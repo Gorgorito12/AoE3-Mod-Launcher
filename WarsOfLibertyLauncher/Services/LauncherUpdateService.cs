@@ -85,12 +85,11 @@ public class LauncherUpdateService
     }
 
     /// <summary>
-    /// Downloads the new launcher .exe and replaces the current one.
-    /// The old binary is renamed to .exe.old (cleaned up on next launch).
-    /// After replacing, starts the new binary and returns true so the
-    /// caller can shut down the current process.
+    /// Downloads the new launcher .exe to a sibling temp file. Doesn't replace
+    /// the running binary yet — call <see cref="RelaunchUpdated"/> after the
+    /// user confirms.
     /// </summary>
-    public static async Task<bool> ApplyUpdateAsync(
+    public static async Task DownloadUpdateAsync(
         string downloadUrl,
         IProgress<DownloadProgress>? progress = null,
         CancellationToken ct = default)
@@ -99,34 +98,55 @@ public class LauncherUpdateService
         if (string.IsNullOrEmpty(currentExe))
             throw new InvalidOperationException("Cannot determine current executable path.");
 
-        var dir = Path.GetDirectoryName(currentExe)!;
-        var newExe = Path.Combine(dir, "WarsOfLibertyLauncher_new.exe");
-        var oldExe = currentExe + ".old";
+        var newExe = GetPendingUpdatePath(currentExe);
 
         DiagnosticLog.Write($"Downloading launcher update from: {downloadUrl}");
+        DiagnosticLog.Write($"  -> {newExe}");
 
-        // Download to a temp file first
+        // Best-effort cleanup of any prior aborted attempt
+        try { if (File.Exists(newExe)) File.Delete(newExe); } catch { }
+
         var downloader = new DownloadService();
         await downloader.DownloadFileAsync(downloadUrl, newExe, progress, ct);
 
-        DiagnosticLog.Write("Download complete. Replacing executable...");
+        DiagnosticLog.Write("Launcher update download complete.");
+    }
 
-        // Clean up any leftover .old from a previous update
+    /// <summary>
+    /// Renames the running executable to .old, swaps in the freshly downloaded
+    /// one, and starts it. Caller should shut down the current process
+    /// immediately after this returns.
+    /// </summary>
+    public static void RelaunchUpdated()
+    {
+        var currentExe = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(currentExe))
+            throw new InvalidOperationException("Cannot determine current executable path.");
+
+        var newExe = GetPendingUpdatePath(currentExe);
+        if (!File.Exists(newExe))
+            throw new InvalidOperationException("No pending launcher update was downloaded.");
+
+        var oldExe = currentExe + ".old";
+
         try { if (File.Exists(oldExe)) File.Delete(oldExe); } catch { }
 
-        // Rename current -> .old, then new -> current
+        DiagnosticLog.Write("Replacing launcher executable...");
         File.Move(currentExe, oldExe);
         File.Move(newExe, currentExe);
 
-        DiagnosticLog.Write("Executable replaced. Starting new version...");
-
+        DiagnosticLog.Write("Starting updated launcher...");
         Process.Start(new ProcessStartInfo
         {
             FileName = currentExe,
             UseShellExecute = true
         });
+    }
 
-        return true;
+    private static string GetPendingUpdatePath(string currentExe)
+    {
+        var dir = Path.GetDirectoryName(currentExe)!;
+        return Path.Combine(dir, "WarsOfLibertyLauncher_new.exe");
     }
 
     /// <summary>

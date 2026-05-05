@@ -370,12 +370,22 @@ public static class Strings
         },
         ["DlgPickInstallFolderDescription"] = new()
         {
-            [LangEn] = "Wars of Liberty will be installed to the folder below. " +
-                       "The folder will be created automatically if it doesn't exist. " +
-                       "About 12 GB of free space is recommended.",
-            [LangEs] = "Wars of Liberty se instalará en la carpeta de abajo. " +
-                       "Se creará automáticamente si no existe. " +
-                       "Se recomiendan unos 12 GB de espacio libre.",
+            [LangEn] = "Wars of Liberty will be installed in its own \"Wars of Liberty\" folder " +
+                       "(separate from the original Age of Empires III install). The launcher will copy " +
+                       "AoE3 there as a base and apply the mod on top. About 12 GB of free space recommended.",
+            [LangEs] = "Wars of Liberty se instalará en su propia carpeta \"Wars of Liberty\" " +
+                       "(separada de la instalación original de Age of Empires III). El launcher copiará " +
+                       "AoE3 ahí como base y aplicará el mod encima. Se recomiendan unos 12 GB libres.",
+        },
+        ["DlgAoe3DetectedTitle"] = new()
+        {
+            [LangEn] = "AGE OF EMPIRES III DETECTED",
+            [LangEs] = "AGE OF EMPIRES III DETECTADO",
+        },
+        ["DlgAoe3DetectedTitleWithSource"] = new()
+        {
+            [LangEn] = "AGE OF EMPIRES III DETECTED ({0})",
+            [LangEs] = "AGE OF EMPIRES III DETECTADO ({0})",
         },
         ["DlgPickInstallFolderLabel"] = new()
         {
@@ -396,6 +406,18 @@ public static class Strings
         {
             [LangEn] = "This folder is reserved by Windows. Please choose a different location.",
             [LangEs] = "Esta carpeta está reservada por Windows. Por favor elige otra ubicación.",
+        },
+        ["WarnInstallFolderSameAsAoe3"] = new()
+        {
+            [LangEn] = "The selected folder is the AoE3 source folder itself. " +
+                       "Please choose a different destination — the mod must be installed in a separate folder.",
+            [LangEs] = "La carpeta seleccionada es la misma carpeta de AoE3. " +
+                       "Por favor elige un destino distinto — el mod debe instalarse en una carpeta aparte.",
+        },
+        ["StatusDetectingAoe3"] = new()
+        {
+            [LangEn] = "Detecting Age of Empires III installation...",
+            [LangEs] = "Detectando instalación de Age of Empires III...",
         },
 
         // -------- AoE3 detection warnings --------
@@ -535,25 +557,31 @@ public static class Strings
         // -------- Disk space confirmation --------
         ["DlgConfirmCopyTitle"] = new()
         {
-            [LangEn] = "Confirm install",
-            [LangEs] = "Confirmar instalación",
+            [LangEn] = "About to install in a new directory",
+            [LangEs] = "Instalación en un nuevo directorio",
         },
         ["DlgConfirmCopyBody"] = new()
         {
-            [LangEn] = "About to install Wars of Liberty:\n\n" +
-                       "  • Copy AoE3 from: {0}\n" +
+            [LangEn] = "Wars of Liberty will be installed in a new directory.\n\n" +
+                       "The launcher will now copy your Age of Empires III installation " +
+                       "into the \"Wars of Liberty\" folder, and then apply the mod on top.\n\n" +
+                       "This keeps your original AoE3 install untouched, but takes more time " +
+                       "and additional disk space.\n\n" +
+                       "  • AoE3 source: {0}\n" +
                        "  • Copy size: ~{1}\n" +
-                       "  • Install to: {2}\n" +
+                       "  • Wars of Liberty folder: {2}\n" +
                        "  • Free space available: {3}\n\n" +
-                       "After copying, the installer will download Wars of Liberty (~2.7 GB) and " +
-                       "apply it on top.\n\nContinue?",
-            [LangEs] = "Por instalar Wars of Liberty:\n\n" +
-                       "  • Copiar AoE3 desde: {0}\n" +
+                       "Do you wish to proceed?",
+            [LangEs] = "Wars of Liberty se instalará en un nuevo directorio.\n\n" +
+                       "El launcher copiará tu instalación de Age of Empires III dentro de " +
+                       "la carpeta \"Wars of Liberty\" y luego aplicará el mod sobre esa copia.\n\n" +
+                       "Esto deja tu instalación original de AoE3 intacta, pero requiere más " +
+                       "tiempo y espacio en disco.\n\n" +
+                       "  • Fuente AoE3: {0}\n" +
                        "  • Tamaño de la copia: ~{1}\n" +
-                       "  • Instalar en: {2}\n" +
+                       "  • Carpeta Wars of Liberty: {2}\n" +
                        "  • Espacio libre disponible: {3}\n\n" +
-                       "Después de copiar, el instalador descargará Wars of Liberty (~2.7 GB) y " +
-                       "lo aplicará encima.\n\n¿Continuar?",
+                       "¿Quieres continuar?",
         },
         ["DlgNotEnoughSpaceTitle"] = new()
         {
@@ -617,17 +645,13 @@ public static class Strings
         {
             [LangEn] = "The launcher will:\n" +
                        "  1. Download the official installer (~2.7 GB)\n" +
-                       "  2. Detect your AoE3 installation\n" +
-                       "  3. Copy AoE3 to a \"Wars of Liberty\" folder\n" +
-                       "  4. Install the mod on top of that copy\n\n" +
-                       "Your original AoE3 installation will not be modified.\n" +
+                       "  2. Ask where to install\n" +
+                       "  3. Install Wars of Liberty silently\n\n" +
                        "Windows will ask for administrator permission. Continue?",
             [LangEs] = "El launcher hará lo siguiente:\n" +
                        "  1. Descargar el instalador oficial (~2.7 GB)\n" +
-                       "  2. Detectar tu instalación de AoE3\n" +
-                       "  3. Copiar AoE3 a una carpeta \"Wars of Liberty\"\n" +
-                       "  4. Instalar el mod sobre esa copia\n\n" +
-                       "Tu instalación original de AoE3 no será modificada.\n" +
+                       "  2. Preguntar dónde instalar\n" +
+                       "  3. Instalar Wars of Liberty en silencio\n\n" +
                        "Windows pedirá permiso de administrador. ¿Continuar?",
         },
         ["ErrInstallerExeNotFound"] = new()
@@ -642,14 +666,63 @@ public static class Strings
             [LangEn] = "Launcher update available",
             [LangEs] = "Actualización del launcher disponible",
         },
-        ["DlgLauncherUpdateBody"] = new()
+        ["DlgLauncherUpdateVersionInfo"] = new()
         {
-            [LangEn] = "A new version of the launcher is available.\n\n" +
-                       "  Current: {0}\n  New: {1}\n  Size: {2}\n\n" +
-                       "Update now?",
-            [LangEs] = "Hay una nueva versión del launcher disponible.\n\n" +
-                       "  Actual: {0}\n  Nueva: {1}\n  Tamaño: {2}\n\n" +
-                       "¿Actualizar ahora?",
+            [LangEn] = "A new version of the launcher is available — " +
+                       "current: {0}, new: {1} ({2}).",
+            [LangEs] = "Hay una nueva versión del launcher disponible — " +
+                       "actual: {0}, nueva: {1} ({2}).",
+        },
+        ["DlgLauncherUpdateConfirmPrompt"] = new()
+        {
+            [LangEn] = "Click DOWNLOAD to fetch the new version. " +
+                       "You'll be asked to restart the launcher when it finishes.",
+            [LangEs] = "Haz click en DESCARGAR para obtener la nueva versión. " +
+                       "Al terminar te pedirá reiniciar el launcher.",
+        },
+        ["DlgLauncherUpdateReadyToDownload"] = new()
+        {
+            [LangEn] = "Ready to download",
+            [LangEs] = "Listo para descargar",
+        },
+        ["DlgLauncherUpdateDownloading"] = new()
+        {
+            [LangEn] = "Downloading...",
+            [LangEs] = "Descargando...",
+        },
+        ["DlgLauncherUpdateDownloadComplete"] = new()
+        {
+            [LangEn] = "Download complete",
+            [LangEs] = "Descarga completa",
+        },
+        ["DlgLauncherUpdateRestartPrompt"] = new()
+        {
+            [LangEn] = "The new version was downloaded. The launcher needs to restart to apply it.\n" +
+                       "Click RESTART NOW to apply the update, or LATER to keep using this version " +
+                       "(the update will apply next time you open the launcher).",
+            [LangEs] = "Se descargó la nueva versión. El launcher necesita reiniciarse para aplicarla.\n" +
+                       "Haz click en REINICIAR AHORA para aplicarla, o MÁS TARDE para seguir usando esta " +
+                       "versión (la actualización se aplicará la próxima vez que abras el launcher).",
+        },
+        ["DlgLauncherUpdateBtnDownload"] = new()
+        {
+            [LangEn] = "DOWNLOAD",
+            [LangEs] = "DESCARGAR",
+        },
+        ["DlgLauncherUpdateBtnRestart"] = new()
+        {
+            [LangEn] = "RESTART NOW",
+            [LangEs] = "REINICIAR AHORA",
+        },
+        ["DlgLauncherUpdateBtnRestartLater"] = new()
+        {
+            [LangEn] = "LATER",
+            [LangEs] = "MÁS TARDE",
+        },
+        ["BtnClose"] = new()
+        {
+            [LangEn] = "CLOSE",
+            [LangEs] = "CERRAR",
         },
         ["StatusDownloadingLauncherUpdate"] = new()
         {

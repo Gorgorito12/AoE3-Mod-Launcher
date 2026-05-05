@@ -227,31 +227,28 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task CheckForLauncherUpdateAsync()
+    private Task CheckForLauncherUpdateAsync()
     {
         try
         {
-            var result = await LauncherUpdateService.CheckAsync();
-            if (!result.UpdateAvailable) return;
-
-            var answer = MessageBox.Show(this,
-                Strings.Format("DlgLauncherUpdateBody",
-                    result.CurrentVersion, result.LatestVersion,
-                    FormatBytes(result.DownloadSize)),
-                Strings.Get("DlgLauncherUpdateTitle"),
-                MessageBoxButton.YesNo, MessageBoxImage.Information);
-
-            if (answer != MessageBoxResult.Yes) return;
-
-            SetStatus(Strings.Get("StatusDownloadingLauncherUpdate"));
-            var restarting = await LauncherUpdateService.ApplyUpdateAsync(result.DownloadUrl!);
-            if (restarting)
-                Application.Current.Shutdown();
+            return CheckForLauncherUpdateInnerAsync();
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Launcher self-update error: {ex.Message}");
+            return Task.CompletedTask;
         }
+    }
+
+    private async Task CheckForLauncherUpdateInnerAsync()
+    {
+        var result = await LauncherUpdateService.CheckAsync();
+        if (!result.UpdateAvailable) return;
+
+        var dialog = new LauncherUpdateDialog(result) { Owner = this };
+        dialog.ShowDialog();
+        // If the user accepted the update, the dialog itself starts the new
+        // binary and shuts the app down — nothing else to do here.
     }
 
     private async Task CheckAsync()
@@ -523,98 +520,35 @@ public partial class MainWindow : Window
             var extractedFolder = await _installerService.ExtractInstallerZipAsync(
                 zipPath, extractStatus, _cts.Token);
 
-            // ---- Step 3: Find AoE3 source to clone from ----
+            // ---- Step 3: Pick install folder ----
             var aoe3Installs = AoE3Detector.FindAll();
-            string aoe3SourcePath;
-
+            string suggestedFolder;
             if (aoe3Installs.Count > 0)
             {
-                aoe3SourcePath = aoe3Installs[0].ModRoot;
+                suggestedFolder = aoe3Installs[0].ModRoot;
                 DiagnosticLog.Write(
-                    $"AoE3 detected at: {aoe3SourcePath} (source: {aoe3Installs[0].Source})");
+                    $"AoE3 detected at: {suggestedFolder} (source: {aoe3Installs[0].Source})");
             }
             else
             {
-                var browseDialog = new Microsoft.Win32.OpenFolderDialog
-                {
-                    Title = Strings.Get("DlgAoe3PickerBrowse"),
-                    Multiselect = false
-                };
-                if (browseDialog.ShowDialog(this) != true)
-                    throw new OperationCanceledException();
-
-                aoe3SourcePath = browseDialog.FolderName;
-                DiagnosticLog.Write($"AoE3 manually selected: {aoe3SourcePath}");
+                suggestedFolder = _config.DefaultInstallFolder;
+                DiagnosticLog.Write("No AoE3 installation found; using configured default.");
             }
 
-            // ---- Step 4: Pick install folder ----
-            var suggestedFolder = Path.Combine(aoe3SourcePath, "Wars of Liberty");
-            var folderDialog = new InstallFolderDialog(suggestedFolder) { Owner = this };
+            var folderDialog = new InstallFolderDialog(suggestedFolder)
+            {
+                Owner = this
+            };
             if (folderDialog.ShowDialog() != true)
                 throw new OperationCanceledException();
             var installFolder = folderDialog.SelectedFolder;
 
-            // ---- Step 5: Disk space check + confirmation ----
-            var sourceSize = Aoe3DetectorService.TryGetFolderSize(aoe3SourcePath);
-            var freeSpace = Aoe3DetectorService.GetFreeSpace(installFolder);
-            var estimatedNeeded = sourceSize + 3L * 1024 * 1024 * 1024;
-
-            if (freeSpace > 0 && freeSpace < estimatedNeeded)
-            {
-                MessageBox.Show(this,
-                    Strings.Format("DlgNotEnoughSpaceBody",
-                        FormatBytes(freeSpace), FormatBytes(estimatedNeeded)),
-                    Strings.Get("DlgNotEnoughSpaceTitle"),
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                throw new OperationCanceledException();
-            }
-
-            var confirmCopy = MessageBox.Show(this,
-                Strings.Format("DlgConfirmCopyBody",
-                    aoe3SourcePath,
-                    FormatBytes(sourceSize),
-                    installFolder,
-                    FormatBytes(freeSpace)),
-                Strings.Get("DlgConfirmCopyTitle"),
-                MessageBoxButton.OKCancel, MessageBoxImage.Question);
-            if (confirmCopy != MessageBoxResult.OK)
-                throw new OperationCanceledException();
-
-            // ---- Step 6: Clone AoE3 to destination ----
-            SetStatus(Strings.Get("StatusCopyingAoe3"));
-            ResetProgressUI();
-            UpdateHeaderText.Text = Strings.Get("StatusCopyingAoe3");
-            UpdateHeaderText.Visibility = Visibility.Visible;
-
-            _cloneService = new FolderCloneService();
-            var cloneProgress = new Progress<CloneProgress>(p =>
-            {
-                double pct = p.BytesTotal > 0
-                    ? (double)p.BytesCopied / p.BytesTotal * 100.0
-                    : 0;
-                PatchProgress.Value = pct;
-                OverallProgress.Value = pct;
-                PatchBytesText.Text = $"{pct:0.0}%";
-                OverallBytesText.Text =
-                    $"{FormatBytes(p.BytesCopied)} / {FormatBytes(p.BytesTotal)}";
-                LblCurrentPatch.Text = p.CurrentFile.Length > 80
-                    ? "..." + p.CurrentFile[^80..]
-                    : p.CurrentFile;
-                SpeedText.Text = p.BytesPerSecond > 0
-                    ? Strings.Format("ProgressSpeed", FormatBytes((long)p.BytesPerSecond))
-                    : "";
-                EtaText.Text = "";
-            });
-            await _cloneService.CloneAsync(
-                aoe3SourcePath, installFolder, cloneProgress, _cts.Token);
-            _cloneService = null;
-
-            // ---- Step 8: Find the installer .exe ----
+            // ---- Step 4: Find the installer .exe ----
             var installerExe = InstallerService.FindInstallerExe(extractedFolder);
             if (installerExe == null)
                 throw new FileNotFoundException(Strings.Get("ErrInstallerExeNotFound"));
 
-            // ---- Step 5: Run silently and monitor progress ----
+            // ---- Step 5: Run installer silently and monitor progress ----
             var logPath = Path.Combine(InstallerService.TempDirectory, "install.log");
             try { if (File.Exists(logPath)) File.Delete(logPath); } catch { /* ignored */ }
 

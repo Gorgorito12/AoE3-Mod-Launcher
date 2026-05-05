@@ -20,12 +20,24 @@ public partial class InstallFolderDialog : Window
     public string SelectedFolder { get; private set; } = "";
 
     public InstallFolderDialog(string defaultFolder)
+        : this(defaultFolder, null, null) { }
+
+    public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel)
     {
         InitializeComponent();
         ApplyLanguage();
         FolderTextBox.Text = defaultFolder;
         FolderTextBox.SelectAll();
         FolderTextBox.Focus();
+
+        if (!string.IsNullOrEmpty(aoe3Path))
+        {
+            Aoe3DetectionTitleText.Text = string.IsNullOrEmpty(aoe3SourceLabel)
+                ? Strings.Get("DlgAoe3DetectedTitle")
+                : Strings.Format("DlgAoe3DetectedTitleWithSource", aoe3SourceLabel);
+            Aoe3DetectionPathText.Text = aoe3Path;
+            Aoe3DetectionPanel.Visibility = Visibility.Visible;
+        }
     }
 
     private void ApplyLanguage()
