@@ -1,0 +1,13 @@
+{
+  "updateInfoUrl": "http://aoe3wol.com/updates/UpdateInfo.xml",
+  "updateInfoUrlAlt": "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml",
+  "modInstallPath": "",
+  "gameExecutable": "",
+  "gameArguments": "",
+  "openPostUpdatePages": true,
+  "language": "en",
+  "installerZipUrl": "https://aoe3wol.com/files/Wars%20of%20Liberty%20Setup%20-%20v1.0.15d.zip",
+  "defaultInstallFolder": "C:\\Program Files (x86)\\Wars of Liberty",
+  "officialWebsite": "http://aoe3wol.com/"
+}
+
