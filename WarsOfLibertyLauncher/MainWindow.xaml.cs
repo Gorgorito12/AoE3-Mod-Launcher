@@ -58,6 +58,8 @@ public partial class MainWindow : Window
             LauncherUpdateService.CleanupOldVersion();
             await CheckForLauncherUpdateAsync();
             await CheckAsync();
+            if (_modIsInstalled)
+                _ = Task.Run(InstallerService.TryCleanupTemp);
             if (autoUpdate && _modIsInstalled && _pendingDownloads.Count > 0)
             {
                 await ApplyAsync();
@@ -657,8 +659,8 @@ public partial class MainWindow : Window
             else
                 SetStatus(Strings.Format("StatusInstallFailed", process.ExitCode));
 
-            // ---- Step 6: Cleanup ----
-            _ = Task.Run(InstallerService.TryCleanupTemp);
+            // Cleanup is deferred to next startup (see Loaded handler)
+            // so the ZIP cache survives if the user needs to retry.
         }
         catch (OperationCanceledException)
         {
