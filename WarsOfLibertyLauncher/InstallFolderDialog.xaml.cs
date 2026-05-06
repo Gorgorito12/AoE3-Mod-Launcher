@@ -6,18 +6,18 @@ using WarsOfLibertyLauncher.Localization;
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Dialog shown before launching the silent installer. The user can accept
-/// the default folder or pick a different one. We default to a Steam/Epic-style
-/// pre-filled path so the common case is "click OK and go".
-///
-/// The standard OpenFolderDialog isn't suitable here because it can only
-/// navigate to existing folders — and on a fresh machine, the destination
-/// folder for WoL doesn't exist yet.
+/// Styled dialog for choosing the Wars of Liberty install folder.
+/// Shows AoE3 detection status, destination folder picker, and disk space.
+/// This is the single dialog for the entire install flow — no additional
+/// popups or MessageBoxes.
 /// </summary>
 public partial class InstallFolderDialog : Window
 {
-    /// <summary>The folder the user confirmed. Set when <see cref="Window.DialogResult"/> is true.</summary>
+    /// <summary>The folder the user confirmed.</summary>
     public string SelectedFolder { get; private set; } = "";
+
+    /// <summary>The detected AoE3 source path (for cloning), or null.</summary>
+    public string? Aoe3SourcePath { get; private set; }
 
     public InstallFolderDialog(string defaultFolder)
         : this(defaultFolder, null, null) { }
@@ -25,6 +25,8 @@ public partial class InstallFolderDialog : Window
     public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel)
     {
         InitializeComponent();
+        Aoe3SourcePath = aoe3Path;
+
         ApplyLanguage();
         FolderTextBox.Text = defaultFolder;
         FolderTextBox.SelectAll();
@@ -32,12 +34,23 @@ public partial class InstallFolderDialog : Window
 
         if (!string.IsNullOrEmpty(aoe3Path))
         {
+            // AoE3 detected — show green panel
             Aoe3DetectionTitleText.Text = string.IsNullOrEmpty(aoe3SourceLabel)
                 ? Strings.Get("DlgAoe3DetectedTitle")
                 : Strings.Format("DlgAoe3DetectedTitleWithSource", aoe3SourceLabel);
             Aoe3DetectionPathText.Text = aoe3Path;
             Aoe3DetectionPanel.Visibility = Visibility.Visible;
+            Aoe3NotDetectedPanel.Visibility = Visibility.Collapsed;
         }
+        else
+        {
+            // AoE3 NOT detected — show orange warning inline
+            Aoe3NotDetectedText.Text = Strings.Get("InstallAoe3NotDetected");
+            Aoe3DetectionPanel.Visibility = Visibility.Collapsed;
+            Aoe3NotDetectedPanel.Visibility = Visibility.Visible;
+        }
+
+        UpdateDiskSpace();
     }
 
     private void ApplyLanguage()
@@ -54,13 +67,9 @@ public partial class InstallFolderDialog : Window
     private void FolderTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         ValidateFolder();
+        UpdateDiskSpace();
     }
 
-    /// <summary>
-    /// Live validation: make sure the path is plausible. We don't require it to
-    /// exist (the installer creates it). We just check it looks like a real
-    /// Windows path and doesn't point inside system folders.
-    /// </summary>
     private void ValidateFolder()
     {
         var path = FolderTextBox.Text.Trim();
@@ -74,11 +83,7 @@ public partial class InstallFolderDialog : Window
         {
             try
             {
-                // Path.GetFullPath rejects clearly malformed paths
                 var full = Path.GetFullPath(path);
-
-                // Reject paths inside Windows system folders — Inno Setup
-                // would refuse anyway and we want a friendly error first.
                 var lowered = full.ToLowerInvariant();
                 if (lowered.StartsWith(@"c:\windows\")
                     || lowered.StartsWith(@"c:\program files\windowsapps"))
@@ -105,10 +110,26 @@ public partial class InstallFolderDialog : Window
         }
     }
 
+    private void UpdateDiskSpace()
+    {
+        try
+        {
+            var path = FolderTextBox.Text.Trim();
+            var root = Path.GetPathRoot(path);
+            if (!string.IsNullOrEmpty(root))
+            {
+                var drive = new DriveInfo(root);
+                DiskSpaceText.Text = Strings.Format("InstallDiskSpace",
+                    FormatBytes(drive.AvailableFreeSpace), root);
+                return;
+            }
+        }
+        catch { }
+        DiskSpaceText.Text = "";
+    }
+
     private void BrowseButton_Click(object sender, RoutedEventArgs e)
     {
-        // Used as an "advanced" escape hatch if the user wants to navigate
-        // visually. Note: this dialog requires the folder to already exist.
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
             Title = Strings.Get("DlgPickInstallFolderTitle"),
@@ -116,8 +137,6 @@ public partial class InstallFolderDialog : Window
         };
 
         var current = FolderTextBox.Text.Trim();
-        // Walk up to the first existing parent so the dialog opens somewhere
-        // meaningful even when the target folder doesn't exist yet.
         try
         {
             var dir = current;
@@ -130,14 +149,10 @@ public partial class InstallFolderDialog : Window
             if (!string.IsNullOrEmpty(dir))
                 dialog.InitialDirectory = dir;
         }
-        catch
-        {
-            // No initial directory; the dialog will use Windows defaults
-        }
+        catch { }
 
         if (dialog.ShowDialog(this) == true)
         {
-            // Append "Wars of Liberty" if the user picked a generic parent
             var picked = dialog.FolderName.TrimEnd('\\', '/');
             if (!picked.EndsWith("Wars of Liberty", StringComparison.OrdinalIgnoreCase))
                 picked = Path.Combine(picked, "Wars of Liberty");
@@ -149,20 +164,12 @@ public partial class InstallFolderDialog : Window
     {
         var chosen = FolderTextBox.Text.Trim().TrimEnd('\\', '/');
 
-        // Final sanity check before accepting: warn the user if the chosen
-        // folder isn't inside an AoE3 install, since WoL won't actually work
-        // there (the AoE3 engine only loads mods from its own directory tree).
-        if (!Services.AoE3Detector.LooksLikeInsideAoE3(chosen))
+        // If no AoE3 detected, try to infer from the parent folder
+        if (Aoe3SourcePath == null)
         {
-            var warn = MessageBox.Show(
-                this,
-                Localization.Strings.Format("DlgFolderNotInAoE3Body", chosen),
-                Localization.Strings.Get("DlgFolderNotInAoE3Title"),
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Warning);
-
-            // OK = "I know, install anyway"; Cancel = "let me pick again"
-            if (warn != MessageBoxResult.OK) return;
+            var parentDir = Path.GetDirectoryName(chosen);
+            if (!string.IsNullOrEmpty(parentDir) && Services.AoE3Detector.LooksLikeAoE3(parentDir))
+                Aoe3SourcePath = parentDir;
         }
 
         SelectedFolder = chosen;
@@ -172,5 +179,14 @@ public partial class InstallFolderDialog : Window
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         DialogResult = false;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        double size = bytes;
+        int unit = 0;
+        while (size >= 1024 && unit < units.Length - 1) { size /= 1024; unit++; }
+        return $"{size:0.##} {units[unit]}";
     }
 }

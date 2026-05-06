@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -24,6 +26,8 @@ public partial class MainWindow : Window
     private bool _modIsInstalled = true;  // false when no valid install detected
     private bool _isPaused;
     private bool _warnedAboutBrokenInstall;
+    private bool _isGameRunning;
+    private DispatcherTimer? _gameMonitorTimer;
 
     public MainWindow()
     {
@@ -103,7 +107,12 @@ public partial class MainWindow : Window
         NewsPlaceholderText.Text = Strings.Get("NewsPlaceholder");
         LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
         LblOverall.Text = Strings.Get("ProgressOverall");
-        PlayButton.Content = Strings.Get("BtnPlay");
+        PlayButton.Content = _isGameRunning
+            ? Strings.Get("BtnPlaying")
+            : Strings.Get("BtnPlay");
+        VerifyButton.Content = Strings.Get("BtnVerify");
+        StopButton.Content = Strings.Get("BtnStop");
+        UninstallMenuItem.Header = Strings.Get("MenuUninstall");
 
         // Buttons that change content based on state — pick the right label
         if (!_modIsInstalled)
@@ -111,7 +120,7 @@ public partial class MainWindow : Window
         else if (_pendingDownloads.Count > 0)
             UpdateButton.Content = Strings.Get("BtnUpdate");
         else
-            UpdateButton.Content = Strings.Get("BtnVerify");
+            UpdateButton.Content = Strings.Get("BtnCheckUpdates");
 
         // Highlight the active language toggle
         LangEnButton.Foreground = Strings.Language == Strings.LangEn
@@ -144,9 +153,27 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) != true) return;
 
-        var chosen = dialog.FolderName;
+        var chosen = dialog.FolderName.TrimEnd('\\', '/');
 
-        if (!RegistryService.IsValidInstall(chosen))
+        // Be tolerant: if the user picked the AoE3 root by mistake, try
+        // common WoL subfolders inside it before failing.
+        string? resolved = null;
+        var candidates = new[]
+        {
+            chosen,
+            Path.Combine(chosen, "Wars of Liberty"),
+            Path.Combine(chosen, "WarsOfLiberty"),
+        };
+        foreach (var candidate in candidates)
+        {
+            if (RegistryService.IsValidInstall(candidate))
+            {
+                resolved = candidate.TrimEnd('\\', '/');
+                break;
+            }
+        }
+
+        if (resolved == null)
         {
             MessageBox.Show(this,
                 Strings.Get("DlgInvalidFolderBody"),
@@ -155,7 +182,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _config.ModInstallPath = chosen.TrimEnd('\\', '/');
+        _config.ModInstallPath = resolved;
         _config.Save();
         await CheckAsync();
     }
@@ -167,11 +194,167 @@ public partial class MainWindow : Window
     private async void UpdateButton_Click(object sender, RoutedEventArgs e)
     {
         if (!_modIsInstalled)
+        {
             await InstallAsync();
+        }
         else if (_pendingDownloads.Count > 0)
+        {
+            if (!EnsureGameNotRunning()) return;
             await ApplyUpdateWithElevationCheckAsync();
+        }
         else
+        {
             await CheckAsync();
+        }
+    }
+
+    private async void VerifyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_modIsInstalled || string.IsNullOrEmpty(_updateService.InstallPath))
+        {
+            SetStatus(Strings.Get("StatusNotInstalled"));
+            return;
+        }
+
+        if (_isBusy) return;
+
+        SetStatus(Strings.Get("StatusVerifying"));
+        var result = await Task.Run(() => VerifyInstallation(_updateService.InstallPath));
+
+        if (result.MissingItems.Count == 0 && result.CorruptItems.Count == 0)
+        {
+            SetStatus(Strings.Format("StatusVerifyOk", result.TotalFilesChecked));
+            return;
+        }
+
+        // Build a report
+        var problems = new List<string>();
+        problems.AddRange(result.MissingItems.Select(m => $"[missing] {m}"));
+        problems.AddRange(result.CorruptItems.Select(c => $"[empty] {c}"));
+        var problemList = string.Join(", ", problems.Take(10));
+        int totalProblems = result.MissingItems.Count + result.CorruptItems.Count;
+
+        SetStatus(Strings.Format("StatusVerifyMissing", totalProblems, problemList));
+        DiagnosticLog.Write($"Verification: {totalProblems} problems found:");
+        foreach (var p in problems) DiagnosticLog.Write($"  {p}");
+
+        // Offer to repair
+        var repair = MessageBox.Show(this,
+            Strings.Format("DlgVerifyRepairBody", totalProblems),
+            Strings.Get("DlgVerifyRepairTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+        if (repair == MessageBoxResult.Yes)
+            await RepairInstallAsync();
+    }
+
+    /// <summary>
+    /// Repairs the installation by re-downloading the WoL payload and
+    /// re-copying the mod files over the existing install.
+    /// </summary>
+    private async Task RepairInstallAsync()
+    {
+        if (_isBusy) return;
+
+        var payloadUrls = _config.PayloadZipUrls;
+        if (payloadUrls == null || payloadUrls.Length == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
+                payloadUrls = new[] { _config.InstallerZipUrl };
+            else
+            {
+                SetStatus(Strings.Get("DlgInstallNoUrlBody"));
+                return;
+            }
+        }
+
+        if (!EnsureGameNotRunning()) return;
+
+        var installPath = _updateService.InstallPath!;
+
+        SetBusy(true);
+        _cts = new CancellationTokenSource();
+        ShowDownloadControls(true);
+
+        UpdateHeaderText.Text = Strings.Get("StatusRepairing");
+        UpdateHeaderText.Visibility = Visibility.Visible;
+        LblCurrentPatch.Text = Strings.Get("StatusDownloadingInstaller");
+        PatchProgress.Value = 0;
+        OverallProgress.Value = 0;
+        PatchBytesText.Text = "0%";
+        OverallBytesText.Text = "...";
+        SpeedText.Text = "";
+        EtaText.Text = "";
+
+        var nativeInstaller = new NativeInstallService();
+
+        try
+        {
+            var speed = new SpeedTracker();
+            var dlProgress = new Progress<DownloadProgress>(p =>
+            {
+                speed.Sample(p.BytesReceived);
+                if (p.TotalBytes > 0)
+                {
+                    var eta = speed.EstimateTimeRemaining(p.TotalBytes - p.BytesReceived);
+                    PatchProgress.Value = p.Percentage;
+                    OverallProgress.Value = p.Percentage * 0.6;
+                    PatchBytesText.Text = $"{p.Percentage:0.0}%";
+                    OverallBytesText.Text = $"{FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes)}";
+                    EtaText.Text = eta.HasValue
+                        ? Strings.Format("ProgressEta", FormatDuration(eta.Value))
+                        : "";
+                }
+                else
+                {
+                    PatchBytesText.Text = FormatBytes(p.BytesReceived);
+                }
+                SpeedText.Text = speed.BytesPerSecond > 0
+                    ? Strings.Format("ProgressSpeed", FormatBytes((long)speed.BytesPerSecond))
+                    : "";
+                LblCurrentPatch.Text = Strings.Get("StatusDownloadingInstaller");
+            });
+
+            var statusProgress = new Progress<string>(s =>
+            {
+                SetStatus(s);
+                LblCurrentPatch.Text = s;
+            });
+
+            // Mod-only install on top of existing (overwrites damaged files)
+            await nativeInstaller.InstallModOnlyAsync(
+                payloadUrls,
+                installPath,
+                dlProgress,
+                statusProgress,
+                _cts.Token);
+
+            PatchProgress.Value = 100;
+            OverallProgress.Value = 100;
+
+            // Re-verify
+            var recheck = await Task.Run(() => VerifyInstallation(installPath));
+            if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
+                SetStatus(Strings.Get("StatusRepairSuccess"));
+            else
+                SetStatus(Strings.Format("StatusRepairPartial", recheck.MissingItems.Count + recheck.CorruptItems.Count));
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus(Strings.Get("StatusCancelledUpdate"));
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error: {ex.Message}");
+            DiagnosticLog.Write($"Repair failed: {ex}");
+        }
+        finally
+        {
+            SetBusy(false);
+            ShowDownloadControls(false);
+            ResetProgressUI();
+            UpdateHeaderText.Visibility = Visibility.Collapsed;
+        }
     }
 
     /// <summary>
@@ -274,18 +457,28 @@ public partial class MainWindow : Window
             if (!result.IsValidInstall)
             {
                 // No installation detected — switch the main button to INSTALL MOD
-                // so first-run users have a clear path forward.
                 SetStatus(Strings.Get("StatusNotInstalled"));
                 UpdateButton.Content = Strings.Get("BtnInstall");
                 UpdateButton.Background = (System.Windows.Media.Brush)
                     new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
                 _pendingDownloads = new();
+
+                // Make the Browse button prominent so users with a non-standard
+                // install location can point the launcher at it manually.
+                BrowseButton.Content = Strings.Get("BrowseModButton");
+                BrowseButton.Foreground = (System.Windows.Media.Brush)
+                    new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
+                BrowseButton.FontSize = 12;
                 return;
             }
 
-            // Installed — restore the normal (gray) update button background
+            // Installed — restore the normal (gray) update button + browse button
             UpdateButton.Background = (System.Windows.Media.Brush)
                 new System.Windows.Media.BrushConverter().ConvertFromString("#3a3d44")!;
+            BrowseButton.Content = Strings.Get("ChangePathButton");
+            BrowseButton.Foreground = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#888")!;
+            BrowseButton.FontSize = 10;
 
             // Sanity check: WoL is installed, but is age3y.exe reachable?
             // If the user installed WoL outside of an AoE3 folder, the mod
@@ -408,44 +601,180 @@ public partial class MainWindow : Window
         }
     }
 
+    // ------------------------------------------------------------------------
+    // Game process detection
+    // ------------------------------------------------------------------------
+
     /// <summary>
-    /// Full first-time install flow (native — no Inno Setup). Walks the user through:
-    ///   1. Detecting Age of Empires III: TAD installations (Steam/GOG/retail)
-    ///   2. Choosing the destination folder (defaults to a "Wars of Liberty"
-    ///      subfolder next to the detected AoE3 install)
-    ///   3. Downloading the WoL payload ZIP (raw mod files)
-    ///   4. Cloning AoE3 to the destination
-    ///   5. Copying WoL files on top
-    ///   6. Creating shortcuts + registry entries
-    ///
-    /// The result is a self-contained "Wars of Liberty" folder that has both
-    /// AoE3:TAD and the WoL mod inside, independent of the original Steam/GOG
-    /// install.
+    /// Checks if the AoE3 game is currently running. If so, offers to close it.
+    /// Returns true if it's safe to proceed (game not running, or user closed it).
+    /// </summary>
+    private bool EnsureGameNotRunning()
+    {
+        var processes = System.Diagnostics.Process.GetProcessesByName("age3y");
+        if (processes.Length == 0) return true;
+
+        var result = MessageBox.Show(this,
+            Strings.Get("DlgGameRunningBody"),
+            Strings.Get("DlgGameRunningTitle"),
+            MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            foreach (var p in processes)
+            {
+                try
+                {
+                    p.Kill();
+                    p.WaitForExit(5000);
+                    DiagnosticLog.Write($"Closed game process (PID {p.Id}).");
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Failed to close game: {ex.Message}");
+                }
+            }
+            return true;
+        }
+
+        return result != MessageBoxResult.Cancel;
+    }
+
+    // ------------------------------------------------------------------------
+    // Install verification
+    // ------------------------------------------------------------------------
+
+    /// <summary>Result of a verification scan.</summary>
+    private record VerifyResult(
+        List<string> MissingItems,
+        List<string> CorruptItems,
+        int TotalFilesChecked);
+
+    /// <summary>
+    /// Deep verification of the mod installation.
+    /// Checks critical folders, files, and looks for zero-byte files that
+    /// indicate a broken copy.
+    /// </summary>
+    private static VerifyResult VerifyInstallation(string installPath)
+    {
+        var missing = new List<string>();
+        var corrupt = new List<string>();
+        int totalChecked = 0;
+
+        // --- Required mod directories ---
+        string[] requiredDirs = new[]
+        {
+            @"art\zulushield",
+            @"data",
+            @"sound",
+            @"AI3",
+        };
+        foreach (var rel in requiredDirs)
+        {
+            totalChecked++;
+            var full = Path.Combine(installPath, rel);
+            if (!Directory.Exists(full))
+                missing.Add(rel + @"\");
+        }
+
+        // --- Check data files (the large .bar archives) ---
+        var dataDir = Path.Combine(installPath, "data");
+        if (Directory.Exists(dataDir))
+        {
+            var barFiles = Directory.GetFiles(dataDir, "*.bar", SearchOption.TopDirectoryOnly);
+            totalChecked += barFiles.Length;
+            if (barFiles.Length == 0)
+            {
+                missing.Add(@"data\*.bar (no data archives found)");
+            }
+            else
+            {
+                foreach (var bar in barFiles)
+                {
+                    var info = new FileInfo(bar);
+                    // .bar files should be at least 1 MB; zero or tiny means broken
+                    if (info.Length < 1024)
+                        corrupt.Add(@"data\" + info.Name);
+                }
+            }
+        }
+
+        // --- Check sound files ---
+        var soundDir = Path.Combine(installPath, "sound");
+        if (Directory.Exists(soundDir))
+        {
+            var soundFiles = Directory.GetFiles(soundDir, "*", SearchOption.AllDirectories);
+            totalChecked += soundFiles.Length;
+            if (soundFiles.Length < 5)
+                missing.Add(@"sound\ (too few files: " + soundFiles.Length + ")");
+        }
+
+        // --- Check art\zulushield contents (WoL marker) ---
+        var zulushield = Path.Combine(installPath, "art", "zulushield");
+        if (Directory.Exists(zulushield))
+        {
+            var artFiles = Directory.GetFiles(zulushield, "*", SearchOption.AllDirectories);
+            totalChecked += artFiles.Length;
+            if (artFiles.Length == 0)
+                missing.Add(@"art\zulushield\ (empty — mod marker missing)");
+        }
+
+        // --- Spot-check: random sample of files for zero-byte ---
+        try
+        {
+            var allFiles = Directory.GetFiles(installPath, "*", SearchOption.AllDirectories);
+            totalChecked += Math.Min(allFiles.Length, 200);
+            var sample = allFiles.Length > 200
+                ? allFiles.OrderBy(_ => Guid.NewGuid()).Take(200)
+                : allFiles.AsEnumerable();
+
+            foreach (var file in sample)
+            {
+                var info = new FileInfo(file);
+                // Skip known-empty files like markers, but flag actual content files
+                if (info.Length == 0 && !info.Name.StartsWith(".")
+                    && info.Extension is ".bar" or ".xml" or ".xmb" or ".dll" or ".exe" or ".ddt")
+                {
+                    var rel = Path.GetRelativePath(installPath, file);
+                    corrupt.Add(rel);
+                }
+            }
+        }
+        catch { /* non-fatal */ }
+
+        return new VerifyResult(missing, corrupt, totalChecked);
+    }
+
+    /// <summary>
+    /// Full first-time install flow (native — no Inno Setup):
+    ///   1. Shows a styled dialog to pick destination folder
+    ///   2. Downloads the WoL payload ZIP parts
+    ///   3. Clones AoE3 to the destination (if detected)
+    ///   4. Copies WoL files on top
+    ///   5. Creates shortcuts + registry entries
+    ///   6. Verifies the installation
     /// </summary>
     private async Task InstallAsync()
     {
         if (_isBusy) return;
 
-        // No URLs configured — fall back to opening the website
+        // Check if game is running first
+        if (!EnsureGameNotRunning()) return;
+
+        // Resolve payload URLs
         var payloadUrls = _config.PayloadZipUrls;
         if (payloadUrls == null || payloadUrls.Length == 0)
         {
-            // Fallback to legacy single URL if available
             if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
                 payloadUrls = new[] { _config.InstallerZipUrl };
             else
             {
-                var fallback = MessageBox.Show(this,
-                    Strings.Get("DlgInstallNoUrlBody"),
-                    Strings.Get("DlgInstallTitle"),
-                    MessageBoxButton.OKCancel, MessageBoxImage.Information);
-                if (fallback == MessageBoxResult.OK)
-                    InstallerService.OpenWebsite(_config.OfficialWebsite);
+                SetStatus(Strings.Get("DlgInstallNoUrlBody"));
                 return;
             }
         }
 
-        // ---- Step 1: Detect AoE3 and pick install folder ----
+        // Detect AoE3
         var aoe3Installs = AoE3Detector.FindAll();
         string? aoe3SourcePath = null;
         string? aoe3SourceLabel = null;
@@ -456,56 +785,24 @@ public partial class MainWindow : Window
             aoe3SourcePath = aoe3Installs[0].GameFolder;
             aoe3SourceLabel = aoe3Installs[0].Source;
             suggestedFolder = aoe3Installs[0].ModRoot;
-            DiagnosticLog.Write(
-                $"AoE3 detected at: {aoe3SourcePath} (source: {aoe3SourceLabel})");
         }
         else
         {
             suggestedFolder = _config.DefaultInstallFolder;
-            DiagnosticLog.Write("No AoE3 installation found; using configured default.");
         }
 
-        // Ensure "Wars of Liberty" subfolder
         if (!suggestedFolder.EndsWith("Wars of Liberty", StringComparison.OrdinalIgnoreCase))
             suggestedFolder = Path.Combine(suggestedFolder, "Wars of Liberty");
 
-        var folderDialog = new InstallFolderDialog(suggestedFolder, aoe3SourcePath, aoe3SourceLabel)
+        // Show the styled install dialog (single popup, no MessageBoxes)
+        var dialog = new InstallFolderDialog(suggestedFolder, aoe3SourcePath, aoe3SourceLabel)
         {
             Owner = this
         };
-        if (folderDialog.ShowDialog() != true) return;
-        var installFolder = folderDialog.SelectedFolder;
+        if (dialog.ShowDialog() != true) return;
 
-        // If no AoE3 detected automatically, the user must have picked a folder
-        // that IS an AoE3 install or the clone step won't have a source.
-        // In that case, try to find AoE3 from the chosen path's parents.
-        if (aoe3SourcePath == null)
-        {
-            // Try the parent of the chosen folder as AoE3 source
-            var parentDir = Path.GetDirectoryName(installFolder);
-            if (!string.IsNullOrEmpty(parentDir) && AoE3Detector.LooksLikeAoE3(parentDir))
-            {
-                aoe3SourcePath = parentDir;
-            }
-            else
-            {
-                // Last resort: ask user
-                var noAoe3 = MessageBox.Show(this,
-                    Strings.Get("DlgNoAoe3DetectedBody"),
-                    Strings.Get("DlgNoAoe3DetectedTitle"),
-                    MessageBoxButton.OKCancel, MessageBoxImage.Warning);
-                if (noAoe3 != MessageBoxResult.OK) return;
-                // Will proceed without clone (mod-only install)
-            }
-        }
-
-        // Confirm install
-        var confirm = MessageBox.Show(this,
-            Strings.Format("DlgInstallNativeConfirmBody", installFolder,
-                aoe3SourcePath ?? "(none - mod only)"),
-            Strings.Get("DlgInstallConfirmTitle"),
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
+        var installFolder = dialog.SelectedFolder;
+        aoe3SourcePath = dialog.Aoe3SourcePath; // may have been inferred
 
         // ---- Begin installation ----
         SetBusy(true);
@@ -616,11 +913,23 @@ public partial class MainWindow : Window
 
             PatchProgress.Value = 100;
             OverallProgress.Value = 100;
-            SetStatus(Strings.Get("StatusInstallSuccess"));
 
             // Point the launcher at the new install
             _config.ModInstallPath = installFolder;
             _config.Save();
+
+            // Verify installation
+            var verifyResult = await Task.Run(() => VerifyInstallation(installFolder));
+            int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
+            if (totalProblems == 0)
+            {
+                SetStatus(Strings.Format("StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
+            }
+            else
+            {
+                SetStatus(Strings.Format("StatusInstallIncomplete", totalProblems));
+                DiagnosticLog.Write($"Install verification: {totalProblems} problems found.");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -629,9 +938,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             SetStatus($"Error: {ex.Message}");
-            MessageBox.Show(this, ex.Message,
-                Strings.Get("DlgUpdateErrorTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            DiagnosticLog.Write($"Install failed: {ex}");
         }
         finally
         {
@@ -737,15 +1044,104 @@ public partial class MainWindow : Window
 
     private void PlayButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_isGameRunning) return; // Already running
+
         try
         {
             GameLauncher.Launch(_config, _updateService.InstallPath);
+            StartGameMonitor();
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message,
                 Strings.Get("DlgGameLaunchErrorTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void StopButton_Click(object sender, RoutedEventArgs e)
+    {
+        var processes = Process.GetProcessesByName("age3y");
+        if (processes.Length == 0)
+        {
+            // Game already closed — update UI
+            OnGameExited();
+            return;
+        }
+
+        foreach (var p in processes)
+        {
+            try
+            {
+                p.Kill();
+                p.WaitForExit(5000);
+                DiagnosticLog.Write($"Stopped game process (PID {p.Id}).");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Failed to stop game: {ex.Message}");
+            }
+        }
+        OnGameExited();
+    }
+
+    /// <summary>
+    /// Starts a timer that polls every 2 seconds to detect when the game exits.
+    /// </summary>
+    private void StartGameMonitor()
+    {
+        _isGameRunning = true;
+        UpdateGameUI();
+
+        _gameMonitorTimer?.Stop();
+        _gameMonitorTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _gameMonitorTimer.Tick += (_, _) =>
+        {
+            var processes = Process.GetProcessesByName("age3y");
+            if (processes.Length == 0)
+            {
+                OnGameExited();
+            }
+        };
+        _gameMonitorTimer.Start();
+        DiagnosticLog.Write("Game monitor started.");
+    }
+
+    private void OnGameExited()
+    {
+        _gameMonitorTimer?.Stop();
+        _gameMonitorTimer = null;
+        _isGameRunning = false;
+        UpdateGameUI();
+        DiagnosticLog.Write("Game exited.");
+    }
+
+    /// <summary>
+    /// Updates button states and status text based on whether the game is running.
+    /// </summary>
+    private void UpdateGameUI()
+    {
+        if (_isGameRunning)
+        {
+            PlayButton.Content = Strings.Get("BtnPlaying");
+            PlayButton.IsEnabled = false;
+            PlayButton.Background = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#2a6e2a")!;
+            StopButton.Visibility = Visibility.Visible;
+            SetStatus(Strings.Get("StatusPlaying"));
+        }
+        else
+        {
+            PlayButton.Content = Strings.Get("BtnPlay");
+            PlayButton.IsEnabled = !_isBusy && _modIsInstalled;
+            PlayButton.Background = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
+            StopButton.Visibility = Visibility.Collapsed;
+            if (!_isBusy)
+                SetStatus(Strings.Get("StatusGameClosed"));
         }
     }
 
@@ -765,8 +1161,9 @@ public partial class MainWindow : Window
     {
         _isBusy = busy;
         UpdateButton.IsEnabled = !busy;
-        // Play is only available when the mod is installed AND we're not busy.
-        PlayButton.IsEnabled = !busy && _modIsInstalled;
+        VerifyButton.IsEnabled = !busy && _modIsInstalled;
+        // Play is only available when the mod is installed, not busy, and game not already running.
+        PlayButton.IsEnabled = !busy && _modIsInstalled && !_isGameRunning;
         BrowseButton.IsEnabled = !busy;
     }
 
@@ -800,5 +1197,86 @@ public partial class MainWindow : Window
         if (ts.TotalSeconds < 60) return $"{(int)ts.TotalSeconds}s";
         if (ts.TotalMinutes < 60) return $"{(int)ts.TotalMinutes}m {ts.Seconds:00}s";
         return $"{(int)ts.TotalHours}h {ts.Minutes:00}m";
+    }
+
+    // ------------------------------------------------------------------------
+    // More menu / Uninstall
+    // ------------------------------------------------------------------------
+
+    private void MoreButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (MoreButton.ContextMenu == null) return;
+        // Only let the user open the menu when nothing is in flight
+        UninstallMenuItem.IsEnabled = !_isBusy && _modIsInstalled;
+        MoreButton.ContextMenu.PlacementTarget = MoreButton;
+        MoreButton.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+        MoreButton.ContextMenu.IsOpen = true;
+    }
+
+    private async void UninstallMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy) return;
+        if (string.IsNullOrEmpty(_updateService.InstallPath))
+        {
+            SetStatus(Strings.Get("StatusNotInstalled"));
+            return;
+        }
+
+        if (!EnsureGameNotRunning()) return;
+
+        var uninstaller = new UninstallService();
+        var plan = uninstaller.Plan(_updateService.InstallPath);
+
+        var dialog = new UninstallDialog(plan) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        if (plan.Mode == UninstallMode.RefusedMergedWithAoe3 ||
+            plan.Mode == UninstallMode.NothingToDo)
+            return;
+
+        SetBusy(true);
+        SetStatus(Strings.Get("StatusUninstalling"));
+        ResetProgressUI();
+
+        var progress = new Progress<(double Pct, string Step)>(p =>
+        {
+            OverallProgress.Value = p.Pct;
+            SetStatus(p.Step);
+        });
+
+        try
+        {
+            var result = await uninstaller.UninstallAsync(plan, dialog.Options, progress);
+
+            if (result.Success)
+            {
+                SetStatus(Strings.Format("StatusUninstallSuccess", result.FilesDeleted));
+            }
+            else
+            {
+                SetStatus(Strings.Format("StatusUninstallPartial", result.Errors.Count));
+                foreach (var err in result.Errors)
+                    DiagnosticLog.Write($"  uninstall error: {err}");
+            }
+
+            // Clear the saved path so re-detection runs from scratch
+            if (dialog.Options.ResetConfig || result.Success)
+            {
+                _config.ModInstallPath = "";
+                _config.GameExecutable = "";
+                _config.Save();
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Uninstall failed: {ex}");
+            SetStatus($"Uninstall failed: {ex.Message}");
+        }
+        finally
+        {
+            SetBusy(false);
+            // Re-check so the UI flips back to "Install" mode
+            await CheckAsync();
+        }
     }
 }

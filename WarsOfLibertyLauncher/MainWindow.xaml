@@ -218,30 +218,70 @@
         </StackPanel>
 
         <!-- Action buttons -->
-        <StackPanel Grid.Row="6"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right">
-            <Button x:Name="PauseButton"
-                    Style="{StaticResource LauncherButton}"
-                    Background="#3a3d44"
-                    Margin="0,0,10,0"
-                    Visibility="Collapsed"
-                    Click="PauseButton_Click"/>
-            <Button x:Name="CancelButton"
-                    Style="{StaticResource LauncherButton}"
-                    Background="#3a3d44"
-                    Margin="0,0,10,0"
-                    Visibility="Collapsed"
-                    Click="CancelButton_Click"/>
-            <Button x:Name="UpdateButton"
-                    Style="{StaticResource LauncherButton}"
-                    Background="#3a3d44"
-                    Margin="0,0,10,0"
-                    Click="UpdateButton_Click"/>
-            <Button x:Name="PlayButton"
-                    Style="{StaticResource LauncherButton}"
-                    MinWidth="160"
-                    Click="PlayButton_Click"/>
-        </StackPanel>
+        <Grid Grid.Row="6">
+            <!-- Overflow menu on the left for less-frequent actions like Uninstall -->
+            <Button x:Name="MoreButton"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Foreground="#888"
+                    FontSize="22"
+                    FontWeight="Bold"
+                    Cursor="Hand"
+                    Padding="10,0"
+                    Width="40" Height="40"
+                    Content="⋯"
+                    ToolTip="More options"
+                    Click="MoreButton_Click">
+                <Button.ContextMenu>
+                    <ContextMenu x:Name="MoreMenu"
+                                 Background="#22252c"
+                                 BorderBrush="#3a3d44"
+                                 BorderThickness="1">
+                        <MenuItem x:Name="UninstallMenuItem"
+                                  Foreground="#e63950"
+                                  Background="#22252c"
+                                  Click="UninstallMenuItem_Click"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+            </Button>
+
+            <StackPanel HorizontalAlignment="Right"
+                        Orientation="Horizontal">
+                <Button x:Name="PauseButton"
+                        Style="{StaticResource LauncherButton}"
+                        Background="#3a3d44"
+                        Margin="0,0,10,0"
+                        Visibility="Collapsed"
+                        Click="PauseButton_Click"/>
+                <Button x:Name="CancelButton"
+                        Style="{StaticResource LauncherButton}"
+                        Background="#3a3d44"
+                        Margin="0,0,10,0"
+                        Visibility="Collapsed"
+                        Click="CancelButton_Click"/>
+                <Button x:Name="UpdateButton"
+                        Style="{StaticResource LauncherButton}"
+                        Background="#3a3d44"
+                        Margin="0,0,10,0"
+                        Click="UpdateButton_Click"/>
+                <Button x:Name="VerifyButton"
+                        Style="{StaticResource LauncherButton}"
+                        Background="#3a3d44"
+                        Margin="0,0,10,0"
+                        Click="VerifyButton_Click"/>
+                <Button x:Name="StopButton"
+                        Style="{StaticResource LauncherButton}"
+                        Background="#8b0000"
+                        Margin="0,0,10,0"
+                        Visibility="Collapsed"
+                        Click="StopButton_Click"/>
+                <Button x:Name="PlayButton"
+                        Style="{StaticResource LauncherButton}"
+                        MinWidth="160"
+                        Click="PlayButton_Click"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

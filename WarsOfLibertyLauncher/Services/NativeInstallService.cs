@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
+using WarsOfLibertyLauncher.Models;
 
 namespace WarsOfLibertyLauncher.Services;
 
@@ -99,11 +101,15 @@ public class NativeInstallService
 
         // ---- Phase 5: Create shortcuts ----
         statusProgress?.Report("Creating shortcuts...");
-        CreateShortcuts(destinationFolder);
+        var shortcuts = CreateShortcuts(destinationFolder, out var startMenuFolder);
 
         // ---- Phase 6: Write registry ----
         statusProgress?.Report("Writing registry entries...");
         WriteRegistryEntries(destinationFolder);
+
+        // ---- Phase 7: Write install manifest ----
+        WriteManifest(destinationFolder, aoe3SourcePath, clonedAoe3: true,
+            shortcuts, startMenuFolder);
 
         DiagnosticLog.Write("=== Native Install Complete ===");
     }
@@ -137,8 +143,12 @@ public class NativeInstallService
 
         // ---- Phase 4: Shortcuts + Registry ----
         statusProgress?.Report("Creating shortcuts...");
-        CreateShortcuts(destinationFolder);
+        var shortcuts = CreateShortcuts(destinationFolder, out var startMenuFolder);
         WriteRegistryEntries(destinationFolder);
+
+        // ---- Phase 5: Write install manifest ----
+        WriteManifest(destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
+            shortcuts, startMenuFolder);
 
         DiagnosticLog.Write("=== Native Install (mod-only) Complete ===");
     }
@@ -320,31 +330,39 @@ public class NativeInstallService
 
     /// <summary>
     /// Creates a Desktop and Start Menu shortcut pointing to age3y.exe
-    /// inside the destination folder.
+    /// inside the destination folder. Returns the absolute paths of the
+    /// shortcuts created (so the install manifest can record them for
+    /// later cleanup).
     /// </summary>
-    private static void CreateShortcuts(string installFolder)
+    private static List<string> CreateShortcuts(string installFolder, out string? startMenuFolder)
     {
+        var created = new List<string>();
+        startMenuFolder = null;
+
         try
         {
             var age3yExe = FindAge3yExe(installFolder);
             if (age3yExe == null)
             {
                 DiagnosticLog.Write("Cannot create shortcuts: age3y.exe not found.");
-                return;
+                return created;
             }
 
             // Desktop shortcut
             var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             var desktopLink = Path.Combine(desktopPath, $"{AppName}.lnk");
             CreateShortcutFile(desktopLink, age3yExe, installFolder);
+            created.Add(desktopLink);
 
             // Start Menu shortcut
             var startMenuPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.Programs),
                 AppName);
             Directory.CreateDirectory(startMenuPath);
+            startMenuFolder = startMenuPath;
             var startMenuLink = Path.Combine(startMenuPath, $"{AppName}.lnk");
             CreateShortcutFile(startMenuLink, age3yExe, installFolder);
+            created.Add(startMenuLink);
 
             DiagnosticLog.Write("Shortcuts created successfully.");
         }
@@ -352,6 +370,80 @@ public class NativeInstallService
         {
             DiagnosticLog.Write($"Shortcut creation failed (non-fatal): {ex.Message}");
         }
+        return created;
+    }
+
+    /// <summary>
+    /// Writes the install manifest (wol-manifest.json) at the root of the
+    /// install folder. The manifest records every file and directory the
+    /// installer placed on disk so the uninstaller can later delete them
+    /// safely without touching anything else (especially Age of Empires III
+    /// base game files).
+    /// </summary>
+    private static void WriteManifest(
+        string installFolder,
+        string? aoe3SourcePath,
+        bool clonedAoe3,
+        List<string> shortcuts,
+        string? startMenuFolder)
+    {
+        try
+        {
+            var (files, dirs) = EnumerateInstalledItems(installFolder);
+
+            var manifest = new InstallManifest
+            {
+                Version = "1.0.15d",
+                InstallPath = installFolder,
+                InstalledAt = DateTime.UtcNow,
+                Aoe3SourcePath = aoe3SourcePath,
+                ClonedAoe3 = clonedAoe3,
+                Files = files,
+                Directories = dirs,
+                Shortcuts = shortcuts,
+                StartMenuFolder = startMenuFolder,
+            };
+            manifest.Save();
+            DiagnosticLog.Write($"Install manifest written: {files.Count} files, {dirs.Count} dirs.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Manifest write failed (non-fatal): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Walks the install folder and returns the relative paths of every file
+    /// and every directory the installer placed there. Excludes the manifest
+    /// itself (it'll be deleted last during uninstall).
+    /// </summary>
+    private static (List<string> Files, List<string> Dirs) EnumerateInstalledItems(string installFolder)
+    {
+        var files = new List<string>();
+        var dirs = new List<string>();
+
+        if (!Directory.Exists(installFolder))
+            return (files, dirs);
+
+        // Files (excluding the manifest itself)
+        foreach (var f in Directory.EnumerateFiles(installFolder, "*", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(installFolder, f).Replace('\\', '/');
+            if (string.Equals(rel, InstallManifest.FileName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            files.Add(rel);
+        }
+
+        // Directories — sort by depth so we record parents before children;
+        // the uninstaller will walk this list in reverse to remove leaves first.
+        foreach (var d in Directory.EnumerateDirectories(installFolder, "*", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(installFolder, d).Replace('\\', '/');
+            dirs.Add(rel);
+        }
+        dirs.Sort((a, b) => a.Length.CompareTo(b.Length));
+
+        return (files, dirs);
     }
 
     /// <summary>

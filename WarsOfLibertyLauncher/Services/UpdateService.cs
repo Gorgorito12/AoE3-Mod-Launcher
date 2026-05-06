@@ -305,21 +305,57 @@ public class UpdateService
 
     // ---- Helpers ----
 
-    /// <summary>Resolve install path from config first, then registry.</summary>
+    /// <summary>
+    /// Resolve install path. Priority:
+    ///   1. Config (user-set or cached from previous detection)
+    ///   2. Windows Registry (Inno Setup GUID)
+    ///   3. Disk scan via AoE3Detector (finds WoL inside AoE3 folders)
+    /// </summary>
     private string? ResolveInstallPath()
     {
+        // 1. Config path
         if (!string.IsNullOrWhiteSpace(_config.ModInstallPath)
             && RegistryService.IsValidInstall(_config.ModInstallPath))
         {
             return _config.ModInstallPath.TrimEnd('\\', '/');
         }
 
+        // 2. Registry (Inno Setup entries)
         var detected = RegistryService.FindInstallPath();
         if (!string.IsNullOrEmpty(detected))
         {
             _config.ModInstallPath = detected;
             _config.Save();
             return detected;
+        }
+
+        // 3. Disk scan — look for WoL inside detected AoE3 installations
+        var aoe3Installs = AoE3Detector.FindAll();
+        foreach (var install in aoe3Installs)
+        {
+            // Candidate locations where WoL files may live, in priority order:
+            //   a) <AoE3 root>\Wars of Liberty\        (most common — installed as subfolder)
+            //   b) <AoE3 root>\                        (mod files merged directly into AoE3)
+            //   c) <bin folder>\Wars of Liberty\       (uncommon, but possible)
+            //   d) <bin folder>\                       (uncommon)
+            var candidates = new[]
+            {
+                Path.Combine(install.ModRoot, "Wars of Liberty"),
+                install.ModRoot,
+                Path.Combine(install.GameFolder, "Wars of Liberty"),
+                install.GameFolder,
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (RegistryService.IsValidInstall(candidate))
+                {
+                    DiagnosticLog.Write($"Found WoL via disk scan: {candidate}");
+                    _config.ModInstallPath = candidate;
+                    _config.Save();
+                    return candidate;
+                }
+            }
         }
 
         return null;

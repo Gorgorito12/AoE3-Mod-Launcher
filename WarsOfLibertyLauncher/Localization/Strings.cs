@@ -85,6 +85,129 @@ public static class Strings
             [LangEn] = "Change...",
             [LangEs] = "Cambiar...",
         },
+        ["BrowseModButton"] = new()
+        {
+            [LangEn] = "Browse...",
+            [LangEs] = "Examinar...",
+        },
+
+        // -------- Uninstall --------
+        ["BtnUninstall"] = new()
+        {
+            [LangEn] = "Uninstall",
+            [LangEs] = "Desinstalar",
+        },
+        ["BtnMore"] = new()
+        {
+            [LangEn] = "⋯",
+            [LangEs] = "⋯",
+        },
+        ["MenuUninstall"] = new()
+        {
+            [LangEn] = "Uninstall mod...",
+            [LangEs] = "Desinstalar mod...",
+        },
+        ["DlgUninstallTitle"] = new()
+        {
+            [LangEn] = "Uninstall Wars of Liberty",
+            [LangEs] = "Desinstalar Wars of Liberty",
+        },
+        ["DlgUninstallHeader"] = new()
+        {
+            [LangEn] = "Uninstall Wars of Liberty",
+            [LangEs] = "Desinstalar Wars of Liberty",
+        },
+        ["DlgUninstallDescription"] = new()
+        {
+            [LangEn] = "This will remove the mod files placed by the launcher. Your Age of Empires III base game will not be affected.",
+            [LangEs] = "Esto eliminará los archivos del mod instalados por el launcher. Tu instalación base de Age of Empires III no se verá afectada.",
+        },
+        ["DlgUninstallInstallPathLabel"] = new()
+        {
+            [LangEn] = "INSTALL PATH",
+            [LangEs] = "RUTA DE INSTALACIÓN",
+        },
+        ["DlgUninstallOptionsTitle"] = new()
+        {
+            [LangEn] = "ALSO CLEAN UP",
+            [LangEs] = "TAMBIÉN LIMPIAR",
+        },
+        ["DlgUninstallOptShortcuts"] = new()
+        {
+            [LangEn] = "Remove desktop and Start Menu shortcuts",
+            [LangEs] = "Eliminar accesos directos del escritorio y menú inicio",
+        },
+        ["DlgUninstallOptRegistry"] = new()
+        {
+            [LangEn] = "Remove Windows registry entry (Add/Remove Programs)",
+            [LangEs] = "Eliminar entrada del registro de Windows (Programas y características)",
+        },
+        ["DlgUninstallOptResetConfig"] = new()
+        {
+            [LangEn] = "Reset launcher config to defaults",
+            [LangEs] = "Restablecer la configuración del launcher",
+        },
+        ["DlgUninstallProtectionNote"] = new()
+        {
+            [LangEn] = "✓ Protected: age3y.exe, age3.exe and other base-game files will never be deleted.",
+            [LangEs] = "✓ Protegidos: age3y.exe, age3.exe y otros archivos del juego base nunca se eliminarán.",
+        },
+        ["DlgUninstallManifestTitle"] = new()
+        {
+            [LangEn] = "✓ INSTALL MANIFEST FOUND — SAFE UNINSTALL",
+            [LangEs] = "✓ MANIFIESTO DE INSTALACIÓN ENCONTRADO — DESINSTALACIÓN SEGURA",
+        },
+        ["DlgUninstallManifestDetail"] = new()
+        {
+            [LangEn] = "Will delete exactly the {0} files and {1} folders the launcher created. Nothing else will be touched.",
+            [LangEs] = "Se eliminarán exactamente los {0} archivos y {1} carpetas que el launcher creó. Nada más será tocado.",
+        },
+        ["DlgUninstallSubfolderTitle"] = new()
+        {
+            [LangEn] = "⚠ NO MANIFEST — STANDALONE FOLDER DETECTED",
+            [LangEs] = "⚠ SIN MANIFIESTO — CARPETA INDEPENDIENTE DETECTADA",
+        },
+        ["DlgUninstallSubfolderDetail"] = new()
+        {
+            [LangEn] = "This folder doesn't contain age3y.exe, so it appears to be a WoL-only folder. The whole folder ({0} files, {1} subfolders) will be deleted.",
+            [LangEs] = "Esta carpeta no contiene age3y.exe, así que parece ser una carpeta exclusiva de WoL. La carpeta entera ({0} archivos, {1} subcarpetas) se eliminará.",
+        },
+        ["DlgUninstallRefusedTitle"] = new()
+        {
+            [LangEn] = "✗ CANNOT UNINSTALL AUTOMATICALLY",
+            [LangEs] = "✗ NO SE PUEDE DESINSTALAR AUTOMÁTICAMENTE",
+        },
+        ["DlgUninstallRefusedDetail"] = new()
+        {
+            [LangEn] = "The install path looks like an Age of Empires III root folder. Without an install manifest, the launcher cannot tell which files belong to the mod and which to the base game. Please uninstall manually or reinstall the mod first to generate a manifest.",
+            [LangEs] = "La ruta de instalación parece ser la raíz de Age of Empires III. Sin un manifiesto de instalación, el launcher no puede distinguir qué archivos pertenecen al mod y cuáles al juego base. Desinstala manualmente o reinstala el mod primero para generar un manifiesto.",
+        },
+        ["DlgUninstallNothingTitle"] = new()
+        {
+            [LangEn] = "NOTHING TO UNINSTALL",
+            [LangEs] = "NADA QUE DESINSTALAR",
+        },
+        ["DlgUninstallNothingDetail"] = new()
+        {
+            [LangEn] = "No installation was detected.",
+            [LangEs] = "No se detectó ninguna instalación.",
+        },
+
+        ["StatusUninstalling"] = new()
+        {
+            [LangEn] = "Uninstalling Wars of Liberty...",
+            [LangEs] = "Desinstalando Wars of Liberty...",
+        },
+        ["StatusUninstallSuccess"] = new()
+        {
+            [LangEn] = "Wars of Liberty was uninstalled successfully ({0} files removed).",
+            [LangEs] = "Wars of Liberty se desinstaló correctamente ({0} archivos eliminados).",
+        },
+        ["StatusUninstallPartial"] = new()
+        {
+            [LangEn] = "Uninstall finished with {0} error(s). Check the log for details.",
+            [LangEs] = "Desinstalación terminada con {0} error(es). Revisa el log para más detalles.",
+        },
         ["NewsPlaceholder"] = new()
         {
             [LangEn] = "News from the latest update will appear here.",
@@ -99,13 +222,28 @@ public static class Strings
         },
         ["BtnVerify"] = new()
         {
-            [LangEn] = "CHECK",
+            [LangEn] = "VERIFY",
             [LangEs] = "VERIFICAR",
+        },
+        ["BtnCheckUpdates"] = new()
+        {
+            [LangEn] = "CHECK",
+            [LangEs] = "BUSCAR",
         },
         ["BtnPlay"] = new()
         {
             [LangEn] = "PLAY",
             [LangEs] = "JUGAR",
+        },
+        ["BtnPlaying"] = new()
+        {
+            [LangEn] = "PLAYING...",
+            [LangEs] = "JUGANDO...",
+        },
+        ["BtnStop"] = new()
+        {
+            [LangEn] = "STOP",
+            [LangEs] = "DETENER",
         },
         ["BtnPause"] = new()
         {
@@ -281,6 +419,22 @@ public static class Strings
             [LangEn] = "Select Wars of Liberty folder",
             [LangEs] = "Seleccionar carpeta de Wars of Liberty",
         },
+        ["DlgGameRunningTitle"] = new()
+        {
+            [LangEn] = "Game is running",
+            [LangEs] = "El juego está en ejecución",
+        },
+        ["DlgGameRunningBody"] = new()
+        {
+            [LangEn] = "Age of Empires III is currently running.\n\n" +
+                       "• Yes — Close the game and continue\n" +
+                       "• No — Continue without closing (not recommended)\n" +
+                       "• Cancel — Go back",
+            [LangEs] = "Age of Empires III está actualmente en ejecución.\n\n" +
+                       "• Sí — Cerrar el juego y continuar\n" +
+                       "• No — Continuar sin cerrar (no recomendado)\n" +
+                       "• Cancelar — Volver",
+        },
         ["DlgGameLaunchErrorTitle"] = new()
         {
             [LangEn] = "Could not start the game",
@@ -335,8 +489,39 @@ public static class Strings
         },
         ["StatusNotInstalled"] = new()
         {
-            [LangEn] = "Wars of Liberty is not installed. Click \"INSTALL MOD\" to download and install it.",
-            [LangEs] = "Wars of Liberty no está instalado. Haz click en \"INSTALAR MOD\" para descargarlo e instalarlo.",
+            [LangEn] = "Wars of Liberty is not installed. Choose a folder and click INSTALL MOD.",
+            [LangEs] = "Wars of Liberty no está instalado. Elige una carpeta y haz click en INSTALAR MOD.",
+        },
+
+        // -------- Integrated install panel --------
+        ["InstallPanelTitle"] = new()
+        {
+            [LangEn] = "Install Wars of Liberty",
+            [LangEs] = "Instalar Wars of Liberty",
+        },
+        ["InstallAoe3Detected"] = new()
+        {
+            [LangEn] = "✓ Age of Empires III detected ({0})",
+            [LangEs] = "✓ Age of Empires III detectado ({0})",
+        },
+        ["InstallAoe3NotDetected"] = new()
+        {
+            [LangEn] = "⚠ Age of Empires III was not detected. The mod will be installed " +
+                       "without copying AoE3 files. Make sure AoE3: The Asian Dynasties " +
+                       "is already in the destination folder.",
+            [LangEs] = "⚠ No se detectó Age of Empires III. El mod se instalará " +
+                       "sin copiar archivos de AoE3. Asegúrate de que AoE3: The Asian Dynasties " +
+                       "ya esté en la carpeta destino.",
+        },
+        ["InstallFolderLabel"] = new()
+        {
+            [LangEn] = "Destination folder:",
+            [LangEs] = "Carpeta destino:",
+        },
+        ["InstallDiskSpace"] = new()
+        {
+            [LangEn] = "Available disk space: {0} on {1}",
+            [LangEs] = "Espacio en disco disponible: {0} en {1}",
         },
         ["StatusDownloadingInstaller"] = new()
         {
@@ -626,6 +811,76 @@ public static class Strings
         {
             [LangEn] = "Installer exited with code {0}. The installation may not be complete.",
             [LangEs] = "El instalador terminó con código {0}. Es posible que la instalación no se haya completado.",
+        },
+        ["StatusInstallIncomplete"] = new()
+        {
+            [LangEn] = "Installation finished but {0} item(s) may be missing. Check the log for details.",
+            [LangEs] = "La instalación finalizó pero {0} elemento(s) podrían faltar. Revisa el log para más detalles.",
+        },
+
+        // -------- Verification --------
+        ["StatusVerifying"] = new()
+        {
+            [LangEn] = "Verifying installation...",
+            [LangEs] = "Verificando instalación...",
+        },
+        ["StatusVerifyOk"] = new()
+        {
+            [LangEn] = "✓ Installation verified — {0} items checked, all OK.",
+            [LangEs] = "✓ Instalación verificada — {0} elementos revisados, todo bien.",
+        },
+        ["StatusVerifyMissing"] = new()
+        {
+            [LangEn] = "⚠ {0} problem(s) found: {1}",
+            [LangEs] = "⚠ {0} problema(s) encontrado(s): {1}",
+        },
+        ["StatusInstallSuccessVerified"] = new()
+        {
+            [LangEn] = "✓ Wars of Liberty installed and verified ({0} items checked).",
+            [LangEs] = "✓ Wars of Liberty instalado y verificado ({0} elementos revisados).",
+        },
+        ["DlgVerifyRepairTitle"] = new()
+        {
+            [LangEn] = "Repair installation?",
+            [LangEs] = "¿Reparar instalación?",
+        },
+        ["DlgVerifyRepairBody"] = new()
+        {
+            [LangEn] = "Found {0} problem(s) in the installation.\n\n" +
+                       "Would you like to repair it? This will re-download the mod files " +
+                       "and overwrite any damaged or missing files.\n\n" +
+                       "Your AoE3 game files will NOT be affected.",
+            [LangEs] = "Se encontraron {0} problema(s) en la instalación.\n\n" +
+                       "¿Deseas repararla? Esto volverá a descargar los archivos del mod " +
+                       "y sobrescribirá los archivos dañados o faltantes.\n\n" +
+                       "Los archivos del juego AoE3 NO se verán afectados.",
+        },
+        ["StatusRepairing"] = new()
+        {
+            [LangEn] = "Repairing installation...",
+            [LangEs] = "Reparando instalación...",
+        },
+        ["StatusRepairSuccess"] = new()
+        {
+            [LangEn] = "✓ Repair complete — all files verified successfully.",
+            [LangEs] = "✓ Reparación completa — todos los archivos verificados correctamente.",
+        },
+        ["StatusRepairPartial"] = new()
+        {
+            [LangEn] = "⚠ Repair finished but {0} problem(s) remain. Some AoE3 base files may need manual reinstall.",
+            [LangEs] = "⚠ Reparación terminada pero {0} problema(s) persisten. Algunos archivos base de AoE3 pueden necesitar reinstalación manual.",
+        },
+
+        // -------- Game state --------
+        ["StatusPlaying"] = new()
+        {
+            [LangEn] = "🎮 Game is running — Wars of Liberty is active.",
+            [LangEs] = "🎮 El juego está en ejecución — Wars of Liberty está activo.",
+        },
+        ["StatusGameClosed"] = new()
+        {
+            [LangEn] = "Game closed.",
+            [LangEs] = "Juego cerrado.",
         },
         ["DlgInstallNoUrlBody"] = new()
         {
