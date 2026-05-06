@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
 
 namespace WarsOfLibertyLauncher;
@@ -17,13 +18,17 @@ public partial class LauncherUpdateDialog : Window
     private enum Phase { Idle, Downloading, ReadyToRestart, Failed }
 
     private readonly LauncherUpdateService.UpdateCheckResult _update;
+    private readonly LauncherConfig? _config;
     private CancellationTokenSource? _cts;
     private Phase _phase = Phase.Idle;
 
-    public LauncherUpdateDialog(LauncherUpdateService.UpdateCheckResult update)
+    public LauncherUpdateDialog(
+        LauncherUpdateService.UpdateCheckResult update,
+        LauncherConfig? config = null)
     {
         InitializeComponent();
         _update = update;
+        _config = config;
 
         Title = Strings.Get("DlgLauncherUpdateTitle");
         HeaderText.Text = Strings.Get("DlgLauncherUpdateTitle");
@@ -55,6 +60,26 @@ public partial class LauncherUpdateDialog : Window
     {
         if (_phase == Phase.ReadyToRestart)
         {
+            // Persist the new tag BEFORE relaunching so the freshly-started
+            // binary sees itself as already-on-this-tag and doesn't loop the
+            // update prompt. The config file isn't touched by RelaunchUpdated
+            // (only the .exe is renamed), so the new instance reads our save.
+            if (_config != null && !string.IsNullOrEmpty(_update.RemoteTag))
+            {
+                try
+                {
+                    _config.LastInstalledLauncherTag = _update.RemoteTag;
+                    _config.SkippedLauncherTag = ""; // no longer relevant
+                    _config.Save();
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Failed to persist new launcher tag: {ex.Message}");
+                    // Non-fatal: continue with relaunch. Worst case the new
+                    // binary prompts again, user clicks Later, saved as skipped.
+                }
+            }
+
             // The user clicked "Restart now" — start the new binary and close.
             try
             {

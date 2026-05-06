@@ -85,6 +85,26 @@ public class LauncherConfig
     [JsonPropertyName("officialWebsite")]
     public string OfficialWebsite { get; set; } = "http://aoe3wol.com/";
 
+    /// <summary>
+    /// GitHub release tag of the launcher binary the user is currently running
+    /// (e.g. "v0.6.0"). Set automatically after a successful self-update.
+    /// Empty on a fresh install — the launcher will prompt once and save it.
+    ///
+    /// This is the source of truth for self-update detection: we compare it
+    /// against the latest release tag on GitHub, NOT the AssemblyVersion of
+    /// the running binary. That way the update mechanism doesn't depend on
+    /// remembering to bump csproj before publishing.
+    /// </summary>
+    [JsonPropertyName("lastInstalledLauncherTag")]
+    public string LastInstalledLauncherTag { get; set; } = "";
+
+    /// <summary>
+    /// GitHub release tag the user dismissed via "Later". The launcher won't
+    /// prompt again for this exact tag — only when a different tag appears.
+    /// </summary>
+    [JsonPropertyName("skippedLauncherTag")]
+    public string SkippedLauncherTag { get; set; } = "";
+
     private const string ConfigFileName = "launcher-config.json";
 
     public static LauncherConfig Load()

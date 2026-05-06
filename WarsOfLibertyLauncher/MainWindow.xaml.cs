@@ -428,13 +428,28 @@ public partial class MainWindow : Window
 
     private async Task CheckForLauncherUpdateInnerAsync()
     {
-        var result = await LauncherUpdateService.CheckAsync();
+        var result = await LauncherUpdateService.CheckAsync(
+            lastInstalledTag: _config.LastInstalledLauncherTag,
+            skippedTag: _config.SkippedLauncherTag);
         if (!result.UpdateAvailable) return;
 
-        var dialog = new LauncherUpdateDialog(result) { Owner = this };
-        dialog.ShowDialog();
-        // If the user accepted the update, the dialog itself starts the new
-        // binary and shuts the app down — nothing else to do here.
+        // Pass the config to the dialog so it can persist the new tag right
+        // before relaunching (avoids a brief race where the new binary boots
+        // and re-checks before this process has saved).
+        var dialog = new LauncherUpdateDialog(result, _config) { Owner = this };
+        var accepted = dialog.ShowDialog();
+
+        // If the user dismissed the update (closed it or clicked "Later"),
+        // remember this tag so we don't keep prompting until a different
+        // tag appears on GitHub.
+        if (accepted != true)
+        {
+            _config.SkippedLauncherTag = result.RemoteTag;
+            _config.Save();
+            DiagnosticLog.Write($"User dismissed launcher update {result.RemoteTag}; saved as skipped.");
+        }
+        // If accepted, the dialog already saved LastInstalledLauncherTag and
+        // launched the new binary — nothing else to do.
     }
 
     private async Task CheckAsync()

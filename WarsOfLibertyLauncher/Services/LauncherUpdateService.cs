@@ -29,58 +29,89 @@ public class LauncherUpdateService
         string CurrentVersion,
         string LatestVersion,
         string? DownloadUrl,
-        long DownloadSize);
+        long DownloadSize,
+        string RemoteTag);
 
     /// <summary>
-    /// The version baked into this assembly at build time (from .csproj Version).
+    /// The AssemblyVersion baked into this binary. Kept for diagnostics only —
+    /// update detection is tag-based, not version-based.
     /// </summary>
     public static Version CurrentVersion =>
         Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
 
     /// <summary>
-    /// Queries GitHub for the latest release and returns whether an update
-    /// is available. Does NOT download anything.
+    /// Queries GitHub for the latest release. Update detection is tag-based:
+    /// the launcher considers an update available when GitHub's latest release
+    /// tag differs from <paramref name="lastInstalledTag"/> (and isn't the tag
+    /// the user previously dismissed via "Later").
+    ///
+    /// This decouples the update flow from the binary's AssemblyVersion, which
+    /// means publishing a new release is just "upload to GitHub" — no need to
+    /// bump csproj or coordinate version numbers.
     /// </summary>
-    public static async Task<UpdateCheckResult> CheckAsync(CancellationToken ct = default)
+    /// <param name="lastInstalledTag">
+    /// The tag of the currently-running launcher (saved after the last
+    /// successful self-update). Empty for fresh installs — in that case the
+    /// launcher will prompt once and save the tag the user picks.
+    /// </param>
+    /// <param name="skippedTag">
+    /// A tag the user previously dismissed. We won't re-prompt for it.
+    /// </param>
+    public static async Task<UpdateCheckResult> CheckAsync(
+        string? lastInstalledTag = null,
+        string? skippedTag = null,
+        CancellationToken ct = default)
     {
-        var current = CurrentVersion;
-        DiagnosticLog.Write($"Launcher self-update check. Current version: {current}");
+        DiagnosticLog.Write(
+            $"Launcher self-update check. Current tag: '{lastInstalledTag ?? ""}', " +
+            $"AssemblyVersion: {CurrentVersion}");
 
         try
         {
             var release = await Http.GetFromJsonAsync<GitHubRelease>(GitHubApiUrl, ct);
-            if (release == null)
-                return NoUpdate(current);
+            if (release == null || string.IsNullOrEmpty(release.TagName))
+                return NoUpdate(lastInstalledTag);
 
-            var remoteVersion = ParseVersion(release.TagName);
-            if (remoteVersion == null || remoteVersion <= current)
+            var remoteTag = release.TagName;
+
+            // Already on the latest tag.
+            if (string.Equals(remoteTag, lastInstalledTag, StringComparison.OrdinalIgnoreCase))
             {
-                DiagnosticLog.Write($"No launcher update needed (remote: {release.TagName}).");
-                return NoUpdate(current);
+                DiagnosticLog.Write($"Already on latest tag ({remoteTag}); no update.");
+                return NoUpdate(lastInstalledTag);
+            }
+
+            // The user dismissed this exact tag before.
+            if (string.Equals(remoteTag, skippedTag, StringComparison.OrdinalIgnoreCase))
+            {
+                DiagnosticLog.Write(
+                    $"User previously dismissed tag {remoteTag}; skipping prompt.");
+                return NoUpdate(lastInstalledTag);
             }
 
             var asset = FindExeAsset(release);
             if (asset == null)
             {
                 DiagnosticLog.Write("Remote release has no .exe asset.");
-                return NoUpdate(current);
+                return NoUpdate(lastInstalledTag);
             }
 
             DiagnosticLog.Write(
-                $"Launcher update available: {current} -> {remoteVersion} " +
+                $"Launcher update available: {lastInstalledTag ?? "(unknown)"} -> {remoteTag} " +
                 $"({asset.Name}, {asset.Size} bytes)");
 
             return new UpdateCheckResult(
                 UpdateAvailable: true,
-                CurrentVersion: current.ToString(3),
-                LatestVersion: remoteVersion.ToString(3),
+                CurrentVersion: string.IsNullOrEmpty(lastInstalledTag) ? "—" : lastInstalledTag!,
+                LatestVersion: remoteTag,
                 DownloadUrl: asset.BrowserDownloadUrl,
-                DownloadSize: asset.Size);
+                DownloadSize: asset.Size,
+                RemoteTag: remoteTag);
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Launcher update check failed: {ex.Message}");
-            return NoUpdate(current);
+            return NoUpdate(lastInstalledTag);
         }
     }
 
@@ -173,13 +204,10 @@ public class LauncherUpdateService
         }
     }
 
-    private static UpdateCheckResult NoUpdate(Version current) =>
-        new(false, current.ToString(3), current.ToString(3), null, 0);
-
-    private static Version? ParseVersion(string tag)
+    private static UpdateCheckResult NoUpdate(string? currentTag)
     {
-        var cleaned = tag.TrimStart('v', 'V');
-        return Version.TryParse(cleaned, out var v) ? v : null;
+        var label = string.IsNullOrEmpty(currentTag) ? "—" : currentTag!;
+        return new(false, label, label, null, 0, currentTag ?? "");
     }
 
     private static GitHubAsset? FindExeAsset(GitHubRelease release)
