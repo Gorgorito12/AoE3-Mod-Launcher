@@ -59,7 +59,10 @@ public partial class MainWindow : Window
             await CheckForLauncherUpdateAsync();
             await CheckAsync();
             if (_modIsInstalled)
+            {
                 _ = Task.Run(InstallerService.TryCleanupTemp);
+                _ = Task.Run(NativeInstallService.TryCleanupTemp);
+            }
             if (autoUpdate && _modIsInstalled && _pendingDownloads.Count > 0)
             {
                 await ApplyAsync();
@@ -406,51 +409,105 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Full first-time install flow. Walks the user through:
+    /// Full first-time install flow (native — no Inno Setup). Walks the user through:
     ///   1. Detecting Age of Empires III: TAD installations (Steam/GOG/retail)
-    ///   2. Picking which one to clone from (or browsing manually)
-    ///   3. Choosing the destination folder
-    ///   4. Confirming with disk-space check
-    ///   5. Cloning AoE3 to the destination
-    ///   6. Downloading the WoL installer ZIP
-    ///   7. Running the installer silently against the cloned AoE3
+    ///   2. Choosing the destination folder (defaults to a "Wars of Liberty"
+    ///      subfolder next to the detected AoE3 install)
+    ///   3. Downloading the WoL payload ZIP (raw mod files)
+    ///   4. Cloning AoE3 to the destination
+    ///   5. Copying WoL files on top
+    ///   6. Creating shortcuts + registry entries
     ///
     /// The result is a self-contained "Wars of Liberty" folder that has both
     /// AoE3:TAD and the WoL mod inside, independent of the original Steam/GOG
     /// install.
     /// </summary>
-    /// <summary>
-    /// Called when the launcher was relaunched elevated with --install-from.
-    /// Skips all dialogs (user already confirmed) and goes straight to work.
-    /// </summary>
-    /// <summary>
-    /// Downloads the official Wars of Liberty installer ZIP, extracts it,
-    /// and runs the installer wizard. The wizard handles AoE3 detection,
-    /// folder selection, and DLL copying internally. After the user finishes,
-    /// the launcher re-checks to detect the new installation automatically.
-    /// </summary>
     private async Task InstallAsync()
     {
         if (_isBusy) return;
 
-        // No URL configured — fall back to opening the website
-        if (string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
+        // No URLs configured — fall back to opening the website
+        var payloadUrls = _config.PayloadZipUrls;
+        if (payloadUrls == null || payloadUrls.Length == 0)
         {
-            var fallback = MessageBox.Show(this,
-                Strings.Get("DlgInstallNoUrlBody"),
-                Strings.Get("DlgInstallTitle"),
-                MessageBoxButton.OKCancel, MessageBoxImage.Information);
-            if (fallback == MessageBoxResult.OK)
-                InstallerService.OpenWebsite(_config.OfficialWebsite);
-            return;
+            // Fallback to legacy single URL if available
+            if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
+                payloadUrls = new[] { _config.InstallerZipUrl };
+            else
+            {
+                var fallback = MessageBox.Show(this,
+                    Strings.Get("DlgInstallNoUrlBody"),
+                    Strings.Get("DlgInstallTitle"),
+                    MessageBoxButton.OKCancel, MessageBoxImage.Information);
+                if (fallback == MessageBoxResult.OK)
+                    InstallerService.OpenWebsite(_config.OfficialWebsite);
+                return;
+            }
         }
 
+        // ---- Step 1: Detect AoE3 and pick install folder ----
+        var aoe3Installs = AoE3Detector.FindAll();
+        string? aoe3SourcePath = null;
+        string? aoe3SourceLabel = null;
+        string suggestedFolder;
+
+        if (aoe3Installs.Count > 0)
+        {
+            aoe3SourcePath = aoe3Installs[0].GameFolder;
+            aoe3SourceLabel = aoe3Installs[0].Source;
+            suggestedFolder = aoe3Installs[0].ModRoot;
+            DiagnosticLog.Write(
+                $"AoE3 detected at: {aoe3SourcePath} (source: {aoe3SourceLabel})");
+        }
+        else
+        {
+            suggestedFolder = _config.DefaultInstallFolder;
+            DiagnosticLog.Write("No AoE3 installation found; using configured default.");
+        }
+
+        // Ensure "Wars of Liberty" subfolder
+        if (!suggestedFolder.EndsWith("Wars of Liberty", StringComparison.OrdinalIgnoreCase))
+            suggestedFolder = Path.Combine(suggestedFolder, "Wars of Liberty");
+
+        var folderDialog = new InstallFolderDialog(suggestedFolder, aoe3SourcePath, aoe3SourceLabel)
+        {
+            Owner = this
+        };
+        if (folderDialog.ShowDialog() != true) return;
+        var installFolder = folderDialog.SelectedFolder;
+
+        // If no AoE3 detected automatically, the user must have picked a folder
+        // that IS an AoE3 install or the clone step won't have a source.
+        // In that case, try to find AoE3 from the chosen path's parents.
+        if (aoe3SourcePath == null)
+        {
+            // Try the parent of the chosen folder as AoE3 source
+            var parentDir = Path.GetDirectoryName(installFolder);
+            if (!string.IsNullOrEmpty(parentDir) && AoE3Detector.LooksLikeAoE3(parentDir))
+            {
+                aoe3SourcePath = parentDir;
+            }
+            else
+            {
+                // Last resort: ask user
+                var noAoe3 = MessageBox.Show(this,
+                    Strings.Get("DlgNoAoe3DetectedBody"),
+                    Strings.Get("DlgNoAoe3DetectedTitle"),
+                    MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+                if (noAoe3 != MessageBoxResult.OK) return;
+                // Will proceed without clone (mod-only install)
+            }
+        }
+
+        // Confirm install
         var confirm = MessageBox.Show(this,
-            Strings.Get("DlgInstallConfirmBody"),
+            Strings.Format("DlgInstallNativeConfirmBody", installFolder,
+                aoe3SourcePath ?? "(none - mod only)"),
             Strings.Get("DlgInstallConfirmTitle"),
             MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
+        // ---- Begin installation ----
         SetBusy(true);
         _cts = new CancellationTokenSource();
         ShowDownloadControls(true);
@@ -458,7 +515,6 @@ public partial class MainWindow : Window
         UpdateHeaderText.Text = Strings.Get("DlgInstallTitle");
         UpdateHeaderText.Visibility = Visibility.Visible;
 
-        // Initialize progress so the user sees something immediately
         LblCurrentPatch.Text = Strings.Get("StatusDownloadingInstaller");
         PatchProgress.Value = 0;
         OverallProgress.Value = 0;
@@ -467,11 +523,11 @@ public partial class MainWindow : Window
         SpeedText.Text = "";
         EtaText.Text = "";
 
+        var nativeInstaller = new NativeInstallService();
+
         try
         {
-            // ---- Step 1: Download the ZIP (~2.7 GB) ----
-            SetStatus(Strings.Get("StatusDownloadingInstaller"));
-
+            // Download progress
             var speed = new SpeedTracker();
             var dlProgress = new Progress<DownloadProgress>(p =>
             {
@@ -482,7 +538,7 @@ public partial class MainWindow : Window
                 {
                     var eta = speed.EstimateTimeRemaining(p.TotalBytes - p.BytesReceived);
                     PatchProgress.Value = p.Percentage;
-                    OverallProgress.Value = p.Percentage;
+                    OverallProgress.Value = p.Percentage * 0.4; // download = 40% of total
                     PatchBytesText.Text = $"{p.Percentage:0.0}%";
                     OverallBytesText.Text =
                         $"{FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes)}";
@@ -495,7 +551,6 @@ public partial class MainWindow : Window
                 else
                 {
                     PatchProgress.Value = 0;
-                    OverallProgress.Value = 0;
                     PatchBytesText.Text = FormatBytes(p.BytesReceived);
                     OverallBytesText.Text = FormatBytes(p.BytesReceived);
                     EtaText.Text = "";
@@ -507,94 +562,65 @@ public partial class MainWindow : Window
                 LblCurrentPatch.Text = Strings.Get("StatusDownloadingInstaller");
             });
 
-            var zipPath = await _installerService.DownloadInstallerZipAsync(
-                _config.InstallerZipUrl, dlProgress, _cts.Token);
-
-            // ---- Step 2: Extract the ZIP ----
-            SetStatus(Strings.Get("StatusExtractingInstaller"));
-            ResetProgressUI();
-            UpdateHeaderText.Text = Strings.Get("DlgInstallTitle");
-            UpdateHeaderText.Visibility = Visibility.Visible;
-
-            var extractStatus = new Progress<string>(SetStatus);
-            var extractedFolder = await _installerService.ExtractInstallerZipAsync(
-                zipPath, extractStatus, _cts.Token);
-
-            // ---- Step 3: Pick install folder ----
-            var aoe3Installs = AoE3Detector.FindAll();
-            string suggestedFolder;
-            if (aoe3Installs.Count > 0)
+            // Clone progress
+            var cloneProgress = new Progress<CloneProgress>(p =>
             {
-                suggestedFolder = aoe3Installs[0].ModRoot;
-                DiagnosticLog.Write(
-                    $"AoE3 detected at: {suggestedFolder} (source: {aoe3Installs[0].Source})");
+                double pct = p.BytesTotal > 0
+                    ? (double)p.BytesCopied / p.BytesTotal * 100.0
+                    : 0;
+                PatchProgress.Value = pct;
+                OverallProgress.Value = 40 + pct * 0.4; // clone = 40%-80% of total
+                PatchBytesText.Text = $"{pct:0.0}%";
+                OverallBytesText.Text =
+                    $"{FormatBytes(p.BytesCopied)} / {FormatBytes(p.BytesTotal)}";
+                LblCurrentPatch.Text = p.CurrentFile.Length > 80
+                    ? "..." + p.CurrentFile[^80..]
+                    : p.CurrentFile;
+                SpeedText.Text = p.BytesPerSecond > 0
+                    ? Strings.Format("ProgressSpeed", FormatBytes((long)p.BytesPerSecond))
+                    : "";
+            });
+
+            // Status updates
+            var statusProgress = new Progress<string>(s =>
+            {
+                SetStatus(s);
+                LblCurrentPatch.Text = s;
+            });
+
+            // Wire up pause to native installer
+            _cloneService = nativeInstaller.CloneService;
+
+            if (aoe3SourcePath != null)
+            {
+                // Full install: clone AoE3 + overlay WoL
+                await nativeInstaller.InstallAsync(
+                    payloadUrls,
+                    aoe3SourcePath,
+                    installFolder,
+                    dlProgress,
+                    cloneProgress,
+                    statusProgress,
+                    _cts.Token);
             }
             else
             {
-                suggestedFolder = _config.DefaultInstallFolder;
-                DiagnosticLog.Write("No AoE3 installation found; using configured default.");
+                // Mod-only: just download and copy WoL files
+                await nativeInstaller.InstallModOnlyAsync(
+                    payloadUrls,
+                    installFolder,
+                    dlProgress,
+                    statusProgress,
+                    _cts.Token);
             }
-
-            var folderDialog = new InstallFolderDialog(suggestedFolder)
-            {
-                Owner = this
-            };
-            if (folderDialog.ShowDialog() != true)
-                throw new OperationCanceledException();
-            var installFolder = folderDialog.SelectedFolder;
-
-            // ---- Step 4: Find the installer .exe ----
-            var installerExe = InstallerService.FindInstallerExe(extractedFolder);
-            if (installerExe == null)
-                throw new FileNotFoundException(Strings.Get("ErrInstallerExeNotFound"));
-
-            // ---- Step 5: Run installer silently and monitor progress ----
-            var logPath = Path.Combine(InstallerService.TempDirectory, "install.log");
-            try { if (File.Exists(logPath)) File.Delete(logPath); } catch { /* ignored */ }
-
-            SetStatus(Strings.Get("StatusLaunchingInstaller"));
-            ResetProgressUI();
-            UpdateHeaderText.Text = Strings.Get("DlgInstallTitle");
-            UpdateHeaderText.Visibility = Visibility.Visible;
-            LblCurrentPatch.Text = Strings.Get("StatusLaunchingInstaller");
-
-            var process = InstallerService.RunInstallerSilent(installerExe, installFolder, logPath);
-
-            using var monitorCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-            var monitor = new InstallProgressMonitor();
-            var installProgress = new Progress<InstallProgressMonitor.InstallProgress>(p =>
-            {
-                PatchProgress.Value = p.Percentage;
-                OverallProgress.Value = p.Percentage;
-                PatchBytesText.Text = $"{p.Percentage:0.0}%";
-                OverallBytesText.Text = Strings.Format(
-                    "StatusInstallingFiles", p.Percentage, p.FilesCopied);
-                LblCurrentPatch.Text = p.LastFile.Length > 80
-                    ? "..." + p.LastFile[^80..]
-                    : p.LastFile;
-                SpeedText.Text = "";
-                EtaText.Text = "";
-            });
-
-            var monitorTask = monitor.MonitorAsync(logPath, installProgress, monitorCts.Token);
-
-            await Task.Run(() => process.WaitForExit(), _cts.Token);
-            DiagnosticLog.Write($"Installer exited with code {process.ExitCode}");
-
-            monitorCts.Cancel();
-            try { await monitorTask; } catch (OperationCanceledException) { /* expected */ }
 
             PatchProgress.Value = 100;
             OverallProgress.Value = 100;
-            SetStatus(Strings.Get("StatusFinishingInstall"));
+            SetStatus(Strings.Get("StatusInstallSuccess"));
 
-            if (process.ExitCode == 0)
-                SetStatus(Strings.Get("StatusInstallSuccess"));
-            else
-                SetStatus(Strings.Format("StatusInstallFailed", process.ExitCode));
-
-            // Cleanup is deferred to next startup (see Loaded handler)
-            // so the ZIP cache survives if the user needs to retry.
+            // Point the launcher at the new install
+            _config.ModInstallPath = installFolder;
+            _config.Save();
         }
         catch (OperationCanceledException)
         {
@@ -609,6 +635,7 @@ public partial class MainWindow : Window
         }
         finally
         {
+            _cloneService = null;
             SetBusy(false);
             ShowDownloadControls(false);
             ResetProgressUI();

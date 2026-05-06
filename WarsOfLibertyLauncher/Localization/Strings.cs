@@ -654,6 +654,33 @@ public static class Strings
                        "  3. Instalar Wars of Liberty en silencio\n\n" +
                        "Windows pedirá permiso de administrador. ¿Continuar?",
         },
+        ["DlgInstallNativeConfirmBody"] = new()
+        {
+            [LangEn] = "The mod will be installed to:\n  {0}\n\n" +
+                       "AoE3 source: {1}\n\n" +
+                       "This will copy Age of Empires III and Wars of Liberty files " +
+                       "to the destination folder. Continue?",
+            [LangEs] = "El mod se instalará en:\n  {0}\n\n" +
+                       "Origen de AoE3: {1}\n\n" +
+                       "Se copiarán los archivos de Age of Empires III y Wars of Liberty " +
+                       "a la carpeta destino. ¿Continuar?",
+        },
+        ["DlgNoAoe3DetectedTitle"] = new()
+        {
+            [LangEn] = "AoE3 not found",
+            [LangEs] = "AoE3 no encontrado",
+        },
+        ["DlgNoAoe3DetectedBody"] = new()
+        {
+            [LangEn] = "Age of Empires III was not detected on this computer.\n\n" +
+                       "The mod will be installed WITHOUT copying AoE3 files. " +
+                       "You will need to have AoE3: The Asian Dynasties already " +
+                       "in the destination folder for the mod to work.\n\nContinue anyway?",
+            [LangEs] = "No se detectó Age of Empires III en este computador.\n\n" +
+                       "El mod se instalará SIN copiar archivos de AoE3. " +
+                       "Necesitarás tener AoE3: The Asian Dynasties ya instalado " +
+                       "en la carpeta destino para que el mod funcione.\n\n¿Continuar de todas formas?",
+        },
         ["ErrInstallerExeNotFound"] = new()
         {
             [LangEn] = "Could not locate the installer .exe inside the downloaded ZIP.",

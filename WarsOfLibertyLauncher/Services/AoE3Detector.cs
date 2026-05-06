@@ -115,6 +115,17 @@ public static class AoE3Detector
     /// either inside the folder itself, in a `bin\` subfolder, or in the
     /// immediate parent's `bin\` subfolder.
     /// </summary>
+    /// <summary>
+    /// Returns true if <paramref name="folder"/> itself looks like an AoE3 install
+    /// (has age3y.exe directly or in bin\).
+    /// </summary>
+    public static bool LooksLikeAoE3(string folder)
+    {
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return false;
+        return File.Exists(Path.Combine(folder, "age3y.exe"))
+            || File.Exists(Path.Combine(folder, "bin", "age3y.exe"));
+    }
+
     public static bool LooksLikeInsideAoE3(string folder)
     {
         if (string.IsNullOrEmpty(folder)) return false;

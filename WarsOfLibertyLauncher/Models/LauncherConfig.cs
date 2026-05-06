@@ -50,13 +50,25 @@ public class LauncherConfig
     public string Language { get; set; } = "en";
 
     /// <summary>
-    /// URL of the Wars of Liberty installer ZIP. The ZIP must contain the
-    /// Inno Setup launcher .exe AND its companion .bin data files (the
-    /// installer is split because the full payload is ~2.7 GB).
+    /// URLs of the Wars of Liberty payload ZIP parts. The ZIP is split into
+    /// multiple files (.zip.001, .zip.002, ...) to work around GitHub's file
+    /// size limits. The launcher downloads all parts, concatenates them into
+    /// a single ZIP, then extracts the raw mod files.
+    /// </summary>
+    [JsonPropertyName("payloadZipUrls")]
+    public string[] PayloadZipUrls { get; set; } = new[]
+    {
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003",
+    };
+
+    /// <summary>
+    /// Legacy single-URL field. Kept for backward compat; if PayloadZipUrls is
+    /// empty, the launcher falls back to this URL.
     /// </summary>
     [JsonPropertyName("installerZipUrl")]
-    public string InstallerZipUrl { get; set; } =
-        "https://aoe3wol.com/files/Wars%20of%20Liberty%20Setup%20-%20v1.0.15d.zip";
+    public string InstallerZipUrl { get; set; } = "";
 
     /// <summary>
     /// Default install folder shown in the install dialog. The user can
