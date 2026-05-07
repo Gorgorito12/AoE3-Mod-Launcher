@@ -60,6 +60,7 @@ public partial class InstallFolderDialog : Window
         DescriptionText.Text = Strings.Get("DlgPickInstallFolderDescription");
         LblFolder.Text = Strings.Get("DlgPickInstallFolderLabel");
         BrowseButton.Content = Strings.Get("ChangePathButton");
+        BrowseAoE3InDialogButton.Content = Strings.Get("BrowseAoE3Button");
         OkButton.Content = Strings.Get("BtnInstall");
         CancelButton.Content = Strings.Get("BtnCancel");
     }
@@ -158,6 +159,59 @@ public partial class InstallFolderDialog : Window
                 picked = Path.Combine(picked, "Wars of Liberty");
             FolderTextBox.Text = picked;
         }
+    }
+
+    private void BrowseAoE3InDialogButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = Strings.Get("DlgAoE3FolderPickerTitle"),
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        var chosen = dialog.FolderName.TrimEnd('\\', '/');
+
+        // Try to find age3y.exe in the selected folder or its bin\ subfolder
+        string? resolvedExe = null;
+        string? gameFolder = null;
+        var candidates = new[]
+        {
+            (exe: Path.Combine(chosen, "age3y.exe"),          folder: chosen),
+            (exe: Path.Combine(chosen, "bin", "age3y.exe"),   folder: chosen),
+        };
+        foreach (var (exe, folder) in candidates)
+        {
+            if (File.Exists(exe))
+            {
+                resolvedExe = exe;
+                gameFolder = folder;
+                break;
+            }
+        }
+
+        if (resolvedExe == null)
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgInvalidAoE3FolderBody"),
+                Strings.Get("DlgInvalidAoE3FolderTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Success — update the dialog state
+        Aoe3SourcePath = gameFolder;
+
+        // Switch from orange "not detected" to green "detected"
+        Aoe3DetectionTitleText.Text = Strings.Get("DlgAoe3DetectedTitle");
+        Aoe3DetectionPathText.Text = gameFolder;
+        Aoe3DetectionPanel.Visibility = Visibility.Visible;
+        Aoe3NotDetectedPanel.Visibility = Visibility.Collapsed;
+
+        // Also suggest installing inside this AoE3 folder
+        var suggestedWolPath = Path.Combine(gameFolder!, "Wars of Liberty");
+        FolderTextBox.Text = suggestedWolPath;
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)

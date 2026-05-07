@@ -113,6 +113,7 @@ public partial class MainWindow : Window
         VerifyButton.Content = Strings.Get("BtnVerify");
         StopButton.Content = Strings.Get("BtnStop");
         UninstallMenuItem.Header = Strings.Get("MenuUninstall");
+        LblGamePath.Text = Strings.Get("LblGamePath");
 
         // Buttons that change content based on state — pick the right label
         if (!_modIsInstalled)
@@ -134,6 +135,91 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------------------
     // Folder browse
     // ------------------------------------------------------------------------
+
+    private void BrowseAoE3Button_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy) return;
+
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = Strings.Get("DlgAoE3FolderPickerTitle"),
+            Multiselect = false
+        };
+
+        // Pre-fill with a sensible starting directory
+        if (!string.IsNullOrEmpty(_config.GameExecutable)
+            && Directory.Exists(Path.GetDirectoryName(_config.GameExecutable)))
+        {
+            dialog.InitialDirectory = Path.GetDirectoryName(_config.GameExecutable)!;
+        }
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        var chosen = dialog.FolderName.TrimEnd('\\', '/');
+
+        // Try to find age3y.exe in the selected folder or its bin\ subfolder
+        string? resolvedExe = null;
+        var candidates = new[]
+        {
+            Path.Combine(chosen, "age3y.exe"),
+            Path.Combine(chosen, "bin", "age3y.exe"),
+        };
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(candidate))
+            {
+                resolvedExe = candidate;
+                break;
+            }
+        }
+
+        if (resolvedExe == null)
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgInvalidAoE3FolderBody"),
+                Strings.Get("DlgInvalidAoE3FolderTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Save and update UI
+        _config.GameExecutable = resolvedExe;
+        _config.Save();
+        DiagnosticLog.Write($"User manually set AoE3 path: {resolvedExe}");
+
+        UpdateAoE3PathUI();
+        SetStatus(Strings.Get("StatusAoE3Configured"));
+    }
+
+    /// <summary>
+    /// Checks whether AoE3 is reachable and updates the AoE3 path row visibility.
+    /// Call after CheckAsync or after the user manually selects a folder.
+    /// </summary>
+    private void UpdateAoE3PathUI()
+    {
+        var exePath = GameLauncher.Find(_config, _updateService.InstallPath);
+
+        if (exePath != null)
+        {
+            // AoE3 found — show path in collapsed/normal style
+            GamePathText.Text = Path.GetDirectoryName(exePath) ?? exePath;
+            AoE3PathRow.Visibility = Visibility.Visible;
+            BrowseAoE3Button.Content = Strings.Get("ChangePathButton");
+            BrowseAoE3Button.Background = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#3a3d44")!;
+        }
+        else
+        {
+            // AoE3 NOT found — show prominent red button
+            GamePathText.Text = Strings.Get("StatusAoE3NotDetected");
+            GamePathText.Foreground = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#e63950")!;
+            AoE3PathRow.Visibility = Visibility.Visible;
+            BrowseAoE3Button.Content = Strings.Get("BrowseAoE3Button");
+            BrowseAoE3Button.Background = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
+        }
+    }
 
     private async void BrowseButton_Click(object sender, RoutedEventArgs e)
     {
@@ -484,6 +570,7 @@ public partial class MainWindow : Window
                 BrowseButton.Foreground = (System.Windows.Media.Brush)
                     new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
                 BrowseButton.FontSize = 12;
+                UpdateAoE3PathUI();
                 return;
             }
 
@@ -494,6 +581,7 @@ public partial class MainWindow : Window
             BrowseButton.Foreground = (System.Windows.Media.Brush)
                 new System.Windows.Media.BrushConverter().ConvertFromString("#888")!;
             BrowseButton.FontSize = 10;
+            UpdateAoE3PathUI();
 
             // Sanity check: WoL is installed, but is age3y.exe reachable?
             // If the user installed WoL outside of an AoE3 folder, the mod
@@ -1065,6 +1153,17 @@ public partial class MainWindow : Window
         {
             GameLauncher.Launch(_config, _updateService.InstallPath);
             StartGameMonitor();
+        }
+        catch (FileNotFoundException)
+        {
+            // age3y.exe not found — offer to browse instead of just showing an error
+            UpdateAoE3PathUI();
+            var result = MessageBox.Show(this,
+                Strings.Get("DlgInvalidAoE3FolderBody"),
+                Strings.Get("DlgGameLaunchErrorTitle"),
+                MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+            if (result == MessageBoxResult.OK)
+                BrowseAoE3Button_Click(sender, e);
         }
         catch (Exception ex)
         {

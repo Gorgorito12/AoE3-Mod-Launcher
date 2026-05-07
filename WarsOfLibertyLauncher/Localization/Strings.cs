@@ -506,12 +506,12 @@ public static class Strings
         },
         ["InstallAoe3NotDetected"] = new()
         {
-            [LangEn] = "⚠ Age of Empires III was not detected. The mod will be installed " +
-                       "without copying AoE3 files. Make sure AoE3: The Asian Dynasties " +
-                       "is already in the destination folder.",
-            [LangEs] = "⚠ No se detectó Age of Empires III. El mod se instalará " +
-                       "sin copiar archivos de AoE3. Asegúrate de que AoE3: The Asian Dynasties " +
-                       "ya esté en la carpeta destino.",
+            [LangEn] = "⚠ Age of Empires III was not detected automatically.\n" +
+                       "Use the button below to select your AoE3 installation folder, " +
+                       "or the mod will be installed without copying AoE3 files.",
+            [LangEs] = "⚠ No se detectó Age of Empires III automáticamente.\n" +
+                       "Usa el botón de abajo para seleccionar la carpeta de AoE3, " +
+                       "o el mod se instalará sin copiar los archivos de AoE3.",
         },
         ["InstallFolderLabel"] = new()
         {
@@ -1010,6 +1010,47 @@ public static class Strings
         {
             [LangEn] = "Downloading launcher update...",
             [LangEs] = "Descargando actualización del launcher...",
+        },
+
+        // -------- AoE3 folder browse --------
+        ["BrowseAoE3Button"] = new()
+        {
+            [LangEn] = "Select AoE3 folder...",
+            [LangEs] = "Seleccionar carpeta de AoE3...",
+        },
+        ["LblGamePath"] = new()
+        {
+            [LangEn] = "AGE OF EMPIRES III",
+            [LangEs] = "AGE OF EMPIRES III",
+        },
+        ["DlgAoE3FolderPickerTitle"] = new()
+        {
+            [LangEn] = "Select Age of Empires III folder",
+            [LangEs] = "Seleccionar carpeta de Age of Empires III",
+        },
+        ["DlgInvalidAoE3FolderTitle"] = new()
+        {
+            [LangEn] = "Invalid folder",
+            [LangEs] = "Carpeta no válida",
+        },
+        ["DlgInvalidAoE3FolderBody"] = new()
+        {
+            [LangEn] = "Could not find 'age3y.exe' in the selected folder.\n\n" +
+                       "Please select the Age of Empires III installation folder " +
+                       "(the one that contains age3y.exe or has a 'bin' subfolder with it).",
+            [LangEs] = "No se encontró 'age3y.exe' en la carpeta seleccionada.\n\n" +
+                       "Selecciona la carpeta de instalación de Age of Empires III " +
+                       "(la que contiene age3y.exe o tiene una subcarpeta 'bin' con él).",
+        },
+        ["StatusAoE3NotDetected"] = new()
+        {
+            [LangEn] = "Age of Empires III not detected. Click the button to select its folder.",
+            [LangEs] = "Age of Empires III no detectado. Haz clic en el botón para seleccionar su carpeta.",
+        },
+        ["StatusAoE3Configured"] = new()
+        {
+            [LangEn] = "Age of Empires III configured successfully.",
+            [LangEs] = "Age of Empires III configurado correctamente.",
         },
     };
 }
