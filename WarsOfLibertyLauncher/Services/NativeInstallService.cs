@@ -543,10 +543,15 @@ public class NativeInstallService
                 return created;
             }
 
+            // Use the mod's WoL.ico as the shortcut icon if it shipped with
+            // the payload. Falls back to the .exe's own icon if not present.
+            var wolIcon = Path.Combine(installFolder, "WoL.ico");
+            string? iconPath = File.Exists(wolIcon) ? wolIcon : null;
+
             // Desktop shortcut
             var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             var desktopLink = Path.Combine(desktopPath, $"{AppName}.lnk");
-            CreateShortcutFile(desktopLink, age3yExe, installFolder);
+            CreateShortcutFile(desktopLink, age3yExe, installFolder, iconPath);
             created.Add(desktopLink);
 
             // Start Menu shortcut
@@ -556,10 +561,12 @@ public class NativeInstallService
             Directory.CreateDirectory(startMenuPath);
             startMenuFolder = startMenuPath;
             var startMenuLink = Path.Combine(startMenuPath, $"{AppName}.lnk");
-            CreateShortcutFile(startMenuLink, age3yExe, installFolder);
+            CreateShortcutFile(startMenuLink, age3yExe, installFolder, iconPath);
             created.Add(startMenuLink);
 
-            DiagnosticLog.Write("Shortcuts created successfully.");
+            DiagnosticLog.Write(iconPath != null
+                ? $"Shortcuts created successfully (icon: {Path.GetFileName(iconPath)})."
+                : "Shortcuts created successfully (using default exe icon).");
         }
         catch (Exception ex)
         {
@@ -707,8 +714,12 @@ public class NativeInstallService
 
     /// <summary>
     /// Creates a .lnk shortcut file using the Windows Script Host COM object.
+    /// When <paramref name="iconPath"/> is provided, the shortcut uses that
+    /// .ico file (with index 0) instead of the default icon embedded in the
+    /// target executable.
     /// </summary>
-    private static void CreateShortcutFile(string linkPath, string targetExe, string workingDir)
+    private static void CreateShortcutFile(
+        string linkPath, string targetExe, string workingDir, string? iconPath = null)
     {
         // Use IWshRuntimeLibrary via dynamic COM interop (available on all Windows)
         var shellType = Type.GetTypeFromProgID("WScript.Shell");
@@ -721,6 +732,11 @@ public class NativeInstallService
             shortcut.TargetPath = targetExe;
             shortcut.WorkingDirectory = workingDir;
             shortcut.Description = "Wars of Liberty - Age of Empires III Mod";
+            if (!string.IsNullOrEmpty(iconPath) && File.Exists(iconPath))
+            {
+                // "<path>,<index>" — index 0 = first icon in the .ico file
+                shortcut.IconLocation = $"{iconPath},0";
+            }
             shortcut.Save();
         }
         finally

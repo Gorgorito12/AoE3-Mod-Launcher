@@ -1374,10 +1374,83 @@ public static class Strings
             [LangEn] = "Select Age of Empires III folder...",
             [LangEs] = "Seleccionar carpeta de Age of Empires III...",
         },
+        ["MenuCheckForUpdates"] = new()
+        {
+            [LangEn] = "Check for updates",
+            [LangEs] = "Buscar actualizaciones",
+        },
         ["MenuVerifyFiles"] = new()
         {
             [LangEn] = "Verify files",
             [LangEs] = "Verificar archivos",
+        },
+
+        // -------- Settings menu tooltips --------
+        // Hover help so the user knows what each option does without clicking.
+        ["TooltipSettingsBody"] = new()
+        {
+            [LangEn] = "Manage folders, user data, and run health checks",
+            [LangEs] = "Gestionar carpetas, datos de usuario y revisar el estado del mod",
+        },
+        ["TooltipMenuFolders"] = new()
+        {
+            [LangEn] = "Open folders or change where Wars of Liberty and Age of Empires III are installed",
+            [LangEs] = "Abrir o cambiar las carpetas de Wars of Liberty y Age of Empires III",
+        },
+        ["TooltipMenuOpenModFolder"] = new()
+        {
+            [LangEn] = "Open the Wars of Liberty install folder in Windows Explorer",
+            [LangEs] = "Abrir la carpeta del mod en el Explorador de Windows",
+        },
+        ["TooltipMenuOpenAoE3Folder"] = new()
+        {
+            [LangEn] = "Open the Age of Empires III install folder in Windows Explorer",
+            [LangEs] = "Abrir la carpeta del juego base en el Explorador de Windows",
+        },
+        ["TooltipMenuSelectModFolder"] = new()
+        {
+            [LangEn] = "Manually point the launcher at an existing Wars of Liberty install if auto-detection failed",
+            [LangEs] = "Indicar manualmente dónde está el mod si la detección automática falló",
+        },
+        ["TooltipMenuSelectAoE3Folder"] = new()
+        {
+            [LangEn] = "Manually point the launcher at Age of Empires III if it wasn't detected",
+            [LangEs] = "Indicar manualmente dónde está Age of Empires III si no se detectó",
+        },
+        ["TooltipMenuUserData"] = new()
+        {
+            [LangEn] = "Manage your saved games and backups in Documents\\My Games",
+            [LangEs] = "Gestiona tus partidas guardadas y respaldos en Documents\\My Games",
+        },
+        ["TooltipMenuOpenUserDataFolder"] = new()
+        {
+            [LangEn] = "View your savegames, custom metropolises and game settings",
+            [LangEs] = "Ver tus partidas guardadas, metrópolis y configuración del juego",
+        },
+        ["TooltipMenuCreateBackupNow"] = new()
+        {
+            [LangEn] = "Move your current data to a timestamped backup. The game will start fresh next time",
+            [LangEs] = "Mover tus datos actuales a un respaldo con la fecha. El juego empezará limpio",
+        },
+        ["TooltipMenuRestoreUserData"] = new()
+        {
+            [LangEn] = "Restore an earlier backup. Your current data is automatically backed up first",
+            [LangEs] = "Volver a una versión anterior de tus partidas. Los datos actuales se respaldan primero",
+        },
+        ["TooltipMenuCheckForUpdates"] = new()
+        {
+            [LangEn] = "Ask the server whether new patches are available",
+            [LangEs] = "Comprobar el servidor por si hay parches nuevos disponibles",
+        },
+        ["TooltipMenuVerifyFiles"] = new()
+        {
+            [LangEn] = "Check the integrity of the mod's files and repair anything missing or corrupt",
+            [LangEs] = "Revisar la integridad de los archivos del mod y reparar archivos dañados o faltantes",
+        },
+        ["TooltipMenuUninstall"] = new()
+        {
+            [LangEn] = "Remove Wars of Liberty from this computer. Age of Empires III is not affected",
+            [LangEs] = "Eliminar Wars of Liberty del equipo. No afecta a Age of Empires III",
         },
         ["DlgOpenFolderNotFoundTitle"] = new()
         {

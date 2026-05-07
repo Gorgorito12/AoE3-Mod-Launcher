@@ -9,6 +9,27 @@
     <AssemblyName>WarsOfLibertyLauncher</AssemblyName>
     <RootNamespace>WarsOfLibertyLauncher</RootNamespace>
     <Version>0.6.0</Version>
+    <!-- Icon embedded in the .exe — shows in Explorer, taskbar, Alt+Tab,
+         the launcher's own window header, and Windows shortcuts pointing
+         at this binary. -->
+    <ApplicationIcon>WoL.ico</ApplicationIcon>
+    <!-- Manifest declares requireAdministrator so Windows always prompts
+         for UAC before launching. Avoids permission edge cases when the
+         install lives in Program Files or the registry needs HKLM access. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Pre-compile to native code at publish time (ReadyToRun). Without
+         this the JIT runs on every cold start, adding 1-2s of startup
+         delay. Trade-off: the published .exe grows ~30 MB and the publish
+         step takes 1-2 minutes longer, but the launcher feels noticeably
+         snappier when the user double-clicks the icon. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Compress the assemblies embedded in the single-file binary.
+         Roughly 30-40% smaller .exe on disk (~190 MB → ~120-130 MB).
+         The runtime decompresses to the per-user extraction cache on first
+         launch, adding maybe half a second the first time the user opens
+         the launcher; subsequent launches read from the cache and are the
+         same speed as before. Zero behavioral change. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>

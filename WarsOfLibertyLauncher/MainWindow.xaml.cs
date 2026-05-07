@@ -69,12 +69,17 @@ public partial class MainWindow : Window
         if (autoUpdate)
             DiagnosticLog.Write("Started with --update-now: will auto-apply updates after check.");
 
-        // Auto-check for updates on startup
+        // Auto-check for updates on startup. Run the launcher self-update
+        // check and the mod-version check IN PARALLEL — they hit different
+        // servers (GitHub vs aoe3wol.com) and each typically takes ~1 second,
+        // so doing both concurrently roughly halves the time the UI sits in
+        // a "busy" state right after the user opens the launcher.
         Loaded += async (_, _) =>
         {
             LauncherUpdateService.CleanupOldVersion();
-            await CheckForLauncherUpdateAsync();
-            await CheckAsync();
+            await Task.WhenAll(
+                CheckForLauncherUpdateAsync(),
+                CheckAsync());
             if (_modIsInstalled)
             {
                 _ = Task.Run(InstallerService.TryCleanupTemp);
@@ -124,6 +129,7 @@ public partial class MainWindow : Window
             : Strings.Get("BtnPlay");
         VerifyButton.Content = Strings.Get("BtnVerify");
         StopButton.Content = Strings.Get("BtnStop");
+        // Headers (the visible label of each item)
         UninstallMenuItem.Header = Strings.Get("MenuUninstall");
         MenuFolders.Header = Strings.Get("MenuFolders");
         MenuOpenModFolder.Header = Strings.Get("MenuOpenModFolder");
@@ -134,10 +140,37 @@ public partial class MainWindow : Window
         MenuOpenUserDataFolder.Header = Strings.Get("MenuOpenUserDataFolder");
         MenuCreateBackupNow.Header = Strings.Get("MenuCreateBackupNow");
         MenuRestoreUserData.Header = Strings.Get("MenuRestoreUserData");
+        MenuCheckForUpdates.Header = Strings.Get("MenuCheckForUpdates");
         MenuVerifyFiles.Header = Strings.Get("MenuVerifyFiles");
 
+        // Tooltips on LEAF items only — items with submenus (Carpetas,
+        // Datos de usuario) are self-explanatory once the submenu opens,
+        // and showing a tooltip on top of the submenu just causes visual
+        // conflict. Same pattern as VS Code, Notion, native OS menus.
+        MoreButton.ToolTip = BuildMenuTooltip(
+            Strings.Get("TooltipSettings"), Strings.Get("TooltipSettingsBody"));
+        MenuOpenModFolder.ToolTip = BuildMenuTooltip(
+            (string)MenuOpenModFolder.Header, Strings.Get("TooltipMenuOpenModFolder"));
+        MenuOpenAoE3Folder.ToolTip = BuildMenuTooltip(
+            (string)MenuOpenAoE3Folder.Header, Strings.Get("TooltipMenuOpenAoE3Folder"));
+        MenuSelectModFolder.ToolTip = BuildMenuTooltip(
+            (string)MenuSelectModFolder.Header, Strings.Get("TooltipMenuSelectModFolder"));
+        MenuSelectAoE3Folder.ToolTip = BuildMenuTooltip(
+            (string)MenuSelectAoE3Folder.Header, Strings.Get("TooltipMenuSelectAoE3Folder"));
+        MenuOpenUserDataFolder.ToolTip = BuildMenuTooltip(
+            (string)MenuOpenUserDataFolder.Header, Strings.Get("TooltipMenuOpenUserDataFolder"));
+        MenuCreateBackupNow.ToolTip = BuildMenuTooltip(
+            (string)MenuCreateBackupNow.Header, Strings.Get("TooltipMenuCreateBackupNow"));
+        MenuRestoreUserData.ToolTip = BuildMenuTooltip(
+            Strings.Get("MenuRestoreUserData"), Strings.Get("TooltipMenuRestoreUserData"));
+        MenuCheckForUpdates.ToolTip = BuildMenuTooltip(
+            (string)MenuCheckForUpdates.Header, Strings.Get("TooltipMenuCheckForUpdates"));
+        MenuVerifyFiles.ToolTip = BuildMenuTooltip(
+            (string)MenuVerifyFiles.Header, Strings.Get("TooltipMenuVerifyFiles"));
+        UninstallMenuItem.ToolTip = BuildMenuTooltip(
+            (string)UninstallMenuItem.Header, Strings.Get("TooltipMenuUninstall"));
+
         LblGamePath.Text = Strings.Get("LblGamePath");
-        MoreButton.ToolTip = Strings.Get("TooltipSettings");
 
         // Buttons that change content based on state — pick the right label
         if (!_modIsInstalled)
@@ -1391,6 +1424,42 @@ public partial class MainWindow : Window
         _                    => "ProgressPatchOf",
     };
 
+    /// <summary>Helper to build a SolidColorBrush from a hex string.</summary>
+    private static System.Windows.Media.Brush Brush(string color) =>
+        (System.Windows.Media.Brush)
+            new System.Windows.Media.BrushConverter().ConvertFromString(color)!;
+
+    /// <summary>
+    /// Builds a styled menu-item tooltip with a bold title and a regular
+    /// description line below it. The outer chrome (dark background, border,
+    /// shadow, rounded corners) comes from the implicit ToolTip Style in
+    /// MainWindow.xaml — this method only fills in the content.
+    /// </summary>
+    private static System.Windows.Controls.ToolTip BuildMenuTooltip(string title, string description)
+    {
+        var titleBlock = new System.Windows.Controls.TextBlock
+        {
+            Text = title,
+            Foreground = Brush("White"),
+            FontSize = 13,
+            FontWeight = System.Windows.FontWeights.SemiBold,
+        };
+        var descBlock = new System.Windows.Controls.TextBlock
+        {
+            Text = description,
+            Foreground = Brush("#aaa"),
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+
+        var stack = new System.Windows.Controls.StackPanel();
+        stack.Children.Add(titleBlock);
+        stack.Children.Add(descBlock);
+
+        return new System.Windows.Controls.ToolTip { Content = stack };
+    }
+
     // ------------------------------------------------------------------------
     // Game launch
     // ------------------------------------------------------------------------
@@ -1633,7 +1702,8 @@ public partial class MainWindow : Window
             restoreLabel = $"{restoreLabel}  ({backups.Count})";
         MenuRestoreUserData.Header = restoreLabel;
 
-        // Verify files — only meaningful with a working install
+        // Health-check actions
+        MenuCheckForUpdates.IsEnabled = !_isBusy && _modIsInstalled;
         MenuVerifyFiles.IsEnabled = !_isBusy && _modIsInstalled;
 
         UninstallMenuItem.IsEnabled = !_isBusy && _modIsInstalled;
@@ -1716,6 +1786,17 @@ public partial class MainWindow : Window
     private void MenuVerifyFiles_Click(object sender, RoutedEventArgs e)
     {
         VerifyButton_Click(sender, e);
+    }
+
+    /// <summary>
+    /// Manually re-checks the server for new patches. Same flow as the
+    /// automatic check on startup — refreshes version info, pending
+    /// downloads, and the UI's Update / Install button state.
+    /// </summary>
+    private async void MenuCheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy) return;
+        await CheckAsync();
     }
 
     /// <summary>Helper for opening a folder in Windows Explorer.</summary>
