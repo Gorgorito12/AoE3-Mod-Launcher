@@ -103,7 +103,6 @@ public partial class MainWindow : Window
         LblInstalledVersion.Text = Strings.Get("InstalledVersion");
         LblLatestVersion.Text = Strings.Get("LatestVersion");
         LblModPath.Text = Strings.Get("ModPath");
-        BrowseButton.Content = Strings.Get("ChangePathButton");
         NewsPlaceholderText.Text = Strings.Get("NewsPlaceholder");
         LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
         LblOverall.Text = Strings.Get("ProgressOverall");
@@ -113,7 +112,10 @@ public partial class MainWindow : Window
         VerifyButton.Content = Strings.Get("BtnVerify");
         StopButton.Content = Strings.Get("BtnStop");
         UninstallMenuItem.Header = Strings.Get("MenuUninstall");
+        MenuSelectModFolder.Header = Strings.Get("MenuSelectModFolder");
+        MenuSelectAoE3Folder.Header = Strings.Get("MenuSelectAoE3Folder");
         LblGamePath.Text = Strings.Get("LblGamePath");
+        MoreButton.ToolTip = Strings.Get("TooltipSettings");
 
         // Buttons that change content based on state — pick the right label
         if (!_modIsInstalled)
@@ -198,26 +200,21 @@ public partial class MainWindow : Window
     private void UpdateAoE3PathUI()
     {
         var exePath = GameLauncher.Find(_config, _updateService.InstallPath);
+        AoE3PathRow.Visibility = Visibility.Visible;
 
         if (exePath != null)
         {
-            // AoE3 found — show path in collapsed/normal style
+            // AoE3 found — show path in normal (white) style
             GamePathText.Text = Path.GetDirectoryName(exePath) ?? exePath;
-            AoE3PathRow.Visibility = Visibility.Visible;
-            BrowseAoE3Button.Content = Strings.Get("ChangePathButton");
-            BrowseAoE3Button.Background = (System.Windows.Media.Brush)
-                new System.Windows.Media.BrushConverter().ConvertFromString("#3a3d44")!;
+            GamePathText.Foreground = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#ccc")!;
         }
         else
         {
-            // AoE3 NOT found — show prominent red button
+            // AoE3 NOT found — show red message; user can fix via gear menu
             GamePathText.Text = Strings.Get("StatusAoE3NotDetected");
             GamePathText.Foreground = (System.Windows.Media.Brush)
                 new System.Windows.Media.BrushConverter().ConvertFromString("#e63950")!;
-            AoE3PathRow.Visibility = Visibility.Visible;
-            BrowseAoE3Button.Content = Strings.Get("BrowseAoE3Button");
-            BrowseAoE3Button.Background = (System.Windows.Media.Brush)
-                new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
         }
     }
 
@@ -563,24 +560,13 @@ public partial class MainWindow : Window
                 UpdateButton.Background = (System.Windows.Media.Brush)
                     new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
                 _pendingDownloads = new();
-
-                // Make the Browse button prominent so users with a non-standard
-                // install location can point the launcher at it manually.
-                BrowseButton.Content = Strings.Get("BrowseModButton");
-                BrowseButton.Foreground = (System.Windows.Media.Brush)
-                    new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
-                BrowseButton.FontSize = 12;
                 UpdateAoE3PathUI();
                 return;
             }
 
-            // Installed — restore the normal (gray) update button + browse button
+            // Installed — restore the normal (gray) update button
             UpdateButton.Background = (System.Windows.Media.Brush)
                 new System.Windows.Media.BrushConverter().ConvertFromString("#3a3d44")!;
-            BrowseButton.Content = Strings.Get("ChangePathButton");
-            BrowseButton.Foreground = (System.Windows.Media.Brush)
-                new System.Windows.Media.BrushConverter().ConvertFromString("#888")!;
-            BrowseButton.FontSize = 10;
             UpdateAoE3PathUI();
 
             // Sanity check: WoL is installed, but is age3y.exe reachable?
@@ -1278,7 +1264,6 @@ public partial class MainWindow : Window
         VerifyButton.IsEnabled = !busy && _modIsInstalled;
         // Play is only available when the mod is installed, not busy, and game not already running.
         PlayButton.IsEnabled = !busy && _modIsInstalled && !_isGameRunning;
-        BrowseButton.IsEnabled = !busy;
     }
 
     private void ResetProgressUI()
@@ -1321,10 +1306,24 @@ public partial class MainWindow : Window
     {
         if (MoreButton.ContextMenu == null) return;
         // Only let the user open the menu when nothing is in flight
+        MenuSelectModFolder.IsEnabled = !_isBusy;
+        MenuSelectAoE3Folder.IsEnabled = !_isBusy;
         UninstallMenuItem.IsEnabled = !_isBusy && _modIsInstalled;
         MoreButton.ContextMenu.PlacementTarget = MoreButton;
         MoreButton.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
         MoreButton.ContextMenu.IsOpen = true;
+    }
+
+    private void MenuSelectModFolder_Click(object sender, RoutedEventArgs e)
+    {
+        // Reuse the existing browse-mod logic
+        BrowseButton_Click(sender, e);
+    }
+
+    private void MenuSelectAoE3Folder_Click(object sender, RoutedEventArgs e)
+    {
+        // Reuse the existing browse-AoE3 logic
+        BrowseAoE3Button_Click(sender, e);
     }
 
     private async void UninstallMenuItem_Click(object sender, RoutedEventArgs e)

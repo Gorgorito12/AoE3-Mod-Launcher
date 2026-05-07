@@ -135,19 +135,7 @@
                                    FontSize="18" FontWeight="SemiBold"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <Grid>
-                            <TextBlock x:Name="LblModPath" Foreground="#888" FontSize="11"
-                                       VerticalAlignment="Center"/>
-                            <Button x:Name="BrowseButton"
-                                    HorizontalAlignment="Right"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Foreground="#888"
-                                    FontSize="10"
-                                    Cursor="Hand"
-                                    Padding="4,0"
-                                    Click="BrowseButton_Click"/>
-                        </Grid>
+                        <TextBlock x:Name="LblModPath" Foreground="#888" FontSize="11"/>
                         <TextBlock x:Name="InstallPathText"
                                    Text="—" Foreground="White"
                                    FontSize="12"
@@ -157,48 +145,14 @@
                 </Grid>
 
                 <!-- AoE3 path row (shown when game isn't auto-detected) -->
-                <Grid x:Name="AoE3PathRow" Margin="0,10,0,0" Visibility="Collapsed">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock x:Name="LblGamePath" Foreground="#888" FontSize="11"/>
-                        <TextBlock x:Name="GamePathText"
-                                   Text="—" Foreground="#ccc"
-                                   FontSize="12"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                    </StackPanel>
-                    <Button x:Name="BrowseAoE3Button"
-                            Grid.Column="1"
-                            Background="#c8102e"
-                            BorderThickness="0"
-                            Foreground="White"
-                            FontSize="11"
-                            FontWeight="SemiBold"
-                            Cursor="Hand"
-                            Padding="12,6"
-                            VerticalAlignment="Center"
-                            Click="BrowseAoE3Button_Click">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border x:Name="border"
-                                        Background="{TemplateBinding Background}"
-                                        CornerRadius="4"
-                                        Padding="{TemplateBinding Padding}">
-                                    <ContentPresenter HorizontalAlignment="Center"
-                                                      VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="Background" Value="#e63950"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
-                </Grid>
+                <StackPanel x:Name="AoE3PathRow" Margin="0,10,0,0" Visibility="Collapsed">
+                    <TextBlock x:Name="LblGamePath" Foreground="#888" FontSize="11"/>
+                    <TextBlock x:Name="GamePathText"
+                               Text="—" Foreground="#ccc"
+                               FontSize="12"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -265,30 +219,102 @@
 
         <!-- Action buttons -->
         <Grid Grid.Row="6">
-            <!-- Overflow menu on the left for less-frequent actions like Uninstall -->
+            <!-- Settings menu on the left for path configuration and uninstall -->
             <Button x:Name="MoreButton"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Center"
                     Background="Transparent"
                     BorderThickness="0"
                     Foreground="#888"
-                    FontSize="22"
-                    FontWeight="Bold"
                     Cursor="Hand"
-                    Padding="10,0"
+                    Padding="0"
                     Width="40" Height="40"
-                    Content="⋯"
-                    ToolTip="More options"
+                    ToolTip="Settings"
                     Click="MoreButton_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="20"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#2a2d34"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <!-- Gear icon (vector, looks proper at any DPI) -->
+                <Path Width="20" Height="20" Stretch="Uniform"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                      Data="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58
+                            c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96
+                            c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84
+                            c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33
+                            c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58
+                            C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61
+                            l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94
+                            l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41
+                            l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22
+                            l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6
+                            s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
                 <Button.ContextMenu>
                     <ContextMenu x:Name="MoreMenu"
                                  Background="#22252c"
                                  BorderBrush="#3a3d44"
-                                 BorderThickness="1">
+                                 BorderThickness="1"
+                                 Padding="4">
+                        <ContextMenu.Resources>
+                            <Style TargetType="MenuItem">
+                                <Setter Property="Padding" Value="10,8"/>
+                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                            </Style>
+                        </ContextMenu.Resources>
+
+                        <!-- Mod folder item -->
+                        <MenuItem x:Name="MenuSelectModFolder"
+                                  Foreground="White"
+                                  Click="MenuSelectModFolder_Click">
+                            <MenuItem.Icon>
+                                <!-- Folder icon -->
+                                <Path Width="16" Height="16" Stretch="Uniform"
+                                      Fill="#c8102e"
+                                      Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+
+                        <!-- AoE3 folder item -->
+                        <MenuItem x:Name="MenuSelectAoE3Folder"
+                                  Foreground="White"
+                                  Click="MenuSelectAoE3Folder_Click">
+                            <MenuItem.Icon>
+                                <!-- Game controller icon -->
+                                <Path Width="16" Height="16" Stretch="Uniform"
+                                      Fill="#5b9bd5"
+                                      Data="M7.97,16L5,19C4.67,19.3 4.23,19.5 3.75,19.5A1.75,1.75 0 0,1 2,17.75V17.5L3,10.12C3.21,7.81 5.14,6 7.5,6H16.5C18.86,6 20.79,7.81 21,10.12L22,17.5V17.75A1.75,1.75 0 0,1 20.25,19.5C19.77,19.5 19.33,19.3 19,19L16.03,16H7.97M7,8V10H5V11H7V13H8V11H10V10H8V8H7M14.5,9A0.5,0.5 0 0,0 14,9.5A0.5,0.5 0 0,0 14.5,10A0.5,0.5 0 0,0 15,9.5A0.5,0.5 0 0,0 14.5,9M16.5,11A0.5,0.5 0 0,0 16,11.5A0.5,0.5 0 0,0 16.5,12A0.5,0.5 0 0,0 17,11.5A0.5,0.5 0 0,0 16.5,11M16.5,9A0.5,0.5 0 0,0 16,9.5A0.5,0.5 0 0,0 16.5,10A0.5,0.5 0 0,0 17,9.5A0.5,0.5 0 0,0 16.5,9M18.5,11A0.5,0.5 0 0,0 18,11.5A0.5,0.5 0 0,0 18.5,12A0.5,0.5 0 0,0 19,11.5A0.5,0.5 0 0,0 18.5,11Z"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+
+                        <Separator Background="#3a3d44" Margin="0,4"/>
+
+                        <!-- Uninstall item -->
                         <MenuItem x:Name="UninstallMenuItem"
                                   Foreground="#e63950"
-                                  Background="#22252c"
-                                  Click="UninstallMenuItem_Click"/>
+                                  Click="UninstallMenuItem_Click">
+                            <MenuItem.Icon>
+                                <!-- Trash icon -->
+                                <Path Width="16" Height="16" Stretch="Uniform"
+                                      Fill="#e63950"
+                                      Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
                     </ContextMenu>
                 </Button.ContextMenu>
             </Button>

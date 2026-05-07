@@ -22,34 +22,20 @@ public partial class InstallFolderDialog : Window
     public InstallFolderDialog(string defaultFolder)
         : this(defaultFolder, null, null) { }
 
+    private string? _aoe3SourceLabel;
+
     public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel)
     {
         InitializeComponent();
         Aoe3SourcePath = aoe3Path;
+        _aoe3SourceLabel = aoe3SourceLabel;
 
         ApplyLanguage();
         FolderTextBox.Text = defaultFolder;
         FolderTextBox.SelectAll();
         FolderTextBox.Focus();
 
-        if (!string.IsNullOrEmpty(aoe3Path))
-        {
-            // AoE3 detected — show green panel
-            Aoe3DetectionTitleText.Text = string.IsNullOrEmpty(aoe3SourceLabel)
-                ? Strings.Get("DlgAoe3DetectedTitle")
-                : Strings.Format("DlgAoe3DetectedTitleWithSource", aoe3SourceLabel);
-            Aoe3DetectionPathText.Text = aoe3Path;
-            Aoe3DetectionPanel.Visibility = Visibility.Visible;
-            Aoe3NotDetectedPanel.Visibility = Visibility.Collapsed;
-        }
-        else
-        {
-            // AoE3 NOT detected — show orange warning inline
-            Aoe3NotDetectedText.Text = Strings.Get("InstallAoe3NotDetected");
-            Aoe3DetectionPanel.Visibility = Visibility.Collapsed;
-            Aoe3NotDetectedPanel.Visibility = Visibility.Visible;
-        }
-
+        UpdateAoE3Display();
         UpdateDiskSpace();
     }
 
@@ -58,11 +44,45 @@ public partial class InstallFolderDialog : Window
         Title = Strings.Get("DlgPickInstallFolderTitle");
         HeaderText.Text = Strings.Get("DlgPickInstallFolderHeader");
         DescriptionText.Text = Strings.Get("DlgPickInstallFolderDescription");
+        LblAoE3Folder.Text = Strings.Get("LblGamePath");
         LblFolder.Text = Strings.Get("DlgPickInstallFolderLabel");
         BrowseButton.Content = Strings.Get("ChangePathButton");
-        BrowseAoE3InDialogButton.Content = Strings.Get("BrowseAoE3Button");
+        BrowseAoE3InDialogButton.Content = Strings.Get("ChangePathButton");
         OkButton.Content = Strings.Get("BtnInstall");
         CancelButton.Content = Strings.Get("BtnCancel");
+    }
+
+    /// <summary>
+    /// Refresh the AoE3 path field and its status message based on
+    /// <see cref="Aoe3SourcePath"/>. Called on init and after the user
+    /// picks a new folder via the Change button.
+    /// </summary>
+    private void UpdateAoE3Display()
+    {
+        if (!string.IsNullOrEmpty(Aoe3SourcePath))
+        {
+            Aoe3PathTextBox.Text = Aoe3SourcePath;
+            Aoe3PathTextBox.BorderBrush = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#3a8c3a")!;
+
+            // Green status line under the field
+            Aoe3StatusText.Text = string.IsNullOrEmpty(_aoe3SourceLabel)
+                ? "✓ " + Strings.Get("DlgAoe3DetectedTitle")
+                : "✓ " + Strings.Format("DlgAoe3DetectedTitleWithSource", _aoe3SourceLabel);
+            Aoe3StatusText.Foreground = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#9bd99b")!;
+        }
+        else
+        {
+            Aoe3PathTextBox.Text = "";
+            Aoe3PathTextBox.BorderBrush = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#8c6c3a")!;
+
+            // Orange status line guiding the user
+            Aoe3StatusText.Text = Strings.Get("InstallAoe3NotDetected");
+            Aoe3StatusText.Foreground = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString("#d4a04a")!;
+        }
     }
 
     private void FolderTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -202,12 +222,8 @@ public partial class InstallFolderDialog : Window
 
         // Success — update the dialog state
         Aoe3SourcePath = gameFolder;
-
-        // Switch from orange "not detected" to green "detected"
-        Aoe3DetectionTitleText.Text = Strings.Get("DlgAoe3DetectedTitle");
-        Aoe3DetectionPathText.Text = gameFolder;
-        Aoe3DetectionPanel.Visibility = Visibility.Visible;
-        Aoe3NotDetectedPanel.Visibility = Visibility.Collapsed;
+        _aoe3SourceLabel = null; // user-picked, no source label
+        UpdateAoE3Display();
 
         // Also suggest installing inside this AoE3 folder
         var suggestedWolPath = Path.Combine(gameFolder!, "Wars of Liberty");

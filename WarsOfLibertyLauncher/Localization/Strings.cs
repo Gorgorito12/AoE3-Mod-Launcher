@@ -1012,6 +1012,23 @@ public static class Strings
             [LangEs] = "Descargando actualización del launcher...",
         },
 
+        // -------- Settings menu --------
+        ["TooltipSettings"] = new()
+        {
+            [LangEn] = "Settings",
+            [LangEs] = "Configuración",
+        },
+        ["MenuSelectModFolder"] = new()
+        {
+            [LangEn] = "Select Wars of Liberty folder...",
+            [LangEs] = "Seleccionar carpeta de Wars of Liberty...",
+        },
+        ["MenuSelectAoE3Folder"] = new()
+        {
+            [LangEn] = "Select Age of Empires III folder...",
+            [LangEs] = "Seleccionar carpeta de Age of Empires III...",
+        },
+
         // -------- AoE3 folder browse --------
         ["BrowseAoE3Button"] = new()
         {

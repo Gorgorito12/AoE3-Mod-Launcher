@@ -67,71 +67,39 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
 
-        <!-- AoE3 detected (green) -->
-        <Border x:Name="Aoe3DetectionPanel"
-                Background="#1f3a1f"
-                BorderBrush="#3a8c3a"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="12,8"
-                Margin="0,0,0,14"
-                Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="Aoe3DetectionTitleText"
-                           FontSize="11" FontWeight="SemiBold"
-                           Foreground="#9bd99b"
-                           Margin="0,0,0,2"/>
-                <TextBlock x:Name="Aoe3DetectionPathText"
-                           FontSize="12"
-                           Foreground="White"
-                           TextWrapping="Wrap"/>
-            </StackPanel>
-        </Border>
+        <!-- AoE3 folder (always visible) -->
+        <TextBlock x:Name="LblAoE3Folder"
+                   FontSize="11"
+                   Foreground="#888"
+                   Margin="0,0,0,4"/>
 
-        <!-- AoE3 NOT detected (orange) -->
-        <Border x:Name="Aoe3NotDetectedPanel"
-                Background="#3a2a1a"
-                BorderBrush="#8c6c3a"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="12,8"
-                Margin="0,0,0,14"
-                Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="Aoe3NotDetectedText"
-                           FontSize="11"
-                           Foreground="#d4a04a"
-                           TextWrapping="Wrap"
-                           Margin="0,0,0,8"/>
-                <Button x:Name="BrowseAoE3InDialogButton"
-                        Background="#8c6c3a"
-                        Foreground="White"
-                        BorderThickness="0"
-                        FontSize="11"
-                        FontWeight="SemiBold"
-                        Cursor="Hand"
-                        Padding="12,6"
-                        HorizontalAlignment="Left"
-                        Click="BrowseAoE3InDialogButton_Click">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="border"
-                                    Background="{TemplateBinding Background}"
-                                    CornerRadius="4"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="Center"
-                                                  VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="border" Property="Background" Value="#a88040"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-            </StackPanel>
-        </Border>
+        <Grid Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="Aoe3PathTextBox"
+                     Grid.Column="0"
+                     FontSize="13"
+                     Background="#2a2d34"
+                     Foreground="White"
+                     BorderBrush="#3a3d44"
+                     BorderThickness="1"
+                     Padding="8,6"
+                     CaretBrush="White"
+                     IsReadOnly="True"/>
+            <Button x:Name="BrowseAoE3InDialogButton"
+                    Grid.Column="1"
+                    Style="{StaticResource DialogButton}"
+                    Margin="8,0,0,0"
+                    Click="BrowseAoE3InDialogButton_Click"/>
+        </Grid>
+
+        <!-- AoE3 status (color-coded inline message) -->
+        <TextBlock x:Name="Aoe3StatusText"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,14"/>
 
         <!-- Destination folder -->
         <TextBlock x:Name="LblFolder"
