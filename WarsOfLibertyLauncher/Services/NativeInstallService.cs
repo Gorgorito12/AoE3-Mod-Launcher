@@ -295,12 +295,18 @@ public class NativeInstallService
     /// <summary>
     /// If <paramref name="destinationFolder"/> contains a `bin\` subfolder
     /// (Steam layout), copies its contents up to the root next to where the
-    /// WoL mod binary will land. The Steam bin\age3y.exe stays in bin\ — we
-    /// only mirror the files at the root so the mod's age3y.exe can find
-    /// the same DLLs it expects to live alongside it.
+    /// WoL mod binary will land, then deletes `bin\` itself.
     ///
-    /// Existing files at the root are NOT overwritten by this step (the next
-    /// phase — the WoL payload overlay — handles overrides explicitly).
+    /// Why: the Steam layout puts age3y.exe + DLLs inside bin\, but the WoL
+    /// mod's binary lives at the root and expects its DLLs alongside it
+    /// (legacy retail layout). Promoting bin\* to the root resolves this.
+    /// Removing bin\ afterwards saves ~3.7 GB of duplicated files AND
+    /// prevents the shortcut creator from picking the wrong age3y.exe
+    /// (the unmodded one in bin\) instead of the WoL-patched one at root.
+    ///
+    /// Existing files at the root are NOT overwritten during the promote
+    /// step (the next phase — the WoL payload overlay — handles overrides
+    /// explicitly).
     /// </summary>
     private static void FlattenBinSubfolder(string destinationFolder, IProgress<string>? statusProgress)
     {
@@ -342,6 +348,22 @@ public class NativeInstallService
         }
 
         DiagnosticLog.Write($"Flatten bin\\ complete: {copied} files promoted, {skipped} skipped.");
+
+        // Now drop the bin\ subfolder entirely. It's redundant after the
+        // promotion (the files are already at the root) and keeping it
+        // confuses the shortcut step which can't tell which age3y.exe to use.
+        try
+        {
+            Directory.Delete(binFolder, recursive: true);
+            DiagnosticLog.Write("Removed redundant bin\\ subfolder after flatten.");
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal: install can still succeed with bin\ still in place.
+            // The shortcut creator will need to handle the duplicate (the
+            // WoL-patched age3y.exe at the root takes priority).
+            DiagnosticLog.Write($"Could not remove bin\\ after flatten: {ex.Message}");
+        }
     }
 
     /// <summary>

@@ -1012,6 +1012,85 @@ public static class Strings
             [LangEs] = "Descargando actualización del launcher...",
         },
 
+        // -------- User-data alert (Documents\Wars of Liberty) --------
+        ["DlgUserDataAlertTitle"] = new()
+        {
+            [LangEn] = "Previous user data detected",
+            [LangEs] = "Datos de versión anterior detectados",
+        },
+        ["DlgUserDataAlertHeader"] = new()
+        {
+            [LangEn] = "We found Wars of Liberty user data on your computer",
+            [LangEs] = "Encontramos datos de Wars of Liberty en tu equipo",
+        },
+        ["DlgUserDataAlertDescription"] = new()
+        {
+            [LangEn] = "The freshly installed mod is the 1.0.15d base version. " +
+                       "If you previously played a newer version, your saves and " +
+                       "metropolises may not be compatible — the game can hang on " +
+                       "the loading screen.",
+            [LangEs] = "Acabas de instalar la versión base 1.0.15d. Si jugaste " +
+                       "antes una versión más nueva, tus partidas guardadas y " +
+                       "metrópolis pueden no ser compatibles — el juego puede " +
+                       "quedarse en la pantalla de carga.",
+        },
+        ["DlgUserDataAlertFoundLabel"] = new()
+        {
+            [LangEn] = "FOUND AT",
+            [LangEs] = "UBICACIÓN",
+        },
+        ["DlgUserDataAlertSavegameCount"] = new()
+        {
+            [LangEn] = "⚠ Found {0} file(s) in Savegame\\ — these may include " +
+                       "metropolises in a newer format the older binary can't read.",
+            [LangEs] = "⚠ Hay {0} archivo(s) en Savegame\\ — pueden incluir " +
+                       "metrópolis en formato nuevo que el binario viejo no puede leer.",
+        },
+        ["DlgUserDataAlertRecommendation"] = new()
+        {
+            [LangEn] = "Recommended: back up the folder. The launcher will rename " +
+                       "it to \"Wars of Liberty.bak.<timestamp>\" so the game can " +
+                       "start with a clean slate. Your old data stays on disk and " +
+                       "you can recover anything you need later.",
+            [LangEs] = "Recomendado: respaldar la carpeta. El launcher la renombrará " +
+                       "a \"Wars of Liberty.bak.<fecha>\" para que el juego arranque " +
+                       "limpio. Tus datos antiguos siguen en el disco y puedes " +
+                       "recuperar lo que necesites después.",
+        },
+        ["DlgUserDataAlertBtnBackup"] = new()
+        {
+            [LangEn] = "Back up and continue",
+            [LangEs] = "Respaldar y continuar",
+        },
+        ["DlgUserDataAlertBtnOpen"] = new()
+        {
+            [LangEn] = "Open folder",
+            [LangEs] = "Abrir carpeta",
+        },
+        ["DlgUserDataAlertBtnIgnore"] = new()
+        {
+            [LangEn] = "Ignore",
+            [LangEs] = "Ignorar",
+        },
+        ["DlgUserDataAlertBackupFailedTitle"] = new()
+        {
+            [LangEn] = "Backup failed",
+            [LangEs] = "Respaldo fallido",
+        },
+        ["DlgUserDataAlertBackupFailedBody"] = new()
+        {
+            [LangEn] = "Could not rename the user data folder. Make sure no other " +
+                       "program (Explorer, the game, etc.) has it open and try again.",
+            [LangEs] = "No se pudo renombrar la carpeta de datos. Verifica que " +
+                       "ningún programa (Explorador, el juego, etc.) la tenga " +
+                       "abierta e intenta de nuevo.",
+        },
+        ["StatusUserDataBackedUp"] = new()
+        {
+            [LangEn] = "User data backed up to: {0}",
+            [LangEs] = "Datos respaldados en: {0}",
+        },
+
         // -------- Settings menu --------
         ["TooltipSettings"] = new()
         {

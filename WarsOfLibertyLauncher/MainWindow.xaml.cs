@@ -1067,6 +1067,13 @@ public partial class MainWindow : Window
                 foreach (var c in verifyResult.CorruptItems)
                     DiagnosticLog.Write($"  [corrupt/empty] {c}");
             }
+
+            // Warn about pre-existing user data from an older WoL install.
+            // The freshly installed payload is the 1.0.15d base — saves /
+            // metropolises written by a newer version can crash the older
+            // binary on first launch (the symptom is the game hanging on
+            // the loading screen).
+            ShowUserDataAlertIfNeeded();
         }
         catch (OperationCanceledException)
         {
@@ -1088,6 +1095,32 @@ public partial class MainWindow : Window
 
         // Re-check to detect the freshly installed mod
         await CheckAsync();
+    }
+
+    /// <summary>
+    /// If the user has a populated WoL data folder under Documents from a
+    /// previous (possibly newer) install, show a styled dialog explaining
+    /// the risk and offering to back it up. We never delete user data —
+    /// the worst we do is rename the folder to ".bak.&lt;timestamp&gt;".
+    ///
+    /// Called once per fresh install. Doesn't run on plain updates.
+    /// </summary>
+    private void ShowUserDataAlertIfNeeded()
+    {
+        if (!UserDataService.HasExistingUserData()) return;
+
+        var folder = UserDataService.GetUserDataFolder();
+        if (string.IsNullOrEmpty(folder)) return;
+
+        DiagnosticLog.Write($"Pre-existing WoL user data detected at: {folder}");
+
+        var dialog = new UserDataAlertDialog(folder) { Owner = this };
+        var backedUp = dialog.ShowDialog() == true;
+
+        if (backedUp && !string.IsNullOrEmpty(dialog.BackupPath))
+        {
+            SetStatus(Strings.Format("StatusUserDataBackedUp", dialog.BackupPath));
+        }
     }
 
     private async Task ApplyAsync()
