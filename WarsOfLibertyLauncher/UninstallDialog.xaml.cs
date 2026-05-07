@@ -5,9 +5,11 @@ using WarsOfLibertyLauncher.Services;
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Confirmation dialog for uninstalling Wars of Liberty. Shows the planned
-/// strategy (manifest / subfolder / refused), the install path, and lets
-/// the user choose optional cleanup steps.
+/// Confirmation dialog for uninstalling Wars of Liberty. Shows the install
+/// path being targeted, a count of files / dirs that will be removed, and
+/// lets the user toggle optional cleanup steps (shortcuts, registry, config).
+/// If the path doesn't have the WoL marker we surface a red error panel
+/// and refuse to proceed instead of touching files.
 /// </summary>
 public partial class UninstallDialog : Window
 {
@@ -34,7 +36,7 @@ public partial class UninstallDialog : Window
         OptDeleteShortcuts.Content = Strings.Get("DlgUninstallOptShortcuts");
         OptRemoveRegistry.Content = Strings.Get("DlgUninstallOptRegistry");
         OptResetConfig.Content = Strings.Get("DlgUninstallOptResetConfig");
-        ProtectionNoteText.Text = Strings.Get("DlgUninstallProtectionNote");
+        AoE3SafeNoteText.Text = Strings.Get("DlgUninstallAoE3SafeNote");
         OkButton.Content = Strings.Get("BtnUninstall");
         CancelButton.Content = Strings.Get("BtnCancel");
     }
@@ -45,43 +47,38 @@ public partial class UninstallDialog : Window
 
         switch (_plan.Mode)
         {
-            case UninstallMode.Manifest:
-                ManifestPanel.Visibility = Visibility.Visible;
-                ManifestTitleText.Text = Strings.Get("DlgUninstallManifestTitle");
-                ManifestDetailText.Text = Strings.Format("DlgUninstallManifestDetail",
+            case UninstallMode.Valid:
+                SummaryPanel.Visibility = Visibility.Visible;
+                SummaryDetailText.Text = Strings.Format(
+                    "DlgUninstallValidDetail",
                     _plan.FileCount, _plan.DirectoryCount);
                 OkButton.IsEnabled = true;
                 break;
 
-            case UninstallMode.SubfolderFallback:
-                SubfolderPanel.Visibility = Visibility.Visible;
-                SubfolderTitleText.Text = Strings.Get("DlgUninstallSubfolderTitle");
-                SubfolderDetailText.Text = Strings.Format("DlgUninstallSubfolderDetail",
-                    _plan.FileCount, _plan.DirectoryCount);
-                OkButton.IsEnabled = true;
-                break;
-
-            case UninstallMode.RefusedMergedWithAoe3:
+            case UninstallMode.NotAValidInstall:
                 RefusedPanel.Visibility = Visibility.Visible;
-                RefusedTitleText.Text = Strings.Get("DlgUninstallRefusedTitle");
-                RefusedDetailText.Text = Strings.Get("DlgUninstallRefusedDetail");
-                // Disable everything but Cancel
-                OkButton.IsEnabled = false;
-                OptDeleteShortcuts.IsEnabled = false;
-                OptRemoveRegistry.IsEnabled = false;
-                OptResetConfig.IsEnabled = false;
+                RefusedTitleText.Text = Strings.Get("DlgUninstallNotValidTitle");
+                RefusedDetailText.Text = Strings.Format(
+                    "DlgUninstallNotValidDetail", _plan.InstallPath);
+                DisableActions();
                 break;
 
             case UninstallMode.NothingToDo:
                 RefusedPanel.Visibility = Visibility.Visible;
                 RefusedTitleText.Text = Strings.Get("DlgUninstallNothingTitle");
                 RefusedDetailText.Text = Strings.Get("DlgUninstallNothingDetail");
-                OkButton.IsEnabled = false;
-                OptDeleteShortcuts.IsEnabled = false;
-                OptRemoveRegistry.IsEnabled = false;
-                OptResetConfig.IsEnabled = false;
+                DisableActions();
                 break;
         }
+    }
+
+    private void DisableActions()
+    {
+        OkButton.IsEnabled = false;
+        OptDeleteShortcuts.IsEnabled = false;
+        OptRemoveRegistry.IsEnabled = false;
+        OptResetConfig.IsEnabled = false;
+        AoE3SafeNoteText.Visibility = Visibility.Collapsed;
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)

@@ -133,4 +133,123 @@ public static class UserDataService
             DiagnosticLog.Write($"Failed to open user-data folder: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Information about a single backup the launcher created on a previous
+    /// install (renamed from "Wars of Liberty" to "Wars of Liberty.bak.&lt;ts&gt;").
+    /// </summary>
+    public record BackupInfo(
+        string Path,
+        DateTime CreatedAt,
+        int FileCount,
+        int SavegameCount,
+        long TotalBytes);
+
+    /// <summary>
+    /// Lists every backup folder that lives next to the active user-data
+    /// folder. Sorted by creation time, most recent first. Returns an
+    /// empty list if there are none.
+    /// </summary>
+    public static List<BackupInfo> ListBackups()
+    {
+        var result = new List<BackupInfo>();
+        var folder = GetUserDataFolder();
+        if (string.IsNullOrEmpty(folder)) return result;
+
+        var parent = Path.GetDirectoryName(folder);
+        if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent)) return result;
+
+        // Folders we created look like: "Wars of Liberty.bak.20260507-123456"
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(parent, "Wars of Liberty.bak.*"))
+            {
+                int count = 0;
+                long totalBytes = 0;
+                try
+                {
+                    foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                    {
+                        count++;
+                        try { totalBytes += new FileInfo(f).Length; }
+                        catch { /* unreadable file; skip its size */ }
+                    }
+                }
+                catch { /* unreadable; report 0 */ }
+
+                int savegameCount = 0;
+                try
+                {
+                    var savegame = Path.Combine(dir, "Savegame");
+                    if (Directory.Exists(savegame))
+                        savegameCount = Directory.EnumerateFiles(savegame, "*", SearchOption.AllDirectories).Count();
+                }
+                catch { /* unreadable; report 0 */ }
+
+                DateTime created;
+                try { created = Directory.GetCreationTime(dir); }
+                catch { created = DateTime.MinValue; }
+
+                result.Add(new BackupInfo(dir, created, count, savegameCount, totalBytes));
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Failed to enumerate user-data backups: {ex.Message}");
+        }
+
+        result.Sort((a, b) => b.CreatedAt.CompareTo(a.CreatedAt));
+        return result;
+    }
+
+    /// <summary>
+    /// Restores a backup folder by swapping it with the active user-data
+    /// folder. If the active folder currently has files, those files are
+    /// renamed to a new ".bak.&lt;ts&gt;" first so nothing is lost — the user
+    /// can swap back and forth between snapshots indefinitely.
+    /// </summary>
+    /// <returns>
+    /// The path of the new backup that was created from the active data
+    /// (so the caller can mention it to the user), or null if the active
+    /// folder was empty / didn't exist.
+    /// </returns>
+    public static string? RestoreBackup(string backupPath)
+    {
+        if (string.IsNullOrEmpty(backupPath) || !Directory.Exists(backupPath))
+            throw new DirectoryNotFoundException($"Backup not found: {backupPath}");
+
+        var folder = GetUserDataFolder();
+        if (string.IsNullOrEmpty(folder))
+            throw new InvalidOperationException("Could not resolve Documents path.");
+
+        string? newBackupOfCurrent = null;
+
+        // Step 1: if the active folder has anything in it, snapshot it as a
+        // fresh backup. We never overwrite without preserving.
+        if (Directory.Exists(folder))
+        {
+            bool hasFiles = false;
+            try { hasFiles = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Any(); }
+            catch { hasFiles = true; /* be conservative — don't lose data we can't read */ }
+
+            if (hasFiles)
+            {
+                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                newBackupOfCurrent = folder + ".bak." + stamp;
+                Directory.Move(folder, newBackupOfCurrent);
+                DiagnosticLog.Write($"Snapshotted active data before restore: '{folder}' -> '{newBackupOfCurrent}'");
+            }
+            else
+            {
+                // Empty folder; just delete so Move below can create cleanly.
+                try { Directory.Delete(folder, recursive: true); } catch { }
+            }
+        }
+
+        // Step 2: rename the chosen backup back into the active path.
+        Directory.Move(backupPath, folder);
+        DiagnosticLog.Write($"Restored backup: '{backupPath}' -> '{folder}'");
+
+        return newBackupOfCurrent;
+    }
 }

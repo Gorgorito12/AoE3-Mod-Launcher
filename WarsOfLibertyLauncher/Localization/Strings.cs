@@ -119,13 +119,13 @@ public static class Strings
         },
         ["DlgUninstallDescription"] = new()
         {
-            [LangEn] = "This will remove the mod files placed by the launcher. Your Age of Empires III base game will not be affected.",
-            [LangEs] = "Esto eliminará los archivos del mod instalados por el launcher. Tu instalación base de Age of Empires III no se verá afectada.",
+            [LangEn] = "This will delete the entire Wars of Liberty install folder. Your Age of Empires III base game lives in a separate folder and will not be touched.",
+            [LangEs] = "Esto eliminará la carpeta completa de Wars of Liberty. Tu instalación de Age of Empires III está en otra carpeta y no será modificada.",
         },
         ["DlgUninstallInstallPathLabel"] = new()
         {
-            [LangEn] = "INSTALL PATH",
-            [LangEs] = "RUTA DE INSTALACIÓN",
+            [LangEn] = "INSTALL FOLDER",
+            [LangEs] = "CARPETA A ELIMINAR",
         },
         ["DlgUninstallOptionsTitle"] = new()
         {
@@ -147,40 +147,25 @@ public static class Strings
             [LangEn] = "Reset launcher config to defaults",
             [LangEs] = "Restablecer la configuración del launcher",
         },
-        ["DlgUninstallProtectionNote"] = new()
+        ["DlgUninstallAoE3SafeNote"] = new()
         {
-            [LangEn] = "✓ Protected: age3y.exe, age3.exe and other base-game files will never be deleted.",
-            [LangEs] = "✓ Protegidos: age3y.exe, age3.exe y otros archivos del juego base nunca se eliminarán.",
+            [LangEn] = "✓ Your Age of Empires III install (in Steam\\steamapps\\common\\Age Of Empires 3 or wherever it lives) will not be modified.",
+            [LangEs] = "✓ Tu instalación de Age of Empires III (en Steam\\steamapps\\common\\Age Of Empires 3 o donde la tengas) no será modificada.",
         },
-        ["DlgUninstallManifestTitle"] = new()
+        ["DlgUninstallValidDetail"] = new()
         {
-            [LangEn] = "✓ INSTALL MANIFEST FOUND — SAFE UNINSTALL",
-            [LangEs] = "✓ MANIFIESTO DE INSTALACIÓN ENCONTRADO — DESINSTALACIÓN SEGURA",
+            [LangEn] = "{0} files in {1} folders will be removed.",
+            [LangEs] = "Se eliminarán {0} archivos en {1} carpetas.",
         },
-        ["DlgUninstallManifestDetail"] = new()
+        ["DlgUninstallNotValidTitle"] = new()
         {
-            [LangEn] = "Will delete exactly the {0} files and {1} folders the launcher created. Nothing else will be touched.",
-            [LangEs] = "Se eliminarán exactamente los {0} archivos y {1} carpetas que el launcher creó. Nada más será tocado.",
+            [LangEn] = "✗ NOT A VALID WARS OF LIBERTY INSTALL",
+            [LangEs] = "✗ NO ES UNA INSTALACIÓN VÁLIDA DE WARS OF LIBERTY",
         },
-        ["DlgUninstallSubfolderTitle"] = new()
+        ["DlgUninstallNotValidDetail"] = new()
         {
-            [LangEn] = "⚠ NO MANIFEST — STANDALONE FOLDER DETECTED",
-            [LangEs] = "⚠ SIN MANIFIESTO — CARPETA INDEPENDIENTE DETECTADA",
-        },
-        ["DlgUninstallSubfolderDetail"] = new()
-        {
-            [LangEn] = "This folder doesn't contain age3y.exe, so it appears to be a WoL-only folder. The whole folder ({0} files, {1} subfolders) will be deleted.",
-            [LangEs] = "Esta carpeta no contiene age3y.exe, así que parece ser una carpeta exclusiva de WoL. La carpeta entera ({0} archivos, {1} subcarpetas) se eliminará.",
-        },
-        ["DlgUninstallRefusedTitle"] = new()
-        {
-            [LangEn] = "✗ CANNOT UNINSTALL AUTOMATICALLY",
-            [LangEs] = "✗ NO SE PUEDE DESINSTALAR AUTOMÁTICAMENTE",
-        },
-        ["DlgUninstallRefusedDetail"] = new()
-        {
-            [LangEn] = "The install path looks like an Age of Empires III root folder. Without an install manifest, the launcher cannot tell which files belong to the mod and which to the base game. Please uninstall manually or reinstall the mod first to generate a manifest.",
-            [LangEs] = "La ruta de instalación parece ser la raíz de Age of Empires III. Sin un manifiesto de instalación, el launcher no puede distinguir qué archivos pertenecen al mod y cuáles al juego base. Desinstala manualmente o reinstala el mod primero para generar un manifiesto.",
+            [LangEn] = "The folder '{0}' does not contain the Wars of Liberty marker (art\\zulushield\\). For safety, the launcher refuses to delete it.\n\nIf this is a real WoL install with broken files, run Verify first to repair it.",
+            [LangEs] = "La carpeta '{0}' no contiene el marcador de Wars of Liberty (art\\zulushield\\). Por seguridad, el launcher se niega a eliminarla.\n\nSi es una instalación real con archivos rotos, ejecuta Verificar primero para repararla.",
         },
         ["DlgUninstallNothingTitle"] = new()
         {
@@ -375,6 +360,23 @@ public static class Strings
             [LangEn] = "Patch {0} of {1}: {2} → {3}",
             [LangEs] = "Parche {0} de {1}: {2} → {3}",
         },
+        // Sub-phase-aware status lines shown just above the bars during update.
+        // {0} = patch target version, {1} = current step, {2} = total steps.
+        ["ProgressPatchStatusDownloading"] = new()
+        {
+            [LangEn] = "📥 Downloading {0} ({1}/{2})...",
+            [LangEs] = "📥 Descargando {0} ({1}/{2})...",
+        },
+        ["ProgressPatchStatusVerifying"] = new()
+        {
+            [LangEn] = "✓ Verifying {0} ({1}/{2})...",
+            [LangEs] = "✓ Verificando {0} ({1}/{2})...",
+        },
+        ["ProgressPatchStatusApplying"] = new()
+        {
+            [LangEn] = "🔧 Applying {0} ({1}/{2})...",
+            [LangEs] = "🔧 Aplicando {0} ({1}/{2})...",
+        },
         ["ProgressCurrentPatch"] = new()
         {
             [LangEn] = "Current patch",
@@ -390,6 +392,53 @@ public static class Strings
             [LangEn] = "Speed: {0}/s",
             [LangEs] = "Velocidad: {0}/s",
         },
+        // Phase-aware speed labels — picked dynamically so the user sees an
+        // accurate description of what the bytes/sec figure represents.
+        ["ProgressSpeedDownload"] = new()
+        {
+            [LangEn] = "📡 Download: {0}/s",
+            [LangEs] = "📡 Descarga: {0}/s",
+        },
+        ["ProgressSpeedExtract"] = new()
+        {
+            [LangEn] = "📦 Extract: {0}/s",
+            [LangEs] = "📦 Extracción: {0}/s",
+        },
+        ["ProgressSpeedCopy"] = new()
+        {
+            [LangEn] = "💾 Copy: {0}/s",
+            [LangEs] = "💾 Copia: {0}/s",
+        },
+        ["ProgressSpeedVerify"] = new()
+        {
+            [LangEn] = "✓ Verifying: {0}/s",
+            [LangEs] = "✓ Verificando: {0}/s",
+        },
+        ["ProgressUpdatingLabel"] = new()
+        {
+            [LangEn] = "UPDATING",
+            [LangEs] = "ACTUALIZANDO",
+        },
+        ["ProgressPatchCounter"] = new()
+        {
+            [LangEn] = "PATCH {0}/{1}",
+            [LangEs] = "PARCHE {0}/{1}",
+        },
+        ["ProgressEtaTotal"] = new()
+        {
+            [LangEn] = "⏱ {0} total",
+            [LangEs] = "⏱ {0} total",
+        },
+        ["StatusExtractingPayload"] = new()
+        {
+            [LangEn] = "📦 Extracting mod files ({0}/{1})...",
+            [LangEs] = "📦 Extrayendo archivos del mod ({0}/{1})...",
+        },
+        ["StatusInstallingMod"] = new()
+        {
+            [LangEn] = "🔧 Applying mod overlay ({0}/{1})...",
+            [LangEs] = "🔧 Aplicando mod ({0}/{1})...",
+        },
         ["ProgressEta"] = new()
         {
             [LangEn] = "ETA: {0}",
@@ -399,6 +448,57 @@ public static class Strings
         {
             [LangEn] = "calculating...",
             [LangEs] = "calculando...",
+        },
+
+        // -------- Phase breadcrumb step labels --------
+        ["InstallStepDownload"] = new()
+        {
+            [LangEn] = "DOWNLOAD",
+            [LangEs] = "DESCARGA",
+        },
+        ["InstallStepExtract"] = new()
+        {
+            [LangEn] = "EXTRACT",
+            [LangEs] = "EXTRACCIÓN",
+        },
+        ["InstallStepClone"] = new()
+        {
+            [LangEn] = "CLONE",
+            [LangEs] = "CLONAR",
+        },
+        ["InstallStepMod"] = new()
+        {
+            [LangEn] = "MOD",
+            [LangEs] = "MOD",
+        },
+        ["InstallStepFinalize"] = new()
+        {
+            [LangEn] = "FINALIZE",
+            [LangEs] = "FINALIZAR",
+        },
+
+        // -------- Update breadcrumb step labels --------
+        ["UpdateStepDownload"] = new()
+        {
+            [LangEn] = "DOWNLOAD",
+            [LangEs] = "DESCARGA",
+        },
+        ["UpdateStepVerify"] = new()
+        {
+            [LangEn] = "VERIFY",
+            [LangEs] = "VERIFICAR",
+        },
+        ["UpdateStepApply"] = new()
+        {
+            [LangEn] = "APPLY",
+            [LangEs] = "APLICAR",
+        },
+
+        // Subtitle of the header during update — shown under "Updating X → Y"
+        ["ProgressPatchSubtitle"] = new()
+        {
+            [LangEn] = "Patch {0}/{1}: {2} → {3}",
+            [LangEs] = "Parche {0}/{1}: {2} → {3}",
         },
 
         // -------- Dialogs --------
@@ -525,8 +625,8 @@ public static class Strings
         },
         ["StatusDownloadingInstaller"] = new()
         {
-            [LangEn] = "Downloading Wars of Liberty installer (large file, ~2.7 GB)...",
-            [LangEs] = "Descargando instalador de Wars of Liberty (archivo grande, ~2.7 GB)...",
+            [LangEn] = "📥 Downloading Wars of Liberty installer (~2.7 GB)...",
+            [LangEs] = "📥 Descargando instalador de Wars of Liberty (~2.7 GB)...",
         },
         ["StatusExtractingInstaller"] = new()
         {
@@ -1025,14 +1125,16 @@ public static class Strings
         },
         ["DlgUserDataAlertDescription"] = new()
         {
-            [LangEn] = "The freshly installed mod is the 1.0.15d base version. " +
-                       "If you previously played a newer version, your saves and " +
-                       "metropolises may not be compatible — the game can hang on " +
-                       "the loading screen.",
-            [LangEs] = "Acabas de instalar la versión base 1.0.15d. Si jugaste " +
+            [LangEn] = "We're about to install the 1.0.15d base version. If you " +
+                       "previously played a newer version, your saves and " +
+                       "metropolises may not be compatible — the game can hang " +
+                       "on the loading screen until you patch back to the " +
+                       "latest version.",
+            [LangEs] = "Vamos a instalar la versión base 1.0.15d. Si jugaste " +
                        "antes una versión más nueva, tus partidas guardadas y " +
                        "metrópolis pueden no ser compatibles — el juego puede " +
-                       "quedarse en la pantalla de carga.",
+                       "quedarse en la pantalla de carga hasta que actualices " +
+                       "a la versión más reciente.",
         },
         ["DlgUserDataAlertFoundLabel"] = new()
         {
@@ -1048,14 +1150,18 @@ public static class Strings
         },
         ["DlgUserDataAlertRecommendation"] = new()
         {
-            [LangEn] = "Recommended: back up the folder. The launcher will rename " +
-                       "it to \"Wars of Liberty.bak.<timestamp>\" so the game can " +
-                       "start with a clean slate. Your old data stays on disk and " +
-                       "you can recover anything you need later.",
-            [LangEs] = "Recomendado: respaldar la carpeta. El launcher la renombrará " +
-                       "a \"Wars of Liberty.bak.<fecha>\" para que el juego arranque " +
-                       "limpio. Tus datos antiguos siguen en el disco y puedes " +
-                       "recuperar lo que necesites después.",
+            [LangEn] = "Recommended: back up the folder before the install runs. " +
+                       "The launcher will rename it to \"Wars of Liberty.bak." +
+                       "<timestamp>\" so the freshly installed game starts with a " +
+                       "clean slate. Your old data stays on disk and you can " +
+                       "restore it later from the gear menu (⚙ → User data → " +
+                       "Restore backup).",
+            [LangEs] = "Recomendado: respaldar la carpeta antes de instalar. El " +
+                       "launcher la renombrará a \"Wars of Liberty.bak.<fecha>\" " +
+                       "para que el juego recién instalado arranque limpio. Tus " +
+                       "datos antiguos siguen en el disco y puedes restaurarlos " +
+                       "después desde el menú de tuerca (⚙ → Datos de usuario → " +
+                       "Restaurar respaldo).",
         },
         ["DlgUserDataAlertBtnBackup"] = new()
         {
@@ -1091,11 +1197,172 @@ public static class Strings
             [LangEs] = "Datos respaldados en: {0}",
         },
 
+        // -------- User data submenu --------
+        ["MenuUserData"] = new()
+        {
+            [LangEn] = "User data",
+            [LangEs] = "Datos de usuario",
+        },
+        ["MenuOpenUserDataFolder"] = new()
+        {
+            [LangEn] = "Open data folder",
+            [LangEs] = "Abrir carpeta de datos",
+        },
+        ["MenuCreateBackupNow"] = new()
+        {
+            [LangEn] = "Create backup now",
+            [LangEs] = "Crear respaldo ahora",
+        },
+        ["MenuRestoreUserData"] = new()
+        {
+            [LangEn] = "Restore backup...",
+            [LangEs] = "Restaurar respaldo...",
+        },
+
+        // -------- Manual backup confirmation (gear menu → Create backup now) --------
+        ["DlgBackupConfirmTitle"] = new()
+        {
+            [LangEn] = "Create backup?",
+            [LangEs] = "¿Crear respaldo?",
+        },
+        ["DlgBackupConfirmBody"] = new()
+        {
+            [LangEn] = "Move the current Wars of Liberty user data to a backup " +
+                       "folder named with today's timestamp?\n\n" +
+                       "The game will create a fresh empty data folder the next " +
+                       "time it runs.",
+            [LangEs] = "¿Mover los datos actuales de Wars of Liberty a una " +
+                       "carpeta de respaldo con la fecha de hoy?\n\n" +
+                       "El juego creará una carpeta nueva vacía la próxima vez " +
+                       "que se ejecute.",
+        },
+        ["DlgBackupNothingTitle"] = new()
+        {
+            [LangEn] = "Nothing to back up",
+            [LangEs] = "Nada que respaldar",
+        },
+        ["DlgBackupNothingBody"] = new()
+        {
+            [LangEn] = "There is no Wars of Liberty user data to back up.",
+            [LangEs] = "No hay datos de Wars of Liberty para respaldar.",
+        },
+
+        // -------- Restore dialog (styled list of backups) --------
+        ["DlgRestoreDialogTitle"] = new()
+        {
+            [LangEn] = "Restore user data backup",
+            [LangEs] = "Restaurar respaldo de datos",
+        },
+        ["DlgRestoreDialogHeader"] = new()
+        {
+            [LangEn] = "Pick a backup to restore",
+            [LangEs] = "Elige un respaldo para restaurar",
+        },
+        ["DlgRestoreDialogDescriptionSingle"] = new()
+        {
+            [LangEn] = "Restoring will rename this backup back into place. Your " +
+                       "current data will be saved as a new backup first, so you " +
+                       "can swap back any time.",
+            [LangEs] = "Al restaurar, este respaldo vuelve a ser la carpeta " +
+                       "activa. Tus datos actuales se guardarán como un respaldo " +
+                       "nuevo primero, así puedes volver cuando quieras.",
+        },
+        ["DlgRestoreDialogDescriptionMultiple"] = new()
+        {
+            [LangEn] = "We found {0} backups. Pick one to restore — your current " +
+                       "data will be saved as a new backup first.",
+            [LangEs] = "Encontramos {0} respaldos. Elige uno para restaurar — " +
+                       "tus datos actuales se guardarán como un respaldo nuevo " +
+                       "primero.",
+        },
+        ["DlgRestoreDialogListLabel"] = new()
+        {
+            [LangEn] = "AVAILABLE BACKUPS",
+            [LangEs] = "RESPALDOS DISPONIBLES",
+        },
+        ["DlgRestoreDialogReassurance"] = new()
+        {
+            [LangEn] = "ⓘ Nothing is deleted. Your current data and any unselected " +
+                       "backups stay on disk — you can manage them later via Explorer.",
+            [LangEs] = "ⓘ No se elimina nada. Tus datos actuales y los respaldos " +
+                       "no seleccionados quedan en disco — puedes gestionarlos " +
+                       "después desde el Explorador.",
+        },
+        ["DlgRestoreDialogBtnRestore"] = new()
+        {
+            [LangEn] = "Restore selected",
+            [LangEs] = "Restaurar seleccionado",
+        },
+        ["DlgRestoreDialogRowDetail"] = new()
+        {
+            [LangEn] = "{0} files",
+            [LangEs] = "{0} archivos",
+        },
+        ["DlgRestoreDialogRowDetailWithSaves"] = new()
+        {
+            [LangEn] = "{0} files  ·  {1} savegames in Savegame\\",
+            [LangEs] = "{0} archivos  ·  {1} partidas en Savegame\\",
+        },
+
+        ["DlgRestoreNoBackupsTitle"] = new()
+        {
+            [LangEn] = "No backups found",
+            [LangEs] = "Sin respaldos",
+        },
+        ["DlgRestoreNoBackupsBody"] = new()
+        {
+            [LangEn] = "There are no user data backups to restore. Backups are " +
+                       "created when you choose 'Back up and continue' in the " +
+                       "previous-data alert after a fresh install.",
+            [LangEs] = "No hay respaldos de datos para restaurar. Los respaldos " +
+                       "se crean cuando eliges 'Respaldar y continuar' en la " +
+                       "alerta de datos previos después de una instalación nueva.",
+        },
+        ["DlgRestoreFailedTitle"] = new()
+        {
+            [LangEn] = "Restore failed",
+            [LangEs] = "Restauración fallida",
+        },
+        ["DlgRestoreFailedBody"] = new()
+        {
+            [LangEn] = "Could not restore the backup:\n\n{0}\n\n" +
+                       "Make sure no program (Explorer, the game, etc.) has " +
+                       "the folder open, and try again.",
+            [LangEs] = "No se pudo restaurar el respaldo:\n\n{0}\n\n" +
+                       "Verifica que ningún programa (Explorador, el juego, " +
+                       "etc.) tenga la carpeta abierta e intenta de nuevo.",
+        },
+        ["StatusRestoreSuccess"] = new()
+        {
+            [LangEn] = "Restored backup '{0}'.",
+            [LangEs] = "Respaldo '{0}' restaurado.",
+        },
+        ["StatusRestoreSuccessWithSnapshot"] = new()
+        {
+            [LangEn] = "Restored '{0}'. Your previous data was saved as '{1}'.",
+            [LangEs] = "Restaurado '{0}'. Tus datos previos fueron guardados como '{1}'.",
+        },
+
         // -------- Settings menu --------
         ["TooltipSettings"] = new()
         {
             [LangEn] = "Settings",
             [LangEs] = "Configuración",
+        },
+        ["MenuFolders"] = new()
+        {
+            [LangEn] = "Folders",
+            [LangEs] = "Carpetas",
+        },
+        ["MenuOpenModFolder"] = new()
+        {
+            [LangEn] = "Open Wars of Liberty folder",
+            [LangEs] = "Abrir carpeta de Wars of Liberty",
+        },
+        ["MenuOpenAoE3Folder"] = new()
+        {
+            [LangEn] = "Open Age of Empires III folder",
+            [LangEs] = "Abrir carpeta de Age of Empires III",
         },
         ["MenuSelectModFolder"] = new()
         {
@@ -1106,6 +1373,30 @@ public static class Strings
         {
             [LangEn] = "Select Age of Empires III folder...",
             [LangEs] = "Seleccionar carpeta de Age of Empires III...",
+        },
+        ["MenuVerifyFiles"] = new()
+        {
+            [LangEn] = "Verify files",
+            [LangEs] = "Verificar archivos",
+        },
+        ["DlgOpenFolderNotFoundTitle"] = new()
+        {
+            [LangEn] = "Folder not found",
+            [LangEs] = "Carpeta no encontrada",
+        },
+        ["DlgOpenFolderNotFoundBody"] = new()
+        {
+            [LangEn] = "The Wars of Liberty install folder is not detected. " +
+                       "Use 'Select Wars of Liberty folder' to point the launcher at it.",
+            [LangEs] = "No se detectó la carpeta de Wars of Liberty. " +
+                       "Usa 'Seleccionar carpeta de Wars of Liberty' para indicar dónde está.",
+        },
+        ["DlgOpenAoE3NotFoundBody"] = new()
+        {
+            [LangEn] = "Age of Empires III is not detected. " +
+                       "Use 'Select Age of Empires III folder' to point the launcher at it.",
+            [LangEs] = "No se detectó Age of Empires III. " +
+                       "Usa 'Seleccionar carpeta de Age of Empires III' para indicar dónde está.",
         },
 
         // -------- AoE3 folder browse --------

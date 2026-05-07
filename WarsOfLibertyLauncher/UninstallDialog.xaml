@@ -73,49 +73,7 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
 
-        <!-- Manifest mode (green) -->
-        <Border x:Name="ManifestPanel"
-                Background="#1f3a1f"
-                BorderBrush="#3a8c3a"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="12,8"
-                Margin="0,0,0,14"
-                Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="ManifestTitleText"
-                           FontSize="11" FontWeight="SemiBold"
-                           Foreground="#9bd99b"
-                           Margin="0,0,0,4"/>
-                <TextBlock x:Name="ManifestDetailText"
-                           FontSize="12"
-                           Foreground="White"
-                           TextWrapping="Wrap"/>
-            </StackPanel>
-        </Border>
-
-        <!-- Subfolder fallback (orange) -->
-        <Border x:Name="SubfolderPanel"
-                Background="#3a2a1a"
-                BorderBrush="#8c6c3a"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="12,8"
-                Margin="0,0,0,14"
-                Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="SubfolderTitleText"
-                           FontSize="11" FontWeight="SemiBold"
-                           Foreground="#d4a04a"
-                           Margin="0,0,0,4"/>
-                <TextBlock x:Name="SubfolderDetailText"
-                           FontSize="12"
-                           Foreground="White"
-                           TextWrapping="Wrap"/>
-            </StackPanel>
-        </Border>
-
-        <!-- Refused (red) -->
+        <!-- Refused panel (red) — shown only when the path doesn't have the WoL marker -->
         <Border x:Name="RefusedPanel"
                 Background="#3a1a1a"
                 BorderBrush="#8c3a3a"
@@ -136,16 +94,32 @@
             </StackPanel>
         </Border>
 
-        <!-- Install path -->
-        <TextBlock x:Name="LblInstallPath"
-                   FontSize="11"
-                   Foreground="#888"
-                   Margin="0,0,0,4"/>
-        <TextBlock x:Name="InstallPathText"
-                   FontSize="12"
-                   Foreground="White"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,14"/>
+        <!-- Install summary panel (gray) — shown when the path is valid -->
+        <Border x:Name="SummaryPanel"
+                Background="#22252c"
+                BorderBrush="#3a3d44"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="12,10"
+                Margin="0,0,0,14"
+                Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock x:Name="LblInstallPath"
+                           FontSize="11"
+                           Foreground="#888"
+                           Margin="0,0,0,2"/>
+                <TextBlock x:Name="InstallPathText"
+                           FontSize="12"
+                           Foreground="White"
+                           TextWrapping="Wrap"
+                           FontFamily="Consolas"
+                           Margin="0,0,0,8"/>
+                <TextBlock x:Name="SummaryDetailText"
+                           FontSize="12"
+                           Foreground="#aaa"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
 
         <!-- Options -->
         <TextBlock x:Name="OptionsTitleText"
@@ -156,8 +130,8 @@
         <CheckBox x:Name="OptRemoveRegistry" IsChecked="True"/>
         <CheckBox x:Name="OptResetConfig" IsChecked="False"/>
 
-        <!-- Final warning -->
-        <TextBlock x:Name="ProtectionNoteText"
+        <!-- Reassurance note about AoE3 not being touched -->
+        <TextBlock x:Name="AoE3SafeNoteText"
                    FontSize="11"
                    Foreground="#9bd99b"
                    TextWrapping="Wrap"

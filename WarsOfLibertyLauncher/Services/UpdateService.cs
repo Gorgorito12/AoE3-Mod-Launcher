@@ -29,6 +29,26 @@ public record UpdateProgress(
     TimeSpan? Eta);             // estimated time remaining (null if unknown)
 
 /// <summary>
+/// Sub-phases the update flow goes through for each individual patch. Drives
+/// the mini-breadcrumb shown to the user (3 dots: download → verify → apply)
+/// and lets the UI swap the speed label between "Download" and "Apply" so
+/// the bytes/sec figure is honestly described.
+/// </summary>
+public enum UpdatePhase
+{
+    /// <summary>Idle / not started.</summary>
+    None,
+    /// <summary>Downloading the .tar.xz from the server.</summary>
+    Download,
+    /// <summary>Computing CRC32 to confirm the .tar.xz isn't corrupt.</summary>
+    Verify,
+    /// <summary>Backing up files about to be overwritten + extracting + applying delete list.</summary>
+    Apply,
+    /// <summary>This patch is finished; ready to start the next one (or all done).</summary>
+    Complete,
+}
+
+/// <summary>
 /// Orchestrates the full update flow, mirroring the original Java updater (v1.4):
 ///
 ///   1. Detect WoL install path (registry or config)
@@ -138,6 +158,7 @@ public class UpdateService
         List<DownloadInfo> downloads,
         IProgress<UpdateProgress>? progress = null,
         IProgress<string>? status = null,
+        IProgress<UpdatePhase>? phase = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(InstallPath))
@@ -200,6 +221,7 @@ public class UpdateService
             bool needsDownload = true;
             if (File.Exists(archivePath) && !string.IsNullOrEmpty(dl.Crc32))
             {
+                phase?.Report(UpdatePhase.Verify);
                 status?.Report(Strings.Format("StatusVerifyingExisting", dl.Id));
                 var existingCrc = await HashService.ComputeCrc32Async(archivePath, ct);
                 if (CrcMatches(existingCrc, dl.Crc32))
@@ -220,6 +242,7 @@ public class UpdateService
             // ---- 2. Download (if needed) ----
             if (needsDownload)
             {
+                phase?.Report(UpdatePhase.Download);
                 status?.Report(Strings.Format("StatusDownloading", dl.Id, patchToVersion));
 
                 var dlProgress = new Progress<DownloadProgress>(p =>
@@ -229,6 +252,7 @@ public class UpdateService
                     dl.Link, dl.AltLink, archivePath, dlProgress, ct);
 
                 // ---- 3. Verify CRC32 of the freshly downloaded file ----
+                phase?.Report(UpdatePhase.Verify);
                 status?.Report(Strings.Format("StatusVerifyingDownload", dl.Id));
                 if (!string.IsNullOrEmpty(dl.Crc32))
                 {
@@ -242,6 +266,7 @@ public class UpdateService
             }
 
             // ---- 4. Extract with backup ----
+            phase?.Report(UpdatePhase.Apply);
             status?.Report(Strings.Format("StatusApplying", dl.Id));
             var backupDir = Path.Combine(InstallPath, $"upd_backup_{dl.Id}");
 
@@ -279,6 +304,7 @@ public class UpdateService
             // ---- 7. Roll forward overall progress and open post-update page ----
             overallBytesDoneFromCompletedPatches += dl.Size;
             Report(0, 0);   // signal that this patch is fully done
+            phase?.Report(UpdatePhase.Complete);
 
             if (_config.OpenPostUpdatePages
                 && !string.IsNullOrEmpty(dl.PostUpdatePage)

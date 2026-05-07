@@ -22,6 +22,30 @@ public record NativeInstallProgress(
     double BytesPerSecond);
 
 /// <summary>
+/// Distinct stages of the install pipeline. The UI uses this to render a
+/// breadcrumb across the top of the progress block, change the speed label
+/// from "Download" to "Copy" / "Files" depending on what's actually being
+/// measured, and weight overall progress correctly.
+/// </summary>
+public enum InstallPhase
+{
+    /// <summary>Idle / not started.</summary>
+    None,
+    /// <summary>Downloading the ZIP parts from GitHub.</summary>
+    Download,
+    /// <summary>Concatenating + extracting the combined ZIP to temp.</summary>
+    Extract,
+    /// <summary>Cloning AoE3 (and flattening bin\) to the destination.</summary>
+    Clone,
+    /// <summary>Copying the WoL mod files on top of the clone.</summary>
+    ModOverlay,
+    /// <summary>Shortcuts, registry, manifest, verification.</summary>
+    Finalize,
+    /// <summary>Install completed (used so the UI can mark every dot done).</summary>
+    Complete,
+}
+
+/// <summary>
 /// Replaces Inno Setup entirely. Performs a full Wars of Liberty installation
 /// natively in C#:
 ///   1. Downloads the WoL payload ZIP parts and concatenates them
@@ -76,6 +100,9 @@ public class NativeInstallService
         IProgress<DownloadProgress>? downloadProgress = null,
         IProgress<CloneProgress>? cloneProgress = null,
         IProgress<string>? statusProgress = null,
+        IProgress<InstallPhase>? phaseProgress = null,
+        IProgress<ExtractProgress>? extractProgress = null,
+        IProgress<ModOverlayProgress>? overlayProgress = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install Start ===");
@@ -84,41 +111,41 @@ public class NativeInstallService
         DiagnosticLog.Write($"  Destination: {destinationFolder}");
 
         // ---- Phase 1: Download all parts and concatenate ----
+        phaseProgress?.Report(InstallPhase.Download);
         statusProgress?.Report("Downloading Wars of Liberty files...");
-        var zipPath = await DownloadAndConcatenatePartsAsync(payloadZipUrls, downloadProgress, ct);
+        var zipPath = await DownloadAndConcatenatePartsAsync(payloadZipUrls, downloadProgress, statusProgress, ct);
 
         // ---- Phase 2: Extract payload to temp ----
+        phaseProgress?.Report(InstallPhase.Extract);
         statusProgress?.Report("Extracting mod files...");
-        var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, ct);
+        var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
 
         // ---- Phase 3: Clone AoE3 to destination ----
+        phaseProgress?.Report(InstallPhase.Clone);
         statusProgress?.Report("Copying Age of Empires III files...");
         await _cloneService.CloneAsync(aoe3SourcePath, destinationFolder, cloneProgress, ct);
 
         // ---- Phase 3b: Flatten bin\ subfolder if present ----
-        // Steam puts age3y.exe and its DLLs inside `bin\`, but the WoL mod's
-        // binary lives at the root and expects its DLLs alongside it (legacy
-        // retail layout). Promote bin\* to the root so the mod's binary can
-        // resolve them. The bin\ folder itself stays in place — leaving it
-        // there is harmless and avoids surprising the user.
+        // (Still part of the Clone phase from the UI's perspective.)
         FlattenBinSubfolder(destinationFolder, statusProgress);
 
         // ---- Phase 4: Copy WoL files on top ----
+        phaseProgress?.Report(InstallPhase.ModOverlay);
         statusProgress?.Report("Installing Wars of Liberty mod files...");
-        await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, ct);
+        await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
 
-        // ---- Phase 5: Create shortcuts ----
+        // ---- Phase 5: Finalize (shortcuts, registry, manifest) ----
+        phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
         var shortcuts = CreateShortcuts(destinationFolder, out var startMenuFolder);
 
-        // ---- Phase 6: Write registry ----
         statusProgress?.Report("Writing registry entries...");
         WriteRegistryEntries(destinationFolder);
 
-        // ---- Phase 7: Write install manifest ----
         WriteManifest(destinationFolder, aoe3SourcePath, clonedAoe3: true,
             shortcuts, startMenuFolder);
 
+        phaseProgress?.Report(InstallPhase.Complete);
         DiagnosticLog.Write("=== Native Install Complete ===");
     }
 
@@ -131,6 +158,9 @@ public class NativeInstallService
         string destinationFolder,
         IProgress<DownloadProgress>? downloadProgress = null,
         IProgress<string>? statusProgress = null,
+        IProgress<InstallPhase>? phaseProgress = null,
+        IProgress<ExtractProgress>? extractProgress = null,
+        IProgress<ModOverlayProgress>? overlayProgress = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install (mod-only) Start ===");
@@ -138,26 +168,30 @@ public class NativeInstallService
         DiagnosticLog.Write($"  Destination: {destinationFolder}");
 
         // ---- Phase 1: Download ----
+        phaseProgress?.Report(InstallPhase.Download);
         statusProgress?.Report("Downloading Wars of Liberty files...");
-        var zipPath = await DownloadAndConcatenatePartsAsync(payloadZipUrls, downloadProgress, ct);
+        var zipPath = await DownloadAndConcatenatePartsAsync(payloadZipUrls, downloadProgress, statusProgress, ct);
 
         // ---- Phase 2: Extract ----
+        phaseProgress?.Report(InstallPhase.Extract);
         statusProgress?.Report("Extracting mod files...");
-        var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, ct);
+        var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
 
-        // ---- Phase 3: Copy WoL on top ----
+        // ---- Phase 3: Copy WoL on top (no Clone phase in mod-only) ----
+        phaseProgress?.Report(InstallPhase.ModOverlay);
         statusProgress?.Report("Installing Wars of Liberty mod files...");
-        await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, ct);
+        await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
 
-        // ---- Phase 4: Shortcuts + Registry ----
+        // ---- Phase 4: Finalize ----
+        phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
         var shortcuts = CreateShortcuts(destinationFolder, out var startMenuFolder);
         WriteRegistryEntries(destinationFolder);
 
-        // ---- Phase 5: Write install manifest ----
         WriteManifest(destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
             shortcuts, startMenuFolder);
 
+        phaseProgress?.Report(InstallPhase.Complete);
         DiagnosticLog.Write("=== Native Install (mod-only) Complete ===");
     }
 
@@ -172,6 +206,7 @@ public class NativeInstallService
     private async Task<string> DownloadAndConcatenatePartsAsync(
         string[] partUrls,
         IProgress<DownloadProgress>? progress,
+        IProgress<string>? statusProgress,
         CancellationToken ct)
     {
         Directory.CreateDirectory(TempDirectory);
@@ -182,6 +217,25 @@ public class NativeInstallService
         try { if (File.Exists(combinedZipPath)) File.Delete(combinedZipPath); } catch { }
 
         DiagnosticLog.Write($"Downloading {partUrls.Length} ZIP parts...");
+
+        // Pre-compute the total size across all parts via HEAD requests so the
+        // progress bar has a real denominator from the very first byte. Without
+        // this the bar can stay invisible during the first download because GitHub
+        // doesn't always send Content-Length on the GET for releases.
+        statusProgress?.Report("Checking download size...");
+        var partSizes = new long[partUrls.Length];
+        long totalAcrossAllParts = 0;
+        bool sizesKnown = true;
+        for (int i = 0; i < partUrls.Length; i++)
+        {
+            partSizes[i] = await _downloader.TryGetRemoteSizeAsync(partUrls[i], ct);
+            if (partSizes[i] <= 0) { sizesKnown = false; }
+            else { totalAcrossAllParts += partSizes[i]; }
+        }
+        if (sizesKnown)
+            DiagnosticLog.Write($"Pre-computed download total: {totalAcrossAllParts} bytes");
+        else
+            DiagnosticLog.Write("Could not pre-compute download total (HEAD not supported); progress will be approximate.");
 
         long totalDownloaded = 0;
 
@@ -194,18 +248,22 @@ public class NativeInstallService
             var partPath = Path.Combine(TempDirectory, partFileName);
 
             DiagnosticLog.Write($"  Part {i + 1}/{partUrls.Length}: {partUrl}");
+            statusProgress?.Report($"Downloading part {i + 1} of {partUrls.Length}...");
 
-            // Wrap progress to show overall across all parts
-            int partIndex = i;
+            // Wrap progress to show overall across all parts. Always pass the
+            // pre-computed total so the bar fills smoothly across all parts.
             long partStartBytes = totalDownloaded;
+            long globalTotal = totalAcrossAllParts;
             var partProgress = new Progress<DownloadProgress>(p =>
             {
-                // Report combined progress: this part's bytes + previous parts
-                var combined = new DownloadProgress(
-                    BytesReceived: partStartBytes + p.BytesReceived,
-                    TotalBytes: 0, // We don't know total across all parts upfront
-                    Percentage: (double)(partIndex * 100 + p.Percentage) / partUrls.Length);
-                progress?.Report(combined);
+                long bytesSoFar = partStartBytes + p.BytesReceived;
+                double pct = globalTotal > 0
+                    ? Math.Min(100.0, (double)bytesSoFar / globalTotal * 100.0)
+                    : 0;
+                progress?.Report(new DownloadProgress(
+                    BytesReceived: bytesSoFar,
+                    TotalBytes: globalTotal,
+                    Percentage: pct));
             });
 
             await _downloader.DownloadFileAsync(partUrl, partPath, partProgress, ct);
@@ -215,6 +273,7 @@ public class NativeInstallService
         }
 
         // Concatenate all parts into one ZIP
+        statusProgress?.Report("Combining downloaded parts...");
         DiagnosticLog.Write("Concatenating parts into single ZIP...");
         await ConcatenateFilesAsync(partUrls.Length, combinedZipPath, ct);
 
@@ -248,9 +307,21 @@ public class NativeInstallService
         }
     }
 
+    /// <summary>
+    /// Progress reported during extraction. Carries enough info for the UI
+    /// to render a real progress bar (not just a status string) and a
+    /// "X files/s" speed indicator.
+    /// </summary>
+    public record ExtractProgress(
+        int EntriesDone,
+        int EntriesTotal,
+        long BytesDone,
+        long BytesTotal);
+
     private Task<string> ExtractPayloadAsync(
         string zipPath,
         IProgress<string>? statusProgress,
+        IProgress<ExtractProgress>? extractProgress,
         CancellationToken ct)
     {
         return Task.Run(() =>
@@ -267,7 +338,13 @@ public class NativeInstallService
 
             using var archive = ZipFile.OpenRead(zipPath);
             int total = archive.Entries.Count;
+            // Pre-compute total uncompressed bytes so the bar has an honest
+            // denominator — not the compressed size of the .zip on disk.
+            long bytesTotal = 0;
+            foreach (var e in archive.Entries) bytesTotal += e.Length;
+
             int done = 0;
+            long bytesDone = 0;
 
             foreach (var entry in archive.Entries)
             {
@@ -275,7 +352,10 @@ public class NativeInstallService
                 done++;
 
                 if (done == 1 || done % 50 == 0 || done == total)
+                {
                     statusProgress?.Report($"Extracting mod files ({done}/{total})...");
+                    extractProgress?.Report(new ExtractProgress(done, total, bytesDone, bytesTotal));
+                }
 
                 if (string.IsNullOrEmpty(entry.Name)) continue;
 
@@ -285,7 +365,11 @@ public class NativeInstallService
                     Directory.CreateDirectory(destDir);
 
                 entry.ExtractToFile(destPath, overwrite: true);
+                bytesDone += entry.Length;
             }
+
+            // Final 100% report so the bar tops out cleanly before the next phase.
+            extractProgress?.Report(new ExtractProgress(done, total, bytesDone, bytesTotal));
 
             DiagnosticLog.Write($"Extraction complete: {done} entries.");
             return extractFolder;
@@ -371,10 +455,23 @@ public class NativeInstallService
     /// overwriting existing files. This is what puts the mod on top of the
     /// cloned AoE3.
     /// </summary>
+    /// <summary>
+    /// Progress reported while copying the extracted mod payload onto the
+    /// cloned AoE3 destination. Mirrors <see cref="ExtractProgress"/> but for
+    /// the overlay step. Bytes are computed from FileInfo.Length so the UI
+    /// can show "X / Y MB" alongside file counts.
+    /// </summary>
+    public record ModOverlayProgress(
+        int FilesDone,
+        int FilesTotal,
+        long BytesDone,
+        long BytesTotal);
+
     private async Task CopyPayloadToDestinationAsync(
         string extractedFolder,
         string destinationFolder,
         IProgress<string>? statusProgress,
+        IProgress<ModOverlayProgress>? overlayProgress,
         CancellationToken ct)
     {
         await Task.Run(() =>
@@ -382,6 +479,16 @@ public class NativeInstallService
             var files = Directory.GetFiles(extractedFolder, "*", SearchOption.AllDirectories);
             int total = files.Length;
             int done = 0;
+
+            // Pre-sum file sizes so the bar / speed indicator track real bytes,
+            // not just file count. Counts are kept around for the status text.
+            long bytesTotal = 0;
+            foreach (var f in files)
+            {
+                try { bytesTotal += new FileInfo(f).Length; }
+                catch { /* unreadable; skip its size */ }
+            }
+            long bytesDone = 0;
 
             DiagnosticLog.Write($"Copying {total} WoL mod files to destination...");
 
@@ -400,10 +507,16 @@ public class NativeInstallService
                 if (!string.IsNullOrEmpty(destDir))
                     Directory.CreateDirectory(destDir);
 
+                long srcSize = 0;
+                try { srcSize = new FileInfo(srcFile).Length; } catch { }
                 File.Copy(srcFile, destPath, overwrite: true);
+                bytesDone += srcSize;
 
                 if (done == 1 || done % 100 == 0 || done == total)
+                {
                     statusProgress?.Report($"Installing mod files ({done}/{total})...");
+                    overlayProgress?.Report(new ModOverlayProgress(done, total, bytesDone, bytesTotal));
+                }
             }
 
             DiagnosticLog.Write($"WoL mod file copy complete: {done} files.");

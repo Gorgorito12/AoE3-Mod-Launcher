@@ -29,6 +29,19 @@ public partial class MainWindow : Window
     private bool _isGameRunning;
     private DispatcherTimer? _gameMonitorTimer;
 
+    /// <summary>
+    /// Current install phase. Drives both the breadcrumb visual and the
+    /// speed-label text (so "5 MB/s" gets prefixed with "Download" during
+    /// the download phase but "Copy" during the clone phase).
+    /// </summary>
+    private InstallPhase _currentInstallPhase = InstallPhase.None;
+
+    /// <summary>
+    /// Current update sub-phase (Download / Verify / Apply). Drives the
+    /// 3-dot mini-breadcrumb in the update overlay AND the speed label.
+    /// </summary>
+    private UpdatePhase _currentUpdatePhase = UpdatePhase.None;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -112,8 +125,17 @@ public partial class MainWindow : Window
         VerifyButton.Content = Strings.Get("BtnVerify");
         StopButton.Content = Strings.Get("BtnStop");
         UninstallMenuItem.Header = Strings.Get("MenuUninstall");
+        MenuFolders.Header = Strings.Get("MenuFolders");
+        MenuOpenModFolder.Header = Strings.Get("MenuOpenModFolder");
+        MenuOpenAoE3Folder.Header = Strings.Get("MenuOpenAoE3Folder");
         MenuSelectModFolder.Header = Strings.Get("MenuSelectModFolder");
         MenuSelectAoE3Folder.Header = Strings.Get("MenuSelectAoE3Folder");
+        MenuUserData.Header = Strings.Get("MenuUserData");
+        MenuOpenUserDataFolder.Header = Strings.Get("MenuOpenUserDataFolder");
+        MenuCreateBackupNow.Header = Strings.Get("MenuCreateBackupNow");
+        MenuRestoreUserData.Header = Strings.Get("MenuRestoreUserData");
+        MenuVerifyFiles.Header = Strings.Get("MenuVerifyFiles");
+
         LblGamePath.Text = Strings.Get("LblGamePath");
         MoreButton.ToolTip = Strings.Get("TooltipSettings");
 
@@ -360,7 +382,8 @@ public partial class MainWindow : Window
         ShowDownloadControls(true);
 
         UpdateHeaderText.Text = Strings.Get("StatusRepairing");
-        UpdateHeaderText.Visibility = Visibility.Visible;
+        UpdateSubtitleText.Visibility = Visibility.Collapsed;
+        UpdateHeaderPanel.Visibility = Visibility.Visible;
         LblCurrentPatch.Text = Strings.Get("StatusDownloadingInstaller");
         PatchProgress.Value = 0;
         OverallProgress.Value = 0;
@@ -404,12 +427,16 @@ public partial class MainWindow : Window
                 LblCurrentPatch.Text = s;
             });
 
-            // Mod-only install on top of existing (overwrites damaged files)
+            // Mod-only install on top of existing (overwrites damaged files).
+            // No phase reporter here — repair doesn't show the breadcrumb.
             await nativeInstaller.InstallModOnlyAsync(
                 payloadUrls,
                 installPath,
                 dlProgress,
                 statusProgress,
+                phaseProgress: null,
+                extractProgress: null,
+                overlayProgress: null,
                 _cts.Token);
 
             PatchProgress.Value = 100;
@@ -436,7 +463,7 @@ public partial class MainWindow : Window
             SetBusy(false);
             ShowDownloadControls(false);
             ResetProgressUI();
-            UpdateHeaderText.Visibility = Visibility.Collapsed;
+            UpdateHeaderPanel.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -559,12 +586,14 @@ public partial class MainWindow : Window
                 UpdateButton.Content = Strings.Get("BtnInstall");
                 UpdateButton.Background = (System.Windows.Media.Brush)
                     new System.Windows.Media.BrushConverter().ConvertFromString("#c8102e")!;
+                UpdateButton.Visibility = Visibility.Visible;
                 _pendingDownloads = new();
                 UpdateAoE3PathUI();
                 return;
             }
 
-            // Installed — restore the normal (gray) update button
+            // Installed — restore the normal (gray) update button (visibility
+            // is decided below based on whether there are pending updates).
             UpdateButton.Background = (System.Windows.Media.Brush)
                 new System.Windows.Media.BrushConverter().ConvertFromString("#3a3d44")!;
             UpdateAoE3PathUI();
@@ -600,7 +629,10 @@ public partial class MainWindow : Window
                         result.CurrentVersion?.Ver,
                         result.LatestVersion?.Ver));
                 }
-                UpdateButton.Content = Strings.Get("BtnVerify");
+                // Hide the UpdateButton entirely when there's nothing to do —
+                // the bottom bar shows just JUGAR (and the gear menu still has
+                // Verify files for occasional integrity checks).
+                UpdateButton.Visibility = Visibility.Collapsed;
                 ResetProgressUI();
             }
             else
@@ -612,6 +644,7 @@ public partial class MainWindow : Window
                     _pendingDownloads.Count,
                     FormatBytes(totalBytes)));
                 UpdateButton.Content = Strings.Get("BtnUpdate");
+                UpdateButton.Visibility = Visibility.Visible;
                 ResetProgressUI();
             }
         }
@@ -887,6 +920,14 @@ public partial class MainWindow : Window
         if (!suggestedFolder.EndsWith("Wars of Liberty", StringComparison.OrdinalIgnoreCase))
             suggestedFolder = Path.Combine(suggestedFolder, "Wars of Liberty");
 
+        // Surface the user-data alert BEFORE the install dialog. We're about
+        // to lay down the 1.0.15d base — if the user has saves/metropolises
+        // from a newer install in Documents\My Games\Wars of Liberty, this
+        // is the right time to offer a backup. Doing it after the install
+        // makes the user wait through a 4 GB download just to learn about
+        // a problem they could have addressed up-front.
+        ShowUserDataAlertIfNeeded();
+
         // Show the styled install dialog (single popup, no MessageBoxes)
         var dialog = new InstallFolderDialog(suggestedFolder, aoe3SourcePath, aoe3SourceLabel)
         {
@@ -941,7 +982,8 @@ public partial class MainWindow : Window
         ShowDownloadControls(true);
 
         UpdateHeaderText.Text = Strings.Get("DlgInstallTitle");
-        UpdateHeaderText.Visibility = Visibility.Visible;
+        UpdateSubtitleText.Visibility = Visibility.Collapsed;
+        UpdateHeaderPanel.Visibility = Visibility.Visible;
 
         LblCurrentPatch.Text = Strings.Get("StatusDownloadingInstaller");
         PatchProgress.Value = 0;
@@ -955,8 +997,23 @@ public partial class MainWindow : Window
 
         try
         {
-            // Download progress
+            // Each phase contributes a slice of the overall install bar. Tweaked
+            // by feel: download dominates wall-clock when bandwidth is slow,
+            // clone dominates when bandwidth is fast — but on average these
+            // weights produce a bar that feels honest.
+            //   Full install:  DL 40% | Extract 15% | Clone 25% | Mod 15% | Final 5%
+            //   Mod-only:      DL 50% | Extract 20% |            Mod 25% | Final 5%
+            bool isModOnly = aoe3SourcePath == null;
+            double weightDownload = isModOnly ? 50 : 40;
+            double weightExtract  = isModOnly ? 20 : 15;
+            double weightClone    = isModOnly ?  0 : 25;
+            double weightOverlay  = isModOnly ? 25 : 15;
+            // weightFinalize = 100 - (sum of above) = 5% in both cases
+
+            // SpeedTracker per phase so the figure resets between phases instead
+            // of inheriting an inflated value from the prior step.
             var speed = new SpeedTracker();
+
             var dlProgress = new Progress<DownloadProgress>(p =>
             {
                 speed.Sample(p.BytesReceived);
@@ -966,9 +1023,8 @@ public partial class MainWindow : Window
                 {
                     var eta = speed.EstimateTimeRemaining(p.TotalBytes - p.BytesReceived);
                     PatchProgress.Value = p.Percentage;
-                    OverallProgress.Value = p.Percentage * 0.4; // download = 40% of total
-                    PatchBytesText.Text = $"{p.Percentage:0.0}%";
-                    OverallBytesText.Text =
+                    OverallProgress.Value = (p.Percentage / 100.0) * weightDownload;
+                    PatchBytesText.Text =
                         $"{FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes)}";
                     EtaText.Text = eta.HasValue
                         ? Strings.Format("ProgressEta", FormatDuration(eta.Value))
@@ -980,33 +1036,79 @@ public partial class MainWindow : Window
                 {
                     PatchProgress.Value = 0;
                     PatchBytesText.Text = FormatBytes(p.BytesReceived);
-                    OverallBytesText.Text = FormatBytes(p.BytesReceived);
                     EtaText.Text = "";
                 }
+                OverallBytesText.Text = $"{OverallProgress.Value:0}%";
 
                 SpeedText.Text = speed.BytesPerSecond > 0
-                    ? Strings.Format("ProgressSpeed", FormatBytes((long)speed.BytesPerSecond))
+                    ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
+                        FormatBytes((long)speed.BytesPerSecond))
                     : "";
-                LblCurrentPatch.Text = Strings.Get("StatusDownloadingInstaller");
             });
 
-            // Clone progress
+            // Extract progress — fires while ZipFile entries are being decompressed
+            // to the temp folder. Bytes are uncompressed sizes; the speed tracker
+            // is reset at phase boundary to give an accurate decompression rate.
+            var extractProgress = new Progress<NativeInstallService.ExtractProgress>(p =>
+            {
+                speed.Sample(p.BytesDone);
+                double pct = p.BytesTotal > 0
+                    ? (double)p.BytesDone / p.BytesTotal * 100.0
+                    : (p.EntriesTotal > 0 ? (double)p.EntriesDone / p.EntriesTotal * 100.0 : 0);
+                PatchProgress.Value = pct;
+                OverallProgress.Value = weightDownload + (pct / 100.0) * weightExtract;
+                PatchBytesText.Text = $"{p.EntriesDone}/{p.EntriesTotal} files";
+                OverallBytesText.Text = $"{OverallProgress.Value:0}%";
+                LblCurrentPatch.Text = Strings.Format("StatusExtractingPayload", p.EntriesDone, p.EntriesTotal);
+                SpeedText.Text = speed.BytesPerSecond > 0
+                    ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
+                        FormatBytes((long)speed.BytesPerSecond))
+                    : "";
+                EtaText.Text = "";
+            });
+
+            // Clone progress — fires while AoE3 files are being cloned.
             var cloneProgress = new Progress<CloneProgress>(p =>
             {
                 double pct = p.BytesTotal > 0
                     ? (double)p.BytesCopied / p.BytesTotal * 100.0
                     : 0;
                 PatchProgress.Value = pct;
-                OverallProgress.Value = 40 + pct * 0.4; // clone = 40%-80% of total
-                PatchBytesText.Text = $"{pct:0.0}%";
-                OverallBytesText.Text =
+                OverallProgress.Value = weightDownload + weightExtract + (pct / 100.0) * weightClone;
+                PatchBytesText.Text =
                     $"{FormatBytes(p.BytesCopied)} / {FormatBytes(p.BytesTotal)}";
-                LblCurrentPatch.Text = p.CurrentFile.Length > 80
+                OverallBytesText.Text = $"{OverallProgress.Value:0}%";
+                // Show "💾 <relative file path>" so the line stays consistent
+                // with the emoji-prefixed status used by other phases.
+                var displayFile = p.CurrentFile.Length > 80
                     ? "..." + p.CurrentFile[^80..]
                     : p.CurrentFile;
+                LblCurrentPatch.Text = $"💾 {displayFile}";
                 SpeedText.Text = p.BytesPerSecond > 0
-                    ? Strings.Format("ProgressSpeed", FormatBytes((long)p.BytesPerSecond))
+                    ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
+                        FormatBytes((long)p.BytesPerSecond))
                     : "";
+            });
+
+            // Mod overlay progress — fires while extracted mod files are being
+            // copied on top of the cloned AoE3 destination.
+            var overlayProgress = new Progress<NativeInstallService.ModOverlayProgress>(p =>
+            {
+                speed.Sample(p.BytesDone);
+                double pct = p.BytesTotal > 0
+                    ? (double)p.BytesDone / p.BytesTotal * 100.0
+                    : (p.FilesTotal > 0 ? (double)p.FilesDone / p.FilesTotal * 100.0 : 0);
+                PatchProgress.Value = pct;
+                OverallProgress.Value =
+                    weightDownload + weightExtract + weightClone + (pct / 100.0) * weightOverlay;
+                PatchBytesText.Text = $"{p.FilesDone}/{p.FilesTotal} files";
+                OverallBytesText.Text = $"{OverallProgress.Value:0}%";
+                LblCurrentPatch.Text = Strings.Format("StatusInstallingMod", p.FilesDone, p.FilesTotal);
+                SpeedText.Text = speed.BytesPerSecond > 0
+                    ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
+                        FormatBytes((long)speed.BytesPerSecond))
+                    : "";
+                EtaText.Text = "";
             });
 
             // Status updates
@@ -1014,6 +1116,19 @@ public partial class MainWindow : Window
             {
                 SetStatus(s);
                 LblCurrentPatch.Text = s;
+            });
+
+            // Phase changes: swap the speed label so it accurately describes
+            // what the bytes/sec figure represents at each stage, and reset
+            // the speed tracker so we start each phase with a clean slate.
+            // The current phase also drives the emoji prefix on status text.
+            var phaseProgress = new Progress<InstallPhase>(phase =>
+            {
+                _currentInstallPhase = phase;
+                speed.Reset();
+                // Clear stale per-phase labels until the next progress event arrives
+                SpeedText.Text = "";
+                EtaText.Text = "";
             });
 
             // Wire up pause to native installer
@@ -1029,6 +1144,9 @@ public partial class MainWindow : Window
                     dlProgress,
                     cloneProgress,
                     statusProgress,
+                    phaseProgress,
+                    extractProgress,
+                    overlayProgress,
                     _cts.Token);
             }
             else
@@ -1039,6 +1157,9 @@ public partial class MainWindow : Window
                     installFolder,
                     dlProgress,
                     statusProgress,
+                    phaseProgress,
+                    extractProgress,
+                    overlayProgress,
                     _cts.Token);
             }
 
@@ -1068,12 +1189,9 @@ public partial class MainWindow : Window
                     DiagnosticLog.Write($"  [corrupt/empty] {c}");
             }
 
-            // Warn about pre-existing user data from an older WoL install.
-            // The freshly installed payload is the 1.0.15d base — saves /
-            // metropolises written by a newer version can crash the older
-            // binary on first launch (the symptom is the game hanging on
-            // the loading screen).
-            ShowUserDataAlertIfNeeded();
+            // Note: the user-data alert was already shown BEFORE the install
+            // started — see the call site at the top of this method. Showing
+            // it again here would be redundant and confusing.
         }
         catch (OperationCanceledException)
         {
@@ -1090,7 +1208,8 @@ public partial class MainWindow : Window
             SetBusy(false);
             ShowDownloadControls(false);
             ResetProgressUI();
-            UpdateHeaderText.Visibility = Visibility.Collapsed;
+            UpdateHeaderPanel.Visibility = Visibility.Collapsed;
+            _currentInstallPhase = InstallPhase.None;
         }
 
         // Re-check to detect the freshly installed mod
@@ -1105,14 +1224,39 @@ public partial class MainWindow : Window
     ///
     /// Called once per fresh install. Doesn't run on plain updates.
     /// </summary>
+    /// <summary>
+    /// Show the user-data backup alert if there's pre-existing data under
+    /// Documents\My Games\Wars of Liberty. Called only after a fresh
+    /// install — that's the only deterministic moment where the version
+    /// risk applies (the install always brings back the 1.0.15d base).
+    /// </summary>
     private void ShowUserDataAlertIfNeeded()
     {
-        if (!UserDataService.HasExistingUserData()) return;
-
         var folder = UserDataService.GetUserDataFolder();
-        if (string.IsNullOrEmpty(folder)) return;
+        DiagnosticLog.Write(
+            $"User-data alert check. Probing path: '{folder ?? "(null)"}'");
 
-        DiagnosticLog.Write($"Pre-existing WoL user data detected at: {folder}");
+        if (string.IsNullOrEmpty(folder))
+        {
+            DiagnosticLog.Write("  -> Documents path could not be resolved; skipping alert.");
+            return;
+        }
+
+        if (!Directory.Exists(folder))
+        {
+            DiagnosticLog.Write("  -> Folder does not exist; skipping alert.");
+            return;
+        }
+
+        if (!UserDataService.HasExistingUserData())
+        {
+            DiagnosticLog.Write("  -> Folder exists but is empty; skipping alert.");
+            return;
+        }
+
+        var savegameCount = UserDataService.CountSavegameFiles();
+        DiagnosticLog.Write(
+            $"Pre-existing WoL user data detected. Savegame files: {savegameCount}. Showing alert.");
 
         var dialog = new UserDataAlertDialog(folder) { Owner = this };
         var backedUp = dialog.ShowDialog() == true;
@@ -1131,19 +1275,29 @@ public partial class MainWindow : Window
         _cts = new CancellationTokenSource();
         ShowDownloadControls(true);
 
-        // Show the "Updating X → Y" header for the duration of the update.
+        // Same header pattern as install: title + optional subtitle. The
+        // subtitle is what shows the per-patch transition during update.
         var fromVersion = _updateService.CurrentVersion?.Ver ?? "?";
         var toVersion = _updateService.LatestVersion?.Ver ?? "?";
         UpdateHeaderText.Text = Strings.Format("ProgressUpdating", fromVersion, toVersion);
-        UpdateHeaderText.Visibility = Visibility.Visible;
+        UpdateSubtitleText.Text = "";
+        UpdateSubtitleText.Visibility = Visibility.Collapsed;
+        UpdateHeaderPanel.Visibility = Visibility.Visible;
+
+        // No fancy chain or breadcrumb — the patch counter in the subtitle
+        // and the phase emoji in the status text carry all the info.
 
         bool succeeded = false;
         try
         {
             var statusReporter = new Progress<string>(SetStatus);
             var progressReporter = new Progress<UpdateProgress>(OnProgress);
+            var phaseReporter = new Progress<UpdatePhase>(phase =>
+            {
+                _currentUpdatePhase = phase;
+            });
             await _updateService.ApplyUpdatesAsync(
-                _pendingDownloads, progressReporter, statusReporter, _cts.Token);
+                _pendingDownloads, progressReporter, statusReporter, phaseReporter, _cts.Token);
             succeeded = true;
         }
         catch (OperationCanceledException)
@@ -1163,6 +1317,9 @@ public partial class MainWindow : Window
             SetBusy(false);
             ShowDownloadControls(false);
             ResetProgressUI();
+            UpdateHeaderPanel.Visibility = Visibility.Collapsed;
+            UpdateSubtitleText.Visibility = Visibility.Collapsed;
+            _currentUpdatePhase = UpdatePhase.None;
         }
 
         // Re-check AFTER releasing busy state, otherwise the new CheckAsync
@@ -1176,10 +1333,12 @@ public partial class MainWindow : Window
 
     private void OnProgress(UpdateProgress p)
     {
-        // Per-patch progress
+        // Per-patch progress (current operation — same as install)
+        double patchPct = 0;
         if (p.PatchBytesTotal > 0)
         {
-            PatchProgress.Value = (double)p.PatchBytesDone / p.PatchBytesTotal * 100.0;
+            patchPct = (double)p.PatchBytesDone / p.PatchBytesTotal * 100.0;
+            PatchProgress.Value = patchPct;
             PatchBytesText.Text = $"{FormatBytes(p.PatchBytesDone)} / {FormatBytes(p.PatchBytesTotal)}";
         }
         else
@@ -1188,25 +1347,49 @@ public partial class MainWindow : Window
             PatchBytesText.Text = "";
         }
 
-        // Overall progress
+        // Total progress (overall update — same as install)
         if (p.OverallBytesTotal > 0)
         {
             OverallProgress.Value = (double)p.OverallBytesDone / p.OverallBytesTotal * 100.0;
-            OverallBytesText.Text = $"{FormatBytes(p.OverallBytesDone)} / {FormatBytes(p.OverallBytesTotal)}";
+            OverallBytesText.Text = $"{OverallProgress.Value:0}%";
         }
 
-        // Patch transition header — "Patch 5 of 26: 1.0.15d → 1.0.15e"
-        LblCurrentPatch.Text = Strings.Format("ProgressPatchOf",
-            p.CurrentStep, p.TotalSteps, p.PatchFromVersion, p.PatchToVersion);
+        // Status line under the bars — phase-aware so the user always knows
+        // whether we're downloading, verifying, or applying.
+        LblCurrentPatch.Text = Strings.Format(
+            UpdateStatusKeyForPhase(_currentUpdatePhase),
+            p.PatchToVersion,
+            p.CurrentStep, p.TotalSteps);
 
-        // Speed and ETA
+        // Subtitle in the header — "Patch 13/26: 1.1.1c → 1.1.1d"
+        UpdateSubtitleText.Text = Strings.Format("ProgressPatchSubtitle",
+            p.CurrentStep, p.TotalSteps, p.PatchFromVersion, p.PatchToVersion);
+        UpdateSubtitleText.Visibility = Visibility.Visible;
+
+        // Speed label — phase-aware (Download / Verify / Apply)
         SpeedText.Text = p.BytesPerSecond > 0
-            ? Strings.Format("ProgressSpeed", FormatBytes((long)p.BytesPerSecond))
+            ? Strings.Format(UpdateSpeedLabelKeyForPhase(_currentUpdatePhase),
+                FormatBytes((long)p.BytesPerSecond))
             : "";
         EtaText.Text = p.Eta.HasValue
             ? Strings.Format("ProgressEta", FormatDuration(p.Eta.Value))
             : (p.BytesPerSecond > 0 ? Strings.Format("ProgressEta", Strings.Get("ProgressEtaCalculating")) : "");
     }
+
+    /// <summary>
+    /// Picks the status-line text key for the current update sub-phase, so
+    /// the line just above the bars reads naturally:
+    ///   "📥 Downloading 1.1.1d (13/26)..."
+    ///   "✓ Verifying 1.1.1d (13/26)..."
+    ///   "🔧 Applying 1.1.1d (13/26)..."
+    /// </summary>
+    private static string UpdateStatusKeyForPhase(UpdatePhase phase) => phase switch
+    {
+        UpdatePhase.Download => "ProgressPatchStatusDownloading",
+        UpdatePhase.Verify   => "ProgressPatchStatusVerifying",
+        UpdatePhase.Apply    => "ProgressPatchStatusApplying",
+        _                    => "ProgressPatchOf",
+    };
 
     // ------------------------------------------------------------------------
     // Game launch
@@ -1356,7 +1539,7 @@ public partial class MainWindow : Window
         SpeedText.Text = "";
         EtaText.Text = "";
         LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
-        UpdateHeaderText.Visibility = Visibility.Collapsed;
+        UpdateHeaderPanel.Visibility = Visibility.Collapsed;
     }
 
     private static string FormatBytes(long bytes)
@@ -1379,6 +1562,42 @@ public partial class MainWindow : Window
         return $"{(int)ts.TotalHours}h {ts.Minutes:00}m";
     }
 
+    /// <summary>
+    /// Picks the right localized label for the speed text based on what the
+    /// current bytes-per-second figure actually represents:
+    ///   - Download:    network throughput from GitHub
+    ///   - Extract:     decompression speed from the temp ZIP
+    ///   - Clone / Mod: SSD copy speed
+    ///   - everything else: generic "Speed:" fallback
+    /// </summary>
+    private static string SpeedLabelKeyForPhase(InstallPhase phase) => phase switch
+    {
+        InstallPhase.Download   => "ProgressSpeedDownload",
+        InstallPhase.Extract    => "ProgressSpeedExtract",
+        InstallPhase.Clone      => "ProgressSpeedCopy",
+        InstallPhase.ModOverlay => "ProgressSpeedCopy",
+        _                       => "ProgressSpeed",
+    };
+
+    // ------------------------------------------------------------------------
+    // Update flow helpers (speed label, status text)
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Same idea as <see cref="SpeedLabelKeyForPhase"/> but for the update
+    /// flow's sub-phases: bytes/sec means network throughput while
+    /// downloading and disk read while applying. "Verify" doesn't get its
+    /// own label because it's instantaneous and visible only as a brief
+    /// flash on the dot.
+    /// </summary>
+    private static string UpdateSpeedLabelKeyForPhase(UpdatePhase phase) => phase switch
+    {
+        UpdatePhase.Download => "ProgressSpeedDownload",
+        UpdatePhase.Apply    => "ProgressSpeedCopy",
+        UpdatePhase.Verify   => "ProgressSpeedVerify",
+        _                    => "ProgressSpeed",
+    };
+
     // ------------------------------------------------------------------------
     // More menu / Uninstall
     // ------------------------------------------------------------------------
@@ -1386,9 +1605,37 @@ public partial class MainWindow : Window
     private void MoreButton_Click(object sender, RoutedEventArgs e)
     {
         if (MoreButton.ContextMenu == null) return;
-        // Only let the user open the menu when nothing is in flight
+
+        // Folders submenu — Open variants are enabled only when the path is
+        // resolvable on disk; Select variants are always available unless
+        // we're busy (the user might be trying to fix a detection problem).
+        bool wolDetected = !string.IsNullOrEmpty(_updateService.InstallPath)
+            && Directory.Exists(_updateService.InstallPath);
+        bool aoe3Detected = GameLauncher.Find(_config, _updateService.InstallPath) != null;
+
+        MenuOpenModFolder.IsEnabled = wolDetected;
+        MenuOpenAoE3Folder.IsEnabled = aoe3Detected;
         MenuSelectModFolder.IsEnabled = !_isBusy;
         MenuSelectAoE3Folder.IsEnabled = !_isBusy;
+
+        // User data submenu — same pattern as before
+        var hasUserData = UserDataService.HasExistingUserData();
+        var backups = UserDataService.ListBackups();
+
+        MenuOpenUserDataFolder.IsEnabled = UserDataService.GetUserDataFolder() != null;
+        MenuCreateBackupNow.IsEnabled = !_isBusy && hasUserData;
+        MenuRestoreUserData.IsEnabled = !_isBusy && backups.Count > 0;
+
+        // Append the count of available backups to the Restore label so the
+        // user knows at a glance whether they have anything to restore.
+        var restoreLabel = Strings.Get("MenuRestoreUserData");
+        if (backups.Count > 0)
+            restoreLabel = $"{restoreLabel}  ({backups.Count})";
+        MenuRestoreUserData.Header = restoreLabel;
+
+        // Verify files — only meaningful with a working install
+        MenuVerifyFiles.IsEnabled = !_isBusy && _modIsInstalled;
+
         UninstallMenuItem.IsEnabled = !_isBusy && _modIsInstalled;
         MoreButton.ContextMenu.PlacementTarget = MoreButton;
         MoreButton.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
@@ -1405,6 +1652,188 @@ public partial class MainWindow : Window
     {
         // Reuse the existing browse-AoE3 logic
         BrowseAoE3Button_Click(sender, e);
+    }
+
+    /// <summary>
+    /// Opens the active Wars of Liberty install folder in Explorer. Doesn't
+    /// change the saved path — just lets the user inspect what's there.
+    /// </summary>
+    private void MenuOpenModFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var path = _updateService.InstallPath;
+        if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgOpenFolderNotFoundBody"),
+                Strings.Get("DlgOpenFolderNotFoundTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        OpenFolderInExplorer(path);
+    }
+
+    /// <summary>
+    /// Opens the detected Age of Empires III install folder in Explorer.
+    /// Walks up from the detected age3y.exe so the user lands on the AoE3
+    /// root instead of `bin\` (Steam layout).
+    /// </summary>
+    private void MenuOpenAoE3Folder_Click(object sender, RoutedEventArgs e)
+    {
+        var exePath = GameLauncher.Find(_config, _updateService.InstallPath);
+        if (string.IsNullOrEmpty(exePath))
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgOpenAoE3NotFoundBody"),
+                Strings.Get("DlgOpenFolderNotFoundTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        // Walk up from age3y.exe to find the AoE3 install root (the folder
+        // that contains data\, sound\, art\, etc., one level above bin\ on
+        // Steam layouts).
+        var folder = Path.GetDirectoryName(exePath);
+        if (!string.IsNullOrEmpty(folder)
+            && string.Equals(Path.GetFileName(folder), "bin", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = Path.GetDirectoryName(folder);
+            if (!string.IsNullOrEmpty(parent) && Directory.Exists(parent))
+                folder = parent;
+        }
+
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgOpenAoE3NotFoundBody"),
+                Strings.Get("DlgOpenFolderNotFoundTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        OpenFolderInExplorer(folder);
+    }
+
+    /// <summary>Verify files menu item — same operation as the old toolbar button.</summary>
+    private void MenuVerifyFiles_Click(object sender, RoutedEventArgs e)
+    {
+        VerifyButton_Click(sender, e);
+    }
+
+    /// <summary>Helper for opening a folder in Windows Explorer.</summary>
+    private static void OpenFolderInExplorer(string folder)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = folder,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Failed to open folder '{folder}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Opens the styled restore dialog so the user can pick a specific
+    /// backup to restore. The dialog handles the swap; we just surface
+    /// the resulting status text in the main window.
+    /// </summary>
+    private void MenuRestoreUserData_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy) return;
+
+        var backups = UserDataService.ListBackups();
+        if (backups.Count == 0)
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgRestoreNoBackupsBody"),
+                Strings.Get("DlgRestoreNoBackupsTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new UserDataRestoreDialog(backups) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        if (dialog.RestoredBackup == null) return;
+
+        if (!string.IsNullOrEmpty(dialog.PreviousDataSnapshotPath))
+        {
+            SetStatus(Strings.Format("StatusRestoreSuccessWithSnapshot",
+                Path.GetFileName(dialog.RestoredBackup.Path),
+                Path.GetFileName(dialog.PreviousDataSnapshotPath)));
+        }
+        else
+        {
+            SetStatus(Strings.Format("StatusRestoreSuccess",
+                Path.GetFileName(dialog.RestoredBackup.Path)));
+        }
+    }
+
+    /// <summary>
+    /// Opens the user-data folder in Explorer. If the active folder doesn't
+    /// exist, falls back to the parent My Games folder so backups stay
+    /// reachable.
+    /// </summary>
+    private void MenuOpenUserDataFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var folder = UserDataService.GetUserDataFolder();
+        if (string.IsNullOrEmpty(folder)) return;
+
+        try
+        {
+            var target = Directory.Exists(folder)
+                ? folder
+                : Path.GetDirectoryName(folder) ?? folder;
+            if (!Directory.Exists(target)) return;
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = target,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Failed to open user-data folder: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Manually backs up the active user-data folder. Same operation as the
+    /// post-install alert, but available on demand from the gear menu.
+    /// </summary>
+    private void MenuCreateBackupNow_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy) return;
+
+        if (!UserDataService.HasExistingUserData())
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgBackupNothingBody"),
+                Strings.Get("DlgBackupNothingTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var confirm = MessageBox.Show(this,
+            Strings.Get("DlgBackupConfirmBody"),
+            Strings.Get("DlgBackupConfirmTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        var path = UserDataService.BackupUserData();
+        if (string.IsNullOrEmpty(path))
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgUserDataAlertBackupFailedBody"),
+                Strings.Get("DlgUserDataAlertBackupFailedTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        SetStatus(Strings.Format("StatusUserDataBackedUp", path));
     }
 
     private async void UninstallMenuItem_Click(object sender, RoutedEventArgs e)
@@ -1424,8 +1853,7 @@ public partial class MainWindow : Window
         var dialog = new UninstallDialog(plan) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        if (plan.Mode == UninstallMode.RefusedMergedWithAoe3 ||
-            plan.Mode == UninstallMode.NothingToDo)
+        if (plan.Mode != UninstallMode.Valid)
             return;
 
         SetBusy(true);

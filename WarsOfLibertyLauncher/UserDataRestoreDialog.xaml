@@ -1,0 +1,176 @@
+<Window x:Class="WarsOfLibertyLauncher.UserDataRestoreDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Restaurar respaldo de datos"
+        Width="600" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#1a1d24"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style x:Key="DialogButton" TargetType="Button">
+            <Setter Property="Background" Value="#3a3d44"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#4a4d54"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
+            <Setter Property="Background" Value="#c8102e"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#e63950"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Card style for each backup row in the list -->
+        <Style x:Key="BackupCard" TargetType="ListBoxItem">
+            <Setter Property="Background" Value="#22252c"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#2a2d34"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="12,10">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#2a2d34"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#3a3d44"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1f3a1f"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#3a8c3a"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <StackPanel Margin="24">
+        <!-- Header -->
+        <TextBlock x:Name="HeaderText"
+                   FontSize="18" FontWeight="SemiBold"
+                   Foreground="White"
+                   Margin="0,0,0,4"/>
+        <TextBlock x:Name="DescriptionText"
+                   FontSize="12"
+                   Foreground="#aaa"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,16"/>
+
+        <!-- Backup list -->
+        <TextBlock x:Name="ListLabelText"
+                   FontSize="11"
+                   Foreground="#888"
+                   Margin="0,0,0,6"/>
+        <ListBox x:Name="BackupsList"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 ItemContainerStyle="{StaticResource BackupCard}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 MaxHeight="280"
+                 Margin="0,0,0,12">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="📅 "
+                                           FontSize="13"
+                                           Foreground="#9bd99b"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding DateLabel}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="White"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding DetailLabel}"
+                                       FontSize="11"
+                                       Foreground="#aaa"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding SizeLabel}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Foreground="#ccc"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Reassurance about current data -->
+        <Border Background="#1f2a3a"
+                BorderBrush="#3a5c8c"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="12,8"
+                Margin="0,0,0,16">
+            <TextBlock x:Name="ReassuranceText"
+                       FontSize="11"
+                       Foreground="#9bb8d9"
+                       TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Buttons -->
+        <Grid>
+            <Button x:Name="OpenFolderButton"
+                    Style="{StaticResource DialogButton}"
+                    HorizontalAlignment="Left"
+                    MinWidth="120"
+                    Click="OpenFolderButton_Click"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="CancelButton"
+                        Style="{StaticResource DialogButton}"
+                        MinWidth="100"
+                        Margin="0,0,8,0"
+                        Click="CancelButton_Click"/>
+                <Button x:Name="RestoreButton"
+                        Style="{StaticResource PrimaryButton}"
+                        MinWidth="140"
+                        IsDefault="True"
+                        Click="RestoreButton_Click"/>
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</Window>

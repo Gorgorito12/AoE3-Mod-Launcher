@@ -168,15 +168,26 @@
                        FontStyle="Italic"/>
         </Border>
 
-        <!-- Update transition header (visible during updates) -->
-        <TextBlock x:Name="UpdateHeaderText"
-                   Grid.Row="3"
-                   Text=""
-                   Foreground="White"
-                   FontSize="14"
-                   FontWeight="SemiBold"
-                   Margin="0,0,0,4"
-                   Visibility="Collapsed"/>
+        <!-- Header for install AND update flows. Same visual structure for
+             both: a primary title + optional subtitle. The update flow uses
+             the subtitle to show "Patch 13/26: 1.1.1c → 1.1.1d"; the install
+             flow leaves it blank. -->
+        <StackPanel x:Name="UpdateHeaderPanel"
+                    Grid.Row="3"
+                    Margin="0,0,0,8"
+                    Visibility="Collapsed">
+            <TextBlock x:Name="UpdateHeaderText"
+                       Text=""
+                       Foreground="White"
+                       FontSize="14"
+                       FontWeight="SemiBold"/>
+            <TextBlock x:Name="UpdateSubtitleText"
+                       Text=""
+                       Foreground="#888"
+                       FontSize="12"
+                       Margin="0,2,0,0"
+                       Visibility="Collapsed"/>
+        </StackPanel>
 
         <!-- Status -->
         <TextBlock x:Name="StatusText"
@@ -187,7 +198,9 @@
                    Margin="0,0,0,8"
                    TextTrimming="CharacterEllipsis"/>
 
-        <!-- Progress block -->
+        <!-- Progress block — minimal: status text, two bars, speed/ETA.
+             No breadcrumbs or chains; the status text + counters carry all
+             the per-phase info the user needs. -->
         <StackPanel Grid.Row="5" Margin="0,0,0,20">
             <!-- Per-patch progress -->
             <Grid Margin="0,0,0,2">
@@ -269,36 +282,232 @@
                                  BorderThickness="1"
                                  Padding="4">
                         <ContextMenu.Resources>
+                            <!-- Separator: thin dark gray line -->
+                            <Style TargetType="Separator">
+                                <Setter Property="Background" Value="#3a3d44"/>
+                                <Setter Property="Margin" Value="6,4"/>
+                                <Setter Property="Height" Value="1"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Separator">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    Height="{TemplateBinding Height}"/>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+
+                            <!-- MenuItem: dark theme with full template control over
+                                 both leaf items and submenu headers, plus a styled
+                                 popup for nested submenus. -->
                             <Style TargetType="MenuItem">
-                                <Setter Property="Padding" Value="10,8"/>
-                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="Foreground" Value="White"/>
                                 <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Padding" Value="6,6"/>
+                                <Setter Property="FontSize" Value="13"/>
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="MenuItem">
+                                            <Border x:Name="border"
+                                                    Background="{TemplateBinding Background}"
+                                                    CornerRadius="3"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="24"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Icon -->
+                                                    <ContentPresenter Grid.Column="0"
+                                                                      ContentSource="Icon"
+                                                                      VerticalAlignment="Center"
+                                                                      HorizontalAlignment="Center"/>
+
+                                                    <!-- Header text -->
+                                                    <ContentPresenter Grid.Column="1"
+                                                                      ContentSource="Header"
+                                                                      VerticalAlignment="Center"
+                                                                      Margin="6,0,12,0"
+                                                                      RecognizesAccessKey="True"/>
+
+                                                    <!-- Submenu arrow (▶), only when there are children -->
+                                                    <Path x:Name="arrow"
+                                                          Grid.Column="2"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,4,0"
+                                                          Width="6" Height="10"
+                                                          Stretch="Uniform"
+                                                          Fill="#888"
+                                                          Data="M0,0 L6,5 L0,10 Z"
+                                                          Visibility="Collapsed"/>
+
+                                                    <!-- Submenu popup -->
+                                                    <Popup x:Name="PART_Popup"
+                                                           IsOpen="{TemplateBinding IsSubmenuOpen}"
+                                                           Placement="Right"
+                                                           HorizontalOffset="-2"
+                                                           VerticalOffset="-4"
+                                                           AllowsTransparency="True"
+                                                           PopupAnimation="Fade"
+                                                           Focusable="False">
+                                                        <Border Background="#22252c"
+                                                                BorderBrush="#3a3d44"
+                                                                BorderThickness="1"
+                                                                CornerRadius="4"
+                                                                Padding="4"
+                                                                Margin="4">
+                                                            <Border.Effect>
+                                                                <DropShadowEffect BlurRadius="12"
+                                                                                  ShadowDepth="2"
+                                                                                  Color="Black"
+                                                                                  Opacity="0.5"/>
+                                                            </Border.Effect>
+                                                            <StackPanel IsItemsHost="True"/>
+                                                        </Border>
+                                                    </Popup>
+                                                </Grid>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <!-- Has submenu? Show the arrow. -->
+                                                <Trigger Property="HasItems" Value="True">
+                                                    <Setter TargetName="arrow" Property="Visibility" Value="Visible"/>
+                                                </Trigger>
+                                                <!-- Hover -->
+                                                <Trigger Property="IsHighlighted" Value="True">
+                                                    <Setter TargetName="border" Property="Background" Value="#3a3d44"/>
+                                                </Trigger>
+                                                <!-- Disabled -->
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="Foreground" Value="#666"/>
+                                                    <Setter TargetName="arrow" Property="Fill" Value="#444"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
                         </ContextMenu.Resources>
 
-                        <!-- Mod folder item -->
-                        <MenuItem x:Name="MenuSelectModFolder"
-                                  Foreground="White"
-                                  Click="MenuSelectModFolder_Click">
+                        <!-- Folders submenu — open + select grouped together -->
+                        <MenuItem x:Name="MenuFolders"
+                                  Foreground="White">
                             <MenuItem.Icon>
                                 <!-- Folder icon -->
                                 <Path Width="16" Height="16" Stretch="Uniform"
-                                      Fill="#c8102e"
+                                      Fill="#d4a04a"
                                       Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/>
                             </MenuItem.Icon>
+
+                            <!-- Open WoL folder -->
+                            <MenuItem x:Name="MenuOpenModFolder"
+                                      Foreground="White"
+                                      Click="MenuOpenModFolder_Click">
+                                <MenuItem.Icon>
+                                    <!-- Open folder icon -->
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Fill="#c8102e"
+                                          Data="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+
+                            <!-- Open AoE3 folder -->
+                            <MenuItem x:Name="MenuOpenAoE3Folder"
+                                      Foreground="White"
+                                      Click="MenuOpenAoE3Folder_Click">
+                                <MenuItem.Icon>
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Fill="#5b9bd5"
+                                          Data="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+
+                            <Separator Background="#3a3d44" Margin="0,4"/>
+
+                            <!-- Select WoL folder (manual override) -->
+                            <MenuItem x:Name="MenuSelectModFolder"
+                                      Foreground="White"
+                                      Click="MenuSelectModFolder_Click">
+                                <MenuItem.Icon>
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Fill="#c8102e"
+                                          Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+
+                            <!-- Select AoE3 folder (manual override) -->
+                            <MenuItem x:Name="MenuSelectAoE3Folder"
+                                      Foreground="White"
+                                      Click="MenuSelectAoE3Folder_Click">
+                                <MenuItem.Icon>
+                                    <!-- Game controller icon -->
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Fill="#5b9bd5"
+                                          Data="M7.97,16L5,19C4.67,19.3 4.23,19.5 3.75,19.5A1.75,1.75 0 0,1 2,17.75V17.5L3,10.12C3.21,7.81 5.14,6 7.5,6H16.5C18.86,6 20.79,7.81 21,10.12L22,17.5V17.75A1.75,1.75 0 0,1 20.25,19.5C19.77,19.5 19.33,19.3 19,19L16.03,16H7.97M7,8V10H5V11H7V13H8V11H10V10H8V8H7M14.5,9A0.5,0.5 0 0,0 14,9.5A0.5,0.5 0 0,0 14.5,10A0.5,0.5 0 0,0 15,9.5A0.5,0.5 0 0,0 14.5,9M16.5,11A0.5,0.5 0 0,0 16,11.5A0.5,0.5 0 0,0 16.5,12A0.5,0.5 0 0,0 17,11.5A0.5,0.5 0 0,0 16.5,11M16.5,9A0.5,0.5 0 0,0 16,9.5A0.5,0.5 0 0,0 16.5,10A0.5,0.5 0 0,0 17,9.5A0.5,0.5 0 0,0 16.5,9M18.5,11A0.5,0.5 0 0,0 18,11.5A0.5,0.5 0 0,0 18.5,12A0.5,0.5 0 0,0 19,11.5A0.5,0.5 0 0,0 18.5,11Z"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
                         </MenuItem>
 
-                        <!-- AoE3 folder item -->
-                        <MenuItem x:Name="MenuSelectAoE3Folder"
-                                  Foreground="White"
-                                  Click="MenuSelectAoE3Folder_Click">
+                        <!-- User data submenu — groups all data-management actions -->
+                        <MenuItem x:Name="MenuUserData"
+                                  Foreground="White">
                             <MenuItem.Icon>
-                                <!-- Game controller icon -->
+                                <!-- Database / disk icon -->
                                 <Path Width="16" Height="16" Stretch="Uniform"
-                                      Fill="#5b9bd5"
-                                      Data="M7.97,16L5,19C4.67,19.3 4.23,19.5 3.75,19.5A1.75,1.75 0 0,1 2,17.75V17.5L3,10.12C3.21,7.81 5.14,6 7.5,6H16.5C18.86,6 20.79,7.81 21,10.12L22,17.5V17.75A1.75,1.75 0 0,1 20.25,19.5C19.77,19.5 19.33,19.3 19,19L16.03,16H7.97M7,8V10H5V11H7V13H8V11H10V10H8V8H7M14.5,9A0.5,0.5 0 0,0 14,9.5A0.5,0.5 0 0,0 14.5,10A0.5,0.5 0 0,0 15,9.5A0.5,0.5 0 0,0 14.5,9M16.5,11A0.5,0.5 0 0,0 16,11.5A0.5,0.5 0 0,0 16.5,12A0.5,0.5 0 0,0 17,11.5A0.5,0.5 0 0,0 16.5,11M16.5,9A0.5,0.5 0 0,0 16,9.5A0.5,0.5 0 0,0 16.5,10A0.5,0.5 0 0,0 17,9.5A0.5,0.5 0 0,0 16.5,9M18.5,11A0.5,0.5 0 0,0 18,11.5A0.5,0.5 0 0,0 18.5,12A0.5,0.5 0 0,0 19,11.5A0.5,0.5 0 0,0 18.5,11Z"/>
+                                      Fill="#d4a04a"
+                                      Data="M12,3C7.58,3 4,4.79 4,7V17C4,19.21 7.59,21 12,21C16.41,21 20,19.21 20,17V7C20,4.79 16.42,3 12,3M18,17C18,17.5 15.87,19 12,19C8.13,19 6,17.5 6,17V14.77C7.61,15.55 9.72,16 12,16C14.28,16 16.39,15.55 18,14.77V17M18,12.45C16.7,13.4 14.42,14 12,14C9.58,14 7.3,13.4 6,12.45V9.64C7.47,10.47 9.61,11 12,11C14.39,11 16.53,10.47 18,9.64V12.45M12,9C8.13,9 6,7.5 6,7C6,6.5 8.13,5 12,5C15.87,5 18,6.5 18,7C18,7.5 15.87,9 12,9Z"/>
+                            </MenuItem.Icon>
+
+                            <!-- Open data folder -->
+                            <MenuItem x:Name="MenuOpenUserDataFolder"
+                                      Foreground="White"
+                                      Click="MenuOpenUserDataFolder_Click">
+                                <MenuItem.Icon>
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Fill="#d4a04a"
+                                          Data="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+
+                            <!-- Create backup now -->
+                            <MenuItem x:Name="MenuCreateBackupNow"
+                                      Foreground="White"
+                                      Click="MenuCreateBackupNow_Click">
+                                <MenuItem.Icon>
+                                    <!-- Download / save arrow -->
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Fill="#5b9bd5"
+                                          Data="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+
+                            <!-- Restore backup -->
+                            <MenuItem x:Name="MenuRestoreUserData"
+                                      Foreground="White"
+                                      Click="MenuRestoreUserData_Click">
+                                <MenuItem.Icon>
+                                    <Path Width="16" Height="16" Stretch="Uniform"
+                                          Fill="#9bd99b"
+                                          Data="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </MenuItem>
+
+                        <Separator Background="#3a3d44" Margin="0,4"/>
+
+                        <!-- Verify files item -->
+                        <MenuItem x:Name="MenuVerifyFiles"
+                                  Foreground="White"
+                                  Click="MenuVerifyFiles_Click">
+                            <MenuItem.Icon>
+                                <!-- Wrench / repair icon -->
+                                <Path Width="16" Height="16" Stretch="Uniform"
+                                      Fill="#9bd99b"
+                                      Data="M22.7,19L13.6,9.9C14.5,7.6 14,4.9 12.1,3C10.1,1 7.1,0.6 4.7,1.7L9,6L6,9L1.6,4.7C0.4,7.1 0.9,10.1 2.9,12.1C4.8,14 7.5,14.5 9.8,13.6L18.9,22.7C19.3,23.1 19.9,23.1 20.3,22.7L22.6,20.4C23.1,20 23.1,19.3 22.7,19Z"/>
                             </MenuItem.Icon>
                         </MenuItem>
 
@@ -338,10 +547,14 @@
                         Background="#3a3d44"
                         Margin="0,0,10,0"
                         Click="UpdateButton_Click"/>
+                <!-- Verify moved to the gear menu (⚙ → Verify files). The
+                     button stays in the tree so existing handlers / strings
+                     don't error, but is permanently collapsed in the bar. -->
                 <Button x:Name="VerifyButton"
                         Style="{StaticResource LauncherButton}"
                         Background="#3a3d44"
                         Margin="0,0,10,0"
+                        Visibility="Collapsed"
                         Click="VerifyButton_Click"/>
                 <Button x:Name="StopButton"
                         Style="{StaticResource LauncherButton}"

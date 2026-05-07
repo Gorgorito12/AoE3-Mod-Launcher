@@ -86,86 +86,147 @@ public class DownloadService
         var tempPath = destinationPath + ".part";
         long existingBytes = File.Exists(tempPath) ? new FileInfo(tempPath).Length : 0;
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        // First request: ask for the partial range if we already have something on disk.
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (existingBytes > 0)
             request.Headers.Range = new RangeHeaderValue(existingBytes, null);
 
-        using var response = await _http.SendAsync(
+        var response = await _http.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        // 416 Range Not Satisfiable: our .part file is at or past the remote
+        // size. This typically happens when a previous attempt finished the
+        // download but the launcher was closed/cancelled before the file got
+        // renamed and the patch applied. Do a HEAD to learn the real size:
+        //   - if our local size matches remote → file is already complete,
+        //     just rename and report 100%.
+        //   - otherwise → wipe and restart from byte 0.
+        if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+        {
+            response.Dispose();
+            request.Dispose();
+
+            long remoteSize = await TryGetRemoteSizeAsync(url, ct);
+            if (remoteSize > 0 && existingBytes == remoteSize)
+            {
+                if (File.Exists(destinationPath)) File.Delete(destinationPath);
+                File.Move(tempPath, destinationPath);
+                progress?.Report(new DownloadProgress(remoteSize, remoteSize, 100.0));
+                return;
+            }
+
+            // Local file is wrong size (corrupt or mismatched). Start over.
+            try { File.Delete(tempPath); } catch { }
+            existingBytes = 0;
+
+            request = new HttpRequestMessage(HttpMethod.Get, url);
+            response = await _http.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
 
         // If server doesn't support Range, restart from zero.
         if (existingBytes > 0 && response.StatusCode != HttpStatusCode.PartialContent)
         {
             existingBytes = 0;
-            File.Delete(tempPath);
+            try { File.Delete(tempPath); } catch { }
         }
 
-        response.EnsureSuccessStatusCode();
-
-        // Try to learn the total size up-front. Some servers send Content-Length
-        // on a HEAD request even when they use chunked transfer for GET.
-        long totalBytes = (response.Content.Headers.ContentLength ?? 0) + existingBytes;
-        if (totalBytes <= 0)
+        try
         {
-            try
+            response.EnsureSuccessStatusCode();
+
+            // Try to learn the total size up-front. Some servers send Content-Length
+            // on a HEAD request even when they use chunked transfer for GET.
+            long totalBytes = (response.Content.Headers.ContentLength ?? 0) + existingBytes;
+            if (totalBytes <= 0)
             {
-                using var headRequest = new HttpRequestMessage(HttpMethod.Head, url);
-                using var headResponse = await _http.SendAsync(headRequest, ct);
-                if (headResponse.IsSuccessStatusCode)
+                try
                 {
-                    var headLen = headResponse.Content.Headers.ContentLength;
-                    if (headLen.HasValue) totalBytes = headLen.Value + existingBytes;
+                    using var headRequest = new HttpRequestMessage(HttpMethod.Head, url);
+                    using var headResponse = await _http.SendAsync(headRequest, ct);
+                    if (headResponse.IsSuccessStatusCode)
+                    {
+                        var headLen = headResponse.Content.Headers.ContentLength;
+                        if (headLen.HasValue) totalBytes = headLen.Value + existingBytes;
+                    }
+                }
+                catch
+                {
+                    // HEAD not supported on this server — proceed without a known total
                 }
             }
-            catch
+
+            await using var sourceStream = await response.Content.ReadAsStreamAsync(ct);
+            await using var destStream = new FileStream(
+                tempPath, FileMode.Append, FileAccess.Write, FileShare.None,
+                bufferSize: 1024 * 1024, useAsync: true);
+
+            var buffer = new byte[1024 * 1024];
+            long received = existingBytes;
+            int read;
+
+            // Initial 0-byte report so the UI shows "Downloading..." instead of
+            // staying blank until the first chunk arrives.
+            progress?.Report(new DownloadProgress(received, totalBytes,
+                totalBytes > 0 ? (double)received / totalBytes * 100.0 : 0));
+
+            while ((read = await sourceStream.ReadAsync(buffer, ct)) > 0)
             {
-                // HEAD not supported on this server — proceed without a known total
+                // Honor the pause flag — if the user pauses mid-download, stop
+                // pulling bytes from the server. The .part file stays on disk so
+                // the next call resumes via HTTP Range.
+                while (Pause && !ct.IsCancellationRequested)
+                {
+                    await Task.Delay(200, ct);
+                }
+                ct.ThrowIfCancellationRequested();
+
+                await destStream.WriteAsync(buffer.AsMemory(0, read), ct);
+                received += read;
+
+                // Always report progress, even when total is unknown — the UI
+                // can decide what to display when TotalBytes is 0 (typically:
+                // bytes received + speed without a percentage).
+                double pct = totalBytes > 0
+                    ? (double)received / totalBytes * 100.0
+                    : 0;
+                progress?.Report(new DownloadProgress(received, totalBytes, pct));
             }
+
+            await destStream.FlushAsync(ct);
+            destStream.Close();
+
+            if (File.Exists(destinationPath))
+                File.Delete(destinationPath);
+            File.Move(tempPath, destinationPath);
         }
-
-        await using var sourceStream = await response.Content.ReadAsStreamAsync(ct);
-        await using var destStream = new FileStream(
-            tempPath, FileMode.Append, FileAccess.Write, FileShare.None,
-            bufferSize: 1024 * 1024, useAsync: true);
-
-        var buffer = new byte[1024 * 1024];
-        long received = existingBytes;
-        int read;
-
-        // Initial 0-byte report so the UI shows "Downloading..." instead of
-        // staying blank until the first chunk arrives.
-        progress?.Report(new DownloadProgress(received, totalBytes,
-            totalBytes > 0 ? (double)received / totalBytes * 100.0 : 0));
-
-        while ((read = await sourceStream.ReadAsync(buffer, ct)) > 0)
+        finally
         {
-            // Honor the pause flag — if the user pauses mid-download, stop
-            // pulling bytes from the server. The .part file stays on disk so
-            // the next call resumes via HTTP Range.
-            while (Pause && !ct.IsCancellationRequested)
-            {
-                await Task.Delay(200, ct);
-            }
-            ct.ThrowIfCancellationRequested();
-
-            await destStream.WriteAsync(buffer.AsMemory(0, read), ct);
-            received += read;
-
-            // Always report progress, even when total is unknown — the UI
-            // can decide what to display when TotalBytes is 0 (typically:
-            // bytes received + speed without a percentage).
-            double pct = totalBytes > 0
-                ? (double)received / totalBytes * 100.0
-                : 0;
-            progress?.Report(new DownloadProgress(received, totalBytes, pct));
+            response.Dispose();
+            request.Dispose();
         }
+    }
 
-        await destStream.FlushAsync(ct);
-        destStream.Close();
-
-        if (File.Exists(destinationPath))
-            File.Delete(destinationPath);
-        File.Move(tempPath, destinationPath);
+    /// <summary>
+    /// HEAD-probe the URL to learn its byte length. Returns -1 if the server
+    /// doesn't supply a Content-Length or HEAD isn't supported. Public so the
+    /// install pipeline can pre-compute total download size before starting,
+    /// which keeps the progress bar usable from the very first byte.
+    /// </summary>
+    public async Task<long> TryGetRemoteSizeAsync(string url, CancellationToken ct)
+    {
+        try
+        {
+            using var headRequest = new HttpRequestMessage(HttpMethod.Head, url);
+            using var headResponse = await _http.SendAsync(headRequest, ct);
+            if (headResponse.IsSuccessStatusCode)
+                return headResponse.Content.Headers.ContentLength ?? -1;
+        }
+        catch
+        {
+            // Falls through to -1
+        }
+        return -1;
     }
 
     /// <summary>Downloads a string (used for delete-list files).</summary>

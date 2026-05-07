@@ -20,7 +20,6 @@ public record UninstallResult(
     int ShortcutsDeleted,
     bool RegistryRemoved,
     bool ConfigRemoved,
-    List<string> Skipped,
     List<string> Errors,
     string? Message);
 
@@ -44,17 +43,14 @@ public class UninstallOptions
 }
 
 /// <summary>
-/// Removes a Wars of Liberty installation safely.
+/// Removes a Wars of Liberty installation by deleting the entire install
+/// folder. Safe because the launcher always installs WoL into its own
+/// dedicated folder (a clone of AoE3 + the mod overlay), separate from the
+/// original AoE3 installation.
 ///
-/// Strategy (in priority order):
-///   1. Manifest-driven: if wol-manifest.json exists, delete only the files
-///      and directories listed there. This is the only fully safe mode when
-///      WoL was installed merged into an AoE3 root.
-///   2. Subfolder fallback: if no manifest but the install path is clearly
-///      a "Wars of Liberty" subfolder (does NOT contain age3y.exe at root or
-///      in bin\), delete the whole folder.
-///   3. Refuse: if the install path looks like an AoE3 root (has age3y.exe),
-///      we cannot tell mod files from base game files. Don't delete anything.
+/// One safety check: the folder must contain the WoL marker
+/// (<c>art\zulushield\</c>). Without it we abort — we won't delete a folder
+/// that isn't actually a WoL install.
 /// </summary>
 public class UninstallService
 {
@@ -62,48 +58,32 @@ public class UninstallService
     private const string AppName = "Wars of Liberty";
 
     /// <summary>
-    /// File names that we refuse to delete even if listed in the manifest —
-    /// they are part of the AoE3 base game.
-    /// </summary>
-    private static readonly HashSet<string> ProtectedFileNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "age3y.exe", "age3.exe", "age3x.exe",
-        "proto.xml", "techtree.xml", "stringtable.xml",
-    };
-
-    /// <summary>
-    /// Tells the UI whether we can fully uninstall, only partially, or not at all.
+    /// Builds an <see cref="UninstallPlan"/> describing what we'll remove.
+    /// Validates that the path looks like a WoL install (has the marker).
     /// </summary>
     public UninstallPlan Plan(string installPath)
     {
         if (string.IsNullOrEmpty(installPath) || !Directory.Exists(installPath))
-            return new UninstallPlan(UninstallMode.NothingToDo, null, 0, 0);
+            return new UninstallPlan(UninstallMode.NothingToDo, installPath ?? "", 0, 0);
 
-        var manifest = InstallManifest.TryLoad(installPath);
-        if (manifest != null)
+        // Marker check: only delete folders that contain the WoL signature.
+        // This rules out catastrophic accidents like the user pointing at
+        // their AoE3 root, an unrelated folder, or a drive root.
+        if (!Directory.Exists(Path.Combine(installPath, "art", "zulushield")))
         {
-            return new UninstallPlan(UninstallMode.Manifest, manifest,
-                manifest.Files.Count, manifest.Directories.Count)
-            { InstallPath = manifest.InstallPath };
+            return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
         }
 
-        // No manifest. Decide between subfolder-delete vs refuse.
-        if (LooksLikeStandaloneSubfolder(installPath))
+        // Count files / dirs for the dialog summary
+        int fileCount = 0, dirCount = 0;
+        try
         {
-            // Roughly count items for the dialog
-            int fileCount = 0, dirCount = 0;
-            try
-            {
-                fileCount = Directory.EnumerateFiles(installPath, "*", SearchOption.AllDirectories).Count();
-                dirCount = Directory.EnumerateDirectories(installPath, "*", SearchOption.AllDirectories).Count();
-            }
-            catch { }
-            return new UninstallPlan(UninstallMode.SubfolderFallback, null, fileCount, dirCount)
-            { InstallPath = installPath };
+            fileCount = Directory.EnumerateFiles(installPath, "*", SearchOption.AllDirectories).Count();
+            dirCount = Directory.EnumerateDirectories(installPath, "*", SearchOption.AllDirectories).Count();
         }
+        catch { /* counts are best-effort, not load-bearing */ }
 
-        return new UninstallPlan(UninstallMode.RefusedMergedWithAoe3, null, 0, 0)
-        { InstallPath = installPath };
+        return new UninstallPlan(UninstallMode.Valid, installPath, fileCount, dirCount);
     }
 
     /// <summary>
@@ -116,21 +96,21 @@ public class UninstallService
         IProgress<(double Percent, string Step)>? progress = null,
         CancellationToken ct = default)
     {
-        DiagnosticLog.Write($"=== Uninstall start (mode={plan.Mode}) ===");
+        DiagnosticLog.Write($"=== Uninstall start (mode={plan.Mode}, path='{plan.InstallPath}') ===");
 
-        if (plan.Mode == UninstallMode.RefusedMergedWithAoe3)
+        if (plan.Mode == UninstallMode.NotAValidInstall)
         {
             return new UninstallResult(
                 Success: false,
                 FilesDeleted: 0, DirectoriesDeleted: 0, ShortcutsDeleted: 0,
                 RegistryRemoved: false, ConfigRemoved: false,
-                Skipped: new(), Errors: new(),
-                Message: "Refused: install path looks like an AoE3 root.");
+                Errors: new(),
+                Message: "Path does not look like a valid Wars of Liberty install.");
         }
 
         if (plan.Mode == UninstallMode.NothingToDo)
         {
-            return new UninstallResult(true, 0, 0, 0, false, false, new(), new(), "Nothing to do.");
+            return new UninstallResult(true, 0, 0, 0, false, false, new(), "Nothing to do.");
         }
 
         return await Task.Run(() => DoUninstall(plan, options, progress, ct), ct);
@@ -142,7 +122,6 @@ public class UninstallService
         IProgress<(double, string)>? progress,
         CancellationToken ct)
     {
-        var skipped = new List<string>();
         var errors = new List<string>();
         int filesDeleted = 0;
         int dirsDeleted = 0;
@@ -152,25 +131,18 @@ public class UninstallService
 
         progress?.Report((0, "Starting uninstall..."));
 
-        // ---- Phase 1: shortcuts (do this BEFORE deleting files so paths still resolve) ----
+        // ---- Phase 1: shortcuts (do this BEFORE deleting files so the
+        //              manifest reference paths still resolve) ----
         if (options.DeleteShortcuts)
         {
-            shortcutsDeleted = DeleteShortcuts(plan.Manifest, errors);
+            shortcutsDeleted = DeleteShortcuts(plan.InstallPath, errors);
         }
 
-        // ---- Phase 2: mod files ----
+        // ---- Phase 2: delete the install folder, recursively ----
         if (options.DeleteModFiles)
         {
-            if (plan.Mode == UninstallMode.Manifest && plan.Manifest != null)
-            {
-                (filesDeleted, dirsDeleted) =
-                    DeleteFromManifest(plan.Manifest, progress, ct, skipped, errors);
-            }
-            else if (plan.Mode == UninstallMode.SubfolderFallback)
-            {
-                (filesDeleted, dirsDeleted) =
-                    DeleteSubfolder(plan.InstallPath, progress, ct, errors);
-            }
+            (filesDeleted, dirsDeleted) =
+                DeleteInstallFolder(plan.InstallPath, plan.FileCount, progress, ct, errors);
         }
 
         // ---- Phase 3: registry ----
@@ -195,120 +167,20 @@ public class UninstallService
 
         return new UninstallResult(
             success, filesDeleted, dirsDeleted, shortcutsDeleted,
-            registryRemoved, configRemoved, skipped, errors, message);
+            registryRemoved, configRemoved, errors, message);
     }
 
     // -------------------------------------------------------------------------
-    // Manifest-driven delete (the safe path)
+    // Folder delete (the simple path)
     // -------------------------------------------------------------------------
 
-    private (int FilesDeleted, int DirsDeleted) DeleteFromManifest(
-        InstallManifest manifest,
-        IProgress<(double, string)>? progress,
-        CancellationToken ct,
-        List<string> skipped,
-        List<string> errors)
-    {
-        int filesDeleted = 0;
-        int dirsDeleted = 0;
-        int totalSteps = manifest.Files.Count + manifest.Directories.Count + 1; // +1 for manifest itself
-        int currentStep = 0;
-
-        var installRoot = Path.GetFullPath(manifest.InstallPath).TrimEnd('\\', '/');
-
-        // Files first
-        foreach (var rel in manifest.Files)
-        {
-            ct.ThrowIfCancellationRequested();
-            currentStep++;
-
-            var name = Path.GetFileName(rel);
-            if (ProtectedFileNames.Contains(name))
-            {
-                skipped.Add(rel);
-                DiagnosticLog.Write($"  [skip protected] {rel}");
-                continue;
-            }
-
-            var abs = Path.Combine(installRoot, rel.Replace('/', Path.DirectorySeparatorChar));
-            if (!IsInsideRoot(abs, installRoot))
-            {
-                skipped.Add(rel);
-                continue;
-            }
-
-            try
-            {
-                if (File.Exists(abs))
-                {
-                    File.SetAttributes(abs, FileAttributes.Normal); // in case it's read-only
-                    File.Delete(abs);
-                    filesDeleted++;
-                }
-            }
-            catch (Exception ex)
-            {
-                errors.Add($"{rel}: {ex.Message}");
-            }
-
-            if (currentStep % 50 == 0 || currentStep == totalSteps)
-            {
-                progress?.Report((100.0 * currentStep / totalSteps,
-                    $"Deleting files ({filesDeleted}/{manifest.Files.Count})..."));
-            }
-        }
-
-        // Directories — reverse order so we delete leaves first
-        foreach (var rel in manifest.Directories.AsEnumerable().Reverse())
-        {
-            ct.ThrowIfCancellationRequested();
-            currentStep++;
-
-            var abs = Path.Combine(installRoot, rel.Replace('/', Path.DirectorySeparatorChar));
-            if (!IsInsideRoot(abs, installRoot)) continue;
-
-            try
-            {
-                if (Directory.Exists(abs) && IsDirectoryEmpty(abs))
-                {
-                    Directory.Delete(abs);
-                    dirsDeleted++;
-                }
-            }
-            catch (Exception ex)
-            {
-                errors.Add($"dir {rel}: {ex.Message}");
-            }
-        }
-
-        // Manifest file itself
-        try
-        {
-            var manifestPath = InstallManifest.GetManifestPath(installRoot);
-            if (File.Exists(manifestPath)) File.Delete(manifestPath);
-        }
-        catch { /* non-fatal */ }
-
-        // Install root itself, if empty after everything
-        try
-        {
-            if (Directory.Exists(installRoot) && IsDirectoryEmpty(installRoot))
-            {
-                Directory.Delete(installRoot);
-                dirsDeleted++;
-            }
-        }
-        catch { /* non-fatal */ }
-
-        return (filesDeleted, dirsDeleted);
-    }
-
-    // -------------------------------------------------------------------------
-    // Subfolder-fallback delete (no manifest, but path is clearly WoL-only)
-    // -------------------------------------------------------------------------
-
-    private (int FilesDeleted, int DirsDeleted) DeleteSubfolder(
+    /// <summary>
+    /// Deletes the install folder recursively. Streams progress as it goes
+    /// so the dialog can show a percentage on multi-GB clones.
+    /// </summary>
+    private static (int FilesDeleted, int DirsDeleted) DeleteInstallFolder(
         string installPath,
+        int expectedFileCount,
         IProgress<(double, string)>? progress,
         CancellationToken ct,
         List<string> errors)
@@ -316,10 +188,17 @@ public class UninstallService
         int filesDeleted = 0;
         int dirsDeleted = 0;
 
+        if (!Directory.Exists(installPath)) return (0, 0);
+
         try
         {
+            // Pass 1: delete every file with progress reporting. Doing this
+            // by hand (instead of Directory.Delete recursive=true in one
+            // shot) lets us update the UI mid-delete and surface per-file
+            // errors instead of failing the whole operation on one locked
+            // file.
             var allFiles = Directory.EnumerateFiles(installPath, "*", SearchOption.AllDirectories).ToList();
-            int total = allFiles.Count;
+            int total = expectedFileCount > 0 ? expectedFileCount : allFiles.Count;
             int done = 0;
 
             foreach (var f in allFiles)
@@ -327,11 +206,6 @@ public class UninstallService
                 ct.ThrowIfCancellationRequested();
                 done++;
 
-                if (ProtectedFileNames.Contains(Path.GetFileName(f)))
-                {
-                    // Shouldn't happen in a true WoL subfolder, but be defensive.
-                    continue;
-                }
                 try
                 {
                     File.SetAttributes(f, FileAttributes.Normal);
@@ -343,11 +217,15 @@ public class UninstallService
                     errors.Add($"{f}: {ex.Message}");
                 }
 
-                if (done % 100 == 0 || done == total)
-                    progress?.Report((100.0 * done / total, $"Deleting files ({done}/{total})..."));
+                if (done % 200 == 0 || done == allFiles.Count)
+                {
+                    var pct = total > 0 ? 100.0 * done / total : 0;
+                    progress?.Report((pct, $"Deleting files ({done}/{allFiles.Count})..."));
+                }
             }
 
-            // Now remove directories bottom-up
+            // Pass 2: delete directories bottom-up. Sorting by descending
+            // path length means leaves come first.
             var allDirs = Directory.EnumerateDirectories(installPath, "*", SearchOption.AllDirectories)
                                    .OrderByDescending(d => d.Length)
                                    .ToList();
@@ -356,9 +234,9 @@ public class UninstallService
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    if (Directory.Exists(d) && IsDirectoryEmpty(d))
+                    if (Directory.Exists(d))
                     {
-                        Directory.Delete(d);
+                        Directory.Delete(d, recursive: false);
                         dirsDeleted++;
                     }
                 }
@@ -368,16 +246,27 @@ public class UninstallService
                 }
             }
 
-            // Finally the install root itself
-            if (Directory.Exists(installPath) && IsDirectoryEmpty(installPath))
+            // Pass 3: delete the install root itself if it's now empty.
+            if (Directory.Exists(installPath))
             {
-                Directory.Delete(installPath);
-                dirsDeleted++;
+                try
+                {
+                    Directory.Delete(installPath, recursive: false);
+                    dirsDeleted++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"root {installPath}: {ex.Message}");
+                }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            errors.Add($"subfolder delete: {ex.Message}");
+            errors.Add($"folder delete: {ex.Message}");
         }
 
         return (filesDeleted, dirsDeleted);
@@ -387,12 +276,14 @@ public class UninstallService
     // Shortcuts / registry / config
     // -------------------------------------------------------------------------
 
-    private static int DeleteShortcuts(InstallManifest? manifest, List<string> errors)
+    private static int DeleteShortcuts(string installPath, List<string> errors)
     {
         int count = 0;
         var paths = new List<string>();
         string? startMenuFolder = null;
 
+        // Prefer the manifest if it's still there (more accurate paths).
+        var manifest = InstallManifest.TryLoad(installPath);
         if (manifest != null)
         {
             paths.AddRange(manifest.Shortcuts);
@@ -487,62 +378,6 @@ public class UninstallService
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
-    /// <summary>
-    /// True if <paramref name="folder"/> looks like a WoL-only container that
-    /// can be safely deleted in its entirety. When this returns true and there's
-    /// no manifest, we can fall back to removing the whole folder.
-    ///
-    /// Two signals are accepted:
-    ///   1. The folder is NAMED "Wars of Liberty" / "WarsOfLiberty" — even if
-    ///      it contains age3y.exe, this means the installer cloned AoE3 INTO
-    ///      this container (full install), and the whole thing is launcher-owned.
-    ///   2. The folder has the WoL marker AND does NOT have age3y.exe at root
-    ///      or in bin\ — i.e. it's clearly mod-only (no AoE3 base game inside).
-    /// </summary>
-    private static bool LooksLikeStandaloneSubfolder(string folder)
-    {
-        if (!Directory.Exists(folder)) return false;
-
-        // Must have the WoL marker either way
-        if (!Directory.Exists(Path.Combine(folder, "art", "zulushield")))
-            return false;
-
-        // Signal 1: folder name. "Wars of Liberty" is the only name the
-        // launcher ever creates. If we see it, treat the whole folder as
-        // launcher-owned regardless of contents.
-        var name = Path.GetFileName(folder.TrimEnd('\\', '/'));
-        if (string.Equals(name, "Wars of Liberty", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(name, "WarsOfLiberty", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        // Signal 2: no AoE3 base game inside.
-        if (File.Exists(Path.Combine(folder, "age3y.exe"))) return false;
-        if (File.Exists(Path.Combine(folder, "age3.exe"))) return false;
-        if (File.Exists(Path.Combine(folder, "bin", "age3y.exe"))) return false;
-        if (File.Exists(Path.Combine(folder, "bin", "age3.exe"))) return false;
-
-        return true;
-    }
-
-    private static bool IsInsideRoot(string path, string root)
-    {
-        try
-        {
-            var fullPath = Path.GetFullPath(path);
-            return fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     private static bool IsDirectoryEmpty(string path)
     {
         try
@@ -556,25 +391,21 @@ public class UninstallService
     }
 }
 
-/// <summary>How an uninstall can proceed (or not) given the current state.</summary>
+/// <summary>
+/// How an uninstall can proceed (or not) given the current state.
+/// </summary>
 public enum UninstallMode
 {
-    /// <summary>wol-manifest.json exists — safe, precise delete.</summary>
-    Manifest,
-    /// <summary>No manifest, but the path is clearly a WoL-only subfolder.</summary>
-    SubfolderFallback,
-    /// <summary>Path looks like an AoE3 root — refuse to avoid breaking the base game.</summary>
-    RefusedMergedWithAoe3,
+    /// <summary>Folder has the WoL marker; safe to delete the whole thing.</summary>
+    Valid,
+    /// <summary>Folder doesn't have the WoL marker — we refuse to delete it.</summary>
+    NotAValidInstall,
     /// <summary>Path doesn't exist or no install was found.</summary>
     NothingToDo,
 }
 
 public record UninstallPlan(
     UninstallMode Mode,
-    InstallManifest? Manifest,
+    string InstallPath,
     int FileCount,
-    int DirectoryCount)
-{
-    /// <summary>Set externally for SubfolderFallback mode where Manifest is null.</summary>
-    public string InstallPath { get; set; } = "";
-}
+    int DirectoryCount);
