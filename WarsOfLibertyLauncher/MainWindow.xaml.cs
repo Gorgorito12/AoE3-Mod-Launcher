@@ -871,7 +871,11 @@ public partial class MainWindow : Window
 
         if (aoe3Installs.Count > 0)
         {
-            aoe3SourcePath = aoe3Installs[0].GameFolder;
+            // Use ModRoot (full AoE3 install root) as the clone source, NOT
+            // GameFolder. For Steam, GameFolder is the `bin\` subfolder which
+            // contains only the executable — cloning that would skip data\,
+            // sound\, art\ and the rest of the game files the mod needs.
+            aoe3SourcePath = aoe3Installs[0].ModRoot;
             aoe3SourceLabel = aoe3Installs[0].Source;
             suggestedFolder = aoe3Installs[0].ModRoot;
         }
@@ -892,6 +896,44 @@ public partial class MainWindow : Window
 
         var installFolder = dialog.SelectedFolder;
         aoe3SourcePath = dialog.Aoe3SourcePath; // may have been inferred
+
+        // ---- Permission check ----
+        // Locations like C:\Program Files (x86)\... need admin to write to.
+        // We probe the parent folder (the install folder doesn't exist yet).
+        var probeFolder = Directory.Exists(installFolder)
+            ? installFolder
+            : Path.GetDirectoryName(installFolder) ?? installFolder;
+
+        if (!ElevationService.CanWriteTo(probeFolder))
+        {
+            DiagnosticLog.Write(
+                $"Cannot write to install folder '{probeFolder}'. " +
+                "Prompting user to relaunch elevated.");
+
+            var elevateResult = MessageBox.Show(
+                this,
+                Strings.Format("DlgElevationRequiredBody", probeFolder),
+                Strings.Get("DlgElevationRequiredTitle"),
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Information);
+
+            if (elevateResult != MessageBoxResult.OK)
+            {
+                SetStatus(Strings.Get("StatusElevationDenied"));
+                return;
+            }
+
+            // Relaunch elevated; the new instance will start fresh and the
+            // user can click "Install" again with admin privileges.
+            var relaunched = ElevationService.RelaunchElevated();
+            if (relaunched)
+            {
+                Application.Current.Shutdown();
+                return;
+            }
+            SetStatus(Strings.Get("StatusElevationDenied"));
+            return;
+        }
 
         // ---- Begin installation ----
         SetBusy(true);
@@ -1018,6 +1060,12 @@ public partial class MainWindow : Window
             {
                 SetStatus(Strings.Format("StatusInstallIncomplete", totalProblems));
                 DiagnosticLog.Write($"Install verification: {totalProblems} problems found.");
+                // Log every missing/corrupt item so the user can see what's
+                // wrong without having to re-run a separate verify pass.
+                foreach (var m in verifyResult.MissingItems)
+                    DiagnosticLog.Write($"  [missing] {m}");
+                foreach (var c in verifyResult.CorruptItems)
+                    DiagnosticLog.Write($"  [corrupt/empty] {c}");
             }
         }
         catch (OperationCanceledException)

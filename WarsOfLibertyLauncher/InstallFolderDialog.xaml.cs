@@ -193,25 +193,36 @@ public partial class InstallFolderDialog : Window
 
         var chosen = dialog.FolderName.TrimEnd('\\', '/');
 
-        // Try to find age3y.exe in the selected folder or its bin\ subfolder
-        string? resolvedExe = null;
+        // Resolve the AoE3 install ROOT — the folder that contains the entire
+        // game tree (bin\, data\, sound\, art\, ...). This is what we clone
+        // when installing the mod. We accept three layouts:
+        //   1. User picked the root directly, with bin\age3y.exe inside (Steam)
+        //   2. User picked the root directly, with age3y.exe inside (GOG/retail)
+        //   3. User picked the bin\ subfolder by mistake — walk up one level
         string? gameFolder = null;
-        var candidates = new[]
+        if (File.Exists(Path.Combine(chosen, "bin", "age3y.exe")))
         {
-            (exe: Path.Combine(chosen, "age3y.exe"),          folder: chosen),
-            (exe: Path.Combine(chosen, "bin", "age3y.exe"),   folder: chosen),
-        };
-        foreach (var (exe, folder) in candidates)
+            gameFolder = chosen;                     // Steam-style root
+        }
+        else if (File.Exists(Path.Combine(chosen, "age3y.exe")))
         {
-            if (File.Exists(exe))
+            // Could be a flat retail/GOG layout, OR the user picked bin\ by mistake.
+            // If the parent has data\, the user picked bin\ — walk up.
+            var parent = Path.GetDirectoryName(chosen);
+            var leaf = Path.GetFileName(chosen);
+            if (string.Equals(leaf, "bin", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(parent)
+                && Directory.Exists(Path.Combine(parent, "data")))
             {
-                resolvedExe = exe;
-                gameFolder = folder;
-                break;
+                gameFolder = parent;
+            }
+            else
+            {
+                gameFolder = chosen;                 // GOG/retail flat layout
             }
         }
 
-        if (resolvedExe == null)
+        if (gameFolder == null)
         {
             MessageBox.Show(this,
                 Strings.Get("DlgInvalidAoE3FolderBody"),

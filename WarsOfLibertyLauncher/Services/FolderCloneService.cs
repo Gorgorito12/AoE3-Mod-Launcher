@@ -72,7 +72,10 @@ public class FolderCloneService
         // Step 1: enumerate everything to copy. We do this up-front so we can
         // show a real percentage instead of the indeterminate "files copied so
         // far" pattern.
-        var files = await Task.Run(() => EnumerateFiles(sourceFolder, ct), ct);
+        // Pass destFolder as an excluded subtree — when destination is inside
+        // source (e.g. AoE3\Wars of Liberty\ is inside AoE3\), we must NOT
+        // recurse into it or the copy will infinite-loop into itself.
+        var files = await Task.Run(() => EnumerateFiles(sourceFolder, destFolder, ct), ct);
         long totalBytes = files.Sum(f => f.Length);
         DiagnosticLog.Write($"Files to copy: {files.Count} ({FormatBytes(totalBytes)})");
 
@@ -181,16 +184,41 @@ public class FolderCloneService
     /// Walks the source folder and returns every file that should be copied.
     /// Filters out files matching <see cref="SkipPatterns"/>.
     /// </summary>
-    private static List<FileInfo> EnumerateFiles(string root, CancellationToken ct)
+    private static List<FileInfo> EnumerateFiles(string root, string? excludeSubtree, CancellationToken ct)
     {
         var result = new List<FileInfo>();
         var stack = new Stack<string>();
         stack.Push(root);
 
+        // Normalize the excluded subtree path for case-insensitive prefix matching.
+        // If the destination lives inside the source we must skip it entirely,
+        // otherwise the clone recurses into the folder it's currently writing.
+        string? excludeNormalized = null;
+        if (!string.IsNullOrEmpty(excludeSubtree))
+        {
+            try { excludeNormalized = Path.GetFullPath(excludeSubtree).TrimEnd('\\', '/'); }
+            catch { /* ignore */ }
+        }
+
         while (stack.Count > 0)
         {
             ct.ThrowIfCancellationRequested();
             var current = stack.Pop();
+
+            // Skip the excluded subtree (and everything beneath it).
+            if (excludeNormalized != null)
+            {
+                string currentFull;
+                try { currentFull = Path.GetFullPath(current).TrimEnd('\\', '/'); }
+                catch { continue; }
+
+                if (string.Equals(currentFull, excludeNormalized, StringComparison.OrdinalIgnoreCase)
+                    || currentFull.StartsWith(excludeNormalized + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    || currentFull.StartsWith(excludeNormalized + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+            }
 
             IEnumerable<string> subdirs;
             IEnumerable<string> files;

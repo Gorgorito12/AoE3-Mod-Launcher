@@ -95,6 +95,14 @@ public class NativeInstallService
         statusProgress?.Report("Copying Age of Empires III files...");
         await _cloneService.CloneAsync(aoe3SourcePath, destinationFolder, cloneProgress, ct);
 
+        // ---- Phase 3b: Flatten bin\ subfolder if present ----
+        // Steam puts age3y.exe and its DLLs inside `bin\`, but the WoL mod's
+        // binary lives at the root and expects its DLLs alongside it (legacy
+        // retail layout). Promote bin\* to the root so the mod's binary can
+        // resolve them. The bin\ folder itself stays in place — leaving it
+        // there is harmless and avoids surprising the user.
+        FlattenBinSubfolder(destinationFolder, statusProgress);
+
         // ---- Phase 4: Copy WoL files on top ----
         statusProgress?.Report("Installing Wars of Liberty mod files...");
         await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, ct);
@@ -282,6 +290,58 @@ public class NativeInstallService
             DiagnosticLog.Write($"Extraction complete: {done} entries.");
             return extractFolder;
         }, ct);
+    }
+
+    /// <summary>
+    /// If <paramref name="destinationFolder"/> contains a `bin\` subfolder
+    /// (Steam layout), copies its contents up to the root next to where the
+    /// WoL mod binary will land. The Steam bin\age3y.exe stays in bin\ — we
+    /// only mirror the files at the root so the mod's age3y.exe can find
+    /// the same DLLs it expects to live alongside it.
+    ///
+    /// Existing files at the root are NOT overwritten by this step (the next
+    /// phase — the WoL payload overlay — handles overrides explicitly).
+    /// </summary>
+    private static void FlattenBinSubfolder(string destinationFolder, IProgress<string>? statusProgress)
+    {
+        var binFolder = Path.Combine(destinationFolder, "bin");
+        if (!Directory.Exists(binFolder)) return;
+
+        statusProgress?.Report("Promoting bin/ files to root...");
+        DiagnosticLog.Write($"Flattening bin\\ subfolder of '{destinationFolder}' to root...");
+
+        int copied = 0;
+        int skipped = 0;
+        foreach (var srcFile in Directory.EnumerateFiles(binFolder, "*", SearchOption.AllDirectories))
+        {
+            // Preserve directory structure relative to bin\ when promoting,
+            // so e.g. bin\Microsoft.VC80.CRT\msvcr80.dll goes to
+            // <root>\Microsoft.VC80.CRT\msvcr80.dll.
+            var relative = Path.GetRelativePath(binFolder, srcFile);
+            var destFile = Path.Combine(destinationFolder, relative);
+
+            // Don't clobber whatever's already at the root — that file might
+            // be a WoL-provided file from the payload (we run before the
+            // payload overlay, but in practice the clone runs first so the
+            // root is mostly empty here).
+            if (File.Exists(destFile)) { skipped++; continue; }
+
+            try
+            {
+                var destDir = Path.GetDirectoryName(destFile);
+                if (!string.IsNullOrEmpty(destDir))
+                    Directory.CreateDirectory(destDir);
+                File.Copy(srcFile, destFile, overwrite: false);
+                copied++;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"  flatten skip: {relative} — {ex.Message}");
+                skipped++;
+            }
+        }
+
+        DiagnosticLog.Write($"Flatten bin\\ complete: {copied} files promoted, {skipped} skipped.");
     }
 
     /// <summary>
