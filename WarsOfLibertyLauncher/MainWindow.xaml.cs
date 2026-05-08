@@ -42,6 +42,13 @@ public partial class MainWindow : Window
     /// </summary>
     private UpdatePhase _currentUpdatePhase = UpdatePhase.None;
 
+    /// <summary>
+    /// Last fetched translations index. Cached for the lifetime of the
+    /// launcher session so we don't re-fetch every time the user opens
+    /// the gear menu. Invalidated by clicking "Actualizar lista".
+    /// </summary>
+    private TranslationIndex? _cachedTranslationIndex;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -69,17 +76,20 @@ public partial class MainWindow : Window
         if (autoUpdate)
             DiagnosticLog.Write("Started with --update-now: will auto-apply updates after check.");
 
-        // Auto-check for updates on startup. Run the launcher self-update
-        // check and the mod-version check IN PARALLEL — they hit different
-        // servers (GitHub vs aoe3wol.com) and each typically takes ~1 second,
-        // so doing both concurrently roughly halves the time the UI sits in
-        // a "busy" state right after the user opens the launcher.
+        // Auto-check for updates on startup. Run all three checks IN PARALLEL
+        // — the launcher self-update (GitHub), the mod patch check (aoe3wol.com)
+        // and the translations index (GitHub) hit different servers, so doing
+        // them concurrently roughly cuts the busy state to the slowest one.
+        // Pre-fetching the translations index here means the gear menu opens
+        // with the language list already populated — no "Refresh" needed for
+        // the common case.
         Loaded += async (_, _) =>
         {
             LauncherUpdateService.CleanupOldVersion();
             await Task.WhenAll(
                 CheckForLauncherUpdateAsync(),
-                CheckAsync());
+                CheckAsync(),
+                RefreshTranslationIndexAsync());
             if (_modIsInstalled)
             {
                 _ = Task.Run(InstallerService.TryCleanupTemp);
@@ -142,6 +152,7 @@ public partial class MainWindow : Window
         MenuRestoreUserData.Header = Strings.Get("MenuRestoreUserData");
         MenuCheckForUpdates.Header = Strings.Get("MenuCheckForUpdates");
         MenuVerifyFiles.Header = Strings.Get("MenuVerifyFiles");
+        MenuGameLanguage.Header = Strings.Get("MenuGameLanguage");
 
         // Tooltips on LEAF items only — items with submenus (Carpetas,
         // Datos de usuario) are self-explanatory once the submenu opens,
@@ -1706,6 +1717,12 @@ public partial class MainWindow : Window
         MenuCheckForUpdates.IsEnabled = !_isBusy && _modIsInstalled;
         MenuVerifyFiles.IsEnabled = !_isBusy && _modIsInstalled;
 
+        // Game-language submenu — populated each time the menu opens so
+        // the available list reflects the latest registry state and the
+        // active translation indicator is up to date.
+        MenuGameLanguage.IsEnabled = !_isBusy && _modIsInstalled;
+        PopulateGameLanguageMenu();
+
         UninstallMenuItem.IsEnabled = !_isBusy && _modIsInstalled;
         MoreButton.ContextMenu.PlacementTarget = MoreButton;
         MoreButton.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
@@ -1786,6 +1803,341 @@ public partial class MainWindow : Window
     private void MenuVerifyFiles_Click(object sender, RoutedEventArgs e)
     {
         VerifyButton_Click(sender, e);
+    }
+
+    // ------------------------------------------------------------------------
+    // Game-language submenu (community translations)
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds the contents of the "Idioma del juego" submenu. Always shows:
+    ///   - "English (default)" with a check if no translation is active
+    ///   - One entry per available pack from the index (or installed locally
+    ///     if the index couldn't be fetched)
+    ///   - "Refresh list" at the bottom
+    /// </summary>
+    private void PopulateGameLanguageMenu()
+    {
+        MenuGameLanguage.Items.Clear();
+
+        var installPath = _updateService.InstallPath;
+        var translationsService = !string.IsNullOrEmpty(installPath)
+            ? new TranslationService(installPath)
+            : null;
+
+        var activeId = _config.ActiveTranslationId ?? "";
+        var installed = translationsService?.ListInstalled() ?? new List<TranslationManifest>();
+
+        // English entry — always first, always available
+        var english = new System.Windows.Controls.MenuItem
+        {
+            Header = string.IsNullOrEmpty(activeId)
+                ? $"🇬🇧  {Strings.Get("MenuLangEnglish")}  ✓"
+                : $"🇬🇧  {Strings.Get("MenuLangEnglish")}",
+            Foreground = Brush(string.IsNullOrEmpty(activeId) ? "#9bd99b" : "White"),
+        };
+        english.Click += (_, _) => RevertToEnglish();
+        MenuGameLanguage.Items.Add(english);
+
+        MenuGameLanguage.Items.Add(new System.Windows.Controls.Separator
+        {
+            Background = Brush("#3a3d44"),
+        });
+
+        // Build the union of registry entries + locally installed packs.
+        // Registry entry takes priority (has the downloadUrl for updates).
+        var entries = new Dictionary<string, TranslationIndexEntry>(StringComparer.OrdinalIgnoreCase);
+        if (_cachedTranslationIndex != null)
+        {
+            foreach (var e in _cachedTranslationIndex.Translations)
+                entries[e.Id] = e;
+        }
+        foreach (var m in installed)
+        {
+            if (entries.ContainsKey(m.Id)) continue;
+            // Local-only pack (sideloaded). Synthesize a minimal index entry
+            // so we can show it in the menu even without a server listing.
+            entries[m.Id] = new TranslationIndexEntry
+            {
+                Id = m.Id,
+                Name = m.Name,
+                Author = m.Author,
+                Version = m.Version,
+                CompatibleWith = m.CompatibleWith,
+            };
+        }
+
+        if (entries.Count == 0)
+        {
+            // Nothing in the index and nothing locally installed — show a
+            // disabled placeholder so the user knows the system is working
+            // but there's just no content yet.
+            MenuGameLanguage.Items.Add(new System.Windows.Controls.MenuItem
+            {
+                Header = Strings.Get("MenuLangNoneAvailable"),
+                IsEnabled = false,
+                Foreground = Brush("#888"),
+            });
+        }
+        else
+        {
+            var currentMod = _updateService.CurrentVersion?.Ver;
+            foreach (var entry in entries.Values.OrderBy(e => e.Name))
+            {
+                var item = BuildLanguageMenuItem(entry, installed, activeId, currentMod);
+                MenuGameLanguage.Items.Add(item);
+            }
+        }
+
+        MenuGameLanguage.Items.Add(new System.Windows.Controls.Separator
+        {
+            Background = Brush("#3a3d44"),
+        });
+
+        // Refresh list — fetches the index from GitHub again. StaysOpenOnClick
+        // keeps the gear menu (and this submenu) open while the async fetch
+        // runs, so the user can see the updated list and keep clicking other
+        // options without having to reopen the menu.
+        var refresh = new System.Windows.Controls.MenuItem
+        {
+            Header = $"🔄  {Strings.Get("MenuLangRefresh")}",
+            StaysOpenOnClick = true,
+        };
+        refresh.Click += async (_, _) =>
+        {
+            // Briefly switch the label so the user sees "doing it now" — the
+            // fetch is async and may take a second or two over the network.
+            var originalHeader = refresh.Header;
+            refresh.Header = $"⏳  {Strings.Get("MenuLangRefreshing")}";
+            refresh.IsEnabled = false;
+
+            await RefreshTranslationIndexAsync(reportStatus: true);
+
+            // Rebuild the submenu so the new entries from the just-fetched
+            // index appear immediately. The submenu Popup stays open across
+            // this rebuild because StaysOpenOnClick suppresses auto-close.
+            PopulateGameLanguageMenu();
+
+            // PopulateGameLanguageMenu re-adds a fresh refresh item, so the
+            // restoration of `originalHeader` here is only relevant if the
+            // user clicked while the menu was about to close. Cheap to do.
+            refresh.Header = originalHeader;
+            refresh.IsEnabled = true;
+        };
+        MenuGameLanguage.Items.Add(refresh);
+
+        // Translator tool — turns a folder of translated XMLs into a ready-
+        // to-publish .zip + JSON snippet. Only useful for translators, but
+        // harmless for regular users (they just won't have anything to package).
+        var packager = new System.Windows.Controls.MenuItem
+        {
+            Header = $"📦  {Strings.Get("MenuLangPackager")}",
+        };
+        packager.Click += (_, _) => OpenTranslationPackager();
+        MenuGameLanguage.Items.Add(packager);
+    }
+
+    /// <summary>
+    /// Opens the translator-facing dialog that builds a .zip pack from a
+    /// folder of translated XML files. The dialog handles all hash/manifest/
+    /// zip logic so the translator only fills in a small form. Works even
+    /// when the launcher's own _originals snapshot doesn't exist — the
+    /// translator can point at their own backup of the English files in
+    /// that case.
+    /// </summary>
+    private void OpenTranslationPackager()
+    {
+        if (string.IsNullOrEmpty(_updateService.InstallPath))
+        {
+            MessageBox.Show(this,
+                Strings.Get("StatusNotInstalled"),
+                Strings.Get("DlgPackagerTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var translations = new TranslationService(_updateService.InstallPath);
+        var dialog = new TranslationPackagerDialog(translations, _updateService.CurrentVersion?.Ver)
+        {
+            Owner = this,
+        };
+        dialog.ShowDialog();
+    }
+
+    private System.Windows.Controls.MenuItem BuildLanguageMenuItem(
+        TranslationIndexEntry entry,
+        List<TranslationManifest> installed,
+        string activeId,
+        string? currentModVersion)
+    {
+        bool isActive = string.Equals(activeId, entry.Id, StringComparison.OrdinalIgnoreCase);
+        var local = installed.FirstOrDefault(m => string.Equals(m.Id, entry.Id, StringComparison.OrdinalIgnoreCase));
+        bool isInstalled = local != null;
+        bool hasUpdate = isInstalled
+            && !string.IsNullOrEmpty(entry.Version)
+            && !string.IsNullOrEmpty(local!.Version)
+            && entry.Version != local.Version;
+
+        // Build the header. Shows BOTH the pack version (so the user knows
+        // which release of the translation they're looking at) AND the
+        // compatible mod versions (so they know if it'll work with their
+        // install). Format:
+        //   <flag>  <name>  v<pack>  (mod <X>, <Y>)  · <author>  <indicators>
+        string header = $"{LanguageFlag(entry.Id)}  {entry.Name}";
+        if (!string.IsNullOrEmpty(entry.Version)) header += $"  v{entry.Version}";
+        if (entry.CompatibleWith.Count > 0)
+        {
+            var label = Strings.Format(
+                "MenuLangModVersionLabel",
+                string.Join(", ", entry.CompatibleWith));
+            header += $"  {label}";
+        }
+        if (!string.IsNullOrEmpty(entry.Author)) header += $"  · {entry.Author}";
+
+        if (isActive) header += "  ✓";
+        else if (hasUpdate) header += $"  🆕 → v{entry.Version}";
+
+        // Compatibility hint (declared list — not authoritative, just a soft warning)
+        bool incompatible = !string.IsNullOrEmpty(currentModVersion)
+            && entry.CompatibleWith.Count > 0
+            && !entry.CompatibleWith.Contains(currentModVersion);
+        if (incompatible) header += "  ⚠";
+
+        var item = new System.Windows.Controls.MenuItem
+        {
+            Header = header,
+            Foreground = Brush(isActive ? "#9bd99b" : (incompatible ? "#888" : "White")),
+        };
+        item.Click += (_, _) => ApplyTranslationAsync(entry);
+        return item;
+    }
+
+    private static string LanguageFlag(string id) => id.ToLowerInvariant() switch
+    {
+        "es" or "es-es" or "es-mx" or "es-ar" => "🇪🇸",
+        "fr" or "fr-fr" => "🇫🇷",
+        "de" or "de-de" => "🇩🇪",
+        "it" or "it-it" => "🇮🇹",
+        "pt" or "pt-pt" => "🇵🇹",
+        "pt-br" => "🇧🇷",
+        "ru" or "ru-ru" => "🇷🇺",
+        "zh" or "zh-cn" or "zh-tw" => "🇨🇳",
+        "ja" or "ja-jp" => "🇯🇵",
+        "ko" or "ko-kr" => "🇰🇷",
+        "pl" or "pl-pl" => "🇵🇱",
+        _ => "🌐",
+    };
+
+    /// <summary>
+    /// Fetches the translation index from GitHub. Primary path is the
+    /// GitHub Releases API of <c>config.TranslationsRepo</c> — each release
+    /// is its own self-contained translation. Falls back to the legacy
+    /// translations-index.json URL if the user has it configured (and the
+    /// API path didn't return anything).
+    /// </summary>
+    /// <param name="reportStatus">
+    /// True when the user explicitly asked for a refresh — surfaces a status
+    /// message in the main window. False when called as part of the silent
+    /// startup pre-fetch (we don't want it stomping over CheckAsync's output).
+    /// </param>
+    private async Task RefreshTranslationIndexAsync(bool reportStatus = false)
+    {
+        var registry = new TranslationRegistryService();
+        try
+        {
+            // 1. Primary: scan the configured GitHub repo's releases.
+            TranslationIndex? index = null;
+            if (!string.IsNullOrWhiteSpace(_config.TranslationsRepo))
+            {
+                index = await registry.FetchFromReleasesAsync(_config.TranslationsRepo);
+            }
+
+            // 2. Fallback: legacy index file URL (kept so users who upgrade
+            //    don't lose translations if the repo scan fails).
+            if ((index == null || index.Translations.Count == 0)
+                && !string.IsNullOrWhiteSpace(_config.TranslationsIndexUrl))
+            {
+                index = await registry.FetchAsync(_config.TranslationsIndexUrl);
+            }
+
+            _cachedTranslationIndex = index;
+
+            if (reportStatus)
+            {
+                if (_cachedTranslationIndex == null)
+                    SetStatus(Strings.Get("StatusLangIndexUnavailable"));
+                else
+                    SetStatus(Strings.Format("StatusLangIndexLoaded",
+                        _cachedTranslationIndex.Translations.Count));
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Translation index refresh error: {ex.Message}");
+            if (reportStatus)
+                SetStatus(Strings.Get("StatusLangIndexUnavailable"));
+        }
+    }
+
+    /// <summary>
+    /// Opens the styled apply-translation dialog. The dialog handles the
+    /// full lifecycle (download progress + compatibility check + apply +
+    /// inline error display) with no separate MessageBox popups, matching
+    /// the rest of the launcher's dark theme.
+    /// </summary>
+    private void ApplyTranslationAsync(TranslationIndexEntry entry)
+    {
+        if (_isBusy) return;
+        if (string.IsNullOrEmpty(_updateService.InstallPath))
+        {
+            SetStatus(Strings.Get("StatusNotInstalled"));
+            return;
+        }
+
+        var translations = new TranslationService(_updateService.InstallPath);
+        var registry = new TranslationRegistryService();
+
+        var dialog = new TranslationApplyDialog(
+            entry,
+            _updateService.CurrentVersion?.Ver,
+            translations,
+            registry)
+        {
+            Owner = this,
+        };
+
+        if (dialog.ShowDialog() == true && dialog.AppliedSuccessfully)
+        {
+            _config.ActiveTranslationId = entry.Id;
+            _config.Save();
+            SetStatus(Strings.Format("StatusLangApplied", entry.Name));
+        }
+    }
+
+    /// <summary>
+    /// Reverts the install to canonical English by copying every file in the
+    /// snapshot back over the live data folder. No download needed.
+    /// </summary>
+    private void RevertToEnglish()
+    {
+        if (_isBusy) return;
+        if (string.IsNullOrEmpty(_updateService.InstallPath)) return;
+        if (string.IsNullOrEmpty(_config.ActiveTranslationId)) return; // already EN
+
+        var translations = new TranslationService(_updateService.InstallPath);
+        if (translations.RevertToOriginal())
+        {
+            _config.ActiveTranslationId = "";
+            _config.Save();
+            SetStatus(Strings.Get("StatusLangRevertedToEnglish"));
+        }
+        else
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgLangRevertFailedBody"),
+                Strings.Get("DlgLangApplyFailedTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     /// <summary>

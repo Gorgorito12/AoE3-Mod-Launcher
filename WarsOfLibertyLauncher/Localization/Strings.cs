@@ -1384,6 +1384,378 @@ public static class Strings
             [LangEn] = "Verify files",
             [LangEs] = "Verificar archivos",
         },
+        ["MenuGameLanguage"] = new()
+        {
+            [LangEn] = "Game language",
+            [LangEs] = "Idioma del juego",
+        },
+        ["MenuLangEnglish"] = new()
+        {
+            [LangEn] = "English (default)",
+            [LangEs] = "Inglés (predeterminado)",
+        },
+        ["MenuLangRefresh"] = new()
+        {
+            [LangEn] = "Refresh list",
+            [LangEs] = "Actualizar lista",
+        },
+        ["MenuLangRefreshing"] = new()
+        {
+            [LangEn] = "Refreshing...",
+            [LangEs] = "Actualizando...",
+        },
+        ["MenuLangNoneAvailable"] = new()
+        {
+            [LangEn] = "No translations available yet",
+            [LangEs] = "Aún no hay traducciones disponibles",
+        },
+        // Shown next to each translation in the menu. {0} is the comma-
+        // separated list of mod versions from compatibleWith — that's what
+        // users care about ("does this work with my mod version?").
+        ["MenuLangModVersionLabel"] = new()
+        {
+            [LangEn] = "(mod {0})",
+            [LangEs] = "(mod {0})",
+        },
+        ["MenuLangPackager"] = new()
+        {
+            [LangEn] = "Package my translation...",
+            [LangEs] = "Empaquetar mi traducción...",
+        },
+
+        // -------- Translator packaging dialog --------
+        ["DlgPackagerTitle"] = new()
+        {
+            [LangEn] = "Package translation",
+            [LangEs] = "Empaquetar traducción",
+        },
+        ["DlgPackagerHeader"] = new()
+        {
+            [LangEn] = "Build a translation pack",
+            [LangEs] = "Crear un paquete de traducción",
+        },
+        ["DlgPackagerDescription"] = new()
+        {
+            [LangEn] = "This generates a ready-to-publish .zip from a folder of " +
+                       "translated XML files. The launcher computes the hashes " +
+                       "and manifest automatically.",
+            [LangEs] = "Genera un .zip listo para publicar a partir de una carpeta " +
+                       "con archivos XML traducidos. El launcher calcula los hashes " +
+                       "y el manifest automáticamente.",
+        },
+        ["DlgPackagerFieldId"] = new()
+        {
+            [LangEn] = "LANGUAGE ID",
+            [LangEs] = "ID DEL IDIOMA",
+        },
+        ["DlgPackagerHintId"] = new()
+        {
+            [LangEn] = "Short identifier — e.g. \"es\", \"fr\", \"pt-br\"",
+            [LangEs] = "Identificador corto — ej. \"es\", \"fr\", \"pt-br\"",
+        },
+        ["DlgPackagerFieldName"] = new()
+        {
+            [LangEn] = "DISPLAY NAME",
+            [LangEs] = "NOMBRE VISIBLE",
+        },
+        ["DlgPackagerFieldAuthor"] = new()
+        {
+            [LangEn] = "AUTHOR / HANDLE",
+            [LangEs] = "AUTOR / NOMBRE DE USUARIO",
+        },
+        ["DlgPackagerFieldVersion"] = new()
+        {
+            [LangEn] = "TRANSLATION VERSION  (e.g. 1.0)",
+            [LangEs] = "VERSIÓN DE LA TRADUCCIÓN  (ej: 1.0)",
+        },
+        ["DlgPackagerHintVersion"] = new()
+        {
+            [LangEn] = "Version of YOUR translation pack — bump this when you " +
+                       "publish changes (1.0 → 1.1 → 1.2...). NOT the mod version " +
+                       "— that goes in the 'Compatibility' field below.",
+            [LangEs] = "Versión de TU paquete de traducción — subila al publicar " +
+                       "cambios (1.0 → 1.1 → 1.2...). NO es la versión del mod " +
+                       "— eso va en el campo 'Compatibilidad' abajo.",
+        },
+        ["DlgPackagerVersionLooksLikeMod"] = new()
+        {
+            [LangEn] = "⚠ \"{0}\" looks like a mod version. The translation version is " +
+                       "yours — start with 1.0 and bump it on each release.",
+            [LangEs] = "⚠ \"{0}\" parece una versión del mod. La versión de la " +
+                       "traducción es tuya — empezá con 1.0 y subila en cada release.",
+        },
+        ["DlgPackagerFieldFolder"] = new()
+        {
+            [LangEn] = "FOLDER WITH TRANSLATED XML FILES",
+            [LangEs] = "CARPETA CON LOS XML TRADUCIDOS",
+        },
+        ["DlgPackagerHintFolder"] = new()
+        {
+            [LangEn] = "Should contain stringtabley.xml and/or unithelpstringsy.xml",
+            [LangEs] = "Debe contener stringtabley.xml y/o unithelpstringsy.xml",
+        },
+        ["DlgPackagerFieldOriginals"] = new()
+        {
+            [LangEn] = "FOLDER WITH ORIGINAL ENGLISH XML FILES",
+            [LangEs] = "CARPETA CON LOS XML ORIGINALES EN INGLÉS",
+        },
+        ["DlgPackagerHintOriginals"] = new()
+        {
+            [LangEn] = "Same file names as above (stringtabley.xml etc.) but the EN versions. " +
+                       "Auto-filled from the launcher's snapshot when available.",
+            [LangEs] = "Mismos nombres de archivo (stringtabley.xml, etc.) pero en inglés. " +
+                       "Se auto-completa con el respaldo del launcher si está disponible.",
+        },
+        ["DlgPackagerFieldCompat"] = new()
+        {
+            [LangEn] = "MOD COMPATIBILITY",
+            [LangEs] = "COMPATIBILIDAD CON EL MOD",
+        },
+        ["DlgPackagerCompatCurrent"] = new()
+        {
+            [LangEn] = "Compatible with current mod version ({0})",
+            [LangEs] = "Compatible con la versión actual del mod ({0})",
+        },
+        ["DlgPackagerHintCompatExtra"] = new()
+        {
+            [LangEn] = "Extra versions, comma-separated (optional)",
+            [LangEs] = "Otras versiones, separadas por coma (opcional)",
+        },
+        ["DlgPackagerFieldOutput"] = new()
+        {
+            [LangEn] = "OUTPUT .ZIP FILE",
+            [LangEs] = "ARCHIVO .ZIP DE SALIDA",
+        },
+        ["DlgPackagerBtnGenerate"] = new()
+        {
+            [LangEn] = "Generate package",
+            [LangEs] = "Generar paquete",
+        },
+        // Errors
+        ["DlgPackagerErrorIdMissing"] = new()
+        {
+            [LangEn] = "Language ID is required (e.g. \"es\").",
+            [LangEs] = "El ID del idioma es obligatorio (ej. \"es\").",
+        },
+        ["DlgPackagerErrorNameMissing"] = new()
+        {
+            [LangEn] = "Display name is required.",
+            [LangEs] = "El nombre visible es obligatorio.",
+        },
+        ["DlgPackagerErrorVersionMissing"] = new()
+        {
+            [LangEn] = "Pack version is required.",
+            [LangEs] = "La versión del paquete es obligatoria.",
+        },
+        ["DlgPackagerErrorFolderMissing"] = new()
+        {
+            [LangEn] = "The translated-files folder doesn't exist.",
+            [LangEs] = "La carpeta con los archivos traducidos no existe.",
+        },
+        ["DlgPackagerErrorOutputMissing"] = new()
+        {
+            [LangEn] = "Output .zip path is required.",
+            [LangEs] = "Falta la ruta del .zip de salida.",
+        },
+        ["DlgPackagerErrorNoCompat"] = new()
+        {
+            [LangEn] = "Specify at least one compatible mod version.",
+            [LangEs] = "Indicá al menos una versión del mod compatible.",
+        },
+        ["DlgPackagerErrorNoSnapshotBody"] = new()
+        {
+            [LangEn] = "Cannot package: the launcher hasn't snapshotted the original " +
+                       "English files yet. Run an install or update first to generate it.",
+            [LangEs] = "No se puede empaquetar: el launcher aún no tiene un respaldo " +
+                       "del original en inglés. Ejecutá una instalación o actualización primero.",
+        },
+        // Result
+        ["DlgPackagerResultHeader"] = new()
+        {
+            [LangEn] = "Package created",
+            [LangEs] = "Paquete creado",
+        },
+        ["DlgPackagerResultPath"] = new()
+        {
+            [LangEn] = "📦 {0} ({1})",
+            [LangEs] = "📦 {0} ({1})",
+        },
+        ["DlgPackagerResultJsonPath"] = new()
+        {
+            [LangEn] = "📄 {0}",
+            [LangEs] = "📄 {0}",
+        },
+        ["DlgPackagerResultInstructions"] = new()
+        {
+            [LangEn] = "ⓘ How to publish:\n" +
+                       "1. Go to github.com/papillo12/translations and create a new release.\n" +
+                       "2. Upload BOTH files above as assets on that release: the .zip " +
+                       "and translation.json (keep that exact filename).\n" +
+                       "3. Done — players will see the new translation in their launcher " +
+                       "menu the next time it refreshes the list.",
+            [LangEs] = "ⓘ Cómo publicar:\n" +
+                       "1. Andá a github.com/papillo12/translations y creá una nueva release.\n" +
+                       "2. Subí AMBOS archivos de arriba como assets de esa release: el .zip " +
+                       "y translation.json (mantené ese nombre exacto).\n" +
+                       "3. Listo — los jugadores verán la nueva traducción en su launcher " +
+                       "la próxima vez que refresque la lista.",
+        },
+        ["DlgPackagerResultJsonLabel"] = new()
+        {
+            [LangEn] = "ADVANCED: JSON entry for legacy translations-index.json",
+            [LangEs] = "AVANZADO: entrada JSON para el translations-index.json antiguo",
+        },
+        ["DlgPackagerResultPreviewLabel"] = new()
+        {
+            [LangEn] = "MENU PREVIEW (how players will see it):",
+            [LangEs] = "VISTA PREVIA EN EL MENÚ (así lo verán los jugadores):",
+        },
+        ["DlgPackagerBtnOpenFolder"] = new()
+        {
+            [LangEn] = "Open folder",
+            [LangEs] = "Abrir carpeta",
+        },
+        ["DlgPackagerBtnCopyJson"] = new()
+        {
+            [LangEn] = "Copy JSON",
+            [LangEs] = "Copiar JSON",
+        },
+        ["DlgPackagerBtnCopied"] = new()
+        {
+            [LangEn] = "✓ Copied",
+            [LangEs] = "✓ Copiado",
+        },
+        ["DlgPackagerBtnDone"] = new()
+        {
+            [LangEn] = "Done",
+            [LangEs] = "Listo",
+        },
+
+        // Game-language status / dialogs
+        ["StatusLangIndexLoaded"] = new()
+        {
+            [LangEn] = "Translation list loaded ({0} available).",
+            [LangEs] = "Lista de traducciones cargada ({0} disponibles).",
+        },
+        ["StatusLangIndexUnavailable"] = new()
+        {
+            [LangEn] = "Translation list is currently unavailable.",
+            [LangEs] = "La lista de traducciones no está disponible.",
+        },
+        ["StatusLangDownloading"] = new()
+        {
+            [LangEn] = "Downloading {0} translation pack...",
+            [LangEs] = "Descargando paquete de traducción {0}...",
+        },
+        ["StatusLangApplying"] = new()
+        {
+            [LangEn] = "Applying {0} translation...",
+            [LangEs] = "Aplicando traducción {0}...",
+        },
+        ["StatusLangApplied"] = new()
+        {
+            [LangEn] = "✓ {0} translation applied.",
+            [LangEs] = "✓ Traducción {0} aplicada.",
+        },
+        ["StatusLangRevertedToEnglish"] = new()
+        {
+            [LangEn] = "✓ Reverted game language to English.",
+            [LangEs] = "✓ Idioma del juego restablecido a inglés.",
+        },
+        ["DlgLangApplyTitle"] = new()
+        {
+            [LangEn] = "Apply translation",
+            [LangEs] = "Aplicar traducción",
+        },
+        ["DlgLangApplyByAuthor"] = new()
+        {
+            [LangEn] = "by {0}",
+            [LangEs] = "por {0}",
+        },
+        ["DlgLangApplyModVersionsLabel"] = new()
+        {
+            [LangEn] = "MOD VERSIONS",
+            [LangEs] = "VERSIONES DEL MOD",
+        },
+        ["DlgLangApplySizeLabel"] = new()
+        {
+            [LangEn] = "DOWNLOAD SIZE",
+            [LangEs] = "TAMAÑO",
+        },
+        ["DlgLangApplyCompatOk"] = new()
+        {
+            [LangEn] = "Compatible with your installed mod ({0})",
+            [LangEs] = "Compatible con tu instalación del mod ({0})",
+        },
+        ["DlgLangApplyCompatWarn"] = new()
+        {
+            [LangEn] = "Made for mod {1}, but you have {0}. Some new strings may stay in English.",
+            [LangEs] = "Hecha para mod {1}, pero tenés {0}. Algunos strings nuevos pueden quedar en inglés.",
+        },
+        ["DlgLangApplyDownloading"] = new()
+        {
+            [LangEn] = "Downloading translation pack...",
+            [LangEs] = "Descargando paquete de traducción...",
+        },
+        ["DlgLangApplyInstalling"] = new()
+        {
+            [LangEn] = "Extracting pack...",
+            [LangEs] = "Extrayendo paquete...",
+        },
+        ["DlgLangApplyApplying"] = new()
+        {
+            [LangEn] = "Applying translation files...",
+            [LangEs] = "Aplicando archivos de traducción...",
+        },
+        ["DlgLangApplyBtnApply"] = new()
+        {
+            [LangEn] = "Apply",
+            [LangEs] = "Aplicar",
+        },
+        ["DlgLangApplyBtnForce"] = new()
+        {
+            [LangEn] = "Apply anyway",
+            [LangEs] = "Aplicar igual",
+        },
+        ["DlgLangApplyFailedBodyDetail"] = new()
+        {
+            [LangEn] = "Could not apply the translation:\n\n{0}",
+            [LangEs] = "No se pudo aplicar la traducción:\n\n{0}",
+        },
+        ["DlgLangIncompatibleTitle"] = new()
+        {
+            [LangEn] = "Translation may not be fully compatible",
+            [LangEs] = "La traducción puede no ser totalmente compatible",
+        },
+        ["DlgLangIncompatibleBody"] = new()
+        {
+            [LangEn] = "This translation was made for a different version of the mod. " +
+                       "Some new strings may stay in English.\n\nApply anyway?",
+            [LangEs] = "Esta traducción se hizo para una versión diferente del mod. " +
+                       "Algunos strings nuevos pueden quedar en inglés.\n\n¿Aplicar igual?",
+        },
+        ["DlgLangApplyFailedTitle"] = new()
+        {
+            [LangEn] = "Could not apply translation",
+            [LangEs] = "No se pudo aplicar la traducción",
+        },
+        ["DlgLangApplyFailedBody"] = new()
+        {
+            [LangEn] = "The translation could not be applied:\n\n{0}",
+            [LangEs] = "No se pudo aplicar la traducción:\n\n{0}",
+        },
+        ["DlgLangNoDownloadUrlBody"] = new()
+        {
+            [LangEn] = "This translation entry has no download URL configured.",
+            [LangEs] = "Esta entrada de traducción no tiene URL de descarga configurada.",
+        },
+        ["DlgLangRevertFailedBody"] = new()
+        {
+            [LangEn] = "Could not revert to English — the original snapshot is missing. " +
+                       "Run Verify files to repair the install.",
+            [LangEs] = "No se pudo volver al inglés — el respaldo del original no existe. " +
+                       "Ejecuta Verificar archivos para reparar la instalación.",
+        },
 
         // -------- Settings menu tooltips --------
         // Hover help so the user knows what each option does without clicking.

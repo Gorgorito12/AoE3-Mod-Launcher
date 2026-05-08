@@ -326,6 +326,45 @@ public class UpdateService
             }
         }
 
+        // ---- Post-update: refresh translation snapshot + re-apply active pack ----
+        // The patches we just applied have overwritten data\stringtabley.xml and
+        // data\unithelpstringsy.xml with the latest English versions. Capture
+        // those as the new canonical snapshot, then if the user had a translation
+        // active, re-apply it on top so they don't fall back to English silently.
+        try
+        {
+            var translations = new TranslationService(InstallPath);
+            translations.RefreshOriginalsSnapshot();
+
+            if (!string.IsNullOrEmpty(_config.ActiveTranslationId))
+            {
+                var manifest = translations.GetInstalled(_config.ActiveTranslationId);
+                if (manifest != null)
+                {
+                    var compat = translations.CheckCompatibility(manifest, LatestVersion?.Ver);
+                    if (compat == CompatibilityResult.Unknown)
+                    {
+                        DiagnosticLog.Write(
+                            $"Translation '{manifest.Id}' may be incompatible with the new mod " +
+                            "version; reverting to English. User will need an updated pack.");
+                        _config.ActiveTranslationId = "";
+                        _config.Save();
+                    }
+                    else
+                    {
+                        var apply = translations.Apply(manifest.Id);
+                        DiagnosticLog.Write(apply.Success
+                            ? $"Translation '{manifest.Id}' re-applied after update."
+                            : $"Translation re-apply failed: {apply.ErrorMessage}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Post-update translation step failed (non-fatal): {ex.Message}");
+        }
+
         status?.Report(Strings.Get("StatusAllDone"));
     }
 
@@ -390,23 +429,38 @@ public class UpdateService
     /// <summary>
     /// Identifies the user's current mod version by computing MD5 of three key files
     /// and matching against the known versions in UpdateInfo.xml.
+    ///
+    /// IMPORTANT: when a community translation is active, the live
+    /// <c>data\stringtabley.xml</c> is the translated version — its hash
+    /// won't match any known mod version. We get around this by hashing
+    /// the canonical English snapshot in <c>translations\_originals\</c>
+    /// instead. <see cref="TranslationService"/> manages that snapshot.
     /// </summary>
     private static async Task<VersionInfo?> DetectCurrentVersionAsync(
         string installPath,
         List<VersionInfo> knownVersions,
         CancellationToken ct)
     {
+        // protoy.xml and techtreey.xml are NOT covered by translations
+        // (they're code/data, not localized strings) so always hash live.
         var protoMd5 = await HashService.ComputeMd5Async(
             Path.Combine(installPath, ProtoRelativePath), ct);
         var techMd5 = await HashService.ComputeMd5Async(
             Path.Combine(installPath, TechRelativePath), ct);
-        var strMd5 = await HashService.ComputeMd5Async(
-            Path.Combine(installPath, StrRelativePath), ct);
+
+        // stringtabley.xml IS localized — defer to the translation service
+        // for the right path to hash (snapshot if a translation is active,
+        // live file otherwise).
+        var translations = new TranslationService(installPath);
+        var strHashPath = translations.ResolveHashableFile(StrRelativePath);
+        var strMd5 = await HashService.ComputeMd5Async(strHashPath, ct);
 
         DiagnosticLog.Write("MD5 of local files:");
         DiagnosticLog.Write($"  protoy.xml       = {protoMd5}");
         DiagnosticLog.Write($"  techtreey.xml    = {techMd5}");
-        DiagnosticLog.Write($"  stringtabley.xml = {strMd5}");
+        DiagnosticLog.Write(strHashPath == Path.Combine(installPath, StrRelativePath)
+            ? $"  stringtabley.xml = {strMd5}"
+            : $"  stringtabley.xml = {strMd5}  (from _originals snapshot)");
         DiagnosticLog.Write($"Searching for a match among {knownVersions.Count} known versions...");
 
         var match = knownVersions.FirstOrDefault(v =>

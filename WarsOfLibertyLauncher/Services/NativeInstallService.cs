@@ -145,6 +145,13 @@ public class NativeInstallService
         WriteManifest(destinationFolder, aoe3SourcePath, clonedAoe3: true,
             shortcuts, startMenuFolder);
 
+        // Snapshot the canonical English files for translation overlay support.
+        // Captures stringtabley.xml + unithelpstringsy.xml so the launcher can
+        // (a) hash them for version detection even when a translation is active,
+        // (b) revert to English on demand.
+        try { new TranslationService(destinationFolder).RefreshOriginalsSnapshot(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
+
         phaseProgress?.Report(InstallPhase.Complete);
         DiagnosticLog.Write("=== Native Install Complete ===");
     }
@@ -190,6 +197,11 @@ public class NativeInstallService
 
         WriteManifest(destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
             shortcuts, startMenuFolder);
+
+        // Same snapshot as the full install — stringtabley.xml /
+        // unithelpstringsy.xml saved for translation overlay support.
+        try { new TranslationService(destinationFolder).RefreshOriginalsSnapshot(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
 
         phaseProgress?.Report(InstallPhase.Complete);
         DiagnosticLog.Write("=== Native Install (mod-only) Complete ===");

@@ -105,6 +105,31 @@ public class LauncherConfig
     [JsonPropertyName("skippedLauncherTag")]
     public string SkippedLauncherTag { get; set; } = "";
 
+    /// <summary>
+    /// GitHub repository where community translations live (format
+    /// "owner/repo"). The launcher discovers translations by listing
+    /// the releases of this repo and reading the <c>translation.json</c>
+    /// asset inside each one.
+    /// </summary>
+    [JsonPropertyName("translationsRepo")]
+    public string TranslationsRepo { get; set; } = "papillo12/translations";
+
+    /// <summary>
+    /// Legacy: URL of a translations-index.json file. Kept for backward
+    /// compatibility with old configs. The launcher prefers
+    /// <see cref="TranslationsRepo"/> when both are set.
+    /// </summary>
+    [JsonPropertyName("translationsIndexUrl")]
+    public string TranslationsIndexUrl { get; set; } = "";
+
+    /// <summary>
+    /// ID of the translation pack currently applied (e.g. "es", "fr").
+    /// Empty string means English (the default canonical state).
+    /// Updated whenever the user picks a different language in the menu.
+    /// </summary>
+    [JsonPropertyName("activeTranslationId")]
+    public string ActiveTranslationId { get; set; } = "";
+
     private const string ConfigFileName = "launcher-config.json";
 
     public static LauncherConfig Load()
