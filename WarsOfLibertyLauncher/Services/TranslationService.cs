@@ -291,11 +291,13 @@ public class TranslationService
     // ------------------------------------------------------------------------
 
     /// <summary>
-    /// Determines how cleanly <paramref name="manifest"/> applies to the
-    /// current install. Used to decide whether to warn the user and to
-    /// auto-revert when a mod update breaks an active translation.
+    /// Async version — call this from UI code. Determines how cleanly
+    /// <paramref name="manifest"/> applies to the current install. Used to
+    /// decide whether to warn the user and to auto-revert when a mod update
+    /// breaks an active translation.
     /// </summary>
-    public CompatibilityResult CheckCompatibility(TranslationManifest manifest, string? currentModVersion)
+    public async Task<CompatibilityResult> CheckCompatibilityAsync(
+        TranslationManifest manifest, string? currentModVersion, CancellationToken ct = default)
     {
         // Hash-level check first: if the snapshot exists and the originalHash
         // declared by every covered file matches what we have on disk, this
@@ -313,7 +315,7 @@ public class TranslationService
                     allMatch = false;
                     break;
                 }
-                var actual = HashService.ComputeMd5Async(snapshot).GetAwaiter().GetResult();
+                var actual = await HashService.ComputeMd5Async(snapshot, ct).ConfigureAwait(false);
                 if (!string.Equals(actual, file.OriginalHash, StringComparison.OrdinalIgnoreCase))
                 {
                     allMatch = false;
@@ -332,6 +334,22 @@ public class TranslationService
         }
 
         return CompatibilityResult.Unknown;
+    }
+
+    /// <summary>
+    /// Synchronous wrapper over <see cref="CheckCompatibilityAsync"/>. Safe to
+    /// call from the threadpool / non-UI threads (e.g. <c>UpdateService</c>'s
+    /// auto-revert logic that already runs on a background thread). DO NOT
+    /// call this from the WPF UI thread — use the async version, otherwise the
+    /// hashing's continuation will deadlock against this method's <c>GetResult</c>.
+    /// </summary>
+    public CompatibilityResult CheckCompatibility(TranslationManifest manifest, string? currentModVersion)
+    {
+        // Run on the threadpool so there's no captured SynchronizationContext
+        // to deadlock against, even if a caller accidentally invokes us on the
+        // UI thread.
+        return Task.Run(() => CheckCompatibilityAsync(manifest, currentModVersion))
+            .GetAwaiter().GetResult();
     }
 
     // ------------------------------------------------------------------------
@@ -370,10 +388,7 @@ public class TranslationService
     ///   <item><description><c>JsonPath</c> — a copy of <c>translation.json</c> written next to the zip,
     ///         ready to be uploaded as a separate asset on the GitHub release.
     ///         The launcher's registry service reads it directly, so no
-    ///         translations-index.json file is needed.</description></item>
-    ///   <item><description><c>IndexJsonSnippet</c> — pre-formatted JSON the maintainer can paste into
-    ///         <c>translations-index.json</c>. Kept for the legacy index-file
-    ///         workflow; not required for the GitHub-releases-API path.</description></item>
+    ///         central index file is needed.</description></item>
     /// </list>
     /// </summary>
     public record ExportResult(
@@ -381,7 +396,6 @@ public class TranslationService
         string? ZipPath,
         long ZipSize,
         string? JsonPath,
-        string? IndexJsonSnippet,
         string? ErrorMessage);
 
     /// <summary>
@@ -553,13 +567,12 @@ public class TranslationService
             }
 
             var zipSize = new FileInfo(inputs.OutputZipPath).Length;
-            var indexSnippet = BuildIndexEntrySnippet(manifest, zipSize);
 
             DiagnosticLog.Write(
                 $"Export: created '{inputs.OutputZipPath}' " +
                 $"({filesIncluded} files, {zipSize} bytes) for translation '{manifest.Id}' v{manifest.Version}.");
 
-            return new ExportResult(true, inputs.OutputZipPath, zipSize, siblingJsonPath, indexSnippet, null);
+            return new ExportResult(true, inputs.OutputZipPath, zipSize, siblingJsonPath, null);
         }
         catch (Exception ex)
         {
@@ -569,33 +582,7 @@ public class TranslationService
     }
 
     private static ExportResult ExportFail(string err) =>
-        new(false, null, 0, null, null, err);
-
-    /// <summary>
-    /// Renders a copy-pasteable JSON entry for translations-index.json. The
-    /// downloadUrl is left as a placeholder string — the maintainer fills it
-    /// in after they upload the zip to GitHub releases.
-    /// </summary>
-    private static string BuildIndexEntrySnippet(TranslationManifest manifest, long zipSize)
-    {
-        var entry = new TranslationIndexEntry
-        {
-            Id = manifest.Id,
-            Name = manifest.Name,
-            Language = manifest.Language,
-            Author = manifest.Author,
-            Version = manifest.Version,
-            CompatibleWith = manifest.CompatibleWith,
-            DownloadUrl = "REPLACE_WITH_GITHUB_RELEASE_URL",
-            Size = zipSize,
-            Description = manifest.Description,
-        };
-        return JsonSerializer.Serialize(entry, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        });
-    }
+        new(false, null, 0, null, err);
 
     private static TranslationManifest ReadManifestFromZip(string zipPath)
     {

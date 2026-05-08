@@ -1600,11 +1600,6 @@ public static class Strings
                        "3. Listo — los jugadores verán la nueva traducción en su launcher " +
                        "la próxima vez que refresque la lista.",
         },
-        ["DlgPackagerResultJsonLabel"] = new()
-        {
-            [LangEn] = "ADVANCED: JSON entry for legacy translations-index.json",
-            [LangEs] = "AVANZADO: entrada JSON para el translations-index.json antiguo",
-        },
         ["DlgPackagerResultPreviewLabel"] = new()
         {
             [LangEn] = "MENU PREVIEW (how players will see it):",
@@ -1614,16 +1609,6 @@ public static class Strings
         {
             [LangEn] = "Open folder",
             [LangEs] = "Abrir carpeta",
-        },
-        ["DlgPackagerBtnCopyJson"] = new()
-        {
-            [LangEn] = "Copy JSON",
-            [LangEs] = "Copiar JSON",
-        },
-        ["DlgPackagerBtnCopied"] = new()
-        {
-            [LangEn] = "✓ Copied",
-            [LangEs] = "✓ Copiado",
         },
         ["DlgPackagerBtnDone"] = new()
         {

@@ -115,14 +115,6 @@ public class LauncherConfig
     public string TranslationsRepo { get; set; } = "papillo12/translations";
 
     /// <summary>
-    /// Legacy: URL of a translations-index.json file. Kept for backward
-    /// compatibility with old configs. The launcher prefers
-    /// <see cref="TranslationsRepo"/> when both are set.
-    /// </summary>
-    [JsonPropertyName("translationsIndexUrl")]
-    public string TranslationsIndexUrl { get; set; } = "";
-
-    /// <summary>
     /// ID of the translation pack currently applied (e.g. "es", "fr").
     /// Empty string means English (the default canonical state).
     /// Updated whenever the user picks a different language in the menu.

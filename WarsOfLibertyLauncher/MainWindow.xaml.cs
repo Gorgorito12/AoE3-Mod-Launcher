@@ -2029,11 +2029,11 @@ public partial class MainWindow : Window
     };
 
     /// <summary>
-    /// Fetches the translation index from GitHub. Primary path is the
-    /// GitHub Releases API of <c>config.TranslationsRepo</c> — each release
-    /// is its own self-contained translation. Falls back to the legacy
-    /// translations-index.json URL if the user has it configured (and the
-    /// API path didn't return anything).
+    /// Fetches the translation index from GitHub. Each release of the
+    /// configured <c>config.TranslationsRepo</c> is one self-contained
+    /// translation pack (its <c>translation.json</c> manifest plus the
+    /// localized files in a <c>.zip</c>), so we just list releases via
+    /// the GitHub API and read the manifests directly.
     /// </summary>
     /// <param name="reportStatus">
     /// True when the user explicitly asked for a refresh — surfaces a status
@@ -2045,19 +2045,10 @@ public partial class MainWindow : Window
         var registry = new TranslationRegistryService();
         try
         {
-            // 1. Primary: scan the configured GitHub repo's releases.
             TranslationIndex? index = null;
             if (!string.IsNullOrWhiteSpace(_config.TranslationsRepo))
             {
                 index = await registry.FetchFromReleasesAsync(_config.TranslationsRepo);
-            }
-
-            // 2. Fallback: legacy index file URL (kept so users who upgrade
-            //    don't lose translations if the repo scan fails).
-            if ((index == null || index.Translations.Count == 0)
-                && !string.IsNullOrWhiteSpace(_config.TranslationsIndexUrl))
-            {
-                index = await registry.FetchAsync(_config.TranslationsIndexUrl);
             }
 
             _cachedTranslationIndex = index;

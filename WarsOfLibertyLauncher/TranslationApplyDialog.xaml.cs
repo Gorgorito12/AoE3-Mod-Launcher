@@ -135,6 +135,8 @@ public partial class TranslationApplyDialog : Window
         ApplyButton.IsEnabled = false;
         _cts = new CancellationTokenSource();
 
+        DiagnosticLog.Write($"Apply translation '{_entry.Id}' v{_entry.Version} clicked.");
+
         try
         {
             // ---- 1. Download (skip if already installed at this version) ----
@@ -146,17 +148,29 @@ public partial class TranslationApplyDialog : Window
             {
                 if (string.IsNullOrEmpty(_entry.DownloadUrl))
                 {
+                    DiagnosticLog.Write("Apply: aborted — no DownloadUrl in index entry.");
                     ShowMessage(MessageKind.Error, Strings.Get("DlgLangNoDownloadUrlBody"));
                     return;
                 }
                 await DownloadAndInstallAsync(_cts.Token);
             }
+            else
+            {
+                DiagnosticLog.Write($"Apply: pack '{_entry.Id}' already at v{local!.Version}; skipping download.");
+            }
 
             // ---- 2. Hash-level compatibility check (now that the pack is
-            // on disk we can compare originalHash against the snapshot) ----
+            // on disk we can compare originalHash against the snapshot).
+            // Async on purpose — calling the sync overload from the UI thread
+            // would deadlock the launcher (the MD5 hashing's continuation
+            // can't resume on the UI thread we'd be blocking with .Result). ----
+            DiagnosticLog.Write("Apply: running compatibility check.");
             var manifest = _translationService.GetInstalled(_entry.Id)
                 ?? throw new InvalidOperationException("Pack didn't install correctly.");
-            var compat = _translationService.CheckCompatibility(manifest, _currentModVersion);
+            var compat = await _translationService.CheckCompatibilityAsync(
+                manifest, _currentModVersion, _cts.Token);
+            DiagnosticLog.Write($"Apply: compatibility = {compat}.");
+
             if (compat == CompatibilityResult.Unknown && !_userAcknowledgedIncompatibility)
             {
                 ShowMessage(MessageKind.Warn, Strings.Get("DlgLangIncompatibleBody"));
@@ -170,11 +184,17 @@ public partial class TranslationApplyDialog : Window
             // ---- 3. Apply ----
             ProgressLabelText.Text = Strings.Get("DlgLangApplyApplying");
             DownloadProgress.IsIndeterminate = true;
-            var apply = _translationService.Apply(manifest.Id);
+            DiagnosticLog.Write($"Apply: copying pack files for '{manifest.Id}'.");
+            // Run the file copies on the threadpool — they're tiny but doing
+            // them on the UI thread can lock up the dialog if Defender or
+            // Steam holds a brief lock on the destination XML.
+            var apply = await Task.Run(
+                () => _translationService.Apply(manifest.Id), _cts.Token);
             DownloadProgress.IsIndeterminate = false;
 
             if (!apply.Success)
             {
+                DiagnosticLog.Write($"Apply: failed — {apply.ErrorMessage}");
                 ShowMessage(MessageKind.Error,
                     apply.ErrorMessage ?? Strings.Get("DlgLangApplyFailedBody"));
                 ApplyButton.IsEnabled = true;
@@ -183,6 +203,7 @@ public partial class TranslationApplyDialog : Window
             }
 
             // ---- 4. Done ----
+            DiagnosticLog.Write($"Apply: done — translation '{manifest.Id}' v{manifest.Version} active.");
             AppliedSuccessfully = true;
             DialogResult = true;
         }

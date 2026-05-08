@@ -11,65 +11,20 @@ using WarsOfLibertyLauncher.Models;
 namespace WarsOfLibertyLauncher.Services;
 
 /// <summary>
-/// Fetches the central <c>translations-index.json</c> from GitHub. The
-/// index is the source of truth for which community translations are
-/// available — analog of <c>UpdateInfo.xml</c> but for game-language packs.
-///
-/// The default URL points at <c>papillo12/translations</c> on GitHub raw.
-/// Users can override it in <c>launcher-config.json</c> if they want to use
-/// a fork or a private mirror for testing.
+/// Discovers community translations by listing the releases of a GitHub
+/// repository and reading the <c>translation.json</c> manifest attached to
+/// each. Defaults to <c>papillo12/translations</c>; users can point the
+/// launcher at a fork or private mirror via <c>launcher-config.json</c>.
 /// </summary>
 public class TranslationRegistryService
 {
     private static readonly HttpClient Http = CreateHttpClient();
 
-    public const string DefaultIndexUrl =
-        "https://raw.githubusercontent.com/papillo12/translations/main/translations-index.json";
-
-    /// <summary>
-    /// Downloads and parses the index. Returns null if the file isn't
-    /// reachable (404, network error, JSON parse failure) — the caller
-    /// surfaces a friendly "no translations available" message instead
-    /// of an error popup.
-    /// </summary>
-    public async Task<TranslationIndex?> FetchAsync(string indexUrl, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(indexUrl)) return null;
-
-        DiagnosticLog.Write($"Fetching translation index: {indexUrl}");
-        try
-        {
-            var index = await Http.GetFromJsonAsync<TranslationIndex>(indexUrl, ct);
-            if (index == null)
-            {
-                DiagnosticLog.Write("Translation index parsed as null.");
-                return null;
-            }
-            DiagnosticLog.Write(
-                $"Translation index loaded: {index.Translations.Count} entries " +
-                $"(schema v{index.SchemaVersion}, lastUpdated: {index.LastUpdated ?? "?"}).");
-            return index;
-        }
-        catch (HttpRequestException ex)
-        {
-            // Most common case: the repo is empty or the index doesn't
-            // exist yet. Report softly — this is an OK end state, not
-            // an error to nag the user about.
-            DiagnosticLog.Write($"Translation index unavailable: {ex.Message}");
-            return null;
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"Translation index fetch failed: {ex.Message}");
-            return null;
-        }
-    }
-
     /// <summary>
     /// Discovers translations by listing the releases of a GitHub repo and
-    /// reading the <c>translation.json</c> asset attached to each. This is
-    /// the primary path: each translation lives entirely inside its own
-    /// release (no separate index file to maintain).
+    /// reading the <c>translation.json</c> asset attached to each. Each
+    /// translation lives entirely inside its own release — no separate
+    /// index file to maintain.
     ///
     /// Releases without a <c>translation.json</c> asset are silently
     /// skipped — the GitHub repo can host other artifacts alongside
@@ -161,12 +116,7 @@ public class TranslationRegistryService
 
             DiagnosticLog.Write(
                 $"Translation releases scanned: {entries.Count} valid entries from {releases.Count} releases.");
-            return new TranslationIndex
-            {
-                SchemaVersion = 1,
-                LastUpdated = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                Translations = entries,
-            };
+            return new TranslationIndex { Translations = entries };
         }
         catch (HttpRequestException ex)
         {

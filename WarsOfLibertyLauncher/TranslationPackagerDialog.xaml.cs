@@ -95,9 +95,7 @@ public partial class TranslationPackagerDialog : Window
         GenerateButton.Content = Strings.Get("DlgPackagerBtnGenerate");
 
         // Result-panel labels
-        LblJsonSnippet.Text = Strings.Get("DlgPackagerResultJsonLabel");
         OpenFolderButton.Content = Strings.Get("DlgPackagerBtnOpenFolder");
-        CopyJsonButton.Content = Strings.Get("DlgPackagerBtnCopyJson");
         DoneButton.Content = Strings.Get("DlgPackagerBtnDone");
     }
 
@@ -248,7 +246,6 @@ public partial class TranslationPackagerDialog : Window
             ResultPathText.Text = pathLines;
 
             ResultInstructionsText.Text = Strings.Get("DlgPackagerResultInstructions");
-            JsonSnippetBox.Text = result.IndexJsonSnippet;
 
             // Build a "this is how players will see it" preview that mirrors
             // BuildLanguageMenuItem in MainWindow.xaml.cs — gives the translator
@@ -289,19 +286,6 @@ public partial class TranslationPackagerDialog : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Packager: open folder failed: {ex.Message}");
-        }
-    }
-
-    private void CopyJsonButton_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Clipboard.SetText(JsonSnippetBox.Text);
-            CopyJsonButton.Content = Strings.Get("DlgPackagerBtnCopied");
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"Packager: clipboard copy failed: {ex.Message}");
         }
     }
 

@@ -81,10 +81,10 @@ public class TranslationManifest
 }
 
 /// <summary>
-/// One entry in the central <c>translations-index.json</c> hosted on
-/// GitHub. Carries enough info to render the menu without downloading
-/// the actual zip; the user only triggers the download when they pick
-/// a translation to apply.
+/// One translation entry produced by scanning a GitHub repo's releases.
+/// Carries enough info to render the menu without downloading the actual
+/// zip; the user only triggers the download when they pick a translation
+/// to apply.
 /// </summary>
 public class TranslationIndexEntry
 {
@@ -123,18 +123,11 @@ public class TranslationIndexEntry
 }
 
 /// <summary>
-/// Top-level shape of <c>translations-index.json</c>. Hosted at
-/// https://raw.githubusercontent.com/papillo12/translations/main/translations-index.json
-/// (overridable in launcher-config.json).
+/// In-memory list of translations the launcher has discovered, populated
+/// by <see cref="WarsOfLibertyLauncher.Services.TranslationRegistryService"/>
+/// from the configured GitHub repo's releases.
 /// </summary>
 public class TranslationIndex
 {
-    [JsonPropertyName("schemaVersion")]
-    public int SchemaVersion { get; set; } = 1;
-
-    [JsonPropertyName("lastUpdated")]
-    public string? LastUpdated { get; set; }
-
-    [JsonPropertyName("translations")]
     public List<TranslationIndexEntry> Translations { get; set; } = new();
 }

@@ -1,0 +1,17 @@
+{
+  "updateInfoUrl": "http://aoe3wol.com/updates/UpdateInfo.xml",
+  "updateInfoUrlAlt": "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml",
+  "modInstallPath": "",
+  "gameExecutable": "",
+  "gameArguments": "",
+  "openPostUpdatePages": true,
+  "language": "en",
+  "payloadZipUrls": [
+    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
+    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
+    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003"
+  ],
+  "installerZipUrl": "",
+  "defaultInstallFolder": "C:\\Program Files (x86)\\Wars of Liberty",
+  "officialWebsite": "http://aoe3wol.com/"
+}

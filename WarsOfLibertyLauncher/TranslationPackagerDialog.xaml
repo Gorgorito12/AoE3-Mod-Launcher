@@ -244,27 +244,6 @@
                            TextWrapping="Wrap"/>
             </Border>
 
-            <!-- JSON snippet -->
-            <TextBlock x:Name="LblJsonSnippet"
-                       Style="{StaticResource FieldLabel}"
-                       Margin="0,8,0,4"/>
-            <Border Background="#0f1218"
-                    BorderBrush="#3a3d44"
-                    BorderThickness="1"
-                    CornerRadius="4">
-                <TextBox x:Name="JsonSnippetBox"
-                         Background="Transparent"
-                         Foreground="#d4d4d4"
-                         BorderThickness="0"
-                         FontFamily="Consolas"
-                         FontSize="11"
-                         IsReadOnly="True"
-                         AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto"
-                         MaxHeight="220"
-                         Padding="10"/>
-            </Border>
-
             <!-- Buttons -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
                 <Button x:Name="OpenFolderButton"
@@ -272,11 +251,6 @@
                         MinWidth="120"
                         Margin="0,0,8,0"
                         Click="OpenFolderButton_Click"/>
-                <Button x:Name="CopyJsonButton"
-                        Style="{StaticResource DialogButton}"
-                        MinWidth="140"
-                        Margin="0,0,8,0"
-                        Click="CopyJsonButton_Click"/>
                 <Button x:Name="DoneButton"
                         Style="{StaticResource PrimaryButton}"
                         MinWidth="100"
