@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Security.AccessControl;
 using System.Security.Principal;
 
@@ -71,9 +70,17 @@ public static class ElevationService
     {
         try
         {
-            var exePath = Process.GetCurrentProcess().MainModule?.FileName;
+            // Environment.ProcessPath is the right primitive for "the
+            // path of the running .exe" — in particular, it works
+            // correctly in single-file published builds. The old fallback
+            // here was Assembly.GetEntryAssembly().Location, which the
+            // single-file packager warns about (IL3000) because it
+            // returns an empty string when assemblies are embedded.
+            // Process.MainModule.FileName is kept as a secondary in case
+            // ProcessPath is unavailable for some reason.
+            var exePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(exePath))
-                exePath = Assembly.GetEntryAssembly()?.Location;
+                exePath = Process.GetCurrentProcess().MainModule?.FileName;
             if (string.IsNullOrEmpty(exePath))
                 return false;
 

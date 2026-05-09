@@ -1,9 +1,36 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using WarsOfLibertyLauncher.Services;
 
 namespace WarsOfLibertyLauncher.Models;
+
+/// <summary>
+/// Per-mod state that has to survive launcher restarts AND has to be kept
+/// separate per profile. Stored under <see cref="LauncherConfig.Mods"/>
+/// keyed by mod id so switching between mods doesn't cross-contaminate
+/// (e.g. so detecting Improvement Mod's install path doesn't overwrite
+/// the Wars of Liberty install path the user already had cached).
+/// </summary>
+public class ModState
+{
+    /// <summary>
+    /// Where this mod is installed on disk. Empty when the launcher hasn't
+    /// found it yet — the next call to the install detector will populate it.
+    /// </summary>
+    [JsonPropertyName("installPath")]
+    public string InstallPath { get; set; } = "";
+
+    /// <summary>
+    /// ID of the community translation pack currently applied for this mod
+    /// (e.g. "es", "fr"). Empty means the canonical English data is active.
+    /// </summary>
+    [JsonPropertyName("activeTranslationId")]
+    public string ActiveTranslationId { get; set; } = "";
+}
 
 /// <summary>
 /// Local launcher config. Most defaults match the official servers; the install
@@ -11,6 +38,53 @@ namespace WarsOfLibertyLauncher.Models;
 /// </summary>
 public class LauncherConfig
 {
+    /// <summary>
+    /// ID of the mod profile the launcher last had selected (e.g. "wol",
+    /// "improvement-mod"). Empty on a fresh config — the launcher resolves
+    /// it to the registry's default profile at startup. Set whenever the
+    /// user picks a different mod in the header dropdown.
+    /// </summary>
+    [JsonPropertyName("activeModId")]
+    public string ActiveModId { get; set; } = "";
+
+    /// <summary>
+    /// Resolves <see cref="ActiveModId"/> to its full profile, falling
+    /// back to <see cref="ModRegistry.Default"/> when the id is empty or
+    /// unknown (e.g. user hand-edited the config with a typo).
+    /// </summary>
+    public ModProfile GetActiveProfile() =>
+        ModRegistry.Find(ActiveModId) ?? ModRegistry.Default;
+
+    /// <summary>
+    /// Per-mod state (install path, active translation, etc.) keyed by
+    /// <see cref="ModProfile.Id"/>. Replaces the old shared root-level
+    /// fields like <c>modInstallPath</c> and <c>activeTranslationId</c> so
+    /// switching mods doesn't overwrite data belonging to another mod.
+    /// Created lazily by <see cref="GetState(string)"/>.
+    /// </summary>
+    [JsonPropertyName("mods")]
+    public Dictionary<string, ModState> Mods { get; set; } = new();
+
+    /// <summary>
+    /// Returns the persistent state record for a given mod id, creating an
+    /// empty one if it doesn't exist yet. The returned reference is the
+    /// live one stored in <see cref="Mods"/> — modifying its fields and
+    /// then calling <see cref="Save"/> persists the change.
+    /// </summary>
+    public ModState GetState(string modId)
+    {
+        if (string.IsNullOrEmpty(modId)) modId = ModRegistry.Default.Id;
+        if (!Mods.TryGetValue(modId, out var state))
+        {
+            state = new ModState();
+            Mods[modId] = state;
+        }
+        return state;
+    }
+
+    /// <summary>Convenience overload: state of the currently active profile.</summary>
+    public ModState GetActiveState() => GetState(GetActiveProfile().Id);
+
     /// <summary>Primary URL of UpdateInfo.xml. Default: official aoe3wol.com server.</summary>
     [JsonPropertyName("updateInfoUrl")]
     public string UpdateInfoUrl { get; set; } = "http://aoe3wol.com/updates/UpdateInfo.xml";
@@ -21,8 +95,11 @@ public class LauncherConfig
         "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml";
 
     /// <summary>
-    /// Where Wars of Liberty is installed. If empty, the launcher tries to
-    /// detect it from the Windows registry on startup.
+    /// LEGACY — kept for backward compatibility with configs written before
+    /// the per-mod <see cref="Mods"/> dictionary existed. New code should
+    /// read/write via <see cref="GetState(string)"/>. On <see cref="Load"/>,
+    /// when a non-empty value here AND no <c>mods["wol"]</c> entry exists,
+    /// the value is migrated under the WoL profile.
     /// </summary>
     [JsonPropertyName("modInstallPath")]
     public string ModInstallPath { get; set; } = "";
@@ -115,9 +192,9 @@ public class LauncherConfig
     public string TranslationsRepo { get; set; } = "papillo12/translations";
 
     /// <summary>
-    /// ID of the translation pack currently applied (e.g. "es", "fr").
-    /// Empty string means English (the default canonical state).
-    /// Updated whenever the user picks a different language in the menu.
+    /// LEGACY — see <see cref="ModInstallPath"/>. Migrated to
+    /// <see cref="ModState.ActiveTranslationId"/> for the WoL profile on
+    /// first load.
     /// </summary>
     [JsonPropertyName("activeTranslationId")]
     public string ActiveTranslationId { get; set; } = "";
@@ -134,7 +211,40 @@ public class LauncherConfig
             return defaults;
         }
         var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<LauncherConfig>(json) ?? new LauncherConfig();
+        var cfg = JsonSerializer.Deserialize<LauncherConfig>(json) ?? new LauncherConfig();
+        cfg.MigrateLegacyState();
+        return cfg;
+    }
+
+    /// <summary>
+    /// One-time migration of the pre-multi-mod root-level state fields
+    /// (<see cref="ModInstallPath"/>, <see cref="ActiveTranslationId"/>)
+    /// into the per-mod <see cref="Mods"/> dictionary. Only runs when the
+    /// dictionary doesn't already have an entry for the WoL profile, so
+    /// it's idempotent — re-loading a migrated config is a no-op.
+    /// </summary>
+    private void MigrateLegacyState()
+    {
+        var wolId = ModRegistry.WolId;
+        bool needsMigration =
+            (!string.IsNullOrEmpty(ModInstallPath) || !string.IsNullOrEmpty(ActiveTranslationId))
+            && !Mods.ContainsKey(wolId);
+
+        if (!needsMigration) return;
+
+        Mods[wolId] = new ModState
+        {
+            InstallPath = ModInstallPath,
+            ActiveTranslationId = ActiveTranslationId,
+        };
+        try { Save(); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Config migration save failed: {ex.Message}");
+        }
+        DiagnosticLog.Write(
+            $"Migrated legacy mod state into Mods[\"{wolId}\"]: " +
+            $"installPath='{ModInstallPath}', activeTranslationId='{ActiveTranslationId}'.");
     }
 
     public void Save()

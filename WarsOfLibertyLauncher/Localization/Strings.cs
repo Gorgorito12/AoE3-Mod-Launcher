@@ -55,25 +55,366 @@ public static class Strings
     private static readonly Dictionary<string, Dictionary<string, string>> Table = new()
     {
         // -------- Window / labels --------
+        // {0} is the active mod profile's display name (e.g. "Wars of Liberty",
+        // "Improvement Mod"). Both fields used to be hard-coded to WoL.
         ["WindowTitle"] = new()
         {
-            [LangEn] = "Wars of Liberty Launcher",
-            [LangEs] = "Wars of Liberty Launcher",
+            [LangEn] = "{0} Launcher",
+            [LangEs] = "{0} Launcher",
+        },
+        // -------- Mod selector popup --------
+        ["ModSelectorInstalled"] = new()
+        {
+            [LangEn] = "Installed · v{0}",
+            [LangEs] = "Instalado · v{0}",
+        },
+        ["ModSelectorInstalledNoVersion"] = new()
+        {
+            [LangEn] = "Installed",
+            [LangEs] = "Instalado",
+        },
+        ["ModSelectorNotInstalled"] = new()
+        {
+            [LangEn] = "Not installed",
+            [LangEs] = "No instalado",
+        },
+        ["ModTileTooltipActive"] = new()
+        {
+            [LangEn] = "Currently active",
+            [LangEs] = "Activo actualmente",
+        },
+        // -------- Mod-switch blocking dialogs --------
+        ["DlgModSwitchBlockedTitle"] = new()
+        {
+            [LangEn] = "Can't switch mod right now",
+            [LangEs] = "No se puede cambiar de mod ahora",
+        },
+        ["DlgModSwitchBusyBody"] = new()
+        {
+            [LangEn] = "An operation is in progress. Wait for it to finish " +
+                       "(or cancel it from the toolbar) before switching mods.",
+            [LangEs] = "Hay una operación en curso. Esperá a que termine " +
+                       "(o cancelala desde la barra) antes de cambiar de mod.",
+        },
+        ["DlgModSwitchGameRunningBody"] = new()
+        {
+            [LangEn] = "The game is currently running. Close it before " +
+                       "switching to another mod.",
+            [LangEs] = "El juego está abierto. Cerralo antes de cambiar a otro mod.",
+        },
+        // -------- New layout: top mods bar, sidebar labels, tabs --------
+        ["ModsBarLabel"] = new()
+        {
+            [LangEn] = "MODS",
+            [LangEs] = "MODS",
+        },
+        ["ActionsLabel"] = new()
+        {
+            [LangEn] = "MOD ACTIONS",
+            [LangEs] = "ACCIONES DEL MOD",
+        },
+        ["TabNoticias"] = new()
+        {
+            [LangEn] = "News",
+            [LangEs] = "Noticias",
+        },
+        ["TabChangelog"] = new()
+        {
+            [LangEn] = "Changelog",
+            [LangEs] = "Changelog",
+        },
+        ["TabAyuda"] = new()
+        {
+            [LangEn] = "Help",
+            [LangEs] = "Ayuda",
+        },
+        // Help tab body (per-mod help text). Profile-specific overrides
+        // come from ModProfile.HelpText when populated.
+        ["HelpDefaultBody"] = new()
+        {
+            [LangEn] = "No additional help is available for this mod yet. " +
+                       "If you run into trouble, open the gear menu in the " +
+                       "sidebar — it has tools to verify files, swap folders, " +
+                       "back up your user data, and uninstall.",
+            [LangEs] = "Todavía no hay ayuda adicional para este mod. Si " +
+                       "tenés algún problema, abrí el menú de configuración " +
+                       "en la barra lateral — tiene herramientas para " +
+                       "verificar archivos, cambiar carpetas, hacer backup " +
+                       "de tus datos y desinstalar.",
+        },
+        ["ChangelogPlaceholder"] = new()
+        {
+            [LangEn] = "No changelog available for this mod yet.",
+            [LangEs] = "Todavía no hay changelog para este mod.",
+        },
+        // -------- Inline progress panel (top of news content) --------
+        ["ProgressPanelHeader"] = new()
+        {
+            [LangEn] = "INSTALL / UPDATE PROGRESS",
+            [LangEs] = "PROGRESO DE INSTALACIÓN / ACTUALIZACIÓN",
+        },
+        // Per-operation header — shown in the small label at the top of
+        // the panel. Used to disambiguate which action is running.
+        ["ProgressLabelInstall"] = new()
+        {
+            [LangEn] = "INSTALL PROGRESS",
+            [LangEs] = "PROGRESO DE INSTALACIÓN",
+        },
+        ["ProgressLabelUpdate"] = new()
+        {
+            [LangEn] = "UPDATE PROGRESS",
+            [LangEs] = "PROGRESO DE ACTUALIZACIÓN",
+        },
+        ["ProgressLabelRepair"] = new()
+        {
+            [LangEn] = "REPAIR PROGRESS",
+            [LangEs] = "PROGRESO DE REPARACIÓN",
+        },
+        ["ProgressLabelVerify"] = new()
+        {
+            [LangEn] = "FILE VERIFICATION",
+            [LangEs] = "VERIFICACIÓN DE ARCHIVOS",
+        },
+        ["ProgressLabelUninstall"] = new()
+        {
+            [LangEn] = "UNINSTALL PROGRESS",
+            [LangEs] = "PROGRESO DE DESINSTALACIÓN",
+        },
+        // Bar labels (one per operation flavor — Repair calls them
+        // Verify / Repair, Uninstall calls them Process / Cleanup, etc.)
+        ["ProgressBarDownload"] = new()
+        {
+            [LangEn] = "Download",
+            [LangEs] = "Descarga",
+        },
+        ["ProgressBarInstall"] = new()
+        {
+            [LangEn] = "Installation",
+            [LangEs] = "Instalación",
+        },
+        ["ProgressBarVerify"] = new()
+        {
+            [LangEn] = "Verification",
+            [LangEs] = "Verificación",
+        },
+        ["ProgressBarRepair"] = new()
+        {
+            [LangEn] = "Repair",
+            [LangEs] = "Reparación",
+        },
+        ["ProgressBarProcess"] = new()
+        {
+            [LangEn] = "Process",
+            [LangEs] = "Proceso",
+        },
+        ["ProgressBarCleanup"] = new()
+        {
+            [LangEn] = "Cleanup",
+            [LangEs] = "Limpieza",
+        },
+        // -------- Idle state of the bottom-left panel --------
+        // The panel that used to host "Game detected" now mirrors the mod's
+        // current status when no operation is running: Ready / Update
+        // available / Not installed / AoE3 missing. Header label sits
+        // above the icon + title row.
+        ["IdleHeader"] = new()
+        {
+            [LangEn] = "MOD STATUS",
+            [LangEs] = "ESTADO DEL MOD",
+        },
+        // -------- New StatusCard rows (top of sidebar) --------
+        ["StatusCardCurrentVersion"] = new()
+        {
+            [LangEn] = "Current version:",
+            [LangEs] = "Versión actual:",
+        },
+        ["StatusCardLatestVersion"] = new()
+        {
+            [LangEn] = "Latest version:",
+            [LangEs] = "Última versión:",
+        },
+        ["StatusCardInstalled"] = new()
+        {
+            [LangEn] = "Installed",
+            [LangEs] = "Instalado",
+        },
+        ["StatusCardNotInstalled"] = new()
+        {
+            [LangEn] = "Not installed",
+            [LangEs] = "No instalado",
+        },
+        // -------- ProgressPanel idle (bottom of sidebar) --------
+        // Neutral "ready for any operation" look. Color flips to whatever
+        // operation is running once StartProgressPanel takes over.
+        ["ProgressIdleHeader"] = new()
+        {
+            [LangEn] = "PROGRESS PANEL",
+            [LangEs] = "PANEL DE PROGRESO",
+        },
+        ["ProgressIdleTitle"] = new()
+        {
+            [LangEn] = "Ready for operations",
+            [LangEs] = "Listo para operaciones",
+        },
+        ["IdleStateReady"] = new()
+        {
+            [LangEn] = "Ready to play",
+            [LangEs] = "Listo para jugar",
+        },
+        ["IdleStateUpdateAvailable"] = new()
+        {
+            [LangEn] = "Update available",
+            [LangEs] = "Actualización disponible",
+        },
+        // {0} = mod display name (e.g. "Wars of Liberty").
+        ["IdleStateNotInstalled"] = new()
+        {
+            [LangEn] = "{0} is not installed",
+            [LangEs] = "{0} no está instalado",
+        },
+        ["IdleStateUnknownVersion"] = new()
+        {
+            [LangEn] = "Version not recognised",
+            [LangEs] = "Versión no reconocida",
+        },
+        ["IdleStateGameMissing"] = new()
+        {
+            [LangEn] = "Age of Empires III not found",
+            [LangEs] = "Age of Empires III no encontrado",
+        },
+        // {0} = mod display name, {1} = installed version.
+        ["IdleSubtitleReady"] = new()
+        {
+            [LangEn] = "{0} v{1}",
+            [LangEs] = "{0} v{1}",
+        },
+        ["IdleSubtitleNotInstalled"] = new()
+        {
+            [LangEn] = "Click Install to get started.",
+            [LangEs] = "Apretá Instalar para empezar.",
+        },
+        // {0} = current version, {1} = latest version.
+        ["IdleSubtitleUpdateAvailable"] = new()
+        {
+            [LangEn] = "v{0} → v{1}",
+            [LangEs] = "v{0} → v{1}",
+        },
+        ["IdleSubtitleGameMissing"] = new()
+        {
+            [LangEn] = "We need the game's location to play.",
+            [LangEs] = "Necesitamos la ubicación del juego para poder jugar.",
+        },
+        // Inline button shown in the panel's idle state when AoE3 isn't
+        // detected — replaces the old "..." button in the game footer.
+        ["BtnFindAoE3"] = new()
+        {
+            [LangEn] = "Find AoE3",
+            [LangEs] = "Buscar AoE3",
+        },
+        // Title shown in the panel header during uninstall.
+        ["ProgressTitleUninstalling"] = new()
+        {
+            [LangEn] = "Uninstalling {0}",
+            [LangEs] = "Desinstalando {0}",
+        },
+        // Subtitle for the uninstall flow.
+        ["ProgressSubRemoving"] = new()
+        {
+            [LangEn] = "Removing mod files...",
+            [LangEs] = "Eliminando archivos del mod...",
+        },
+        // Title row at the top of the panel — "Installing/Updating {0}".
+        ["ProgressTitleInstalling"] = new()
+        {
+            [LangEn] = "Installing {0}",
+            [LangEs] = "Instalando {0}",
+        },
+        ["ProgressTitleUpdating"] = new()
+        {
+            [LangEn] = "Updating {0}",
+            [LangEs] = "Actualizando {0}",
+        },
+        ["ProgressTitleRepairing"] = new()
+        {
+            [LangEn] = "Repairing {0}",
+            [LangEs] = "Reparando {0}",
+        },
+        ["ProgressTitleVerifying"] = new()
+        {
+            [LangEn] = "Verifying {0}",
+            [LangEs] = "Verificando {0}",
+        },
+        ["ProgressTitleCompleted"] = new()
+        {
+            [LangEn] = "Completed",
+            [LangEs] = "Completado",
+        },
+        ["ProgressTitleError"] = new()
+        {
+            [LangEn] = "Operation failed",
+            [LangEs] = "La operación falló",
+        },
+        ["ProgressTitleCancelled"] = new()
+        {
+            [LangEn] = "Cancelled",
+            [LangEs] = "Cancelado",
+        },
+        // End-state banners inside the panel.
+        ["ProgressCompletedMessage"] = new()
+        {
+            [LangEn] = "All done. The mod is ready to play.",
+            [LangEs] = "Listo. El mod ya está disponible para jugar.",
+        },
+        ["ProgressCancelledMessage"] = new()
+        {
+            [LangEn] = "The operation was cancelled. You can resume by retrying.",
+            [LangEs] = "La operación fue cancelada. Podés reintentar para retomarla.",
+        },
+        // Sub-step phrases used as the panel's subtitle.
+        ["ProgressSubDownloading"] = new()
+        {
+            [LangEn] = "Downloading...",
+            [LangEs] = "Descargando...",
+        },
+        ["ProgressSubVerifying"] = new()
+        {
+            [LangEn] = "Verifying files...",
+            [LangEs] = "Verificando archivos...",
+        },
+        // Step counter in the top-right of the panel — "Step {0} of {1}".
+        ["ProgressStepFormat"] = new()
+        {
+            [LangEn] = "Step {0} of {1}",
+            [LangEs] = "Paso {0} de {1}",
+        },
+        // Action button labels inside the panel.
+        ["BtnRetry"] = new()
+        {
+            [LangEn] = "Retry",
+            [LangEs] = "Reintentar",
+        },
+        ["BtnClose"] = new()
+        {
+            [LangEn] = "Close",
+            [LangEs] = "Cerrar",
+        },
+        // Shown in the INSTALLED VERSION card for mods that don't have
+        // Status line for mods whose updates are managed outside the
+        // launcher (their own patcher, ModDB, etc.). {0} = mod name.
+        ["StatusReadyExternalUpdates"] = new()
+        {
+            [LangEn] = "Ready to play. Updates for {0} are managed externally.",
+            [LangEs] = "Listo para jugar. Las actualizaciones de {0} se manejan por fuera del launcher.",
+        },
+        ["StatusModNotInstalledExternal"] = new()
+        {
+            [LangEn] = "{0} isn't installed yet. Install it from its own site, then come back here to play.",
+            [LangEs] = "{0} todavía no está instalado. Instalalo desde su sitio y volvé acá para jugar.",
         },
         ["Subtitle"] = new()
         {
             [LangEn] = "Launcher",
             [LangEs] = "Launcher",
-        },
-        ["InstalledVersion"] = new()
-        {
-            [LangEn] = "INSTALLED VERSION",
-            [LangEs] = "VERSIÓN INSTALADA",
-        },
-        ["LatestVersion"] = new()
-        {
-            [LangEn] = "LATEST AVAILABLE",
-            [LangEs] = "ÚLTIMA DISPONIBLE",
         },
         ["ModPath"] = new()
         {
@@ -202,18 +543,104 @@ public static class Strings
         // -------- Buttons --------
         ["BtnUpdate"] = new()
         {
-            [LangEn] = "UPDATE",
-            [LangEs] = "ACTUALIZAR",
+            [LangEn] = "Update",
+            [LangEs] = "Actualizar",
         },
         ["BtnVerify"] = new()
         {
-            [LangEn] = "VERIFY",
-            [LangEs] = "VERIFICAR",
+            [LangEn] = "Verify files",
+            [LangEs] = "Verificar archivos",
         },
-        ["BtnCheckUpdates"] = new()
+        ["BtnConfig"] = new()
         {
-            [LangEn] = "CHECK",
-            [LangEs] = "BUSCAR",
+            [LangEn] = "Settings",
+            [LangEs] = "Ajustes",
+        },
+        // Section headers inside the Settings menu — small-caps gray
+        // labels grouping the items below each one. Not clickable.
+        ["MenuSectionPaths"] = new()
+        {
+            [LangEn] = "PATHS",
+            [LangEs] = "RUTAS",
+        },
+        ["MenuSectionUserData"] = new()
+        {
+            [LangEn] = "USER DATA",
+            [LangEs] = "DATOS DE USUARIO",
+        },
+        ["MenuSectionLanguage"] = new()
+        {
+            [LangEn] = "LANGUAGE",
+            [LangEs] = "IDIOMA",
+        },
+        ["MenuSectionMaintenance"] = new()
+        {
+            [LangEn] = "MAINTENANCE",
+            [LangEs] = "MANTENIMIENTO",
+        },
+        ["MenuSectionAdvanced"] = new()
+        {
+            [LangEn] = "ADVANCED",
+            [LangEs] = "AVANZADO",
+        },
+        ["MenuSectionDanger"] = new()
+        {
+            [LangEn] = "DANGER",
+            [LangEs] = "PELIGRO",
+        },
+        ["BtnOpenFolder"] = new()
+        {
+            [LangEn] = "Open folder",
+            [LangEs] = "Abrir carpeta",
+        },
+        ["BtnRepair"] = new()
+        {
+            [LangEn] = "Repair install",
+            [LangEs] = "Reparar instalación",
+        },
+        ["BtnUninstall"] = new()
+        {
+            [LangEn] = "Uninstall",
+            [LangEs] = "Desinstalar",
+        },
+        // -------- New gear-menu items (Maintenance + Advanced) --------
+        ["MenuRepairInstall"] = new()
+        {
+            [LangEn] = "Repair install",
+            [LangEs] = "Reparar instalación",
+        },
+        ["MenuVerifyFiles"] = new()
+        {
+            [LangEn] = "Verify files",
+            [LangEs] = "Verificar archivos",
+        },
+        ["MenuViewLogs"] = new()
+        {
+            [LangEn] = "View logs",
+            [LangEs] = "Ver logs",
+        },
+        ["TooltipMenuRepairInstall"] = new()
+        {
+            [LangEn] = "Re-downloads the mod payload and overlays it on top " +
+                       "of the existing install — replaces missing or corrupt " +
+                       "files without losing user data.",
+            [LangEs] = "Re-descarga el contenido del mod y lo aplica sobre " +
+                       "la instalación actual — reemplaza archivos faltantes " +
+                       "o corruptos sin perder los datos del usuario.",
+        },
+        ["TooltipMenuVerifyFiles"] = new()
+        {
+            [LangEn] = "Quick integrity check — flags missing or empty files " +
+                       "and offers Repair if anything is wrong.",
+            [LangEs] = "Verificación rápida de integridad — marca archivos " +
+                       "faltantes o vacíos y ofrece Reparar si algo no está bien.",
+        },
+        ["TooltipMenuViewLogs"] = new()
+        {
+            [LangEn] = "Opens the launcher diagnostic log in your default " +
+                       "text editor.",
+            [LangEs] = "Abre el log de diagnóstico del launcher en tu editor " +
+                       "de texto predeterminado.",
         },
         ["BtnPlay"] = new()
         {
@@ -283,10 +710,12 @@ public static class Strings
         },
 
         // -------- Status: in progress --------
+        // {0} = active mod's display name (e.g. "Wars of Liberty",
+        // "Improvement Mod"). Used to be hard-coded to WoL.
         ["StatusDetectingInstall"] = new()
         {
-            [LangEn] = "Detecting Wars of Liberty installation...",
-            [LangEs] = "Detectando instalación de Wars of Liberty...",
+            [LangEn] = "Detecting {0} installation...",
+            [LangEs] = "Detectando instalación de {0}...",
         },
         ["StatusFetchingManifest"] = new()
         {
@@ -1347,12 +1776,20 @@ public static class Strings
         ["TooltipSettings"] = new()
         {
             [LangEn] = "Settings",
-            [LangEs] = "Configuración",
+            [LangEs] = "Ajustes",
         },
         ["MenuFolders"] = new()
         {
             [LangEn] = "Folders",
             [LangEs] = "Carpetas",
+        },
+        // Replaces "Folders" — the submenu is now for path settings, not
+        // path opening (the sidebar's "Open folder" button covers the
+        // common case for the active mod).
+        ["MenuManagePaths"] = new()
+        {
+            [LangEn] = "Manage paths",
+            [LangEs] = "Administrar rutas",
         },
         ["MenuOpenModFolder"] = new()
         {

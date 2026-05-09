@@ -1,0 +1,166 @@
+using System.Collections.Generic;
+
+namespace WarsOfLibertyLauncher.Models;
+
+/// <summary>
+/// How a mod is laid out on disk and how the launcher updates it. Two shapes
+/// are supported today; more can be added when a new mod profile needs them.
+/// </summary>
+public enum ModInstallType
+{
+    /// <summary>
+    /// The mod lives in its own folder, separate from the AoE3 install. The
+    /// launcher applies patches inside that folder and runs a copy of the
+    /// game executable (or a symlink to it). Wars of Liberty works this way.
+    /// </summary>
+    IsolatedFolder,
+
+    /// <summary>
+    /// The mod's files are extracted directly into the AoE3 install folder
+    /// (or its <c>bin\</c> subfolder) and ship their own .exe alongside
+    /// AoE3's. Improvement Mod works this way.
+    /// </summary>
+    InPlaceOverlay,
+}
+
+/// <summary>
+/// How the launcher gets new versions of the mod's files.
+/// </summary>
+public enum ModUpdateMechanism
+{
+    /// <summary>
+    /// Pull-based updater driven by an <c>UpdateInfo.xml</c> feed and
+    /// incremental <c>.tar.xz</c> patches. The Wars of Liberty pipeline.
+    /// </summary>
+    WolPatcher,
+
+    /// <summary>
+    /// The launcher only knows how to play the mod; updates are handled by
+    /// the mod's own external tool (e.g. Improvement Mod's <c>age3m.exe</c>
+    /// patcher). The launcher exposes a "play" button and reads the
+    /// installed version if it can, but doesn't push updates itself.
+    /// </summary>
+    DelegatedExternal,
+
+    /// <summary>
+    /// No automated updates — the user installs the mod manually. Used as a
+    /// fallback while a proper mechanism is being added.
+    /// </summary>
+    Manual,
+}
+
+/// <summary>
+/// Settings for the WoL-style update pipeline (UpdateInfo.xml + tar.xz
+/// patches). Only meaningful when <see cref="ModProfile.UpdateMechanism"/>
+/// is <see cref="ModUpdateMechanism.WolPatcher"/>.
+/// </summary>
+public class WolPatcherSettings
+{
+    /// <summary>Primary URL of the UpdateInfo.xml feed.</summary>
+    public string UpdateInfoUrl { get; set; } = "";
+
+    /// <summary>Mirror used when the primary URL fails.</summary>
+    public string UpdateInfoUrlAlt { get; set; } = "";
+
+    /// <summary>Public website / fallback download page if the feed is unreachable.</summary>
+    public string OfficialWebsite { get; set; } = "";
+
+    /// <summary>
+    /// Multipart payload zip URLs (split with .zip.001 / .002 / ... to
+    /// dodge GitHub's per-file size cap). The launcher concatenates them
+    /// before extracting.
+    /// </summary>
+    public string[] PayloadZipUrls { get; set; } = System.Array.Empty<string>();
+}
+
+/// <summary>
+/// Settings for the community-translation overlay system. Only meaningful
+/// when the mod's data layout matches WoL's (the launcher hashes a
+/// snapshot of the canonical English files and applies translation packs
+/// over <c>data\</c>).
+/// </summary>
+public class TranslationsSettings
+{
+    /// <summary>
+    /// GitHub repository (format <c>owner/repo</c>) whose releases each
+    /// host a <c>translation.json</c> + <c>.zip</c> pair.
+    /// </summary>
+    public string Repo { get; set; } = "";
+
+    /// <summary>
+    /// Files (relative to the install root) that translation packs are
+    /// allowed to replace. Used to build the originals snapshot and to
+    /// validate incoming packs.
+    /// </summary>
+    public List<string> CoveredFiles { get; set; } = new();
+}
+
+/// <summary>
+/// Everything that distinguishes one mod from another in the launcher.
+/// All hard-coded "Wars of Liberty"-specific values live in a profile
+/// instead of in the launcher's code so adding a new mod is just a new
+/// profile entry.
+/// </summary>
+public class ModProfile
+{
+    /// <summary>Stable identifier used in config files and on disk. Lowercase, no spaces.</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>Human-readable name shown in the header and the mod selector.</summary>
+    public string DisplayName { get; set; } = "";
+
+    /// <summary>
+    /// Short tagline shown under the title (e.g. "Launcher" or
+    /// "AoE3:TAD overhaul"). Optional.
+    /// </summary>
+    public string Subtitle { get; set; } = "";
+
+    /// <summary>Hex accent color used for primary buttons and highlights.</summary>
+    public string AccentColor { get; set; } = "#c8102e";
+
+    /// <summary>
+    /// Optional path (relative to the launcher's resources) of a banner
+    /// image. When null/empty the launcher falls back to plain text.
+    /// </summary>
+    public string? BannerImage { get; set; }
+
+    /// <summary>How the mod's files relate to the AoE3 install folder.</summary>
+    public ModInstallType InstallType { get; set; } = ModInstallType.IsolatedFolder;
+
+    /// <summary>
+    /// Default folder offered to the user in the install dialog. For
+    /// isolated mods this is a separate folder; for in-place mods this is
+    /// usually the AoE3 folder itself.
+    /// </summary>
+    public string DefaultInstallFolder { get; set; } = "";
+
+    /// <summary>
+    /// Filename of a probe file inside the install folder that, when
+    /// present, confirms the mod is installed. For WoL this is one of the
+    /// patched data files; for IM it's <c>age3m.exe</c>. The launcher uses
+    /// this to detect "is the mod installed at this path".
+    /// </summary>
+    public string InstallProbeFile { get; set; } = "";
+
+    /// <summary>
+    /// Filename of the .exe to launch when the user hits PLAY. Resolved
+    /// relative to the install folder for in-place mods, or to the mod's
+    /// own folder for isolated mods.
+    /// </summary>
+    public string GameExecutable { get; set; } = "";
+
+    /// <summary>Optional command-line arguments passed to the executable.</summary>
+    public string GameArguments { get; set; } = "";
+
+    /// <summary>How the launcher pulls new versions of this mod.</summary>
+    public ModUpdateMechanism UpdateMechanism { get; set; } = ModUpdateMechanism.Manual;
+
+    /// <summary>Settings for the WoL-style updater. Used only when <see cref="UpdateMechanism"/> = <see cref="ModUpdateMechanism.WolPatcher"/>.</summary>
+    public WolPatcherSettings? Wol { get; set; }
+
+    /// <summary>
+    /// Translations overlay configuration. <c>null</c> means the mod
+    /// doesn't participate in the community-translation system.
+    /// </summary>
+    public TranslationsSettings? Translations { get; set; }
+}

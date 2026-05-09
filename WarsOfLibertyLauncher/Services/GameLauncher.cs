@@ -7,31 +7,38 @@ using WarsOfLibertyLauncher.Models;
 namespace WarsOfLibertyLauncher.Services;
 
 /// <summary>
-/// Locates and launches the Age of Empires III: The Asian Dynasties executable
-/// (age3y.exe), which is the actual game binary used by Wars of Liberty.
+/// Locates and launches the executable that actually runs the active mod.
 ///
-/// Wars of Liberty does NOT have its own .exe — it patches AoE3's data files,
-/// and the game launches via age3y.exe in the AoE3 folder.
+/// For Wars of Liberty that is <c>age3y.exe</c> (Age of Empires III: TAD)
+/// because WoL patches the base game's data files and reuses its binary.
+/// For Improvement Mod that is <c>age3m.exe</c>, IM's own .exe shipped
+/// alongside the AoE3 binaries. Each <see cref="ModProfile"/> declares
+/// its own <see cref="ModProfile.GameExecutable"/>; this class is just the
+/// "where on disk does it actually live" resolver.
 ///
 /// Layout examples observed in the wild:
 ///   - Steam:           ...\Steam\steamapps\common\Age Of Empires 3\bin\age3y.exe
 ///   - Microsoft Games: ...\Microsoft Games\Age of Empires III\age3y.exe
 ///   - GOG:             ...\GOG Games\Age of Empires III\age3y.exe
 ///
-/// Note that Steam puts the executable in a `bin\` subfolder, while the older
-/// retail layout has it at the root.
+/// Note that Steam puts the executable in a <c>bin\</c> subfolder, while
+/// the older retail layout has it at the root.
 /// </summary>
 public static class GameLauncher
 {
     /// <summary>
-    /// Find age3y.exe by checking known locations in priority order.
-    /// Returns null if no candidate is found anywhere.
+    /// Find the active mod's executable by checking known locations in
+    /// priority order. Returns null if no candidate is found anywhere.
     /// </summary>
-    public static string? Find(LauncherConfig config, string? wolInstallPath)
+    public static string? Find(LauncherConfig config, string? modInstallPath, ModProfile profile)
     {
+        var exeName = string.IsNullOrEmpty(profile.GameExecutable)
+            ? "age3y.exe"
+            : profile.GameExecutable;
+
         var checkedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var candidate in EnumerateCandidates(config, wolInstallPath))
+        foreach (var candidate in EnumerateCandidates(config, modInstallPath, exeName))
         {
             if (string.IsNullOrEmpty(candidate)) continue;
             if (!checkedPaths.Add(candidate)) continue;       // skip duplicates
@@ -44,19 +51,20 @@ public static class GameLauncher
 
     /// <summary>
     /// Find the Age of Empires III install ROOT (the folder that *contains*
-    /// age3y.exe, walking up from a Steam-style bin/ subfolder if needed).
-    /// Returns null if AoE3 cannot be located on this machine.
+    /// the game executable, walking up from a Steam-style bin/ subfolder if
+    /// needed). Returns null if AoE3 cannot be located on this machine.
     ///
-    /// This is what mod installers care about: WoL needs to be installed
-    /// alongside AoE3's data files, not in some random location.
+    /// This is what mod installers care about: isolated mods (WoL) need to
+    /// be installed alongside AoE3's data files, and in-place mods (IM)
+    /// install directly into this folder.
     /// </summary>
-    public static string? FindAoe3InstallRoot(LauncherConfig config, string? wolInstallPath)
+    public static string? FindAoe3InstallRoot(LauncherConfig config, string? modInstallPath, ModProfile profile)
     {
-        var exePath = Find(config, wolInstallPath);
+        var exePath = Find(config, modInstallPath, profile);
         if (string.IsNullOrEmpty(exePath)) return null;
 
         // The "install root" is the folder containing AoE3's data — typically
-        // the parent of either `age3y.exe` (legacy retail) or `bin\age3y.exe`
+        // the parent of either `<game>.exe` (legacy retail) or `bin\<game>.exe`
         // (Steam). The marker for "this is the install root" is the presence
         // of a `data` subfolder.
         var dir = Path.GetDirectoryName(exePath);
@@ -72,35 +80,55 @@ public static class GameLauncher
     }
 
     /// <summary>
-    /// Best-guess WoL install folder: the recommended subfolder of AoE3 if we
-    /// can find AoE3, otherwise null. The launcher uses this to pre-fill the
-    /// folder picker dialog with a sensible default.
+    /// Best-guess install folder for the active mod: the recommended
+    /// subfolder of AoE3 if we can find AoE3, otherwise null. The launcher
+    /// uses this to pre-fill the folder picker dialog with a sensible
+    /// default. For in-place mods this equals the AoE3 root itself.
     /// </summary>
-    public static string? SuggestModInstallFolder(LauncherConfig config, string? wolInstallPath)
+    public static string? SuggestModInstallFolder(LauncherConfig config, string? modInstallPath, ModProfile profile)
     {
-        var aoe3Root = FindAoe3InstallRoot(config, wolInstallPath);
+        var aoe3Root = FindAoe3InstallRoot(config, modInstallPath, profile);
         if (string.IsNullOrEmpty(aoe3Root)) return null;
-        return Path.Combine(aoe3Root, "Wars of Liberty");
+
+        if (profile.InstallType == ModInstallType.InPlaceOverlay)
+            return aoe3Root;
+
+        // Isolated-folder mod: append the profile's folder name so the
+        // user lands on something like "C:\Program Files (x86)\Wars of Liberty".
+        var folderName = string.IsNullOrEmpty(profile.DefaultInstallFolder)
+            ? profile.DisplayName
+            : Path.GetFileName(profile.DefaultInstallFolder.TrimEnd('\\', '/'));
+        return Path.Combine(aoe3Root, folderName);
     }
 
     /// <summary>Lazy enumeration of likely paths, in priority order.</summary>
     private static IEnumerable<string> EnumerateCandidates(
         LauncherConfig config,
-        string? wolInstallPath)
+        string? modInstallPath,
+        string exeName)
     {
-        // 1. Cached path from config (set after a successful previous launch)
-        if (!string.IsNullOrWhiteSpace(config.GameExecutable))
-            yield return config.GameExecutable;
-
-        // 2. Walk up from WoL install folder, checking each level for age3y.exe
-        //    in both the root and a `bin\` subfolder (Steam layout).
-        if (!string.IsNullOrWhiteSpace(wolInstallPath))
+        // 1. Cached path from config (set after a successful previous launch).
+        //    Only used when its filename matches the active profile's exe — a
+        //    cached age3y.exe is no good for IM, and vice versa.
+        if (!string.IsNullOrWhiteSpace(config.GameExecutable)
+            && string.Equals(
+                Path.GetFileName(config.GameExecutable),
+                exeName,
+                StringComparison.OrdinalIgnoreCase))
         {
-            var current = new DirectoryInfo(wolInstallPath);
+            yield return config.GameExecutable;
+        }
+
+        // 2. Walk up from the mod install folder, checking each level for
+        //    the exe both at the root and inside a `bin\` subfolder
+        //    (Steam layout).
+        if (!string.IsNullOrWhiteSpace(modInstallPath))
+        {
+            var current = new DirectoryInfo(modInstallPath);
             for (int i = 0; i < 4 && current != null; i++)
             {
-                yield return Path.Combine(current.FullName, "age3y.exe");
-                yield return Path.Combine(current.FullName, "bin", "age3y.exe");
+                yield return Path.Combine(current.FullName, exeName);
+                yield return Path.Combine(current.FullName, "bin", exeName);
                 current = current.Parent;
             }
         }
@@ -109,14 +137,14 @@ public static class GameLauncher
         var commonSubpaths = new[]
         {
             // Steam
-            @"Steam\steamapps\common\Age Of Empires 3\bin\age3y.exe",
-            @"Steam\steamapps\common\Age of Empires 3\bin\age3y.exe",
-            @"Steam\steamapps\common\Age of Empires III\bin\age3y.exe",
+            $@"Steam\steamapps\common\Age Of Empires 3\bin\{exeName}",
+            $@"Steam\steamapps\common\Age of Empires 3\bin\{exeName}",
+            $@"Steam\steamapps\common\Age of Empires III\bin\{exeName}",
             // Microsoft Games (legacy retail)
-            @"Microsoft Games\Age of Empires III\age3y.exe",
+            $@"Microsoft Games\Age of Empires III\{exeName}",
             // GOG
-            @"GOG Games\Age of Empires III\age3y.exe",
-            @"GOG.com\Age of Empires III\age3y.exe",
+            $@"GOG Games\Age of Empires III\{exeName}",
+            $@"GOG.com\Age of Empires III\{exeName}",
         };
 
         var roots = new[]
@@ -138,12 +166,13 @@ public static class GameLauncher
     }
 
     /// <summary>
-    /// Launch the game. If we can't find age3y.exe anywhere, throws so the UI
-    /// can surface a friendly "please point us to your AoE3 install" dialog.
+    /// Launch the active mod's game. If we can't find the executable anywhere,
+    /// throws so the UI can surface a friendly "please point us to your AoE3
+    /// install" dialog.
     /// </summary>
-    public static void Launch(LauncherConfig config, string? wolInstallPath)
+    public static void Launch(LauncherConfig config, string? modInstallPath, ModProfile profile)
     {
-        var exePath = Find(config, wolInstallPath);
+        var exePath = Find(config, modInstallPath, profile);
 
         if (exePath == null)
         {
@@ -159,12 +188,16 @@ public static class GameLauncher
             config.Save();
         }
 
-        DiagnosticLog.Write($"Launching game: {exePath}");
+        DiagnosticLog.Write($"Launching game: {exePath} (profile '{profile.Id}')");
+
+        var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
+            ? profile.GameArguments
+            : config.GameArguments;
 
         var startInfo = new ProcessStartInfo
         {
             FileName = exePath,
-            Arguments = config.GameArguments,
+            Arguments = arguments ?? "",
             WorkingDirectory = Path.GetDirectoryName(exePath),
             UseShellExecute = true
         };

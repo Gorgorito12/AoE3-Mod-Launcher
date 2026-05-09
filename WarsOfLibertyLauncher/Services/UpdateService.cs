@@ -71,17 +71,69 @@ public class UpdateService
     public const string StrRelativePath = @"data\stringtabley.xml";
 
     private readonly LauncherConfig _config;
+    private readonly ModProfile _profile;
     private readonly UpdateInfoService _infoService;
     private readonly DownloadService _downloader;
     private readonly ArchiveService _archive;
 
-    public UpdateService(LauncherConfig config)
+    public UpdateService(LauncherConfig config, ModProfile profile)
     {
         _config = config;
+        _profile = profile;
         _infoService = new UpdateInfoService();
         _downloader = new DownloadService();
         _archive = new ArchiveService();
     }
+
+    /// <summary>The mod profile this service is operating on (active mod).</summary>
+    public ModProfile Profile => _profile;
+
+    // ------------------------------------------------------------------------
+    // Effective settings — the profile is the source of truth, but if the
+    // user has explicitly written a value into launcher-config.json (a
+    // non-empty override) we honour it. Lets advanced users redirect URLs
+    // without us having to expose a UI for it. Public so the UI layer can
+    // use the same resolution rules instead of re-implementing them.
+    // ------------------------------------------------------------------------
+
+    public string EffectiveUpdateInfoUrl() =>
+        !string.IsNullOrWhiteSpace(_config.UpdateInfoUrl)
+            ? _config.UpdateInfoUrl
+            : _profile.Wol?.UpdateInfoUrl ?? "";
+
+    public string EffectiveUpdateInfoUrlAlt() =>
+        !string.IsNullOrWhiteSpace(_config.UpdateInfoUrlAlt)
+            ? _config.UpdateInfoUrlAlt
+            : _profile.Wol?.UpdateInfoUrlAlt ?? "";
+
+    public string[] EffectivePayloadZipUrls()
+    {
+        // User override wins (allows pointing at a private mirror). An empty
+        // override array means "no override" — fall through to the profile.
+        if (_config.PayloadZipUrls != null && _config.PayloadZipUrls.Length > 0)
+            return _config.PayloadZipUrls;
+        return _profile.Wol?.PayloadZipUrls ?? System.Array.Empty<string>();
+    }
+
+    public string EffectiveDefaultInstallFolder() =>
+        !string.IsNullOrWhiteSpace(_config.DefaultInstallFolder)
+            ? _config.DefaultInstallFolder
+            : _profile.DefaultInstallFolder;
+
+    public string EffectiveOfficialWebsite() =>
+        !string.IsNullOrWhiteSpace(_config.OfficialWebsite)
+            ? _config.OfficialWebsite
+            : _profile.Wol?.OfficialWebsite ?? "";
+
+    /// <summary>
+    /// GitHub repo (<c>owner/repo</c>) the launcher scans for community
+    /// translations of the active mod. Returns empty when the active mod
+    /// doesn't participate in the translation system.
+    /// </summary>
+    public string EffectiveTranslationsRepo() =>
+        !string.IsNullOrWhiteSpace(_config.TranslationsRepo)
+            ? _config.TranslationsRepo
+            : _profile.Translations?.Repo ?? "";
 
     /// <summary>True while a download is paused.</summary>
     public bool IsPaused
@@ -116,14 +168,28 @@ public class UpdateService
     {
         DiagnosticLog.WriteSection("CheckAsync");
 
-        status?.Report(Strings.Get("StatusDetectingInstall"));
+        status?.Report(Strings.Format("StatusDetectingInstall", _profile.DisplayName));
         InstallPath = ResolveInstallPath();
-        bool valid = !string.IsNullOrEmpty(InstallPath) && RegistryService.IsValidInstall(InstallPath);
+        bool valid = !string.IsNullOrEmpty(InstallPath) && IsProfileInstalled(InstallPath);
         DiagnosticLog.Write($"Install path detected: '{InstallPath}' (valid: {valid})");
+
+        // Short-circuit for mods that don't have a WoL-style updater (e.g.
+        // Improvement Mod, which ships its own external patcher). We still
+        // detect the install path so the PLAY button works and the gear
+        // menu can open the right folder, but we skip the manifest fetch
+        // and version match — those are WoL-specific concepts.
+        if (_profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
+        {
+            DiagnosticLog.Write(
+                $"Profile '{_profile.Id}' uses '{_profile.UpdateMechanism}'; skipping manifest fetch.");
+            CurrentVersion = null;
+            LatestVersion = null;
+            return new CheckResult(new UpdateInfo(), null, null, new List<DownloadInfo>(), valid);
+        }
 
         status?.Report(Strings.Get("StatusFetchingManifest"));
         var info = await _infoService.FetchAsync(
-            _config.UpdateInfoUrl, _config.UpdateInfoUrlAlt, ct);
+            EffectiveUpdateInfoUrl(), EffectiveUpdateInfoUrlAlt(), ct);
 
         VersionInfo? current = null;
         if (valid)
@@ -270,9 +336,22 @@ public class UpdateService
             status?.Report(Strings.Format("StatusApplying", dl.Id));
             var backupDir = Path.Combine(InstallPath, $"upd_backup_{dl.Id}");
 
-            var extractProgress = new Progress<string>(s => status?.Report(s));
+            var extractStatus = new Progress<string>(s => status?.Report(s));
+
+            // Forward archive-level extract progress to the same UpdateProgress
+            // pipeline the download phase uses, so the bar keeps moving while
+            // SharpCompress is decompressing the .tar.xz instead of freezing
+            // at 100% from the download. We map BytesRead/BytesTotal from the
+            // archive to PatchBytesDone/PatchBytesTotal so the existing UI
+            // bindings (PatchProgress, PatchBytesText) light up automatically.
+            var extractByteProgress = new Progress<ArchiveExtractProgress>(p =>
+            {
+                Report(p.BytesRead, p.BytesTotal);
+            });
+
             await _archive.ExtractTarXzWithBackupAsync(
-                archivePath, InstallPath, backupDir, extractProgress, ct);
+                archivePath, InstallPath, backupDir,
+                extractStatus, extractByteProgress, ct);
 
             // ---- 5. Apply delete list ----
             if (!string.IsNullOrEmpty(dl.DeleteList))
@@ -336,9 +415,10 @@ public class UpdateService
             var translations = new TranslationService(InstallPath);
             translations.RefreshOriginalsSnapshot();
 
-            if (!string.IsNullOrEmpty(_config.ActiveTranslationId))
+            var activeState = _config.GetState(_profile.Id);
+            if (!string.IsNullOrEmpty(activeState.ActiveTranslationId))
             {
-                var manifest = translations.GetInstalled(_config.ActiveTranslationId);
+                var manifest = translations.GetInstalled(activeState.ActiveTranslationId);
                 if (manifest != null)
                 {
                     var compat = translations.CheckCompatibility(manifest, LatestVersion?.Ver);
@@ -347,7 +427,7 @@ public class UpdateService
                         DiagnosticLog.Write(
                             $"Translation '{manifest.Id}' may be incompatible with the new mod " +
                             "version; reverting to English. User will need an updated pack.");
-                        _config.ActiveTranslationId = "";
+                        activeState.ActiveTranslationId = "";
                         _config.Save();
                     }
                     else
@@ -371,52 +451,55 @@ public class UpdateService
     // ---- Helpers ----
 
     /// <summary>
-    /// Resolve install path. Priority:
+    /// Resolve install path for the active mod profile. Priority:
     ///   1. Config (user-set or cached from previous detection)
-    ///   2. Windows Registry (Inno Setup GUID)
-    ///   3. Disk scan via AoE3Detector (finds WoL inside AoE3 folders)
+    ///   2. Windows Registry (Inno Setup GUID — WoL only, since ModDB-style
+    ///      mods like IM don't register with the OS uninstaller)
+    ///   3. Disk scan: per profile install type — isolated mods are looked
+    ///      for as subfolders of AoE3 installs, in-place mods are detected
+    ///      by their probe file sitting inside the AoE3 folder itself.
     /// </summary>
     private string? ResolveInstallPath()
     {
-        // 1. Config path
-        if (!string.IsNullOrWhiteSpace(_config.ModInstallPath)
-            && RegistryService.IsValidInstall(_config.ModInstallPath))
+        var state = _config.GetState(_profile.Id);
+
+        // 1. Path cached for THIS mod from a previous detection (per-mod —
+        //    cannot leak across profiles).
+        if (!string.IsNullOrWhiteSpace(state.InstallPath)
+            && IsProfileInstalled(state.InstallPath))
         {
-            return _config.ModInstallPath.TrimEnd('\\', '/');
+            return state.InstallPath.TrimEnd('\\', '/');
         }
 
-        // 2. Registry (Inno Setup entries)
-        var detected = RegistryService.FindInstallPath();
-        if (!string.IsNullOrEmpty(detected))
+        // 2. Registry — only the WoL profile has a known Inno Setup product
+        //    GUID. Other profiles skip this step.
+        if (string.Equals(_profile.Id, ModRegistry.WolId, StringComparison.OrdinalIgnoreCase))
         {
-            _config.ModInstallPath = detected;
-            _config.Save();
-            return detected;
+            var detected = RegistryService.FindInstallPath();
+            if (!string.IsNullOrEmpty(detected))
+            {
+                state.InstallPath = detected;
+                _config.Save();
+                return detected;
+            }
         }
 
-        // 3. Disk scan — look for WoL inside detected AoE3 installations
+        // 3. Disk scan — strategy depends on whether the mod lives in its
+        //    own folder or on top of AoE3.
         var aoe3Installs = AoE3Detector.FindAll();
         foreach (var install in aoe3Installs)
         {
-            // Candidate locations where WoL files may live, in priority order:
-            //   a) <AoE3 root>\Wars of Liberty\        (most common — installed as subfolder)
-            //   b) <AoE3 root>\                        (mod files merged directly into AoE3)
-            //   c) <bin folder>\Wars of Liberty\       (uncommon, but possible)
-            //   d) <bin folder>\                       (uncommon)
-            var candidates = new[]
-            {
-                Path.Combine(install.ModRoot, "Wars of Liberty"),
-                install.ModRoot,
-                Path.Combine(install.GameFolder, "Wars of Liberty"),
-                install.GameFolder,
-            };
+            var candidates = _profile.InstallType == ModInstallType.IsolatedFolder
+                ? IsolatedCandidates(install)
+                : InPlaceCandidates(install);
 
             foreach (var candidate in candidates)
             {
-                if (RegistryService.IsValidInstall(candidate))
+                if (IsProfileInstalled(candidate))
                 {
-                    DiagnosticLog.Write($"Found WoL via disk scan: {candidate}");
-                    _config.ModInstallPath = candidate;
+                    DiagnosticLog.Write(
+                        $"Found '{_profile.Id}' via disk scan: {candidate}");
+                    state.InstallPath = candidate;
                     _config.Save();
                     return candidate;
                 }
@@ -424,6 +507,52 @@ public class UpdateService
         }
 
         return null;
+    }
+
+    /// <summary>Probe locations for an isolated-folder mod (e.g. WoL).</summary>
+    private IEnumerable<string> IsolatedCandidates(AoE3Detector.Installation install)
+    {
+        // Folder name we expect the mod to live in. Falls back to the
+        // profile's display name when DefaultInstallFolder isn't set.
+        var folderName = string.IsNullOrEmpty(_profile.DefaultInstallFolder)
+            ? _profile.DisplayName
+            : Path.GetFileName(_profile.DefaultInstallFolder.TrimEnd('\\', '/'));
+
+        if (!string.IsNullOrEmpty(folderName))
+        {
+            yield return Path.Combine(install.ModRoot, folderName);
+            yield return Path.Combine(install.GameFolder, folderName);
+        }
+        // Some users extract the mod files directly on top of AoE3.
+        yield return install.ModRoot;
+        yield return install.GameFolder;
+    }
+
+    /// <summary>Probe locations for an in-place overlay mod (e.g. IM).</summary>
+    private static IEnumerable<string> InPlaceCandidates(AoE3Detector.Installation install)
+    {
+        // Steam ships AoE3 with a `bin\` subfolder for the executables;
+        // IM extracts there. Non-Steam users extract straight into the
+        // game folder. Both are valid.
+        yield return install.GameFolder;
+        yield return install.ModRoot;
+    }
+
+    /// <summary>
+    /// Generic "is the active mod installed at this path" check, driven by
+    /// <see cref="ModProfile.InstallProbeFile"/>. When a profile doesn't
+    /// declare a probe we fall back to the WoL-specific marker for
+    /// backward compatibility.
+    /// </summary>
+    private bool IsProfileInstalled(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+            return false;
+
+        if (string.IsNullOrEmpty(_profile.InstallProbeFile))
+            return RegistryService.IsValidInstall(path);
+
+        return File.Exists(Path.Combine(path, _profile.InstallProbeFile));
     }
 
     /// <summary>

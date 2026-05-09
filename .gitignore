@@ -1,6 +1,11 @@
 ## .NET build output
 bin/
 obj/
+# Single-file release builds produced by build-release.ps1; the .exe is
+# ~120 MB and lives at WarsOfLibertyLauncher/publish/Aoe3ModLauncher.exe.
+# It belongs in GitHub Releases, not the repo.
+publish/
+WarsOfLibertyLauncher/publish/
 
 ## User-specific files
 *.user
