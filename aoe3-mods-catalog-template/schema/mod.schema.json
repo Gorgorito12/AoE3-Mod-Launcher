@@ -37,8 +37,8 @@
     "officialWebsite": {
       "type": "string",
       "format": "uri",
-      "pattern": "^https://",
-      "description": "Must be HTTPS."
+      "pattern": "^https?://",
+      "description": "Public website / homepage. HTTP is permitted for legacy mod sites that don't have HTTPS yet (e.g. http://aoe3wol.com); HTTPS is preferred for new submissions. This field is informational only — the launcher just opens it in the user's browser."
     },
     "icon": {
       "type": "string",
