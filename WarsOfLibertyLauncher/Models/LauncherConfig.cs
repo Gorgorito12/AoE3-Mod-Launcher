@@ -192,6 +192,18 @@ public class LauncherConfig
     public string TranslationsRepo { get; set; } = "papillo12/translations";
 
     /// <summary>
+    /// GitHub repository (format "owner/repo") that hosts the mods catalog
+    /// — one folder per community-submitted mod, each with a
+    /// <c>mod.json</c> manifest. Empty (the default) means "don't fetch
+    /// the catalog at all", which is the safe state until the catalog repo
+    /// exists and the workflow there is wired up. When non-empty, the
+    /// launcher merges the discovered mods with its built-in registry on
+    /// startup, with built-in winning on id collisions.
+    /// </summary>
+    [JsonPropertyName("modsCatalogRepo")]
+    public string ModsCatalogRepo { get; set; } = "";
+
+    /// <summary>
     /// LEGACY — see <see cref="ModInstallPath"/>. Migrated to
     /// <see cref="ModState.ActiveTranslationId"/> for the WoL profile on
     /// first load.
