@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/schema/mod.schema.json",
+  "id": "improvement-mod",
+  "displayName": "Improvement Mod",
+  "subtitle": "AoE3:TAD overhaul",
+  "accentColor": "#3a8cd9",
+  "description": {
+    "en": "Overhaul mod for AoE3: The Asian Dynasties. After install, updates are handled by the mod's own age3m.exe patcher.",
+    "es": "Mod de mejora para AoE3: The Asian Dynasties. Después de instalar, las actualizaciones las maneja el parcher age3m.exe del propio mod."
+  },
+  "install": {
+    "type": "InPlaceOverlay",
+    "defaultFolder": "",
+    "probeFile": "age3m.exe",
+    "executable": "age3m.exe",
+    "arguments": "",
+    "payloadUrls": [
+      "https://github.com/papillo12/Improvement-Mod/releases/download/Improvement-Mod/AoE3ImpMod_New18.zip"
+    ],
+    "payloadSha256": [
+      "1F59E1FC61653184D66EA30DE6ADE9534064A3CF2D4A2A7368539B03157A2484"
+    ]
+  },
+  "update": {
+    "mechanism": "DelegatedExternal"
+  }
+}

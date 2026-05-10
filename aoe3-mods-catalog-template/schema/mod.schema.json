@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/papillo12/aoe3-mods-catalog/main/schema/mod.schema.json",
+  "$id": "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/schema/mod.schema.json",
   "title": "AoE3 Mod Manifest",
   "description": "Schema validated by the catalog repo CI on every PR. The launcher reads manifests that pass this schema; anything else is rejected.",
   "type": "object",
@@ -91,6 +91,22 @@
         },
         "arguments": {
           "type": "string"
+        },
+        "payloadUrls": {
+          "type": "array",
+          "description": "Generic initial-install payload URLs, agnostic of the update mechanism. Used when the mod ships its files as one or more downloadable archives. For multi-part archives (e.g. .zip.001/.002/...) list every part in order; the launcher concatenates them before extracting.",
+          "items": {
+            "type": "string",
+            "pattern": "^https://"
+          }
+        },
+        "payloadSha256": {
+          "type": "array",
+          "description": "Optional but strongly recommended. Parallel array to payloadUrls — SHA-256 of each file. If present, the launcher rejects downloads whose hash doesn't match. Defends against silent payload tampering at the hosting source (e.g. account compromise, repo takeover).",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$"
+          }
         }
       }
     },

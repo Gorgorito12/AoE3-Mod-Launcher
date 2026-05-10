@@ -107,6 +107,30 @@ public class ModCatalogInstall
 
     [JsonPropertyName("arguments")]
     public string Arguments { get; set; } = "";
+
+    /// <summary>
+    /// Initial-install payload URLs, agnostic of the update mechanism. Used
+    /// for first-time installs where the mod ships its files as one or
+    /// more archives. Multi-part archives (.zip.001 / .zip.002 / ...)
+    /// list every part in order; the launcher concatenates them before
+    /// extracting. <c>null</c> or empty means the mod can't be installed
+    /// automatically (e.g. ModDB-hosted mods that need a browser to
+    /// download); the launcher's install button should fall back to
+    /// opening <see cref="ModCatalogManifest.OfficialWebsite"/> instead.
+    /// </summary>
+    [JsonPropertyName("payloadUrls")]
+    public string[]? PayloadUrls { get; set; }
+
+    /// <summary>
+    /// Parallel array to <see cref="PayloadUrls"/> with the SHA-256 of
+    /// each file. The launcher verifies after download and aborts if any
+    /// hash mismatches — protects against silent payload tampering at the
+    /// hosting source (account compromise, repo takeover, etc.).
+    /// Optional but strongly encouraged for any mod the launcher
+    /// auto-installs.
+    /// </summary>
+    [JsonPropertyName("payloadSha256")]
+    public string[]? PayloadSha256 { get; set; }
 }
 
 public class ModCatalogUpdate

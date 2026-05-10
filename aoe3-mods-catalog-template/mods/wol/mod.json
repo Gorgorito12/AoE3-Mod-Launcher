@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/schema/mod.schema.json",
+  "id": "wol",
+  "displayName": "Wars of Liberty",
+  "subtitle": "Launcher",
+  "accentColor": "#c8102e",
+  "author": "Wars of Liberty Team",
+  "officialWebsite": "http://aoe3wol.com/",
+  "description": {
+    "en": "Total-conversion mod for AoE3, set in 19th-century colonial wars.",
+    "es": "Mod de conversión total para AoE3, ambientado en las guerras coloniales del siglo XIX."
+  },
+  "install": {
+    "type": "IsolatedFolder",
+    "defaultFolder": "C:\\Program Files (x86)\\Wars of Liberty",
+    "probeFile": "data\\stringtabley.xml",
+    "executable": "age3y.exe",
+    "arguments": ""
+  },
+  "update": {
+    "mechanism": "WolPatcher",
+    "wol": {
+      "updateInfoUrl": "http://aoe3wol.com/updates/UpdateInfo.xml",
+      "updateInfoUrlAlt": "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml",
+      "payloadZipUrls": [
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003"
+      ]
+    }
+  },
+  "translations": {
+    "repo": "papillo12/translations",
+    "coveredFiles": [
+      "data\\stringtabley.xml",
+      "data\\unithelpstringsy.xml"
+    ]
+  }
+}
