@@ -100,6 +100,16 @@ public class TranslationsSettings
 /// All hard-coded "Wars of Liberty"-specific values live in a profile
 /// instead of in the launcher's code so adding a new mod is just a new
 /// profile entry.
+///
+/// Profiles are populated from two sources:
+///   * <c>ModRegistry._builtIn</c> — the WoL + Improvement Mod entries
+///     compiled into the launcher itself (offline fallback).
+///   * Community catalog at <c>Gorgorito12/aoe3-mods-catalog</c> —
+///     fetched on startup by <see cref="ModRegistry"/> and merged with
+///     the built-ins. Each remote <c>mod.json</c> is projected into one
+///     of these objects.
+/// Built-in entries always win on id collisions: a community PR can't
+/// shadow the official "wol" entry to redirect downloads.
 /// </summary>
 public class ModProfile
 {
@@ -119,10 +129,70 @@ public class ModProfile
     public string AccentColor { get; set; } = "#c8102e";
 
     /// <summary>
-    /// Optional path (relative to the launcher's resources) of a banner
-    /// image. When null/empty the launcher falls back to plain text.
+    /// Author / team that maintains the mod. Empty for built-in profiles
+    /// (the launcher's own UI doesn't surface an author for them) and
+    /// populated from the catalog manifest for community ones. Used in
+    /// the mod-selector tile under the title.
+    /// </summary>
+    public string Author { get; set; } = "";
+
+    /// <summary>
+    /// Mod's homepage / official site. Opened in the user's browser
+    /// from the Settings menu. May be HTTP for legacy mod sites that
+    /// don't have HTTPS yet (the catalog schema permits it for this
+    /// field; payload URLs are HTTPS-only).
+    /// </summary>
+    public string OfficialWebsite { get; set; } = "";
+
+    /// <summary>
+    /// Per-language descriptions keyed by ISO 639-1 ("en", "es", …).
+    /// Resolved against the user's UI language with a fallback to "en".
+    /// Null for built-in profiles, which fall back to a hard-coded
+    /// description string elsewhere if needed.
+    /// </summary>
+    public Dictionary<string, string>? Description { get; set; }
+
+    /// <summary>
+    /// Built-in pack URI for the mod's icon (e.g.
+    /// <c>pack://application:,,,/WoL.ico</c>). Used by the legacy mod
+    /// selector tiles. Community mods leave this null and use
+    /// <see cref="IconUrl"/> + cached local file instead — see
+    /// <c>ModAssetCacheService</c>.
     /// </summary>
     public string? BannerImage { get; set; }
+
+    /// <summary>
+    /// Remote URL of the mod's 256×256 icon (PNG). Set only for
+    /// community mods discovered via the catalog. Resolved to a local
+    /// cached file on demand by the UI layer.
+    /// </summary>
+    public string? IconUrl { get; set; }
+
+    /// <summary>
+    /// Remote URL of the mod's 1200×300 banner image (PNG/JPG). Optional
+    /// even for community mods — when null, the UI synthesises a
+    /// gradient from <see cref="AccentColor"/>.
+    /// </summary>
+    public string? BannerUrl { get; set; }
+
+    /// <summary>
+    /// Local file path of the cached icon, populated by the UI once
+    /// <see cref="IconUrl"/> has been downloaded into the mod-asset
+    /// cache (<c>%LocalAppData%\AoE3ModLauncher\mod-assets\</c>). Null
+    /// while the download is in flight or if the mod doesn't ship an
+    /// icon — the UI falls back to a coloured monogram (<see cref="AccentColor"/>
+    /// + first letter of <see cref="DisplayName"/>) in either case.
+    /// Mutable on purpose: it gets set after the lazy fetch completes.
+    /// </summary>
+    public string? LocalIconPath { get; set; }
+
+    /// <summary>
+    /// Local file path of the cached banner. Same lifecycle as
+    /// <see cref="LocalIconPath"/>: null until <see cref="BannerUrl"/>
+    /// is downloaded. When null, the active-mod header uses a synthetic
+    /// gradient driven by <see cref="AccentColor"/>.
+    /// </summary>
+    public string? LocalBannerPath { get; set; }
 
     /// <summary>How the mod's files relate to the AoE3 install folder.</summary>
     public ModInstallType InstallType { get; set; } = ModInstallType.IsolatedFolder;

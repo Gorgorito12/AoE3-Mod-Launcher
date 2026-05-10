@@ -81,20 +81,32 @@ public partial class MainWindow : Window
         if (autoUpdate)
             DiagnosticLog.Write("Started with --update-now: will auto-apply updates after check.");
 
-        // Auto-check for updates on startup. Run all three checks IN PARALLEL
-        // — the launcher self-update (GitHub), the mod patch check (aoe3wol.com)
-        // and the translations index (GitHub) hit different servers, so doing
-        // them concurrently roughly cuts the busy state to the slowest one.
-        // Pre-fetching the translations index here means the gear menu opens
-        // with the language list already populated — no "Refresh" needed for
-        // the common case.
+        // Auto-check for updates on startup. Run all four checks IN PARALLEL
+        // — launcher self-update (GitHub), mod patch check (aoe3wol.com),
+        // translations index (GitHub) and mods catalog (GitHub) hit different
+        // servers, so doing them concurrently roughly cuts the busy state to
+        // the slowest one. Pre-fetching the translations index here means the
+        // gear menu opens with the language list already populated — no
+        // "Refresh" needed for the common case. Pre-fetching the catalog
+        // means community mods appear in the top bar without a launcher
+        // restart.
         Loaded += async (_, _) =>
         {
             LauncherUpdateService.CleanupOldVersion();
             await Task.WhenAll(
                 CheckForLauncherUpdateAsync(),
                 CheckAsync(),
-                RefreshTranslationIndexAsync());
+                RefreshTranslationIndexAsync(),
+                RefreshCatalogAsync());
+
+            // The catalog fetch may have surfaced new community mods that
+            // weren't visible during the initial RefreshModCards() call in
+            // the constructor. Re-render so they show up. Cheap no-op for
+            // the common case where the catalog returned the same set
+            // (RefreshModCards just rebuilds the panel from ModRegistry.All
+            // which is idempotent).
+            RefreshModCards();
+
             if (_modIsInstalled)
             {
                 _ = Task.Run(InstallerService.TryCleanupTemp);
@@ -139,10 +151,20 @@ public partial class MainWindow : Window
         bool isActive = string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase);
         var accent = SafeBrush(profile.AccentColor, "#3a3d44");
 
-        // Icon: prefer the profile's banner image (round, image-filled);
-        // fall back to an accent-colored disc with the display name's first
-        // letter in white.
-        var iconBrush = TryLoadTileImage(profile.BannerImage);
+        // Icon resolution priority:
+        //   1. Cached community icon (profile.LocalIconPath, populated by
+        //      EnsureModAssetsAsync once the catalog's icon.png lands in
+        //      %LocalAppData%\AoE3ModLauncher\mod-assets\).
+        //   2. Built-in pack URI (profile.BannerImage — historical name; for
+        //      WoL it's the .ico embedded as a pack resource).
+        //   3. Fallback: monogram (accent-coloured disc + first letter of
+        //      DisplayName) — handled below in the else branch.
+        // For community mods that have an IconUrl but haven't been cached
+        // yet, we kick off the download here so the next render swaps the
+        // monogram for the real icon.
+        var iconBrush = TryLoadTileImage(ResolveModIcon(profile));
+        if (iconBrush == null && !string.IsNullOrEmpty(profile.IconUrl))
+            _ = EnsureModAssetsAsync(profile);
         UIElement iconChild;
         System.Windows.Media.Brush iconBg;
         if (iconBrush != null)
@@ -805,10 +827,13 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Paints the active mod's banner area at the top of the left sidebar.
-    /// Tries the profile's <c>BannerImage</c>; if that's missing, falls back
-    /// to a tinted gradient using the profile's accent color so the area
-    /// still feels mod-specific. The TitleText/SubtitleText overlay sits
-    /// on top, set elsewhere from <see cref="ApplyLanguage"/>.
+    /// Resolution order: cached community banner (1200×300) → built-in
+    /// pack URI (used by WoL — strictly speaking it's the icon, but it
+    /// fills the tile cleanly when there's no purpose-built banner) →
+    /// synthetic gradient driven by the profile's accent colour, so the
+    /// area always feels mod-specific even when no image is present.
+    /// The TitleText/SubtitleText overlay sits on top, set elsewhere
+    /// from <see cref="ApplyLanguage"/>.
     /// </summary>
     private void RefreshActiveModBanner()
     {
@@ -826,7 +851,9 @@ public partial class MainWindow : Window
         gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
             ((System.Windows.Media.SolidColorBrush)accent).Color, 1));
 
-        var imgBrush = TryLoadTileImage(profile.BannerImage);
+        // Prefer the community banner if cached; otherwise the built-in
+        // tile image (BannerImage). Both paths flow through TryLoadTileImage.
+        var imgBrush = TryLoadTileImage(profile.LocalBannerPath ?? profile.BannerImage);
         if (imgBrush != null)
         {
             // Show the image plus a dark vignette gradient for legible text.
@@ -836,6 +863,120 @@ public partial class MainWindow : Window
         {
             ModBannerHost.Background = gradient;
         }
+
+        // Lazy fetch: the active profile may be a community mod whose
+        // banner hasn't been cached yet. Kicking the download here means
+        // the next switch back to this mod (or the next RefreshModCards
+        // call) will pick up the real banner.
+        if (string.IsNullOrEmpty(profile.LocalBannerPath) && !string.IsNullOrEmpty(profile.BannerUrl))
+            _ = EnsureModAssetsAsync(profile);
+    }
+
+    // ------------------------------------------------------------------------
+    // Mod assets — lazy download + cache for community-mod icons/banners.
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Profile ids we've already kicked an asset fetch for in this session.
+    /// Keeps us from hammering GitHub each time RefreshModCards re-runs
+    /// (every mod switch, every catalog refresh) while a download is in
+    /// flight or after one cleanly failed (network down, rate-limited,
+    /// HTTP 404). The cache itself is durable — a second launcher session
+    /// finds the file already on disk via <see cref="ModAssetCacheService"/>
+    /// and skips the network entirely.
+    /// </summary>
+    private readonly HashSet<string> _assetFetchAttempted = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Resolves which icon URI the UI should hand to <c>TryLoadTileImage</c>
+    /// for the given profile.
+    ///   * Community mod with a cached icon → the local file path.
+    ///   * Built-in mod (or community mod whose icon is still being fetched)
+    ///     → <c>BannerImage</c>, which for built-ins is the pack URI of
+    ///     the embedded .ico.
+    ///   * Otherwise null → caller renders the monogram fallback.
+    /// </summary>
+    private static string? ResolveModIcon(ModProfile profile)
+    {
+        if (!string.IsNullOrEmpty(profile.LocalIconPath)
+            && System.IO.File.Exists(profile.LocalIconPath))
+            return profile.LocalIconPath;
+        if (!string.IsNullOrEmpty(profile.BannerImage))
+            return profile.BannerImage;
+        return null;
+    }
+
+    /// <summary>
+    /// Fire-and-forget background task that downloads any missing icon and
+    /// banner for <paramref name="profile"/> into the on-disk cache, then
+    /// re-renders the affected UI on completion. Idempotent on repeated
+    /// calls within a session — only one fetch attempt is made per profile
+    /// (see <see cref="_assetFetchAttempted"/>); the on-disk cache means
+    /// subsequent launcher sessions short-circuit to the local file
+    /// without hitting the network.
+    ///
+    /// All errors are silently swallowed (logged via DiagnosticLog).
+    /// Failure leaves <c>LocalIconPath</c> / <c>LocalBannerPath</c> null
+    /// and the UI stays on its monogram / gradient fallbacks — the
+    /// launcher remains fully functional offline.
+    /// </summary>
+    private async Task EnsureModAssetsAsync(ModProfile profile)
+    {
+        if (string.IsNullOrEmpty(profile.Id)) return;
+        // Don't pile up parallel fetches for the same profile if
+        // BuildModCard/RefreshActiveModBanner both fire it within a
+        // single session, or if RefreshModCards re-runs while a fetch
+        // is still in flight.
+        if (!_assetFetchAttempted.Add(profile.Id)) return;
+
+        var cache = new ModAssetCacheService();
+        bool changed = false;
+
+        try
+        {
+            if (string.IsNullOrEmpty(profile.LocalIconPath)
+                && !string.IsNullOrEmpty(profile.IconUrl))
+            {
+                var path = await cache.GetIconPathAsync(profile.Id, profile.IconUrl);
+                if (!string.IsNullOrEmpty(path))
+                {
+                    profile.LocalIconPath = path;
+                    changed = true;
+                }
+            }
+
+            if (string.IsNullOrEmpty(profile.LocalBannerPath)
+                && !string.IsNullOrEmpty(profile.BannerUrl))
+            {
+                var path = await cache.GetBannerPathAsync(profile.Id, profile.BannerUrl);
+                if (!string.IsNullOrEmpty(path))
+                {
+                    profile.LocalBannerPath = path;
+                    changed = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // ModAssetCacheService catches its own HTTP/IO errors and
+            // returns null; this branch is for anything truly unexpected.
+            DiagnosticLog.Write($"EnsureModAssets '{profile.Id}': {ex.Message}");
+            return;
+        }
+
+        if (!changed) return;
+
+        // Bring the new assets to the screen. We may not be on the UI
+        // thread (the await above hops off), so go through the dispatcher.
+        // Refreshing the cards re-runs BuildModCard for every profile,
+        // including the one whose icon just landed; refreshing the active
+        // banner is only needed if the just-fetched mod is the active one.
+        await Dispatcher.InvokeAsync(() =>
+        {
+            RefreshModCards();
+            if (string.Equals(_updateService.Profile.Id, profile.Id, StringComparison.OrdinalIgnoreCase))
+                RefreshActiveModBanner();
+        });
     }
 
     /// <summary>
@@ -3218,6 +3359,43 @@ public partial class MainWindow : Window
             if (reportStatus)
                 SetStatus(Strings.Get("StatusLangIndexUnavailable"));
         }
+    }
+
+    /// <summary>
+    /// Pulls the community mods catalog at startup — runs alongside
+    /// <see cref="CheckAsync"/>, <see cref="CheckForLauncherUpdateAsync"/>,
+    /// and <see cref="RefreshTranslationIndexAsync"/> in
+    /// <c>Task.WhenAll</c>, so the four together take only as long as the
+    /// slowest of the lot.
+    ///
+    /// Resolves the repo to query from <c>launcher-config.json</c>:
+    ///   * empty / unset → use the launcher's default catalog
+    ///                     (<c>Gorgorito12/aoe3-mods-catalog</c>).
+    ///   * <c>"none"</c>  → opt-out, skip the fetch entirely. Lets a user
+    ///                     disable the catalog without un-shipping the
+    ///                     field from their config.
+    ///   * <c>"owner/repo"</c> → use that repo (forks, mirrors, private
+    ///                     test catalogs).
+    ///
+    /// Failures are swallowed inside
+    /// <see cref="ModRegistry.RefreshFromCatalogAsync"/> — the launcher
+    /// always falls back to the built-in mods, so this method never
+    /// throws and never blocks the UI on a bad network.
+    /// </summary>
+    private async Task RefreshCatalogAsync()
+    {
+        const string defaultRepo = "Gorgorito12/aoe3-mods-catalog";
+
+        var raw = _config.ModsCatalogRepo;
+        string? repo;
+        if (string.IsNullOrEmpty(raw))
+            repo = defaultRepo;
+        else if (string.Equals(raw, "none", StringComparison.OrdinalIgnoreCase))
+            repo = null;
+        else
+            repo = raw;
+
+        await ModRegistry.RefreshFromCatalogAsync(repo);
     }
 
     /// <summary>

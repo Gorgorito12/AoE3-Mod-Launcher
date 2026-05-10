@@ -194,11 +194,24 @@ public class LauncherConfig
     /// <summary>
     /// GitHub repository (format "owner/repo") that hosts the mods catalog
     /// — one folder per community-submitted mod, each with a
-    /// <c>mod.json</c> manifest. Empty (the default) means "don't fetch
-    /// the catalog at all", which is the safe state until the catalog repo
-    /// exists and the workflow there is wired up. When non-empty, the
-    /// launcher merges the discovered mods with its built-in registry on
-    /// startup, with built-in winning on id collisions.
+    /// <c>mod.json</c> manifest.
+    ///
+    /// Three values are meaningful:
+    /// <list type="bullet">
+    ///   <item><c>""</c> (empty, default) — use the launcher's built-in
+    ///     default catalog at <c>Gorgorito12/aoe3-mods-catalog</c>. This
+    ///     is what most users want.</item>
+    ///   <item><c>"none"</c> — opt-out: skip the catalog fetch entirely.
+    ///     The launcher still works, just shows only its built-in mods
+    ///     (WoL + Improvement Mod). For users who don't want their
+    ///     launcher reaching out to GitHub, or for kiosk deployments.</item>
+    ///   <item><c>"owner/repo"</c> — fetch from a specific repo. Useful
+    ///     for forks, mirrors, or private test catalogs.</item>
+    /// </list>
+    ///
+    /// Whichever path is taken, built-in mods always win on id collisions:
+    /// a community PR cannot shadow the official "wol" entry to redirect
+    /// downloads.
     /// </summary>
     [JsonPropertyName("modsCatalogRepo")]
     public string ModsCatalogRepo { get; set; } = "";

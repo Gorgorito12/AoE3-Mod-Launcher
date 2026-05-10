@@ -27,8 +27,15 @@ on:
 # Required so the workflow can comment on PRs, label them, and call
 # `gh pr merge --auto`. If you tighten the repo's default token permissions,
 # keep these.
+#
+# `contents: write` is needed because `gh pr merge --auto --squash`
+# resolves to GitHub's GraphQL `mergePullRequest` mutation, which writes
+# to repo contents (creates the squash commit on the base branch). With
+# `contents: read` the workflow gets
+# "Resource not accessible by integration (mergePullRequest)" and the
+# auto-merge step fails.
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
 
