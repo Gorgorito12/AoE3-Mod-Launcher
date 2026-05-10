@@ -1,0 +1,200 @@
+# Validate mod-catalog PRs and auto-merge the safe ones.
+#
+# Pipeline (jobs depend in this order):
+#
+#   1. classify   - look at the diff, decide tier1/tier2/tier3/invalid.
+#   2. validate   - JSON Schema + image spec checks. Skipped on 'invalid'.
+#   3. block      - on 'invalid', comment + fail the workflow.
+#      auto_merge - on 'tier1' / 'tier2' (after validate passes), turn on
+#                   GitHub's auto-merge so the PR squash-merges as soon as
+#                   required checks are green.
+#      review     - on 'tier3', label the PR and comment requesting human
+#                   review. No auto-merge.
+#
+# What it explicitly does NOT do:
+#   - It never auto-approves a PR. Required-approvals on the branch should
+#     either be 0, or come from a GitHub App / CODEOWNERS bot you trust.
+#     The workflow only enables auto-merge; the merge happens once branch
+#     protection's required checks pass.
+#   - It never deletes or force-pushes anything.
+
+name: Validate and auto-merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Required so the workflow can comment on PRs, label them, and call
+# `gh pr merge --auto`. If you tighten the repo's default token permissions,
+# keep these.
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+# Cancel an in-flight run when a new commit lands on the same PR. Saves
+# minutes and avoids a stale 'tier' decision auto-merging after the diff
+# changed.
+concurrency:
+  group: validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # -- 1. Decide what kind of change this PR is making ----------------------
+  classify:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.classify.outputs.tier }}
+      mod_id: ${{ steps.classify.outputs.mod_id }}
+      reason: ${{ steps.classify.outputs.reason }}
+    steps:
+      - name: Checkout (full history for diffs)
+        uses: actions/checkout@v4
+        with:
+          # Need both base and head to diff. Default fetch-depth=1 only
+          # fetches the head commit, which breaks `git diff base...head`.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Classify PR
+        id: classify
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python .github/scripts/classify_pr.py
+
+  # -- 2. Validate the manifest + assets (skipped if 'invalid') -------------
+  validate:
+    name: Validate manifest and assets
+    needs: classify
+    if: needs.classify.outputs.tier != 'invalid'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install validators
+        # ajv-cli for JSON Schema; Pillow for image-spec checks.
+        run: |
+          npm install -g ajv-cli@5 ajv-formats@3
+          pip install --quiet Pillow
+
+      - name: Validate JSON Schema
+        # --strict=false because draft-07 + ajv strict mode is overzealous
+        # about unknown formats; we already pin draft-07 in the schema.
+        run: >
+          ajv validate
+          -s schema/mod.schema.json
+          -d "mods/**/mod.json"
+          -c ajv-formats
+          --strict=false
+
+      - name: Validate image specs
+        run: python .github/scripts/validate_images.py
+
+  # -- 3a. Block invalid PRs ------------------------------------------------
+  block:
+    name: Block (structural problems)
+    needs: classify
+    if: needs.classify.outputs.tier == 'invalid'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment and fail
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REASON: ${{ needs.classify.outputs.reason }}
+        run: |
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$(
+            cat <<EOF
+          ❌ **This PR cannot be auto-processed.**
+
+          Reason: $REASON
+
+          PRs to this catalog must:
+          - Touch files only inside a single \`mods/<mod-id>/\` folder
+          - Use only recognised filenames: \`mod.json\`, \`icon.png\`, \`banner.png\`/\`banner.jpg\`
+
+          Please open separate PRs per mod, and keep workflow / schema /
+          documentation changes in their own PR.
+          EOF
+          )"
+          # Fail the workflow so branch protection blocks the merge.
+          exit 1
+
+  # -- 3b. Enable auto-merge for tier1/tier2 PRs that passed validation -----
+  auto_merge:
+    name: Enable auto-merge
+    needs: [classify, validate]
+    if: |
+      needs.classify.outputs.tier == 'tier1' ||
+      needs.classify.outputs.tier == 'tier2'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Turn on auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          TIER: ${{ needs.classify.outputs.tier }}
+          REASON: ${{ needs.classify.outputs.reason }}
+        # Squash so the PR collapses to one commit on main; cleaner history
+        # for catalog updates that may iterate via several pushes.
+        run: |
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --squash
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$(
+            cat <<EOF
+          ✅ **Auto-merge enabled** — tier: \`$TIER\`.
+
+          $REASON
+
+          The PR will merge automatically once all required status checks
+          are green. Push more commits to the same PR if validation fails;
+          this run will redo classification on the new diff.
+          EOF
+          )"
+
+  # -- 3c. Tier 3 changes -> ask a maintainer ------------------------------
+  request_review:
+    name: Request manual review
+    needs: [classify, validate]
+    if: needs.classify.outputs.tier == 'tier3'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label and comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REASON: ${{ needs.classify.outputs.reason }}
+        run: |
+          # Create the label idempotently so first-run on a fresh repo works.
+          gh label create needs-manual-review \
+            --repo "$GITHUB_REPOSITORY" \
+            --color "f9d71c" \
+            --description "Catalog PR with critical changes that needs human review" \
+            2>/dev/null || true
+
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label "needs-manual-review"
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$(
+            cat <<EOF
+          🔍 **Manual review required.**
+
+          $REASON
+
+          This PR changes fields the launcher trusts at runtime (install
+          paths, payload URLs, executable, source repository). A maintainer
+          will look at it before it can merge — please do not push pressure
+          comments; you'll get a response when someone is available.
+          EOF
+          )"

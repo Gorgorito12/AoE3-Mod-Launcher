@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/papillo12/aoe3-mods-catalog/main/schema/mod.schema.json",
+  "title": "AoE3 Mod Manifest",
+  "description": "Schema validated by the catalog repo CI on every PR. The launcher reads manifests that pass this schema; anything else is rejected.",
+  "type": "object",
+  "required": ["id", "displayName", "install", "update"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema URL — purely for editor IntelliSense, ignored by the launcher."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,30}$",
+      "description": "Unique mod id. Lowercase alphanumerics + hyphens only. Must match the folder name under /mods/."
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50
+    },
+    "subtitle": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "accentColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "description": "Hex color used for borders, badges, and the synthetic banner gradient when no banner.png is supplied."
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "officialWebsite": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "description": "Must be HTTPS."
+    },
+    "icon": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+\\.png$",
+      "description": "Filename of icon.png in the same folder. Specs: 256x256, PNG with alpha, <= 100 KB."
+    },
+    "banner": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+\\.(png|jpg|jpeg)$",
+      "description": "Filename of banner.png/banner.jpg in the same folder. Specs: 1200x300, <= 500 KB."
+    },
+    "description": {
+      "type": "object",
+      "description": "Per-language short description shown in the mod selector. Keys: ISO-639-1 codes (en, es, ...). The launcher falls back to 'en' when the user's language is not present.",
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "sourceRepo": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$",
+      "description": "owner/repo of the mod's own GitHub repository (used by the Pin to Release Tag flow)."
+    },
+    "approvedReleaseTag": {
+      "type": "string",
+      "description": "Tag in sourceRepo whose contents the launcher will load. Bumping this is a Tier 2 change (auto-merge if validation passes)."
+    },
+    "install": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["IsolatedFolder", "InPlaceOverlay"],
+          "description": "IsolatedFolder = mod lives in its own folder cloned from AoE3 (e.g. WoL). InPlaceOverlay = files extracted on top of AoE3 (e.g. Improvement Mod)."
+        },
+        "defaultFolder": {
+          "type": "string",
+          "description": "Default install path suggestion. Empty for InPlaceOverlay (resolves to AoE3's path)."
+        },
+        "probeFile": {
+          "type": "string",
+          "description": "Relative path the launcher checks to confirm the mod is installed at a given location."
+        },
+        "executable": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_.-]+\\.exe$"
+        },
+        "arguments": {
+          "type": "string"
+        }
+      }
+    },
+    "update": {
+      "type": "object",
+      "required": ["mechanism"],
+      "additionalProperties": false,
+      "properties": {
+        "mechanism": {
+          "type": "string",
+          "enum": ["WolPatcher", "DelegatedExternal", "GitHubReleases"],
+          "description": "WolPatcher = UpdateInfo.xml + .tar.xz patches. DelegatedExternal = mod has its own external patcher; launcher only plays. GitHubReleases = updates ship as GitHub Releases on the mod's own repo."
+        },
+        "wol": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "updateInfoUrl": {
+              "type": "string",
+              "pattern": "^https?://",
+              "description": "Allowed: HTTP for legacy mod servers (e.g. aoe3wol.com). The launcher logs a warning but allows it; new mods should use HTTPS."
+            },
+            "updateInfoUrlAlt": {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            "payloadZipUrls": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^https://",
+                "description": "MUST be HTTPS — the multi-part install ZIP is downloaded fresh and is the highest-risk asset."
+              }
+            },
+            "payloadSha256": {
+              "type": "array",
+              "description": "Optional but strongly recommended. Parallel array to payloadZipUrls — SHA-256 of each .zip. The launcher rejects downloads that don't match.",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "translations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$",
+          "description": "owner/repo where community translations live (one release per translation, with a translation.json + .zip)."
+        },
+        "coveredFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
