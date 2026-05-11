@@ -588,6 +588,218 @@ public static class Strings
             [LangEn] = "DANGER",
             [LangEs] = "PELIGRO",
         },
+
+        // -------- Launcher Settings dialog (Tier 1) --------
+        ["BtnLauncherSettings"] = new()
+        {
+            [LangEn] = "Launcher",
+            [LangEs] = "Launcher",
+        },
+        ["DlgLauncherSettingsTitle"] = new()
+        {
+            [LangEn] = "Launcher Settings",
+            [LangEs] = "Ajustes del launcher",
+        },
+        ["DlgLauncherSettingsSectionGeneral"] = new()
+        {
+            [LangEn] = "GENERAL",
+            [LangEs] = "GENERAL",
+        },
+        ["DlgLauncherSettingsSectionUpdates"] = new()
+        {
+            [LangEn] = "UPDATES",
+            [LangEs] = "ACTUALIZACIONES",
+        },
+        ["DlgLauncherSettingsSectionCatalog"] = new()
+        {
+            [LangEn] = "MODS CATALOG",
+            [LangEs] = "CATÁLOGO DE MODS",
+        },
+        ["DlgLauncherSettingsLanguageLabel"] = new()
+        {
+            [LangEn] = "Launcher language",
+            [LangEs] = "Idioma del launcher",
+        },
+        ["DlgLauncherSettingsStartWithWindows"] = new()
+        {
+            [LangEn] = "Start with Windows",
+            [LangEs] = "Iniciar con Windows",
+        },
+        ["DlgLauncherSettingsStartWithWindowsHint"] = new()
+        {
+            [LangEn] = "Launches automatically when you log in.",
+            [LangEs] = "Se inicia automáticamente al iniciar sesión.",
+        },
+        ["DlgLauncherSettingsCloseOnGame"] = new()
+        {
+            [LangEn] = "Close launcher when game starts",
+            [LangEs] = "Cerrar el launcher al iniciar el juego",
+        },
+        ["DlgLauncherSettingsCloseOnGameHint"] = new()
+        {
+            [LangEn] = "Frees resources while you play. Reopen the launcher manually after the game closes.",
+            [LangEs] = "Libera recursos mientras juegas. Vuelve a abrir el launcher manualmente cuando termines.",
+        },
+        ["DlgLauncherSettingsMinimizeToTray"] = new()
+        {
+            [LangEn] = "Minimize to system tray on close",
+            [LangEs] = "Minimizar a la bandeja al cerrar",
+        },
+        ["DlgLauncherSettingsMinimizeToTrayHint"] = new()
+        {
+            [LangEn] = "Closing the window keeps the launcher running in the tray. Right-click the tray icon → Exit to fully quit.",
+            [LangEs] = "Cerrar la ventana mantiene el launcher en la bandeja. Click derecho en el icono → Salir para cerrarlo del todo.",
+        },
+        ["DlgLauncherSettingsShowToasts"] = new()
+        {
+            [LangEn] = "Show notifications when updates finish",
+            [LangEs] = "Mostrar notificaciones cuando terminan las actualizaciones",
+        },
+        ["DlgLauncherSettingsShowToastsHint"] = new()
+        {
+            [LangEn] = "A system tray balloon appears when an update completes while the launcher window is hidden or minimised.",
+            [LangEs] = "Aparece una notificación en la bandeja cuando termina una actualización y la ventana del launcher está oculta o minimizada.",
+        },
+        ["ToastUpdateCompleteTitle"] = new()
+        {
+            [LangEn] = "Update complete",
+            [LangEs] = "Actualización completada",
+        },
+        ["ToastUpdateCompleteBody"] = new()
+        {
+            [LangEn] = "{0} is now up to date.",
+            [LangEs] = "{0} está actualizado.",
+        },
+        ["ToastInstallCompleteTitle"] = new()
+        {
+            [LangEn] = "Install complete",
+            [LangEs] = "Instalación completada",
+        },
+        ["ToastInstallCompleteBody"] = new()
+        {
+            [LangEn] = "{0} is ready to play.",
+            [LangEs] = "{0} está listo para jugar.",
+        },
+        ["TrayTooltip"] = new()
+        {
+            [LangEn] = "AoE3 Mod Launcher",
+            [LangEs] = "AoE3 Mod Launcher",
+        },
+        ["TrayMenuShow"] = new()
+        {
+            [LangEn] = "Show launcher",
+            [LangEs] = "Mostrar launcher",
+        },
+        ["TrayMenuExit"] = new()
+        {
+            [LangEn] = "Exit",
+            [LangEs] = "Salir",
+        },
+        ["DlgLauncherSettingsAutoCheck"] = new()
+        {
+            [LangEn] = "Check for updates on startup",
+            [LangEs] = "Buscar actualizaciones al iniciar",
+        },
+        ["DlgLauncherSettingsAutoCheckHint"] = new()
+        {
+            [LangEn] = "Runs in the background; the launcher only surfaces a notice when something is pending.",
+            [LangEs] = "Se ejecuta en segundo plano; el launcher solo te avisa cuando hay algo pendiente.",
+        },
+        ["DlgLauncherSettingsOpenPostUpdate"] = new()
+        {
+            [LangEn] = "Open post-update pages in browser",
+            [LangEs] = "Abrir páginas post-actualización en el navegador",
+        },
+        ["DlgLauncherSettingsOpenPostUpdateHint"] = new()
+        {
+            [LangEn] = "Some mods link to a changelog page after applying a patch.",
+            [LangEs] = "Algunos mods enlazan a una página de cambios después de aplicar un parche.",
+        },
+        ["DlgLauncherSettingsCatalogDefault"] = new()
+        {
+            [LangEn] = "Default catalog",
+            [LangEs] = "Catálogo por defecto",
+        },
+        ["DlgLauncherSettingsCatalogCustom"] = new()
+        {
+            [LangEn] = "Custom repository:",
+            [LangEs] = "Repositorio personalizado:",
+        },
+        ["DlgLauncherSettingsCatalogDisabled"] = new()
+        {
+            [LangEn] = "Disabled (built-in mods only)",
+            [LangEs] = "Desactivado (solo mods integrados)",
+        },
+        ["DlgLauncherSettingsClearCache"] = new()
+        {
+            [LangEn] = "Clear catalog cache",
+            [LangEs] = "Limpiar caché del catálogo",
+        },
+        ["DlgLauncherSettingsClearCacheHint"] = new()
+        {
+            [LangEn] = "Forces a fresh fetch on next start.",
+            [LangEs] = "Fuerza una nueva descarga en el próximo arranque.",
+        },
+        ["DlgLauncherSettingsCacheCleared"] = new()
+        {
+            [LangEn] = "Cache cleared.",
+            [LangEs] = "Caché eliminada.",
+        },
+        ["DlgLauncherSettingsSectionMaintenance"] = new()
+        {
+            [LangEn] = "MAINTENANCE",
+            [LangEs] = "MANTENIMIENTO",
+        },
+        ["DlgLauncherSettingsClearAssets"] = new()
+        {
+            [LangEn] = "Clear mod icons cache",
+            [LangEs] = "Limpiar caché de iconos de mods",
+        },
+        ["DlgLauncherSettingsClearAssetsHint"] = new()
+        {
+            [LangEn] = "Removes cached icon/banner images. They redownload on next launcher start.",
+            [LangEs] = "Elimina las imágenes (iconos/banners) cacheadas. Se vuelven a descargar al reabrir el launcher.",
+        },
+        ["DlgLauncherSettingsClearTemp"] = new()
+        {
+            [LangEn] = "Clear temporary files",
+            [LangEs] = "Limpiar archivos temporales",
+        },
+        ["DlgLauncherSettingsClearTempHint"] = new()
+        {
+            [LangEn] = "Removes leftover download/extract files from interrupted updates.",
+            [LangEs] = "Elimina archivos sobrantes de descargas/extracciones interrumpidas.",
+        },
+        ["DlgLauncherSettingsAssetsCleared"] = new()
+        {
+            [LangEn] = "Asset cache cleared ({0} files).",
+            [LangEs] = "Caché de imágenes eliminada ({0} archivos).",
+        },
+        ["DlgLauncherSettingsTempCleared"] = new()
+        {
+            [LangEn] = "Temp files cleared.",
+            [LangEs] = "Archivos temporales eliminados.",
+        },
+        ["DlgLauncherSettingsNothingToClean"] = new()
+        {
+            [LangEn] = "Nothing to clean.",
+            [LangEs] = "Nada que limpiar.",
+        },
+        ["DlgLauncherSettingsInvalidRepo"] = new()
+        {
+            [LangEn] = "Invalid repository format. Use owner/repo (e.g. Gorgorito12/aoe3-mods-catalog).",
+            [LangEs] = "Formato inválido. Usa owner/repo (ej: Gorgorito12/aoe3-mods-catalog).",
+        },
+        ["BtnSave"] = new()
+        {
+            [LangEn] = "Save changes",
+            [LangEs] = "Guardar cambios",
+        },
+        ["BtnCancel"] = new()
+        {
+            [LangEn] = "Cancel",
+            [LangEs] = "Cancelar",
+        },
         ["BtnOpenFolder"] = new()
         {
             [LangEn] = "Open folder",

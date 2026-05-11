@@ -75,6 +75,11 @@ public partial class MainWindow : Window
         RefreshModCards();
         ResetProgressUI();
 
+        // Surface the tray icon if either MinimizeToTray or
+        // ShowToastNotifications is on — the icon is the anchor point
+        // for both flows. Recomputed every time Launcher Settings closes.
+        UpdateTrayIconVisibility();
+
         // Check for --update-now flag from elevated relaunch
         var args = Environment.GetCommandLineArgs();
         bool autoUpdate = args.Any(a => string.Equals(a, "--update-now", StringComparison.OrdinalIgnoreCase));
@@ -93,19 +98,37 @@ public partial class MainWindow : Window
         Loaded += async (_, _) =>
         {
             LauncherUpdateService.CleanupOldVersion();
-            await Task.WhenAll(
-                CheckForLauncherUpdateAsync(),
-                CheckAsync(),
-                RefreshTranslationIndexAsync(),
-                RefreshCatalogAsync());
 
-            // The catalog fetch may have surfaced new community mods that
-            // weren't visible during the initial RefreshModCards() call in
-            // the constructor. Re-render so they show up. Cheap no-op for
-            // the common case where the catalog returned the same set
-            // (RefreshModCards just rebuilds the panel from ModRegistry.All
-            // which is idempotent).
-            RefreshModCards();
+            // CheckUpdatesOnStartup gates the four parallel network calls
+            // that happen at boot. When the user has it off — typically
+            // because they're on a metered connection or just want the
+            // launcher to be silent — we skip the entire WhenAll. The
+            // launcher still works fully from cached state (catalog
+            // cache, last-known mod version, etc., all populated by my
+            // earlier phases). The --update-now command-line flag below
+            // is honoured regardless: it's an explicit user/elevated-
+            // relaunch request, not a passive auto-check.
+            if (_config.CheckUpdatesOnStartup)
+            {
+                await Task.WhenAll(
+                    CheckForLauncherUpdateAsync(),
+                    CheckAsync(),
+                    RefreshTranslationIndexAsync(),
+                    RefreshCatalogAsync());
+
+                // The catalog fetch may have surfaced new community mods
+                // that weren't visible during the initial RefreshModCards()
+                // call in the constructor. Re-render so they show up.
+                // Cheap no-op for the common case where the catalog
+                // returned the same set (RefreshModCards just rebuilds
+                // the panel from ModRegistry.All which is idempotent).
+                RefreshModCards();
+            }
+            else
+            {
+                DiagnosticLog.Write(
+                    "Startup auto-check disabled (CheckUpdatesOnStartup=false); using cached state.");
+            }
 
             if (_modIsInstalled)
             {
@@ -386,12 +409,21 @@ public partial class MainWindow : Window
 
         // Fresh service bound to the new profile. Per-mod state in
         // _config.Mods[target.Id] keeps the install path / translation
-        // separate from any previously active mod.
+        // separate from any previously active mod. The constructor does a
+        // synchronous fast-path lookup of the cached install path, so
+        // _updateService.InstallPath is already populated by the time we
+        // get here for mods seen in a previous session.
         _updateService = new UpdateService(_config, target);
 
         // Reset session caches that were tied to the old mod.
         _pendingDownloads = new();
-        _modIsInstalled = false;
+        // Trust the synchronous cache check the UpdateService constructor
+        // just did. Avoids the "Not installed (red) → Installed (green)"
+        // flicker every time the user switches to a previously-detected
+        // mod. CheckAsync runs right after and refines the rest (current
+        // version, pending updates, etc.); if the install was uninstalled
+        // out-of-band between sessions, CheckAsync will clear this flag.
+        _modIsInstalled = !string.IsNullOrEmpty(_updateService.InstallPath);
         _warnedAboutBrokenInstall = false;
         _cachedTranslationIndex = null;
 
@@ -399,6 +431,15 @@ public partial class MainWindow : Window
         ApplyLanguage();
         RefreshModCards();
         ResetProgressUI();
+
+        // Sync the primary button (Play / Install / Update / Stop) with the
+        // new profile's install state. ApplyLanguage above repaints it but
+        // uses the cached _primaryAction from the PREVIOUS profile, which
+        // means switching from a not-installed mod to an installed one (or
+        // vice-versa) would otherwise show the wrong label until CheckAsync
+        // finishes. UpdateGameUI reads _modIsInstalled (just refreshed from
+        // the cached install path) and picks the right action.
+        UpdateGameUI();
 
         // Re-detect install path + version + pending updates for the new
         // profile. CheckAsync already short-circuits for non-WolPatcher
@@ -493,6 +534,205 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------------------
+    // Launcher Settings — global preferences dialog (scope: the whole
+    // launcher, not the active mod). The per-mod gear menu in the sidebar
+    // handles mod-specific concerns.
+    // ------------------------------------------------------------------------
+
+    private void LauncherSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new LauncherSettingsDialog(_config) { Owner = this };
+        var ok = dialog.ShowDialog();
+        if (ok == true)
+        {
+            // The dialog already applied the language change live (via
+            // Strings.SetLanguage), persisted the config, and pushed the
+            // autostart registration. Refresh anything that depends on
+            // catalog repo / language that might not be wired through
+            // events yet.
+            RefreshIdlePanel();
+            UpdateGameUI();
+            // The tray tooltip + menu labels follow the launcher language;
+            // re-localise them so the user sees their new choice if they
+            // right-click the tray icon.
+            RefreshTrayLabels();
+            // Tray icon's visibility depends on MinimizeToTray /
+            // ShowToastNotifications — both may have flipped in the
+            // dialog. Recompute so the icon appears/disappears from the
+            // notification area without needing a restart.
+            UpdateTrayIconVisibility();
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // System tray — used when the user has MinimizeToTray enabled and
+    // closes the main window. Code lives here (not in a service) because
+    // it touches WPF Window state, dispatcher, and the TrayIcon control
+    // directly — pulling it out would require routing events back through
+    // the window anyway.
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Set to true whenever something has decided "this Close is a real
+    /// exit, not a minimize-to-tray hide". Read by <see cref="OnClosing"/>
+    /// to bypass the MinimizeToTray interception. Drivers:
+    ///   * Tray menu → Exit
+    ///   * Game launched while CloseLauncherOnGameStart is on
+    /// </summary>
+    private bool _requestedHardExit;
+
+    /// <summary>
+    /// Window.OnClosing override (wired up in the constructor). When
+    /// MinimizeToTray is on, swallow the close request and hide the
+    /// window instead, leaving the tray icon as the way back. When off,
+    /// fall through to the default close behaviour.
+    /// </summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_requestedHardExit && _config.MinimizeToTray)
+        {
+            e.Cancel = true;
+            HideToTray();
+            return;
+        }
+        base.OnClosing(e);
+    }
+
+    /// <summary>
+    /// Hide the main window and surface the tray icon. Called from the
+    /// Closing handler when MinimizeToTray is on. Idempotent — calling
+    /// twice in a row is a no-op.
+    /// </summary>
+    private void HideToTray()
+    {
+        Hide();
+        TrayIcon.Visibility = Visibility.Visible;
+        RefreshTrayLabels();
+    }
+
+    /// <summary>
+    /// Recomputes the tray icon's visibility from the current settings.
+    /// Visible when either MinimizeToTray is on (so the user can restore
+    /// after closing) or ShowToastNotifications is on (so the launcher
+    /// has an icon attached to fire balloon tips from). Hidden when both
+    /// are off — no point cluttering the user's tray.
+    ///
+    /// Safe to call anytime: it doesn't toggle a tray icon that's
+    /// currently being used to keep a hidden window discoverable, because
+    /// HideToTray flips Visibility to Visible directly and only "Exit"
+    /// from the tray menu shuts the icon down.
+    /// </summary>
+    private void UpdateTrayIconVisibility()
+    {
+        bool keepResident = _config.MinimizeToTray || _config.ShowToastNotifications;
+        // If the window is currently hidden (we're sitting in the tray),
+        // never hide the icon — the user would have no way back.
+        if (!IsVisible) keepResident = true;
+        TrayIcon.Visibility = keepResident ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Show a system-tray balloon notification — used at the tail end of
+    /// install / update operations. Suppressed when:
+    ///   * The user disabled notifications in Launcher Settings.
+    ///   * The main window is visible and active — the user can already
+    ///     see whatever the launcher is reporting in its own UI.
+    ///   * The tray icon isn't visible (because both MinimizeToTray and
+    ///     ShowToastNotifications are off, so there's no surface to
+    ///     attach a balloon to). In that case the user opted out.
+    ///
+    /// The balloon uses Windows' built-in info icon. Hardcodet's
+    /// TaskbarIcon falls back to a plain notification on systems where
+    /// balloons are disabled by group policy.
+    /// </summary>
+    private void ShowToast(string title, string message)
+    {
+        if (!_config.ShowToastNotifications) return;
+
+        // If the user is looking at the launcher (window visible and not
+        // minimised), they already see whatever we'd put in a toast.
+        // Toasts are about catching attention away from the window.
+        bool userIsLooking = IsVisible
+            && WindowState != WindowState.Minimized
+            && IsActive;
+        if (userIsLooking) return;
+
+        // The tray icon must be visible (== resident in the notification
+        // area) for ShowBalloonTip to render — Hardcodet attaches the
+        // balloon to the icon, not to the window.
+        if (TrayIcon.Visibility != Visibility.Visible) return;
+
+        try
+        {
+            TrayIcon.ShowBalloonTip(
+                title,
+                message,
+                Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            // ShowBalloonTip can throw on some locked-down systems where
+            // notifications are policy-disabled. Silent fail — the user
+            // explicitly enabled this and we don't have a better place to
+            // surface the error.
+            DiagnosticLog.Write($"ShowToast failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Bring the window back into view. Restores from minimised state if
+    /// needed and gives it focus.
+    /// </summary>
+    private void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+        // The tray icon stays visible so the user can re-hide via Close;
+        // hiding it on restore would force them to discover the close-to-
+        // tray flow over and over. Their preference, sticky behaviour.
+    }
+
+    /// <summary>
+    /// Update the tray tooltip + context-menu labels from the current
+    /// localisation table. Called on construction, language change, and
+    /// after the Settings dialog closes.
+    /// </summary>
+    private void RefreshTrayLabels()
+    {
+        TrayIcon.ToolTipText = WarsOfLibertyLauncher.Localization.Strings.Get("TrayTooltip");
+        TrayMenuShow.Header = WarsOfLibertyLauncher.Localization.Strings.Get("TrayMenuShow");
+        TrayMenuExit.Header = WarsOfLibertyLauncher.Localization.Strings.Get("TrayMenuExit");
+    }
+
+    private void TrayIcon_DoubleClick(object sender, RoutedEventArgs e)
+        => ShowFromTray();
+
+    private void TrayMenuShow_Click(object sender, RoutedEventArgs e)
+        => ShowFromTray();
+
+    private void TrayMenuExit_Click(object sender, RoutedEventArgs e)
+        => RequestHardExit();
+
+    /// <summary>
+    /// Tear the launcher down for real. Used by:
+    ///   * Tray menu → Exit (user said "stop running, even from the tray").
+    ///   * ExecutePlay when CloseLauncherOnGameStart is on (game took
+    ///     over, the launcher steps aside).
+    /// Sets the bypass flag so OnClosing doesn't intercept us into the
+    /// tray instead. Disposes the tray icon first so Windows removes it
+    /// from the notification area immediately — some shells otherwise
+    /// leave a phantom icon around until the user hovers.
+    /// </summary>
+    private void RequestHardExit()
+    {
+        _requestedHardExit = true;
+        try { TrayIcon.Dispose(); } catch { /* best-effort */ }
+        System.Windows.Application.Current.Shutdown();
+    }
+
+    // ------------------------------------------------------------------------
     // Language
     // ------------------------------------------------------------------------
 
@@ -559,6 +799,11 @@ public partial class MainWindow : Window
         UpdateButtonText.Text = Strings.Get("BtnUpdate");
         MoreButtonText.Text = Strings.Get("BtnConfig");
         OpenFolderButtonText.Text = Strings.Get("BtnOpenFolder");
+        LauncherSettingsButtonText.Text = Strings.Get("BtnLauncherSettings");
+        // Tray labels follow the launcher language. Safe to call even
+        // when the tray icon is hidden; ContextMenu lives on the XAML
+        // element regardless of Visibility.
+        RefreshTrayLabels();
         // Re-paint the primary button under the new locale: SetPrimaryAction
         // pulls each label from Strings, so calling it with the current
         // action key picks up the translated text.
@@ -710,8 +955,16 @@ public partial class MainWindow : Window
     private void RefreshStatusCard()
     {
         var profile = _updateService.Profile;
-        var exePath = GameLauncher.Find(_config, _updateService.InstallPath, profile);
-        bool aoe3Detected = exePath != null;
+        // AoE3 detection is GLOBAL, not per-mod: we're asking "is Age of
+        // Empires III installed on this machine at all?", not "does the
+        // active mod's specific .exe exist?". Otherwise switching to a
+        // community mod whose GameExecutable is some custom .exe (e.g. a
+        // demo mod with executable="test.exe") would flip the badge to
+        // "AoE3 not found" even when the user has AoE3 perfectly installed.
+        // The launcher-state below (mod-installed / version / pending
+        // updates) still uses mod-specific lookups; only the AoE3 badge is
+        // global.
+        bool aoe3Detected = GameLauncher.FindAoe3Install(_config) != null;
 
         // Default labels for the two version rows. The actual numbers come
         // from CurrentVersion / LatestVersion below.
@@ -1414,7 +1667,12 @@ public partial class MainWindow : Window
     private async Task CheckAsync()
     {
         if (_isBusy) return;
-        SetBusy(true);
+        // checkOnly: this pass is read-only (MD5 hashes + manifest fetch),
+        // so SetBusy keeps Play and Settings live. Otherwise every mod
+        // switch greys them out for a second or two even though there's
+        // nothing happening that would conflict with the user clicking
+        // them.
+        SetBusy(true, checkOnly: true);
         _cts = new CancellationTokenSource();
 
         try
@@ -2120,6 +2378,16 @@ public partial class MainWindow : Window
         // Check if game is running first
         if (!EnsureGameNotRunning()) return;
 
+        // Mods that use the GitHub-Releases mechanism have a separate,
+        // much simpler install pipeline: download one .zip from the
+        // modder's own pinned release, extract overlay, done. Diverge
+        // here before the WoL-specific payload-URL / AoE3-clone path.
+        if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
+        {
+            await InstallGitHubReleasesAsync();
+            return;
+        }
+
         // Resolve payload URLs
         var payloadUrls = _updateService.EffectivePayloadZipUrls();
         if (payloadUrls == null || payloadUrls.Length == 0)
@@ -2568,6 +2836,14 @@ public partial class MainWindow : Window
         {
             ShowProgressCompleted("ProgressTitleCompleted",
                 Strings.Format("ProgressUpdating", fromVersion, toVersion));
+
+            // Tray notification — only fires if the user is away from the
+            // launcher (window hidden/minimised/inactive). If they're
+            // watching, ShowProgressCompleted above already painted the
+            // "Update complete" state in the sidebar.
+            ShowToast(
+                Strings.Get("ToastUpdateCompleteTitle"),
+                Strings.Format("ToastUpdateCompleteBody", _updateService.Profile.DisplayName));
         }
 
         // Re-check AFTER releasing busy state, otherwise the new CheckAsync
@@ -2727,6 +3003,21 @@ public partial class MainWindow : Window
         try
         {
             GameLauncher.Launch(_config, _updateService.InstallPath, _updateService.Profile);
+
+            // CloseLauncherOnGameStart: user opted to fully quit the
+            // launcher once the game's running. Skip StartGameMonitor
+            // (no point monitoring something we won't react to) and
+            // call RequestHardExit so OnClosing doesn't divert us to
+            // the system tray. The user reopens the launcher manually
+            // after the game closes.
+            if (_config.CloseLauncherOnGameStart)
+            {
+                DiagnosticLog.Write(
+                    "CloseLauncherOnGameStart=true; launcher exiting now that the game has started.");
+                RequestHardExit();
+                return;
+            }
+
             StartGameMonitor();
         }
         catch (FileNotFoundException)
@@ -2901,18 +3192,40 @@ public partial class MainWindow : Window
             StatusText.Text = message;
     }
 
-    private void SetBusy(bool busy)
+    private void SetBusy(bool busy, bool checkOnly = false)
     {
         _isBusy = busy;
+        // Update button is always disabled while busy — we genuinely don't
+        // know what's available to download until the manifest fetch
+        // completes, so letting the user click "Update" early would be
+        // racy.
         UpdateButton.IsEnabled = !busy;
-        // Verify / Repair / Uninstall live in the gear menu now and are
-        // gated by their own MenuItem.IsEnabled inside MoreButton_Click.
-        // The gear button itself stays live — its menu items handle their
-        // own disabled states — but we lock it during ops so the user can't
-        // fire a second flow on top of the running one.
-        MoreButton.IsEnabled = !busy;
-        // Play is only available when the mod is installed, not busy, and game not already running.
-        PlayButton.IsEnabled = !busy && _modIsInstalled && !_isGameRunning;
+
+        if (busy && checkOnly)
+        {
+            // Read-only check (CheckAsync's MD5 + manifest fetch): doesn't
+            // modify the install, doesn't download anything. There's no
+            // reason to lock Play or Settings during it — blocking them
+            // just makes every mod switch feel sluggish (Play stays grey
+            // for a second or two while the launcher is silently sniffing
+            // the disk). Keep them live; the operation is reentrancy-safe
+            // because CheckAsync's "if (_isBusy) return" guard at the top
+            // still prevents a second check from piling on top of the
+            // first.
+            MoreButton.IsEnabled = true;
+            PlayButton.IsEnabled = _modIsInstalled && !_isGameRunning;
+        }
+        else
+        {
+            // Verify / Repair / Uninstall live in the gear menu now and are
+            // gated by their own MenuItem.IsEnabled inside MoreButton_Click.
+            // The gear button itself stays live — its menu items handle their
+            // own disabled states — but we lock it during ops so the user can't
+            // fire a second flow on top of the running one.
+            MoreButton.IsEnabled = !busy;
+            // Play is only available when the mod is installed, not busy, and game not already running.
+            PlayButton.IsEnabled = !busy && _modIsInstalled && !_isGameRunning;
+        }
     }
 
     private void ResetProgressUI()
@@ -2993,16 +3306,15 @@ public partial class MainWindow : Window
         // Folders submenu — Open variants are enabled only when the path is
         // resolvable on disk; Select variants are always available unless
         // we're busy (the user might be trying to fix a detection problem).
-        bool wolDetected = !string.IsNullOrEmpty(_updateService.InstallPath)
-            && Directory.Exists(_updateService.InstallPath);
-        bool aoe3Detected = GameLauncher.Find(_config, _updateService.InstallPath, _updateService.Profile) != null;
+        // Use the GLOBAL AoE3 detection (not the active mod's executable
+        // lookup) so "Open AoE3 folder" stays enabled even when the active
+        // mod is one whose executable doesn't exist (e.g. a community mod
+        // the user hasn't installed yet).
+        bool aoe3Detected = GameLauncher.FindAoe3Install(_config) != null;
 
         MenuOpenAoE3Folder.IsEnabled = aoe3Detected;
         MenuSelectModFolder.IsEnabled = !_isBusy;
         MenuSelectAoE3Folder.IsEnabled = !_isBusy;
-        // Suppress the "wolDetected" unused-warning when the variable
-        // isn't otherwise consumed in this method.
-        _ = wolDetected;
 
         // User data submenu — same pattern as before
         var hasUserData = UserDataService.HasExistingUserData();
@@ -3059,10 +3371,14 @@ public partial class MainWindow : Window
     /// Opens the detected Age of Empires III install folder in Explorer.
     /// Walks up from the detected age3y.exe so the user lands on the AoE3
     /// root instead of `bin\` (Steam layout).
+    ///
+    /// Uses the global AoE3 detector (not the active mod's executable
+    /// lookup), so this opens the user's AoE3 folder even when the active
+    /// mod ships a different .exe name or isn't installed yet.
     /// </summary>
     private void MenuOpenAoE3Folder_Click(object sender, RoutedEventArgs e)
     {
-        var exePath = GameLauncher.Find(_config, _updateService.InstallPath, _updateService.Profile);
+        var exePath = GameLauncher.FindAoe3Install(_config);
         if (string.IsNullOrEmpty(exePath))
         {
             MessageBox.Show(this,

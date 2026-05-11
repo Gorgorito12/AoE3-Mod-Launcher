@@ -122,10 +122,48 @@ public static class ModRegistry
             return _builtIn;
         }
 
+        var service = new ModCatalogService();
+
+        // ---- Cache-first path -----------------------------------------------
+        //
+        // Fast path: if a cache file exists and is still within TTL, render
+        // from it and skip the network entirely. This is the common case for
+        // anyone who launches the app more than once in a 24h window.
+        //
+        // Cold path: no cache at all → fall through to the online fetch.
+        //
+        // Stale path: cache exists but TTL expired → render from the cached
+        // copy immediately (so the UI is instant) AND kick a background
+        // refresh that updates the on-disk cache for the next session. The
+        // user doesn't have to wait for the refresh; if it lands while
+        // they're still in the app the in-memory runtime list is updated
+        // too, so a subsequent RefreshModCards call picks up any new entries.
+
+        var cache = service.LoadFromCache(repo);
+        if (cache != null && service.IsFresh(cache))
+        {
+            DiagnosticLog.Write(
+                $"ModRegistry: using fresh cache ({cache.Manifests.Count} entries, " +
+                $"fetched {cache.FetchedAt:o}).");
+            return ApplyMerged(cache.Manifests, ct);
+        }
+
+        if (cache != null)
+        {
+            DiagnosticLog.Write(
+                $"ModRegistry: cache is stale (fetched {cache.FetchedAt:o}, TTL " +
+                $"{ModCatalogService.CacheTtl}) — using it for now, refreshing in background.");
+            var staleMerged = ApplyMerged(cache.Manifests, ct);
+            _ = Task.Run(() => BackgroundRefreshAsync(repo!));
+            return staleMerged;
+        }
+
+        // ---- Cold online fetch ----------------------------------------------
+
         List<ModCatalogEntry>? remote;
         try
         {
-            remote = await new ModCatalogService().FetchAsync(repo!, ct);
+            remote = await service.FetchAsync(repo!, ct);
         }
         catch (Exception ex)
         {
@@ -143,17 +181,30 @@ public static class ModRegistry
             return _builtIn;
         }
 
-        // Build the merged list. Built-in profiles take precedence: any
-        // community manifest with the same id is dropped on the floor and
-        // logged (so an honest dup doesn't go silently ignored).
+        // FetchAsync already persisted the new cache; nothing for us to do
+        // on disk. Just merge in memory and return.
+        return ApplyMerged(remote, ct);
+    }
+
+    /// <summary>
+    /// Builds the built-in + community merge from a raw entries list,
+    /// publishes it into <see cref="_runtime"/>, and returns it. Shared
+    /// between the cache-hit, stale-cache, and cold-fetch paths so the
+    /// merge rules (built-in id collisions win, bad projections skipped)
+    /// stay consistent.
+    /// </summary>
+    private static IReadOnlyList<ModProfile> ApplyMerged(
+        List<ModCatalogEntry> entries, CancellationToken ct)
+    {
         var builtInIds = new HashSet<string>(
             _builtIn.Select(p => p.Id), StringComparer.OrdinalIgnoreCase);
 
         var merged = new List<ModProfile>(_builtIn);
-        foreach (var entry in remote)
+        foreach (var entry in entries)
         {
             ct.ThrowIfCancellationRequested();
-            if (string.IsNullOrEmpty(entry.Manifest.Id)) continue;
+            if (entry?.Manifest == null || string.IsNullOrEmpty(entry.Manifest.Id))
+                continue;
 
             if (builtInIds.Contains(entry.Manifest.Id))
             {
@@ -186,6 +237,35 @@ public static class ModRegistry
             $"ModRegistry: refresh complete — {_builtIn.Count} built-in + " +
             $"{merged.Count - _builtIn.Count} community = {merged.Count} total.");
         return merged;
+    }
+
+    /// <summary>
+    /// Fire-and-forget refresh path used when a stale cache is rendered.
+    /// Fetches the catalog online (which also rewrites the cache file via
+    /// <see cref="ModCatalogService.FetchAsync"/>), then re-publishes the
+    /// merged runtime list. Failures here are silent — the user already
+    /// has the stale cache rendered, and the next refresh attempt will try
+    /// again. Doesn't take a CancellationToken because nobody upstream
+    /// awaits this task.
+    /// </summary>
+    private static async Task BackgroundRefreshAsync(string repo)
+    {
+        try
+        {
+            var service = new ModCatalogService();
+            var entries = await service.FetchAsync(repo, default);
+            if (entries == null)
+            {
+                DiagnosticLog.Write("ModRegistry: background refresh got no entries — keeping stale cache.");
+                return;
+            }
+            ApplyMerged(entries, default);
+            DiagnosticLog.Write("ModRegistry: background refresh complete.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModRegistry: background refresh failed: {ex.Message}");
+        }
     }
 
     // -- Projection ------------------------------------------------------------
@@ -243,6 +323,37 @@ public static class ModRegistry
             };
         }
 
+        if (updateMechanism == ModUpdateMechanism.GitHubReleases)
+        {
+            // The schema places sourceRepo + approvedReleaseTag at the top
+            // of the manifest (not inside update.*), because they identify
+            // the mod's authoritative GitHub repo and could in principle
+            // be used by other update mechanisms in the future. The
+            // launcher only acts on them when mechanism == GitHubReleases,
+            // though — for other mechanisms they're informational.
+            //
+            // A manifest declaring GitHubReleases as its mechanism but
+            // missing one of these fields would have been rejected by the
+            // catalog's CI; still, we treat them defensively here and
+            // leave GitHubReleases settings null if either is empty so
+            // the launcher's install pipeline can skip cleanly instead of
+            // hitting an HTTP 404 against an empty URL.
+            if (!string.IsNullOrEmpty(m.SourceRepo)
+                && !string.IsNullOrEmpty(m.ApprovedReleaseTag))
+            {
+                profile.GitHubReleases = new GitHubReleasesSettings
+                {
+                    SourceRepo = m.SourceRepo!,
+                    ApprovedReleaseTag = m.ApprovedReleaseTag!,
+                    // AssetNamePattern is a schema extension we may add
+                    // later (top-level "assetNamePattern" field). For now
+                    // the downloader's "first .zip wins" default covers
+                    // every mod we've seen.
+                    AssetNamePattern = "",
+                };
+            }
+        }
+
         if (m.Translations != null && !string.IsNullOrEmpty(m.Translations.Repo))
         {
             profile.Translations = new TranslationsSettings
@@ -266,12 +377,12 @@ public static class ModRegistry
     {
         "WolPatcher" => ModUpdateMechanism.WolPatcher,
         "DelegatedExternal" => ModUpdateMechanism.DelegatedExternal,
+        "GitHubReleases" => ModUpdateMechanism.GitHubReleases,
         "Manual" => ModUpdateMechanism.Manual,
-        // The schema currently only documents the three above. Anything
-        // else is either a typo on the modder's side or a future field
-        // we don't yet support — fall back to Manual rather than throwing,
-        // so the launcher at least lists the mod even if it doesn't yet
-        // know how to update it.
+        // Anything else is either a typo on the modder's side or a future
+        // field we don't yet support — fall back to Manual rather than
+        // throwing, so the launcher at least lists the mod even if it
+        // doesn't yet know how to update it.
         _ => ModUpdateMechanism.Manual,
     };
 

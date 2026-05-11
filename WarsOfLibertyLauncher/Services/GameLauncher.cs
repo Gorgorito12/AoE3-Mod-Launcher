@@ -50,6 +50,37 @@ public static class GameLauncher
     }
 
     /// <summary>
+    /// Locate the base Age of Empires III install on this machine, independent
+    /// of which mod is currently active. Used by the UI to tell whether AoE3
+    /// is installed at all (the "Age of Empires III not found" badge in the
+    /// status card), so the answer doesn't flip-flop when the user switches
+    /// between mods that ship different executables.
+    ///
+    /// Probes <c>age3y.exe</c> specifically — the canonical TAD binary. Every
+    /// AoE3 mod in this launcher relies on TAD being installed; mods that
+    /// ship their own .exe (e.g. Improvement Mod's <c>age3m.exe</c>) still
+    /// live next to <c>age3y.exe</c> inside an existing AoE3 install. So
+    /// "found age3y.exe somewhere" is the right test for "AoE3 is here".
+    ///
+    /// Returns the full path to <c>age3y.exe</c> if found, null otherwise.
+    /// </summary>
+    public static string? FindAoe3Install(LauncherConfig config)
+    {
+        // We intentionally pass modInstallPath=null: the search should not be
+        // biased by whichever mod folder the active profile happens to point
+        // at. We want a clean "scan the disk for age3y.exe" pass.
+        var checkedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in EnumerateCandidates(config, modInstallPath: null, exeName: "age3y.exe"))
+        {
+            if (string.IsNullOrEmpty(candidate)) continue;
+            if (!checkedPaths.Add(candidate)) continue;
+            if (File.Exists(candidate))
+                return candidate;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Find the Age of Empires III install ROOT (the folder that *contains*
     /// the game executable, walking up from a Steam-style bin/ subfolder if
     /// needed). Returns null if AoE3 cannot be located on this machine.

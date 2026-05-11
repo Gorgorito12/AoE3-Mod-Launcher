@@ -47,6 +47,16 @@ public enum ModUpdateMechanism
     /// fallback while a proper mechanism is being added.
     /// </summary>
     Manual,
+
+    /// <summary>
+    /// Pin-to-tag updater. The mod lives in its own GitHub repository
+    /// and publishes versions as GitHub Releases (each tagged
+    /// <c>v1.0</c>, <c>v1.1</c>, …). The catalog manifest references a
+    /// specific approved tag; the launcher downloads the release asset
+    /// from that tag and applies it. Updates flow via Tier 2 micro-PRs
+    /// to the catalog that bump the tag. See <see cref="GitHubReleasesSettings"/>.
+    /// </summary>
+    GitHubReleases,
 }
 
 /// <summary>
@@ -227,6 +237,15 @@ public class ModProfile
 
     /// <summary>Settings for the WoL-style updater. Used only when <see cref="UpdateMechanism"/> = <see cref="ModUpdateMechanism.WolPatcher"/>.</summary>
     public WolPatcherSettings? Wol { get; set; }
+
+    /// <summary>
+    /// Settings for the "Pin to GitHub Release" update flow. Used only
+    /// when <see cref="UpdateMechanism"/> =
+    /// <see cref="ModUpdateMechanism.GitHubReleases"/>. Carries the
+    /// modder's source-repo identifier and the approved release tag the
+    /// launcher should download from.
+    /// </summary>
+    public GitHubReleasesSettings? GitHubReleases { get; set; }
 
     /// <summary>
     /// Translations overlay configuration. <c>null</c> means the mod

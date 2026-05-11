@@ -83,6 +83,67 @@ public class UpdateService
         _infoService = new UpdateInfoService();
         _downloader = new DownloadService();
         _archive = new ArchiveService();
+
+        // Fast-path: if a previous session already detected this mod's
+        // install path AND that location is still valid on disk, populate
+        // InstallPath right now (synchronously). Two file-system syscalls
+        // — Directory.Exists + File.Exists for the probe file — so this is
+        // essentially free.
+        //
+        // The UI relies on this: when the user switches to a mod, we want
+        // to show "Installed" immediately if we've seen this mod before,
+        // not flash "Not installed" while the async CheckAsync does its
+        // work. CheckAsync will run shortly after and refine version info,
+        // pending patches, etc. — but the install-state badge is correct
+        // from frame zero.
+        //
+        // If the cache is stale (user uninstalled the mod manually between
+        // sessions), CheckAsync's full ResolveInstallPath will catch up
+        // and clear InstallPath. The worst case is a one-frame "Installed
+        // → Not installed" flicker, which is much rarer and less jarring
+        // than the previous "Not installed → Installed" flicker that
+        // happened on every single mod switch.
+        var state = _config.GetState(_profile.Id);
+
+        // 1. Cached install path. Two syscalls (Directory.Exists +
+        //    File.Exists for the probe file) → essentially free. Avoids
+        //    flashing "Not installed" on mod switch.
+        var cachedPath = state.InstallPath;
+        bool pathCacheHit = !string.IsNullOrWhiteSpace(cachedPath) && IsProfileInstalled(cachedPath);
+        if (pathCacheHit)
+        {
+            InstallPath = cachedPath.TrimEnd('\\', '/');
+        }
+
+        // 2. Cached version strings. Only meaningful for mods that compute
+        //    versions (i.e. WolPatcher). We synthesise placeholder
+        //    VersionInfo objects carrying just the .Ver field — enough for
+        //    the UI to render "Installed (v1.2.0c2)" and "Latest: 1.2.0c2"
+        //    instead of the alarming "Unknown version" red badge and the
+        //    "—" placeholder while CheckAsync's MD5 pass + manifest fetch
+        //    run. The real VersionInfo (with TechMd5 / StrMd5 / ProtoMd5
+        //    populated for matching) replaces them as soon as CheckAsync
+        //    finishes — exactly one frame later for cache hits, ~1-2 s for
+        //    cold sessions.
+        var cachedVer = state.LastKnownVersion;
+        if (pathCacheHit && !string.IsNullOrWhiteSpace(cachedVer))
+        {
+            CurrentVersion = new Models.VersionInfo { Ver = cachedVer };
+        }
+
+        var cachedLatest = state.LastKnownLatestVersion;
+        if (!string.IsNullOrWhiteSpace(cachedLatest))
+        {
+            LatestVersion = new Models.VersionInfo { Ver = cachedLatest };
+        }
+
+        DiagnosticLog.Write(
+            $"UpdateService ctor for '{_profile.Id}': cachedPath='{cachedPath ?? "(empty)"}' " +
+            $"pathCacheHit={pathCacheHit} cachedVer='{cachedVer ?? "(empty)"}' " +
+            $"cachedLatest='{cachedLatest ?? "(empty)"}' -> " +
+            $"InstallPath='{InstallPath ?? "(null)"}' " +
+            $"CurrentVersion='{CurrentVersion?.Ver ?? "(null)"}' " +
+            $"LatestVersion='{LatestVersion?.Ver ?? "(null)"}'");
     }
 
     /// <summary>The mod profile this service is operating on (active mod).</summary>
@@ -213,6 +274,39 @@ public class UpdateService
 
         CurrentVersion = current;
         LatestVersion = latest;
+
+        // Persist the just-detected versions into per-mod state so the next
+        // mod switch back to this profile can render the badges correctly
+        // from frame zero (see ctor's cache-hit logic).
+        //   * Current version: only saved when we actually identified one;
+        //     leaving the cache stale on a failed detection is fine, the
+        //     constructor's IsProfileInstalled gate prevents misleading the
+        //     user, and the next successful CheckAsync will repair it.
+        //   * Latest version: saved whenever the manifest fetch returns
+        //     something — it's a server-side fact that doesn't depend on
+        //     the local install being detected.
+        var modState = _config.GetState(_profile.Id);
+        bool dirty = false;
+
+        if (current != null && valid && modState.LastKnownVersion != current.Ver)
+        {
+            modState.LastKnownVersion = current.Ver;
+            dirty = true;
+        }
+        if (latest != null && !string.IsNullOrEmpty(latest.Ver)
+            && modState.LastKnownLatestVersion != latest.Ver)
+        {
+            modState.LastKnownLatestVersion = latest.Ver;
+            dirty = true;
+        }
+        if (dirty)
+        {
+            try { _config.Save(); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Failed to persist version cache: {ex.Message}");
+            }
+        }
 
         return new CheckResult(info, current, latest, pending, valid);
     }

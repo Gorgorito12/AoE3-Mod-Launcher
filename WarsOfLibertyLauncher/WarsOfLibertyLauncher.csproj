@@ -45,6 +45,11 @@
     <PackageReference Include="SharpCompress" Version="0.37.2" />
     <!-- For CRC32 verification of downloaded .tar.xz files -->
     <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
+    <!-- System-tray icon (WPF-native; avoids dragging in WinForms just for
+         the tray). Used to keep the launcher running in the tray when the
+         user closes the window with "Minimize to tray" enabled in the
+         Launcher Settings dialog. -->
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
   </ItemGroup>
 
   <ItemGroup>

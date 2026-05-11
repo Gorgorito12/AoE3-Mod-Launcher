@@ -30,6 +30,28 @@ public class ModState
     /// </summary>
     [JsonPropertyName("activeTranslationId")]
     public string ActiveTranslationId { get; set; } = "";
+
+    /// <summary>
+    /// Last mod version we detected, stored so the UI can show "Installed"
+    /// with the right version number immediately after the user switches to
+    /// this mod, without waiting for the async CheckAsync MD5-and-XML pass
+    /// to complete. CheckAsync overwrites it with the freshly-computed value
+    /// when it finishes. Empty means we have never detected a version for
+    /// this profile (e.g. brand-new install, or mod whose UpdateMechanism
+    /// isn't WolPatcher and so doesn't compute versions at all).
+    /// </summary>
+    [JsonPropertyName("lastKnownVersion")]
+    public string LastKnownVersion { get; set; } = "";
+
+    /// <summary>
+    /// Last "latest version" we got from the mod's update server, cached so
+    /// the "Latest version" row in the status card has a value to show
+    /// immediately after a mod switch instead of waiting for the async
+    /// CheckAsync HTTP fetch to complete. Empty until the first successful
+    /// CheckAsync (or for non-WolPatcher mods that don't fetch a manifest).
+    /// </summary>
+    [JsonPropertyName("lastKnownLatestVersion")]
+    public string LastKnownLatestVersion { get; set; } = "";
 }
 
 /// <summary>
@@ -117,6 +139,68 @@ public class LauncherConfig
     /// <summary>Optional command-line arguments for the game.</summary>
     [JsonPropertyName("gameArguments")]
     public string GameArguments { get; set; } = "";
+
+    // ------------------------------------------------------------------------
+    // Launcher-wide preferences (not per-mod). Surfaced in the
+    // "Launcher Settings" dialog. Default values match the previous
+    // hard-coded behaviour, so upgrading from an older launcher config
+    // doesn't change what the user sees out of the box.
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// When true, the launcher registers itself in
+    /// <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c> so Windows
+    /// starts it automatically at login. Off by default — opt-in.
+    /// <see cref="Services.StartupRegistrationService"/> applies / clears
+    /// the registry key whenever this flag is saved.
+    /// </summary>
+    [JsonPropertyName("startWithWindows")]
+    public bool StartWithWindows { get; set; } = false;
+
+    /// <summary>
+    /// When true, the launcher's main window closes itself once the game
+    /// process has started, freeing resources while the user plays. The
+    /// previously default behaviour (window stays open) is preserved by
+    /// the false default — turning this on is opt-in.
+    /// </summary>
+    [JsonPropertyName("closeLauncherOnGameStart")]
+    public bool CloseLauncherOnGameStart { get; set; } = false;
+
+    /// <summary>
+    /// When true, closing the main window minimises the launcher to the
+    /// system tray instead of exiting the process. Useful for users who
+    /// keep the launcher running in the background (e.g. waiting on a
+    /// long download). Right-click the tray icon → Exit to actually
+    /// terminate. False by default — the conventional "X = quit"
+    /// behaviour is what most users expect.
+    /// </summary>
+    [JsonPropertyName("minimizeToTray")]
+    public bool MinimizeToTray { get; set; } = false;
+
+    /// <summary>
+    /// When true, the launcher shows a system-tray balloon notification
+    /// after long-running operations finish (mod update applied, launcher
+    /// self-update available). The toast only fires when the main window
+    /// is hidden or minimised — there's no point notifying the user about
+    /// something they're already watching on screen.
+    ///
+    /// Default true: matches the principle of "let the user step away and
+    /// come back when something's done". Turning it off is opt-out for
+    /// users who want a silent launcher.
+    /// </summary>
+    [JsonPropertyName("showToastNotifications")]
+    public bool ShowToastNotifications { get; set; } = true;
+
+    /// <summary>
+    /// When true (default), the launcher runs the standard "check for
+    /// updates" routine on startup — launcher self-update + mod patches +
+    /// translations index + mods catalog. Turning it off lets users with
+    /// flaky connections, metered data, or strict privacy preferences
+    /// avoid any outbound HTTP at launch (the launcher still works fully
+    /// from cached state).
+    /// </summary>
+    [JsonPropertyName("checkUpdatesOnStartup")]
+    public bool CheckUpdatesOnStartup { get; set; } = true;
 
     /// <summary>If true, opens the postUpdatePage URLs in the browser after each update.</summary>
     [JsonPropertyName("openPostUpdatePages")]

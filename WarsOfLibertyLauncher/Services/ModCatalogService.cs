@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -35,6 +36,29 @@ namespace WarsOfLibertyLauncher.Services;
 public class ModCatalogService
 {
     private static readonly HttpClient Http = CreateHttpClient();
+
+    /// <summary>
+    /// How long a cached catalog is considered fresh. After this window
+    /// the launcher will refresh the cache in the background (a stale
+    /// cache is still rendered immediately so the UI never waits on the
+    /// network).
+    ///
+    /// 24h is the right grain for community-mod catalogs: new entries
+    /// land via PR and don't need to be seen within minutes, while
+    /// keeping the user out of GitHub's anonymous rate limit (60
+    /// req/hour per IP) even if they launch the app many times a day.
+    /// </summary>
+    public static TimeSpan CacheTtl { get; } = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// On-disk path for the cache file. Lives under per-user LocalAppData
+    /// so we can write without UAC, and so the cache survives launcher
+    /// upgrades that may overwrite the install folder.
+    /// </summary>
+    public static string CacheFilePath { get; } = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "AoE3ModLauncher",
+        "catalog-cache.json");
 
     /// <summary>
     /// Fetches the manifest of every mod folder in <paramref name="repo"/>'s
@@ -150,8 +174,104 @@ public class ModCatalogService
 
         DiagnosticLog.Write(
             $"ModCatalog: {entries.Count} valid manifests from {listing.Count} entries.");
+
+        // Persist successful fetches so the next launcher session can skip
+        // the network entirely (or at least render from cache while a
+        // background refresh runs). Failures here are non-fatal: the user
+        // just doesn't get the speed-up.
+        try { SaveCache(repo, entries); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModCatalog: cache save failed (non-fatal): {ex.Message}");
+        }
+
         return entries;
     }
+
+    // -- Cache load/save ------------------------------------------------------
+
+    /// <summary>
+    /// Read the on-disk catalog cache synchronously. Returns null when the
+    /// file doesn't exist, can't be parsed, or was built from a different
+    /// repo than the one currently configured (so a user switching their
+    /// <c>modsCatalogRepo</c> doesn't see stale entries from the old one).
+    ///
+    /// Caller is responsible for deciding what to do with the result;
+    /// freshness is checked separately via <see cref="IsFresh"/> so the
+    /// "stale cache" code path can still use the data for an immediate
+    /// render while a background fetch runs.
+    /// </summary>
+    public ModCatalogCache? LoadFromCache(string repo)
+    {
+        if (string.IsNullOrWhiteSpace(repo)) return null;
+        if (!File.Exists(CacheFilePath)) return null;
+
+        try
+        {
+            var json = File.ReadAllText(CacheFilePath);
+            var cache = JsonSerializer.Deserialize<ModCatalogCache>(json);
+            if (cache == null) return null;
+            if (!string.Equals(cache.Repo, repo, StringComparison.OrdinalIgnoreCase))
+            {
+                DiagnosticLog.Write(
+                    $"ModCatalog: cache repo '{cache.Repo}' doesn't match active '{repo}' — discarding.");
+                return null;
+            }
+            return cache;
+        }
+        catch (Exception ex)
+        {
+            // Corrupt cache → log + behave as if there's no cache. The next
+            // successful fetch will overwrite with a clean file.
+            DiagnosticLog.Write($"ModCatalog: cache load failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// True if the cache is still within the TTL window. A fresh cache
+    /// should be used directly without touching the network; a stale one
+    /// is OK to render but should be refreshed in the background.
+    /// </summary>
+    public bool IsFresh(ModCatalogCache cache) =>
+        cache != null && (DateTime.UtcNow - cache.FetchedAt) < CacheTtl;
+
+    /// <summary>
+    /// Write the cache to disk. Called automatically by <see cref="FetchAsync"/>
+    /// after a successful online fetch; also exposed so external callers
+    /// (e.g. a "force refresh" button) can trigger persistence after their
+    /// own fetch if needed.
+    /// </summary>
+    public void SaveCache(string repo, List<ModCatalogEntry> entries)
+    {
+        if (string.IsNullOrWhiteSpace(repo) || entries == null) return;
+
+        var dir = Path.GetDirectoryName(CacheFilePath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+
+        var cache = new ModCatalogCache
+        {
+            FetchedAt = DateTime.UtcNow,
+            Repo = repo,
+            Manifests = entries,
+        };
+
+        // Write through a temp file + atomic move so a process crash mid-
+        // write doesn't leave a half-serialised JSON that the next session
+        // chokes on.
+        var tmpPath = CacheFilePath + ".tmp";
+        var json = JsonSerializer.Serialize(
+            cache, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(tmpPath, json);
+        if (File.Exists(CacheFilePath)) File.Delete(CacheFilePath);
+        File.Move(tmpPath, CacheFilePath);
+
+        DiagnosticLog.Write(
+            $"ModCatalog: cache saved ({entries.Count} entries, repo='{repo}').");
+    }
+
+    // -- Internals ------------------------------------------------------------
 
     /// <summary>
     /// Builds the raw-CDN URL for an asset that the manifest references by
