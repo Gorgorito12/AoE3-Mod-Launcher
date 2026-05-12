@@ -1684,27 +1684,49 @@ public partial class MainWindow : Window
 
             _modIsInstalled = result.IsValidInstall;
 
-            // Non-WoL-style mods (e.g. Improvement Mod) don't have an updater
-            // pipeline we can reason about — version detection, manifest fetch
-            // and the Update button are all WoL-specific. We render a
-            // stripped-down "ready to play" status and short-circuit before
-            // any of the WoL-specific branching. Verify/Repair are gated by
-            // _modIsInstalled inside MoreButton_Click — we don't touch
-            // their visibility here.
+            // Non-WoL-style mods don't have the WoL updater pipeline (version
+            // detection, UpdateInfo.xml, .tar.xz patches), so we short-circuit
+            // before any of the WoL-specific branching. Inside this branch the
+            // Install button's enabled state depends on whether the launcher
+            // can actually perform the install:
+            //
+            //   * GitHubReleases  — yes, the launcher downloads the modder's
+            //                       pinned release .zip and overlays it. The
+            //                       Install button is enabled and routes
+            //                       through InstallGitHubReleasesAsync.
+            //   * DelegatedExternal / Manual — no, the mod's own installer or
+            //                       a manual download is the right channel.
+            //                       Install is shown disabled so the user
+            //                       knows it's not actionable from here.
+            //
+            // Verify/Repair are gated by _modIsInstalled inside MoreButton_Click
+            // — we don't touch their visibility here.
             if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
             {
                 UpdateButton.Visibility = Visibility.Collapsed;
                 RefreshIdlePanel();
-                // External-update mods (IM): we can't install for them, so
-                // when not installed the primary is grayed out — the status
-                // text tells the user to install via the mod's own channel.
-                SetPrimaryAction(
-                    result.IsValidInstall ? PrimaryAction.Play : PrimaryAction.Install,
-                    enabled: result.IsValidInstall);
 
-                SetStatus(result.IsValidInstall
-                    ? Strings.Format("StatusReadyExternalUpdates", _updateService.Profile.DisplayName)
-                    : Strings.Format("StatusModNotInstalledExternal", _updateService.Profile.DisplayName));
+                bool launcherCanInstall =
+                    _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases;
+
+                if (result.IsValidInstall)
+                {
+                    SetPrimaryAction(PrimaryAction.Play);
+                    SetStatus(Strings.Format(
+                        "StatusReadyExternalUpdates", _updateService.Profile.DisplayName));
+                }
+                else if (launcherCanInstall)
+                {
+                    SetPrimaryAction(PrimaryAction.Install);
+                    SetStatus(Strings.Get("StatusNotInstalled"));
+                }
+                else
+                {
+                    SetPrimaryAction(PrimaryAction.Install, enabled: false);
+                    SetStatus(Strings.Format(
+                        "StatusModNotInstalledExternal", _updateService.Profile.DisplayName));
+                }
+
                 _pendingDownloads = new();
                 ResetProgressUI();
                 return;
