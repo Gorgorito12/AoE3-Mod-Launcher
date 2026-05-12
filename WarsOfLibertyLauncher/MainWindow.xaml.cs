@@ -60,6 +60,22 @@ public partial class MainWindow : Window
         MainTabsControl.TabNoticias.Click += TabNoticias_Click;
         MainTabsControl.TabChangelog.Click += TabChangelog_Click;
         MainTabsControl.TabAyuda.Click += TabAyuda_Click;
+        ActionPanelControl.PlayButton.Click += PlayButton_Click;
+        ActionPanelControl.StopButton.Click += StopButton_Click;
+        ActionPanelControl.UpdateButton.Click += UpdateButton_Click;
+        ActionPanelControl.MoreButton.Click += MoreButton_Click;
+        ActionPanelControl.OpenFolderButton.Click += OpenFolderButton_Click;
+        ActionPanelControl.MenuOpenAoE3Folder.Click += MenuOpenAoE3Folder_Click;
+        ActionPanelControl.MenuSelectModFolder.Click += MenuSelectModFolder_Click;
+        ActionPanelControl.MenuSelectAoE3Folder.Click += MenuSelectAoE3Folder_Click;
+        ActionPanelControl.MenuOpenUserDataFolder.Click += MenuOpenUserDataFolder_Click;
+        ActionPanelControl.MenuCreateBackupNow.Click += MenuCreateBackupNow_Click;
+        ActionPanelControl.MenuRestoreUserData.Click += MenuRestoreUserData_Click;
+        ActionPanelControl.MenuCheckForUpdates.Click += MenuCheckForUpdates_Click;
+        ActionPanelControl.MenuRepairInstall.Click += MenuRepairInstall_Click;
+        ActionPanelControl.MenuVerifyFiles.Click += MenuVerifyFiles_Click;
+        ActionPanelControl.MenuViewLogs.Click += MenuViewLogs_Click;
+        ActionPanelControl.UninstallMenuItem.Click += UninstallMenuItem_Click;
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
 
@@ -876,7 +892,7 @@ public partial class MainWindow : Window
         // driven by the template triggers for now.
         try
         {
-            PlayButton.Background = Brush(profile.AccentColor);
+            ActionPanelControl.PlayButton.Background = Brush(profile.AccentColor);
         }
         catch
         {
@@ -885,7 +901,7 @@ public partial class MainWindow : Window
         }
         // Sidebar text (status box, actions, game footer, tabs)
         ModsBarLabel.Text = Strings.Get("ModsBarLabel");
-        ActionsLabel.Text = Strings.Get("ActionsLabel");
+        ActionPanelControl.ActionsLabel.Text = Strings.Get("ActionsLabel");
         // The "INSTALLED VERSION / LATEST AVAILABLE" labels lived in the
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
@@ -896,10 +912,10 @@ public partial class MainWindow : Window
         // icon + a named TextBlock — we update only the TextBlock so the
         // icon survives a language change. Verify/Repair/Uninstall live
         // in the gear menu now and aren't rebound here.
-        StopButton.Content = Strings.Get("BtnStop");
-        UpdateButtonText.Text = Strings.Get("BtnUpdate");
-        MoreButtonText.Text = Strings.Get("BtnConfig");
-        OpenFolderButtonText.Text = Strings.Get("BtnOpenFolder");
+        ActionPanelControl.StopButton.Content = Strings.Get("BtnStop");
+        ActionPanelControl.UpdateButtonText.Text = Strings.Get("BtnUpdate");
+        ActionPanelControl.MoreButtonText.Text = Strings.Get("BtnConfig");
+        ActionPanelControl.OpenFolderButtonText.Text = Strings.Get("BtnOpenFolder");
         LauncherSettingsButtonText.Text = Strings.Get("BtnLauncherSettings");
         // Tray labels follow the launcher language. Safe to call even
         // when the tray icon is hidden; ContextMenu lives on the XAML
@@ -918,60 +934,60 @@ public partial class MainWindow : Window
         RefreshActiveModBanner();
         RefreshIdlePanel();
         // Headers (the visible label of each item)
-        UninstallMenuItem.Header = Strings.Get("MenuUninstall");
-        MenuFolders.Header = Strings.Get("MenuManagePaths");
-        MenuOpenAoE3Folder.Header = Strings.Get("MenuOpenAoE3Folder");
-        MenuSelectModFolder.Header = Strings.Format(
+        ActionPanelControl.UninstallMenuItem.Header = Strings.Get("MenuUninstall");
+        ActionPanelControl.MenuFolders.Header = Strings.Get("MenuManagePaths");
+        ActionPanelControl.MenuOpenAoE3Folder.Header = Strings.Get("MenuOpenAoE3Folder");
+        ActionPanelControl.MenuSelectModFolder.Header = Strings.Format(
             "MenuSelectModFolder", _updateService.Profile.DisplayName);
-        MenuSelectAoE3Folder.Header = Strings.Get("MenuSelectAoE3Folder");
-        MenuUserData.Header = Strings.Get("MenuUserData");
-        MenuOpenUserDataFolder.Header = Strings.Get("MenuOpenUserDataFolder");
-        MenuCreateBackupNow.Header = Strings.Get("MenuCreateBackupNow");
-        MenuRestoreUserData.Header = Strings.Get("MenuRestoreUserData");
-        MenuCheckForUpdates.Header = Strings.Get("MenuCheckForUpdates");
-        MenuGameLanguage.Header = Strings.Get("MenuGameLanguage");
-        MenuRepairInstall.Header = Strings.Get("MenuRepairInstall");
-        MenuVerifyFiles.Header = Strings.Get("MenuVerifyFiles");
-        MenuViewLogs.Header = Strings.Get("MenuViewLogs");
+        ActionPanelControl.MenuSelectAoE3Folder.Header = Strings.Get("MenuSelectAoE3Folder");
+        ActionPanelControl.MenuUserData.Header = Strings.Get("MenuUserData");
+        ActionPanelControl.MenuOpenUserDataFolder.Header = Strings.Get("MenuOpenUserDataFolder");
+        ActionPanelControl.MenuCreateBackupNow.Header = Strings.Get("MenuCreateBackupNow");
+        ActionPanelControl.MenuRestoreUserData.Header = Strings.Get("MenuRestoreUserData");
+        ActionPanelControl.MenuCheckForUpdates.Header = Strings.Get("MenuCheckForUpdates");
+        ActionPanelControl.MenuGameLanguage.Header = Strings.Get("MenuGameLanguage");
+        ActionPanelControl.MenuRepairInstall.Header = Strings.Get("MenuRepairInstall");
+        ActionPanelControl.MenuVerifyFiles.Header = Strings.Get("MenuVerifyFiles");
+        ActionPanelControl.MenuViewLogs.Header = Strings.Get("MenuViewLogs");
 
         // Section headers — small-caps gray labels grouping items in the
         // Settings menu. Not clickable; just visual organization.
-        MenuSectionPaths.Header = Strings.Get("MenuSectionPaths");
-        MenuSectionUserData.Header = Strings.Get("MenuSectionUserData");
-        MenuSectionLanguage.Header = Strings.Get("MenuSectionLanguage");
-        MenuSectionMaintenance.Header = Strings.Get("MenuSectionMaintenance");
-        MenuSectionAdvanced.Header = Strings.Get("MenuSectionAdvanced");
-        MenuSectionDanger.Header = Strings.Get("MenuSectionDanger");
+        ActionPanelControl.MenuSectionPaths.Header = Strings.Get("MenuSectionPaths");
+        ActionPanelControl.MenuSectionUserData.Header = Strings.Get("MenuSectionUserData");
+        ActionPanelControl.MenuSectionLanguage.Header = Strings.Get("MenuSectionLanguage");
+        ActionPanelControl.MenuSectionMaintenance.Header = Strings.Get("MenuSectionMaintenance");
+        ActionPanelControl.MenuSectionAdvanced.Header = Strings.Get("MenuSectionAdvanced");
+        ActionPanelControl.MenuSectionDanger.Header = Strings.Get("MenuSectionDanger");
 
         // Tooltips on LEAF items only — items with submenus (Carpetas,
         // Datos de usuario) are self-explanatory once the submenu opens,
         // and showing a tooltip on top of the submenu just causes visual
         // conflict. Same pattern as VS Code, Notion, native OS menus.
-        MoreButton.ToolTip = BuildMenuTooltip(
+        ActionPanelControl.MoreButton.ToolTip = BuildMenuTooltip(
             Strings.Get("TooltipSettings"), Strings.Get("TooltipSettingsBody"));
-        MenuOpenAoE3Folder.ToolTip = BuildMenuTooltip(
-            (string)MenuOpenAoE3Folder.Header, Strings.Get("TooltipMenuOpenAoE3Folder"));
-        MenuSelectModFolder.ToolTip = BuildMenuTooltip(
-            (string)MenuSelectModFolder.Header,
+        ActionPanelControl.MenuOpenAoE3Folder.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuOpenAoE3Folder.Header, Strings.Get("TooltipMenuOpenAoE3Folder"));
+        ActionPanelControl.MenuSelectModFolder.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuSelectModFolder.Header,
             Strings.Format("TooltipMenuSelectModFolder", _updateService.Profile.DisplayName));
-        MenuSelectAoE3Folder.ToolTip = BuildMenuTooltip(
-            (string)MenuSelectAoE3Folder.Header, Strings.Get("TooltipMenuSelectAoE3Folder"));
-        MenuOpenUserDataFolder.ToolTip = BuildMenuTooltip(
-            (string)MenuOpenUserDataFolder.Header, Strings.Get("TooltipMenuOpenUserDataFolder"));
-        MenuCreateBackupNow.ToolTip = BuildMenuTooltip(
-            (string)MenuCreateBackupNow.Header, Strings.Get("TooltipMenuCreateBackupNow"));
-        MenuRestoreUserData.ToolTip = BuildMenuTooltip(
+        ActionPanelControl.MenuSelectAoE3Folder.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuSelectAoE3Folder.Header, Strings.Get("TooltipMenuSelectAoE3Folder"));
+        ActionPanelControl.MenuOpenUserDataFolder.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuOpenUserDataFolder.Header, Strings.Get("TooltipMenuOpenUserDataFolder"));
+        ActionPanelControl.MenuCreateBackupNow.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuCreateBackupNow.Header, Strings.Get("TooltipMenuCreateBackupNow"));
+        ActionPanelControl.MenuRestoreUserData.ToolTip = BuildMenuTooltip(
             Strings.Get("MenuRestoreUserData"), Strings.Get("TooltipMenuRestoreUserData"));
-        MenuCheckForUpdates.ToolTip = BuildMenuTooltip(
-            (string)MenuCheckForUpdates.Header, Strings.Get("TooltipMenuCheckForUpdates"));
-        MenuRepairInstall.ToolTip = BuildMenuTooltip(
-            (string)MenuRepairInstall.Header, Strings.Get("TooltipMenuRepairInstall"));
-        MenuVerifyFiles.ToolTip = BuildMenuTooltip(
-            (string)MenuVerifyFiles.Header, Strings.Get("TooltipMenuVerifyFiles"));
-        MenuViewLogs.ToolTip = BuildMenuTooltip(
-            (string)MenuViewLogs.Header, Strings.Get("TooltipMenuViewLogs"));
-        UninstallMenuItem.ToolTip = BuildMenuTooltip(
-            (string)UninstallMenuItem.Header, Strings.Get("TooltipMenuUninstall"));
+        ActionPanelControl.MenuCheckForUpdates.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuCheckForUpdates.Header, Strings.Get("TooltipMenuCheckForUpdates"));
+        ActionPanelControl.MenuRepairInstall.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuRepairInstall.Header, Strings.Get("TooltipMenuRepairInstall"));
+        ActionPanelControl.MenuVerifyFiles.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuVerifyFiles.Header, Strings.Get("TooltipMenuVerifyFiles"));
+        ActionPanelControl.MenuViewLogs.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuViewLogs.Header, Strings.Get("TooltipMenuViewLogs"));
+        ActionPanelControl.UninstallMenuItem.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.UninstallMenuItem.Header, Strings.Get("TooltipMenuUninstall"));
 
         // The UpdateButton's label is fixed at "Update" — its visibility (not
         // its label) is what tracks state: it only shows when the active mod
@@ -1862,7 +1878,7 @@ public partial class MainWindow : Window
             // — we don't touch their visibility here.
             if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
             {
-                UpdateButton.Visibility = Visibility.Collapsed;
+                ActionPanelControl.UpdateButton.Visibility = Visibility.Collapsed;
                 RefreshIdlePanel();
 
                 bool launcherCanInstall =
@@ -1899,7 +1915,7 @@ public partial class MainWindow : Window
                 SetStatus(Strings.Get("StatusNotInstalled"));
                 SetPrimaryAction(PrimaryAction.Install);
                 _pendingDownloads = new();
-                UpdateButton.Visibility = Visibility.Collapsed;
+                ActionPanelControl.UpdateButton.Visibility = Visibility.Collapsed;
                 RefreshIdlePanel();
                 return;
             }
@@ -1936,7 +1952,7 @@ public partial class MainWindow : Window
             //      full chain — that's a fresh install, not an update. Primary
             //      becomes Install and the Update button stays hidden.
             bool versionKnown = result.CurrentVersion != null;
-            UpdateButton.Visibility = (versionKnown && _pendingDownloads.Count > 0)
+            ActionPanelControl.UpdateButton.Visibility = (versionKnown && _pendingDownloads.Count > 0)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
@@ -3513,33 +3529,33 @@ public partial class MainWindow : Window
         switch (action)
         {
             case PrimaryAction.Install:
-                PlayButtonText.Text = Strings.Get("BtnInstall");
-                PlayButton.Background = accent;
-                PlayButton.Visibility = Visibility.Visible;
-                PlayButton.IsEnabled = enabled;
+                ActionPanelControl.PlayButtonText.Text = Strings.Get("BtnInstall");
+                ActionPanelControl.PlayButton.Background = accent;
+                ActionPanelControl.PlayButton.Visibility = Visibility.Visible;
+                ActionPanelControl.PlayButton.IsEnabled = enabled;
                 break;
             case PrimaryAction.Play:
-                PlayButtonText.Text = _isGameRunning
+                ActionPanelControl.PlayButtonText.Text = _isGameRunning
                     ? Strings.Get("BtnPlaying")
                     : Strings.Get("BtnPlay");
-                PlayButton.Background = accent;
-                PlayButton.Visibility = Visibility.Visible;
-                PlayButton.IsEnabled = enabled && !_isGameRunning;
+                ActionPanelControl.PlayButton.Background = accent;
+                ActionPanelControl.PlayButton.Visibility = Visibility.Visible;
+                ActionPanelControl.PlayButton.IsEnabled = enabled && !_isGameRunning;
                 break;
             case PrimaryAction.Update:
-                PlayButtonText.Text = Strings.Get("BtnUpdate");
-                PlayButton.Background = Brush("#d4a04a");
-                PlayButton.Visibility = Visibility.Visible;
-                PlayButton.IsEnabled = enabled;
+                ActionPanelControl.PlayButtonText.Text = Strings.Get("BtnUpdate");
+                ActionPanelControl.PlayButton.Background = Brush("#d4a04a");
+                ActionPanelControl.PlayButton.Visibility = Visibility.Visible;
+                ActionPanelControl.PlayButton.IsEnabled = enabled;
                 break;
             case PrimaryAction.Stop:
-                PlayButtonText.Text = Strings.Get("BtnStop");
-                PlayButton.Background = Brush("#8b0000");
-                PlayButton.Visibility = Visibility.Visible;
-                PlayButton.IsEnabled = enabled;
+                ActionPanelControl.PlayButtonText.Text = Strings.Get("BtnStop");
+                ActionPanelControl.PlayButton.Background = Brush("#8b0000");
+                ActionPanelControl.PlayButton.Visibility = Visibility.Visible;
+                ActionPanelControl.PlayButton.IsEnabled = enabled;
                 break;
             case PrimaryAction.Hidden:
-                PlayButton.Visibility = Visibility.Collapsed;
+                ActionPanelControl.PlayButton.Visibility = Visibility.Collapsed;
                 break;
         }
     }
@@ -3587,7 +3603,7 @@ public partial class MainWindow : Window
         // know what's available to download until the manifest fetch
         // completes, so letting the user click "Update" early would be
         // racy.
-        UpdateButton.IsEnabled = !busy;
+        ActionPanelControl.UpdateButton.IsEnabled = !busy;
 
         if (busy && checkOnly)
         {
@@ -3600,8 +3616,8 @@ public partial class MainWindow : Window
             // because CheckAsync's "if (_isBusy) return" guard at the top
             // still prevents a second check from piling on top of the
             // first.
-            MoreButton.IsEnabled = true;
-            PlayButton.IsEnabled = PrimaryActionEnabled();
+            ActionPanelControl.MoreButton.IsEnabled = true;
+            ActionPanelControl.PlayButton.IsEnabled = PrimaryActionEnabled();
         }
         else
         {
@@ -3610,8 +3626,8 @@ public partial class MainWindow : Window
             // The gear button itself stays live — its menu items handle their
             // own disabled states — but we lock it during ops so the user can't
             // fire a second flow on top of the running one.
-            MoreButton.IsEnabled = !busy;
-            PlayButton.IsEnabled = !busy && PrimaryActionEnabled();
+            ActionPanelControl.MoreButton.IsEnabled = !busy;
+            ActionPanelControl.PlayButton.IsEnabled = !busy && PrimaryActionEnabled();
         }
     }
 
@@ -3710,7 +3726,7 @@ public partial class MainWindow : Window
 
     private void MoreButton_Click(object sender, RoutedEventArgs e)
     {
-        if (MoreButton.ContextMenu == null) return;
+        if (ActionPanelControl.MoreButton.ContextMenu == null) return;
 
         // Folders submenu — Open variants are enabled only when the path is
         // resolvable on disk; Select variants are always available unless
@@ -3721,9 +3737,9 @@ public partial class MainWindow : Window
         // the user hasn't installed yet).
         bool aoe3Detected = GameLauncher.FindAoe3Install(_config) != null;
 
-        MenuOpenAoE3Folder.IsEnabled = aoe3Detected;
-        MenuSelectModFolder.IsEnabled = !_isBusy;
-        MenuSelectAoE3Folder.IsEnabled = !_isBusy;
+        ActionPanelControl.MenuOpenAoE3Folder.IsEnabled = aoe3Detected;
+        ActionPanelControl.MenuSelectModFolder.IsEnabled = !_isBusy;
+        ActionPanelControl.MenuSelectAoE3Folder.IsEnabled = !_isBusy;
 
         // User data submenu — gated by whether the active mod declares a
         // user-data folder. Mods that don't (e.g. overlay mods sharing the
@@ -3731,7 +3747,7 @@ public partial class MainWindow : Window
         // suggest a feature that wouldn't do anything.
         var userDataFolderName = _updateService.Profile.UserDataFolder;
         var userDataActive = !string.IsNullOrEmpty(userDataFolderName);
-        MenuUserData.Visibility = userDataActive
+        ActionPanelControl.MenuUserData.Visibility = userDataActive
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -3740,10 +3756,10 @@ public partial class MainWindow : Window
             var hasUserData = UserDataService.HasExistingUserData(userDataFolderName);
             var backups = UserDataService.ListBackups(userDataFolderName);
 
-            MenuOpenUserDataFolder.IsEnabled =
+            ActionPanelControl.MenuOpenUserDataFolder.IsEnabled =
                 UserDataService.GetUserDataFolder(userDataFolderName) != null;
-            MenuCreateBackupNow.IsEnabled = !_isBusy && hasUserData;
-            MenuRestoreUserData.IsEnabled = !_isBusy && backups.Count > 0;
+            ActionPanelControl.MenuCreateBackupNow.IsEnabled = !_isBusy && hasUserData;
+            ActionPanelControl.MenuRestoreUserData.IsEnabled = !_isBusy && backups.Count > 0;
 
             // Append the count of available backups to the Restore label so
             // the user knows at a glance whether they have anything to
@@ -3751,11 +3767,11 @@ public partial class MainWindow : Window
             var restoreLabel = Strings.Get("MenuRestoreUserData");
             if (backups.Count > 0)
                 restoreLabel = $"{restoreLabel}  ({backups.Count})";
-            MenuRestoreUserData.Header = restoreLabel;
+            ActionPanelControl.MenuRestoreUserData.Header = restoreLabel;
         }
 
         // Health-check + maintenance actions
-        MenuCheckForUpdates.IsEnabled = !_isBusy && _modIsInstalled;
+        ActionPanelControl.MenuCheckForUpdates.IsEnabled = !_isBusy && _modIsInstalled;
         // Repair re-runs the install pipeline, so it only makes sense for
         // mechanisms the launcher knows how to install from. DelegatedExternal
         // / Manual mods (updated by the mod's own tool) get their entry
@@ -3763,32 +3779,32 @@ public partial class MainWindow : Window
         bool launcherCanInstall =
             _updateService.Profile.UpdateMechanism == ModUpdateMechanism.WolPatcher
             || _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases;
-        MenuRepairInstall.IsEnabled = !_isBusy && _modIsInstalled && launcherCanInstall;
+        ActionPanelControl.MenuRepairInstall.IsEnabled = !_isBusy && _modIsInstalled && launcherCanInstall;
 
         // Verify is now profile-aware: it only enforces the WoL-specific
         // markers when the active mod actually uses the WolPatcher pipeline;
         // for every other mod it falls back to "probe file present + no
         // zero-byte content files". Safe to leave clickable for any
         // installed mod.
-        MenuVerifyFiles.IsEnabled = !_isBusy && _modIsInstalled;
+        ActionPanelControl.MenuVerifyFiles.IsEnabled = !_isBusy && _modIsInstalled;
         // ViewLogs is always available — useful even when no mod is installed.
-        MenuViewLogs.IsEnabled = true;
+        ActionPanelControl.MenuViewLogs.IsEnabled = true;
 
         // Game-language submenu — populated each time the menu opens so
         // the available list reflects the latest registry state and the
         // active translation indicator is up to date.
-        MenuGameLanguage.IsEnabled = !_isBusy && _modIsInstalled;
+        ActionPanelControl.MenuGameLanguage.IsEnabled = !_isBusy && _modIsInstalled;
         PopulateGameLanguageMenu();
 
-        UninstallMenuItem.IsEnabled = !_isBusy && _modIsInstalled;
+        ActionPanelControl.UninstallMenuItem.IsEnabled = !_isBusy && _modIsInstalled;
         // Open to the right of the Settings button, with a small gap so the
         // menu doesn't visually touch the button. WPF auto-flips to the
         // left side if there's not enough room (e.g. very narrow window).
-        MoreButton.ContextMenu.PlacementTarget = MoreButton;
-        MoreButton.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Right;
-        MoreButton.ContextMenu.HorizontalOffset = 8;
-        MoreButton.ContextMenu.VerticalOffset = 0;
-        MoreButton.ContextMenu.IsOpen = true;
+        ActionPanelControl.MoreButton.ContextMenu.PlacementTarget = ActionPanelControl.MoreButton;
+        ActionPanelControl.MoreButton.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Right;
+        ActionPanelControl.MoreButton.ContextMenu.HorizontalOffset = 8;
+        ActionPanelControl.MoreButton.ContextMenu.VerticalOffset = 0;
+        ActionPanelControl.MoreButton.ContextMenu.IsOpen = true;
     }
 
     private void MenuSelectModFolder_Click(object sender, RoutedEventArgs e)
@@ -3860,7 +3876,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void PopulateGameLanguageMenu()
     {
-        MenuGameLanguage.Items.Clear();
+        ActionPanelControl.MenuGameLanguage.Items.Clear();
 
         var installPath = _updateService.InstallPath;
         var translationsService = !string.IsNullOrEmpty(installPath)
@@ -3879,9 +3895,9 @@ public partial class MainWindow : Window
             Foreground = Brush(string.IsNullOrEmpty(activeId) ? "#9bd99b" : "White"),
         };
         english.Click += (_, _) => RevertToEnglish();
-        MenuGameLanguage.Items.Add(english);
+        ActionPanelControl.MenuGameLanguage.Items.Add(english);
 
-        MenuGameLanguage.Items.Add(new System.Windows.Controls.Separator
+        ActionPanelControl.MenuGameLanguage.Items.Add(new System.Windows.Controls.Separator
         {
             Background = Brush("#3a3d44"),
         });
@@ -3914,7 +3930,7 @@ public partial class MainWindow : Window
             // Nothing in the index and nothing locally installed — show a
             // disabled placeholder so the user knows the system is working
             // but there's just no content yet.
-            MenuGameLanguage.Items.Add(new System.Windows.Controls.MenuItem
+            ActionPanelControl.MenuGameLanguage.Items.Add(new System.Windows.Controls.MenuItem
             {
                 Header = Strings.Get("MenuLangNoneAvailable"),
                 IsEnabled = false,
@@ -3927,11 +3943,11 @@ public partial class MainWindow : Window
             foreach (var entry in entries.Values.OrderBy(e => e.Name))
             {
                 var item = BuildLanguageMenuItem(entry, installed, activeId, currentMod);
-                MenuGameLanguage.Items.Add(item);
+                ActionPanelControl.MenuGameLanguage.Items.Add(item);
             }
         }
 
-        MenuGameLanguage.Items.Add(new System.Windows.Controls.Separator
+        ActionPanelControl.MenuGameLanguage.Items.Add(new System.Windows.Controls.Separator
         {
             Background = Brush("#3a3d44"),
         });
@@ -3966,7 +3982,7 @@ public partial class MainWindow : Window
             refresh.Header = originalHeader;
             refresh.IsEnabled = true;
         };
-        MenuGameLanguage.Items.Add(refresh);
+        ActionPanelControl.MenuGameLanguage.Items.Add(refresh);
 
         // Translator tool — turns a folder of translated XMLs into a ready-
         // to-publish .zip + JSON snippet. Only useful for translators, but
@@ -3976,7 +3992,7 @@ public partial class MainWindow : Window
             Header = $"📦  {Strings.Get("MenuLangPackager")}",
         };
         packager.Click += (_, _) => OpenTranslationPackager();
-        MenuGameLanguage.Items.Add(packager);
+        ActionPanelControl.MenuGameLanguage.Items.Add(packager);
     }
 
     /// <summary>
