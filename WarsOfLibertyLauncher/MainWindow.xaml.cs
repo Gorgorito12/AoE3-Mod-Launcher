@@ -82,6 +82,7 @@ public partial class MainWindow : Window
         _config = LauncherConfig.Load();
         Strings.SetLanguage(_config.Language);
         Strings.LanguageChanged += ApplyLanguage;
+        RestoreWindowState();
 
         var activeProfile = _config.GetActiveProfile();
         DiagnosticLog.Write(
@@ -98,6 +99,11 @@ public partial class MainWindow : Window
         ApplyLanguage();
         RefreshModCards();
         ResetProgressUI();
+        // Sync the right-content tab visibility with the saved _activeTab
+        // restored by RestoreWindowState. SwitchContentTab needs Strings
+        // (ApplyLanguage above) and the profile to be ready, so it can't
+        // run from RestoreWindowState itself.
+        SwitchContentTab(_activeTab);
 
         // Surface the tray icon if either MinimizeToTray or
         // ShowToastNotifications is on — the icon is the anchor point
@@ -712,7 +718,76 @@ public partial class MainWindow : Window
             HideToTray();
             return;
         }
+        // Real close — persist size/position/tab so the next launch comes
+        // up where the user left it.
+        SaveWindowState();
         base.OnClosing(e);
+    }
+
+    /// <summary>
+    /// Restores window dimensions, position, maximised flag and the last
+    /// active tab from config. Called from the constructor right after
+    /// the config loads so the window paints at the saved geometry on
+    /// first frame. Off-screen saved positions get clamped to the primary
+    /// screen so a vanished secondary monitor doesn't strand the window.
+    /// </summary>
+    private void RestoreWindowState()
+    {
+        if (_config.WindowWidth >= MinWidth) Width = _config.WindowWidth;
+        if (_config.WindowHeight >= MinHeight) Height = _config.WindowHeight;
+
+        if (!double.IsNaN(_config.WindowLeft) && !double.IsNaN(_config.WindowTop))
+        {
+            var screen = SystemParameters.WorkArea;
+            var l = _config.WindowLeft;
+            var t = _config.WindowTop;
+            bool onScreen =
+                l + Width > screen.Left + 40 &&
+                l < screen.Right - 40 &&
+                t + 40 < screen.Bottom &&
+                t >= screen.Top - 8;
+            if (onScreen)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Left = l;
+                Top = t;
+            }
+        }
+
+        if (_config.WindowMaximized)
+            WindowState = WindowState.Maximized;
+
+        _activeTab = _config.LastActiveTab switch
+        {
+            "Changelog" => ContentTab.Changelog,
+            "Ayuda" => ContentTab.Ayuda,
+            _ => ContentTab.Noticias,
+        };
+    }
+
+    /// <summary>
+    /// Snapshot the current window geometry + active tab into the config
+    /// and flush to disk. Uses RestoreBounds when maximised so the saved
+    /// W/H/Left/Top describe the un-maximised window — restoring then sets
+    /// the geometry first and the maximised flag second.
+    /// </summary>
+    private void SaveWindowState()
+    {
+        var bounds = WindowState == WindowState.Maximized
+            ? RestoreBounds
+            : new System.Windows.Rect(Left, Top, Width, Height);
+
+        if (!double.IsNaN(bounds.Width) && bounds.Width > 0)
+            _config.WindowWidth = bounds.Width;
+        if (!double.IsNaN(bounds.Height) && bounds.Height > 0)
+            _config.WindowHeight = bounds.Height;
+        if (!double.IsNaN(bounds.Left)) _config.WindowLeft = bounds.Left;
+        if (!double.IsNaN(bounds.Top)) _config.WindowTop = bounds.Top;
+        _config.WindowMaximized = WindowState == WindowState.Maximized;
+        _config.LastActiveTab = _activeTab.ToString();
+
+        try { _config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Save window state failed: {ex.Message}"); }
     }
 
     /// <summary>

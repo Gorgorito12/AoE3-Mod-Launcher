@@ -218,6 +218,34 @@ public class LauncherConfig
     public string Theme { get; set; } = "dark";
 
     /// <summary>
+    /// Persisted window geometry. Width/Height are the user's preferred
+    /// normal-state size; Left/Top default to NaN meaning "let WPF
+    /// CenterScreen pick a position on first run". Maximized is restored
+    /// as a separate flag so we don't store maximized dimensions.
+    /// </summary>
+    [JsonPropertyName("windowWidth")]
+    public double WindowWidth { get; set; } = 1100;
+
+    [JsonPropertyName("windowHeight")]
+    public double WindowHeight { get; set; } = 700;
+
+    [JsonPropertyName("windowLeft")]
+    public double WindowLeft { get; set; } = double.NaN;
+
+    [JsonPropertyName("windowTop")]
+    public double WindowTop { get; set; } = double.NaN;
+
+    [JsonPropertyName("windowMaximized")]
+    public bool WindowMaximized { get; set; } = false;
+
+    /// <summary>
+    /// Tab the right content panel was showing when the launcher last closed.
+    /// One of "Noticias" (default), "Changelog", "Ayuda".
+    /// </summary>
+    [JsonPropertyName("lastActiveTab")]
+    public string LastActiveTab { get; set; } = "Noticias";
+
+    /// <summary>
     /// URLs of the Wars of Liberty payload ZIP parts. The ZIP is split into
     /// multiple files (.zip.001, .zip.002, ...) to work around GitHub's file
     /// size limits. The launcher downloads all parts, concatenates them into
