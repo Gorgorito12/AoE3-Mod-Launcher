@@ -308,17 +308,79 @@ public partial class MainWindow : Window
             Margin = new Thickness(0, 0, 10, 0),
             Cursor = System.Windows.Input.Cursors.Hand,
             Child = inner,
+            Tag = profile,
             ToolTip = $"{profile.DisplayName} — {ProbeInstalledState(profile)}",
         };
 
-        if (!isActive)
+        // Handlers attached unconditionally so an in-place highlight switch
+        // (UpdateActiveModHighlight) doesn't strand a tile without hover/
+        // click behaviour. Each handler short-circuits when the card
+        // represents the currently active mod, so the active tile stays
+        // calm (no hover flicker, no self-switch click).
+        card.MouseEnter += (_, _) =>
         {
-            card.MouseEnter += (_, _) => card.Background = hoverBg;
-            card.MouseLeave += (_, _) => card.Background = inactiveBg;
-            card.MouseLeftButtonUp += (_, _) => LoadModProfile(profile);
-        }
+            if (IsActiveModCard(card)) return;
+            card.Background = hoverBg;
+        };
+        card.MouseLeave += (_, _) =>
+        {
+            if (IsActiveModCard(card)) return;
+            card.Background = inactiveBg;
+        };
+        card.MouseLeftButtonUp += (_, _) =>
+        {
+            if (IsActiveModCard(card)) return;
+            LoadModProfile(profile);
+        };
 
         return card;
+    }
+
+    /// <summary>Card is currently displaying the active mod's profile.</summary>
+    private bool IsActiveModCard(System.Windows.Controls.Border card)
+    {
+        return card.Tag is ModProfile p
+            && string.Equals(p.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Cheap mod-switch repaint: walks the existing tiles in
+    /// <see cref="ModCardsPanel"/> and updates only the active highlight
+    /// (BorderBrush + Background) on each, skipping the full rebuild's
+    /// expensive work (per-tile <see cref="ProbeInstalledState"/> disk
+    /// probes, image loads, allocations). Falls back to
+    /// <see cref="RefreshModCards"/> when the tile count doesn't match
+    /// the registry — e.g. a community mod showed up between switches.
+    /// </summary>
+    private void UpdateActiveModHighlight()
+    {
+        var allProfiles = ModRegistry.All.ToList();
+        if (ModCardsPanel.Children.Count != allProfiles.Count)
+        {
+            // Tile set drifted from registry (catalog refresh added/removed
+            // mods) — full rebuild is the only safe option.
+            RefreshModCards();
+            return;
+        }
+
+        var activeId = _updateService.Profile.Id;
+        foreach (var child in ModCardsPanel.Children)
+        {
+            if (child is not System.Windows.Controls.Border card) continue;
+            if (card.Tag is not ModProfile cardProfile) continue;
+
+            bool isActive = string.Equals(cardProfile.Id, activeId, StringComparison.OrdinalIgnoreCase);
+            if (isActive)
+            {
+                card.BorderBrush = SafeBrush(cardProfile.AccentColor, "#3a3d44");
+                card.Background = SafeBrush(BlendWithBase(cardProfile.AccentColor, 0.18), "#3a1f24");
+            }
+            else
+            {
+                card.BorderBrush = Brush("#3a3d44");
+                card.Background = Brush("#22252c");
+            }
+        }
     }
 
     /// <summary>
@@ -541,7 +603,11 @@ public partial class MainWindow : Window
         // (language-only labels, tray strings, section headers) didn't
         // change so re-touching ~40 controls every switch was wasted work.
         RefreshActiveModUi();
-        RefreshModCards();
+        // In-place highlight swap on the existing tiles instead of a full
+        // rebuild (which re-runs per-tile disk probes and image loads).
+        // The post-CheckAsync rebuild below still does the full pass once
+        // the manifest fetch finishes, so any state-text drift gets fixed.
+        UpdateActiveModHighlight();
         ResetProgressUI();
 
         // Sync the primary button (Play / Install / Update / Stop) with the
@@ -594,12 +660,25 @@ public partial class MainWindow : Window
     private static void UpdateAccentResources(ModProfile profile)
     {
         var accent = ParseAccentColor(profile.AccentColor);
+
+        // Bail if the resource brush already matches. Both built-in profiles
+        // happen to use #c8102e, so every switch between them was rebuilding
+        // identical brushes and triggering DynamicResource invalidation in
+        // every consumer in the visual tree (tabs, dialog buttons, scrollbars,
+        // status card, …) for nothing. Comparing the Color value avoids that.
+        if (Application.Current?.Resources["AccentBrush"]
+                is System.Windows.Media.SolidColorBrush existing
+            && existing.Color == accent)
+        {
+            return;
+        }
+
         var hover = LightenColor(accent, 0.18);
         var accentBrush = new System.Windows.Media.SolidColorBrush(accent);
         var hoverBrush = new System.Windows.Media.SolidColorBrush(hover);
         accentBrush.Freeze();
         hoverBrush.Freeze();
-        Application.Current.Resources["AccentBrush"] = accentBrush;
+        Application.Current!.Resources["AccentBrush"] = accentBrush;
         Application.Current.Resources["AccentBrushHover"] = hoverBrush;
     }
 
