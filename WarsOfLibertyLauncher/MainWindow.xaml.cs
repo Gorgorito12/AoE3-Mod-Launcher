@@ -144,7 +144,8 @@ public partial class MainWindow : Window
                     CheckForLauncherUpdateAsync(),
                     CheckAsync(),
                     RefreshTranslationIndexAsync(),
-                    RefreshCatalogAsync());
+                    RefreshCatalogAsync(),
+                    RefreshNewsAsync());
 
                 // The catalog fetch may have surfaced new community mods
                 // that weren't visible during the initial RefreshModCards()
@@ -158,6 +159,8 @@ public partial class MainWindow : Window
             {
                 DiagnosticLog.Write(
                     "Startup auto-check disabled (CheckUpdatesOnStartup=false); using cached state.");
+                // News still loads from cache when auto-check is off.
+                _ = RefreshNewsAsync();
             }
 
             if (_modIsInstalled)
@@ -1316,6 +1319,176 @@ public partial class MainWindow : Window
         // call) will pick up the real banner.
         if (string.IsNullOrEmpty(profile.LocalBannerPath) && !string.IsNullOrEmpty(profile.BannerUrl))
             _ = EnsureModAssetsAsync(profile);
+    }
+
+    // ------------------------------------------------------------------------
+    // News feed — fetched from the catalog repo's news.json on startup and
+    // rendered as cards in the Noticias tab. Defensive: a failed fetch just
+    // leaves the existing placeholder in place.
+    // ------------------------------------------------------------------------
+
+    private async Task RefreshNewsAsync()
+    {
+        try
+        {
+            var feed = await new NewsService().FetchAsync(_config.NewsUrl);
+            await Dispatcher.InvokeAsync(() => RenderNews(feed));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RefreshNewsAsync failed: {ex.Message}");
+        }
+    }
+
+    private void RenderNews(NewsFeed? feed)
+    {
+        MainTabsControl.NewsCardsPanel.Children.Clear();
+
+        var items = feed?.Items;
+        if (items == null || items.Count == 0)
+        {
+            MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        // Filter by active mod when the entry has a modIds list; sort
+        // newest-first by PublishedAt (ISO-8601 strings sort correctly).
+        var activeId = _updateService.Profile.Id;
+        var filtered = items
+            .Where(i => i.ModIds == null || i.ModIds.Count == 0 ||
+                        i.ModIds.Exists(m => string.Equals(m, activeId, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(i => i.PublishedAt, StringComparer.Ordinal)
+            .ToList();
+
+        if (filtered.Count == 0)
+        {
+            MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Collapsed;
+        foreach (var item in filtered)
+            MainTabsControl.NewsCardsPanel.Children.Add(BuildNewsCard(item));
+    }
+
+    private FrameworkElement BuildNewsCard(NewsItem item)
+    {
+        // Locale-aware title / body. Falls back to the top-level values when
+        // the requested language isn't present in item.Locale.
+        var lang = _config.Language ?? "en";
+        var title = item.Title;
+        var body = item.Body;
+        if (item.Locale != null && item.Locale.TryGetValue(lang, out var loc))
+        {
+            if (!string.IsNullOrWhiteSpace(loc.Title)) title = loc.Title;
+            if (!string.IsNullOrWhiteSpace(loc.Body)) body = loc.Body;
+        }
+
+        var stack = new System.Windows.Controls.StackPanel();
+
+        stack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = title,
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (System.Windows.Media.Brush)FindResource("TextPrimary"),
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var when = FormatPublishedAt(item.PublishedAt, lang);
+        if (!string.IsNullOrEmpty(when))
+        {
+            stack.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = when,
+                FontSize = 10,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondary"),
+                Margin = new Thickness(0, 2, 0, 6),
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            stack.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = body,
+                FontSize = 12,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextPrimary"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 4),
+            });
+        }
+
+        // Optional "Read more" link — http/https only so a malformed feed
+        // can't ship a file:// or javascript: URL that opens elsewhere.
+        if (!string.IsNullOrWhiteSpace(item.Link) &&
+            Uri.TryCreate(item.Link, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            var btn = new System.Windows.Controls.Button
+            {
+                Content = Strings.Get("NewsReadMore"),
+                Background = System.Windows.Media.Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Foreground = (System.Windows.Media.Brush)FindResource("InfoBrush"),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Padding = new Thickness(0, 4, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            btn.Click += (_, _) =>
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = uri.ToString(),
+                        UseShellExecute = true,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"News link open failed: {ex.Message}");
+                }
+            };
+            stack.Children.Add(btn);
+        }
+
+        return new System.Windows.Controls.Border
+        {
+            Background = (System.Windows.Media.Brush)FindResource("BgPanel"),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("BorderSubtle"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(14, 12, 14, 12),
+            Margin = new Thickness(0, 0, 0, 10),
+            Child = stack,
+        };
+    }
+
+    /// <summary>
+    /// "5 days ago", "Today", or the absolute date — depending on age and
+    /// whether the timestamp parsed. Falls back to the raw string when
+    /// PublishedAt isn't a valid ISO-8601.
+    /// </summary>
+    private static string FormatPublishedAt(string isoTimestamp, string lang)
+    {
+        if (string.IsNullOrWhiteSpace(isoTimestamp)) return "";
+        if (!DateTime.TryParse(isoTimestamp, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var when))
+        {
+            return isoTimestamp;
+        }
+
+        var days = (int)(DateTime.UtcNow - when).TotalDays;
+        bool es = string.Equals(lang, "es", StringComparison.OrdinalIgnoreCase);
+        if (days < 1) return es ? "Hoy" : "Today";
+        if (days == 1) return es ? "Ayer" : "Yesterday";
+        if (days < 30) return es ? $"Hace {days} días" : $"{days} days ago";
+        return when.ToLocalTime().ToString(es ? "d MMM yyyy" : "MMM d, yyyy",
+            System.Globalization.CultureInfo.GetCultureInfo(es ? "es" : "en"));
     }
 
     // ------------------------------------------------------------------------

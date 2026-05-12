@@ -648,6 +648,11 @@ public static class Strings
             [LangEn] = "Follow Windows",
             [LangEs] = "Seguir Windows",
         },
+        ["NewsReadMore"] = new()
+        {
+            [LangEn] = "Read more →",
+            [LangEs] = "Leer más →",
+        },
         ["DlgLauncherSettingsStartWithWindows"] = new()
         {
             [LangEn] = "Start with Windows",

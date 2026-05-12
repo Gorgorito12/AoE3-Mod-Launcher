@@ -218,6 +218,15 @@ public class LauncherConfig
     public string Theme { get; set; } = "dark";
 
     /// <summary>
+    /// URL of the catalog news.json feed. Default points at the official
+    /// catalog repo. Empty disables the news fetch entirely (the Noticias
+    /// tab then shows just the placeholder).
+    /// </summary>
+    [JsonPropertyName("newsUrl")]
+    public string NewsUrl { get; set; } =
+        "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/news.json";
+
+    /// <summary>
     /// Persisted window geometry. Width/Height are the user's preferred
     /// normal-state size; Left/Top default to NaN meaning "let WPF
     /// CenterScreen pick a position on first run". Maximized is restored
