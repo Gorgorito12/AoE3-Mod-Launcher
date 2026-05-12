@@ -160,13 +160,17 @@ public partial class ModsBrowser : UserControl
         inner.Children.Add(icon);
         inner.Children.Add(right);
 
+        var bgIdle = (Brush)FindResource("BgPanel");
+        var bgHover = (Brush)FindResource("BgPanelAlt");
+        var borderIdle = (Brush)FindResource("BorderSubtle");
+
         var card = new Border
         {
             Width = 320,
             CornerRadius = new CornerRadius(8),
             BorderThickness = new Thickness(isActive ? 2 : 1),
-            BorderBrush = isActive ? accentBrush : (Brush)FindResource("BorderSubtle"),
-            Background = (Brush)FindResource("BgPanel"),
+            BorderBrush = isActive ? accentBrush : borderIdle,
+            Background = bgIdle,
             Padding = new Thickness(14),
             Margin = new Thickness(0, 0, 14, 14),
             Cursor = Cursors.Hand,
@@ -174,10 +178,40 @@ public partial class ModsBrowser : UserControl
             Child = inner,
         };
 
-        // Click handlers + hover effects ship in the next commit; the Tag
-        // already carries the ModProfile so wiring them is just a couple
-        // of event lines.
+        // Hover paints the alt-panel background and bumps the border to
+        // the accent so inactive cards still feel tappable. The active
+        // card keeps its accent border permanently, so we leave its
+        // hover state alone (skip-if-active) to avoid a flicker.
+        card.MouseEnter += (_, _) =>
+        {
+            if (IsActive(card)) return;
+            card.Background = bgHover;
+            card.BorderBrush = accentBrush;
+        };
+        card.MouseLeave += (_, _) =>
+        {
+            if (IsActive(card)) return;
+            card.Background = bgIdle;
+            card.BorderBrush = borderIdle;
+        };
+        // Fire on mouse-down to match the top-strip tiles. CardClicked
+        // is raised even for the active card — consumers (MainWindow)
+        // decide whether to no-op or, in commit 5, open the detail panel.
+        card.MouseLeftButtonDown += (_, _) =>
+        {
+            CardClicked?.Invoke(this, profile);
+        };
+
         return card;
+    }
+
+    private bool IsActive(Border card)
+    {
+        // The card is active when its border thickness matches the active
+        // branch in BuildCard. Simpler than passing activeId around and
+        // good enough since the only way a card flips active is via a
+        // full Populate() rebuild.
+        return card.BorderThickness.Left >= 2;
     }
 
     private static string ResolveDescription(ModProfile profile, string lang)

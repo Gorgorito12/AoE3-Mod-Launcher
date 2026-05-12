@@ -82,6 +82,10 @@ public partial class MainWindow : Window
         MainTabsControl.TabNoticias.Click += TabNoticias_Click;
         MainTabsControl.TabChangelog.Click += TabChangelog_Click;
         MainTabsControl.TabAyuda.Click += TabAyuda_Click;
+        // v0.9 mod browser: card clicks behave like top-strip tile clicks
+        // (LoadModProfile takes care of the inflight / busy guard). Detail
+        // panel wiring lands in a later commit; for now this is the MVP.
+        ModsBrowserView.CardClicked += ModsBrowserView_CardClicked;
         ActionPanelControl.PlayButton.Click += PlayButton_Click;
         ActionPanelControl.StopButton.Click += StopButton_Click;
         ActionPanelControl.UpdateButton.Click += UpdateButton_Click;
@@ -1890,6 +1894,17 @@ public partial class MainWindow : Window
     private void TopTabMultiplayer_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Multiplayer);
     private void TopTabNews_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.News);
     private void TopTabSettings_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Settings);
+
+    /// <summary>
+    /// MVP handler for v0.9: a click on a browser card is treated the
+    /// same as a click on the top-strip tile — switch the active mod.
+    /// LoadModProfile already short-circuits when the clicked profile
+    /// matches the active one, so we just forward unconditionally.
+    /// </summary>
+    private void ModsBrowserView_CardClicked(object? sender, ModProfile profile)
+    {
+        LoadModProfile(profile);
+    }
 
     private void SwitchTopTab(TopTab tab)
     {
