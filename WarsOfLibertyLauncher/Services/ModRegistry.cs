@@ -409,7 +409,13 @@ public static class ModRegistry
             // logo instead of the "W" placeholder.
             BannerImage = "pack://application:,,,/WoL.ico",
             InstallType = ModInstallType.IsolatedFolder,
-            DefaultInstallFolder = @"C:\Program Files (x86)\Wars of Liberty",
+            // Empty on purpose: lets the install dialog fall through to the
+            // "sibling of detected AoE3" default (parent of AoE3 + this mod's
+            // DisplayName). For Steam users this resolves to e.g.
+            // `…\steamapps\common\Wars of Liberty`, sitting alongside AoE3
+            // rather than inside Program Files. The user can override in the
+            // dialog if they want a custom location.
+            DefaultInstallFolder = "",
             InstallProbeFile = @"data\stringtabley.xml",
             GameExecutable = "age3y.exe",
             GameArguments = "",
