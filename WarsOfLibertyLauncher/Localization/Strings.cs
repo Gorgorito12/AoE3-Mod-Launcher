@@ -678,10 +678,20 @@ public static class Strings
             [LangEn] = "SETTINGS",
             [LangEs] = "AJUSTES",
         },
-        ["ModsBrowserComingSoon"] = new()
+        ["ModsBrowserHeaderTitle"] = new()
         {
-            [LangEn] = "Mod browser — coming in v0.9.\nFor now, mods are managed via the gear menu.",
-            [LangEs] = "Explorador de mods — llega en v0.9.\nPor ahora, los mods se gestionan desde el menú de engranaje.",
+            [LangEn] = "Mod browser",
+            [LangEs] = "Explorador de mods",
+        },
+        ["ModsBrowserHeaderSubtitle"] = new()
+        {
+            [LangEn] = "Built-in mods and community catalog",
+            [LangEs] = "Mods integrados y catálogo de la comunidad",
+        },
+        ["ModsBrowserEmpty"] = new()
+        {
+            [LangEn] = "No mods to show. Check the catalog settings in launcher preferences.",
+            [LangEs] = "No hay mods que mostrar. Revisa la configuración del catálogo en los ajustes.",
         },
         ["MultiplayerComingSoon"] = new()
         {

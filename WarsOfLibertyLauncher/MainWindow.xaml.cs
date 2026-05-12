@@ -222,6 +222,27 @@ public partial class MainWindow : Window
         {
             ModCardsPanel.Children.Add(BuildModCard(profile, activeId));
         }
+        // Keep the v0.9 browser grid in sync with the top strip — same
+        // data source (ModRegistry.All), same active highlight, same
+        // install-state probe. Cheap when the Mods tab isn't visible
+        // (the UserControl just rebuilds its children off-screen).
+        RefreshModsBrowser();
+    }
+
+    /// <summary>
+    /// Re-renders the v0.9 mod browser cards from <see cref="ModRegistry.All"/>.
+    /// Safe to call from any thread that already owns the dispatcher (we
+    /// keep all UI-touching helpers single-threaded). Decoupled from
+    /// <see cref="RefreshModCards"/> so future commits can call it
+    /// independently after catalog filtering / search changes.
+    /// </summary>
+    private void RefreshModsBrowser()
+    {
+        ModsBrowserView.Populate(
+            ModRegistry.All,
+            _updateService.Profile.Id,
+            _config.Language,
+            ProbeInstalledState);
     }
 
     private FrameworkElement BuildModCard(ModProfile profile, string activeId)
@@ -1151,11 +1172,18 @@ public partial class MainWindow : Window
         TopTabNews.Content = Strings.Get("TopTabNews");
         TopTabSettings.Content = Strings.Get("TopTabSettings");
 
-        // Placeholder copy for the v0.9 / v1.0 tabs and the Settings teaser.
-        ModsBrowserTeaserText.Text = Strings.Get("ModsBrowserComingSoon");
+        // Placeholder copy for the v1.0 Multiplayer tab and the Settings teaser.
         MultiplayerTeaserText.Text = Strings.Get("MultiplayerComingSoon");
         SettingsTeaserText.Text = Strings.Get("SettingsTabTeaser");
         OpenSettingsTabButton.Content = Strings.Get("SettingsTabOpen");
+
+        // v0.9 mods browser: header strings + empty-state copy. Cards are
+        // (re)rendered by RefreshModsBrowser whenever ModRegistry.All or
+        // the active mod changes; ApplyLanguage only updates static chrome.
+        ModsBrowserView.HeaderTitleText = Strings.Get("ModsBrowserHeaderTitle");
+        ModsBrowserView.HeaderSubtitleText = Strings.Get("ModsBrowserHeaderSubtitle");
+        ModsBrowserView.EmptyMessage = Strings.Get("ModsBrowserEmpty");
+        RefreshModsBrowser();
 
         RefreshTopTabHighlight();
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");

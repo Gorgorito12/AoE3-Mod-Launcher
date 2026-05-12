@@ -501,18 +501,11 @@
         </Grid>
             </Grid>   <!-- /PlayView -->
 
-            <!-- Mods Browser placeholder — full mod catalog UI lands in v0.9. -->
-            <Grid x:Name="ModsBrowserView" Visibility="Collapsed">
-                <StackPanel HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            MaxWidth="600">
-                    <TextBlock x:Name="ModsBrowserTeaserText"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="16"
-                               TextAlignment="Center"
-                               TextWrapping="Wrap"/>
-                </StackPanel>
-            </Grid>
+            <!-- v0.9 mod browser: header + scrollable card grid populated
+                 from ModRegistry.All (built-ins + community catalog). The
+                 UserControl is decoupled from runtime services — MainWindow
+                 calls Populate() whenever the underlying state changes. -->
+            <controls:ModsBrowser x:Name="ModsBrowserView" Visibility="Collapsed"/>
 
             <!-- Multiplayer placeholder — lobby ships in v1.0. -->
             <Grid x:Name="MultiplayerView" Visibility="Collapsed">
