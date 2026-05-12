@@ -849,7 +849,7 @@ public partial class MainWindow : Window
         // the active mod re-renders both with no other changes.
         var profile = _updateService.Profile;
         Title = Strings.Format("WindowTitle", profile.DisplayName);
-        TitleText.Text = profile.DisplayName.ToUpperInvariant();
+        ActiveModBanner.Title = profile.DisplayName.ToUpperInvariant();
 
         // Subtitle: prefer the profile's own (e.g. "AoE3:TAD overhaul") and
         // fall back to the localized "Launcher" when the profile didn't set
@@ -860,7 +860,7 @@ public partial class MainWindow : Window
             : profile.Subtitle;
         if (ElevationService.IsRunningAsAdmin())
             subtitle += "  " + Strings.Get("StatusRunningAsAdmin");
-        SubtitleText.Text = subtitle;
+        ActiveModBanner.Subtitle = subtitle;
 
         // Tint the PLAY button with the active profile's accent color so
         // switching mods gives instant visual feedback ("am I in WoL or
@@ -1206,11 +1206,11 @@ public partial class MainWindow : Window
         if (imgBrush != null)
         {
             // Show the image plus a dark vignette gradient for legible text.
-            ModBannerHost.Background = imgBrush;
+            ActiveModBanner.HostBackground = imgBrush;
         }
         else
         {
-            ModBannerHost.Background = gradient;
+            ActiveModBanner.HostBackground = gradient;
         }
 
         // Lazy fetch: the active profile may be a community mod whose
