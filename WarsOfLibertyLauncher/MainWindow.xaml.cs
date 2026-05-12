@@ -3199,9 +3199,10 @@ public partial class MainWindow : Window
     /// On failure the helper sets a user-facing status and returns null —
     /// callers should bail (no return-bool noise needed).
     /// </summary>
-    private async Task<PayloadResolution?> ResolvePayloadUrlsAsync()
+    private async Task<PayloadResolution?> ResolvePayloadUrlsAsync(UpdateService? targetService = null)
     {
-        var profile = _updateService.Profile;
+        var service = targetService ?? _updateService;
+        var profile = service.Profile;
         if (profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
         {
             var ghs = profile.GitHubReleases;
@@ -3238,7 +3239,7 @@ public partial class MainWindow : Window
         // surfaced here — keeping it null preserves the previous behaviour
         // for WoL while leaving the door open for a follow-up that lifts
         // ModCatalogWolSettings.PayloadSha256 through ModProfile.
-        var payloadUrls = _updateService.EffectivePayloadZipUrls();
+        var payloadUrls = service.EffectivePayloadZipUrls();
         if (payloadUrls != null && payloadUrls.Length > 0)
             return new PayloadResolution(payloadUrls, null);
 
@@ -3254,15 +3255,16 @@ public partial class MainWindow : Window
     /// registry based on the active profile's update mechanism. Shared by
     /// <see cref="InstallAsync"/> and <see cref="RepairInstallAsync"/>.
     /// </summary>
-    private string ResolveInstallVersion()
+    private string ResolveInstallVersion(UpdateService? targetService = null)
     {
-        var profile = _updateService.Profile;
+        var service = targetService ?? _updateService;
+        var profile = service.Profile;
         return profile.UpdateMechanism switch
         {
             ModUpdateMechanism.GitHubReleases =>
                 profile.GitHubReleases?.ApprovedReleaseTag ?? "",
-            _ => _updateService.CurrentVersion?.Ver
-                ?? _updateService.LatestVersion?.Ver ?? "",
+            _ => service.CurrentVersion?.Ver
+                ?? service.LatestVersion?.Ver ?? "",
         };
     }
 
@@ -3276,14 +3278,25 @@ public partial class MainWindow : Window
     ///   5. Creates shortcuts + registry entries
     ///   6. Verifies the installation
     /// </summary>
-    private async Task InstallAsync()
+    /// <param name="targetService">
+    /// Optional override so the Mod Browser (v0.9) can install a mod that
+    /// isn't the currently active one without forcing a mod-switch first.
+    /// When null we default to <see cref="_updateService"/>, which keeps
+    /// every existing call site behaving exactly as before.
+    /// </param>
+    private async Task InstallAsync(UpdateService? targetService = null)
     {
         if (_isBusy) return;
 
         // Check if game is running first
         if (!EnsureGameNotRunning()) return;
 
-        var payload = await ResolvePayloadUrlsAsync();
+        // Resolve once at the top so the rest of the body talks about the
+        // install target uniformly via `profile` / `service`.
+        var service = targetService ?? _updateService;
+        var profile = service.Profile;
+
+        var payload = await ResolvePayloadUrlsAsync(service);
         if (payload == null) return;
         var payloadUrls = payload.Urls;
         var payloadSha256 = payload.Sha256;
@@ -3323,7 +3336,6 @@ public partial class MainWindow : Window
         // unrelated mod installs.
         // The user can still override the suggested folder in the dialog.
         string suggestedFolder;
-        var profile = _updateService.Profile;
         if (profile.InstallType == ModInstallType.InPlaceOverlay)
         {
             suggestedFolder = aoe3SourcePath
@@ -3393,7 +3405,7 @@ public partial class MainWindow : Window
         // Show the styled install dialog (single popup, no MessageBoxes)
         var dialog = new InstallFolderDialog(
             suggestedFolder, aoe3SourcePath, aoe3SourceLabel,
-            _updateService.Profile.DisplayName)
+            profile.DisplayName)
         {
             Owner = this
         };
@@ -3450,7 +3462,7 @@ public partial class MainWindow : Window
         // bars / step counter / speed.
         StartProgressPanel(
             ProgressOperation.Install,
-            title: Strings.Format("ProgressTitleInstalling", _updateService.Profile.DisplayName),
+            title: Strings.Format("ProgressTitleInstalling", profile.DisplayName),
             subtitle: Strings.Get("ProgressSubDownloading"));
 
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
@@ -3602,13 +3614,13 @@ public partial class MainWindow : Window
             // Wire up pause to native installer
             _cloneService = nativeInstaller.CloneService;
 
-            var installVersion = ResolveInstallVersion();
+            var installVersion = ResolveInstallVersion(service);
 
             if (aoe3SourcePath != null)
             {
                 // Full install: clone AoE3 + overlay mod
                 await nativeInstaller.InstallAsync(
-                    _updateService.Profile,
+                    profile,
                     installVersion,
                     payloadUrls,
                     aoe3SourcePath,
@@ -3626,7 +3638,7 @@ public partial class MainWindow : Window
             {
                 // Mod-only: just download and copy mod files
                 await nativeInstaller.InstallModOnlyAsync(
-                    _updateService.Profile,
+                    profile,
                     installVersion,
                     payloadUrls,
                     installFolder,
@@ -3649,7 +3661,7 @@ public partial class MainWindow : Window
             // mods the tag IS the version, so persisting it here is what
             // makes the StatusCard render "Installed v1.5" on next launch
             // without waiting for a manifest fetch.
-            var installState = _config.GetActiveState();
+            var installState = _config.GetState(profile.Id);
             installState.InstallPath = installFolder;
             if (!string.IsNullOrEmpty(installVersion))
                 installState.LastKnownVersion = installVersion;
@@ -3661,9 +3673,8 @@ public partial class MainWindow : Window
             // (art\zulushield\, .bar archives, sound\, AI3\) when the active
             // profile uses the WolPatcher mechanism. Non-WoL mods get the
             // generic layer only, so no false positives.
-            var postInstallProfile = _updateService.Profile;
             var verifyResult = await Task.Run(
-                () => VerifyInstallation(installFolder, postInstallProfile));
+                () => VerifyInstallation(installFolder, profile));
             int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
             if (totalProblems == 0)
             {
