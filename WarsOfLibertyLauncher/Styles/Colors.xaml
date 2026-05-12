@@ -1,0 +1,35 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Surfaces -->
+    <SolidColorBrush x:Key="BgBase" Color="#1a1d24"/>
+    <SolidColorBrush x:Key="BgPanel" Color="#22252c"/>
+    <SolidColorBrush x:Key="BgPanelAlt" Color="#2a2d34"/>
+    <SolidColorBrush x:Key="BgNeutral" Color="#3a3d44"/>
+    <SolidColorBrush x:Key="BgNeutralHover" Color="#4a4d54"/>
+    <SolidColorBrush x:Key="BgNeutralPressed" Color="#5a5d64"/>
+
+    <!-- Border -->
+    <SolidColorBrush x:Key="BorderSubtle" Color="#3a3d44"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextPrimary" Color="#f0f0f0"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#b8b8b8"/>
+
+    <!-- Accent: per-mod theme. Static here today; swapped to a runtime
+         DynamicResource on mod switch in commit 5. -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#c8102e"/>
+    <SolidColorBrush x:Key="AccentBrushHover" Color="#e63950"/>
+
+    <!-- Destructive (Uninstall). Stays static — never themed per mod. -->
+    <SolidColorBrush x:Key="DangerBrush" Color="#8b0000"/>
+    <SolidColorBrush x:Key="DangerBrushHover" Color="#a71d1d"/>
+
+    <!-- Status foregrounds -->
+    <SolidColorBrush x:Key="ErrorBrush" Color="#e63950"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="#9bd99b"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="#5b9bd5"/>
+    <SolidColorBrush x:Key="InfoBrushHover" Color="#3a8cd9"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="#d4a04a"/>
+
+</ResourceDictionary>
