@@ -5,10 +5,10 @@ using WarsOfLibertyLauncher.Services;
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Confirmation dialog for uninstalling Wars of Liberty. Shows the install
-/// path being targeted, a count of files / dirs that will be removed, and
-/// lets the user toggle optional cleanup steps (shortcuts, registry, config).
-/// If the path doesn't have the WoL marker we surface a red error panel
+/// Confirmation dialog for uninstalling a mod. Shows the install path being
+/// targeted, a count of files / dirs that will be removed, and lets the
+/// user toggle optional cleanup steps (shortcuts, registry, config). If the
+/// path doesn't have the profile's probe file we surface a red error panel
 /// and refuse to proceed instead of touching files.
 /// </summary>
 public partial class UninstallDialog : Window
@@ -16,11 +16,35 @@ public partial class UninstallDialog : Window
     public UninstallOptions Options { get; private set; } = new();
 
     private readonly UninstallPlan _plan;
+    private readonly string _modDisplayName;
+    private readonly string _probeFile;
 
+    /// <summary>
+    /// Back-compat overload. Defaults to WoL-labelled copy. New callers
+    /// should use the four-argument form so the dialog templates the active
+    /// mod's name into every visible string.
+    /// </summary>
     public UninstallDialog(UninstallPlan plan)
+        : this(plan, "Wars of Liberty", @"art\zulushield\") { }
+
+    /// <param name="modDisplayName">
+    /// Display name of the mod being uninstalled (e.g. "Wars of Liberty",
+    /// "Improvement Mod"). Templated into the title, description and error
+    /// messages so every mod sees its own name.
+    /// </param>
+    /// <param name="probeFile">
+    /// File the launcher checks to confirm the target folder really is an
+    /// install of this mod (e.g. <c>"age3m.exe"</c> for Improvement Mod,
+    /// <c>"data\\stringtabley.xml"</c> for Wars of Liberty). Shown in the
+    /// "not a valid install" error message so the user can understand
+    /// what's missing.
+    /// </param>
+    public UninstallDialog(UninstallPlan plan, string modDisplayName, string probeFile)
     {
         InitializeComponent();
         _plan = plan;
+        _modDisplayName = string.IsNullOrEmpty(modDisplayName) ? "the mod" : modDisplayName;
+        _probeFile = string.IsNullOrEmpty(probeFile) ? "(unknown)" : probeFile;
 
         ApplyLanguage();
         ApplyPlan();
@@ -28,9 +52,9 @@ public partial class UninstallDialog : Window
 
     private void ApplyLanguage()
     {
-        Title = Strings.Get("DlgUninstallTitle");
-        HeaderText.Text = Strings.Get("DlgUninstallHeader");
-        DescriptionText.Text = Strings.Get("DlgUninstallDescription");
+        Title = Strings.Format("DlgUninstallTitle", _modDisplayName);
+        HeaderText.Text = Strings.Format("DlgUninstallHeader", _modDisplayName);
+        DescriptionText.Text = Strings.Format("DlgUninstallDescription", _modDisplayName);
         LblInstallPath.Text = Strings.Get("DlgUninstallInstallPathLabel");
         OptionsTitleText.Text = Strings.Get("DlgUninstallOptionsTitle");
         OptDeleteShortcuts.Content = Strings.Get("DlgUninstallOptShortcuts");
@@ -57,9 +81,10 @@ public partial class UninstallDialog : Window
 
             case UninstallMode.NotAValidInstall:
                 RefusedPanel.Visibility = Visibility.Visible;
-                RefusedTitleText.Text = Strings.Get("DlgUninstallNotValidTitle");
+                RefusedTitleText.Text = Strings.Format(
+                    "DlgUninstallNotValidTitle", _modDisplayName);
                 RefusedDetailText.Text = Strings.Format(
-                    "DlgUninstallNotValidDetail", _plan.InstallPath);
+                    "DlgUninstallNotValidDetail", _plan.InstallPath, _probeFile, _modDisplayName);
                 DisableActions();
                 break;
 

@@ -20,15 +20,26 @@ public partial class InstallFolderDialog : Window
     public string? Aoe3SourcePath { get; private set; }
 
     public InstallFolderDialog(string defaultFolder)
-        : this(defaultFolder, null, null) { }
-
-    private string? _aoe3SourceLabel;
+        : this(defaultFolder, null, null, "Wars of Liberty") { }
 
     public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel)
+        : this(defaultFolder, aoe3Path, aoe3SourceLabel, "Wars of Liberty") { }
+
+    private string? _aoe3SourceLabel;
+    private readonly string _modDisplayName;
+
+    /// <param name="modDisplayName">
+    /// Display name of the mod being installed (e.g. "Wars of Liberty",
+    /// "Improvement Mod"). Templated into the dialog's title and the
+    /// "&lt;mod&gt; will be installed in its own '&lt;mod&gt;' folder" copy so
+    /// every mod sees its own name instead of WoL.
+    /// </param>
+    public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel, string modDisplayName)
     {
         InitializeComponent();
         Aoe3SourcePath = aoe3Path;
         _aoe3SourceLabel = aoe3SourceLabel;
+        _modDisplayName = string.IsNullOrEmpty(modDisplayName) ? "the mod" : modDisplayName;
 
         ApplyLanguage();
         FolderTextBox.Text = defaultFolder;
@@ -41,9 +52,9 @@ public partial class InstallFolderDialog : Window
 
     private void ApplyLanguage()
     {
-        Title = Strings.Get("DlgPickInstallFolderTitle");
+        Title = Strings.Format("DlgPickInstallFolderTitle", _modDisplayName);
         HeaderText.Text = Strings.Get("DlgPickInstallFolderHeader");
-        DescriptionText.Text = Strings.Get("DlgPickInstallFolderDescription");
+        DescriptionText.Text = Strings.Format("DlgPickInstallFolderDescription", _modDisplayName);
         LblAoE3Folder.Text = Strings.Get("LblGamePath");
         LblFolder.Text = Strings.Get("DlgPickInstallFolderLabel");
         BrowseButton.Content = Strings.Get("ChangePathButton");

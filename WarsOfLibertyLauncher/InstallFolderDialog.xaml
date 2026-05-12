@@ -1,7 +1,7 @@
 <Window x:Class="WarsOfLibertyLauncher.InstallFolderDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Install Wars of Liberty"
+        Title="Install"
         Width="560" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"

@@ -208,7 +208,8 @@ public static class GameLauncher
         if (exePath == null)
         {
             throw new FileNotFoundException(
-                WarsOfLibertyLauncher.Localization.Strings.Get("ErrGameExeNotFound"));
+                WarsOfLibertyLauncher.Localization.Strings.Format(
+                    "ErrGameExeNotFound", profile.DisplayName));
         }
 
         // Cache the resolved path so the next launch is instant — no need to

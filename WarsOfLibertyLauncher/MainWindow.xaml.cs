@@ -820,7 +820,8 @@ public partial class MainWindow : Window
         UninstallMenuItem.Header = Strings.Get("MenuUninstall");
         MenuFolders.Header = Strings.Get("MenuManagePaths");
         MenuOpenAoE3Folder.Header = Strings.Get("MenuOpenAoE3Folder");
-        MenuSelectModFolder.Header = Strings.Get("MenuSelectModFolder");
+        MenuSelectModFolder.Header = Strings.Format(
+            "MenuSelectModFolder", _updateService.Profile.DisplayName);
         MenuSelectAoE3Folder.Header = Strings.Get("MenuSelectAoE3Folder");
         MenuUserData.Header = Strings.Get("MenuUserData");
         MenuOpenUserDataFolder.Header = Strings.Get("MenuOpenUserDataFolder");
@@ -850,7 +851,8 @@ public partial class MainWindow : Window
         MenuOpenAoE3Folder.ToolTip = BuildMenuTooltip(
             (string)MenuOpenAoE3Folder.Header, Strings.Get("TooltipMenuOpenAoE3Folder"));
         MenuSelectModFolder.ToolTip = BuildMenuTooltip(
-            (string)MenuSelectModFolder.Header, Strings.Get("TooltipMenuSelectModFolder"));
+            (string)MenuSelectModFolder.Header,
+            Strings.Format("TooltipMenuSelectModFolder", _updateService.Profile.DisplayName));
         MenuSelectAoE3Folder.ToolTip = BuildMenuTooltip(
             (string)MenuSelectAoE3Folder.Header, Strings.Get("TooltipMenuSelectAoE3Folder"));
         MenuOpenUserDataFolder.ToolTip = BuildMenuTooltip(
@@ -1303,9 +1305,11 @@ public partial class MainWindow : Window
     {
         if (_isBusy) return;
 
+        var profile = _updateService.Profile;
+
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = Strings.Get("DlgFolderPickerTitle"),
+            Title = Strings.Format("DlgFolderPickerTitle", profile.DisplayName),
             Multiselect = false
         };
 
@@ -1319,18 +1323,28 @@ public partial class MainWindow : Window
 
         var chosen = dialog.FolderName.TrimEnd('\\', '/');
 
-        // Be tolerant: if the user picked the AoE3 root by mistake, try
-        // common WoL subfolders inside it before failing.
-        string? resolved = null;
-        var candidates = new[]
+        // Be tolerant: if the user picked the AoE3 root by mistake, try a
+        // mod-named subfolder inside it before failing. The candidate names
+        // come from the active profile, not from hardcoded WoL strings, so
+        // this works for any mod whose install convention is a separate
+        // folder under AoE3. "Validity" of a candidate is verified by the
+        // mod's own probe file (e.g. age3y.exe / age3m.exe / etc.).
+        var candidates = new List<string> { chosen };
+        if (!string.IsNullOrEmpty(profile.DisplayName))
+            candidates.Add(Path.Combine(chosen, profile.DisplayName));
+        var defaultLeaf = Path.GetFileName(
+            profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? "");
+        if (!string.IsNullOrEmpty(defaultLeaf)
+            && !candidates.Contains(Path.Combine(chosen, defaultLeaf),
+                StringComparer.OrdinalIgnoreCase))
         {
-            chosen,
-            Path.Combine(chosen, "Wars of Liberty"),
-            Path.Combine(chosen, "WarsOfLiberty"),
-        };
+            candidates.Add(Path.Combine(chosen, defaultLeaf));
+        }
+
+        string? resolved = null;
         foreach (var candidate in candidates)
         {
-            if (RegistryService.IsValidInstall(candidate))
+            if (LooksLikeModInstall(candidate, profile))
             {
                 resolved = candidate.TrimEnd('\\', '/');
                 break;
@@ -1340,7 +1354,12 @@ public partial class MainWindow : Window
         if (resolved == null)
         {
             MessageBox.Show(this,
-                Strings.Get("DlgInvalidFolderBody"),
+                Strings.Format(
+                    "DlgInvalidFolderBody",
+                    profile.DisplayName,
+                    string.IsNullOrEmpty(profile.InstallProbeFile)
+                        ? "(unknown probe file)"
+                        : profile.InstallProbeFile),
                 Strings.Get("DlgInvalidFolderTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -1349,6 +1368,38 @@ public partial class MainWindow : Window
         _config.GetActiveState().InstallPath = resolved;
         _config.Save();
         await CheckAsync();
+    }
+
+    /// <summary>
+    /// Lightweight "is this folder an install of the given mod" check used
+    /// by the manual folder picker. Primary signal is the profile's probe
+    /// file — same one the install pipeline writes and the uninstaller
+    /// looks for. For WoL specifically (the only mod that also has an Inno
+    /// Setup registry footprint) we fall back to <see cref="RegistryService.IsValidInstall"/>
+    /// so existing legacy installs without the modern probe file still
+    /// resolve.
+    /// </summary>
+    private static bool LooksLikeModInstall(string candidate, ModProfile profile)
+    {
+        if (string.IsNullOrEmpty(candidate) || !Directory.Exists(candidate))
+            return false;
+
+        if (!string.IsNullOrEmpty(profile.InstallProbeFile)
+            && File.Exists(Path.Combine(candidate, profile.InstallProbeFile)))
+        {
+            return true;
+        }
+
+        // Backwards-compat for WoL installs from the Inno-installer era,
+        // which may predate the probe-file-based detection. Other mods don't
+        // touch this registry path so the check is cheap and silent for them.
+        if (string.Equals(profile.Id, ModRegistry.WolId, StringComparison.OrdinalIgnoreCase)
+            && RegistryService.IsValidInstall(candidate))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     // ------------------------------------------------------------------------
@@ -1768,8 +1819,12 @@ public partial class MainWindow : Window
             {
                 _warnedAboutBrokenInstall = true;
                 MessageBox.Show(this,
-                    Strings.Format("DlgBrokenInstallBody", _updateService.InstallPath),
-                    Strings.Get("DlgBrokenInstallTitle"),
+                    Strings.Format(
+                        "DlgBrokenInstallBody",
+                        _updateService.InstallPath,
+                        _updateService.Profile.DisplayName),
+                    Strings.Format(
+                        "DlgBrokenInstallTitle", _updateService.Profile.DisplayName),
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
 
@@ -1810,8 +1865,10 @@ public partial class MainWindow : Window
                 {
                     SetStatus(Strings.Format(
                         "StatusVersionTooOld",
+                        _updateService.Profile.DisplayName,
                         result.CurrentVersion?.Ver,
-                        result.LatestVersion?.Ver));
+                        result.LatestVersion?.Ver,
+                        _updateService.Profile.OfficialWebsite));
                 }
                 SetPrimaryAction(PrimaryAction.Play);
                 ResetProgressUI();
@@ -2461,7 +2518,6 @@ public partial class MainWindow : Window
         var aoe3Installs = AoE3Detector.FindAll();
         string? aoe3SourcePath = null;
         string? aoe3SourceLabel = null;
-        string suggestedFolder;
 
         if (aoe3Installs.Count > 0)
         {
@@ -2471,24 +2527,73 @@ public partial class MainWindow : Window
             // sound\, art\ and the rest of the game files the mod needs.
             aoe3SourcePath = aoe3Installs[0].ModRoot;
             aoe3SourceLabel = aoe3Installs[0].Source;
-            suggestedFolder = aoe3Installs[0].ModRoot;
+        }
+
+        // Default destination depends on InstallType:
+        //   * InPlaceOverlay → the AoE3 folder itself (mod files extracted on
+        //                      top of vanilla AoE3).
+        //   * IsolatedFolder → in priority order:
+        //       1. the path the user installed THIS mod to last time (per-mod
+        //          state — remembers their pick across reinstalls);
+        //       2. the profile's DefaultInstallFolder (set by the modder in
+        //          their catalog mod.json);
+        //       3. a sibling of AoE3 named after the mod (when neither of
+        //          the above is set).
+        // Deliberately NOT using LauncherConfig.DefaultInstallFolder — that
+        // legacy setting is WoL-specific and would leak the WoL path into
+        // unrelated mod installs.
+        // The user can still override the suggested folder in the dialog.
+        string suggestedFolder;
+        var profile = _updateService.Profile;
+        if (profile.InstallType == ModInstallType.InPlaceOverlay)
+        {
+            suggestedFolder = aoe3SourcePath
+                ?? (string.IsNullOrEmpty(profile.DefaultInstallFolder)
+                    ? profile.DisplayName
+                    : profile.DefaultInstallFolder);
         }
         else
         {
-            suggestedFolder = _updateService.EffectiveDefaultInstallFolder();
-        }
+            var lastInstallPath = _config.GetState(profile.Id).InstallPath;
 
-        // Append the mod's folder name (e.g. "Wars of Liberty") if the user
-        // pointed at a parent folder. Only applies to isolated-folder mods —
-        // in-place mods (Improvement Mod) install directly into AoE3.
-        if (_updateService.Profile.InstallType == ModInstallType.IsolatedFolder)
-        {
-            var modFolderName = Path.GetFileName(
-                _updateService.EffectiveDefaultInstallFolder().TrimEnd('\\', '/'));
-            if (!string.IsNullOrEmpty(modFolderName)
-                && !suggestedFolder.EndsWith(modFolderName, StringComparison.OrdinalIgnoreCase))
+            // Defensive validation: only trust the per-mod cached install path
+            // if its leaf folder looks like THIS mod's folder (DisplayName or
+            // DefaultInstallFolder leaf). Otherwise the cached value may be a
+            // vanilla-AoE3 leak (e.g. the Steam "...\Age Of Empires 3\bin")
+            // saved by an earlier detection that fell through to the AoE3
+            // fallback candidates. Suggesting that as the install destination
+            // for an IsolatedFolder mod would overwrite the user's AoE3.
+            string[] expectedLeafs = new[]
             {
-                suggestedFolder = Path.Combine(suggestedFolder, modFolderName);
+                profile.DisplayName,
+                Path.GetFileName(profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? ""),
+            };
+            bool lastIsTrustworthy =
+                !string.IsNullOrEmpty(lastInstallPath)
+                && expectedLeafs.Any(leaf =>
+                    !string.IsNullOrEmpty(leaf)
+                    && string.Equals(
+                        Path.GetFileName(lastInstallPath.TrimEnd('\\', '/')),
+                        leaf,
+                        StringComparison.OrdinalIgnoreCase));
+
+            if (lastIsTrustworthy)
+            {
+                suggestedFolder = lastInstallPath;
+            }
+            else if (!string.IsNullOrEmpty(profile.DefaultInstallFolder))
+            {
+                suggestedFolder = profile.DefaultInstallFolder;
+            }
+            else if (!string.IsNullOrEmpty(aoe3SourcePath))
+            {
+                var parent = Path.GetDirectoryName(aoe3SourcePath.TrimEnd('\\', '/'))
+                    ?? aoe3SourcePath;
+                suggestedFolder = Path.Combine(parent, profile.DisplayName);
+            }
+            else
+            {
+                suggestedFolder = profile.DisplayName;
             }
         }
 
@@ -2501,7 +2606,9 @@ public partial class MainWindow : Window
         ShowUserDataAlertIfNeeded();
 
         // Show the styled install dialog (single popup, no MessageBoxes)
-        var dialog = new InstallFolderDialog(suggestedFolder, aoe3SourcePath, aoe3SourceLabel)
+        var dialog = new InstallFolderDialog(
+            suggestedFolder, aoe3SourcePath, aoe3SourceLabel,
+            _updateService.Profile.DisplayName)
         {
             Owner = this
         };
@@ -4040,7 +4147,17 @@ public partial class MainWindow : Window
         var uninstaller = new UninstallService();
         var plan = uninstaller.Plan(_updateService.Profile, _updateService.InstallPath);
 
-        var dialog = new UninstallDialog(plan) { Owner = this };
+        // Pass the active profile's display name + probe file into the dialog
+        // so every visible string is templated correctly for THIS mod (e.g.
+        // "Uninstall Improvement Mod", "does not contain the Improvement Mod
+        // marker (age3m.exe)") instead of the WoL fallback.
+        var dialog = new UninstallDialog(
+            plan,
+            _updateService.Profile.DisplayName,
+            _updateService.Profile.InstallProbeFile)
+        {
+            Owner = this
+        };
         if (dialog.ShowDialog() != true) return;
 
         if (plan.Mode != UninstallMode.Valid)
@@ -4053,7 +4170,7 @@ public partial class MainWindow : Window
             subtitle: Strings.Get("ProgressSubRemoving"),
             bar1Label: "ProgressBarProcess",
             bar2Label: "ProgressBarCleanup");
-        SetStatus(Strings.Get("StatusUninstalling"));
+        SetStatus(Strings.Format("StatusUninstalling", _updateService.Profile.DisplayName));
 
         // The uninstall service emits a single "Pct/Step" tuple per phase.
         // Map to the two bars: top bar follows the percentage, bottom bar
@@ -4085,10 +4202,14 @@ public partial class MainWindow : Window
 
             if (result.Success)
             {
-                SetStatus(Strings.Format("StatusUninstallSuccess", result.FilesDeleted));
+                SetStatus(Strings.Format(
+                    "StatusUninstallSuccess",
+                    _updateService.Profile.DisplayName, result.FilesDeleted));
                 // Uninstall: nothing to play, nothing to open — just Close.
                 ShowProgressCompleted("ProgressTitleCompleted",
-                    Strings.Format("StatusUninstallSuccess", result.FilesDeleted));
+                    Strings.Format(
+                        "StatusUninstallSuccess",
+                        _updateService.Profile.DisplayName, result.FilesDeleted));
             }
             else
             {

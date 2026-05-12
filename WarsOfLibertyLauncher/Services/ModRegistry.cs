@@ -401,6 +401,9 @@ public static class ModRegistry
             // by older builds and the (legacy) Inno installer.
             ProductGuid = "{EB448764-CABB-4766-8055-495AEA292020}_is1",
             Author = "Wars of Liberty Team",
+            // Templated into error / status messages that tell the user
+            // where to re-download the mod from when an update fails.
+            OfficialWebsite = "http://aoe3wol.com/",
             // Reuse the launcher's app icon (WoL.ico, registered as a
             // pack-resource in the .csproj) so the WoL tile shows the real
             // logo instead of the "W" placeholder.

@@ -448,20 +448,22 @@ public static class Strings
             [LangEn] = "Uninstall mod...",
             [LangEs] = "Desinstalar mod...",
         },
+        // {0} = mod display name (e.g. "Wars of Liberty", "Improvement Mod")
         ["DlgUninstallTitle"] = new()
         {
-            [LangEn] = "Uninstall Wars of Liberty",
-            [LangEs] = "Desinstalar Wars of Liberty",
+            [LangEn] = "Uninstall {0}",
+            [LangEs] = "Desinstalar {0}",
         },
         ["DlgUninstallHeader"] = new()
         {
-            [LangEn] = "Uninstall Wars of Liberty",
-            [LangEs] = "Desinstalar Wars of Liberty",
+            [LangEn] = "Uninstall {0}",
+            [LangEs] = "Desinstalar {0}",
         },
+        // {0} = mod display name
         ["DlgUninstallDescription"] = new()
         {
-            [LangEn] = "This will delete the entire Wars of Liberty install folder. Your Age of Empires III base game lives in a separate folder and will not be touched.",
-            [LangEs] = "Esto eliminará la carpeta completa de Wars of Liberty. Tu instalación de Age of Empires III está en otra carpeta y no será modificada.",
+            [LangEn] = "This will delete the entire {0} install folder. Your Age of Empires III base game lives in a separate folder and will not be touched.",
+            [LangEs] = "Esto eliminará la carpeta completa de {0}. Tu instalación de Age of Empires III está en otra carpeta y no será modificada.",
         },
         ["DlgUninstallInstallPathLabel"] = new()
         {
@@ -498,15 +500,19 @@ public static class Strings
             [LangEn] = "{0} files in {1} folders will be removed.",
             [LangEs] = "Se eliminarán {0} archivos en {1} carpetas.",
         },
+        // {0} = mod display name (uppercased in the UI styling, not in the string)
         ["DlgUninstallNotValidTitle"] = new()
         {
-            [LangEn] = "✗ NOT A VALID WARS OF LIBERTY INSTALL",
-            [LangEs] = "✗ NO ES UNA INSTALACIÓN VÁLIDA DE WARS OF LIBERTY",
+            [LangEn] = "✗ NOT A VALID {0} INSTALL",
+            [LangEs] = "✗ NO ES UNA INSTALACIÓN VÁLIDA DE {0}",
         },
+        // {0} = folder path the user pointed at, {1} = probe file the mod
+        // expects there (e.g. "age3m.exe", "data\\stringtabley.xml"), {2} =
+        // mod display name.
         ["DlgUninstallNotValidDetail"] = new()
         {
-            [LangEn] = "The folder '{0}' does not contain the Wars of Liberty marker (art\\zulushield\\). For safety, the launcher refuses to delete it.\n\nIf this is a real WoL install with broken files, run Verify first to repair it.",
-            [LangEs] = "La carpeta '{0}' no contiene el marcador de Wars of Liberty (art\\zulushield\\). Por seguridad, el launcher se niega a eliminarla.\n\nSi es una instalación real con archivos rotos, ejecuta Verificar primero para repararla.",
+            [LangEn] = "The folder '{0}' does not contain the {2} marker ({1}). For safety, the launcher refuses to delete it.\n\nIf this is a real {2} install with broken files, run Verify first to repair it.",
+            [LangEs] = "La carpeta '{0}' no contiene el marcador de {2} ({1}). Por seguridad, el launcher se niega a eliminarla.\n\nSi es una instalación real de {2} con archivos rotos, ejecuta Verificar primero para repararla.",
         },
         ["DlgUninstallNothingTitle"] = new()
         {
@@ -519,15 +525,17 @@ public static class Strings
             [LangEs] = "No se detectó ninguna instalación.",
         },
 
+        // {0} = mod display name
         ["StatusUninstalling"] = new()
         {
-            [LangEn] = "Uninstalling Wars of Liberty...",
-            [LangEs] = "Desinstalando Wars of Liberty...",
+            [LangEn] = "Uninstalling {0}...",
+            [LangEs] = "Desinstalando {0}...",
         },
+        // {0} = mod display name, {1} = file count removed.
         ["StatusUninstallSuccess"] = new()
         {
-            [LangEn] = "Wars of Liberty was uninstalled successfully ({0} files removed).",
-            [LangEs] = "Wars of Liberty se desinstaló correctamente ({0} archivos eliminados).",
+            [LangEn] = "{0} was uninstalled successfully ({1} files removed).",
+            [LangEs] = "{0} se desinstaló correctamente ({1} archivos eliminados).",
         },
         ["StatusUninstallPartial"] = new()
         {
@@ -901,23 +909,26 @@ public static class Strings
             [LangEn] = "Up to date. Version {0}. Ready to play!",
             [LangEs] = "Todo al día. Versión {0}. ¡Listo para jugar!",
         },
+        // {0} = mod display name, {1} = current ver, {2} = latest ver,
+        // {3} = official website URL (from the mod's catalog manifest).
         ["StatusVersionTooOld"] = new()
         {
-            [LangEn] = "Your version ({0}) is too old to update via patches. " +
-                       "Latest available: {1}. Please reinstall Wars of Liberty from aoe3wol.com.",
-            [LangEs] = "Tu versión ({0}) es demasiado antigua para actualizar por parches. " +
-                       "Última disponible: {1}. Necesitas reinstalar Wars of Liberty desde aoe3wol.com.",
+            [LangEn] = "Your version of {0} ({1}) is too old to update via patches. " +
+                       "Latest available: {2}. Please reinstall {0} from {3}.",
+            [LangEs] = "Tu versión de {0} ({1}) es demasiado antigua para actualizar por parches. " +
+                       "Última disponible: {2}. Necesitas reinstalar {0} desde {3}.",
         },
         ["StatusUpdatesAvailable"] = new()
         {
             [LangEn] = "{0} update(s) available ({1} total).",
             [LangEs] = "{0} actualización(es) disponible(s) ({1} total).",
         },
+        // {0} = mod display name.
         ["StatusInstallNotFound"] = new()
         {
-            [LangEn] = "Wars of Liberty was not auto-detected. " +
+            [LangEn] = "{0} was not auto-detected. " +
                        "Use the \"Change...\" button to select the folder manually.",
-            [LangEs] = "No se detectó automáticamente Wars of Liberty. " +
+            [LangEs] = "No se detectó automáticamente {0}. " +
                        "Usa el botón \"Cambiar...\" para indicar manualmente la carpeta.",
         },
 
@@ -1148,17 +1159,21 @@ public static class Strings
             [LangEn] = "Invalid folder",
             [LangEs] = "Carpeta no válida",
         },
+        // {0} = mod display name, {1} = probe file the launcher checks for
+        // (relative to the install folder), e.g. "data\\stringtabley.xml"
+        // for WoL or "age3m.exe" for Improvement Mod.
         ["DlgInvalidFolderBody"] = new()
         {
-            [LangEn] = "The selected folder doesn't appear to be a valid Wars of Liberty installation.\n\n" +
-                       "Expected to find the subfolder 'art\\zulushield' inside.",
-            [LangEs] = "La carpeta seleccionada no parece ser una instalación válida de Wars of Liberty.\n\n" +
-                       "Esperaba encontrar la subcarpeta 'art\\zulushield' adentro.",
+            [LangEn] = "The selected folder doesn't appear to be a valid {0} installation.\n\n" +
+                       "Expected to find '{1}' inside.",
+            [LangEs] = "La carpeta seleccionada no parece ser una instalación válida de {0}.\n\n" +
+                       "Esperaba encontrar '{1}' adentro.",
         },
+        // {0} = mod display name.
         ["DlgFolderPickerTitle"] = new()
         {
-            [LangEn] = "Select Wars of Liberty folder",
-            [LangEs] = "Seleccionar carpeta de Wars of Liberty",
+            [LangEn] = "Select {0} folder",
+            [LangEs] = "Seleccionar carpeta de {0}",
         },
         ["DlgGameRunningTitle"] = new()
         {
@@ -1205,14 +1220,18 @@ public static class Strings
             [LangEn] = "Update #{0} arrived corrupted. Expected CRC32: {1}, actual: {2}.",
             [LangEs] = "La actualización #{0} llegó corrupta. CRC32 esperado: {1}, real: {2}.",
         },
+        // {0} = mod display name (e.g. "Wars of Liberty", "Improvement Mod").
+        // The 'age3y.exe' string stays literal — that's specifically the AoE3
+        // base game's executable, which is the same file regardless of which
+        // mod is on top.
         ["ErrGameExeNotFound"] = new()
         {
             [LangEn] = "'age3y.exe' (Age of Empires III: The Asian Dynasties) not found.\n\n" +
-                       "Wars of Liberty needs Age of Empires III installed to work.\n" +
+                       "{0} needs Age of Empires III installed to work.\n" +
                        "Use the \"Change...\" button to point to the correct folder, " +
                        "or set 'gameExecutable' manually in launcher-config.json.",
             [LangEs] = "No se encontró 'age3y.exe' (Age of Empires III: The Asian Dynasties).\n\n" +
-                       "Wars of Liberty necesita Age of Empires III instalado para funcionar.\n" +
+                       "{0} necesita Age of Empires III instalado para funcionar.\n" +
                        "Usa el botón \"Cambiar...\" para indicar la carpeta correcta, " +
                        "o configura 'gameExecutable' manualmente en launcher-config.json.",
         },
@@ -1284,22 +1303,26 @@ public static class Strings
             [LangEn] = "Install Wars of Liberty",
             [LangEs] = "Instalar Wars of Liberty",
         },
+        // {0} = mod display name (e.g. "Wars of Liberty", "Improvement Mod").
         ["DlgPickInstallFolderTitle"] = new()
         {
-            [LangEn] = "Choose where to install Wars of Liberty",
-            [LangEs] = "Elige dónde instalar Wars of Liberty",
+            [LangEn] = "Choose where to install {0}",
+            [LangEs] = "Elige dónde instalar {0}",
         },
         ["DlgPickInstallFolderHeader"] = new()
         {
             [LangEn] = "Install location",
             [LangEs] = "Ubicación de instalación",
         },
+        // {0} = mod display name. Appears twice — first as the subject, then
+        // as the folder name (e.g. "Improvement Mod will be installed in its
+        // own 'Improvement Mod' folder").
         ["DlgPickInstallFolderDescription"] = new()
         {
-            [LangEn] = "Wars of Liberty will be installed in its own \"Wars of Liberty\" folder " +
+            [LangEn] = "{0} will be installed in its own \"{0}\" folder " +
                        "(separate from the original Age of Empires III install). The launcher will copy " +
                        "AoE3 there as a base and apply the mod on top. About 12 GB of free space recommended.",
-            [LangEs] = "Wars of Liberty se instalará en su propia carpeta \"Wars of Liberty\" " +
+            [LangEs] = "{0} se instalará en su propia carpeta \"{0}\" " +
                        "(separada de la instalación original de Age of Empires III). El launcher copiará " +
                        "AoE3 ahí como base y aplicará el mod encima. Se recomiendan unos 12 GB libres.",
         },
@@ -1370,22 +1393,24 @@ public static class Strings
         },
         ["DlgBrokenInstallTitle"] = new()
         {
-            [LangEn] = "Wars of Liberty may not be working correctly",
-            [LangEs] = "Wars of Liberty podría no estar funcionando correctamente",
+            // {0} = mod display name.
+            [LangEn] = "{0} may not be working correctly",
+            [LangEs] = "{0} podría no estar funcionando correctamente",
         },
+        // {0} = the detected install path on disk, {1} = mod display name.
         ["DlgBrokenInstallBody"] = new()
         {
-            [LangEn] = "Wars of Liberty was found at:\n\n{0}\n\n" +
+            [LangEn] = "{1} was found at:\n\n{0}\n\n" +
                        "But this folder doesn't appear to be inside Age of Empires III. " +
                        "The mod files are on disk, but the AoE3 engine won't load them from " +
                        "this location.\n\n" +
-                       "To fix this, reinstall Wars of Liberty into the same folder as " +
+                       "To fix this, reinstall {1} into the same folder as " +
                        "Age of Empires III (typically your Steam library).",
-            [LangEs] = "Se encontró Wars of Liberty en:\n\n{0}\n\n" +
+            [LangEs] = "Se encontró {1} en:\n\n{0}\n\n" +
                        "Pero esta carpeta no parece estar dentro de Age of Empires III. " +
                        "Los archivos del mod están en disco, pero el motor de AoE3 no los va a " +
                        "cargar desde esta ubicación.\n\n" +
-                       "Para arreglarlo, reinstala Wars of Liberty en la misma carpeta donde " +
+                       "Para arreglarlo, reinstala {1} en la misma carpeta donde " +
                        "tienes Age of Empires III (típicamente tu biblioteca de Steam).",
         },
 
@@ -2013,10 +2038,11 @@ public static class Strings
             [LangEn] = "Open Age of Empires III folder",
             [LangEs] = "Abrir carpeta de Age of Empires III",
         },
+        // {0} = mod display name.
         ["MenuSelectModFolder"] = new()
         {
-            [LangEn] = "Select Wars of Liberty folder...",
-            [LangEs] = "Seleccionar carpeta de Wars of Liberty...",
+            [LangEn] = "Select {0} folder...",
+            [LangEs] = "Seleccionar carpeta de {0}...",
         },
         ["MenuSelectAoE3Folder"] = new()
         {
@@ -2413,10 +2439,11 @@ public static class Strings
             [LangEn] = "Open the Age of Empires III install folder in Windows Explorer",
             [LangEs] = "Abrir la carpeta del juego base en el Explorador de Windows",
         },
+        // {0} = mod display name.
         ["TooltipMenuSelectModFolder"] = new()
         {
-            [LangEn] = "Manually point the launcher at an existing Wars of Liberty install if auto-detection failed",
-            [LangEs] = "Indicar manualmente dónde está el mod si la detección automática falló",
+            [LangEn] = "Manually point the launcher at an existing {0} install if auto-detection failed",
+            [LangEs] = "Indicar manualmente dónde está {0} si la detección automática falló",
         },
         ["TooltipMenuSelectAoE3Folder"] = new()
         {
@@ -2463,12 +2490,13 @@ public static class Strings
             [LangEn] = "Folder not found",
             [LangEs] = "Carpeta no encontrada",
         },
+        // {0} = mod display name (appears twice).
         ["DlgOpenFolderNotFoundBody"] = new()
         {
-            [LangEn] = "The Wars of Liberty install folder is not detected. " +
-                       "Use 'Select Wars of Liberty folder' to point the launcher at it.",
-            [LangEs] = "No se detectó la carpeta de Wars of Liberty. " +
-                       "Usa 'Seleccionar carpeta de Wars of Liberty' para indicar dónde está.",
+            [LangEn] = "The {0} install folder is not detected. " +
+                       "Use 'Select {0} folder' to point the launcher at it.",
+            [LangEs] = "No se detectó la carpeta de {0}. " +
+                       "Usa 'Seleccionar carpeta de {0}' para indicar dónde está.",
         },
         ["DlgOpenAoE3NotFoundBody"] = new()
         {
