@@ -54,6 +54,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         StatusCardControl.BrowseAoE3Click += BrowseAoE3Button_Click;
+        ProgressPanelControl.PauseButton.Click += PauseButton_Click;
+        ProgressPanelControl.CancelButton.Click += CancelButton_Click;
+        ProgressPanelControl.ProgressActionRetry.Click += ProgressActionRetry_Click;
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
 
@@ -884,8 +887,8 @@ public partial class MainWindow : Window
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
         NewsPlaceholderText.Text = Strings.Get("NewsPlaceholder");
-        LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
-        LblOverall.Text = Strings.Get("ProgressOverall");
+        ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
+        ProgressPanelControl.LblOverall.Text = Strings.Get("ProgressOverall");
         // Sidebar buttons. Each one's Content is a Grid/StackPanel with an
         // icon + a named TextBlock — we update only the TextBlock so the
         // icon survives a language change. Verify/Repair/Uninstall live
@@ -1135,17 +1138,17 @@ public partial class MainWindow : Window
         // operation tone owns the panel until it auto-reverts.
         if (_progressState != ProgressState.Idle) return;
 
-        ProgressActionsRow.Visibility = Visibility.Collapsed;
-        ProgressActionRetry.Visibility = Visibility.Collapsed;
-        ProgressBarsGroup.Visibility = Visibility.Collapsed;
-        ProgressMessagePanel.Visibility = Visibility.Collapsed;
-        ProgressRunningActions.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionsRow.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionRetry.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressBarsGroup.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressMessagePanel.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressRunningActions.Visibility = Visibility.Collapsed;
 
         // Neutral idle: gray panel chrome, gray dot icon, generic message.
-        ProgressPanel.Background = SafeBrush("#22252c", "#22252c");
-        ProgressPanel.BorderBrush = SafeBrush("#3a3d44", "#3a3d44");
-        ProgressIcon.Text = "○";
-        ProgressIcon.Foreground = SafeBrush("#888", "#888");
+        ProgressPanelControl.OuterBorder.Background = SafeBrush("#22252c", "#22252c");
+        ProgressPanelControl.OuterBorder.BorderBrush = SafeBrush("#3a3d44", "#3a3d44");
+        ProgressPanelControl.ProgressIcon.Text = "○";
+        ProgressPanelControl.ProgressIcon.Foreground = SafeBrush("#888", "#888");
         // Idle layout: the dot stays put on the left as a decoration,
         // and the title block (title + subtitle) floats to the centre of
         // the whole panel for true visual symmetry. The Grid that holds
@@ -1153,14 +1156,14 @@ public partial class MainWindow : Window
         // title means "centred in the panel," not "centred in a column."
         // StartProgressPanel switches the title block back to Left with a
         // left-margin so the operation title sits next to the dot.
-        ProgressTitleStack.HorizontalAlignment = HorizontalAlignment.Center;
-        ProgressTitleStack.Margin = new Thickness(0);
-        ProgressPanelLabel.Foreground = SafeBrush("#888", "#888");
-        ProgressPanelLabel.Text = Strings.Get("ProgressIdleHeader");
-        ProgressTitleText.Text = Strings.Get("ProgressIdleTitle");
-        ProgressStepText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
+        ProgressPanelControl.ProgressTitleStack.HorizontalAlignment = HorizontalAlignment.Center;
+        ProgressPanelControl.ProgressTitleStack.Margin = new Thickness(0);
+        ProgressPanelControl.ProgressPanelLabel.Foreground = SafeBrush("#888", "#888");
+        ProgressPanelControl.ProgressPanelLabel.Text = Strings.Get("ProgressIdleHeader");
+        ProgressPanelControl.ProgressTitleText.Text = Strings.Get("ProgressIdleTitle");
+        ProgressPanelControl.ProgressStepText.Text = "";
+        ProgressPanelControl.SpeedText.Text = "";
+        ProgressPanelControl.EtaText.Text = "";
     }
 
     /// <summary>
@@ -1540,8 +1543,8 @@ public partial class MainWindow : Window
             bar1Label: "ProgressBarVerify",
             bar2Label: "ProgressBarProcess",
             retry: RepairInstallAsync);
-        PatchProgress.IsIndeterminate = true;
-        OverallProgress.IsIndeterminate = true;
+        ProgressPanelControl.PatchProgress.IsIndeterminate = true;
+        ProgressPanelControl.OverallProgress.IsIndeterminate = true;
         SetStatus(Strings.Get("StatusVerifying"));
 
         try
@@ -1549,10 +1552,10 @@ public partial class MainWindow : Window
             var verifyProfile = _updateService.Profile;
             var result = await Task.Run(
                 () => VerifyInstallation(_updateService.InstallPath, verifyProfile));
-            PatchProgress.IsIndeterminate = false;
-            OverallProgress.IsIndeterminate = false;
-            PatchProgress.Value = 100;
-            OverallProgress.Value = 100;
+            ProgressPanelControl.PatchProgress.IsIndeterminate = false;
+            ProgressPanelControl.OverallProgress.IsIndeterminate = false;
+            ProgressPanelControl.PatchProgress.Value = 100;
+            ProgressPanelControl.OverallProgress.Value = 100;
 
             if (result.MissingItems.Count == 0 && result.CorruptItems.Count == 0)
             {
@@ -1622,11 +1625,11 @@ public partial class MainWindow : Window
             bar1Label: "ProgressBarVerify",
             bar2Label: "ProgressBarRepair",
             retry: RepairInstallAsync);
-        LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
-        PatchProgress.Value = 0;
-        OverallProgress.Value = 0;
-        PatchBytesText.Text = "";
-        OverallBytesText.Text = "";
+        ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
+        ProgressPanelControl.PatchProgress.Value = 0;
+        ProgressPanelControl.OverallProgress.Value = 0;
+        ProgressPanelControl.PatchBytesText.Text = "";
+        ProgressPanelControl.OverallBytesText.Text = "";
 
         var nativeInstaller = new NativeInstallService();
 
@@ -1639,29 +1642,29 @@ public partial class MainWindow : Window
                 if (p.TotalBytes > 0)
                 {
                     var eta = speed.EstimateTimeRemaining(p.TotalBytes - p.BytesReceived);
-                    PatchProgress.Value = p.Percentage;
-                    OverallProgress.Value = p.Percentage * 0.6;
-                    PatchBytesText.Text = $"{p.Percentage:0.0}%";
-                    OverallBytesText.Text = $"{FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes)}";
-                    EtaText.Text = eta.HasValue
+                    ProgressPanelControl.PatchProgress.Value = p.Percentage;
+                    ProgressPanelControl.OverallProgress.Value = p.Percentage * 0.6;
+                    ProgressPanelControl.PatchBytesText.Text = $"{p.Percentage:0.0}%";
+                    ProgressPanelControl.OverallBytesText.Text = $"{FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes)}";
+                    ProgressPanelControl.EtaText.Text = eta.HasValue
                         ? Strings.Format("ProgressEta", FormatDuration(eta.Value))
                         : "";
                 }
                 else
                 {
-                    PatchBytesText.Text = FormatBytes(p.BytesReceived);
+                    ProgressPanelControl.PatchBytesText.Text = FormatBytes(p.BytesReceived);
                 }
-                SpeedText.Text = speed.BytesPerSecond > 0
+                ProgressPanelControl.SpeedText.Text = speed.BytesPerSecond > 0
                     ? Strings.Format("ProgressSpeed", FormatBytes((long)speed.BytesPerSecond))
                     : "";
-                LblCurrentPatch.Text = Strings.Format(
+                ProgressPanelControl.LblCurrentPatch.Text = Strings.Format(
                     "StatusDownloadingInstaller", _updateService.Profile.DisplayName);
             });
 
             var statusProgress = new Progress<string>(s =>
             {
                 SetStatus(s);
-                LblCurrentPatch.Text = s;
+                ProgressPanelControl.LblCurrentPatch.Text = s;
             });
 
             // Mod-only install on top of existing (overwrites damaged files).
@@ -1680,8 +1683,8 @@ public partial class MainWindow : Window
                 payloadSha256: payloadSha256,
                 ct: _cts.Token);
 
-            PatchProgress.Value = 100;
-            OverallProgress.Value = 100;
+            ProgressPanelControl.PatchProgress.Value = 100;
+            ProgressPanelControl.OverallProgress.Value = 100;
 
             // Re-verify (profile passed so non-WoL repairs don't get false
             // positives on the WoL-specific markers).
@@ -2007,12 +2010,12 @@ public partial class MainWindow : Window
 
         if (_isPaused)
         {
-            PauseButton.Content = Strings.Get("BtnResume");
+            ProgressPanelControl.PauseButton.Content = Strings.Get("BtnResume");
             SetStatus(Strings.Get("StatusPaused"));
         }
         else
         {
-            PauseButton.Content = Strings.Get("BtnPause");
+            ProgressPanelControl.PauseButton.Content = Strings.Get("BtnPause");
             // Status will be overwritten by the next progress callback
         }
     }
@@ -2040,16 +2043,16 @@ public partial class MainWindow : Window
             _isPaused = false;
             _installerService.IsPaused = false;
             _updateService.IsPaused = false;
-            PauseButton.Content = Strings.Get("BtnPause");
-            CancelButton.Content = Strings.Get("BtnCancel");
+            ProgressPanelControl.PauseButton.Content = Strings.Get("BtnPause");
+            ProgressPanelControl.CancelButton.Content = Strings.Get("BtnCancel");
             // Pause + Cancel live inside the progress panel now. We toggle
             // the whole row; the individual button visibilities don't need
             // to be touched (they're always Visible inside the row).
-            ProgressRunningActions.Visibility = Visibility.Visible;
+            ProgressPanelControl.ProgressRunningActions.Visibility = Visibility.Visible;
         }
         else
         {
-            ProgressRunningActions.Visibility = Visibility.Collapsed;
+            ProgressPanelControl.ProgressRunningActions.Visibility = Visibility.Collapsed;
             _isPaused = false;
             _installerService.IsPaused = false;
             _updateService.IsPaused = false;
@@ -2111,29 +2114,29 @@ public partial class MainWindow : Window
         // (the idle "centred title" mode is undone here). The 20px left
         // margin equals dot width + spacing so the title hugs the dot
         // instead of floating into it.
-        ProgressTitleStack.HorizontalAlignment = HorizontalAlignment.Left;
-        ProgressTitleStack.Margin = new Thickness(20, 0, 0, 0);
+        ProgressPanelControl.ProgressTitleStack.HorizontalAlignment = HorizontalAlignment.Left;
+        ProgressPanelControl.ProgressTitleStack.Margin = new Thickness(20, 0, 0, 0);
 
-        ProgressPanelLabel.Text = LabelKeyForOperation(op);
-        ProgressTitleText.Text = title;
-        ProgressSubtitleText.Text = subtitle;
-        ProgressStepText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
+        ProgressPanelControl.ProgressPanelLabel.Text = LabelKeyForOperation(op);
+        ProgressPanelControl.ProgressTitleText.Text = title;
+        ProgressPanelControl.ProgressSubtitleText.Text = subtitle;
+        ProgressPanelControl.ProgressStepText.Text = "";
+        ProgressPanelControl.SpeedText.Text = "";
+        ProgressPanelControl.EtaText.Text = "";
 
-        LblCurrentPatch.Text = Strings.Get(bar1Label ?? "ProgressBarDownload");
-        LblOverall.Text = Strings.Get(bar2Label ?? "ProgressBarInstall");
-        PatchBytesText.Text = "";
-        OverallBytesText.Text = "";
-        PatchProgress.Value = 0;
-        OverallProgress.Value = 0;
-        PatchProgress.IsIndeterminate = false;
-        OverallProgress.IsIndeterminate = false;
+        ProgressPanelControl.LblCurrentPatch.Text = Strings.Get(bar1Label ?? "ProgressBarDownload");
+        ProgressPanelControl.LblOverall.Text = Strings.Get(bar2Label ?? "ProgressBarInstall");
+        ProgressPanelControl.PatchBytesText.Text = "";
+        ProgressPanelControl.OverallBytesText.Text = "";
+        ProgressPanelControl.PatchProgress.Value = 0;
+        ProgressPanelControl.OverallProgress.Value = 0;
+        ProgressPanelControl.PatchProgress.IsIndeterminate = false;
+        ProgressPanelControl.OverallProgress.IsIndeterminate = false;
 
-        ProgressBarsGroup.Visibility = Visibility.Visible;
-        ProgressMessagePanel.Visibility = Visibility.Collapsed;
-        ProgressActionsRow.Visibility = Visibility.Collapsed;
-        ProgressActionRetry.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressBarsGroup.Visibility = Visibility.Visible;
+        ProgressPanelControl.ProgressMessagePanel.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionsRow.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionRetry.Visibility = Visibility.Collapsed;
         // Note: we don't touch ProgressRunningActions here. The operation
         // flow calls ShowDownloadControls(true) BEFORE StartProgressPanel,
         // so the row is already visible by the time we get here — undoing
@@ -2209,20 +2212,20 @@ public partial class MainWindow : Window
     private void ShowProgressCompleted(string headlineKey, string? detail = null)
     {
         _progressState = ProgressState.Completed;
-        ProgressTitleText.Text = Strings.Get(headlineKey);
-        ProgressSubtitleText.Text = detail ?? "";
-        ProgressStepText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
+        ProgressPanelControl.ProgressTitleText.Text = Strings.Get(headlineKey);
+        ProgressPanelControl.ProgressSubtitleText.Text = detail ?? "";
+        ProgressPanelControl.ProgressStepText.Text = "";
+        ProgressPanelControl.SpeedText.Text = "";
+        ProgressPanelControl.EtaText.Text = "";
 
-        ProgressBarsGroup.Visibility = Visibility.Collapsed;
-        ProgressRunningActions.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressBarsGroup.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressRunningActions.Visibility = Visibility.Collapsed;
         PaintProgressMessage("#1f3a1f", "#3a8c3a", "#9bd99b");
-        ProgressMessageText.Text = Strings.Get("ProgressCompletedMessage");
-        ProgressMessagePanel.Visibility = Visibility.Visible;
+        ProgressPanelControl.ProgressMessageText.Text = Strings.Get("ProgressCompletedMessage");
+        ProgressPanelControl.ProgressMessagePanel.Visibility = Visibility.Visible;
 
-        ProgressActionsRow.Visibility = Visibility.Collapsed;
-        ProgressActionRetry.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionsRow.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionRetry.Visibility = Visibility.Collapsed;
 
         ScheduleAutoRevert(CompletedHoldSeconds);
     }
@@ -2235,22 +2238,22 @@ public partial class MainWindow : Window
     private void ShowProgressError(string errorMessage)
     {
         _progressState = ProgressState.Error;
-        ProgressTitleText.Text = Strings.Get("ProgressTitleError");
-        ProgressSubtitleText.Text = "";
-        ProgressStepText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
+        ProgressPanelControl.ProgressTitleText.Text = Strings.Get("ProgressTitleError");
+        ProgressPanelControl.ProgressSubtitleText.Text = "";
+        ProgressPanelControl.ProgressStepText.Text = "";
+        ProgressPanelControl.SpeedText.Text = "";
+        ProgressPanelControl.EtaText.Text = "";
 
-        ProgressBarsGroup.Visibility = Visibility.Collapsed;
-        ProgressRunningActions.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressBarsGroup.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressRunningActions.Visibility = Visibility.Collapsed;
         PaintProgressMessage("#3a1a1a", "#8c3a3a", "#e63950");
-        ProgressMessageText.Text = errorMessage;
-        ProgressMessagePanel.Visibility = Visibility.Visible;
+        ProgressPanelControl.ProgressMessageText.Text = errorMessage;
+        ProgressPanelControl.ProgressMessagePanel.Visibility = Visibility.Visible;
 
         bool canRetry = _progressRetryAction != null;
-        ProgressActionsRow.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
-        ProgressActionRetry.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
-        ProgressActionRetry.Content = Strings.Get("BtnRetry");
+        ProgressPanelControl.ProgressActionsRow.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionRetry.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionRetry.Content = Strings.Get("BtnRetry");
 
         ScheduleAutoRevert(ErrorHoldSeconds);
     }
@@ -2262,32 +2265,32 @@ public partial class MainWindow : Window
     private void ShowProgressCancelled()
     {
         _progressState = ProgressState.Cancelled;
-        ProgressTitleText.Text = Strings.Get("ProgressTitleCancelled");
-        ProgressSubtitleText.Text = "";
-        ProgressStepText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
+        ProgressPanelControl.ProgressTitleText.Text = Strings.Get("ProgressTitleCancelled");
+        ProgressPanelControl.ProgressSubtitleText.Text = "";
+        ProgressPanelControl.ProgressStepText.Text = "";
+        ProgressPanelControl.SpeedText.Text = "";
+        ProgressPanelControl.EtaText.Text = "";
 
-        ProgressBarsGroup.Visibility = Visibility.Collapsed;
-        ProgressRunningActions.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressBarsGroup.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressRunningActions.Visibility = Visibility.Collapsed;
         PaintProgressMessage("#3a2a1a", "#8c6c3a", "#d4a04a");
-        ProgressMessageText.Text = Strings.Get("ProgressCancelledMessage");
-        ProgressMessagePanel.Visibility = Visibility.Visible;
+        ProgressPanelControl.ProgressMessageText.Text = Strings.Get("ProgressCancelledMessage");
+        ProgressPanelControl.ProgressMessagePanel.Visibility = Visibility.Visible;
 
         bool canRetry = _progressRetryAction != null;
-        ProgressActionsRow.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
-        ProgressActionRetry.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
-        ProgressActionRetry.Content = Strings.Get("BtnRetry");
+        ProgressPanelControl.ProgressActionsRow.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionRetry.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionRetry.Content = Strings.Get("BtnRetry");
 
         ScheduleAutoRevert(ErrorHoldSeconds);
     }
 
     private void PaintProgressMessage(string bg, string border, string fg)
     {
-        ProgressMessagePanel.Background = SafeBrush(bg, "#1f3a1f");
-        ProgressMessagePanel.BorderBrush = SafeBrush(border, "#3a8c3a");
-        ProgressMessagePanel.BorderThickness = new Thickness(1);
-        ProgressMessageText.Foreground = SafeBrush(fg, "#9bd99b");
+        ProgressPanelControl.ProgressMessagePanel.Background = SafeBrush(bg, "#1f3a1f");
+        ProgressPanelControl.ProgressMessagePanel.BorderBrush = SafeBrush(border, "#3a8c3a");
+        ProgressPanelControl.ProgressMessagePanel.BorderThickness = new Thickness(1);
+        ProgressPanelControl.ProgressMessageText.Foreground = SafeBrush(fg, "#9bd99b");
     }
 
     // ------------------------------------------------------------------------
@@ -2306,9 +2309,9 @@ public partial class MainWindow : Window
         if (retry == null) return;
         StopAutoRevertTimer();
         _progressState = ProgressState.Running;
-        ProgressBarsGroup.Visibility = Visibility.Visible;
-        ProgressMessagePanel.Visibility = Visibility.Collapsed;
-        ProgressActionsRow.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressBarsGroup.Visibility = Visibility.Visible;
+        ProgressPanelControl.ProgressMessagePanel.Visibility = Visibility.Collapsed;
+        ProgressPanelControl.ProgressActionsRow.Visibility = Visibility.Collapsed;
         try { await retry(); }
         catch (Exception ex)
         {
@@ -2390,13 +2393,13 @@ public partial class MainWindow : Window
     private void SetProgressTone(ProgressOperation op)
     {
         var tone = ToneFor(op);
-        ProgressPanel.Background = SafeBrush(tone.Background, "#1a2a3a");
-        ProgressPanel.BorderBrush = SafeBrush(tone.Border, "#3a8cd9");
-        ProgressPanelLabel.Foreground = SafeBrush(tone.Accent, "#5b9bd5");
-        PatchProgress.Foreground = SafeBrush(tone.Accent, "#5b9bd5");
-        OverallProgress.Foreground = SafeBrush(tone.Accent, "#5b9bd5");
-        ProgressIcon.Text = tone.Icon;
-        ProgressIcon.Foreground = SafeBrush(tone.Accent, "#5b9bd5");
+        ProgressPanelControl.OuterBorder.Background = SafeBrush(tone.Background, "#1a2a3a");
+        ProgressPanelControl.OuterBorder.BorderBrush = SafeBrush(tone.Border, "#3a8cd9");
+        ProgressPanelControl.ProgressPanelLabel.Foreground = SafeBrush(tone.Accent, "#5b9bd5");
+        ProgressPanelControl.PatchProgress.Foreground = SafeBrush(tone.Accent, "#5b9bd5");
+        ProgressPanelControl.OverallProgress.Foreground = SafeBrush(tone.Accent, "#5b9bd5");
+        ProgressPanelControl.ProgressIcon.Text = tone.Icon;
+        ProgressPanelControl.ProgressIcon.Foreground = SafeBrush(tone.Accent, "#5b9bd5");
     }
 
     // ------------------------------------------------------------------------
@@ -2849,13 +2852,13 @@ public partial class MainWindow : Window
             title: Strings.Format("ProgressTitleInstalling", _updateService.Profile.DisplayName),
             subtitle: Strings.Get("ProgressSubDownloading"));
 
-        LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
-        PatchProgress.Value = 0;
-        OverallProgress.Value = 0;
-        PatchBytesText.Text = "";
-        OverallBytesText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
+        ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
+        ProgressPanelControl.PatchProgress.Value = 0;
+        ProgressPanelControl.OverallProgress.Value = 0;
+        ProgressPanelControl.PatchBytesText.Text = "";
+        ProgressPanelControl.OverallBytesText.Text = "";
+        ProgressPanelControl.SpeedText.Text = "";
+        ProgressPanelControl.EtaText.Text = "";
 
         var nativeInstaller = new NativeInstallService();
 
@@ -2886,11 +2889,11 @@ public partial class MainWindow : Window
                 if (knowTotal)
                 {
                     var eta = speed.EstimateTimeRemaining(p.TotalBytes - p.BytesReceived);
-                    PatchProgress.Value = p.Percentage;
-                    OverallProgress.Value = (p.Percentage / 100.0) * weightDownload;
-                    PatchBytesText.Text =
+                    ProgressPanelControl.PatchProgress.Value = p.Percentage;
+                    ProgressPanelControl.OverallProgress.Value = (p.Percentage / 100.0) * weightDownload;
+                    ProgressPanelControl.PatchBytesText.Text =
                         $"{FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes)}";
-                    EtaText.Text = eta.HasValue
+                    ProgressPanelControl.EtaText.Text = eta.HasValue
                         ? Strings.Format("ProgressEta", FormatDuration(eta.Value))
                         : (speed.BytesPerSecond > 0
                             ? Strings.Format("ProgressEta", Strings.Get("ProgressEtaCalculating"))
@@ -2898,13 +2901,13 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    PatchProgress.Value = 0;
-                    PatchBytesText.Text = FormatBytes(p.BytesReceived);
-                    EtaText.Text = "";
+                    ProgressPanelControl.PatchProgress.Value = 0;
+                    ProgressPanelControl.PatchBytesText.Text = FormatBytes(p.BytesReceived);
+                    ProgressPanelControl.EtaText.Text = "";
                 }
-                OverallBytesText.Text = $"{OverallProgress.Value:0}%";
+                ProgressPanelControl.OverallBytesText.Text = $"{ProgressPanelControl.OverallProgress.Value:0}%";
 
-                SpeedText.Text = speed.BytesPerSecond > 0
+                ProgressPanelControl.SpeedText.Text = speed.BytesPerSecond > 0
                     ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
                         FormatBytes((long)speed.BytesPerSecond))
                     : "";
@@ -2919,16 +2922,16 @@ public partial class MainWindow : Window
                 double pct = p.BytesTotal > 0
                     ? (double)p.BytesDone / p.BytesTotal * 100.0
                     : (p.EntriesTotal > 0 ? (double)p.EntriesDone / p.EntriesTotal * 100.0 : 0);
-                PatchProgress.Value = pct;
-                OverallProgress.Value = weightDownload + (pct / 100.0) * weightExtract;
-                PatchBytesText.Text = $"{p.EntriesDone}/{p.EntriesTotal} files";
-                OverallBytesText.Text = $"{OverallProgress.Value:0}%";
-                LblCurrentPatch.Text = Strings.Format("StatusExtractingPayload", p.EntriesDone, p.EntriesTotal);
-                SpeedText.Text = speed.BytesPerSecond > 0
+                ProgressPanelControl.PatchProgress.Value = pct;
+                ProgressPanelControl.OverallProgress.Value = weightDownload + (pct / 100.0) * weightExtract;
+                ProgressPanelControl.PatchBytesText.Text = $"{p.EntriesDone}/{p.EntriesTotal} files";
+                ProgressPanelControl.OverallBytesText.Text = $"{ProgressPanelControl.OverallProgress.Value:0}%";
+                ProgressPanelControl.LblCurrentPatch.Text = Strings.Format("StatusExtractingPayload", p.EntriesDone, p.EntriesTotal);
+                ProgressPanelControl.SpeedText.Text = speed.BytesPerSecond > 0
                     ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
                         FormatBytes((long)speed.BytesPerSecond))
                     : "";
-                EtaText.Text = "";
+                ProgressPanelControl.EtaText.Text = "";
             });
 
             // Clone progress — fires while AoE3 files are being cloned.
@@ -2937,18 +2940,18 @@ public partial class MainWindow : Window
                 double pct = p.BytesTotal > 0
                     ? (double)p.BytesCopied / p.BytesTotal * 100.0
                     : 0;
-                PatchProgress.Value = pct;
-                OverallProgress.Value = weightDownload + weightExtract + (pct / 100.0) * weightClone;
-                PatchBytesText.Text =
+                ProgressPanelControl.PatchProgress.Value = pct;
+                ProgressPanelControl.OverallProgress.Value = weightDownload + weightExtract + (pct / 100.0) * weightClone;
+                ProgressPanelControl.PatchBytesText.Text =
                     $"{FormatBytes(p.BytesCopied)} / {FormatBytes(p.BytesTotal)}";
-                OverallBytesText.Text = $"{OverallProgress.Value:0}%";
+                ProgressPanelControl.OverallBytesText.Text = $"{ProgressPanelControl.OverallProgress.Value:0}%";
                 // Show "💾 <relative file path>" so the line stays consistent
                 // with the emoji-prefixed status used by other phases.
                 var displayFile = p.CurrentFile.Length > 80
                     ? "..." + p.CurrentFile[^80..]
                     : p.CurrentFile;
-                LblCurrentPatch.Text = $"💾 {displayFile}";
-                SpeedText.Text = p.BytesPerSecond > 0
+                ProgressPanelControl.LblCurrentPatch.Text = $"💾 {displayFile}";
+                ProgressPanelControl.SpeedText.Text = p.BytesPerSecond > 0
                     ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
                         FormatBytes((long)p.BytesPerSecond))
                     : "";
@@ -2962,24 +2965,24 @@ public partial class MainWindow : Window
                 double pct = p.BytesTotal > 0
                     ? (double)p.BytesDone / p.BytesTotal * 100.0
                     : (p.FilesTotal > 0 ? (double)p.FilesDone / p.FilesTotal * 100.0 : 0);
-                PatchProgress.Value = pct;
-                OverallProgress.Value =
+                ProgressPanelControl.PatchProgress.Value = pct;
+                ProgressPanelControl.OverallProgress.Value =
                     weightDownload + weightExtract + weightClone + (pct / 100.0) * weightOverlay;
-                PatchBytesText.Text = $"{p.FilesDone}/{p.FilesTotal} files";
-                OverallBytesText.Text = $"{OverallProgress.Value:0}%";
-                LblCurrentPatch.Text = Strings.Format("StatusInstallingMod", p.FilesDone, p.FilesTotal);
-                SpeedText.Text = speed.BytesPerSecond > 0
+                ProgressPanelControl.PatchBytesText.Text = $"{p.FilesDone}/{p.FilesTotal} files";
+                ProgressPanelControl.OverallBytesText.Text = $"{ProgressPanelControl.OverallProgress.Value:0}%";
+                ProgressPanelControl.LblCurrentPatch.Text = Strings.Format("StatusInstallingMod", p.FilesDone, p.FilesTotal);
+                ProgressPanelControl.SpeedText.Text = speed.BytesPerSecond > 0
                     ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
                         FormatBytes((long)speed.BytesPerSecond))
                     : "";
-                EtaText.Text = "";
+                ProgressPanelControl.EtaText.Text = "";
             });
 
             // Status updates
             var statusProgress = new Progress<string>(s =>
             {
                 SetStatus(s);
-                LblCurrentPatch.Text = s;
+                ProgressPanelControl.LblCurrentPatch.Text = s;
             });
 
             // Phase changes: swap the speed label so it accurately describes
@@ -2991,8 +2994,8 @@ public partial class MainWindow : Window
                 _currentInstallPhase = phase;
                 speed.Reset();
                 // Clear stale per-phase labels until the next progress event arrives
-                SpeedText.Text = "";
-                EtaText.Text = "";
+                ProgressPanelControl.SpeedText.Text = "";
+                ProgressPanelControl.EtaText.Text = "";
             });
 
             // Wire up pause to native installer
@@ -3035,8 +3038,8 @@ public partial class MainWindow : Window
                     ct: _cts.Token);
             }
 
-            PatchProgress.Value = 100;
-            OverallProgress.Value = 100;
+            ProgressPanelControl.PatchProgress.Value = 100;
+            ProgressPanelControl.OverallProgress.Value = 100;
 
             // Point the launcher at the new install and remember which
             // version we just laid down. For WolPatcher mods CheckAsync
@@ -3244,25 +3247,25 @@ public partial class MainWindow : Window
         if (p.PatchBytesTotal > 0)
         {
             patchPct = (double)p.PatchBytesDone / p.PatchBytesTotal * 100.0;
-            PatchProgress.Value = patchPct;
-            PatchBytesText.Text = $"{FormatBytes(p.PatchBytesDone)} / {FormatBytes(p.PatchBytesTotal)}";
+            ProgressPanelControl.PatchProgress.Value = patchPct;
+            ProgressPanelControl.PatchBytesText.Text = $"{FormatBytes(p.PatchBytesDone)} / {FormatBytes(p.PatchBytesTotal)}";
         }
         else
         {
-            PatchProgress.Value = 0;
-            PatchBytesText.Text = "";
+            ProgressPanelControl.PatchProgress.Value = 0;
+            ProgressPanelControl.PatchBytesText.Text = "";
         }
 
         // Total progress (overall update — same as install)
         if (p.OverallBytesTotal > 0)
         {
-            OverallProgress.Value = (double)p.OverallBytesDone / p.OverallBytesTotal * 100.0;
-            OverallBytesText.Text = $"{OverallProgress.Value:0}%";
+            ProgressPanelControl.OverallProgress.Value = (double)p.OverallBytesDone / p.OverallBytesTotal * 100.0;
+            ProgressPanelControl.OverallBytesText.Text = $"{ProgressPanelControl.OverallProgress.Value:0}%";
         }
 
         // Status line under the bars — phase-aware so the user always knows
         // whether we're downloading, verifying, or applying.
-        LblCurrentPatch.Text = Strings.Format(
+        ProgressPanelControl.LblCurrentPatch.Text = Strings.Format(
             UpdateStatusKeyForPhase(_currentUpdatePhase),
             p.PatchToVersion,
             p.CurrentStep, p.TotalSteps);
@@ -3270,17 +3273,17 @@ public partial class MainWindow : Window
         // Drive the progress-panel subtitle and step counter — these are
         // what the user sees in the inline panel at the bottom of the
         // sidebar.
-        ProgressSubtitleText.Text = Strings.Format("ProgressPatchSubtitle",
+        ProgressPanelControl.ProgressSubtitleText.Text = Strings.Format("ProgressPatchSubtitle",
             p.CurrentStep, p.TotalSteps, p.PatchFromVersion, p.PatchToVersion);
-        ProgressStepText.Text = Strings.Format(
+        ProgressPanelControl.ProgressStepText.Text = Strings.Format(
             "ProgressStepFormat", p.CurrentStep, p.TotalSteps);
 
         // Speed label — phase-aware (Download / Verify / Apply)
-        SpeedText.Text = p.BytesPerSecond > 0
+        ProgressPanelControl.SpeedText.Text = p.BytesPerSecond > 0
             ? Strings.Format(UpdateSpeedLabelKeyForPhase(_currentUpdatePhase),
                 FormatBytes((long)p.BytesPerSecond))
             : "";
-        EtaText.Text = p.Eta.HasValue
+        ProgressPanelControl.EtaText.Text = p.Eta.HasValue
             ? Strings.Format("ProgressEta", FormatDuration(p.Eta.Value))
             : (p.BytesPerSecond > 0 ? Strings.Format("ProgressEta", Strings.Get("ProgressEtaCalculating")) : "");
     }
@@ -3633,13 +3636,13 @@ public partial class MainWindow : Window
 
     private void ResetProgressUI()
     {
-        PatchProgress.Value = 0;
-        OverallProgress.Value = 0;
-        PatchBytesText.Text = "";
-        OverallBytesText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
-        LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
+        ProgressPanelControl.PatchProgress.Value = 0;
+        ProgressPanelControl.OverallProgress.Value = 0;
+        ProgressPanelControl.PatchBytesText.Text = "";
+        ProgressPanelControl.OverallBytesText.Text = "";
+        ProgressPanelControl.SpeedText.Text = "";
+        ProgressPanelControl.EtaText.Text = "";
+        ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
     }
 
     private static string FormatBytes(long bytes)
@@ -4390,11 +4393,11 @@ public partial class MainWindow : Window
         // showing two bars matches the rest of the operation panels).
         var progress = new Progress<(double Pct, string Step)>(p =>
         {
-            PatchProgress.Value = p.Pct;
-            OverallProgress.Value = p.Pct;
-            PatchBytesText.Text = $"{p.Pct:0}%";
-            OverallBytesText.Text = $"{p.Pct:0}%";
-            ProgressSubtitleText.Text = p.Step;
+            ProgressPanelControl.PatchProgress.Value = p.Pct;
+            ProgressPanelControl.OverallProgress.Value = p.Pct;
+            ProgressPanelControl.PatchBytesText.Text = $"{p.Pct:0}%";
+            ProgressPanelControl.OverallBytesText.Text = $"{p.Pct:0}%";
+            ProgressPanelControl.ProgressSubtitleText.Text = p.Step;
             SetStatus(p.Step);
         });
 

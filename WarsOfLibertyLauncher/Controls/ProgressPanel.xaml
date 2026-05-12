@@ -1,0 +1,166 @@
+<UserControl x:Class="WarsOfLibertyLauncher.Controls.ProgressPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border x:Name="OuterBorder"
+            x:FieldModifier="public"
+            Background="#22252c"
+            BorderBrush="#3a3d44"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="12,10">
+        <StackPanel>
+            <!-- Header label -->
+            <TextBlock x:Name="ProgressPanelLabel"
+                       x:FieldModifier="public"
+                       Foreground="#5b9bd5"
+                       FontSize="10"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,4"/>
+
+            <!-- Title + subtitle with operation icon. Single-cell Grid
+                 used as an overlay so the dot floats Left and the title
+                 block (ProgressTitleStack) floats independently. -->
+            <Grid>
+                <TextBlock x:Name="ProgressIcon"
+                           x:FieldModifier="public"
+                           Text="↻"
+                           FontSize="16"
+                           FontWeight="Bold"
+                           Foreground="#5b9bd5"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"/>
+                <StackPanel x:Name="ProgressTitleStack"
+                            x:FieldModifier="public"
+                            HorizontalAlignment="Center">
+                    <TextBlock x:Name="ProgressTitleText"
+                               x:FieldModifier="public"
+                               Foreground="White"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="ProgressSubtitleText"
+                               x:FieldModifier="public"
+                               Foreground="#aaa"
+                               FontSize="10"
+                               Margin="0,1,0,0"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Bars + footer wrapped in their own panel so they hide
+                 as a group during end states. -->
+            <StackPanel x:Name="ProgressBarsGroup"
+                        x:FieldModifier="public">
+                <Grid Margin="0,8,0,2">
+                    <TextBlock x:Name="LblCurrentPatch"
+                               x:FieldModifier="public"
+                               Foreground="#888" FontSize="10"/>
+                    <TextBlock x:Name="PatchBytesText"
+                               x:FieldModifier="public"
+                               Foreground="#aaa" FontSize="10"
+                               HorizontalAlignment="Right"/>
+                </Grid>
+                <ProgressBar x:Name="PatchProgress"
+                             x:FieldModifier="public"
+                             Height="6"
+                             Foreground="#3a8cd9"/>
+                <Grid Margin="0,6,0,2">
+                    <TextBlock x:Name="LblOverall"
+                               x:FieldModifier="public"
+                               Foreground="#888" FontSize="10"/>
+                    <TextBlock x:Name="OverallBytesText"
+                               x:FieldModifier="public"
+                               Foreground="#aaa" FontSize="10"
+                               HorizontalAlignment="Right"/>
+                </Grid>
+                <ProgressBar x:Name="OverallProgress"
+                             x:FieldModifier="public"
+                             Height="6"
+                             Foreground="#3a8cd9"/>
+                <Grid Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               x:Name="SpeedText"
+                               x:FieldModifier="public"
+                               Foreground="#888"
+                               FontSize="10"/>
+                    <TextBlock Grid.Column="1"
+                               x:Name="ProgressStepText"
+                               x:FieldModifier="public"
+                               Foreground="#888"
+                               FontSize="10"/>
+                </Grid>
+            </StackPanel>
+            <!-- Kept hidden so the existing OnProgress reporter can still
+                 write to it without blowing up. -->
+            <TextBlock x:Name="EtaText"
+                       x:FieldModifier="public"
+                       Visibility="Collapsed"/>
+
+            <!-- Pause / Cancel — visible only while an operation is in
+                 flight. Click handlers wired from MainWindow constructor. -->
+            <StackPanel x:Name="ProgressRunningActions"
+                        x:FieldModifier="public"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Margin="0,8,0,0"
+                        Visibility="Collapsed">
+                <Button x:Name="PauseButton"
+                        x:FieldModifier="public"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Foreground="#5b9bd5"
+                        FontSize="10"
+                        FontWeight="SemiBold"
+                        Cursor="Hand"
+                        Padding="6,2"
+                        Margin="0,0,8,0"/>
+                <Button x:Name="CancelButton"
+                        x:FieldModifier="public"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Foreground="#c84a4a"
+                        FontSize="10"
+                        FontWeight="SemiBold"
+                        Cursor="Hand"
+                        Padding="6,2"/>
+            </StackPanel>
+
+            <!-- Final-state banner (Completed / Error / Cancelled). -->
+            <Border x:Name="ProgressMessagePanel"
+                    x:FieldModifier="public"
+                    Visibility="Collapsed"
+                    CornerRadius="3"
+                    Padding="8,6"
+                    Margin="0,8,0,0">
+                <TextBlock x:Name="ProgressMessageText"
+                           x:FieldModifier="public"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"/>
+            </Border>
+
+            <!-- Inline action row. Retry click wired from MainWindow. -->
+            <StackPanel x:Name="ProgressActionsRow"
+                        x:FieldModifier="public"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Margin="0,8,0,0"
+                        Visibility="Collapsed">
+                <Button x:Name="ProgressActionRetry"
+                        x:FieldModifier="public"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Foreground="#d4a04a"
+                        FontSize="10"
+                        FontWeight="SemiBold"
+                        Cursor="Hand"
+                        Padding="6,2"
+                        Visibility="Collapsed"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>
