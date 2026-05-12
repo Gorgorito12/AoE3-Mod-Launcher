@@ -739,11 +739,11 @@ public partial class MainWindow : Window
         if (_config.WindowWidth >= MinWidth) Width = _config.WindowWidth;
         if (_config.WindowHeight >= MinHeight) Height = _config.WindowHeight;
 
-        if (!double.IsNaN(_config.WindowLeft) && !double.IsNaN(_config.WindowTop))
+        if (_config.WindowLeft.HasValue && _config.WindowTop.HasValue)
         {
             var screen = SystemParameters.WorkArea;
-            var l = _config.WindowLeft;
-            var t = _config.WindowTop;
+            var l = _config.WindowLeft.Value;
+            var t = _config.WindowTop.Value;
             bool onScreen =
                 l + Width > screen.Left + 40 &&
                 l < screen.Right - 40 &&

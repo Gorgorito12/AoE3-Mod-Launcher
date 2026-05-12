@@ -238,11 +238,14 @@ public class LauncherConfig
     [JsonPropertyName("windowHeight")]
     public double WindowHeight { get; set; } = 700;
 
+    // Nullable so "never saved a position" serialises as JSON null rather
+    // than NaN (System.Text.Json refuses NaN by default and would throw
+    // from Save()).
     [JsonPropertyName("windowLeft")]
-    public double WindowLeft { get; set; } = double.NaN;
+    public double? WindowLeft { get; set; }
 
     [JsonPropertyName("windowTop")]
-    public double WindowTop { get; set; } = double.NaN;
+    public double? WindowTop { get; set; }
 
     [JsonPropertyName("windowMaximized")]
     public bool WindowMaximized { get; set; } = false;
