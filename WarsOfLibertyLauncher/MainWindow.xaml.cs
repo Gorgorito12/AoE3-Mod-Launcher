@@ -1347,6 +1347,19 @@ public partial class MainWindow : Window
     /// </summary>
     private void InvalidateAoe3DetectedCache() => _aoe3DetectedCache = null;
 
+    /// <summary>
+    /// Drop the cached CheckResult for the currently active mod so the next
+    /// CheckAsync runs a fresh manifest fetch / install-state probe. Called
+    /// from every flow that mutates the active mod's on-disk state
+    /// (install, update, uninstall, manual folder pick) and from the user's
+    /// explicit "Check for updates" entry so a refresh button doesn't just
+    /// re-render stale cached data.
+    /// </summary>
+    private void InvalidateActiveModCheckCache()
+    {
+        _checkResultCache.Remove(_updateService.Profile.Id);
+    }
+
     private void RefreshStatusCard()
     {
         var profile = _updateService.Profile;
@@ -1999,6 +2012,7 @@ public partial class MainWindow : Window
 
         _config.GetActiveState().InstallPath = resolved;
         _config.Save();
+        InvalidateActiveModCheckCache();
         await CheckAsync();
     }
 
@@ -2051,6 +2065,9 @@ public partial class MainWindow : Window
         }
         else
         {
+            // User pressed the refresh action — force a fresh manifest fetch
+            // rather than replaying whatever's cached.
+            InvalidateActiveModCheckCache();
             await CheckAsync();
         }
     }
@@ -3688,6 +3705,7 @@ public partial class MainWindow : Window
         }
 
         // Re-check to detect the freshly installed mod
+        InvalidateActiveModCheckCache();
         await CheckAsync();
     }
 
@@ -3820,6 +3838,7 @@ public partial class MainWindow : Window
         // the version info card, the status message, and the pending list.
         if (succeeded)
         {
+            InvalidateActiveModCheckCache();
             await CheckAsync();
         }
     }
@@ -4802,6 +4821,8 @@ public partial class MainWindow : Window
     private async void MenuCheckForUpdates_Click(object sender, RoutedEventArgs e)
     {
         if (_isBusy) return;
+        // "Check for updates" must mean a real check, not a cache replay.
+        InvalidateActiveModCheckCache();
         await CheckAsync();
     }
 
@@ -5028,6 +5049,7 @@ public partial class MainWindow : Window
         {
             SetBusy(false);
             // Re-check so the UI flips back to "Install" mode
+            InvalidateActiveModCheckCache();
             await CheckAsync();
         }
     }
