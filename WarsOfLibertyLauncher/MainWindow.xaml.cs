@@ -91,7 +91,11 @@ public partial class MainWindow : Window
         ModsBrowserView.OpenWebsiteRequested += ModsBrowserView_OpenWebsiteRequested;
         ModsBrowserView.InstallRequested += ModsBrowserView_InstallRequested;
         ModsBrowserView.UninstallRequested += ModsBrowserView_UninstallRequested;
-        ModsBrowserView.PublishRequested += ModsBrowserView_PublishRequested;
+        ModsBrowserView.UpdateRequested += ModsBrowserView_UpdateRequested;
+        ModsBrowserView.PlayRequested += ModsBrowserView_PlayRequested;
+        ModsBrowserView.RepairRequested += ModsBrowserView_RepairRequested;
+        ModsBrowserView.RefreshCatalogRequested += ModsBrowserView_RefreshCatalogRequested;
+        ModsBrowserView.AddLocalModRequested += ModsBrowserView_AddLocalModRequested;
         ActionPanelControl.PlayButton.Click += PlayButton_Click;
         ActionPanelControl.StopButton.Click += StopButton_Click;
         ActionPanelControl.UpdateButton.Click += UpdateButton_Click;
@@ -252,7 +256,61 @@ public partial class MainWindow : Window
             ModRegistry.All,
             _updateService.Profile.Id,
             _config.Language,
-            ProbeInstalledState);
+            BuildModRowState);
+    }
+
+    /// <summary>
+    /// Per-profile structured state for the catalog view. Reads from the
+    /// CheckResult cache when available (so revisits paint installed +
+    /// versioned without disk I/O); falls back to the per-mod state +
+    /// on-disk probe used by <see cref="ProbeInstalledState"/> otherwise.
+    /// </summary>
+    private Controls.ModRowState BuildModRowState(ModProfile profile)
+    {
+        bool isActive = string.Equals(
+            profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
+
+        string current = "";
+        string available = "";
+        bool installed;
+        bool hasUpdate = false;
+
+        if (_checkResultCache.TryGetValue(profile.Id, out var cached))
+        {
+            current = cached.CurrentVersion?.Ver ?? "";
+            available = cached.LatestVersion?.Ver ?? "";
+            installed = cached.IsValidInstall;
+            hasUpdate = cached.PendingDownloads.Count > 0;
+        }
+        else
+        {
+            // No cached check yet — fall back to the saved per-mod path +
+            // last-known version. Same logic as ProbeInstalledState, but
+            // typed instead of a localised string.
+            var state = _config.GetState(profile.Id);
+            string? path = isActive ? _updateService.InstallPath : state.InstallPath;
+            installed = !string.IsNullOrEmpty(path)
+                && Directory.Exists(path)
+                && SavedPathLooksValid(path, profile);
+            if (!installed)
+            {
+                var probe = ResolveProbedInstallPath(profile);
+                installed = !string.IsNullOrEmpty(probe);
+            }
+            current = state.LastKnownVersion;
+        }
+
+        Controls.ModRowStatus status = installed
+            ? (hasUpdate ? Controls.ModRowStatus.UpdateAvailable : Controls.ModRowStatus.Installed)
+            : Controls.ModRowStatus.NotInstalled;
+
+        return new Controls.ModRowState
+        {
+            Status = status,
+            CurrentVersion = current,
+            AvailableVersion = available,
+            IsActive = isActive,
+        };
     }
 
     private FrameworkElement BuildModCard(ModProfile profile, string activeId)
@@ -1194,22 +1252,65 @@ public partial class MainWindow : Window
         // string used by ProbeInstalledState — feeding it in here lets the
         // "only installed" toggle do a pure-string comparison instead of
         // duplicating the disk probe inside the UserControl.
+        // Header chrome.
         ModsBrowserView.HeaderTitleText = Strings.Get("ModsBrowserHeaderTitle");
         ModsBrowserView.HeaderSubtitleText = Strings.Get("ModsBrowserHeaderSubtitle");
         ModsBrowserView.EmptyMessage = Strings.Get("ModsBrowserEmpty");
+        ModsBrowserView.DetailEmptyMessage = Strings.Get("ModsBrowserDetailEmpty");
         ModsBrowserView.SearchPlaceholder = Strings.Get("ModsBrowserSearchPlaceholder");
-        ModsBrowserView.OnlyInstalledLabel = Strings.Get("ModsBrowserOnlyInstalled");
-        ModsBrowserView.NotInstalledStateText = Strings.Get("ModSelectorNotInstalled");
-        ModsBrowserView.DetailBreadcrumbText = Strings.Get("ModsBrowserDetailBreadcrumb");
-        ModsBrowserView.DetailSwitchActiveLabel = Strings.Get("ModsBrowserDetailSwitchActive");
-        ModsBrowserView.DetailOpenWebsiteLabel = Strings.Get("ModsBrowserDetailOpenWebsite");
+        ModsBrowserView.ListSummaryFormat = Strings.Get("ModsBrowserListSummary");
+
+        // Header action buttons.
+        ModsBrowserView.RefreshCatalogLabel = Strings.Get("ModsBrowserRefreshCatalog");
+        ModsBrowserView.AddLocalModLabel = Strings.Get("ModsBrowserAddLocal");
+        ModsBrowserView.SubTabMyModsLabel = Strings.Get("ModsBrowserSubTabMyMods");
+        ModsBrowserView.SubTabCatalogLabel = Strings.Get("ModsBrowserSubTabCatalog");
+
+        // Filter chips + sort dropdown.
+        ModsBrowserView.FiltersLabelText = Strings.Get("ModsBrowserFiltersLabel");
+        ModsBrowserView.SortLabelText = Strings.Get("ModsBrowserSortLabel");
+        ModsBrowserView.SetFilterLabels(
+            Strings.Get("ModsBrowserFilterAll"),
+            Strings.Get("ModsBrowserFilterInstalled"),
+            Strings.Get("ModsBrowserFilterNotInstalled"),
+            Strings.Get("ModsBrowserFilterUpdates"),
+            Strings.Get("ModsBrowserFilterCompatible"));
+        ModsBrowserView.SetSortItems(
+            Strings.Get("ModsBrowserSortRecent"),
+            Strings.Get("ModsBrowserSortName"),
+            Strings.Get("ModsBrowserSortStatus"));
+
+        // Status badge labels.
+        ModsBrowserView.BadgeNotInstalled = Strings.Get("ModsBrowserBadgeNotInstalled");
+        ModsBrowserView.BadgeInstalled = Strings.Get("ModsBrowserBadgeInstalled");
+        ModsBrowserView.BadgeUpdateAvailable = Strings.Get("ModsBrowserBadgeUpdate");
+        ModsBrowserView.BadgeIncompatible = Strings.Get("ModsBrowserBadgeIncompatible");
+        ModsBrowserView.BadgeError = Strings.Get("ModsBrowserBadgeError");
+
+        // Detail panel labels.
+        ModsBrowserView.DetailDeveloperLabel = Strings.Get("ModsBrowserDetailDeveloper");
+        ModsBrowserView.DetailVersionLabel = Strings.Get("ModsBrowserDetailVersion");
+        ModsBrowserView.DetailAvailableVersionLabel = Strings.Get("ModsBrowserDetailAvailable");
         ModsBrowserView.DetailInstallTypeLabel = Strings.Get("ModsBrowserDetailInstallType");
         ModsBrowserView.DetailUpdateMechLabel = Strings.Get("ModsBrowserDetailUpdates");
         ModsBrowserView.DetailWebsiteLabel = Strings.Get("ModsBrowserDetailWebsite");
-        ModsBrowserView.DetailActiveLabel = Strings.Get("ModsBrowserDetailActive");
-        ModsBrowserView.DetailInstallLabel = Strings.Get("ModsBrowserDetailInstall");
-        ModsBrowserView.DetailUninstallLabel = Strings.Get("ModsBrowserDetailUninstall");
-        ModsBrowserView.PublishButtonLabel = Strings.Get("ModsBrowserPublish");
+        ModsBrowserView.DetailLanguagesLabel = Strings.Get("ModsBrowserDetailLanguages");
+        ModsBrowserView.DetailInstallLabel = Strings.Get("ModsBrowserActionInstall");
+        ModsBrowserView.DetailUpdateLabel = Strings.Get("ModsBrowserActionUpdate");
+        ModsBrowserView.DetailPlayLabel = Strings.Get("ModsBrowserActionPlay");
+        ModsBrowserView.DetailRepairLabel = Strings.Get("ModsBrowserActionRepair");
+        ModsBrowserView.DetailIncompatibleLabel = Strings.Get("ModsBrowserActionIncompatible");
+        ModsBrowserView.DetailViewWebsiteLabel = Strings.Get("ModsBrowserActionViewWebsite");
+        ModsBrowserView.DetailSwitchActiveLabel = Strings.Get("ModsBrowserActionSwitchActive");
+        ModsBrowserView.DetailUninstallLabel = Strings.Get("ModsBrowserActionUninstall");
+
+        // Header ⋯ menu: only the publish wizard for now. Kept in the
+        // overflow instead of a dedicated header button — the catalog
+        // redesign prioritises Refresh + Add local + search in the
+        // primary band, with publish a secondary discoverability.
+        ModsBrowserView.SetMoreMenuItems(
+            (Strings.Get("ModsBrowserMenuPublish"), () => ModsBrowserView_PublishRequested(this, EventArgs.Empty)));
+
         RefreshModsBrowser();
 
         RefreshTopTabHighlight();
@@ -1962,6 +2063,94 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write($"OpenWebsite failed for '{url}': {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Update flow from the browser. The Update / Apply pipeline currently
+    /// only knows how to upgrade the active mod (it reads pending downloads
+    /// off <c>_updateService</c>); so when the user clicks Update on a
+    /// non-active row we switch to that mod first via <see cref="LoadModProfile"/>
+    /// and let the user re-click after CheckAsync settles. For the active
+    /// mod we go straight to <see cref="ApplyAsync"/>.
+    /// </summary>
+    private async void ModsBrowserView_UpdateRequested(object? sender, ModProfile profile)
+    {
+        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            await ApplyAsync();
+            RefreshModsBrowser();
+            return;
+        }
+        // Non-active: switch first. LoadModProfile triggers CheckAsync which
+        // repopulates the cache; the browser will show Update again once
+        // pending downloads land in _checkResultCache.
+        LoadModProfile(profile);
+    }
+
+    /// <summary>
+    /// Play from the browser. Same active/non-active split as Update —
+    /// the existing PlayButton path runs against the active service.
+    /// </summary>
+    private void ModsBrowserView_PlayRequested(object? sender, ModProfile profile)
+    {
+        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            PlayButton_Click(this, new RoutedEventArgs());
+            return;
+        }
+        LoadModProfile(profile);
+    }
+
+    /// <summary>
+    /// Repair from the browser. RepairInstallAsync uses the active service
+    /// internally; for non-active rows we switch first and let the user
+    /// re-trigger after CheckAsync confirms the install state.
+    /// </summary>
+    private async void ModsBrowserView_RepairRequested(object? sender, ModProfile profile)
+    {
+        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            await RepairInstallAsync();
+            RefreshModsBrowser();
+            return;
+        }
+        LoadModProfile(profile);
+    }
+
+    /// <summary>
+    /// Refresh the community catalog and repaint the browser. Forwards to
+    /// the existing periodic refresh path so we don't duplicate fetch /
+    /// merge logic — the browser just rebuilds against the new
+    /// <c>ModRegistry.All</c> snapshot afterwards.
+    /// </summary>
+    private async void ModsBrowserView_RefreshCatalogRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            await RefreshCatalogAsync();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Browser RefreshCatalog failed: {ex.Message}");
+        }
+        finally
+        {
+            RefreshModsBrowser();
+        }
+    }
+
+    /// <summary>
+    /// Placeholder for the catalog redesign's "Add local mod" entry point.
+    /// Wiring a real folder-picker → schema-validate → register flow is a
+    /// future commit; for now we surface a friendly toast so the button
+    /// doesn't feel dead.
+    /// </summary>
+    private void ModsBrowserView_AddLocalModRequested(object? sender, EventArgs e)
+    {
+        MessageBox.Show(this,
+            Strings.Get("ModsBrowserAddLocalSoonBody"),
+            Strings.Get("ModsBrowserAddLocalSoonTitle"),
+            MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     /// <summary>

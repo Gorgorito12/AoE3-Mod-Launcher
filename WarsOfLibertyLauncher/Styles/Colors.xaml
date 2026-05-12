@@ -32,4 +32,24 @@
     <SolidColorBrush x:Key="InfoBrushHover" Color="#3a8cd9"/>
     <SolidColorBrush x:Key="WarningBrush" Color="#d4a04a"/>
 
+    <!-- Catalog redesign palette. Selection / primary CTA are blue (NOT
+         the per-mod accent — that would make the selected row scream
+         in WoL red). Status badges use desaturated tints so the list
+         doesn't feel like a Christmas tree when many mods are shown. -->
+    <SolidColorBrush x:Key="CatalogBlue" Color="#2f6fed"/>
+    <SolidColorBrush x:Key="CatalogBlueHover" Color="#4581f0"/>
+    <SolidColorBrush x:Key="CatalogBlueSubtle" Color="#1d2a44"/>
+
+    <!-- Status badge backgrounds (use the matching *Text brush for fg). -->
+    <SolidColorBrush x:Key="StatusInstalledBg" Color="#1f3a25"/>
+    <SolidColorBrush x:Key="StatusInstalledFg" Color="#7ed28b"/>
+    <SolidColorBrush x:Key="StatusNotInstalledBg" Color="#2c2f36"/>
+    <SolidColorBrush x:Key="StatusNotInstalledFg" Color="#b8b8b8"/>
+    <SolidColorBrush x:Key="StatusUpdateBg" Color="#3a2f1a"/>
+    <SolidColorBrush x:Key="StatusUpdateFg" Color="#e0b85f"/>
+    <SolidColorBrush x:Key="StatusIncompatibleBg" Color="#2a223a"/>
+    <SolidColorBrush x:Key="StatusIncompatibleFg" Color="#a98cd6"/>
+    <SolidColorBrush x:Key="StatusErrorBg" Color="#3a1a20"/>
+    <SolidColorBrush x:Key="StatusErrorFg" Color="#e63950"/>
+
 </ResourceDictionary>

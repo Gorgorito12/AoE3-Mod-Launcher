@@ -1,380 +1,940 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using WarsOfLibertyLauncher.Models;
 
 namespace WarsOfLibertyLauncher.Controls;
 
 /// <summary>
-/// v0.9 mod browser — replaces the "Mods" top-tab placeholder. Renders a
-/// card per <see cref="ModProfile"/> coming from <see cref="Services.ModRegistry.All"/>
-/// (built-ins + community catalog merged). MainWindow drives population
-/// so the browser stays decoupled from the runtime services it would
-/// otherwise need to reach for (active profile id, install-state probe).
+/// Compact, single-frame status of a mod as seen by the catalog UI.
+/// MainWindow builds this from its CheckResult cache, the per-mod
+/// LauncherConfig.GetState, and the existing on-disk probe — the
+/// browser then maps it to the right badge / button labels without
+/// having to talk to runtime services itself.
+/// </summary>
+public enum ModRowStatus
+{
+    /// <summary>Not present on disk.</summary>
+    NotInstalled,
+    /// <summary>Installed and up to date.</summary>
+    Installed,
+    /// <summary>Installed but a newer version is available.</summary>
+    UpdateAvailable,
+    /// <summary>Cannot be installed in the current environment
+    /// (missing AoE3 expansion, conflicting mod, ...).</summary>
+    Incompatible,
+    /// <summary>An install / update / detection error blocks this row.</summary>
+    Error,
+}
+
+/// <summary>
+/// Per-row state pushed in by MainWindow. Stays purely descriptive — no
+/// disk probes, no services — so the browser can re-render synchronously
+/// after any filter / sort change without a re-fetch.
+/// </summary>
+public sealed class ModRowState
+{
+    public ModRowStatus Status { get; init; }
+    public string CurrentVersion { get; init; } = "";
+    public string AvailableVersion { get; init; } = "";
+    public bool IsActive { get; init; }
+    /// <summary>Optional short reason string for Incompatible / Error rows.</summary>
+    public string Note { get; init; } = "";
+}
+
+/// <summary>
+/// v0.9.x catalog redesign — two-column layout. Left column is a
+/// scrollable list of compact mod rows (icon + name + author + status
+/// badge + version + actions); right column is a persistent detail
+/// panel for the currently-selected row. Header carries the search box,
+/// subtabs (Mis mods / Catálogo), filter chips, and sort selector.
+///
+/// MainWindow drives everything via the <see cref="Populate"/> method —
+/// the browser caches the inputs so search / filter / sort interactions
+/// re-render against the snapshot without bouncing back to the host.
 /// </summary>
 public partial class ModsBrowser : UserControl
 {
-    /// <summary>
-    /// Raised when the user clicks a mod card. MainWindow handles it by
-    /// opening the detail panel via <see cref="ShowDetail"/>.
-    /// </summary>
+    // ------------------------------------------------------------------------
+    // Events. Same names as the pre-redesign control so MainWindow stays
+    // wired without changes; two new ones added for the catalog refresh
+    // + add-local-mod buttons.
+    // ------------------------------------------------------------------------
+
     public event EventHandler<ModProfile>? CardClicked;
-
-    /// <summary>
-    /// Raised from the detail panel's primary action when the user wants
-    /// to make the displayed mod active. MainWindow forwards it to the
-    /// existing LoadModProfile flow.
-    /// </summary>
     public event EventHandler<ModProfile>? SwitchActiveRequested;
-
-    /// <summary>
-    /// Raised from the detail panel when the user wants to visit the mod's
-    /// official website. MainWindow opens the URL in the default browser.
-    /// </summary>
     public event EventHandler<string>? OpenWebsiteRequested;
-
-    /// <summary>
-    /// Raised from the detail panel when the user wants to install the
-    /// displayed mod. MainWindow builds a fresh UpdateService for that
-    /// profile and calls InstallAsync(service) — the active mod stays put.
-    /// </summary>
     public event EventHandler<ModProfile>? InstallRequested;
-
-    /// <summary>
-    /// Raised from the detail panel when the user wants to uninstall the
-    /// displayed mod. MainWindow resolves the per-mod install path and
-    /// runs UninstallService.UninstallAsync against this profile only.
-    /// </summary>
     public event EventHandler<ModProfile>? UninstallRequested;
-
-    /// <summary>
-    /// Raised when the user clicks the "Publish my mod" button in the
-    /// header. MainWindow opens <see cref="PublishModDialog"/> in
-    /// response. The wizard's forms / JSON generation arrive in commit 8.
-    /// </summary>
+    public event EventHandler<ModProfile>? UpdateRequested;
+    public event EventHandler<ModProfile>? PlayRequested;
+    public event EventHandler<ModProfile>? RepairRequested;
     public event EventHandler? PublishRequested;
+    public event EventHandler? RefreshCatalogRequested;
+    public event EventHandler? AddLocalModRequested;
 
-    // Cached inputs from the last Populate() call so the filter handlers
-    // can re-render without making MainWindow re-supply the data each
-    // keystroke. ModRegistry.All is the source of truth; we only stash
-    // a snapshot so search/installed filtering stays in this control.
+    // ------------------------------------------------------------------------
+    // Filter / sort modes.
+    // ------------------------------------------------------------------------
+
+    public enum FilterMode { All, Installed, NotInstalled, Updates, Compatible }
+    public enum SortMode { Recent, Name, Status }
+    public enum SubTabMode { MyMods, Catalog }
+
+    private FilterMode _filter = FilterMode.All;
+    private SortMode _sort = SortMode.Recent;
+    private SubTabMode _subTab = SubTabMode.Catalog;
+
+    // ------------------------------------------------------------------------
+    // Cached inputs from MainWindow.
+    // ------------------------------------------------------------------------
+
     private IReadOnlyList<ModProfile> _allProfiles = Array.Empty<ModProfile>();
     private string _activeId = "";
     private string _uiLanguage = "";
-    private Func<ModProfile, string>? _probeStateText;
+    private Func<ModProfile, ModRowState>? _stateProvider;
+
+    private ModProfile? _selectedProfile;
+    private readonly Dictionary<string, Border> _rowsByProfileId = new(StringComparer.OrdinalIgnoreCase);
 
     public ModsBrowser()
     {
         InitializeComponent();
+
+        // Search.
         SearchBox.TextChanged += (_, _) =>
         {
             SearchPlaceholderText.Visibility =
                 string.IsNullOrEmpty(SearchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
             ApplyFilters();
         };
-        OnlyInstalledToggle.Checked += (_, _) => ApplyFilters();
-        OnlyInstalledToggle.Unchecked += (_, _) => ApplyFilters();
-        DetailBackButton.Click += (_, _) => HideDetail();
-        PublishButton.Click += (_, _) => PublishRequested?.Invoke(this, EventArgs.Empty);
+
+        // Subtabs.
+        SubTabMyMods.Click += (_, _) => SetSubTab(SubTabMode.MyMods);
+        SubTabCatalog.Click += (_, _) => SetSubTab(SubTabMode.Catalog);
+
+        // Filter chips.
+        FilterAll.Click          += (_, _) => SetFilter(FilterMode.All);
+        FilterInstalled.Click    += (_, _) => SetFilter(FilterMode.Installed);
+        FilterNotInstalled.Click += (_, _) => SetFilter(FilterMode.NotInstalled);
+        FilterUpdates.Click      += (_, _) => SetFilter(FilterMode.Updates);
+        FilterCompatible.Click   += (_, _) => SetFilter(FilterMode.Compatible);
+
+        // Sort selector. Items added in code so SetSortItems() can map
+        // localised strings while keeping the enum order canonical.
+        SortBox.SelectionChanged += (_, _) =>
+        {
+            if (SortBox.SelectedItem is ComboBoxItem item && item.Tag is SortMode m)
+            {
+                _sort = m;
+                ApplyFilters();
+            }
+        };
+
+        // Header buttons.
+        RefreshCatalogButton.Click += (_, _) => RefreshCatalogRequested?.Invoke(this, EventArgs.Empty);
+        AddLocalModButton.Click += (_, _) => AddLocalModRequested?.Invoke(this, EventArgs.Empty);
+        MoreMenuButton.Click += (_, _) =>
+        {
+            // Manual open — Button's default Click doesn't pop the menu.
+            if (MoreMenuButton.ContextMenu is null) return;
+            MoreMenuButton.ContextMenu.PlacementTarget = MoreMenuButton;
+            MoreMenuButton.ContextMenu.IsOpen = true;
+        };
+
+        // Default selection visual.
+        SetFilter(FilterMode.All);
+        SetSubTab(SubTabMode.Catalog);
     }
 
-    /// <summary>Label shown on the header "Publish my mod" button.</summary>
-    public string PublishButtonLabel
+    // ------------------------------------------------------------------------
+    // Public surface — localisable labels + the structured Populate API.
+    // ------------------------------------------------------------------------
+
+    public string HeaderTitleText { get => HeaderTitle.Text; set => HeaderTitle.Text = value; }
+    public string HeaderSubtitleText { get => HeaderSubtitle.Text; set => HeaderSubtitle.Text = value; }
+    public string SearchPlaceholder { get => SearchPlaceholderText.Text; set => SearchPlaceholderText.Text = value; }
+    public string EmptyMessage { get => EmptyText.Text; set => EmptyText.Text = value; }
+    public string DetailEmptyMessage { get => DetailEmptyText.Text; set => DetailEmptyText.Text = value; }
+    public string ListSummaryFormat { get; set; } = "Available mods ({0})";
+
+    public string RefreshCatalogLabel { get => (string)(RefreshCatalogButton.Content ?? ""); set => RefreshCatalogButton.Content = value; }
+    public string AddLocalModLabel { get => (string)(AddLocalModButton.Content ?? ""); set => AddLocalModButton.Content = value; }
+    public string SubTabMyModsLabel { get => (string)(SubTabMyMods.Content ?? ""); set => SubTabMyMods.Content = value; }
+    public string SubTabCatalogLabel { get => (string)(SubTabCatalog.Content ?? ""); set => SubTabCatalog.Content = value; }
+    public string FiltersLabelText { get => FiltersLabel.Text; set => FiltersLabel.Text = value; }
+    public string SortLabelText { get => SortLabel.Text; set => SortLabel.Text = value; }
+
+    /// <summary>Sets the chip labels. Order: All / Installed / NotInstalled / Updates / Compatible.</summary>
+    public void SetFilterLabels(string all, string installed, string notInstalled, string updates, string compatible)
     {
-        get => (string)(PublishButton.Content ?? "");
-        set => PublishButton.Content = value;
+        FilterAll.Content = all;
+        FilterInstalled.Content = installed;
+        FilterNotInstalled.Content = notInstalled;
+        FilterUpdates.Content = updates;
+        FilterCompatible.Content = compatible;
     }
 
-    /// <summary>Placeholder text shown inside the search box when empty.</summary>
-    public string SearchPlaceholder
+    /// <summary>Sets the sort dropdown items. Order: Recent / Name / Status.</summary>
+    public void SetSortItems(string recent, string name, string status)
     {
-        get => SearchPlaceholderText.Text;
-        set => SearchPlaceholderText.Text = value;
-    }
-
-    /// <summary>Label next to the "only installed" checkbox.</summary>
-    public string OnlyInstalledLabel
-    {
-        get => (string)(OnlyInstalledToggle.Content ?? "");
-        set => OnlyInstalledToggle.Content = value;
-    }
-
-    /// <summary>Breadcrumb shown next to the back arrow in the detail panel.</summary>
-    public string DetailBreadcrumbText { get; set; } = "";
-
-    /// <summary>Primary action label in the detail panel ("Switch to this mod").</summary>
-    public string DetailSwitchActiveLabel { get; set; } = "Switch to this mod";
-
-    /// <summary>Secondary action label ("Open website").</summary>
-    public string DetailOpenWebsiteLabel { get; set; } = "Open website";
-
-    /// <summary>Localised label for the InstallType / UpdateMechanism rows.</summary>
-    public string DetailInstallTypeLabel { get; set; } = "Install type";
-    public string DetailUpdateMechLabel { get; set; } = "Updates";
-    public string DetailWebsiteLabel { get; set; } = "Website";
-    public string DetailActiveLabel { get; set; } = "Active mod";
-    public string DetailInstallLabel { get; set; } = "Install";
-    public string DetailUninstallLabel { get; set; } = "Uninstall";
-
-    public string HeaderTitleText
-    {
-        get => HeaderTitle.Text;
-        set => HeaderTitle.Text = value;
-    }
-
-    public string HeaderSubtitleText
-    {
-        get => HeaderSubtitle.Text;
-        set => HeaderSubtitle.Text = value;
-    }
-
-    public string EmptyMessage
-    {
-        get => EmptyText.Text;
-        set => EmptyText.Text = value;
+        SortBox.Items.Clear();
+        SortBox.Items.Add(new ComboBoxItem { Content = recent, Tag = SortMode.Recent });
+        SortBox.Items.Add(new ComboBoxItem { Content = name,   Tag = SortMode.Name });
+        SortBox.Items.Add(new ComboBoxItem { Content = status, Tag = SortMode.Status });
+        SortBox.SelectedIndex = 0;
     }
 
     /// <summary>
-    /// Replaces the visible card list. Called by MainWindow on first show
-    /// and after every event that can change which mod is active or which
-    /// community mods are catalog-visible.
+    /// Populates the header's three-dot context menu. Used by MainWindow
+    /// to surface secondary actions (publish wizard, future telemetry
+    /// toggles, …) that don't deserve their own button in the header.
     /// </summary>
-    /// <param name="profiles">The mods to render.</param>
-    /// <param name="activeId">Currently active profile id (highlighted card).</param>
-    /// <param name="uiLanguage">User's launcher language for localised descriptions.</param>
-    /// <param name="probeStateText">
-    /// Callback that returns "Installed (vX)" / "Not installed" / etc. for
-    /// the given profile. Provided by MainWindow so we reuse its existing
-    /// ProbeInstalledState logic instead of duplicating disk probes here.
-    /// </param>
+    public void SetMoreMenuItems(params (string Label, Action OnClick)[] items)
+    {
+        MoreMenu.Items.Clear();
+        foreach (var (label, onClick) in items)
+        {
+            var mi = new MenuItem { Header = label };
+            mi.Click += (_, _) => onClick?.Invoke();
+            MoreMenu.Items.Add(mi);
+        }
+    }
+
+    /// <summary>Detail panel action button labels — set per launcher language.</summary>
+    public string DetailInstallLabel { get; set; } = "Install";
+    public string DetailUpdateLabel { get; set; } = "Update";
+    public string DetailPlayLabel { get; set; } = "Play";
+    public string DetailRepairLabel { get; set; } = "Repair";
+    public string DetailIncompatibleLabel { get; set; } = "Incompatible";
+    public string DetailViewWebsiteLabel { get; set; } = "View mod page";
+    public string DetailSwitchActiveLabel { get; set; } = "Set as active mod";
+    public string DetailUninstallLabel { get; set; } = "Uninstall";
+
+    /// <summary>Status badge labels (localised text shown inside each badge).</summary>
+    public string BadgeNotInstalled { get; set; } = "No instalado";
+    public string BadgeInstalled { get; set; } = "Instalado";
+    public string BadgeUpdateAvailable { get; set; } = "Actualización disponible";
+    public string BadgeIncompatible { get; set; } = "Incompatible";
+    public string BadgeError { get; set; } = "Error";
+
+    /// <summary>Labels used in the detail metadata grid.</summary>
+    public string DetailDeveloperLabel { get; set; } = "Developer";
+    public string DetailVersionLabel { get; set; } = "Version";
+    public string DetailAvailableVersionLabel { get; set; } = "Available";
+    public string DetailInstallTypeLabel { get; set; } = "Install type";
+    public string DetailUpdateMechLabel { get; set; } = "Updates";
+    public string DetailWebsiteLabel { get; set; } = "Website";
+    public string DetailLanguagesLabel { get; set; } = "Languages";
+    public string DetailFeaturesTitleText { get; set; } = "Features";
+
+    /// <summary>
+    /// Replaces the visible list. <paramref name="stateProvider"/> is
+    /// asked for a per-profile <see cref="ModRowState"/> each render —
+    /// MainWindow caches what it needs and returns synchronously so
+    /// filter / sort interactions repaint without disk I/O.
+    /// </summary>
     public void Populate(
         IEnumerable<ModProfile> profiles,
         string activeId,
         string uiLanguage,
-        Func<ModProfile, string> probeStateText)
+        Func<ModProfile, ModRowState> stateProvider)
     {
         _allProfiles = profiles.ToList();
         _activeId = activeId ?? "";
         _uiLanguage = uiLanguage ?? "";
-        _probeStateText = probeStateText;
+        _stateProvider = stateProvider;
         ApplyFilters();
-        // Keep the detail overlay in sync after a refresh: pick the matching
-        // profile from the new snapshot so renamed display names / changed
-        // descriptions / new install paths show up without the user having
-        // to close and re-open the panel. If the previously-shown profile
-        // disappeared from the list (catalog rebuild evicted it), close the
-        // overlay so we don't show stale data.
-        if (_detailProfile is not null)
+
+        // Re-render the detail panel against the new snapshot so badges,
+        // buttons, and the description follow whatever just changed (mod
+        // switch, catalog refresh, install). If the previously-selected
+        // profile is no longer in the list, blank out the right pane.
+        if (_selectedProfile is not null)
         {
             var match = _allProfiles.FirstOrDefault(p =>
-                string.Equals(p.Id, _detailProfile.Id, StringComparison.OrdinalIgnoreCase));
-            if (match is null) HideDetail();
+                string.Equals(p.Id, _selectedProfile.Id, StringComparison.OrdinalIgnoreCase));
+            if (match is null) ClearDetail();
             else ShowDetail(match);
+        }
+        else
+        {
+            // Auto-select the active mod on first paint so the user lands
+            // on something meaningful instead of an empty right pane.
+            var activeProfile = _allProfiles.FirstOrDefault(p =>
+                string.Equals(p.Id, _activeId, StringComparison.OrdinalIgnoreCase));
+            if (activeProfile is not null) ShowDetail(activeProfile);
         }
     }
 
-    /// <summary>
-    /// (Re)renders the card grid against the cached profile list, filtered
-    /// by the search box query (case-insensitive substring on display name
-    /// + author) and — when the toggle is on — the install-state probe.
-    /// Called by the input handlers and by Populate(); cheap because cards
-    /// are plain Borders with frozen brushes.
-    /// </summary>
+    // ------------------------------------------------------------------------
+    // Filter / sort / render.
+    // ------------------------------------------------------------------------
+
+    private void SetFilter(FilterMode mode)
+    {
+        _filter = mode;
+        PaintFilterChips();
+        ApplyFilters();
+    }
+
+    private void SetSubTab(SubTabMode mode)
+    {
+        _subTab = mode;
+        PaintSubTabs();
+        ApplyFilters();
+    }
+
+    private void PaintFilterChips()
+    {
+        PaintChip(FilterAll,          _filter == FilterMode.All);
+        PaintChip(FilterInstalled,    _filter == FilterMode.Installed);
+        PaintChip(FilterNotInstalled, _filter == FilterMode.NotInstalled);
+        PaintChip(FilterUpdates,      _filter == FilterMode.Updates);
+        PaintChip(FilterCompatible,   _filter == FilterMode.Compatible);
+    }
+
+    private void PaintChip(Button chip, bool selected)
+    {
+        if (selected)
+        {
+            chip.Background = (Brush)FindResource("CatalogBlue");
+            chip.Foreground = Brushes.White;
+            chip.BorderBrush = (Brush)FindResource("CatalogBlue");
+        }
+        else
+        {
+            chip.Background = (Brush)FindResource("BgPanelAlt");
+            chip.Foreground = (Brush)FindResource("TextPrimary");
+            chip.BorderBrush = (Brush)FindResource("BorderSubtle");
+        }
+    }
+
+    private void PaintSubTabs()
+    {
+        var active = (Brush)FindResource("CatalogBlue");
+        var inactive = (Brush)FindResource("TextSecondary");
+        SubTabMyMods.Foreground = _subTab == SubTabMode.MyMods ? Brushes.White : inactive;
+        SubTabMyMods.BorderBrush = _subTab == SubTabMode.MyMods ? active : Brushes.Transparent;
+        SubTabCatalog.Foreground = _subTab == SubTabMode.Catalog ? Brushes.White : inactive;
+        SubTabCatalog.BorderBrush = _subTab == SubTabMode.Catalog ? active : Brushes.Transparent;
+    }
+
     private void ApplyFilters()
     {
-        if (_probeStateText is null)
+        RowsPanel.Children.Clear();
+        _rowsByProfileId.Clear();
+        if (_stateProvider is null)
         {
-            CardsPanel.Children.Clear();
             EmptyText.Visibility = Visibility.Collapsed;
+            ListSummary.Text = "";
             return;
         }
 
-        var notInstalledMarker = GetNotInstalledMarker();
         var query = (SearchBox.Text ?? "").Trim();
-        bool onlyInstalled = OnlyInstalledToggle.IsChecked == true;
+        var items = _allProfiles
+            .Select(p => (Profile: p, State: _stateProvider(p)))
+            .Where(t => MatchesSubTab(t.State))
+            .Where(t => MatchesFilter(t.State))
+            .Where(t => MatchesQuery(t.Profile, query))
+            .ToList();
 
-        CardsPanel.Children.Clear();
-        int count = 0;
-        foreach (var profile in _allProfiles)
+        items = _sort switch
         {
-            if (!MatchesQuery(profile, query)) continue;
-            string state = _probeStateText(profile);
-            if (onlyInstalled && IsNotInstalled(state, notInstalledMarker)) continue;
-            CardsPanel.Children.Add(
-                BuildCard(profile, _activeId, _uiLanguage, _ => state));
-            count++;
+            SortMode.Name => items.OrderBy(t => t.Profile.DisplayName, StringComparer.OrdinalIgnoreCase).ToList(),
+            SortMode.Status => items.OrderBy(t => StatusOrder(t.State.Status)).ThenBy(t => t.Profile.DisplayName, StringComparer.OrdinalIgnoreCase).ToList(),
+            _ => items, // Recent = catalog/registry order
+        };
+
+        foreach (var (profile, state) in items)
+        {
+            var row = BuildRow(profile, state);
+            RowsPanel.Children.Add(row);
+            _rowsByProfileId[profile.Id] = row;
         }
-        EmptyText.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ListSummary.Text = string.Format(ListSummaryFormat, items.Count);
+        EmptyText.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        HighlightSelectedRow();
     }
 
-    private static bool MatchesQuery(ModProfile profile, string query)
+    private bool MatchesSubTab(ModRowState s) => _subTab switch
+    {
+        SubTabMode.MyMods => s.Status != ModRowStatus.NotInstalled,
+        _ => true,
+    };
+
+    private bool MatchesFilter(ModRowState s) => _filter switch
+    {
+        FilterMode.Installed    => s.Status == ModRowStatus.Installed || s.Status == ModRowStatus.UpdateAvailable,
+        FilterMode.NotInstalled => s.Status == ModRowStatus.NotInstalled,
+        FilterMode.Updates      => s.Status == ModRowStatus.UpdateAvailable,
+        FilterMode.Compatible   => s.Status != ModRowStatus.Incompatible,
+        _ => true,
+    };
+
+    private static bool MatchesQuery(ModProfile p, string query)
     {
         if (string.IsNullOrEmpty(query)) return true;
-        string name = profile.DisplayName ?? "";
-        string author = profile.Author ?? "";
-        return name.Contains(query, StringComparison.OrdinalIgnoreCase)
-            || author.Contains(query, StringComparison.OrdinalIgnoreCase);
+        return (p.DisplayName ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
+            || (p.Author ?? "").Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// We don't have a structured install-state enum at the browser layer
-    /// — MainWindow's <c>ProbeInstalledState</c> returns localised strings.
-    /// To classify "installed vs not" we sample the marker once (by passing
-    /// an obviously-uninstalled profile id is overkill; instead we let
-    /// MainWindow inject the marker via <see cref="NotInstalledStateText"/>).
-    /// </summary>
-    public string NotInstalledStateText { get; set; } = "";
-
-    private string GetNotInstalledMarker() => NotInstalledStateText;
-
-    private static bool IsNotInstalled(string state, string marker)
+    private static int StatusOrder(ModRowStatus s) => s switch
     {
-        if (string.IsNullOrEmpty(marker)) return false;
-        return string.Equals(state, marker, StringComparison.Ordinal);
-    }
+        ModRowStatus.UpdateAvailable => 0,
+        ModRowStatus.Installed => 1,
+        ModRowStatus.NotInstalled => 2,
+        ModRowStatus.Incompatible => 3,
+        ModRowStatus.Error => 4,
+        _ => 99,
+    };
 
-    private FrameworkElement BuildCard(
-        ModProfile profile,
-        string activeId,
-        string lang,
-        Func<ModProfile, string> probeStateText)
+    // ------------------------------------------------------------------------
+    // Row rendering.
+    // ------------------------------------------------------------------------
+
+    private Border BuildRow(ModProfile profile, ModRowState state)
     {
-        bool isActive = string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase);
-        var accentBrush = ParseColorBrush(profile.AccentColor)
-            ?? (Brush)FindResource("BgNeutral");
+        var accentBrush = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("BgNeutral");
 
-        // Icon column: 56x56 disc tinted with the mod's accent, monogram
-        // overlay until we wire the cached banner / icon image in a later
-        // commit. Keeps initial render zero-disk so the grid paints instantly.
-        var monogram = new TextBlock
+        // 48x48 icon disc (smaller than the v0.9 cards) — leaves more
+        // horizontal room for description + actions in the compact row.
+        var iconBg = TryLoadImageBrush(profile.LocalIconPath);
+        UIElement iconChild;
+        Brush iconBack;
+        if (iconBg != null)
         {
-            Text = string.IsNullOrEmpty(profile.DisplayName)
-                ? "?"
-                : profile.DisplayName[..1].ToUpperInvariant(),
-            FontSize = 22,
-            FontWeight = FontWeights.Bold,
-            Foreground = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+            iconChild = new Border();
+            iconBack = iconBg;
+        }
+        else
+        {
+            iconChild = new TextBlock
+            {
+                Text = string.IsNullOrEmpty(profile.DisplayName) ? "?" : profile.DisplayName[..1].ToUpperInvariant(),
+                FontSize = 18,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            iconBack = accentBrush;
+        }
         var icon = new Border
         {
-            Width = 56,
-            Height = 56,
-            CornerRadius = new CornerRadius(28),
-            Background = accentBrush,
+            Width = 48, Height = 48,
+            CornerRadius = new CornerRadius(8),
+            Background = iconBack,
+            Child = iconChild,
             VerticalAlignment = VerticalAlignment.Top,
-            Child = monogram,
+            Margin = new Thickness(0, 0, 14, 0),
         };
 
+        // Center stack: title, description, author.
         var titleText = new TextBlock
         {
             Text = profile.DisplayName,
-            FontSize = 15,
+            FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)FindResource("TextPrimary"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var descText = new TextBlock
+        {
+            Text = ResolveDescription(profile, _uiLanguage),
+            FontSize = 11,
+            Foreground = (Brush)FindResource("TextSecondary"),
             TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxHeight = 32,
+            Margin = new Thickness(0, 3, 0, 5),
         };
         var authorText = new TextBlock
         {
             Text = profile.Author ?? "",
             FontSize = 10,
             Foreground = (Brush)FindResource("TextSecondary"),
-            Margin = new Thickness(0, 2, 0, 6),
-            Visibility = string.IsNullOrWhiteSpace(profile.Author)
-                ? Visibility.Collapsed
-                : Visibility.Visible,
+            Visibility = string.IsNullOrWhiteSpace(profile.Author) ? Visibility.Collapsed : Visibility.Visible,
         };
-        var descText = new TextBlock
+        var center = new StackPanel();
+        center.Children.Add(titleText);
+        center.Children.Add(descText);
+        center.Children.Add(authorText);
+
+        // Right stack: status badge, version, size, primary action.
+        var badge = BuildStatusBadge(state.Status);
+        badge.HorizontalAlignment = HorizontalAlignment.Right;
+        badge.Margin = new Thickness(0, 0, 0, 6);
+
+        var versionText = new TextBlock
         {
-            Text = ResolveDescription(profile, lang),
+            Text = FormatVersionLine(state),
             FontSize = 11,
             Foreground = (Brush)FindResource("TextPrimary"),
-            TextWrapping = TextWrapping.Wrap,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxHeight = 48,
-            Margin = new Thickness(0, 0, 0, 8),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Visibility = string.IsNullOrEmpty(FormatVersionLine(state)) ? Visibility.Collapsed : Visibility.Visible,
         };
-        var stateText = new TextBlock
+        // Row-level primary action: install / update / play / repair /
+        // disabled-incompatible. Single chip, no secondary button in the
+        // compact row — the right pane has the full set.
+        var rowAction = BuildRowAction(profile, state);
+        rowAction.HorizontalAlignment = HorizontalAlignment.Right;
+        rowAction.Margin = new Thickness(0, 8, 0, 0);
+
+        var right = new StackPanel
         {
-            Text = probeStateText(profile),
-            FontSize = 10,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = accentBrush,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(14, 0, 0, 0),
         };
+        right.Children.Add(badge);
+        right.Children.Add(versionText);
+        right.Children.Add(rowAction);
 
-        var right = new StackPanel { Margin = new Thickness(14, 0, 0, 0) };
-        right.Children.Add(titleText);
-        right.Children.Add(authorText);
-        right.Children.Add(descText);
-        right.Children.Add(stateText);
-
+        // Two-column inner grid: icon | (center expands) | right.
         var inner = new Grid();
         inner.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         inner.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        inner.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(icon, 0);
-        Grid.SetColumn(right, 1);
+        Grid.SetColumn(center, 1);
+        Grid.SetColumn(right, 2);
         inner.Children.Add(icon);
+        inner.Children.Add(center);
         inner.Children.Add(right);
 
-        var bgIdle = (Brush)FindResource("BgPanel");
-        var bgHover = (Brush)FindResource("BgPanelAlt");
-        var borderIdle = (Brush)FindResource("BorderSubtle");
-
-        var card = new Border
+        var row = new Border
         {
-            Width = 320,
             CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(isActive ? 2 : 1),
-            BorderBrush = isActive ? accentBrush : borderIdle,
-            Background = bgIdle,
-            Padding = new Thickness(14),
-            Margin = new Thickness(0, 0, 14, 14),
+            BorderThickness = new Thickness(1),
+            BorderBrush = (Brush)FindResource("BorderSubtle"),
+            Background = (Brush)FindResource("BgPanel"),
+            Padding = new Thickness(14, 12, 14, 12),
+            Margin = new Thickness(0, 0, 0, 8),
             Cursor = Cursors.Hand,
             Tag = profile,
             Child = inner,
         };
 
-        // Hover paints the alt-panel background and bumps the border to
-        // the accent so inactive cards still feel tappable. The active
-        // card keeps its accent border permanently, so we leave its
-        // hover state alone (skip-if-active) to avoid a flicker.
-        card.MouseEnter += (_, _) =>
+        row.MouseEnter += (_, _) =>
         {
-            if (IsActive(card)) return;
-            card.Background = bgHover;
-            card.BorderBrush = accentBrush;
+            if (IsSelected(row)) return;
+            row.Background = (Brush)FindResource("BgPanelAlt");
         };
-        card.MouseLeave += (_, _) =>
+        row.MouseLeave += (_, _) =>
         {
-            if (IsActive(card)) return;
-            card.Background = bgIdle;
-            card.BorderBrush = borderIdle;
+            if (IsSelected(row)) return;
+            row.Background = (Brush)FindResource("BgPanel");
         };
-        // Click opens the detail panel for that mod. The legacy "click =
-        // switch active mod" behaviour now lives behind the detail panel's
-        // primary action button — see ShowDetail. CardClicked still fires
-        // so MainWindow can drive richer flows (e.g. analytics, deep links).
-        card.MouseLeftButtonDown += (_, _) =>
+        row.MouseLeftButtonDown += (_, _) =>
         {
             CardClicked?.Invoke(this, profile);
             ShowDetail(profile);
         };
 
-        return card;
+        return row;
     }
 
-    private bool IsActive(Border card)
+    private bool IsSelected(Border row)
     {
-        // The card is active when its border thickness matches the active
-        // branch in BuildCard. Simpler than passing activeId around and
-        // good enough since the only way a card flips active is via a
-        // full Populate() rebuild.
-        return card.BorderThickness.Left >= 2;
+        if (_selectedProfile is null) return false;
+        if (row.Tag is not ModProfile p) return false;
+        return string.Equals(p.Id, _selectedProfile.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void HighlightSelectedRow()
+    {
+        var blue = (Brush)FindResource("CatalogBlue");
+        var subtle = (Brush)FindResource("BorderSubtle");
+        var bgIdle = (Brush)FindResource("BgPanel");
+        var bgSel = (Brush)FindResource("CatalogBlueSubtle");
+        foreach (var row in _rowsByProfileId.Values)
+        {
+            bool selected = IsSelected(row);
+            row.BorderBrush = selected ? blue : subtle;
+            row.BorderThickness = new Thickness(selected ? 2 : 1);
+            row.Background = selected ? bgSel : bgIdle;
+        }
+    }
+
+    private string FormatVersionLine(ModRowState s)
+    {
+        if (s.Status == ModRowStatus.UpdateAvailable
+            && !string.IsNullOrEmpty(s.CurrentVersion)
+            && !string.IsNullOrEmpty(s.AvailableVersion))
+        {
+            return $"v{Strip(s.CurrentVersion)} → v{Strip(s.AvailableVersion)}";
+        }
+        if (!string.IsNullOrEmpty(s.CurrentVersion))
+            return $"v{Strip(s.CurrentVersion)}";
+        if (!string.IsNullOrEmpty(s.AvailableVersion))
+            return $"v{Strip(s.AvailableVersion)}";
+        return "";
+    }
+
+    private static string Strip(string v) => v.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? v[1..] : v;
+
+    private Border BuildStatusBadge(ModRowStatus s)
+    {
+        (Brush bg, Brush fg, string label) = s switch
+        {
+            ModRowStatus.Installed       => ((Brush)FindResource("StatusInstalledBg"),       (Brush)FindResource("StatusInstalledFg"),       BadgeInstalled),
+            ModRowStatus.UpdateAvailable => ((Brush)FindResource("StatusUpdateBg"),          (Brush)FindResource("StatusUpdateFg"),          BadgeUpdateAvailable),
+            ModRowStatus.Incompatible    => ((Brush)FindResource("StatusIncompatibleBg"),    (Brush)FindResource("StatusIncompatibleFg"),    BadgeIncompatible),
+            ModRowStatus.Error           => ((Brush)FindResource("StatusErrorBg"),           (Brush)FindResource("StatusErrorFg"),           BadgeError),
+            _                            => ((Brush)FindResource("StatusNotInstalledBg"),    (Brush)FindResource("StatusNotInstalledFg"),    BadgeNotInstalled),
+        };
+        return new Border
+        {
+            Background = bg,
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(8, 3, 8, 3),
+            Child = new TextBlock
+            {
+                Text = label,
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = fg,
+            },
+        };
+    }
+
+    private Button BuildRowAction(ModProfile profile, ModRowState state)
+    {
+        (string label, Action? click, bool enabled) = state.Status switch
+        {
+            ModRowStatus.UpdateAvailable => (DetailUpdateLabel, (Action?)(() => UpdateRequested?.Invoke(this, profile)), true),
+            ModRowStatus.Installed       => (DetailPlayLabel,   (Action?)(() => PlayRequested?.Invoke(this, profile)),   true),
+            ModRowStatus.Incompatible    => (DetailIncompatibleLabel, (Action?)null, false),
+            ModRowStatus.Error           => (DetailRepairLabel, (Action?)(() => RepairRequested?.Invoke(this, profile)), true),
+            _                            => (DetailInstallLabel, (Action?)(() => InstallRequested?.Invoke(this, profile)), true),
+        };
+
+        bool primary = enabled && state.Status != ModRowStatus.Installed;
+        var btn = new Button
+        {
+            Content = label,
+            Foreground = enabled ? Brushes.White : (Brush)FindResource("TextSecondary"),
+            Background = primary
+                ? (Brush)FindResource("CatalogBlue")
+                : (Brush)FindResource("BgPanelAlt"),
+            BorderBrush = primary
+                ? (Brush)FindResource("CatalogBlue")
+                : (Brush)FindResource("BorderSubtle"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14, 5, 14, 5),
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Cursor = enabled ? Cursors.Hand : Cursors.Arrow,
+            IsEnabled = enabled,
+        };
+        if (enabled && click is not null)
+        {
+            btn.Click += (_, _) =>
+            {
+                ShowDetail(profile);
+                click();
+            };
+        }
+        return btn;
+    }
+
+    // ------------------------------------------------------------------------
+    // Detail panel.
+    // ------------------------------------------------------------------------
+
+    public ModProfile? SelectedProfile => _selectedProfile;
+
+    /// <summary>Selects a profile and renders the right pane against it.</summary>
+    public void ShowDetail(ModProfile profile)
+    {
+        _selectedProfile = profile;
+        DetailEmptyPanel.Visibility = Visibility.Collapsed;
+        DetailContent.Visibility = Visibility.Visible;
+        if (_stateProvider is null) return;
+
+        var state = _stateProvider(profile);
+        var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("CatalogBlue");
+
+        // Banner: prefer real banner image, fall back to gradient + monogram.
+        var bannerSource = TryLoadBitmap(profile.LocalBannerPath);
+        if (bannerSource != null)
+        {
+            DetailBannerImage.Source = bannerSource;
+            DetailBannerImage.Visibility = Visibility.Visible;
+            DetailBanner.Background = Brushes.Black;
+            DetailMonogramHero.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            DetailBannerImage.Source = null;
+            DetailBannerImage.Visibility = Visibility.Collapsed;
+            DetailBanner.Background = BuildBannerGradient(accent);
+            DetailMonogramHero.Visibility = Visibility.Visible;
+            DetailMonogramHero.Background = accent;
+            DetailMonogram.Text = string.IsNullOrEmpty(profile.DisplayName)
+                ? "?"
+                : profile.DisplayName[..1].ToUpperInvariant();
+        }
+
+        DetailTitle.Text = profile.DisplayName;
+        PaintDetailBadge(state.Status);
+        DetailDescription.Text = ResolveDescription(profile, _uiLanguage);
+        DetailDescription.Visibility = string.IsNullOrWhiteSpace(DetailDescription.Text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        BuildDetailMeta(profile, state);
+        BuildDetailLanguages(profile);
+        BuildDetailActions(profile, state);
+        HighlightSelectedRow();
+    }
+
+    private void ClearDetail()
+    {
+        _selectedProfile = null;
+        DetailEmptyPanel.Visibility = Visibility.Visible;
+        DetailContent.Visibility = Visibility.Collapsed;
+    }
+
+    private void PaintDetailBadge(ModRowStatus s)
+    {
+        (Brush bg, Brush fg, string label) = s switch
+        {
+            ModRowStatus.Installed       => ((Brush)FindResource("StatusInstalledBg"),       (Brush)FindResource("StatusInstalledFg"),       BadgeInstalled),
+            ModRowStatus.UpdateAvailable => ((Brush)FindResource("StatusUpdateBg"),          (Brush)FindResource("StatusUpdateFg"),          BadgeUpdateAvailable),
+            ModRowStatus.Incompatible    => ((Brush)FindResource("StatusIncompatibleBg"),    (Brush)FindResource("StatusIncompatibleFg"),    BadgeIncompatible),
+            ModRowStatus.Error           => ((Brush)FindResource("StatusErrorBg"),           (Brush)FindResource("StatusErrorFg"),           BadgeError),
+            _                            => ((Brush)FindResource("StatusNotInstalledBg"),    (Brush)FindResource("StatusNotInstalledFg"),    BadgeNotInstalled),
+        };
+        DetailStateBadge.Background = bg;
+        DetailStateBadgeText.Foreground = fg;
+        DetailStateBadgeText.Text = label;
+    }
+
+    private void BuildDetailMeta(ModProfile profile, ModRowState state)
+    {
+        DetailMetaLeft.Children.Clear();
+        DetailMetaRight.Children.Clear();
+        var rows = new List<(string Label, string Value)>();
+        if (!string.IsNullOrWhiteSpace(profile.Author))
+            rows.Add((DetailDeveloperLabel, profile.Author));
+        if (!string.IsNullOrEmpty(state.CurrentVersion))
+            rows.Add((DetailVersionLabel, "v" + Strip(state.CurrentVersion)));
+        if (!string.IsNullOrEmpty(state.AvailableVersion)
+            && state.AvailableVersion != state.CurrentVersion)
+            rows.Add((DetailAvailableVersionLabel, "v" + Strip(state.AvailableVersion)));
+        rows.Add((DetailInstallTypeLabel, FormatInstallType(profile.InstallType)));
+        rows.Add((DetailUpdateMechLabel, FormatUpdateMechanism(profile.UpdateMechanism)));
+        if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
+            rows.Add((DetailWebsiteLabel, profile.OfficialWebsite));
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var target = (i % 2 == 0) ? DetailMetaLeft : DetailMetaRight;
+            target.Children.Add(BuildMetaRow(rows[i].Label, rows[i].Value));
+        }
+    }
+
+    private FrameworkElement BuildMetaRow(string label, string value)
+    {
+        var sp = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        sp.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontSize = 10,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("TextSecondary"),
+        });
+        sp.Children.Add(new TextBlock
+        {
+            Text = value,
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextPrimary"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        return sp;
+    }
+
+    private void BuildDetailLanguages(ModProfile profile)
+    {
+        DetailFeaturesPanel.Children.Clear();
+        if (profile.Description is null || profile.Description.Count == 0)
+        {
+            DetailFeaturesTitle.Visibility = Visibility.Collapsed;
+            return;
+        }
+        DetailFeaturesTitle.Text = DetailLanguagesLabel;
+        DetailFeaturesTitle.Visibility = Visibility.Visible;
+
+        var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var key in profile.Description.Keys.OrderBy(k => k))
+        {
+            wrap.Children.Add(new Border
+            {
+                Background = (Brush)FindResource("BgBase"),
+                BorderBrush = (Brush)FindResource("BorderSubtle"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Padding = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(0, 0, 6, 6),
+                Child = new TextBlock
+                {
+                    Text = key.ToUpperInvariant(),
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("TextSecondary"),
+                },
+            });
+        }
+        DetailFeaturesPanel.Children.Add(wrap);
+    }
+
+    private void BuildDetailActions(ModProfile profile, ModRowState state)
+    {
+        // Primary CTA — dynamic per status. CatalogBlue when enabled,
+        // greyed when Incompatible.
+        (string label, Action? click, bool enabled) = state.Status switch
+        {
+            ModRowStatus.UpdateAvailable => (DetailUpdateLabel, (Action)(() => UpdateRequested?.Invoke(this, profile)), true),
+            ModRowStatus.Installed       => (DetailPlayLabel,   (Action)(() => PlayRequested?.Invoke(this, profile)),   true),
+            ModRowStatus.Incompatible    => (DetailIncompatibleLabel, null, false),
+            ModRowStatus.Error           => (DetailRepairLabel, (Action)(() => RepairRequested?.Invoke(this, profile)), true),
+            _                            => (DetailInstallLabel, (Action)(() => InstallRequested?.Invoke(this, profile)), true),
+        };
+        DetailPrimaryButton.Content = label;
+        DetailPrimaryButton.IsEnabled = enabled;
+        DetailPrimaryButton.Background = enabled
+            ? (Brush)FindResource("CatalogBlue")
+            : (Brush)FindResource("BgPanelAlt");
+        DetailPrimaryButton.Foreground = enabled
+            ? Brushes.White
+            : (Brush)FindResource("TextSecondary");
+        // Replace handler each rebuild — Click is rewired to whichever
+        // action matches the current state.
+        DetailPrimaryButton.Click -= OnPrimaryClick;
+        _primaryAction = click;
+        DetailPrimaryButton.Click += OnPrimaryClick;
+
+        // Secondary — view mod page if URL present, otherwise hide.
+        if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
+        {
+            DetailSecondaryButton.Visibility = Visibility.Visible;
+            DetailSecondaryButton.Content = DetailViewWebsiteLabel;
+            DetailSecondaryButton.Click -= OnSecondaryClick;
+            _secondaryUrl = profile.OfficialWebsite;
+            DetailSecondaryButton.Click += OnSecondaryClick;
+        }
+        else
+        {
+            DetailSecondaryButton.Visibility = Visibility.Collapsed;
+        }
+
+        // Overflow menu items: Set active + Uninstall (when installed).
+        BuildDetailMoreMenu(profile, state);
+    }
+
+    private Action? _primaryAction;
+    private string _secondaryUrl = "";
+    private void OnPrimaryClick(object sender, RoutedEventArgs e) => _primaryAction?.Invoke();
+    private void OnSecondaryClick(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(_secondaryUrl))
+            OpenWebsiteRequested?.Invoke(this, _secondaryUrl);
+    }
+
+    private void BuildDetailMoreMenu(ModProfile profile, ModRowState state)
+    {
+        DetailMoreMenu.Items.Clear();
+        bool installed = state.Status == ModRowStatus.Installed
+            || state.Status == ModRowStatus.UpdateAvailable;
+        bool isActive = string.Equals(profile.Id, _activeId, StringComparison.OrdinalIgnoreCase);
+
+        if (!isActive && installed)
+        {
+            var mi = new MenuItem { Header = DetailSwitchActiveLabel };
+            mi.Click += (_, _) => SwitchActiveRequested?.Invoke(this, profile);
+            DetailMoreMenu.Items.Add(mi);
+        }
+        if (installed)
+        {
+            var mi = new MenuItem { Header = DetailUninstallLabel };
+            mi.Click += (_, _) => UninstallRequested?.Invoke(this, profile);
+            DetailMoreMenu.Items.Add(mi);
+        }
+        DetailMoreButton.Visibility = DetailMoreMenu.Items.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        // Show the menu on click — WPF doesn't fire ContextMenu on
+        // primary click by default.
+        DetailMoreButton.Click -= OnDetailMoreClick;
+        DetailMoreButton.Click += OnDetailMoreClick;
+    }
+
+    private void OnDetailMoreClick(object sender, RoutedEventArgs e)
+    {
+        if (DetailMoreButton.ContextMenu is null) return;
+        DetailMoreButton.ContextMenu.PlacementTarget = DetailMoreButton;
+        DetailMoreButton.ContextMenu.IsOpen = true;
+    }
+
+    // ------------------------------------------------------------------------
+    // Helpers.
+    // ------------------------------------------------------------------------
+
+    private static Brush BuildBannerGradient(Brush accent)
+    {
+        if (accent is SolidColorBrush solid)
+        {
+            var color = solid.Color;
+            var dim = Color.FromArgb(255,
+                (byte)(color.R * 0.45),
+                (byte)(color.G * 0.45),
+                (byte)(color.B * 0.45));
+            var lg = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+            };
+            lg.GradientStops.Add(new GradientStop(color, 0));
+            lg.GradientStops.Add(new GradientStop(dim, 1));
+            lg.Freeze();
+            return lg;
+        }
+        return accent;
+    }
+
+    private static ImageBrush? TryLoadImageBrush(string? path)
+    {
+        var bmp = TryLoadBitmap(path);
+        if (bmp is null) return null;
+        var br = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
+        br.Freeze();
+        return br;
+    }
+
+    private static BitmapImage? TryLoadBitmap(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.UriSource = new Uri(path, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string ResolveDescription(ModProfile profile, string lang)
@@ -390,122 +950,6 @@ public partial class ModsBrowser : UserControl
                 return en;
         }
         return profile.Subtitle ?? "";
-    }
-
-    private static Brush? ParseColorBrush(string hex)
-    {
-        if (string.IsNullOrWhiteSpace(hex)) return null;
-        try
-        {
-            var color = (Color)ColorConverter.ConvertFromString(hex);
-            var b = new SolidColorBrush(color);
-            b.Freeze();
-            return b;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    // ------------------------------------------------------------------------
-    // Detail panel
-    // ------------------------------------------------------------------------
-
-    private ModProfile? _detailProfile;
-
-    /// <summary>Currently displayed profile inside the detail overlay, or null if hidden.</summary>
-    public ModProfile? DetailProfile => _detailProfile;
-
-    public bool IsDetailVisible => DetailOverlay.Visibility == Visibility.Visible;
-
-    /// <summary>
-    /// Populates and reveals the detail overlay for <paramref name="profile"/>.
-    /// Safe to call repeatedly: each call rebuilds the action bar so callers
-    /// (MainWindow) can refresh it after install / uninstall / mod-switch.
-    /// </summary>
-    public void ShowDetail(ModProfile profile)
-    {
-        _detailProfile = profile;
-        if (_probeStateText is null) return;
-
-        var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("AccentBrush");
-        DetailIcon.Background = accent;
-        DetailMonogram.Text = string.IsNullOrEmpty(profile.DisplayName)
-            ? "?"
-            : profile.DisplayName[..1].ToUpperInvariant();
-        DetailTitle.Text = profile.DisplayName;
-        DetailAuthor.Text = profile.Author ?? "";
-        DetailAuthor.Visibility = string.IsNullOrWhiteSpace(profile.Author)
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-
-        bool isActive = string.Equals(profile.Id, _activeId, StringComparison.OrdinalIgnoreCase);
-        DetailStateBadge.Text = isActive
-            ? DetailActiveLabel + " · " + _probeStateText(profile)
-            : _probeStateText(profile);
-        DetailStateBadge.Foreground = accent;
-
-        DetailDescription.Text = ResolveDescription(profile, _uiLanguage);
-        DetailDescription.Visibility = string.IsNullOrWhiteSpace(DetailDescription.Text)
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-
-        DetailBreadcrumb.Text = DetailBreadcrumbText;
-        BuildDetailMeta(profile);
-        BuildDetailActions(profile, isActive);
-
-        DetailOverlay.Visibility = Visibility.Visible;
-    }
-
-    /// <summary>Hides the detail overlay and clears the cached profile.</summary>
-    public void HideDetail()
-    {
-        DetailOverlay.Visibility = Visibility.Collapsed;
-        _detailProfile = null;
-    }
-
-    private void BuildDetailMeta(ModProfile profile)
-    {
-        DetailMetaPanel.Children.Clear();
-        DetailMetaPanel.Children.Add(BuildMetaRow(
-            DetailInstallTypeLabel,
-            FormatInstallType(profile.InstallType)));
-        DetailMetaPanel.Children.Add(BuildMetaRow(
-            DetailUpdateMechLabel,
-            FormatUpdateMechanism(profile.UpdateMechanism)));
-        if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
-        {
-            DetailMetaPanel.Children.Add(BuildMetaRow(
-                DetailWebsiteLabel,
-                profile.OfficialWebsite));
-        }
-    }
-
-    private FrameworkElement BuildMetaRow(string label, string value)
-    {
-        var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var lbl = new TextBlock
-        {
-            Text = label,
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource("TextSecondary"),
-        };
-        var val = new TextBlock
-        {
-            Text = value,
-            FontSize = 12,
-            Foreground = (Brush)FindResource("TextPrimary"),
-            TextWrapping = TextWrapping.Wrap,
-        };
-        Grid.SetColumn(lbl, 0);
-        Grid.SetColumn(val, 1);
-        row.Children.Add(lbl);
-        row.Children.Add(val);
-        return row;
     }
 
     private static string FormatInstallType(ModInstallType t) => t switch
@@ -524,79 +968,19 @@ public partial class ModsBrowser : UserControl
         _ => m.ToString(),
     };
 
-    private void BuildDetailActions(ModProfile profile, bool isActive)
+    private static Brush? ParseColorBrush(string hex)
     {
-        DetailActionPanel.Children.Clear();
-        bool isInstalled = !IsNotInstalled(
-            _probeStateText!(profile), GetNotInstalledMarker());
-
-        // Open website (secondary). Visible only when the profile has a URL.
-        if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+        try
         {
-            var webBtn = BuildSecondaryButton(DetailOpenWebsiteLabel);
-            webBtn.Click += (_, _) =>
-                OpenWebsiteRequested?.Invoke(this, profile.OfficialWebsite);
-            DetailActionPanel.Children.Add(webBtn);
+            var color = (Color)ColorConverter.ConvertFromString(hex);
+            var b = new SolidColorBrush(color);
+            b.Freeze();
+            return b;
         }
-
-        // Install / Uninstall (secondary). Mutually exclusive — driven by
-        // the probe state passed in from MainWindow. Both fire events that
-        // let MainWindow build an off-active UpdateService for the target.
-        if (isInstalled)
+        catch
         {
-            var uninBtn = BuildSecondaryButton(DetailUninstallLabel);
-            uninBtn.Click += (_, _) =>
-                UninstallRequested?.Invoke(this, profile);
-            DetailActionPanel.Children.Add(uninBtn);
+            return null;
         }
-        else
-        {
-            var instBtn = BuildSecondaryButton(DetailInstallLabel);
-            instBtn.Click += (_, _) =>
-                InstallRequested?.Invoke(this, profile);
-            DetailActionPanel.Children.Add(instBtn);
-        }
-
-        // Switch active (primary). Skipped when this card already represents
-        // the active mod — the badge above already says so.
-        if (!isActive)
-        {
-            var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("AccentBrush");
-            var primary = BuildPrimaryButton(DetailSwitchActiveLabel, accent);
-            primary.Click += (_, _) =>
-                SwitchActiveRequested?.Invoke(this, profile);
-            DetailActionPanel.Children.Add(primary);
-        }
-    }
-
-    private Button BuildSecondaryButton(string label)
-    {
-        return new Button
-        {
-            Content = label,
-            Background = (Brush)FindResource("BgPanelAlt"),
-            Foreground = (Brush)FindResource("TextPrimary"),
-            BorderBrush = (Brush)FindResource("BorderSubtle"),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(16, 8, 16, 8),
-            Margin = new Thickness(0, 0, 10, 0),
-            Cursor = Cursors.Hand,
-            FontSize = 12,
-        };
-    }
-
-    private Button BuildPrimaryButton(string label, Brush accent)
-    {
-        return new Button
-        {
-            Content = label,
-            Background = accent,
-            Foreground = Brushes.White,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(20, 8, 20, 8),
-            Cursor = Cursors.Hand,
-            FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
-        };
     }
 }

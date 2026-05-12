@@ -678,45 +678,148 @@ public static class Strings
             [LangEn] = "SETTINGS",
             [LangEs] = "AJUSTES",
         },
+        // ====================================================================
+        // Catalog redesign (post-v0.9): two-column layout strings.
+        // ====================================================================
         ["ModsBrowserHeaderTitle"] = new()
         {
-            [LangEn] = "Mod browser",
-            [LangEs] = "Explorador de mods",
+            [LangEn] = "Mods",
+            [LangEs] = "Mods",
         },
         ["ModsBrowserHeaderSubtitle"] = new()
         {
-            [LangEn] = "Built-in mods and community catalog",
-            [LangEs] = "Mods integrados y catálogo de la comunidad",
+            [LangEn] = "Explore, install and manage mods for Age of Empires III.",
+            [LangEs] = "Explora, instala y administra mods para Age of Empires III.",
         },
         ["ModsBrowserEmpty"] = new()
         {
-            [LangEn] = "No mods to show. Check the catalog settings in launcher preferences.",
-            [LangEs] = "No hay mods que mostrar. Revisa la configuración del catálogo en los ajustes.",
+            [LangEn] = "No mods match your filters.",
+            [LangEs] = "Ningún mod coincide con tus filtros.",
+        },
+        ["ModsBrowserDetailEmpty"] = new()
+        {
+            [LangEn] = "Select a mod from the list to see its details.",
+            [LangEs] = "Selecciona un mod de la lista para ver sus detalles.",
         },
         ["ModsBrowserSearchPlaceholder"] = new()
         {
             [LangEn] = "Search mods…",
-            [LangEs] = "Buscar mods…",
+            [LangEs] = "Buscar mods...",
         },
-        ["ModsBrowserOnlyInstalled"] = new()
+        ["ModsBrowserListSummary"] = new()
         {
-            [LangEn] = "Only installed",
-            [LangEs] = "Solo instalados",
+            [LangEn] = "Available mods ({0})",
+            [LangEs] = "Mods disponibles ({0})",
         },
-        ["ModsBrowserDetailBreadcrumb"] = new()
+        ["ModsBrowserRefreshCatalog"] = new()
         {
-            [LangEn] = "Mod browser  ›  Details",
-            [LangEs] = "Explorador  ›  Detalles",
+            [LangEn] = "↻ Refresh catalog",
+            [LangEs] = "↻ Actualizar catálogo",
         },
-        ["ModsBrowserDetailSwitchActive"] = new()
+        ["ModsBrowserAddLocal"] = new()
         {
-            [LangEn] = "Switch to this mod",
-            [LangEs] = "Cambiar a este mod",
+            [LangEn] = "+ Add local mod",
+            [LangEs] = "+ Agregar mod local",
         },
-        ["ModsBrowserDetailOpenWebsite"] = new()
+        ["ModsBrowserSubTabMyMods"] = new()
         {
-            [LangEn] = "Open website",
-            [LangEs] = "Abrir sitio web",
+            [LangEn] = "My mods",
+            [LangEs] = "Mis mods",
+        },
+        ["ModsBrowserSubTabCatalog"] = new()
+        {
+            [LangEn] = "Catalog",
+            [LangEs] = "Catálogo",
+        },
+        ["ModsBrowserFiltersLabel"] = new()
+        {
+            [LangEn] = "Filters:",
+            [LangEs] = "Filtros:",
+        },
+        ["ModsBrowserFilterAll"] = new()
+        {
+            [LangEn] = "All",
+            [LangEs] = "Todos",
+        },
+        ["ModsBrowserFilterInstalled"] = new()
+        {
+            [LangEn] = "Installed",
+            [LangEs] = "Instalados",
+        },
+        ["ModsBrowserFilterNotInstalled"] = new()
+        {
+            [LangEn] = "Not installed",
+            [LangEs] = "No instalados",
+        },
+        ["ModsBrowserFilterUpdates"] = new()
+        {
+            [LangEn] = "Updates",
+            [LangEs] = "Actualizaciones",
+        },
+        ["ModsBrowserFilterCompatible"] = new()
+        {
+            [LangEn] = "Compatible",
+            [LangEs] = "Compatibles",
+        },
+        ["ModsBrowserSortLabel"] = new()
+        {
+            [LangEn] = "Sort by:",
+            [LangEs] = "Ordenar por:",
+        },
+        ["ModsBrowserSortRecent"] = new()
+        {
+            [LangEn] = "Most recent",
+            [LangEs] = "Más recientes",
+        },
+        ["ModsBrowserSortName"] = new()
+        {
+            [LangEn] = "Name",
+            [LangEs] = "Nombre",
+        },
+        ["ModsBrowserSortStatus"] = new()
+        {
+            [LangEn] = "Status",
+            [LangEs] = "Estado",
+        },
+        ["ModsBrowserBadgeNotInstalled"] = new()
+        {
+            [LangEn] = "Not installed",
+            [LangEs] = "No instalado",
+        },
+        ["ModsBrowserBadgeInstalled"] = new()
+        {
+            [LangEn] = "Installed",
+            [LangEs] = "Instalado",
+        },
+        ["ModsBrowserBadgeUpdate"] = new()
+        {
+            [LangEn] = "Update available",
+            [LangEs] = "Actualización disponible",
+        },
+        ["ModsBrowserBadgeIncompatible"] = new()
+        {
+            [LangEn] = "Incompatible",
+            [LangEs] = "Incompatible",
+        },
+        ["ModsBrowserBadgeError"] = new()
+        {
+            [LangEn] = "Error",
+            [LangEs] = "Error",
+        },
+        ["ModsBrowserDetailDeveloper"] = new()
+        {
+            [LangEn] = "Developer",
+            [LangEs] = "Desarrollador",
+        },
+        ["ModsBrowserDetailVersion"] = new()
+        {
+            [LangEn] = "Version",
+            [LangEs] = "Versión",
+        },
+        ["ModsBrowserDetailAvailable"] = new()
+        {
+            [LangEn] = "Available",
+            [LangEs] = "Disponible",
         },
         ["ModsBrowserDetailInstallType"] = new()
         {
@@ -733,25 +836,65 @@ public static class Strings
             [LangEn] = "Website",
             [LangEs] = "Sitio web",
         },
-        ["ModsBrowserDetailActive"] = new()
+        ["ModsBrowserDetailLanguages"] = new()
         {
-            [LangEn] = "Active mod",
-            [LangEs] = "Mod activo",
+            [LangEn] = "Languages",
+            [LangEs] = "Idiomas",
         },
-        ["ModsBrowserDetailInstall"] = new()
+        ["ModsBrowserActionInstall"] = new()
         {
-            [LangEn] = "Install",
-            [LangEs] = "Instalar",
+            [LangEn] = "Install mod",
+            [LangEs] = "Instalar mod",
         },
-        ["ModsBrowserDetailUninstall"] = new()
+        ["ModsBrowserActionUpdate"] = new()
+        {
+            [LangEn] = "Update",
+            [LangEs] = "Actualizar",
+        },
+        ["ModsBrowserActionPlay"] = new()
+        {
+            [LangEn] = "Play",
+            [LangEs] = "Jugar",
+        },
+        ["ModsBrowserActionRepair"] = new()
+        {
+            [LangEn] = "Repair",
+            [LangEs] = "Reparar",
+        },
+        ["ModsBrowserActionIncompatible"] = new()
+        {
+            [LangEn] = "Incompatible",
+            [LangEs] = "Incompatible",
+        },
+        ["ModsBrowserActionViewWebsite"] = new()
+        {
+            [LangEn] = "View mod page",
+            [LangEs] = "Ver página del mod",
+        },
+        ["ModsBrowserActionSwitchActive"] = new()
+        {
+            [LangEn] = "Set as active mod",
+            [LangEs] = "Establecer como mod activo",
+        },
+        ["ModsBrowserActionUninstall"] = new()
         {
             [LangEn] = "Uninstall",
             [LangEs] = "Desinstalar",
         },
-        ["ModsBrowserPublish"] = new()
+        ["ModsBrowserMenuPublish"] = new()
         {
             [LangEn] = "Publish my mod",
             [LangEs] = "Publicar mi mod",
+        },
+        ["ModsBrowserAddLocalSoonTitle"] = new()
+        {
+            [LangEn] = "Add local mod",
+            [LangEs] = "Agregar mod local",
+        },
+        ["ModsBrowserAddLocalSoonBody"] = new()
+        {
+            [LangEn] = "Registering a manually-installed mod folder lands in a future update.",
+            [LangEs] = "Registrar una carpeta de mod instalada manualmente llegará en una próxima actualización.",
         },
         ["PublishWizardTitle"] = new()
         {
