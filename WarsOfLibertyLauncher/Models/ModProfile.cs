@@ -273,4 +273,16 @@ public class ModProfile
     /// doesn't participate in the community-translation system.
     /// </summary>
     public TranslationsSettings? Translations { get; set; }
+
+    /// <summary>
+    /// Folder name (relative to <c>%USERPROFILE%\Documents\My Games\</c>)
+    /// where this mod stores its user-side data: save games, custom
+    /// metropolises, replays, etc. When non-empty, the launcher offers a
+    /// pre-install "we found existing user data" backup prompt and exposes
+    /// "Open user data folder" / "Create backup" / "Restore backup" in the
+    /// gear menu. When empty (default), the launcher skips all of that —
+    /// useful for mods that share AoE3's vanilla user data folder or don't
+    /// have a separate one (e.g. overlay mods like Improvement Mod by default).
+    /// </summary>
+    public string UserDataFolder { get; set; } = "";
 }

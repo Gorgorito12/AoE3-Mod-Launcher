@@ -1504,7 +1504,9 @@ public partial class MainWindow : Window
 
         try
         {
-            var result = await Task.Run(() => VerifyInstallation(_updateService.InstallPath));
+            var verifyProfile = _updateService.Profile;
+            var result = await Task.Run(
+                () => VerifyInstallation(_updateService.InstallPath, verifyProfile));
             PatchProgress.IsIndeterminate = false;
             OverallProgress.IsIndeterminate = false;
             PatchProgress.Value = 100;
@@ -1552,17 +1554,14 @@ public partial class MainWindow : Window
     {
         if (_isBusy) return;
 
-        var payloadUrls = _updateService.EffectivePayloadZipUrls();
-        if (payloadUrls == null || payloadUrls.Length == 0)
-        {
-            if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
-                payloadUrls = new[] { _config.InstallerZipUrl };
-            else
-            {
-                SetStatus(Strings.Get("DlgInstallNoUrlBody"));
-                return;
-            }
-        }
+        // Resolve payload via the same helper InstallAsync uses so Repair
+        // works for every mechanism the launcher can install (WolPatcher,
+        // GitHubReleases). DelegatedExternal / Manual mods hit the empty-
+        // URL branch and surface "no install URL" — the menu gating in
+        // ApplyMenuVisibility hides Repair for them anyway, this is just
+        // belt-and-braces.
+        var payloadUrls = await ResolvePayloadUrlsAsync();
+        if (payloadUrls == null) return;
 
         if (!EnsureGameNotRunning()) return;
 
@@ -1611,7 +1610,8 @@ public partial class MainWindow : Window
                 SpeedText.Text = speed.BytesPerSecond > 0
                     ? Strings.Format("ProgressSpeed", FormatBytes((long)speed.BytesPerSecond))
                     : "";
-                LblCurrentPatch.Text = Strings.Get("StatusDownloadingInstaller");
+                LblCurrentPatch.Text = Strings.Format(
+                    "StatusDownloadingInstaller", _updateService.Profile.DisplayName);
             });
 
             var statusProgress = new Progress<string>(s =>
@@ -1621,19 +1621,11 @@ public partial class MainWindow : Window
             });
 
             // Mod-only install on top of existing (overwrites damaged files).
-            // Repair re-stamps the manifest with the version we just verified;
-            // for GitHubReleases mods that's the approved tag we'd reinstall.
+            // Repair re-stamps the manifest with the version we just verified.
             // No phase reporter here — repair doesn't show the breadcrumb.
-            var repairVersion = _updateService.Profile.UpdateMechanism switch
-            {
-                ModUpdateMechanism.GitHubReleases =>
-                    _updateService.Profile.GitHubReleases?.ApprovedReleaseTag ?? "",
-                _ => _updateService.CurrentVersion?.Ver
-                    ?? _updateService.LatestVersion?.Ver ?? "",
-            };
             await nativeInstaller.InstallModOnlyAsync(
                 _updateService.Profile,
-                repairVersion,
+                ResolveInstallVersion(),
                 payloadUrls,
                 installPath,
                 dlProgress,
@@ -1646,8 +1638,10 @@ public partial class MainWindow : Window
             PatchProgress.Value = 100;
             OverallProgress.Value = 100;
 
-            // Re-verify
-            var recheck = await Task.Run(() => VerifyInstallation(installPath));
+            // Re-verify (profile passed so non-WoL repairs don't get false
+            // positives on the WoL-specific markers).
+            var recheckProfile = _updateService.Profile;
+            var recheck = await Task.Run(() => VerifyInstallation(installPath, recheckProfile));
             if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
             {
                 SetStatus(Strings.Get("StatusRepairSuccess"));
@@ -2414,71 +2408,104 @@ public partial class MainWindow : Window
     /// Checks critical folders, files, and looks for zero-byte files that
     /// indicate a broken copy.
     /// </summary>
-    private static VerifyResult VerifyInstallation(string installPath)
+    /// <summary>
+    /// Sanity-checks a mod installation on disk. Two layers:
+    ///
+    ///   * <b>Generic</b> (every profile): the mod's
+    ///     <see cref="ModProfile.InstallProbeFile"/> must exist, and a random
+    ///     sample of content files must not be zero-byte.
+    ///   * <b>WoL-specific</b> (only when the active profile uses
+    ///     <see cref="ModUpdateMechanism.WolPatcher"/>): the legacy markers
+    ///     this verifier was originally written for — <c>art\zulushield\</c>,
+    ///     <c>data\*.bar</c>, <c>sound\</c>, <c>AI3\</c>.
+    ///
+    /// For non-WoL mods we skip the WoL layer instead of reporting false
+    /// positives (those folders don't exist in e.g. an Improvement Mod
+    /// install on top of vanilla AoE3).
+    /// </summary>
+    private static VerifyResult VerifyInstallation(string installPath, ModProfile profile)
     {
         var missing = new List<string>();
         var corrupt = new List<string>();
         int totalChecked = 0;
 
-        // --- Required mod directories ---
-        string[] requiredDirs = new[]
-        {
-            @"art\zulushield",
-            @"data",
-            @"sound",
-            @"AI3",
-        };
-        foreach (var rel in requiredDirs)
+        // --- Generic: probe file ---
+        if (!string.IsNullOrEmpty(profile.InstallProbeFile))
         {
             totalChecked++;
-            var full = Path.Combine(installPath, rel);
-            if (!Directory.Exists(full))
-                missing.Add(rel + @"\");
+            var probe = Path.Combine(installPath, profile.InstallProbeFile);
+            if (!File.Exists(probe))
+                missing.Add(profile.InstallProbeFile);
         }
 
-        // --- Check data files (the large .bar archives) ---
-        var dataDir = Path.Combine(installPath, "data");
-        if (Directory.Exists(dataDir))
+        // --- WoL-specific layer ---
+        // Only applied when the mod uses the WoL-style updater. Skipped for
+        // GitHubReleases / DelegatedExternal mods that don't ship the WoL
+        // file layout (zulushield, .bar archives, etc.).
+        bool isWolStyle = profile.UpdateMechanism == ModUpdateMechanism.WolPatcher;
+        if (isWolStyle)
         {
-            var barFiles = Directory.GetFiles(dataDir, "*.bar", SearchOption.TopDirectoryOnly);
-            totalChecked += barFiles.Length;
-            if (barFiles.Length == 0)
+            string[] requiredDirs = new[]
             {
-                missing.Add(@"data\*.bar (no data archives found)");
+                @"art\zulushield",
+                @"data",
+                @"sound",
+                @"AI3",
+            };
+            foreach (var rel in requiredDirs)
+            {
+                totalChecked++;
+                var full = Path.Combine(installPath, rel);
+                if (!Directory.Exists(full))
+                    missing.Add(rel + @"\");
             }
-            else
+
+            // --- Check data files (the large .bar archives) ---
+            var dataDir = Path.Combine(installPath, "data");
+            if (Directory.Exists(dataDir))
             {
-                foreach (var bar in barFiles)
+                var barFiles = Directory.GetFiles(dataDir, "*.bar", SearchOption.TopDirectoryOnly);
+                totalChecked += barFiles.Length;
+                if (barFiles.Length == 0)
                 {
-                    var info = new FileInfo(bar);
-                    // .bar files should be at least 1 MB; zero or tiny means broken
-                    if (info.Length < 1024)
-                        corrupt.Add(@"data\" + info.Name);
+                    missing.Add(@"data\*.bar (no data archives found)");
+                }
+                else
+                {
+                    foreach (var bar in barFiles)
+                    {
+                        var info = new FileInfo(bar);
+                        // .bar files should be at least 1 MB; zero or tiny means broken
+                        if (info.Length < 1024)
+                            corrupt.Add(@"data\" + info.Name);
+                    }
                 }
             }
+
+            // --- Check sound files ---
+            var soundDir = Path.Combine(installPath, "sound");
+            if (Directory.Exists(soundDir))
+            {
+                var soundFiles = Directory.GetFiles(soundDir, "*", SearchOption.AllDirectories);
+                totalChecked += soundFiles.Length;
+                if (soundFiles.Length < 5)
+                    missing.Add(@"sound\ (too few files: " + soundFiles.Length + ")");
+            }
+
+            // --- Check art\zulushield contents (WoL marker) ---
+            var zulushield = Path.Combine(installPath, "art", "zulushield");
+            if (Directory.Exists(zulushield))
+            {
+                var artFiles = Directory.GetFiles(zulushield, "*", SearchOption.AllDirectories);
+                totalChecked += artFiles.Length;
+                if (artFiles.Length == 0)
+                    missing.Add(@"art\zulushield\ (empty — mod marker missing)");
+            }
         }
 
-        // --- Check sound files ---
-        var soundDir = Path.Combine(installPath, "sound");
-        if (Directory.Exists(soundDir))
-        {
-            var soundFiles = Directory.GetFiles(soundDir, "*", SearchOption.AllDirectories);
-            totalChecked += soundFiles.Length;
-            if (soundFiles.Length < 5)
-                missing.Add(@"sound\ (too few files: " + soundFiles.Length + ")");
-        }
-
-        // --- Check art\zulushield contents (WoL marker) ---
-        var zulushield = Path.Combine(installPath, "art", "zulushield");
-        if (Directory.Exists(zulushield))
-        {
-            var artFiles = Directory.GetFiles(zulushield, "*", SearchOption.AllDirectories);
-            totalChecked += artFiles.Length;
-            if (artFiles.Length == 0)
-                missing.Add(@"art\zulushield\ (empty — mod marker missing)");
-        }
-
-        // --- Spot-check: random sample of files for zero-byte ---
+        // --- Generic: spot-check zero-byte content files (random sample) ---
+        // Applies to every mod — a content file at 0 bytes is almost always
+        // a broken download/extract regardless of which mod produced it.
         try
         {
             var allFiles = Directory.GetFiles(installPath, "*", SearchOption.AllDirectories);
@@ -2505,11 +2532,77 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Resolves the download URLs for the active mod's install/repair payload.
+    /// Shared by <see cref="InstallAsync"/> and <see cref="RepairInstallAsync"/>
+    /// so both flows handle every mechanism identically.
+    ///
+    /// On failure the helper sets a user-facing status and returns null —
+    /// callers should bail (no return-bool noise needed).
+    /// </summary>
+    private async Task<string[]?> ResolvePayloadUrlsAsync()
+    {
+        var profile = _updateService.Profile;
+        if (profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
+        {
+            var ghs = profile.GitHubReleases;
+            if (ghs == null
+                || string.IsNullOrEmpty(ghs.SourceRepo)
+                || string.IsNullOrEmpty(ghs.ApprovedReleaseTag))
+            {
+                SetStatus(Strings.Get("DlgInstallNoUrlBody"));
+                return null;
+            }
+            try
+            {
+                var (url, _) = await new GitHubReleaseDownloader()
+                    .ResolveAssetAsync(ghs, default);
+                return new[] { url };
+            }
+            catch (Exception ex)
+            {
+                SetStatus($"Error: {ex.Message}");
+                DiagnosticLog.Write($"GitHubReleases asset resolution failed: {ex}");
+                return null;
+            }
+        }
+
+        // Non-GitHubReleases path: legacy WoL multipart URLs from the profile
+        // or LauncherConfig.InstallerZipUrl as a last-resort override.
+        var payloadUrls = _updateService.EffectivePayloadZipUrls();
+        if (payloadUrls != null && payloadUrls.Length > 0)
+            return payloadUrls;
+
+        if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
+            return new[] { _config.InstallerZipUrl };
+
+        SetStatus(Strings.Get("DlgInstallNoUrlBody"));
+        return null;
+    }
+
+    /// <summary>
+    /// Picks the right version string to stamp into the install manifest /
+    /// registry based on the active profile's update mechanism. Shared by
+    /// <see cref="InstallAsync"/> and <see cref="RepairInstallAsync"/>.
+    /// </summary>
+    private string ResolveInstallVersion()
+    {
+        var profile = _updateService.Profile;
+        return profile.UpdateMechanism switch
+        {
+            ModUpdateMechanism.GitHubReleases =>
+                profile.GitHubReleases?.ApprovedReleaseTag ?? "",
+            _ => _updateService.CurrentVersion?.Ver
+                ?? _updateService.LatestVersion?.Ver ?? "",
+        };
+    }
+
+    /// <summary>
     /// Full first-time install flow (native — no Inno Setup):
     ///   1. Shows a styled dialog to pick destination folder
-    ///   2. Downloads the WoL payload ZIP parts
+    ///   2. Downloads the mod's payload (multipart for WoL, single asset for
+    ///      GitHubReleases — see <see cref="ResolvePayloadUrlsAsync"/>)
     ///   3. Clones AoE3 to the destination (if detected)
-    ///   4. Copies WoL files on top
+    ///   4. Copies the mod's files on top
     ///   5. Creates shortcuts + registry entries
     ///   6. Verifies the installation
     /// </summary>
@@ -2520,51 +2613,8 @@ public partial class MainWindow : Window
         // Check if game is running first
         if (!EnsureGameNotRunning()) return;
 
-        // Resolve payload URLs. Two shapes feed the same install pipeline:
-        //   * WolPatcher    — multipart URLs hardcoded in the profile or
-        //                     config (legacy SourceForge / GitHub asset split).
-        //   * GitHubReleases — one .zip published on a tagged release in the
-        //                     modder's own repo. Resolved via the GitHub API
-        //                     into a single-element array so the same
-        //                     NativeInstallService pipeline below handles both.
-        string[]? payloadUrls;
-        if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
-        {
-            var ghs = _updateService.Profile.GitHubReleases;
-            if (ghs == null
-                || string.IsNullOrEmpty(ghs.SourceRepo)
-                || string.IsNullOrEmpty(ghs.ApprovedReleaseTag))
-            {
-                SetStatus(Strings.Get("DlgInstallNoUrlBody"));
-                return;
-            }
-            try
-            {
-                var (url, _) = await new GitHubReleaseDownloader()
-                    .ResolveAssetAsync(ghs, default);
-                payloadUrls = new[] { url };
-            }
-            catch (Exception ex)
-            {
-                SetStatus($"Error: {ex.Message}");
-                DiagnosticLog.Write($"GitHubReleases asset resolution failed: {ex}");
-                return;
-            }
-        }
-        else
-        {
-            payloadUrls = _updateService.EffectivePayloadZipUrls();
-            if (payloadUrls == null || payloadUrls.Length == 0)
-            {
-                if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
-                    payloadUrls = new[] { _config.InstallerZipUrl };
-                else
-                {
-                    SetStatus(Strings.Get("DlgInstallNoUrlBody"));
-                    return;
-                }
-            }
-        }
+        var payloadUrls = await ResolvePayloadUrlsAsync();
+        if (payloadUrls == null) return;
 
         // Detect AoE3
         var aoe3Installs = AoE3Detector.FindAll();
@@ -2586,11 +2636,16 @@ public partial class MainWindow : Window
         //                      top of vanilla AoE3).
         //   * IsolatedFolder → in priority order:
         //       1. the path the user installed THIS mod to last time (per-mod
-        //          state — remembers their pick across reinstalls);
-        //       2. the profile's DefaultInstallFolder (set by the modder in
-        //          their catalog mod.json);
-        //       3. a sibling of AoE3 named after the mod (when neither of
-        //          the above is set).
+        //          state — remembers their pick across reinstalls), as long
+        //          as it still looks like a real install of this mod;
+        //       2. <detected AoE3 folder>\<DisplayName> — the same convention
+        //          for every IsolatedFolder mod (e.g. "…\Age Of Empires 3\
+        //          Wars of Liberty"), keeping mod installs alongside the base
+        //          game they're cloning;
+        //       3. the profile's DefaultInstallFolder, only when AoE3 isn't
+        //          detected (rare — IsolatedFolder needs AoE3 to clone anyway,
+        //          so this is just a sensible last hint);
+        //       4. <DisplayName> as a final fallback.
         // Deliberately NOT using LauncherConfig.DefaultInstallFolder — that
         // legacy setting is WoL-specific and would leak the WoL path into
         // unrelated mod installs.
@@ -2633,15 +2688,21 @@ public partial class MainWindow : Window
             {
                 suggestedFolder = lastInstallPath;
             }
+            else if (!string.IsNullOrEmpty(aoe3SourcePath))
+            {
+                // Uniform convention for every IsolatedFolder mod: install
+                // INSIDE the detected AoE3 folder, in a subfolder named
+                // after the mod. Overrides any profile.DefaultInstallFolder
+                // the modder may have set in the catalog — the launcher's
+                // policy is "the clone source's parent is the right home for
+                // the cloned copy." Modders who really need an absolute path
+                // elsewhere would need an explicit opt-in flag (not added
+                // yet — agree on the use case before exposing it).
+                suggestedFolder = Path.Combine(aoe3SourcePath, profile.DisplayName);
+            }
             else if (!string.IsNullOrEmpty(profile.DefaultInstallFolder))
             {
                 suggestedFolder = profile.DefaultInstallFolder;
-            }
-            else if (!string.IsNullOrEmpty(aoe3SourcePath))
-            {
-                var parent = Path.GetDirectoryName(aoe3SourcePath.TrimEnd('\\', '/'))
-                    ?? aoe3SourcePath;
-                suggestedFolder = Path.Combine(parent, profile.DisplayName);
             }
             else
             {
@@ -2869,16 +2930,7 @@ public partial class MainWindow : Window
             // Wire up pause to native installer
             _cloneService = nativeInstaller.CloneService;
 
-            // Version stamped into the install manifest / registry comes from
-            // a different source depending on the mod's update mechanism:
-            //   * GitHubReleases → the approved release tag we just resolved.
-            //   * WolPatcher    → the latest version from UpdateInfo.xml.
-            var installVersion = _updateService.Profile.UpdateMechanism switch
-            {
-                ModUpdateMechanism.GitHubReleases =>
-                    _updateService.Profile.GitHubReleases?.ApprovedReleaseTag ?? "",
-                _ => _updateService.LatestVersion?.Ver ?? "",
-            };
+            var installVersion = ResolveInstallVersion();
 
             if (aoe3SourcePath != null)
             {
@@ -2920,53 +2972,33 @@ public partial class MainWindow : Window
             _config.GetActiveState().InstallPath = installFolder;
             _config.Save();
 
-            // Verify installation. VerifyInstallation scans for WoL-specific
-            // markers (art\zulushield\, .bar archives, etc.) and would report
-            // false negatives for non-WoL mods. For other mechanisms — GitHub
-            // Releases, DelegatedExternal — just confirm the profile's probe
-            // file landed in the destination; the install pipeline itself
-            // raises on real failures, so a present probe means success.
-            if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.WolPatcher)
+            // Verify installation. VerifyInstallation is now profile-aware —
+            // it always checks the probe file + spot-checks zero-byte content
+            // files, and additionally applies the WoL-specific markers
+            // (art\zulushield\, .bar archives, sound\, AI3\) when the active
+            // profile uses the WolPatcher mechanism. Non-WoL mods get the
+            // generic layer only, so no false positives.
+            var postInstallProfile = _updateService.Profile;
+            var verifyResult = await Task.Run(
+                () => VerifyInstallation(installFolder, postInstallProfile));
+            int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
+            if (totalProblems == 0)
             {
-                var verifyResult = await Task.Run(() => VerifyInstallation(installFolder));
-                int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
-                if (totalProblems == 0)
-                {
-                    SetStatus(Strings.Format("StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
-                    ShowProgressCompleted("ProgressTitleCompleted",
-                        Strings.Format("StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
-                }
-                else
-                {
-                    SetStatus(Strings.Format("StatusInstallIncomplete", totalProblems));
-                    DiagnosticLog.Write($"Install verification: {totalProblems} problems found.");
-                    foreach (var m in verifyResult.MissingItems)
-                        DiagnosticLog.Write($"  [missing] {m}");
-                    foreach (var c in verifyResult.CorruptItems)
-                        DiagnosticLog.Write($"  [corrupt/empty] {c}");
-                    ShowProgressError(Strings.Format("StatusInstallIncomplete", totalProblems));
-                }
+                SetStatus(Strings.Format(
+                    "StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
+                ShowProgressCompleted("ProgressTitleCompleted",
+                    Strings.Format(
+                        "StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
             }
             else
             {
-                var probe = _updateService.Profile.InstallProbeFile;
-                bool probeOk = string.IsNullOrEmpty(probe)
-                    || File.Exists(Path.Combine(installFolder, probe));
-                if (probeOk)
-                {
-                    SetStatus(Strings.Format(
-                        "StatusInstallSuccess", _updateService.Profile.DisplayName));
-                    ShowProgressCompleted("ProgressTitleCompleted",
-                        Strings.Format(
-                            "StatusInstallSuccess", _updateService.Profile.DisplayName));
-                }
-                else
-                {
-                    var msg = $"Probe file '{probe}' not found in '{installFolder}' after install.";
-                    SetStatus(msg);
-                    DiagnosticLog.Write(msg);
-                    ShowProgressError(msg);
-                }
+                SetStatus(Strings.Format("StatusInstallIncomplete", totalProblems));
+                DiagnosticLog.Write($"Install verification: {totalProblems} problems found.");
+                foreach (var m in verifyResult.MissingItems)
+                    DiagnosticLog.Write($"  [missing] {m}");
+                foreach (var c in verifyResult.CorruptItems)
+                    DiagnosticLog.Write($"  [corrupt/empty] {c}");
+                ShowProgressError(Strings.Format("StatusInstallIncomplete", totalProblems));
             }
         }
         catch (OperationCanceledException)
@@ -3003,15 +3035,25 @@ public partial class MainWindow : Window
     /// </summary>
     /// <summary>
     /// Show the user-data backup alert if there's pre-existing data under
-    /// Documents\My Games\Wars of Liberty. Called only after a fresh
-    /// install — that's the only deterministic moment where the version
-    /// risk applies (the install always brings back the 1.0.15d base).
+    /// <c>Documents\My Games\&lt;profile.UserDataFolder&gt;</c>. Skipped
+    /// when the active mod doesn't declare a user-data folder. Called only
+    /// before a fresh install — that's the only deterministic moment where
+    /// the version risk applies.
     /// </summary>
     private void ShowUserDataAlertIfNeeded()
     {
-        var folder = UserDataService.GetUserDataFolder();
+        var profile = _updateService.Profile;
+        var userDataFolderName = profile.UserDataFolder;
+        if (string.IsNullOrEmpty(userDataFolderName))
+        {
+            DiagnosticLog.Write(
+                $"User-data alert: profile '{profile.Id}' has no userDataFolder; skipping.");
+            return;
+        }
+
+        var folder = UserDataService.GetUserDataFolder(userDataFolderName);
         DiagnosticLog.Write(
-            $"User-data alert check. Probing path: '{folder ?? "(null)"}'");
+            $"User-data alert check ({profile.DisplayName}). Probing path: '{folder ?? "(null)"}'");
 
         if (string.IsNullOrEmpty(folder))
         {
@@ -3025,17 +3067,19 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!UserDataService.HasExistingUserData())
+        if (!UserDataService.HasExistingUserData(userDataFolderName))
         {
             DiagnosticLog.Write("  -> Folder exists but is empty; skipping alert.");
             return;
         }
 
-        var savegameCount = UserDataService.CountSavegameFiles();
+        var savegameCount = UserDataService.CountSavegameFiles(userDataFolderName);
         DiagnosticLog.Write(
-            $"Pre-existing WoL user data detected. Savegame files: {savegameCount}. Showing alert.");
+            $"Pre-existing user data detected for '{profile.Id}'. " +
+            $"Savegame files: {savegameCount}. Showing alert.");
 
-        var dialog = new UserDataAlertDialog(folder) { Owner = this };
+        var dialog = new UserDataAlertDialog(
+            folder, profile.DisplayName, userDataFolderName) { Owner = this };
         var backedUp = dialog.ShowDialog() == true;
 
         if (backedUp && !string.IsNullOrEmpty(dialog.BackupPath))
@@ -3596,24 +3640,51 @@ public partial class MainWindow : Window
         MenuSelectModFolder.IsEnabled = !_isBusy;
         MenuSelectAoE3Folder.IsEnabled = !_isBusy;
 
-        // User data submenu — same pattern as before
-        var hasUserData = UserDataService.HasExistingUserData();
-        var backups = UserDataService.ListBackups();
+        // User data submenu — gated by whether the active mod declares a
+        // user-data folder. Mods that don't (e.g. overlay mods sharing the
+        // AoE3 vanilla folder) hide the whole submenu so the items don't
+        // suggest a feature that wouldn't do anything.
+        var userDataFolderName = _updateService.Profile.UserDataFolder;
+        var userDataActive = !string.IsNullOrEmpty(userDataFolderName);
+        MenuUserData.Visibility = userDataActive
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
-        MenuOpenUserDataFolder.IsEnabled = UserDataService.GetUserDataFolder() != null;
-        MenuCreateBackupNow.IsEnabled = !_isBusy && hasUserData;
-        MenuRestoreUserData.IsEnabled = !_isBusy && backups.Count > 0;
+        if (userDataActive)
+        {
+            var hasUserData = UserDataService.HasExistingUserData(userDataFolderName);
+            var backups = UserDataService.ListBackups(userDataFolderName);
 
-        // Append the count of available backups to the Restore label so the
-        // user knows at a glance whether they have anything to restore.
-        var restoreLabel = Strings.Get("MenuRestoreUserData");
-        if (backups.Count > 0)
-            restoreLabel = $"{restoreLabel}  ({backups.Count})";
-        MenuRestoreUserData.Header = restoreLabel;
+            MenuOpenUserDataFolder.IsEnabled =
+                UserDataService.GetUserDataFolder(userDataFolderName) != null;
+            MenuCreateBackupNow.IsEnabled = !_isBusy && hasUserData;
+            MenuRestoreUserData.IsEnabled = !_isBusy && backups.Count > 0;
+
+            // Append the count of available backups to the Restore label so
+            // the user knows at a glance whether they have anything to
+            // restore.
+            var restoreLabel = Strings.Get("MenuRestoreUserData");
+            if (backups.Count > 0)
+                restoreLabel = $"{restoreLabel}  ({backups.Count})";
+            MenuRestoreUserData.Header = restoreLabel;
+        }
 
         // Health-check + maintenance actions
         MenuCheckForUpdates.IsEnabled = !_isBusy && _modIsInstalled;
-        MenuRepairInstall.IsEnabled = !_isBusy && _modIsInstalled;
+        // Repair re-runs the install pipeline, so it only makes sense for
+        // mechanisms the launcher knows how to install from. DelegatedExternal
+        // / Manual mods (updated by the mod's own tool) get their entry
+        // disabled — clicking it would otherwise fail with "no payload URL".
+        bool launcherCanInstall =
+            _updateService.Profile.UpdateMechanism == ModUpdateMechanism.WolPatcher
+            || _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases;
+        MenuRepairInstall.IsEnabled = !_isBusy && _modIsInstalled && launcherCanInstall;
+
+        // Verify is now profile-aware: it only enforces the WoL-specific
+        // markers when the active mod actually uses the WolPatcher pipeline;
+        // for every other mod it falls back to "probe file present + no
+        // zero-byte content files". Safe to leave clickable for any
+        // installed mod.
         MenuVerifyFiles.IsEnabled = !_isBusy && _modIsInstalled;
         // ViewLogs is always available — useful even when no mod is installed.
         MenuViewLogs.IsEnabled = true;
@@ -4093,7 +4164,10 @@ public partial class MainWindow : Window
     {
         if (_isBusy) return;
 
-        var backups = UserDataService.ListBackups();
+        var userDataFolderName = _updateService.Profile.UserDataFolder;
+        if (string.IsNullOrEmpty(userDataFolderName)) return;
+
+        var backups = UserDataService.ListBackups(userDataFolderName);
         if (backups.Count == 0)
         {
             MessageBox.Show(this,
@@ -4103,7 +4177,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var dialog = new UserDataRestoreDialog(backups) { Owner = this };
+        var dialog = new UserDataRestoreDialog(backups, userDataFolderName) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         if (dialog.RestoredBackup == null) return;
 
@@ -4127,7 +4201,10 @@ public partial class MainWindow : Window
     /// </summary>
     private void MenuOpenUserDataFolder_Click(object sender, RoutedEventArgs e)
     {
-        var folder = UserDataService.GetUserDataFolder();
+        var userDataFolderName = _updateService.Profile.UserDataFolder;
+        if (string.IsNullOrEmpty(userDataFolderName)) return;
+
+        var folder = UserDataService.GetUserDataFolder(userDataFolderName);
         if (string.IsNullOrEmpty(folder)) return;
 
         try
@@ -4157,7 +4234,10 @@ public partial class MainWindow : Window
     {
         if (_isBusy) return;
 
-        if (!UserDataService.HasExistingUserData())
+        var userDataFolderName = _updateService.Profile.UserDataFolder;
+        if (string.IsNullOrEmpty(userDataFolderName)) return;
+
+        if (!UserDataService.HasExistingUserData(userDataFolderName))
         {
             MessageBox.Show(this,
                 Strings.Get("DlgBackupNothingBody"),
@@ -4172,7 +4252,7 @@ public partial class MainWindow : Window
             MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
-        var path = UserDataService.BackupUserData();
+        var path = UserDataService.BackupUserData(userDataFolderName);
         if (string.IsNullOrEmpty(path))
         {
             MessageBox.Show(this,

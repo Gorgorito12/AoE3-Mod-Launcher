@@ -1283,10 +1283,13 @@ public static class Strings
             [LangEn] = "Available disk space: {0} on {1}",
             [LangEs] = "Espacio en disco disponible: {0} en {1}",
         },
+        // {0} = mod display name. Size deliberately omitted — the progress
+        // bar underneath already shows real bytes for whichever mod is
+        // being downloaded.
         ["StatusDownloadingInstaller"] = new()
         {
-            [LangEn] = "📥 Downloading Wars of Liberty installer (~2.7 GB)...",
-            [LangEs] = "📥 Descargando instalador de Wars of Liberty (~2.7 GB)...",
+            [LangEn] = "📥 Downloading {0} installer...",
+            [LangEs] = "📥 Descargando instalador de {0}...",
         },
         ["StatusExtractingInstaller"] = new()
         {
@@ -1778,29 +1781,32 @@ public static class Strings
             [LangEs] = "Descargando actualización del launcher...",
         },
 
-        // -------- User-data alert (Documents\Wars of Liberty) --------
+        // -------- User-data alert (Documents\<mod>\) --------
+        // Title is mod-agnostic (no placeholder needed).
         ["DlgUserDataAlertTitle"] = new()
         {
             [LangEn] = "Previous user data detected",
             [LangEs] = "Datos de versión anterior detectados",
         },
+        // {0} = mod display name (e.g. "Wars of Liberty", "Improvement Mod").
         ["DlgUserDataAlertHeader"] = new()
         {
-            [LangEn] = "We found Wars of Liberty user data on your computer",
-            [LangEs] = "Encontramos datos de Wars of Liberty en tu equipo",
+            [LangEn] = "We found {0} user data on your computer",
+            [LangEs] = "Encontramos datos de {0} en tu equipo",
         },
+        // {0} = mod display name. The "base version" framing matches WoL's
+        // WolPatcher flow, but the warning applies to any install that lays
+        // down older binaries on top of newer saves — keep it generic.
         ["DlgUserDataAlertDescription"] = new()
         {
-            [LangEn] = "We're about to install the 1.0.15d base version. If you " +
-                       "previously played a newer version, your saves and " +
-                       "metropolises may not be compatible — the game can hang " +
-                       "on the loading screen until you patch back to the " +
-                       "latest version.",
-            [LangEs] = "Vamos a instalar la versión base 1.0.15d. Si jugaste " +
-                       "antes una versión más nueva, tus partidas guardadas y " +
-                       "metrópolis pueden no ser compatibles — el juego puede " +
-                       "quedarse en la pantalla de carga hasta que actualices " +
-                       "a la versión más reciente.",
+            [LangEn] = "We're about to install {0}. If you previously played a " +
+                       "newer version, your saves and metropolises may not be " +
+                       "compatible — the game can hang on the loading screen " +
+                       "until you patch back to the latest version.",
+            [LangEs] = "Vamos a instalar {0}. Si jugaste antes una versión más " +
+                       "nueva, tus partidas guardadas y metrópolis pueden no " +
+                       "ser compatibles — el juego puede quedarse en la pantalla " +
+                       "de carga hasta que actualices a la versión más reciente.",
         },
         ["DlgUserDataAlertFoundLabel"] = new()
         {
@@ -1814,20 +1820,21 @@ public static class Strings
             [LangEs] = "⚠ Hay {0} archivo(s) en Savegame\\ — pueden incluir " +
                        "metrópolis en formato nuevo que el binario viejo no puede leer.",
         },
+        // {0} = mod display name (used as the renamed-folder prefix:
+        // "<modName>.bak.<timestamp>").
         ["DlgUserDataAlertRecommendation"] = new()
         {
             [LangEn] = "Recommended: back up the folder before the install runs. " +
-                       "The launcher will rename it to \"Wars of Liberty.bak." +
-                       "<timestamp>\" so the freshly installed game starts with a " +
-                       "clean slate. Your old data stays on disk and you can " +
-                       "restore it later from the gear menu (⚙ → User data → " +
-                       "Restore backup).",
+                       "The launcher will rename it to \"{0}.bak.<timestamp>\" so " +
+                       "the freshly installed game starts with a clean slate. " +
+                       "Your old data stays on disk and you can restore it later " +
+                       "from the gear menu (⚙ → User data → Restore backup).",
             [LangEs] = "Recomendado: respaldar la carpeta antes de instalar. El " +
-                       "launcher la renombrará a \"Wars of Liberty.bak.<fecha>\" " +
-                       "para que el juego recién instalado arranque limpio. Tus " +
-                       "datos antiguos siguen en el disco y puedes restaurarlos " +
-                       "después desde el menú de tuerca (⚙ → Datos de usuario → " +
-                       "Restaurar respaldo).",
+                       "launcher la renombrará a \"{0}.bak.<fecha>\" para que el " +
+                       "juego recién instalado arranque limpio. Tus datos " +
+                       "antiguos siguen en el disco y puedes restaurarlos después " +
+                       "desde el menú de tuerca (⚙ → Datos de usuario → Restaurar " +
+                       "respaldo).",
         },
         ["DlgUserDataAlertBtnBackup"] = new()
         {

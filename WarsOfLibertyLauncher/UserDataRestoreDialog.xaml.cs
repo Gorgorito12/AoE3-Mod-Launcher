@@ -29,12 +29,25 @@ public partial class UserDataRestoreDialog : Window
     public string? PreviousDataSnapshotPath { get; private set; }
 
     private readonly List<BackupRow> _rows;
+    private readonly string _userDataFolderName;
 
+    /// <summary>Back-compat overload. Defaults to WoL's folder name.</summary>
     public UserDataRestoreDialog(IReadOnlyList<UserDataService.BackupInfo> backups)
+        : this(backups, "Wars of Liberty") { }
+
+    /// <param name="userDataFolderName">
+    /// The active mod's <see cref="ModProfile.UserDataFolder"/>. Passed
+    /// through to <see cref="UserDataService.RestoreBackup(string, string)"/>
+    /// and to the Open-folder action so the dialog operates on the right
+    /// mod's data when more than one mod uses the feature.
+    /// </param>
+    public UserDataRestoreDialog(
+        IReadOnlyList<UserDataService.BackupInfo> backups, string userDataFolderName)
     {
         InitializeComponent();
 
         _rows = backups.Select(b => new BackupRow(b)).ToList();
+        _userDataFolderName = userDataFolderName ?? "";
 
         Title = Strings.Get("DlgRestoreDialogTitle");
         HeaderText.Text = Strings.Get("DlgRestoreDialogHeader");
@@ -58,7 +71,8 @@ public partial class UserDataRestoreDialog : Window
 
         try
         {
-            PreviousDataSnapshotPath = UserDataService.RestoreBackup(row.Info.Path);
+            PreviousDataSnapshotPath = UserDataService.RestoreBackup(
+                _userDataFolderName, row.Info.Path);
             RestoredBackup = row.Info;
             RestorePerformed = true;
             DialogResult = true;
@@ -76,7 +90,7 @@ public partial class UserDataRestoreDialog : Window
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {
         // Open the parent so the user sees the active folder + every .bak side by side
-        var folder = UserDataService.GetUserDataFolder();
+        var folder = UserDataService.GetUserDataFolder(_userDataFolderName);
         var parent = string.IsNullOrEmpty(folder) ? null : Path.GetDirectoryName(folder);
         if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent)) return;
 

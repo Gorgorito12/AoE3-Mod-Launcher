@@ -299,6 +299,7 @@ public static class ModRegistry
             OfficialWebsite = m.OfficialWebsite ?? "",
             Description = m.Description,
             ProductGuid = m.InstallProductGuid ?? "",
+            UserDataFolder = m.UserDataFolder ?? "",
             // Built-in pack URI stays null for community mods — they use
             // IconUrl/BannerUrl resolved against the catalog repo.
             BannerImage = null,
@@ -404,6 +405,10 @@ public static class ModRegistry
             // Templated into error / status messages that tell the user
             // where to re-download the mod from when an update fails.
             OfficialWebsite = "http://aoe3wol.com/",
+            // WoL keeps its own save / metropolis folder under Documents.
+            // Enabling this turns on the pre-install user-data backup alert
+            // and the gear menu's "User data" submenu for this profile.
+            UserDataFolder = "Wars of Liberty",
             // Reuse the launcher's app icon (WoL.ico, registered as a
             // pack-resource in the .csproj) so the WoL tile shows the real
             // logo instead of the "W" placeholder.

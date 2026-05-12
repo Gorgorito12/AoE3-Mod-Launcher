@@ -69,6 +69,13 @@
       "maxLength": 80,
       "description": "Optional. Stable Add/Remove Programs registry subkey. The launcher uses this exact string under HKLM\\…\\Uninstall\\<here>. When omitted the launcher derives `<id>_launcher`."
     },
+    "userDataFolder": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[^\\\\/]+$",
+      "description": "Optional. Folder name (relative to Documents\\My Games\\) where this mod keeps its user-side data — saves, custom metropolises, replays, etc. When set, the launcher offers a backup-before-install prompt and exposes 'Open / Create backup / Restore backup' in the gear menu. Omit to opt out of the user-data feature entirely (e.g. overlay mods that share AoE3 vanilla's folder)."
+    },
     "approvedReleaseTag": {
       "type": "string",
       "description": "Tag in sourceRepo whose contents the launcher will load. Bumping this is a Tier 2 change (auto-merge if validation passes)."

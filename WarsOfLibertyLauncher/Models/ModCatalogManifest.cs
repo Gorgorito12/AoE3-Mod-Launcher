@@ -88,6 +88,18 @@ public class ModCatalogManifest
     [JsonPropertyName("installProductGuid")]
     public string? InstallProductGuid { get; set; }
 
+    /// <summary>
+    /// Optional folder name (relative to
+    /// <c>%USERPROFILE%\Documents\My Games\</c>) where this mod keeps its
+    /// user-side data — saves, custom metropolises, replays, etc. When
+    /// present, the launcher offers a backup-before-install prompt and
+    /// surfaces "Open / Create backup / Restore backup" entries in the
+    /// gear menu, all pointing at that folder. When omitted the launcher
+    /// silently skips the user-data feature for this mod.
+    /// </summary>
+    [JsonPropertyName("userDataFolder")]
+    public string? UserDataFolder { get; set; }
+
     [JsonPropertyName("install")]
     public ModCatalogInstall Install { get; set; } = new();
 

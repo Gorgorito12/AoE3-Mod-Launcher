@@ -6,18 +6,23 @@ using System.Linq;
 namespace WarsOfLibertyLauncher.Services;
 
 /// <summary>
-/// Helpers for the user-data folder Wars of Liberty creates under the user's
-/// Documents — typically:
+/// Helpers for the per-mod user-data folder under the user's Documents.
+/// Each mod that opts into this feature declares a folder name (relative to
+/// <c>%USERPROFILE%\Documents\My Games\</c>) in its catalog manifest as
+/// <c>userDataFolder</c>; WoL's built-in profile sets it to
+/// <c>"Wars of Liberty"</c>. Other mods can leave it empty to opt out.
 ///
-///   C:\Users\&lt;name&gt;\Documents\My Games\Wars of Liberty\
+/// Typical folder shape:
 ///
-/// That folder holds saves (Savegame\), custom metropolises, replays and a
-/// few config files. AoE3 itself uses the same "My Games" parent folder,
-/// which is the standard Microsoft convention.
+///   C:\Users\&lt;name&gt;\Documents\My Games\&lt;folder&gt;\
+///
+/// Holds saves (<c>Savegame\</c>), custom metropolises, replays and config
+/// files. AoE3 itself uses the same "My Games" parent folder — that's the
+/// standard Microsoft convention.
 ///
 /// None of this is touched by the launcher's install/uninstall flow (it's
 /// user data and should survive a reinstall), but if the user installs an
-/// OLDER version of WoL on top of newer save files the game may crash on
+/// OLDER mod version on top of newer save files the game can crash on
 /// startup — newer metropolis formats can't be parsed by older binaries.
 ///
 /// This service only DETECTS and offers to back up. It never deletes.
@@ -25,16 +30,18 @@ namespace WarsOfLibertyLauncher.Services;
 public static class UserDataService
 {
     /// <summary>
-    /// The default WoL user-data folder under Documents. Returns null if we
-    /// can't determine the user's Documents path.
+    /// Resolves the absolute path of a mod's user-data folder. Returns null
+    /// when <paramref name="folderName"/> is empty (mod doesn't opt in) or
+    /// when we can't determine the user's Documents path.
     /// </summary>
-    public static string? GetUserDataFolder()
+    public static string? GetUserDataFolder(string folderName)
     {
+        if (string.IsNullOrEmpty(folderName)) return null;
         try
         {
             var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             if (string.IsNullOrEmpty(docs)) return null;
-            return Path.Combine(docs, "My Games", "Wars of Liberty");
+            return Path.Combine(docs, "My Games", folderName);
         }
         catch
         {
@@ -43,12 +50,13 @@ public static class UserDataService
     }
 
     /// <summary>
-    /// True if the user has a populated WoL data folder under Documents.
-    /// "Populated" means at least one file exists somewhere under it.
+    /// True if the user has a populated data folder for this mod under
+    /// Documents. "Populated" means at least one file exists somewhere
+    /// under it. Returns false when the mod doesn't opt into the feature.
     /// </summary>
-    public static bool HasExistingUserData()
+    public static bool HasExistingUserData(string folderName)
     {
-        var folder = GetUserDataFolder();
+        var folder = GetUserDataFolder(folderName);
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return false;
         try
         {
@@ -62,14 +70,14 @@ public static class UserDataService
 
     /// <summary>
     /// Count of files inside the <c>Savegame\</c> subfolder. This is where
-    /// WoL keeps custom metropolises and saved games — the files most
-    /// likely to be in a newer format that the freshly-installed older
+    /// the game keeps custom metropolises and saved games — the files most
+    /// likely to be in a newer format that a freshly-installed older
     /// binary can't parse, causing the loading-screen hang.
     /// Returns 0 if the folder doesn't exist or can't be read.
     /// </summary>
-    public static int CountSavegameFiles()
+    public static int CountSavegameFiles(string folderName)
     {
-        var folder = GetUserDataFolder();
+        var folder = GetUserDataFolder(folderName);
         if (string.IsNullOrEmpty(folder)) return 0;
         var savegame = Path.Combine(folder, "Savegame");
         if (!Directory.Exists(savegame)) return 0;
@@ -84,16 +92,16 @@ public static class UserDataService
     }
 
     /// <summary>
-    /// Renames the WoL Documents folder to "Wars of Liberty.bak.&lt;timestamp&gt;"
+    /// Renames the user-data folder to "&lt;folderName&gt;.bak.&lt;timestamp&gt;"
     /// so the game starts with a clean slate. Returns the new backup path on
     /// success, or null if there was nothing to back up / the rename failed.
     ///
     /// We never DELETE — the user can manually clean up the .bak folder later
     /// once they've confirmed the new install works.
     /// </summary>
-    public static string? BackupUserData()
+    public static string? BackupUserData(string folderName)
     {
-        var folder = GetUserDataFolder();
+        var folder = GetUserDataFolder(folderName);
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return null;
 
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
@@ -102,23 +110,24 @@ public static class UserDataService
         try
         {
             Directory.Move(folder, backupPath);
-            DiagnosticLog.Write($"Backed up WoL user data: '{folder}' -> '{backupPath}'");
+            DiagnosticLog.Write($"Backed up user data: '{folder}' -> '{backupPath}'");
             return backupPath;
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"Failed to back up WoL user data: {ex.Message}");
+            DiagnosticLog.Write($"Failed to back up user data ('{folderName}'): {ex.Message}");
             return null;
         }
     }
 
     /// <summary>
-    /// Opens the WoL user-data folder in Explorer so the user can inspect /
-    /// move / delete files manually. No-op if the folder doesn't exist.
+    /// Opens the user-data folder in Explorer so the user can inspect /
+    /// move / delete files manually. No-op if the folder doesn't exist or
+    /// the mod doesn't opt into the feature.
     /// </summary>
-    public static void OpenUserDataFolder()
+    public static void OpenUserDataFolder(string folderName)
     {
-        var folder = GetUserDataFolder();
+        var folder = GetUserDataFolder(folderName);
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return;
         try
         {
@@ -136,7 +145,8 @@ public static class UserDataService
 
     /// <summary>
     /// Information about a single backup the launcher created on a previous
-    /// install (renamed from "Wars of Liberty" to "Wars of Liberty.bak.&lt;ts&gt;").
+    /// install (renamed from <c>&lt;folder&gt;</c> to
+    /// <c>&lt;folder&gt;.bak.&lt;ts&gt;</c>).
     /// </summary>
     public record BackupInfo(
         string Path,
@@ -148,21 +158,23 @@ public static class UserDataService
     /// <summary>
     /// Lists every backup folder that lives next to the active user-data
     /// folder. Sorted by creation time, most recent first. Returns an
-    /// empty list if there are none.
+    /// empty list when the mod doesn't opt into the feature or there are
+    /// no backups.
     /// </summary>
-    public static List<BackupInfo> ListBackups()
+    public static List<BackupInfo> ListBackups(string folderName)
     {
         var result = new List<BackupInfo>();
-        var folder = GetUserDataFolder();
+        var folder = GetUserDataFolder(folderName);
         if (string.IsNullOrEmpty(folder)) return result;
 
         var parent = Path.GetDirectoryName(folder);
         if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent)) return result;
 
-        // Folders we created look like: "Wars of Liberty.bak.20260507-123456"
+        // Folders we created look like: "<folderName>.bak.20260507-123456"
         try
         {
-            foreach (var dir in Directory.EnumerateDirectories(parent, "Wars of Liberty.bak.*"))
+            var pattern = $"{folderName}.bak.*";
+            foreach (var dir in Directory.EnumerateDirectories(parent, pattern))
             {
                 int count = 0;
                 long totalBytes = 0;
@@ -213,14 +225,15 @@ public static class UserDataService
     /// (so the caller can mention it to the user), or null if the active
     /// folder was empty / didn't exist.
     /// </returns>
-    public static string? RestoreBackup(string backupPath)
+    public static string? RestoreBackup(string folderName, string backupPath)
     {
         if (string.IsNullOrEmpty(backupPath) || !Directory.Exists(backupPath))
             throw new DirectoryNotFoundException($"Backup not found: {backupPath}");
 
-        var folder = GetUserDataFolder();
+        var folder = GetUserDataFolder(folderName);
         if (string.IsNullOrEmpty(folder))
-            throw new InvalidOperationException("Could not resolve Documents path.");
+            throw new InvalidOperationException(
+                "Could not resolve Documents path / mod doesn't declare userDataFolder.");
 
         string? newBackupOfCurrent = null;
 
