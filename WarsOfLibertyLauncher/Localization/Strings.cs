@@ -843,6 +843,92 @@ public static class Strings
             [LangEn] = "Inspect the generated mod.json, copy it to the clipboard, and open the catalog PR template on GitHub.",
             [LangEs] = "Revisa el mod.json generado, cópialo al portapapeles y abre la plantilla de PR del catálogo en GitHub.",
         },
+        ["PublishFieldId"] = new() { [LangEn] = "Id", [LangEs] = "Id" },
+        ["PublishFieldIdHint"] = new()
+        {
+            [LangEn] = "Lowercase letters, digits, dashes. Used as the folder name under /mods/.",
+            [LangEs] = "Minúsculas, dígitos y guiones. Se usa como nombre de carpeta dentro de /mods/.",
+        },
+        ["PublishFieldDisplayName"] = new() { [LangEn] = "Display name", [LangEs] = "Nombre visible" },
+        ["PublishFieldAuthor"] = new() { [LangEn] = "Author (optional)", [LangEs] = "Autor (opcional)" },
+        ["PublishFieldSubtitle"] = new() { [LangEn] = "Subtitle (optional)", [LangEs] = "Subtítulo (opcional)" },
+        ["PublishFieldAccent"] = new() { [LangEn] = "Accent colour (optional)", [LangEs] = "Color de acento (opcional)" },
+        ["PublishFieldAccentHint"] = new()
+        {
+            [LangEn] = "Hex format, e.g. #c8102e.",
+            [LangEs] = "Formato hex, ej. #c8102e.",
+        },
+        ["PublishFieldIcon"] = new() { [LangEn] = "Icon filename (optional)", [LangEs] = "Nombre del icono (opcional)" },
+        ["PublishFieldIconHint"] = new()
+        {
+            [LangEn] = "icon.png — 256x256, PNG with alpha, ≤100 KB.",
+            [LangEs] = "icon.png — 256x256, PNG con alfa, ≤100 KB.",
+        },
+        ["PublishFieldBanner"] = new() { [LangEn] = "Banner filename (optional)", [LangEs] = "Nombre del banner (opcional)" },
+        ["PublishFieldBannerHint"] = new()
+        {
+            [LangEn] = "banner.png/.jpg — 1200x300, ≤500 KB.",
+            [LangEs] = "banner.png/.jpg — 1200x300, ≤500 KB.",
+        },
+        ["PublishFieldInstallType"] = new() { [LangEn] = "Install type", [LangEs] = "Tipo de instalación" },
+        ["PublishFieldInstallTypeHint"] = new()
+        {
+            [LangEn] = "IsolatedFolder = own folder. InPlaceOverlay = on top of AoE3.",
+            [LangEs] = "IsolatedFolder = carpeta propia. InPlaceOverlay = encima de AoE3.",
+        },
+        ["PublishFieldDefaultFolder"] = new() { [LangEn] = "Default install folder", [LangEs] = "Carpeta de instalación por defecto" },
+        ["PublishFieldProbeFile"] = new() { [LangEn] = "Probe file", [LangEs] = "Archivo de detección" },
+        ["PublishFieldExecutable"] = new() { [LangEn] = "Executable", [LangEs] = "Ejecutable" },
+        ["PublishFieldArguments"] = new() { [LangEn] = "Arguments (optional)", [LangEs] = "Argumentos (opcional)" },
+        ["PublishFieldMechanism"] = new() { [LangEn] = "Update mechanism", [LangEs] = "Mecanismo de actualización" },
+        ["PublishFieldWolUpdateInfoUrl"] = new() { [LangEn] = "UpdateInfo.xml URL", [LangEs] = "URL de UpdateInfo.xml" },
+        ["PublishFieldSourceRepo"] = new() { [LangEn] = "Source repo (owner/repo)", [LangEs] = "Repo fuente (owner/repo)" },
+        ["PublishFieldSourceRepoHint"] = new()
+        {
+            [LangEn] = "Your mod's GitHub repository, e.g. yourname/your-mod.",
+            [LangEs] = "El repositorio de GitHub de tu mod, ej. tunombre/tu-mod.",
+        },
+        ["PublishFieldApprovedTag"] = new() { [LangEn] = "Approved release tag", [LangEs] = "Tag de release aprobado" },
+        ["PublishFieldDescriptionEn"] = new() { [LangEn] = "Description (English)", [LangEs] = "Descripción (Inglés)" },
+        ["PublishFieldDescriptionEs"] = new() { [LangEn] = "Description (Spanish)", [LangEs] = "Descripción (Español)" },
+        ["PublishFieldWebsite"] = new() { [LangEn] = "Official website (optional)", [LangEs] = "Sitio web oficial (opcional)" },
+        ["PublishCopyJson"] = new() { [LangEn] = "Copy JSON", [LangEs] = "Copiar JSON" },
+        ["PublishOpenPr"] = new() { [LangEn] = "Open PR on GitHub", [LangEs] = "Abrir PR en GitHub" },
+        ["PublishErrorId"] = new()
+        {
+            [LangEn] = "Invalid id. Use lowercase letters, digits and dashes (max 31 chars, starts with a letter).",
+            [LangEs] = "Id inválido. Usa minúsculas, dígitos y guiones (máx 31 chars, empieza por letra).",
+        },
+        ["PublishErrorDisplayName"] = new()
+        {
+            [LangEn] = "Display name is required (1–50 characters).",
+            [LangEs] = "El nombre visible es obligatorio (1–50 caracteres).",
+        },
+        ["PublishErrorAccent"] = new()
+        {
+            [LangEn] = "Accent colour must be a six-digit hex string like #c8102e.",
+            [LangEs] = "El color de acento debe ser un hex de seis dígitos, ej. #c8102e.",
+        },
+        ["PublishErrorIcon"] = new()
+        {
+            [LangEn] = "Icon filename must end with .png and contain only letters, digits, dashes or underscores.",
+            [LangEs] = "El nombre del icono debe acabar en .png y contener solo letras, dígitos, guiones o guiones bajos.",
+        },
+        ["PublishErrorBanner"] = new()
+        {
+            [LangEn] = "Banner filename must end with .png/.jpg/.jpeg and contain only safe characters.",
+            [LangEs] = "El nombre del banner debe acabar en .png/.jpg/.jpeg y contener solo caracteres seguros.",
+        },
+        ["PublishErrorExecutable"] = new()
+        {
+            [LangEn] = "Executable must be a filename ending in .exe (e.g. age3y.exe).",
+            [LangEs] = "El ejecutable debe ser un archivo terminado en .exe (ej. age3y.exe).",
+        },
+        ["PublishErrorWebsite"] = new()
+        {
+            [LangEn] = "Website must start with http:// or https://.",
+            [LangEs] = "El sitio web debe empezar con http:// o https://.",
+        },
         ["MultiplayerComingSoon"] = new()
         {
             [LangEn] = "Multiplayer lobby — coming in v1.0.\nA Voobly-style room browser for AoE3 mods.",

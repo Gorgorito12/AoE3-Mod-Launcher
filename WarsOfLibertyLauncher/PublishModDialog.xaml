@@ -8,6 +8,40 @@
         Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
 
+    <Window.Resources>
+        <!-- Compact form chrome shared across every step. Keeps the wizard's
+             form rows tight (40px target height) so all six steps fit in
+             the 640px window without needing nested scrollbars per panel. -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,12,0,4"/>
+        </Style>
+        <Style x:Key="FieldInput" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource BgPanel}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style x:Key="FieldHint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontStyle" Value="Italic"/>
+            <Setter Property="Margin" Value="0,3,0,0"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="ErrorText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#e63950"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -15,7 +49,6 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header: title + step breadcrumb. -->
         <Border Grid.Row="0"
                 Background="{DynamicResource BgPanel}"
                 BorderBrush="{DynamicResource BorderSubtle}"
@@ -33,77 +66,178 @@
             </StackPanel>
         </Border>
 
-        <!-- Body: one Grid per step, only the active one is visible. The
-             contents are minimal placeholders here; the wizard forms +
-             JSON output + PR-open button arrive in commit 8. -->
         <ScrollViewer Grid.Row="1"
                       VerticalScrollBarVisibility="Auto"
-                      Padding="32,24">
+                      Padding="32,18">
             <Grid>
+                <!-- Step 1 — Identity: id + displayName (required), author + subtitle (optional). -->
                 <StackPanel x:Name="Step1Panel">
-                    <TextBlock x:Name="Step1Title"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="15" FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step1Hint"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12" TextWrapping="Wrap"
-                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step1Title" Style="{StaticResource FieldLabel}" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step1Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="12" Margin="0,0,0,12"/>
+
+                    <TextBlock x:Name="LblId" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldId"   Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="HintId" Style="{StaticResource FieldHint}"/>
+                    <TextBlock x:Name="ErrorId" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+
+                    <TextBlock x:Name="LblDisplayName" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldDisplayName" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="ErrorDisplayName" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+
+                    <TextBlock x:Name="LblAuthor" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldAuthor" Style="{StaticResource FieldInput}"/>
+
+                    <TextBlock x:Name="LblSubtitle" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldSubtitle" Style="{StaticResource FieldInput}"/>
                 </StackPanel>
+
+                <!-- Step 2 — Look & feel: accent + icon filename + banner filename. -->
                 <StackPanel x:Name="Step2Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step2Title"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="15" FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step2Hint"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12" TextWrapping="Wrap"
-                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step2Title" Style="{StaticResource FieldLabel}" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step2Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="12" Margin="0,0,0,12"/>
+
+                    <TextBlock x:Name="LblAccent" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldAccent" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="HintAccent" Style="{StaticResource FieldHint}"/>
+                    <TextBlock x:Name="ErrorAccent" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+
+                    <TextBlock x:Name="LblIcon" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldIcon" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="HintIcon" Style="{StaticResource FieldHint}"/>
+                    <TextBlock x:Name="ErrorIcon" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+
+                    <TextBlock x:Name="LblBanner" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldBanner" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="HintBanner" Style="{StaticResource FieldHint}"/>
+                    <TextBlock x:Name="ErrorBanner" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
                 </StackPanel>
+
+                <!-- Step 3 — Install. -->
                 <StackPanel x:Name="Step3Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step3Title"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="15" FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step3Hint"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12" TextWrapping="Wrap"
-                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step3Title" Style="{StaticResource FieldLabel}" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step3Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="12" Margin="0,0,0,12"/>
+
+                    <TextBlock x:Name="LblInstallType" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="FieldInstallType"
+                              Background="{DynamicResource BgPanel}"
+                              Foreground="{DynamicResource TextPrimary}"
+                              BorderBrush="{DynamicResource BorderSubtle}"
+                              Padding="8,6" FontSize="12">
+                        <ComboBoxItem Content="IsolatedFolder" Tag="IsolatedFolder"/>
+                        <ComboBoxItem Content="InPlaceOverlay" Tag="InPlaceOverlay"/>
+                    </ComboBox>
+                    <TextBlock x:Name="HintInstallType" Style="{StaticResource FieldHint}"/>
+
+                    <TextBlock x:Name="LblDefaultFolder" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldDefaultFolder" Style="{StaticResource FieldInput}"/>
+
+                    <TextBlock x:Name="LblProbeFile" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldProbeFile" Style="{StaticResource FieldInput}"/>
+
+                    <TextBlock x:Name="LblExecutable" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldExecutable" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="ErrorExecutable" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+
+                    <TextBlock x:Name="LblArguments" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldArguments" Style="{StaticResource FieldInput}"/>
                 </StackPanel>
+
+                <!-- Step 4 — Updates: mechanism (+ contextual subfields). -->
                 <StackPanel x:Name="Step4Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step4Title"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="15" FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step4Hint"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12" TextWrapping="Wrap"
-                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step4Title" Style="{StaticResource FieldLabel}" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step4Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="12" Margin="0,0,0,12"/>
+
+                    <TextBlock x:Name="LblMechanism" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="FieldMechanism"
+                              Background="{DynamicResource BgPanel}"
+                              Foreground="{DynamicResource TextPrimary}"
+                              BorderBrush="{DynamicResource BorderSubtle}"
+                              Padding="8,6" FontSize="12">
+                        <ComboBoxItem Content="WolPatcher"        Tag="WolPatcher"/>
+                        <ComboBoxItem Content="GitHubReleases"    Tag="GitHubReleases"/>
+                        <ComboBoxItem Content="DelegatedExternal" Tag="DelegatedExternal"/>
+                        <ComboBoxItem Content="Manual"            Tag="Manual"/>
+                    </ComboBox>
+
+                    <!-- WoL patcher subfields. -->
+                    <StackPanel x:Name="MechanismWolPanel" Visibility="Collapsed">
+                        <TextBlock x:Name="LblWolUpdateInfoUrl" Style="{StaticResource FieldLabel}"/>
+                        <TextBox  x:Name="FieldWolUpdateInfoUrl" Style="{StaticResource FieldInput}"/>
+                    </StackPanel>
+
+                    <!-- GitHub Releases subfields. -->
+                    <StackPanel x:Name="MechanismGitHubPanel" Visibility="Collapsed">
+                        <TextBlock x:Name="LblSourceRepo" Style="{StaticResource FieldLabel}"/>
+                        <TextBox  x:Name="FieldSourceRepo" Style="{StaticResource FieldInput}"/>
+                        <TextBlock x:Name="HintSourceRepo" Style="{StaticResource FieldHint}"/>
+
+                        <TextBlock x:Name="LblApprovedTag" Style="{StaticResource FieldLabel}"/>
+                        <TextBox  x:Name="FieldApprovedTag" Style="{StaticResource FieldInput}"/>
+                    </StackPanel>
                 </StackPanel>
+
+                <!-- Step 5 — Description + website. -->
                 <StackPanel x:Name="Step5Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step5Title"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="15" FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step5Hint"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12" TextWrapping="Wrap"
-                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step5Title" Style="{StaticResource FieldLabel}" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step5Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="12" Margin="0,0,0,12"/>
+
+                    <TextBlock x:Name="LblDescriptionEn" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldDescriptionEn" Style="{StaticResource FieldInput}"
+                              AcceptsReturn="True" TextWrapping="Wrap" Height="70" VerticalScrollBarVisibility="Auto"/>
+
+                    <TextBlock x:Name="LblDescriptionEs" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldDescriptionEs" Style="{StaticResource FieldInput}"
+                              AcceptsReturn="True" TextWrapping="Wrap" Height="70" VerticalScrollBarVisibility="Auto"/>
+
+                    <TextBlock x:Name="LblWebsite" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldWebsite" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="ErrorWebsite" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
                 </StackPanel>
+
+                <!-- Step 6 — Review + actions. -->
                 <StackPanel x:Name="Step6Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step6Title"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="15" FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step6Hint"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12" TextWrapping="Wrap"
-                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step6Title" Style="{StaticResource FieldLabel}" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step6Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="12" Margin="0,0,0,12"/>
+
+                    <Border BorderBrush="{DynamicResource BorderSubtle}"
+                            BorderThickness="1"
+                            Background="{DynamicResource BgPanel}"
+                            CornerRadius="4"
+                            Padding="2">
+                        <TextBox x:Name="JsonPreview"
+                                 IsReadOnly="True"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Foreground="{DynamicResource TextPrimary}"
+                                 FontFamily="Consolas"
+                                 FontSize="11"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 Height="280"/>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button x:Name="CopyJsonButton"
+                                Background="{DynamicResource BgPanelAlt}"
+                                Foreground="{DynamicResource TextPrimary}"
+                                BorderBrush="{DynamicResource BorderSubtle}"
+                                BorderThickness="1"
+                                Padding="14,6"
+                                Margin="0,0,10,0"
+                                Cursor="Hand"/>
+                        <Button x:Name="OpenPrButton"
+                                Background="{DynamicResource AccentBrush}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Padding="14,6"
+                                Cursor="Hand"/>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </ScrollViewer>
 
-        <!-- Footer: Cancel + Back + Next/Finish. -->
         <Border Grid.Row="2"
                 Background="{DynamicResource BgPanel}"
                 BorderBrush="{DynamicResource BorderSubtle}"

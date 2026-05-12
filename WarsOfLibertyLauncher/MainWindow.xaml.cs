@@ -2042,6 +2042,45 @@ public partial class MainWindow : Window
         dlg.SetStepHint(5, Strings.Get("PublishWizardStep5Hint"));
         dlg.SetStepTitle(6, Strings.Get("PublishWizardStep6Title"));
         dlg.SetStepHint(6, Strings.Get("PublishWizardStep6Hint"));
+
+        // Field labels + hints. Kept as one explicit block so adding a new
+        // language is a checklist exercise — every visible string is
+        // assigned exactly once.
+        dlg.LblIdText = Strings.Get("PublishFieldId");
+        dlg.HintIdText = Strings.Get("PublishFieldIdHint");
+        dlg.LblDisplayNameText = Strings.Get("PublishFieldDisplayName");
+        dlg.LblAuthorText = Strings.Get("PublishFieldAuthor");
+        dlg.LblSubtitleText = Strings.Get("PublishFieldSubtitle");
+        dlg.LblAccentText = Strings.Get("PublishFieldAccent");
+        dlg.HintAccentText = Strings.Get("PublishFieldAccentHint");
+        dlg.LblIconText = Strings.Get("PublishFieldIcon");
+        dlg.HintIconText = Strings.Get("PublishFieldIconHint");
+        dlg.LblBannerText = Strings.Get("PublishFieldBanner");
+        dlg.HintBannerText = Strings.Get("PublishFieldBannerHint");
+        dlg.LblInstallTypeText = Strings.Get("PublishFieldInstallType");
+        dlg.HintInstallTypeText = Strings.Get("PublishFieldInstallTypeHint");
+        dlg.LblDefaultFolderText = Strings.Get("PublishFieldDefaultFolder");
+        dlg.LblProbeFileText = Strings.Get("PublishFieldProbeFile");
+        dlg.LblExecutableText = Strings.Get("PublishFieldExecutable");
+        dlg.LblArgumentsText = Strings.Get("PublishFieldArguments");
+        dlg.LblMechanismText = Strings.Get("PublishFieldMechanism");
+        dlg.LblWolUpdateInfoUrlText = Strings.Get("PublishFieldWolUpdateInfoUrl");
+        dlg.LblSourceRepoText = Strings.Get("PublishFieldSourceRepo");
+        dlg.HintSourceRepoText = Strings.Get("PublishFieldSourceRepoHint");
+        dlg.LblApprovedTagText = Strings.Get("PublishFieldApprovedTag");
+        dlg.LblDescriptionEnText = Strings.Get("PublishFieldDescriptionEn");
+        dlg.LblDescriptionEsText = Strings.Get("PublishFieldDescriptionEs");
+        dlg.LblWebsiteText = Strings.Get("PublishFieldWebsite");
+        dlg.CopyJsonLabel = Strings.Get("PublishCopyJson");
+        dlg.OpenPrLabel = Strings.Get("PublishOpenPr");
+        dlg.ErrorIdInvalid = Strings.Get("PublishErrorId");
+        dlg.ErrorDisplayNameRequired = Strings.Get("PublishErrorDisplayName");
+        dlg.ErrorAccentInvalid = Strings.Get("PublishErrorAccent");
+        dlg.ErrorIconInvalid = Strings.Get("PublishErrorIcon");
+        dlg.ErrorBannerInvalid = Strings.Get("PublishErrorBanner");
+        dlg.ErrorExecutableInvalid = Strings.Get("PublishErrorExecutable");
+        dlg.ErrorWebsiteInvalid = Strings.Get("PublishErrorWebsite");
+
         dlg.GoTo(1);
     }
 
