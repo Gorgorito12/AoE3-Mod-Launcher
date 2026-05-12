@@ -693,6 +693,16 @@ public static class Strings
             [LangEn] = "No mods to show. Check the catalog settings in launcher preferences.",
             [LangEs] = "No hay mods que mostrar. Revisa la configuración del catálogo en los ajustes.",
         },
+        ["ModsBrowserSearchPlaceholder"] = new()
+        {
+            [LangEn] = "Search mods…",
+            [LangEs] = "Buscar mods…",
+        },
+        ["ModsBrowserOnlyInstalled"] = new()
+        {
+            [LangEn] = "Only installed",
+            [LangEs] = "Solo instalados",
+        },
         ["MultiplayerComingSoon"] = new()
         {
             [LangEn] = "Multiplayer lobby — coming in v1.0.\nA Voobly-style room browser for AoE3 mods.",

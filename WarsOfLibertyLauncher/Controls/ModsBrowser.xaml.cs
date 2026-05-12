@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -24,9 +25,40 @@ public partial class ModsBrowser : UserControl
     /// </summary>
     public event EventHandler<ModProfile>? CardClicked;
 
+    // Cached inputs from the last Populate() call so the filter handlers
+    // can re-render without making MainWindow re-supply the data each
+    // keystroke. ModRegistry.All is the source of truth; we only stash
+    // a snapshot so search/installed filtering stays in this control.
+    private IReadOnlyList<ModProfile> _allProfiles = Array.Empty<ModProfile>();
+    private string _activeId = "";
+    private string _uiLanguage = "";
+    private Func<ModProfile, string>? _probeStateText;
+
     public ModsBrowser()
     {
         InitializeComponent();
+        SearchBox.TextChanged += (_, _) =>
+        {
+            SearchPlaceholderText.Visibility =
+                string.IsNullOrEmpty(SearchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+            ApplyFilters();
+        };
+        OnlyInstalledToggle.Checked += (_, _) => ApplyFilters();
+        OnlyInstalledToggle.Unchecked += (_, _) => ApplyFilters();
+    }
+
+    /// <summary>Placeholder text shown inside the search box when empty.</summary>
+    public string SearchPlaceholder
+    {
+        get => SearchPlaceholderText.Text;
+        set => SearchPlaceholderText.Text = value;
+    }
+
+    /// <summary>Label next to the "only installed" checkbox.</summary>
+    public string OnlyInstalledLabel
+    {
+        get => (string)(OnlyInstalledToggle.Content ?? "");
+        set => OnlyInstalledToggle.Content = value;
     }
 
     public string HeaderTitleText
@@ -66,14 +98,71 @@ public partial class ModsBrowser : UserControl
         string uiLanguage,
         Func<ModProfile, string> probeStateText)
     {
+        _allProfiles = profiles.ToList();
+        _activeId = activeId ?? "";
+        _uiLanguage = uiLanguage ?? "";
+        _probeStateText = probeStateText;
+        ApplyFilters();
+    }
+
+    /// <summary>
+    /// (Re)renders the card grid against the cached profile list, filtered
+    /// by the search box query (case-insensitive substring on display name
+    /// + author) and — when the toggle is on — the install-state probe.
+    /// Called by the input handlers and by Populate(); cheap because cards
+    /// are plain Borders with frozen brushes.
+    /// </summary>
+    private void ApplyFilters()
+    {
+        if (_probeStateText is null)
+        {
+            CardsPanel.Children.Clear();
+            EmptyText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var notInstalledMarker = GetNotInstalledMarker();
+        var query = (SearchBox.Text ?? "").Trim();
+        bool onlyInstalled = OnlyInstalledToggle.IsChecked == true;
+
         CardsPanel.Children.Clear();
         int count = 0;
-        foreach (var profile in profiles)
+        foreach (var profile in _allProfiles)
         {
-            CardsPanel.Children.Add(BuildCard(profile, activeId, uiLanguage, probeStateText));
+            if (!MatchesQuery(profile, query)) continue;
+            string state = _probeStateText(profile);
+            if (onlyInstalled && IsNotInstalled(state, notInstalledMarker)) continue;
+            CardsPanel.Children.Add(
+                BuildCard(profile, _activeId, _uiLanguage, _ => state));
             count++;
         }
         EmptyText.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static bool MatchesQuery(ModProfile profile, string query)
+    {
+        if (string.IsNullOrEmpty(query)) return true;
+        string name = profile.DisplayName ?? "";
+        string author = profile.Author ?? "";
+        return name.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || author.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// We don't have a structured install-state enum at the browser layer
+    /// — MainWindow's <c>ProbeInstalledState</c> returns localised strings.
+    /// To classify "installed vs not" we sample the marker once (by passing
+    /// an obviously-uninstalled profile id is overkill; instead we let
+    /// MainWindow inject the marker via <see cref="NotInstalledStateText"/>).
+    /// </summary>
+    public string NotInstalledStateText { get; set; } = "";
+
+    private string GetNotInstalledMarker() => NotInstalledStateText;
+
+    private static bool IsNotInstalled(string state, string marker)
+    {
+        if (string.IsNullOrEmpty(marker)) return false;
+        return string.Equals(state, marker, StringComparison.Ordinal);
     }
 
     private FrameworkElement BuildCard(

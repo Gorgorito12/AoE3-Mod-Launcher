@@ -7,8 +7,8 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Header. Filter / "Publish my mod" controls land in this row in
-             subsequent v0.9 commits; for now it's just the title block. -->
+        <!-- Header. Title block + filter row (search box + installed toggle).
+             "Publish my mod" entry point lands in a later v0.9 commit. -->
         <Border Grid.Row="0"
                 Background="{DynamicResource BgPanel}"
                 BorderBrush="{DynamicResource BorderSubtle}"
@@ -28,6 +28,42 @@
                                Foreground="{DynamicResource TextSecondary}"
                                FontSize="11"
                                Margin="0,2,0,0"/>
+                </StackPanel>
+
+                <!-- Filter row: search box + "only installed" toggle. Both
+                     re-render via ApplyFilters(); the underlying profile
+                     list is cached so MainWindow only repopulates on real
+                     state changes (mod switch / catalog refresh / install). -->
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Border Background="{DynamicResource BgBase}"
+                            BorderBrush="{DynamicResource BorderSubtle}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="8,4"
+                            Width="220"
+                            Margin="0,0,12,0">
+                        <Grid>
+                            <TextBlock x:Name="SearchPlaceholderText"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="12"
+                                       FontStyle="Italic"
+                                       VerticalAlignment="Center"
+                                       IsHitTestVisible="False"/>
+                            <TextBox x:Name="SearchBox"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="{DynamicResource TextPrimary}"
+                                     CaretBrush="{DynamicResource TextPrimary}"
+                                     FontSize="12"
+                                     VerticalContentAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <CheckBox x:Name="OnlyInstalledToggle"
+                              Foreground="{DynamicResource TextPrimary}"
+                              VerticalAlignment="Center"
+                              FontSize="12"/>
                 </StackPanel>
             </Grid>
         </Border>

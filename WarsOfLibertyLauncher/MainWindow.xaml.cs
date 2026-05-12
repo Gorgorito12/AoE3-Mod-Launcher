@@ -1181,12 +1181,19 @@ public partial class MainWindow : Window
         SettingsTeaserText.Text = Strings.Get("SettingsTabTeaser");
         OpenSettingsTabButton.Content = Strings.Get("SettingsTabOpen");
 
-        // v0.9 mods browser: header strings + empty-state copy. Cards are
-        // (re)rendered by RefreshModsBrowser whenever ModRegistry.All or
-        // the active mod changes; ApplyLanguage only updates static chrome.
+        // v0.9 mods browser: header strings + filter labels + empty-state.
+        // Cards are (re)rendered by RefreshModsBrowser whenever ModRegistry
+        // or the active mod changes; ApplyLanguage only updates static
+        // chrome. NotInstalledStateText is the literal "Not installed"
+        // string used by ProbeInstalledState — feeding it in here lets the
+        // "only installed" toggle do a pure-string comparison instead of
+        // duplicating the disk probe inside the UserControl.
         ModsBrowserView.HeaderTitleText = Strings.Get("ModsBrowserHeaderTitle");
         ModsBrowserView.HeaderSubtitleText = Strings.Get("ModsBrowserHeaderSubtitle");
         ModsBrowserView.EmptyMessage = Strings.Get("ModsBrowserEmpty");
+        ModsBrowserView.SearchPlaceholder = Strings.Get("ModsBrowserSearchPlaceholder");
+        ModsBrowserView.OnlyInstalledLabel = Strings.Get("ModsBrowserOnlyInstalled");
+        ModsBrowserView.NotInstalledStateText = Strings.Get("ModSelectorNotInstalled");
         RefreshModsBrowser();
 
         RefreshTopTabHighlight();
