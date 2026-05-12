@@ -2400,26 +2400,49 @@ public partial class MainWindow : Window
         // Check if game is running first
         if (!EnsureGameNotRunning()) return;
 
-        // Mods that use the GitHub-Releases mechanism have a separate,
-        // much simpler install pipeline: download one .zip from the
-        // modder's own pinned release, extract overlay, done. Diverge
-        // here before the WoL-specific payload-URL / AoE3-clone path.
+        // Resolve payload URLs. Two shapes feed the same install pipeline:
+        //   * WolPatcher    — multipart URLs hardcoded in the profile or
+        //                     config (legacy SourceForge / GitHub asset split).
+        //   * GitHubReleases — one .zip published on a tagged release in the
+        //                     modder's own repo. Resolved via the GitHub API
+        //                     into a single-element array so the same
+        //                     NativeInstallService pipeline below handles both.
+        string[]? payloadUrls;
         if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
         {
-            await InstallGitHubReleasesAsync();
-            return;
-        }
-
-        // Resolve payload URLs
-        var payloadUrls = _updateService.EffectivePayloadZipUrls();
-        if (payloadUrls == null || payloadUrls.Length == 0)
-        {
-            if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
-                payloadUrls = new[] { _config.InstallerZipUrl };
-            else
+            var ghs = _updateService.Profile.GitHubReleases;
+            if (ghs == null
+                || string.IsNullOrEmpty(ghs.SourceRepo)
+                || string.IsNullOrEmpty(ghs.ApprovedReleaseTag))
             {
                 SetStatus(Strings.Get("DlgInstallNoUrlBody"));
                 return;
+            }
+            try
+            {
+                var (url, _) = await new GitHubReleaseDownloader()
+                    .ResolveAssetAsync(ghs, default);
+                payloadUrls = new[] { url };
+            }
+            catch (Exception ex)
+            {
+                SetStatus($"Error: {ex.Message}");
+                DiagnosticLog.Write($"GitHubReleases asset resolution failed: {ex}");
+                return;
+            }
+        }
+        else
+        {
+            payloadUrls = _updateService.EffectivePayloadZipUrls();
+            if (payloadUrls == null || payloadUrls.Length == 0)
+            {
+                if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
+                    payloadUrls = new[] { _config.InstallerZipUrl };
+                else
+                {
+                    SetStatus(Strings.Get("DlgInstallNoUrlBody"));
+                    return;
+                }
             }
         }
 
@@ -2712,24 +2735,53 @@ public partial class MainWindow : Window
             _config.GetActiveState().InstallPath = installFolder;
             _config.Save();
 
-            // Verify installation
-            var verifyResult = await Task.Run(() => VerifyInstallation(installFolder));
-            int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
-            if (totalProblems == 0)
+            // Verify installation. VerifyInstallation scans for WoL-specific
+            // markers (art\zulushield\, .bar archives, etc.) and would report
+            // false negatives for non-WoL mods. For other mechanisms — GitHub
+            // Releases, DelegatedExternal — just confirm the profile's probe
+            // file landed in the destination; the install pipeline itself
+            // raises on real failures, so a present probe means success.
+            if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.WolPatcher)
             {
-                SetStatus(Strings.Format("StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
-                ShowProgressCompleted("ProgressTitleCompleted",
-                    Strings.Format("StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
+                var verifyResult = await Task.Run(() => VerifyInstallation(installFolder));
+                int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
+                if (totalProblems == 0)
+                {
+                    SetStatus(Strings.Format("StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
+                    ShowProgressCompleted("ProgressTitleCompleted",
+                        Strings.Format("StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
+                }
+                else
+                {
+                    SetStatus(Strings.Format("StatusInstallIncomplete", totalProblems));
+                    DiagnosticLog.Write($"Install verification: {totalProblems} problems found.");
+                    foreach (var m in verifyResult.MissingItems)
+                        DiagnosticLog.Write($"  [missing] {m}");
+                    foreach (var c in verifyResult.CorruptItems)
+                        DiagnosticLog.Write($"  [corrupt/empty] {c}");
+                    ShowProgressError(Strings.Format("StatusInstallIncomplete", totalProblems));
+                }
             }
             else
             {
-                SetStatus(Strings.Format("StatusInstallIncomplete", totalProblems));
-                DiagnosticLog.Write($"Install verification: {totalProblems} problems found.");
-                foreach (var m in verifyResult.MissingItems)
-                    DiagnosticLog.Write($"  [missing] {m}");
-                foreach (var c in verifyResult.CorruptItems)
-                    DiagnosticLog.Write($"  [corrupt/empty] {c}");
-                ShowProgressError(Strings.Format("StatusInstallIncomplete", totalProblems));
+                var probe = _updateService.Profile.InstallProbeFile;
+                bool probeOk = string.IsNullOrEmpty(probe)
+                    || File.Exists(Path.Combine(installFolder, probe));
+                if (probeOk)
+                {
+                    SetStatus(Strings.Format(
+                        "StatusInstallSuccess", _updateService.Profile.DisplayName));
+                    ShowProgressCompleted("ProgressTitleCompleted",
+                        Strings.Format(
+                            "StatusInstallSuccess", _updateService.Profile.DisplayName));
+                }
+                else
+                {
+                    var msg = $"Probe file '{probe}' not found in '{installFolder}' after install.";
+                    SetStatus(msg);
+                    DiagnosticLog.Write(msg);
+                    ShowProgressError(msg);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -2753,221 +2805,6 @@ public partial class MainWindow : Window
         }
 
         // Re-check to detect the freshly installed mod
-        await CheckAsync();
-    }
-
-    /// <summary>
-    /// Install flow for mods declared with <see cref="ModUpdateMechanism.GitHubReleases"/>.
-    /// Compared to the WoL pipeline this is short: one .zip from the modder's
-    /// pinned release, extracted on top of the user's AoE3 folder (the mod is
-    /// always InPlaceOverlay in this branch — IsolatedFolder + GitHubReleases
-    /// would work too but no current mod ships that combo). Two phases:
-    /// Download + Extract. No AoE3 clone, no shortcuts, no registry — the
-    /// in-place files coexist with vanilla AoE3 and the modder owns post-
-    /// install updates via their own patcher.
-    /// </summary>
-    private async Task InstallGitHubReleasesAsync()
-    {
-        var profile = _updateService.Profile;
-        if (profile.GitHubReleases == null
-            || string.IsNullOrEmpty(profile.GitHubReleases.SourceRepo)
-            || string.IsNullOrEmpty(profile.GitHubReleases.ApprovedReleaseTag))
-        {
-            SetStatus(Strings.Get("DlgInstallNoUrlBody"));
-            return;
-        }
-
-        // Detect AoE3 — InPlaceOverlay mods need a base AoE3 install to sit on
-        // top of. Without it there's nowhere to extract to.
-        var aoe3Installs = AoE3Detector.FindAll();
-        if (aoe3Installs.Count == 0)
-        {
-            MessageBox.Show(
-                this,
-                Strings.Get("IdleStateGameMissing"),
-                profile.DisplayName,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-        var aoe3SourcePath = aoe3Installs[0].ModRoot;
-        var aoe3SourceLabel = aoe3Installs[0].Source;
-
-        // Install dialog. For InPlaceOverlay both the AoE3 source and the
-        // destination are the same folder — the user is allowed to change
-        // the destination via the picker but the default is AoE3's root.
-        var dialog = new InstallFolderDialog(aoe3SourcePath, aoe3SourcePath, aoe3SourceLabel)
-        {
-            Owner = this
-        };
-        if (dialog.ShowDialog() != true) return;
-        var installFolder = dialog.SelectedFolder;
-
-        // Permission check — IM commonly lives under Program Files (x86),
-        // which needs admin to write to.
-        var probeFolder = Directory.Exists(installFolder)
-            ? installFolder
-            : Path.GetDirectoryName(installFolder) ?? installFolder;
-        if (!ElevationService.CanWriteTo(probeFolder))
-        {
-            DiagnosticLog.Write(
-                $"Cannot write to install folder '{probeFolder}'. Prompting for elevation.");
-
-            var elevateResult = MessageBox.Show(
-                this,
-                Strings.Format("DlgElevationRequiredBody", probeFolder),
-                Strings.Get("DlgElevationRequiredTitle"),
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Information);
-
-            if (elevateResult != MessageBoxResult.OK)
-            {
-                SetStatus(Strings.Get("StatusElevationDenied"));
-                return;
-            }
-            if (ElevationService.RelaunchElevated())
-            {
-                Application.Current.Shutdown();
-                return;
-            }
-            SetStatus(Strings.Get("StatusElevationDenied"));
-            return;
-        }
-
-        // ---- Begin installation ----
-        SetBusy(true);
-        _cts = new CancellationTokenSource();
-        ShowDownloadControls(true);
-
-        StartProgressPanel(
-            ProgressOperation.Install,
-            title: Strings.Format("ProgressTitleInstalling", profile.DisplayName),
-            subtitle: Strings.Get("ProgressSubDownloading"));
-
-        LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
-        PatchProgress.Value = 0;
-        OverallProgress.Value = 0;
-        PatchBytesText.Text = "";
-        OverallBytesText.Text = "";
-        SpeedText.Text = "";
-        EtaText.Text = "";
-
-        // Phase weights: download dominates wall-clock for a 1 GB asset.
-        // Extract is fast (local SSD), so 70/30 produces an honest-feeling bar.
-        const double weightDownload = 70;
-        const double weightExtract  = 30;
-
-        var speed = new SpeedTracker();
-        _currentInstallPhase = InstallPhase.Download;
-
-        var statusProgress = new Progress<string>(s =>
-        {
-            SetStatus(s);
-            LblCurrentPatch.Text = s;
-        });
-
-        var byteProgress = new Progress<(long BytesDone, long BytesTotal)>(p =>
-        {
-            speed.Sample(p.BytesDone);
-            bool knowTotal = p.BytesTotal > 0;
-
-            if (knowTotal)
-            {
-                double pct = (double)p.BytesDone / p.BytesTotal * 100.0;
-                PatchProgress.Value = pct;
-                OverallProgress.Value = (pct / 100.0) * weightDownload;
-                PatchBytesText.Text =
-                    $"{FormatBytes(p.BytesDone)} / {FormatBytes(p.BytesTotal)}";
-                var eta = speed.EstimateTimeRemaining(p.BytesTotal - p.BytesDone);
-                EtaText.Text = eta.HasValue
-                    ? Strings.Format("ProgressEta", FormatDuration(eta.Value))
-                    : (speed.BytesPerSecond > 0
-                        ? Strings.Format("ProgressEta", Strings.Get("ProgressEtaCalculating"))
-                        : "");
-            }
-            else
-            {
-                PatchProgress.Value = 0;
-                PatchBytesText.Text = FormatBytes(p.BytesDone);
-                EtaText.Text = "";
-            }
-            OverallBytesText.Text = $"{OverallProgress.Value:0}%";
-            SpeedText.Text = speed.BytesPerSecond > 0
-                ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
-                    FormatBytes((long)speed.BytesPerSecond))
-                : "";
-        });
-
-        // ArchiveService doesn't emit a phase change of its own — it just
-        // starts firing extract events once download is done. We flip the
-        // phase the first time an extract event arrives so the speed label
-        // switches from "Download" to "Extract" cleanly.
-        var extractProgress = new Progress<ArchiveExtractProgress>(p =>
-        {
-            if (_currentInstallPhase != InstallPhase.Extract)
-            {
-                _currentInstallPhase = InstallPhase.Extract;
-                speed.Reset();
-            }
-            speed.Sample(p.BytesRead);
-            double pct = p.BytesTotal > 0
-                ? (double)p.BytesRead / p.BytesTotal * 100.0
-                : 0;
-            PatchProgress.Value = pct;
-            OverallProgress.Value = weightDownload + (pct / 100.0) * weightExtract;
-            PatchBytesText.Text = $"{p.EntriesDone} files";
-            OverallBytesText.Text = $"{OverallProgress.Value:0}%";
-            var displayFile = p.CurrentFile.Length > 80
-                ? "..." + p.CurrentFile[^80..]
-                : p.CurrentFile;
-            LblCurrentPatch.Text = $"📂 {displayFile}";
-            SpeedText.Text = speed.BytesPerSecond > 0
-                ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
-                    FormatBytes((long)speed.BytesPerSecond))
-                : "";
-            EtaText.Text = "";
-        });
-
-        try
-        {
-            var installer = new GitHubReleasesInstallService();
-            await installer.InstallAsync(
-                profile,
-                installFolder,
-                statusProgress,
-                byteProgress,
-                extractProgress,
-                _cts.Token);
-
-            PatchProgress.Value = 100;
-            OverallProgress.Value = 100;
-
-            _config.GetActiveState().InstallPath = installFolder;
-            _config.Save();
-
-            SetStatus(Strings.Format("StatusInstallSuccess", profile.DisplayName));
-            ShowProgressCompleted("ProgressTitleCompleted",
-                Strings.Format("StatusInstallSuccess", profile.DisplayName));
-        }
-        catch (OperationCanceledException)
-        {
-            SetStatus(Strings.Get("StatusCancelledUpdate"));
-            ShowProgressCancelled();
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Error: {ex.Message}");
-            DiagnosticLog.Write($"Install (GitHubReleases) failed: {ex}");
-            ShowProgressError(ex.Message);
-        }
-        finally
-        {
-            SetBusy(false);
-            ShowDownloadControls(false);
-            ResetProgressUI();
-            _currentInstallPhase = InstallPhase.None;
-        }
-
         await CheckAsync();
     }
 
@@ -3450,7 +3287,7 @@ public partial class MainWindow : Window
             // still prevents a second check from piling on top of the
             // first.
             MoreButton.IsEnabled = true;
-            PlayButton.IsEnabled = _modIsInstalled && !_isGameRunning;
+            PlayButton.IsEnabled = PrimaryActionEnabled();
         }
         else
         {
@@ -3460,10 +3297,31 @@ public partial class MainWindow : Window
             // own disabled states — but we lock it during ops so the user can't
             // fire a second flow on top of the running one.
             MoreButton.IsEnabled = !busy;
-            // Play is only available when the mod is installed, not busy, and game not already running.
-            PlayButton.IsEnabled = !busy && _modIsInstalled && !_isGameRunning;
+            PlayButton.IsEnabled = !busy && PrimaryActionEnabled();
         }
     }
+
+    /// <summary>
+    /// Whether the primary button is actionable for its CURRENT mode. The
+    /// PlayButton element does multiple jobs (Install / Update / Play /
+    /// Stop), so a blanket "_modIsInstalled" gate would wrongly grey out the
+    /// Install button on a fresh install. Gate each mode by what actually
+    /// needs to be true:
+    ///   * Install — always actionable (the whole point is to install)
+    ///   * Update  — actionable; pending-downloads count gates visibility,
+    ///               not enabled state
+    ///   * Play    — needs an installed mod and the game not already running
+    ///   * Stop    — only meaningful while the game is running
+    ///   * Hidden  — N/A
+    /// </summary>
+    private bool PrimaryActionEnabled() => _primaryAction switch
+    {
+        PrimaryAction.Install => true,
+        PrimaryAction.Update  => true,
+        PrimaryAction.Play    => _modIsInstalled && !_isGameRunning,
+        PrimaryAction.Stop    => _isGameRunning,
+        _                     => false,
+    };
 
     private void ResetProgressUI()
     {

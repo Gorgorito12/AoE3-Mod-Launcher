@@ -404,7 +404,7 @@ public class NativeInstallService
     /// step (the next phase — the WoL payload overlay — handles overrides
     /// explicitly).
     /// </summary>
-    private static void FlattenBinSubfolder(string destinationFolder, IProgress<string>? statusProgress)
+    public static void FlattenBinSubfolder(string destinationFolder, IProgress<string>? statusProgress)
     {
         var binFolder = Path.Combine(destinationFolder, "bin");
         if (!Directory.Exists(binFolder)) return;
