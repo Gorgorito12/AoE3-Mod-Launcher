@@ -714,9 +714,19 @@ public partial class MainWindow : Window
     /// or in a format we don't support — the caller renders the placeholder
     /// initial in that case.
     /// </summary>
+    // Memo cache for loaded ImageBrush instances. Keyed by uri so repeated
+    // switches to the same mod re-use the already-decoded BitmapSource
+    // instead of re-running IconBitmapDecoder / BitmapImage every time.
+    // Brushes are frozen at load time so they can be shared across threads
+    // / UI elements without copying. Null is cached too — once we've
+    // determined a uri can't be loaded, repeat probes return immediately.
+    private static readonly Dictionary<string, System.Windows.Media.ImageBrush?> s_tileImageCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private static System.Windows.Media.ImageBrush? TryLoadTileImage(string? uri)
     {
         if (string.IsNullOrWhiteSpace(uri)) return null;
+        if (s_tileImageCache.TryGetValue(uri, out var cached)) return cached;
         try
         {
             var sourceUri = new Uri(uri, UriKind.RelativeOrAbsolute);
@@ -759,14 +769,18 @@ public partial class MainWindow : Window
             if (source.CanFreeze) source.Freeze();
             DiagnosticLog.Write(
                 $"Mod tile image loaded: '{uri}' ({source.PixelWidth}×{source.PixelHeight}).");
-            return new System.Windows.Media.ImageBrush(source)
+            var brush = new System.Windows.Media.ImageBrush(source)
             {
                 Stretch = System.Windows.Media.Stretch.UniformToFill,
             };
+            if (brush.CanFreeze) brush.Freeze();
+            s_tileImageCache[uri] = brush;
+            return brush;
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Mod tile image load failed for '{uri}': {ex.Message}");
+            s_tileImageCache[uri] = null;
             return null;
         }
     }
