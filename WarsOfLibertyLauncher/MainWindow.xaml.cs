@@ -89,6 +89,8 @@ public partial class MainWindow : Window
         // opens the mod's official URL in the default browser.
         ModsBrowserView.SwitchActiveRequested += ModsBrowserView_SwitchActiveRequested;
         ModsBrowserView.OpenWebsiteRequested += ModsBrowserView_OpenWebsiteRequested;
+        ModsBrowserView.InstallRequested += ModsBrowserView_InstallRequested;
+        ModsBrowserView.UninstallRequested += ModsBrowserView_UninstallRequested;
         ActionPanelControl.PlayButton.Click += PlayButton_Click;
         ActionPanelControl.StopButton.Click += StopButton_Click;
         ActionPanelControl.UpdateButton.Click += UpdateButton_Click;
@@ -1204,6 +1206,8 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailUpdateMechLabel = Strings.Get("ModsBrowserDetailUpdates");
         ModsBrowserView.DetailWebsiteLabel = Strings.Get("ModsBrowserDetailWebsite");
         ModsBrowserView.DetailActiveLabel = Strings.Get("ModsBrowserDetailActive");
+        ModsBrowserView.DetailInstallLabel = Strings.Get("ModsBrowserDetailInstall");
+        ModsBrowserView.DetailUninstallLabel = Strings.Get("ModsBrowserDetailUninstall");
         RefreshModsBrowser();
 
         RefreshTopTabHighlight();
@@ -1407,6 +1411,18 @@ public partial class MainWindow : Window
     private void InvalidateActiveModCheckCache()
     {
         _checkResultCache.Remove(_updateService.Profile.Id);
+    }
+
+    /// <summary>
+    /// Same as <see cref="InvalidateActiveModCheckCache"/> but for an
+    /// arbitrary profile id. Used by the v0.9 browser flows when the
+    /// user installs / uninstalls a non-active mod and the cached
+    /// CheckResult for that profile is now stale.
+    /// </summary>
+    private void InvalidateCheckCacheFor(string profileId)
+    {
+        if (string.IsNullOrEmpty(profileId)) return;
+        _checkResultCache.Remove(profileId);
     }
 
     private void RefreshStatusCard()
@@ -1943,6 +1959,152 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"OpenWebsite failed for '{url}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Install a mod without switching the active one. We build a fresh
+    /// UpdateService scoped to the requested profile and pass it into the
+    /// existing InstallAsync pipeline (refactored in commit 1 to accept an
+    /// optional target). The active mod's UpdateService and the player's
+    /// current profile selection stay untouched. After the install finishes
+    /// (success or failure), we invalidate the cached CheckResult for that
+    /// profile so the browser reflects the new install state on the next
+    /// refresh.
+    /// </summary>
+    private async void ModsBrowserView_InstallRequested(object? sender, ModProfile profile)
+    {
+        // Reuse the same active-profile install path when the user happened
+        // to click Install on the active mod — InstallAsync(null) already
+        // wires that case correctly (uses the existing _updateService).
+        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            await InstallAsync();
+            return;
+        }
+
+        UpdateService? target = null;
+        try
+        {
+            target = new UpdateService(_config, profile);
+            await InstallAsync(target);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Install from browser failed ({profile.Id}): {ex}");
+            SetStatus($"Install failed: {ex.Message}");
+        }
+        finally
+        {
+            InvalidateCheckCacheFor(profile.Id);
+            RefreshModsBrowser();
+        }
+    }
+
+    /// <summary>
+    /// Uninstall a mod without changing the active selection. Mirrors the
+    /// gear-menu uninstall flow (UninstallMenuItem_Click) but resolves the
+    /// install path from per-mod state instead of the active service, and
+    /// only touches the active LauncherConfig fields when the uninstalled
+    /// mod happens to be the active one.
+    /// </summary>
+    private async void ModsBrowserView_UninstallRequested(object? sender, ModProfile profile)
+    {
+        if (_isBusy && !_isCheckOnly)
+        {
+            SetStatus(Strings.Get("DlgModSwitchBusyBody"));
+            return;
+        }
+        if (!EnsureGameNotRunning()) return;
+
+        // Resolve the install path: active-service if this is the active mod,
+        // otherwise the per-mod state, otherwise an on-disk probe. Anything
+        // that returns "" hits the "Not installed" branch — UninstallService
+        // returns NothingToDo and we skip the dialog.
+        bool isActive = string.Equals(
+            profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
+        string? installPath = isActive
+            ? _updateService.InstallPath
+            : _config.GetState(profile.Id).InstallPath;
+        if (string.IsNullOrEmpty(installPath))
+            installPath = ResolveProbedInstallPath(profile);
+        if (string.IsNullOrEmpty(installPath))
+        {
+            SetStatus(Strings.Get("StatusNotInstalled"));
+            return;
+        }
+
+        var uninstaller = new UninstallService();
+        var plan = uninstaller.Plan(profile, installPath);
+        var dialog = new UninstallDialog(plan, profile.DisplayName, profile.InstallProbeFile)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true) return;
+        if (plan.Mode != Services.UninstallMode.Valid) return;
+
+        SetBusy(true);
+        StartProgressPanel(
+            ProgressOperation.Uninstall,
+            title: Strings.Format("ProgressTitleUninstalling", profile.DisplayName),
+            subtitle: Strings.Get("ProgressSubRemoving"),
+            bar1Label: "ProgressBarProcess",
+            bar2Label: "ProgressBarCleanup");
+        SetStatus(Strings.Format("StatusUninstalling", profile.DisplayName));
+
+        var progress = new Progress<(double Pct, string Step)>(p =>
+        {
+            ProgressPanelControl.PatchProgress.Value = p.Pct;
+            ProgressPanelControl.OverallProgress.Value = p.Pct;
+            ProgressPanelControl.PatchBytesText.Text = $"{p.Pct:0}%";
+            ProgressPanelControl.OverallBytesText.Text = $"{p.Pct:0}%";
+            ProgressPanelControl.ProgressSubtitleText.Text = p.Step;
+            SetStatus(p.Step);
+        });
+
+        try
+        {
+            var result = await uninstaller.UninstallAsync(profile, plan, dialog.Options, progress);
+
+            // Per-mod state writeback so re-detection runs from scratch the
+            // next time this profile becomes active. GameExecutable is global
+            // — only clear it when the uninstalled mod is the active one,
+            // otherwise we'd break the active mod's play button.
+            if (dialog.Options.ResetConfig || result.Success)
+            {
+                _config.GetState(profile.Id).InstallPath = "";
+                if (isActive) _config.GameExecutable = "";
+                _config.Save();
+            }
+
+            if (result.Success)
+            {
+                ShowProgressCompleted("ProgressTitleCompleted",
+                    Strings.Format(
+                        "StatusUninstallSuccess",
+                        profile.DisplayName, result.FilesDeleted));
+            }
+            else
+            {
+                foreach (var err in result.Errors)
+                    DiagnosticLog.Write($"  uninstall error: {err}");
+                ShowProgressError(Strings.Format("StatusUninstallPartial", result.Errors.Count));
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Uninstall from browser failed ({profile.Id}): {ex}");
+            ShowProgressError(ex.Message);
+        }
+        finally
+        {
+            SetBusy(false);
+            InvalidateCheckCacheFor(profile.Id);
+            // Only re-run the active check when the uninstalled mod is the
+            // active one — otherwise the existing CheckAsync flow would
+            // re-probe a different profile.
+            if (isActive) await CheckAsync();
+            RefreshModsBrowser();
         }
     }
 

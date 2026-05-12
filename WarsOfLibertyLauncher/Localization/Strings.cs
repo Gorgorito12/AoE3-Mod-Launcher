@@ -738,6 +738,16 @@ public static class Strings
             [LangEn] = "Active mod",
             [LangEs] = "Mod activo",
         },
+        ["ModsBrowserDetailInstall"] = new()
+        {
+            [LangEn] = "Install",
+            [LangEs] = "Instalar",
+        },
+        ["ModsBrowserDetailUninstall"] = new()
+        {
+            [LangEn] = "Uninstall",
+            [LangEs] = "Desinstalar",
+        },
         ["MultiplayerComingSoon"] = new()
         {
             [LangEn] = "Multiplayer lobby — coming in v1.0.\nA Voobly-style room browser for AoE3 mods.",

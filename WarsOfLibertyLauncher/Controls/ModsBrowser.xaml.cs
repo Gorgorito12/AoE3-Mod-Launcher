@@ -37,6 +37,20 @@ public partial class ModsBrowser : UserControl
     /// </summary>
     public event EventHandler<string>? OpenWebsiteRequested;
 
+    /// <summary>
+    /// Raised from the detail panel when the user wants to install the
+    /// displayed mod. MainWindow builds a fresh UpdateService for that
+    /// profile and calls InstallAsync(service) — the active mod stays put.
+    /// </summary>
+    public event EventHandler<ModProfile>? InstallRequested;
+
+    /// <summary>
+    /// Raised from the detail panel when the user wants to uninstall the
+    /// displayed mod. MainWindow resolves the per-mod install path and
+    /// runs UninstallService.UninstallAsync against this profile only.
+    /// </summary>
+    public event EventHandler<ModProfile>? UninstallRequested;
+
     // Cached inputs from the last Populate() call so the filter handlers
     // can re-render without making MainWindow re-supply the data each
     // keystroke. ModRegistry.All is the source of truth; we only stash
@@ -88,6 +102,8 @@ public partial class ModsBrowser : UserControl
     public string DetailUpdateMechLabel { get; set; } = "Updates";
     public string DetailWebsiteLabel { get; set; } = "Website";
     public string DetailActiveLabel { get; set; } = "Active mod";
+    public string DetailInstallLabel { get; set; } = "Install";
+    public string DetailUninstallLabel { get; set; } = "Uninstall";
 
     public string HeaderTitleText
     {
@@ -496,6 +512,8 @@ public partial class ModsBrowser : UserControl
     private void BuildDetailActions(ModProfile profile, bool isActive)
     {
         DetailActionPanel.Children.Clear();
+        bool isInstalled = !IsNotInstalled(
+            _probeStateText!(profile), GetNotInstalledMarker());
 
         // Open website (secondary). Visible only when the profile has a URL.
         if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
@@ -504,6 +522,24 @@ public partial class ModsBrowser : UserControl
             webBtn.Click += (_, _) =>
                 OpenWebsiteRequested?.Invoke(this, profile.OfficialWebsite);
             DetailActionPanel.Children.Add(webBtn);
+        }
+
+        // Install / Uninstall (secondary). Mutually exclusive — driven by
+        // the probe state passed in from MainWindow. Both fire events that
+        // let MainWindow build an off-active UpdateService for the target.
+        if (isInstalled)
+        {
+            var uninBtn = BuildSecondaryButton(DetailUninstallLabel);
+            uninBtn.Click += (_, _) =>
+                UninstallRequested?.Invoke(this, profile);
+            DetailActionPanel.Children.Add(uninBtn);
+        }
+        else
+        {
+            var instBtn = BuildSecondaryButton(DetailInstallLabel);
+            instBtn.Click += (_, _) =>
+                InstallRequested?.Invoke(this, profile);
+            DetailActionPanel.Children.Add(instBtn);
         }
 
         // Switch active (primary). Skipped when this card already represents
