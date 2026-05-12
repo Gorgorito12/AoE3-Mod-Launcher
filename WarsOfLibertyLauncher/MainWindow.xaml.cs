@@ -38,6 +38,15 @@ public partial class MainWindow : Window
     // invalidate it whenever the user manually picks a path or an install
     // flow completes.
     private bool? _aoe3DetectedCache;
+
+    // Per-mod cache of the last successful CheckAsync result. Lets the
+    // second-and-subsequent visits to a mod in the same session replay
+    // the saved manifest / pending-downloads / version data synchronously
+    // instead of paying the 1-2 second network round-trip every time.
+    // Invalidated on install / uninstall / update so a state-changing
+    // action forces a fresh check next time the user lands on that mod.
+    private readonly Dictionary<string, UpdateService.CheckResult> _checkResultCache =
+        new(StringComparer.OrdinalIgnoreCase);
     private bool _isPaused;
     private bool _warnedAboutBrokenInstall;
     private bool _isGameRunning;
@@ -2353,12 +2362,37 @@ public partial class MainWindow : Window
         // mod's CheckAsync hasn't fully unwound yet — the writeback guard
         // below skips stale results so the second call wins safely.
         if (_isBusy && !_isCheckOnly) return;
-        SetBusy(true, checkOnly: true);
-        _cts = new CancellationTokenSource();
         // Snapshot the active profile so a mod switch mid-await can be
         // detected before we write check results back to UI fields that
         // would otherwise belong to the new mod.
         var profileAtStart = _updateService.Profile.Id;
+
+        // Fast path: if we've already run a full check for this mod in this
+        // session, replay the cached result synchronously. Skips the 1-2s
+        // network round-trip on every revisit so rapid mod switching is
+        // genuinely instant after the first visit to each mod.
+        if (_checkResultCache.TryGetValue(profileAtStart, out var cached))
+        {
+            // Sanity: drop the cache entry if the on-disk state visibly
+            // disagrees (cache said "installed" but the new UpdateService's
+            // constructor fast-path didn't find the install — user moved
+            // or deleted files since). Falling through to the network
+            // path re-discovers the truth.
+            bool diskAgrees = !cached.IsValidInstall
+                || !string.IsNullOrEmpty(_updateService.InstallPath);
+            if (diskAgrees)
+            {
+                DiagnosticLog.Write($"CheckAsync cache hit for '{profileAtStart}'.");
+                ApplyCheckResult(cached);
+                return;
+            }
+            DiagnosticLog.Write(
+                $"CheckAsync cache evicted for '{profileAtStart}': install path missing on disk.");
+            _checkResultCache.Remove(profileAtStart);
+        }
+
+        SetBusy(true, checkOnly: true);
+        _cts = new CancellationTokenSource();
 
         try
         {
@@ -2373,9 +2407,35 @@ public partial class MainWindow : Window
                 return;
             }
 
-            InstallPathText.Text = _updateService.InstallPath ?? "(not detected)";
+            // Cache so the next visit to this mod is sync.
+            _checkResultCache[profileAtStart] = result;
+            ApplyCheckResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus(Strings.Get("StatusCancelledCheck"));
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error: {ex.Message}");
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
 
-            _modIsInstalled = result.IsValidInstall;
+    /// <summary>
+    /// Writes a CheckResult's data into all the UI controls + state fields
+    /// that depend on it. Pulled out of CheckAsync so the cached-replay
+    /// fast path and the post-network slow path share exactly the same
+    /// rendering logic — no chance of drift between the two.
+    /// </summary>
+    private void ApplyCheckResult(UpdateService.CheckResult result)
+    {
+        InstallPathText.Text = _updateService.InstallPath ?? "(not detected)";
+
+        _modIsInstalled = result.IsValidInstall;
 
             // Non-WoL-style mods don't have the WoL updater pipeline (version
             // detection, UpdateInfo.xml, .tar.xz patches), so we short-circuit
@@ -2394,143 +2454,130 @@ public partial class MainWindow : Window
             //
             // Verify/Repair are gated by _modIsInstalled inside MoreButton_Click
             // — we don't touch their visibility here.
-            if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
-            {
-                ActionPanelControl.UpdateButton.Visibility = Visibility.Collapsed;
-                RefreshIdlePanel();
-
-                bool launcherCanInstall =
-                    _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases;
-
-                if (result.IsValidInstall)
-                {
-                    SetPrimaryAction(PrimaryAction.Play);
-                    SetStatus(Strings.Format(
-                        "StatusReadyExternalUpdates", _updateService.Profile.DisplayName));
-                }
-                else if (launcherCanInstall)
-                {
-                    SetPrimaryAction(PrimaryAction.Install);
-                    SetStatus(Strings.Get("StatusNotInstalled"));
-                }
-                else
-                {
-                    SetPrimaryAction(PrimaryAction.Install, enabled: false);
-                    SetStatus(Strings.Format(
-                        "StatusModNotInstalledExternal", _updateService.Profile.DisplayName));
-                }
-
-                _pendingDownloads = new();
-                ResetProgressUI();
-                return;
-            }
-
-            // From here down: WoL-specific path.
-
-            if (!result.IsValidInstall)
-            {
-                // No installation detected — primary becomes "Install".
-                SetStatus(Strings.Get("StatusNotInstalled"));
-                SetPrimaryAction(PrimaryAction.Install);
-                _pendingDownloads = new();
-                ActionPanelControl.UpdateButton.Visibility = Visibility.Collapsed;
-                RefreshIdlePanel();
-                return;
-            }
-
+        if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
+        {
+            ActionPanelControl.UpdateButton.Visibility = Visibility.Collapsed;
             RefreshIdlePanel();
 
-            // Sanity check: WoL is installed, but is age3y.exe reachable?
-            // If the user installed WoL outside of an AoE3 folder, the mod
-            // files are on disk but the engine will never load them. Warn
-            // them once per session so they can fix it.
-            if (!_warnedAboutBrokenInstall
-                && !Services.AoE3Detector.LooksLikeInsideAoE3(_updateService.InstallPath!)
-                && GameLauncher.Find(_config, _updateService.InstallPath, _updateService.Profile) == null)
-            {
-                _warnedAboutBrokenInstall = true;
-                MessageBox.Show(this,
-                    Strings.Format(
-                        "DlgBrokenInstallBody",
-                        _updateService.InstallPath,
-                        _updateService.Profile.DisplayName),
-                    Strings.Format(
-                        "DlgBrokenInstallTitle", _updateService.Profile.DisplayName),
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            bool launcherCanInstall =
+                _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases;
 
-            _pendingDownloads = result.PendingDownloads;
-
-            // Two distinct cases for "the user has the WoL folder on disk":
-            //   a) Version detected (CurrentVersion != null): the install is
-            //      legit — primary is Play, and Update appears as a separate
-            //      secondary button when there are patches to apply.
-            //   b) Version is null ("?"): the data files don't match any known
-            //      version. Bringing them up to current means downloading the
-            //      full chain — that's a fresh install, not an update. Primary
-            //      becomes Install and the Update button stays hidden.
-            bool versionKnown = result.CurrentVersion != null;
-            ActionPanelControl.UpdateButton.Visibility = (versionKnown && _pendingDownloads.Count > 0)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-            if (!versionKnown)
+            if (result.IsValidInstall)
             {
-                long totalBytes = 0;
-                foreach (var d in _pendingDownloads) totalBytes += d.Size;
-                SetStatus(Strings.Format(
-                    "StatusUpdatesAvailable",
-                    _pendingDownloads.Count,
-                    FormatBytes(totalBytes)));
-                SetPrimaryAction(PrimaryAction.Install);
-                ResetProgressUI();
-            }
-            else if (_pendingDownloads.Count == 0)
-            {
-                bool onLatest = result.CurrentVersion?.Ver == result.LatestVersion?.Ver;
-                if (onLatest)
-                {
-                    SetStatus(Strings.Format("StatusUpToDate", result.CurrentVersion?.Ver));
-                }
-                else
-                {
-                    SetStatus(Strings.Format(
-                        "StatusVersionTooOld",
-                        _updateService.Profile.DisplayName,
-                        result.CurrentVersion?.Ver,
-                        result.LatestVersion?.Ver,
-                        _updateService.Profile.OfficialWebsite));
-                }
                 SetPrimaryAction(PrimaryAction.Play);
-                ResetProgressUI();
+                SetStatus(Strings.Format(
+                    "StatusReadyExternalUpdates", _updateService.Profile.DisplayName));
+            }
+            else if (launcherCanInstall)
+            {
+                SetPrimaryAction(PrimaryAction.Install);
+                SetStatus(Strings.Get("StatusNotInstalled"));
             }
             else
             {
-                long totalBytes = 0;
-                foreach (var d in _pendingDownloads) totalBytes += d.Size;
+                SetPrimaryAction(PrimaryAction.Install, enabled: false);
                 SetStatus(Strings.Format(
-                    "StatusUpdatesAvailable",
-                    _pendingDownloads.Count,
-                    FormatBytes(totalBytes)));
-                // Version is known and patches are pending → primary is Play
-                // (let the user launch the old version if they want); the
-                // separate Update button (already shown above) handles the
-                // "apply patches" path.
-                SetPrimaryAction(PrimaryAction.Play);
-                ResetProgressUI();
+                    "StatusModNotInstalledExternal", _updateService.Profile.DisplayName));
             }
+
+            _pendingDownloads = new();
+            ResetProgressUI();
+            return;
         }
-        catch (OperationCanceledException)
+
+        // From here down: WoL-specific path.
+
+        if (!result.IsValidInstall)
         {
-            SetStatus(Strings.Get("StatusCancelledCheck"));
+            // No installation detected — primary becomes "Install".
+            SetStatus(Strings.Get("StatusNotInstalled"));
+            SetPrimaryAction(PrimaryAction.Install);
+            _pendingDownloads = new();
+            ActionPanelControl.UpdateButton.Visibility = Visibility.Collapsed;
+            RefreshIdlePanel();
+            return;
         }
-        catch (Exception ex)
+
+        RefreshIdlePanel();
+
+        // Sanity check: WoL is installed, but is age3y.exe reachable?
+        // If the user installed WoL outside of an AoE3 folder, the mod
+        // files are on disk but the engine will never load them. Warn
+        // them once per session so they can fix it.
+        if (!_warnedAboutBrokenInstall
+            && !Services.AoE3Detector.LooksLikeInsideAoE3(_updateService.InstallPath!)
+            && GameLauncher.Find(_config, _updateService.InstallPath, _updateService.Profile) == null)
         {
-            SetStatus($"Error: {ex.Message}");
+            _warnedAboutBrokenInstall = true;
+            MessageBox.Show(this,
+                Strings.Format(
+                    "DlgBrokenInstallBody",
+                    _updateService.InstallPath,
+                    _updateService.Profile.DisplayName),
+                Strings.Format(
+                    "DlgBrokenInstallTitle", _updateService.Profile.DisplayName),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
-        finally
+
+        _pendingDownloads = result.PendingDownloads;
+
+        // Two distinct cases for "the user has the WoL folder on disk":
+        //   a) Version detected (CurrentVersion != null): the install is
+        //      legit — primary is Play, and Update appears as a separate
+        //      secondary button when there are patches to apply.
+        //   b) Version is null ("?"): the data files don't match any known
+        //      version. Bringing them up to current means downloading the
+        //      full chain — that's a fresh install, not an update. Primary
+        //      becomes Install and the Update button stays hidden.
+        bool versionKnown = result.CurrentVersion != null;
+        ActionPanelControl.UpdateButton.Visibility = (versionKnown && _pendingDownloads.Count > 0)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        if (!versionKnown)
         {
-            SetBusy(false);
+            long totalBytes = 0;
+            foreach (var d in _pendingDownloads) totalBytes += d.Size;
+            SetStatus(Strings.Format(
+                "StatusUpdatesAvailable",
+                _pendingDownloads.Count,
+                FormatBytes(totalBytes)));
+            SetPrimaryAction(PrimaryAction.Install);
+            ResetProgressUI();
+        }
+        else if (_pendingDownloads.Count == 0)
+        {
+            bool onLatest = result.CurrentVersion?.Ver == result.LatestVersion?.Ver;
+            if (onLatest)
+            {
+                SetStatus(Strings.Format("StatusUpToDate", result.CurrentVersion?.Ver));
+            }
+            else
+            {
+                SetStatus(Strings.Format(
+                    "StatusVersionTooOld",
+                    _updateService.Profile.DisplayName,
+                    result.CurrentVersion?.Ver,
+                    result.LatestVersion?.Ver,
+                    _updateService.Profile.OfficialWebsite));
+            }
+            SetPrimaryAction(PrimaryAction.Play);
+            ResetProgressUI();
+        }
+        else
+        {
+            long totalBytes = 0;
+            foreach (var d in _pendingDownloads) totalBytes += d.Size;
+            SetStatus(Strings.Format(
+                "StatusUpdatesAvailable",
+                _pendingDownloads.Count,
+                FormatBytes(totalBytes)));
+            // Version is known and patches are pending → primary is Play
+            // (let the user launch the old version if they want); the
+            // separate Update button (already shown above) handles the
+            // "apply patches" path.
+            SetPrimaryAction(PrimaryAction.Play);
+            ResetProgressUI();
         }
     }
 
