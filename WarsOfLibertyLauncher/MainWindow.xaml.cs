@@ -82,10 +82,13 @@ public partial class MainWindow : Window
         MainTabsControl.TabNoticias.Click += TabNoticias_Click;
         MainTabsControl.TabChangelog.Click += TabChangelog_Click;
         MainTabsControl.TabAyuda.Click += TabAyuda_Click;
-        // v0.9 mod browser: card clicks behave like top-strip tile clicks
-        // (LoadModProfile takes care of the inflight / busy guard). Detail
-        // panel wiring lands in a later commit; for now this is the MVP.
-        ModsBrowserView.CardClicked += ModsBrowserView_CardClicked;
+        // v0.9 mod browser: card clicks open the detail panel inside the
+        // UserControl. The detail panel's primary action raises
+        // SwitchActiveRequested, which we forward to LoadModProfile (same
+        // busy/in-flight guard as the top-strip tiles). OpenWebsiteRequested
+        // opens the mod's official URL in the default browser.
+        ModsBrowserView.SwitchActiveRequested += ModsBrowserView_SwitchActiveRequested;
+        ModsBrowserView.OpenWebsiteRequested += ModsBrowserView_OpenWebsiteRequested;
         ActionPanelControl.PlayButton.Click += PlayButton_Click;
         ActionPanelControl.StopButton.Click += StopButton_Click;
         ActionPanelControl.UpdateButton.Click += UpdateButton_Click;
@@ -1194,6 +1197,13 @@ public partial class MainWindow : Window
         ModsBrowserView.SearchPlaceholder = Strings.Get("ModsBrowserSearchPlaceholder");
         ModsBrowserView.OnlyInstalledLabel = Strings.Get("ModsBrowserOnlyInstalled");
         ModsBrowserView.NotInstalledStateText = Strings.Get("ModSelectorNotInstalled");
+        ModsBrowserView.DetailBreadcrumbText = Strings.Get("ModsBrowserDetailBreadcrumb");
+        ModsBrowserView.DetailSwitchActiveLabel = Strings.Get("ModsBrowserDetailSwitchActive");
+        ModsBrowserView.DetailOpenWebsiteLabel = Strings.Get("ModsBrowserDetailOpenWebsite");
+        ModsBrowserView.DetailInstallTypeLabel = Strings.Get("ModsBrowserDetailInstallType");
+        ModsBrowserView.DetailUpdateMechLabel = Strings.Get("ModsBrowserDetailUpdates");
+        ModsBrowserView.DetailWebsiteLabel = Strings.Get("ModsBrowserDetailWebsite");
+        ModsBrowserView.DetailActiveLabel = Strings.Get("ModsBrowserDetailActive");
         RefreshModsBrowser();
 
         RefreshTopTabHighlight();
@@ -1903,14 +1913,37 @@ public partial class MainWindow : Window
     private void TopTabSettings_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Settings);
 
     /// <summary>
-    /// MVP handler for v0.9: a click on a browser card is treated the
-    /// same as a click on the top-strip tile — switch the active mod.
-    /// LoadModProfile already short-circuits when the clicked profile
-    /// matches the active one, so we just forward unconditionally.
+    /// The detail panel's primary action — forward to the existing
+    /// LoadModProfile flow so we share the busy/in-flight guards with
+    /// the top-strip tiles. After the switch the detail panel stays
+    /// open so the user sees the badge update from "not active" to the
+    /// active state on the next RefreshModsBrowser tick.
     /// </summary>
-    private void ModsBrowserView_CardClicked(object? sender, ModProfile profile)
+    private void ModsBrowserView_SwitchActiveRequested(object? sender, ModProfile profile)
     {
         LoadModProfile(profile);
+    }
+
+    /// <summary>
+    /// Opens the mod's <c>OfficialWebsite</c> in the user's default browser.
+    /// The url has already been validated by the catalog schema (or the
+    /// hard-coded built-in profile) before getting to this point.
+    /// </summary>
+    private void ModsBrowserView_OpenWebsiteRequested(object? sender, string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"OpenWebsite failed for '{url}': {ex.Message}");
+        }
     }
 
     private void SwitchTopTab(TopTab tab)

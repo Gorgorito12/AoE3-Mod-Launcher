@@ -703,6 +703,41 @@ public static class Strings
             [LangEn] = "Only installed",
             [LangEs] = "Solo instalados",
         },
+        ["ModsBrowserDetailBreadcrumb"] = new()
+        {
+            [LangEn] = "Mod browser  ›  Details",
+            [LangEs] = "Explorador  ›  Detalles",
+        },
+        ["ModsBrowserDetailSwitchActive"] = new()
+        {
+            [LangEn] = "Switch to this mod",
+            [LangEs] = "Cambiar a este mod",
+        },
+        ["ModsBrowserDetailOpenWebsite"] = new()
+        {
+            [LangEn] = "Open website",
+            [LangEs] = "Abrir sitio web",
+        },
+        ["ModsBrowserDetailInstallType"] = new()
+        {
+            [LangEn] = "Install type",
+            [LangEs] = "Tipo de instalación",
+        },
+        ["ModsBrowserDetailUpdates"] = new()
+        {
+            [LangEn] = "Updates",
+            [LangEs] = "Actualizaciones",
+        },
+        ["ModsBrowserDetailWebsite"] = new()
+        {
+            [LangEn] = "Website",
+            [LangEs] = "Sitio web",
+        },
+        ["ModsBrowserDetailActive"] = new()
+        {
+            [LangEn] = "Active mod",
+            [LangEs] = "Mod activo",
+        },
         ["MultiplayerComingSoon"] = new()
         {
             [LangEn] = "Multiplayer lobby — coming in v1.0.\nA Voobly-style room browser for AoE3 mods.",

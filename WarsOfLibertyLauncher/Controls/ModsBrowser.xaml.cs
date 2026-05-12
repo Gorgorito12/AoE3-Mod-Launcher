@@ -20,10 +20,22 @@ public partial class ModsBrowser : UserControl
 {
     /// <summary>
     /// Raised when the user clicks a mod card. MainWindow handles it by
-    /// switching the active profile (MVP) or — once Commit 5 lands — by
-    /// opening the detail panel.
+    /// opening the detail panel via <see cref="ShowDetail"/>.
     /// </summary>
     public event EventHandler<ModProfile>? CardClicked;
+
+    /// <summary>
+    /// Raised from the detail panel's primary action when the user wants
+    /// to make the displayed mod active. MainWindow forwards it to the
+    /// existing LoadModProfile flow.
+    /// </summary>
+    public event EventHandler<ModProfile>? SwitchActiveRequested;
+
+    /// <summary>
+    /// Raised from the detail panel when the user wants to visit the mod's
+    /// official website. MainWindow opens the URL in the default browser.
+    /// </summary>
+    public event EventHandler<string>? OpenWebsiteRequested;
 
     // Cached inputs from the last Populate() call so the filter handlers
     // can re-render without making MainWindow re-supply the data each
@@ -45,6 +57,7 @@ public partial class ModsBrowser : UserControl
         };
         OnlyInstalledToggle.Checked += (_, _) => ApplyFilters();
         OnlyInstalledToggle.Unchecked += (_, _) => ApplyFilters();
+        DetailBackButton.Click += (_, _) => HideDetail();
     }
 
     /// <summary>Placeholder text shown inside the search box when empty.</summary>
@@ -60,6 +73,21 @@ public partial class ModsBrowser : UserControl
         get => (string)(OnlyInstalledToggle.Content ?? "");
         set => OnlyInstalledToggle.Content = value;
     }
+
+    /// <summary>Breadcrumb shown next to the back arrow in the detail panel.</summary>
+    public string DetailBreadcrumbText { get; set; } = "";
+
+    /// <summary>Primary action label in the detail panel ("Switch to this mod").</summary>
+    public string DetailSwitchActiveLabel { get; set; } = "Switch to this mod";
+
+    /// <summary>Secondary action label ("Open website").</summary>
+    public string DetailOpenWebsiteLabel { get; set; } = "Open website";
+
+    /// <summary>Localised label for the InstallType / UpdateMechanism rows.</summary>
+    public string DetailInstallTypeLabel { get; set; } = "Install type";
+    public string DetailUpdateMechLabel { get; set; } = "Updates";
+    public string DetailWebsiteLabel { get; set; } = "Website";
+    public string DetailActiveLabel { get; set; } = "Active mod";
 
     public string HeaderTitleText
     {
@@ -103,6 +131,19 @@ public partial class ModsBrowser : UserControl
         _uiLanguage = uiLanguage ?? "";
         _probeStateText = probeStateText;
         ApplyFilters();
+        // Keep the detail overlay in sync after a refresh: pick the matching
+        // profile from the new snapshot so renamed display names / changed
+        // descriptions / new install paths show up without the user having
+        // to close and re-open the panel. If the previously-shown profile
+        // disappeared from the list (catalog rebuild evicted it), close the
+        // overlay so we don't show stale data.
+        if (_detailProfile is not null)
+        {
+            var match = _allProfiles.FirstOrDefault(p =>
+                string.Equals(p.Id, _detailProfile.Id, StringComparison.OrdinalIgnoreCase));
+            if (match is null) HideDetail();
+            else ShowDetail(match);
+        }
     }
 
     /// <summary>
@@ -283,12 +324,14 @@ public partial class ModsBrowser : UserControl
             card.Background = bgIdle;
             card.BorderBrush = borderIdle;
         };
-        // Fire on mouse-down to match the top-strip tiles. CardClicked
-        // is raised even for the active card — consumers (MainWindow)
-        // decide whether to no-op or, in commit 5, open the detail panel.
+        // Click opens the detail panel for that mod. The legacy "click =
+        // switch active mod" behaviour now lives behind the detail panel's
+        // primary action button — see ShowDetail. CardClicked still fires
+        // so MainWindow can drive richer flows (e.g. analytics, deep links).
         card.MouseLeftButtonDown += (_, _) =>
         {
             CardClicked?.Invoke(this, profile);
+            ShowDetail(profile);
         };
 
         return card;
@@ -332,5 +375,177 @@ public partial class ModsBrowser : UserControl
         {
             return null;
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // Detail panel
+    // ------------------------------------------------------------------------
+
+    private ModProfile? _detailProfile;
+
+    /// <summary>Currently displayed profile inside the detail overlay, or null if hidden.</summary>
+    public ModProfile? DetailProfile => _detailProfile;
+
+    public bool IsDetailVisible => DetailOverlay.Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// Populates and reveals the detail overlay for <paramref name="profile"/>.
+    /// Safe to call repeatedly: each call rebuilds the action bar so callers
+    /// (MainWindow) can refresh it after install / uninstall / mod-switch.
+    /// </summary>
+    public void ShowDetail(ModProfile profile)
+    {
+        _detailProfile = profile;
+        if (_probeStateText is null) return;
+
+        var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("AccentBrush");
+        DetailIcon.Background = accent;
+        DetailMonogram.Text = string.IsNullOrEmpty(profile.DisplayName)
+            ? "?"
+            : profile.DisplayName[..1].ToUpperInvariant();
+        DetailTitle.Text = profile.DisplayName;
+        DetailAuthor.Text = profile.Author ?? "";
+        DetailAuthor.Visibility = string.IsNullOrWhiteSpace(profile.Author)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        bool isActive = string.Equals(profile.Id, _activeId, StringComparison.OrdinalIgnoreCase);
+        DetailStateBadge.Text = isActive
+            ? DetailActiveLabel + " · " + _probeStateText(profile)
+            : _probeStateText(profile);
+        DetailStateBadge.Foreground = accent;
+
+        DetailDescription.Text = ResolveDescription(profile, _uiLanguage);
+        DetailDescription.Visibility = string.IsNullOrWhiteSpace(DetailDescription.Text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        DetailBreadcrumb.Text = DetailBreadcrumbText;
+        BuildDetailMeta(profile);
+        BuildDetailActions(profile, isActive);
+
+        DetailOverlay.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Hides the detail overlay and clears the cached profile.</summary>
+    public void HideDetail()
+    {
+        DetailOverlay.Visibility = Visibility.Collapsed;
+        _detailProfile = null;
+    }
+
+    private void BuildDetailMeta(ModProfile profile)
+    {
+        DetailMetaPanel.Children.Clear();
+        DetailMetaPanel.Children.Add(BuildMetaRow(
+            DetailInstallTypeLabel,
+            FormatInstallType(profile.InstallType)));
+        DetailMetaPanel.Children.Add(BuildMetaRow(
+            DetailUpdateMechLabel,
+            FormatUpdateMechanism(profile.UpdateMechanism)));
+        if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
+        {
+            DetailMetaPanel.Children.Add(BuildMetaRow(
+                DetailWebsiteLabel,
+                profile.OfficialWebsite));
+        }
+    }
+
+    private FrameworkElement BuildMetaRow(string label, string value)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var lbl = new TextBlock
+        {
+            Text = label,
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("TextSecondary"),
+        };
+        var val = new TextBlock
+        {
+            Text = value,
+            FontSize = 12,
+            Foreground = (Brush)FindResource("TextPrimary"),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumn(lbl, 0);
+        Grid.SetColumn(val, 1);
+        row.Children.Add(lbl);
+        row.Children.Add(val);
+        return row;
+    }
+
+    private static string FormatInstallType(ModInstallType t) => t switch
+    {
+        ModInstallType.IsolatedFolder => "Isolated folder",
+        ModInstallType.InPlaceOverlay => "In-place overlay",
+        _ => t.ToString(),
+    };
+
+    private static string FormatUpdateMechanism(ModUpdateMechanism m) => m switch
+    {
+        ModUpdateMechanism.WolPatcher => "WoL patcher (UpdateInfo.xml)",
+        ModUpdateMechanism.GitHubReleases => "GitHub Releases",
+        ModUpdateMechanism.DelegatedExternal => "External updater",
+        ModUpdateMechanism.Manual => "Manual",
+        _ => m.ToString(),
+    };
+
+    private void BuildDetailActions(ModProfile profile, bool isActive)
+    {
+        DetailActionPanel.Children.Clear();
+
+        // Open website (secondary). Visible only when the profile has a URL.
+        if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
+        {
+            var webBtn = BuildSecondaryButton(DetailOpenWebsiteLabel);
+            webBtn.Click += (_, _) =>
+                OpenWebsiteRequested?.Invoke(this, profile.OfficialWebsite);
+            DetailActionPanel.Children.Add(webBtn);
+        }
+
+        // Switch active (primary). Skipped when this card already represents
+        // the active mod — the badge above already says so.
+        if (!isActive)
+        {
+            var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("AccentBrush");
+            var primary = BuildPrimaryButton(DetailSwitchActiveLabel, accent);
+            primary.Click += (_, _) =>
+                SwitchActiveRequested?.Invoke(this, profile);
+            DetailActionPanel.Children.Add(primary);
+        }
+    }
+
+    private Button BuildSecondaryButton(string label)
+    {
+        return new Button
+        {
+            Content = label,
+            Background = (Brush)FindResource("BgPanelAlt"),
+            Foreground = (Brush)FindResource("TextPrimary"),
+            BorderBrush = (Brush)FindResource("BorderSubtle"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(16, 8, 16, 8),
+            Margin = new Thickness(0, 0, 10, 0),
+            Cursor = Cursors.Hand,
+            FontSize = 12,
+        };
+    }
+
+    private Button BuildPrimaryButton(string label, Brush accent)
+    {
+        return new Button
+        {
+            Content = label,
+            Background = accent,
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(20, 8, 20, 8),
+            Cursor = Cursors.Hand,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+        };
     }
 }

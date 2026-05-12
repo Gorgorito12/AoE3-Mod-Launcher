@@ -82,5 +82,108 @@
                            Visibility="Collapsed"/>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- Detail overlay. Covers both header + card grid when shown so
+             the user focuses on a single mod. Populated by ShowDetail()
+             from the code-behind whenever a card is clicked. -->
+        <Grid x:Name="DetailOverlay"
+              Grid.Row="0" Grid.RowSpan="2"
+              Background="{DynamicResource BgBase}"
+              Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Top bar: back chevron + breadcrumb. -->
+            <Border Grid.Row="0"
+                    Background="{DynamicResource BgPanel}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,12">
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="DetailBackButton"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="{DynamicResource TextPrimary}"
+                            FontSize="14"
+                            Padding="8,4"
+                            Cursor="Hand"
+                            Content="&#x2190;"/>
+                    <TextBlock x:Name="DetailBreadcrumb"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Body: scrollable so long descriptions don't push the action
+                 bar off-screen on short windows. -->
+            <ScrollViewer Grid.Row="1"
+                          VerticalScrollBarVisibility="Auto"
+                          Padding="32,24,24,24">
+                <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+                    <!-- Hero: large icon + title block. -->
+                    <Grid Margin="0,0,0,24">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="DetailIcon"
+                                Grid.Column="0"
+                                Width="96" Height="96"
+                                CornerRadius="48"
+                                VerticalAlignment="Top">
+                            <TextBlock x:Name="DetailMonogram"
+                                       FontSize="40"
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="20,0,0,0">
+                            <TextBlock x:Name="DetailTitle"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="24"
+                                       FontWeight="Bold"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DetailAuthor"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="12"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock x:Name="DetailStateBadge"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Description. -->
+                    <TextBlock x:Name="DetailDescription"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="13"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,20"/>
+
+                    <!-- Metadata grid: install type, update mechanism, website. -->
+                    <StackPanel x:Name="DetailMetaPanel"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Action bar pinned to the bottom. Switch active mod is the
+                 primary action; Install / Uninstall / Update wire in
+                 commit 6 via the target-service refactor from commit 1. -->
+            <Border Grid.Row="2"
+                    Background="{DynamicResource BgPanel}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
+                    BorderThickness="0,1,0,0"
+                    Padding="24,14">
+                <StackPanel x:Name="DetailActionPanel"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"/>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>
