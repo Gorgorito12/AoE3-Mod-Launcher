@@ -1,430 +1,432 @@
-# Roadmap completo — AoE3 Mod Launcher (Wars of Liberty / Improvement Mod)
+# Complete Roadmap — AoE3 Mod Launcher (Wars of Liberty / Improvement Mod)
 
-## Contexto
+## Context
 
-El launcher está en `v0.7.9`, ~20k líneas C#/XAML, escrito en .NET 8 + WPF. Ya cumple un rol sólido como reemplazo del actualizador Java de Wars of Liberty y soporta multi-mod (WoL + Improvement Mod). Tiene catálogo externo en GitHub con auto-merge, instalación nativa, traducciones comunitarias, self-update, EN/ES.
+The launcher is at `v0.7.9`, ~20k lines of C#/XAML, written in .NET 8 + WPF. It already plays a solid role as a replacement for the Wars of Liberty Java updater and supports multi-mod (WoL + Improvement Mod). It has an external GitHub catalog with auto-merge, native installation, community translations, self-update, and EN/ES localization.
 
-El pedido del usuario: hoja de ruta **grande y completa** para todo lo que se puede hacer, no solo multiplayer. Audiencia es el usuario solo (documento de trabajo interno, tono directo). Refactor a aplicar es **pragmático** — modularizar sin migrar a MVVM completo.
+This is an internal working document. Tone is direct, opinionated, prioritized.
 
-Objetivos transversales:
-- **100% gratis** (sin tarjeta de crédito en cuenta CF; presupuestar para 50 DAU pico).
-- **Compatible con lo que ya funciona** — no romper el flujo actual de WoL y IM.
-- **Bajar la fricción para agregar mods nuevos** al ecosistema.
-- **UI moderna** que reemplace la sensación de actualizador legacy.
-- **Multijugador integrado** estilo Voobly/GameRanger.
+Cross-cutting goals:
+- **100% free** (no credit card on the CF account; budget for 50 DAU peak).
+- **Compatible with what already works** — do not break the current WoL and IM flow.
+- **Lower the friction for adding new mods** to the ecosystem.
+- **Modern UI** that replaces the legacy-updater feel.
+- **Integrated multiplayer** in the style of Voobly / GameRanger.
+
+Refactor stance: **pragmatic**. Modularize where it pays off; do not migrate to full MVVM. Keep code-behind where it works.
 
 ---
 
-## Estado actual (resumen)
+## Current state (summary)
 
-| Área | Madurez | Notas |
+| Area | Maturity | Notes |
 |---|---|---|
-| Install/update pipeline | 🟢 Sólido | `UpdateService` 752 L, `NativeInstallService` 772 L. Resumable, CRC32, backups. |
-| Catálogo de mods | 🟡 Backend listo, sin UI | `ModRegistry` carga built-ins + GitHub. **No hay browser visual**. |
-| Mecanismos install | 🟡 Limitado | Solo `IsolatedFolder` y `InPlaceOverlay`. Falta `StandardModsFolder` (Documents). |
-| Mecanismos update | 🟢 3 funcionando | `WolPatcher`, `DelegatedExternal`, `GitHubReleases`. |
-| UI/UX | 🟠 Funcional pero monolítica | `MainWindow.xaml.cs` 3998 L code-behind, sin ResourceDictionary global. Estilos duplicados en 9 diálogos. |
-| Localización | 🟡 EN/ES hardcoded | `Strings.cs` 103 KB con diccionario en código. Hay que migrar a archivos externos. |
-| Multijugador | 🔴 Inexistente | Backend ya pensado (CF + ZeroTier hosted, ver Track C). |
-| Self-update launcher | 🟢 Funciona | `LauncherUpdateService`, tag-based. |
-| Code signing | 🟡 Self-signed | Cert `CN=Gorgorito`, post-build target. SmartScreen sigue alertando. |
-| CI/CD | 🔴 Manual | `build-release.ps1` local. **Sin GitHub Actions en el launcher** (sí en el catálogo). |
-| Tests | 🔴 Cero | No hay proyecto de tests. |
-| Crash reporting | 🔴 Solo local | `DiagnosticLog.cs` a archivo, sin envío remoto. |
-| Discord RPC / Play time / News | 🔴 Inexistente | Tab "Noticias" existe pero sin backend. |
+| Install/update pipeline | 🟢 Solid | `UpdateService` 752 L, `NativeInstallService` 772 L. Resumable, CRC32, backups. |
+| Mod catalog | 🟡 Backend ready, no UI | `ModRegistry` loads built-ins + GitHub. **No visual browser yet**. |
+| Install mechanisms | 🟡 Limited | Only `IsolatedFolder` and `InPlaceOverlay`. Missing `StandardModsFolder` (Documents). |
+| Update mechanisms | 🟢 3 working | `WolPatcher`, `DelegatedExternal`, `GitHubReleases`. |
+| UI/UX | 🟠 Functional but monolithic | `MainWindow.xaml.cs` 3998 L code-behind, no global ResourceDictionary. Styles duplicated across 9 dialogs. |
+| Localization | 🟡 EN/ES hardcoded | `Strings.cs` 103 KB with in-code dictionary. Needs migration to external files. |
+| Multiplayer | 🔴 Nonexistent | Backend already planned (CF + hosted ZeroTier, see Track C). |
+| Launcher self-update | 🟢 Working | `LauncherUpdateService`, tag-based. |
+| Code signing | 🟡 Self-signed | Cert `CN=Gorgorito`, post-build target. SmartScreen still warns. |
+| CI/CD | 🔴 Manual | Local `build-release.ps1`. **No GitHub Actions in the launcher** (catalog repo has them). |
+| Tests | 🔴 None | No test project. |
+| Crash reporting | 🔴 Local only | `DiagnosticLog.cs` to file, no remote upload. |
+| Discord RPC / Play time / News | 🔴 Nonexistent | "News" tab exists but with no backend. |
 
 ---
 
-## Tracks del roadmap
+## Roadmap tracks
 
-Cada track es una unidad de trabajo independiente, con prioridad, esfuerzo y archivos afectados.
+Each track is an independent unit of work, with priority, effort, and affected files.
 
-### 🅰️ Track A — UI/UX pragmática (alta prioridad, 4–5 semanas)
+### 🅰️ Track A — Pragmatic UI/UX (high priority, 4–5 weeks)
 
-**Goal**: modernizar la primera impresión del launcher sin reescribir todo.
+**Goal**: modernize the launcher's first impression without rewriting everything.
 
-#### A1. Modularizar MainWindow.xaml.cs (3998 L → ~600 L)
-- Extraer en UserControls:
+#### A1. Modularize MainWindow.xaml.cs (3998 L → ~600 L)
+- Extract into UserControls:
   - `Views/HeroBanner.xaml` (mod selector + banner + accent)
-  - `Views/StatusCard.xaml` (estado + versiones + AoE3 row)
+  - `Views/StatusCard.xaml` (state + versions + AoE3 row)
   - `Views/ActionPanel.xaml` (Play / Update / Verify / Repair / Browse)
-  - `Views/ProgressPanel.xaml` (overlay durante operaciones)
-  - `Views/MainTabs.xaml` (Noticias / Changelog / Ayuda → expandible)
-- MainWindow queda como "shell" que orquesta UserControls.
-- Code-behind se queda en cada UserControl (no migramos a MVVM).
-- Archivos: `MainWindow.xaml`, `MainWindow.xaml.cs` (refactor); nuevos en `Views/`.
+  - `Views/ProgressPanel.xaml` (overlay during operations)
+  - `Views/MainTabs.xaml` (News / Changelog / Help → expandable)
+- MainWindow becomes a "shell" that orchestrates UserControls.
+- Code-behind stays inside each UserControl (no MVVM migration).
+- Files: `MainWindow.xaml`, `MainWindow.xaml.cs` (refactor); new files under `Views/`.
 
-#### A2. ResourceDictionary global
-- Mover estilos compartidos (`DialogButton`, `PrimaryButton`, `SectionHeader`, `HintText`, scrollbars, tooltips) de `MainWindow.xaml` y los 9 diálogos a `Styles/Common.xaml`.
-- Cargar como Merged Dictionary en `App.xaml`.
-- Elimina ~2800 líneas de estilos duplicados.
-- Archivos: `App.xaml`, nuevo `Styles/Common.xaml`, los 10 archivos XAML pierden la duplicación.
+#### A2. Global ResourceDictionary
+- Move shared styles (`DialogButton`, `PrimaryButton`, `SectionHeader`, `HintText`, scrollbars, tooltips) from `MainWindow.xaml` and the 9 dialogs to `Styles/Common.xaml`.
+- Load as Merged Dictionary in `App.xaml`.
+- Removes ~2800 lines of duplicated style XAML.
+- Files: `App.xaml`, new `Styles/Common.xaml`, the 10 XAML files lose duplication.
 
-#### A3. Sistema de temas
-- Tres modos: claro / oscuro / sistema.
-- Variable `AccentColor` dinámica leída del mod activo (`ModProfile.AccentColor`) — ya existe el dato, falta usarlo en bindings.
-- Setting nuevo en `LauncherConfig`: `Theme` (enum), `AccentColorOverride` (string, opcional).
-- Archivos: `Models/LauncherConfig.cs`, `Styles/Themes/Dark.xaml`, `Styles/Themes/Light.xaml`, `LauncherSettingsDialog`.
+#### A3. Theme system
+- Three modes: light / dark / system.
+- Dynamic `AccentColor` variable read from the active mod (`ModProfile.AccentColor`) — data already exists, bindings are missing.
+- New settings in `LauncherConfig`: `Theme` (enum), `AccentColorOverride` (string, optional).
+- Files: `Models/LauncherConfig.cs`, `Styles/Themes/Dark.xaml`, `Styles/Themes/Light.xaml`, `LauncherSettingsDialog`.
 
-#### A4. Pestañas principales reorganizadas
-- Header con tabs: `Jugar` · `Mods` · `Multijugador` · `Noticias` · `Configuración`.
-- "Jugar" = la vista actual (status + acciones).
-- "Mods", "Multijugador" = nuevas (Tracks B y C).
-- "Noticias" = el tab interno actual promovido a tab principal.
-- Archivos: `MainWindow.xaml`, nuevo `Views/MainTabs.xaml`.
+#### A4. Reorganized main tabs
+- Header with tabs: `Play` · `Mods` · `Multiplayer` · `News` · `Settings`.
+- "Play" = the current view (status + actions).
+- "Mods", "Multiplayer" = new (Tracks B and C).
+- "News" = today's internal tab promoted to a main tab.
+- Files: `MainWindow.xaml`, new `Views/MainTabs.xaml`.
 
-#### A5. News feed funcional
-- Nuevo `Services/NewsService.cs`: fetch desde `news.json` en repo del catálogo (mismo repo de mods).
-- Formato: `{ title, date, body (markdown), image, modIds: ["wol", null] }` (null = global).
-- Cache 1 h, mostrar `last 10`. Markdown renderizado con `Markdig` NuGet (~200 KB, gratis).
-- UI: lista de cards con imagen + texto recortado + "leer más" que expande.
-- Archivos: nuevo `Services/NewsService.cs`, nuevo `Models/NewsItem.cs`, nuevo `Views/NewsTab.xaml`.
+#### A5. Working news feed
+- New `Services/NewsService.cs`: fetches from `news.json` in the catalog repo (same repo as mods).
+- Format: `{ title, date, body (markdown), image, modIds: ["wol", null] }` (null = global).
+- 1 h cache, show last 10. Markdown rendered with `Markdig` NuGet (~200 KB, free).
+- UI: list of cards with image + clipped body + "read more" expand.
+- Files: new `Services/NewsService.cs`, new `Models/NewsItem.cs`, new `Views/NewsTab.xaml`.
 
 #### A6. Window state + last-used persistence
-- Guardar posición, tamaño, último tab abierto, último mod activo en `LauncherConfig`.
-- Restaurar en startup (con validación: pantalla puede haberse desconectado).
-- Archivos: `Models/LauncherConfig.cs` (campos nuevos: `WindowX`, `WindowY`, `WindowWidth`, `WindowHeight`, `WindowMaximized`, `LastActiveTab`, `LastActiveModId`), `MainWindow.xaml.cs` (suscripción a `Closing`).
+- Save position, size, last open tab, last active mod into `LauncherConfig`.
+- Restore on startup (with validation: a monitor may have been disconnected).
+- Files: `Models/LauncherConfig.cs` (new fields: `WindowX`, `WindowY`, `WindowWidth`, `WindowHeight`, `WindowMaximized`, `LastActiveTab`, `LastActiveModId`), `MainWindow.xaml.cs` (`Closing` subscription).
 
 #### A7. Discord Rich Presence
-- NuGet `DiscordRichPresence` (~50 KB, gratis, MIT).
-- Mostrar: "Jugando Wars of Liberty v2.x" cuando se detecta `age3y.exe` corriendo (ya hay `_gameMonitorTimer`).
-- Setting opt-in en `LauncherSettingsDialog`.
-- Archivos: nuevo `Services/DiscordPresenceService.cs`, hook en `MainWindow.xaml.cs` donde corre `_gameMonitorTimer`.
+- NuGet `DiscordRichPresence` (~50 KB, free, MIT).
+- Show "Playing Wars of Liberty v2.x" when `age3y.exe` is detected (already have `_gameMonitorTimer`).
+- Opt-in setting in `LauncherSettingsDialog`.
+- Files: new `Services/DiscordPresenceService.cs`, hook into `MainWindow.xaml.cs` where `_gameMonitorTimer` runs.
 
-#### A8. Animaciones suaves
-- Storyboards XAML para transiciones entre tabs y aparición de paneles (no usar librerías externas).
-- Loading skeleton para la lista de mods en lugar de spinner.
-- Archivos: cada UserControl nuevo de Track A.
+#### A8. Smooth animations
+- XAML storyboards for tab transitions and panel reveals (no external libs).
+- Loading skeleton for the mod list instead of a spinner.
+- Files: each new Track A UserControl.
 
-**Esfuerzo total Track A**: ~4–5 semanas.
-
----
-
-### 🅱️ Track B — Mods más fáciles de agregar y consumir (3–4 semanas)
-
-**Goal**: que el catálogo deje de tener 2 mods hardcoded y se vuelva un ecosistema vivo.
-
-#### B1. Mod Browser dentro del launcher
-- Tab `Mods` con grid de cards: icon, displayName, autor, descripción, accent color como borde.
-- Filtros: instalado / no instalado, idioma, tipo (IsolatedFolder / Overlay / StandardMods).
-- Click → vista detalle con banner grande, screenshots opcionales, "Instalar" / "Desinstalar".
-- Reutiliza `ModCatalogService` (cache de 24 h ya implementado) y `ModAssetCacheService`.
-- Archivos: nuevo `Views/ModBrowserTab.xaml`, nuevo `Views/ModDetailPage.xaml`.
-
-#### B2. Soporte de `StandardModsFolder`
-- Nuevo `ModInstallType.StandardModsFolder`: mod se instala en `%USERPROFILE%\Documents\My Games\Age of Empires 3\Mods\<modName>\`.
-- Activación: copiar/symlink al folder, escribir `Mods.xml` para que AoE3 lo registre.
-- Lanzamiento: AoE3 base con `-mod:<modName>` arg.
-- Cubre el ecosistema oficial de modding AoE3 (ESOC patch, etc.).
-- Archivos: `Models/ModProfile.cs` (nuevo enum value), `Services/NativeInstallService.cs` (rama nueva), `Services/GameLauncher.cs` (args nuevos).
-
-#### B3. Soporte de AoE3: Definitive Edition
-- Nuevo `GameEdition` enum en `ModProfile`: `LegacyTAD` (actual) / `DefinitiveEdition`.
-- `Aoe3DetectorService` ya busca registry → agregar las rutas de DE (Steam app id `933110`).
-- Distinto folder de Mods (`%USERPROFILE%\Games\Age of Empires 3 DE\<userId>\mods\`).
-- Algunos mods existen en ambas versiones; el manifest puede declarar `compatibleEditions: ["LegacyTAD", "DefinitiveEdition"]`.
-- Archivos: `Models/ModProfile.cs`, `Models/ModCatalogManifest.cs`, `Services/Aoe3DetectorService.cs`.
-
-#### B4. Wizard "Publicar mi mod"
-- Diálogo nuevo accesible desde el botón `Mods` → `+ Publicar mi mod`.
-- Form: ID, displayName, autor, descripción EN/ES, accent color picker, install type, payload URLs.
-- Valida contra el schema JSON local (`aoe3-mods-catalog-template/schema/mod.schema.json` embebido como recurso).
-- Genera el `mod.json` y abre el navegador en `https://github.com/Gorgorito12/aoe3-mods-catalog/new/main/mods/<id>/` con el contenido pre-rellenado (URL params).
-- Archivos: nuevo `PublishModDialog.xaml`, recurso embebido del schema.
-
-#### B5. Dependencias entre mods (opcional, baja prioridad)
-- Campo nuevo en `mod.json`: `dependencies: [{ id: "esoc-patch", version: ">=1.5" }]`.
-- El launcher instala dependencias antes que el mod principal.
-- Útil para mods que requieren ESOC patch o Sandbox.
-- Archivos: `Models/ModCatalogManifest.cs`, `Services/NativeInstallService.cs` (resolución topológica).
-
-#### B6. Mejorar el flow Tier 2 del catálogo
-- En el repo de catálogo, el workflow `auto-merge.yml` valida tag bump.
-- Agregar validación: que el tag exista en `sourceRepo` y tenga al menos un asset `.zip`.
-- Esto evita "tag fantasma" que se mergea y rompe usuarios.
-- Archivos: `aoe3-mods-catalog-template/.github/scripts/classify_pr.py` (extender), o nuevo `validate_release_tag.py`.
-
-**Esfuerzo total Track B**: ~3–4 semanas (sin B5 ni B6 que pueden esperar).
+**Total Track A effort**: ~4–5 weeks.
 
 ---
 
-### 🅲 Track C — Multijugador (6–9 semanas)
+### 🅱️ Track B — Easier to add and consume mods (3–4 weeks)
 
-**Goal**: lobby + chat + matchmaking + red virtual estilo Voobly, todo gratis, dimensionado para 50 DAU pico.
+**Goal**: make the catalog stop being 2 hardcoded mods and become a living ecosystem.
 
-#### C1. Backend en Cloudflare (1–2 semanas)
-- Cuenta Cloudflare **sin tarjeta** (físicamente no pueden cobrar).
+#### B1. In-launcher Mod Browser
+- `Mods` tab with a grid of cards: icon, displayName, author, description, accent color as border.
+- Filters: installed / not installed, language, type (IsolatedFolder / Overlay / StandardMods).
+- Click → detail view with large banner, optional screenshots, "Install" / "Uninstall".
+- Reuses `ModCatalogService` (24 h cache already implemented) and `ModAssetCacheService`.
+- Files: new `Views/ModBrowserTab.xaml`, new `Views/ModDetailPage.xaml`.
+
+#### B2. `StandardModsFolder` support
+- New `ModInstallType.StandardModsFolder`: mod installs into `%USERPROFILE%\Documents\My Games\Age of Empires 3\Mods\<modName>\`.
+- Activation: copy/symlink into the folder, write `Mods.xml` for AoE3 to register it.
+- Launch: base AoE3 with `-mod:<modName>` arg.
+- Covers the official AoE3 modding ecosystem (ESOC patch, etc.).
+- Files: `Models/ModProfile.cs` (new enum value), `Services/NativeInstallService.cs` (new branch), `Services/GameLauncher.cs` (new args).
+
+#### B3. AoE3: Definitive Edition support
+- New `GameEdition` enum in `ModProfile`: `LegacyTAD` (current) / `DefinitiveEdition`.
+- `Aoe3DetectorService` already probes registry → add DE paths (Steam app id `933110`).
+- Different mods folder (`%USERPROFILE%\Games\Age of Empires 3 DE\<userId>\mods\`).
+- Some mods exist on both versions; the manifest can declare `compatibleEditions: ["LegacyTAD", "DefinitiveEdition"]`.
+- Files: `Models/ModProfile.cs`, `Models/ModCatalogManifest.cs`, `Services/Aoe3DetectorService.cs`.
+
+#### B4. "Publish my mod" wizard
+- New dialog accessible from the `Mods` button → `+ Publish my mod`.
+- Form: ID, displayName, author, description EN/ES, accent color picker, install type, payload URLs.
+- Validates against the local JSON schema (`aoe3-mods-catalog-template/schema/mod.schema.json` embedded as a resource).
+- Generates `mod.json` and opens the browser at `https://github.com/Gorgorito12/aoe3-mods-catalog/new/main/mods/<id>/` with the content pre-filled (URL params).
+- Files: new `PublishModDialog.xaml`, embedded schema resource.
+
+#### B5. Mod dependencies (optional, low priority)
+- New field in `mod.json`: `dependencies: [{ id: "esoc-patch", version: ">=1.5" }]`.
+- Launcher installs dependencies before the main mod.
+- Useful for mods that require ESOC patch or Sandbox.
+- Files: `Models/ModCatalogManifest.cs`, `Services/NativeInstallService.cs` (topological resolution).
+
+#### B6. Improve catalog Tier 2 flow
+- In the catalog repo, the `auto-merge.yml` workflow validates tag bumps.
+- Add validation: that the tag exists in `sourceRepo` and has at least one `.zip` asset.
+- Prevents "ghost tags" from being merged and breaking users.
+- Files: `aoe3-mods-catalog-template/.github/scripts/classify_pr.py` (extend), or new `validate_release_tag.py`.
+
+**Total Track B effort**: ~3–4 weeks (without B5 or B6, which can wait).
+
+---
+
+### 🅲 Track C — Multiplayer (6–9 weeks)
+
+**Goal**: lobby + chat + matchmaking + virtual network, Voobly-style, all free, sized for 50 DAU peak.
+
+#### C1. Cloudflare backend (1–2 weeks)
+- Cloudflare account **without a credit card** (physically cannot be charged).
 - Worker + Durable Objects + D1 + R2.
-- Schema D1: `users`, `friends`, `games`, `replays`, `bans`, `usage_today`.
-- Endpoints REST mínimos: `/auth/github`, `/me`, `/games` (CRUD), `/friends`, `/replays`.
-- WebSocket Hibernation API para chat lobby y eventos de salas (cero gasto cuando idle).
-- Repo nuevo: `wol-launcher-lobby-worker` (separado del launcher).
+- D1 schema: `users`, `friends`, `games`, `replays`, `bans`, `usage_today`.
+- Minimal REST endpoints: `/auth/github`, `/me`, `/games` (CRUD), `/friends`, `/replays`.
+- Hibernatable WebSocket API for lobby chat and room events (zero cost while idle).
+- New repo: `wol-launcher-lobby-worker` (separate from the launcher).
 
-#### C2. Red virtual con ZeroTier Central (1–2 semanas)
-- API gratis de ZeroTier Central: redes ilimitadas, 25 nodos por red.
-- **1 red ZeroTier creada on-demand por sala de juego** (máximo 8 jugadores AoE3 → muy lejos del límite).
-- Worker tiene el `ZT_API_TOKEN` (secret), expone `/games/{id}/network` que crea la red y devuelve `network_id` + `assigned_ip`.
-- Cliente WPF baja el binario oficial de ZeroTier (gratis, MSI silencioso), `zerotier-cli join <id>`, espera IP `25.x.x.x`.
-- Al terminar la partida: el host destruye la red.
+#### C2. Virtual network via ZeroTier Central (1–2 weeks)
+- Free ZeroTier Central API: unlimited networks, 25 nodes per network.
+- **1 ZeroTier network created on demand per game room** (max 8 AoE3 players → well under the limit).
+- Worker holds `ZT_API_TOKEN` (secret), exposes `/games/{id}/network` that creates the network and returns `network_id` + `assigned_ip`.
+- WPF client downloads the official ZeroTier binary (free, silent MSI), runs `zerotier-cli join <id>`, waits for `25.x.x.x` IP.
+- After the match ends: the host destroys the network.
 
-#### C3. TURN/relay fallback (0 semanas inicial)
-- Empezar **sin TURN propio**. Si ~10% de jugadores caen en NAT simétrica, lo notan, no hay solución mágica al inicio.
-- Si se vuelve problema: usar un TURN público gratis (ej. `openrelay.metered.ca` tiene plan free generoso) antes de auto-hostear.
-- Si el problema crece y compensa, levantar un `coturn` en VPS Hetzner CX11 (€3.79/mes) — no es gratis pero es el último recurso.
+#### C3. TURN/relay fallback (0 weeks initially)
+- Start **without our own TURN**. If ~10% of players hit symmetric NAT, they'll notice — no magic fix at launch.
+- If it becomes a problem: use a free public TURN (e.g. `openrelay.metered.ca` has a generous free plan) before self-hosting.
+- If the problem grows and it's worth it, spin up `coturn` on a Hetzner CX11 VPS (€3.79/month) — not free, but the last resort.
 
-#### C4. Cliente WPF — pestaña Multijugador (2–3 semanas)
-- Subtabs internos: `Salas` · `Amigos` · `Perfil` · `Historial`.
-- Salas: lista filtrable (mapa, ranked, ping), botón "Crear sala".
-- Vista de sala: 8 slots, color, civilización, mapa, chat de sala, "Listo", "Comenzar" (solo host).
-- Chat global persistente en sidebar.
-- Friends: lista, presencia, DMs.
-- Perfil: ELO Glicko-2 (cálculo en Worker), partidas, replays.
-- Archivos: `Views/MultiplayerTab.xaml` con subtabs, `Services/LobbyClient.cs` (WebSocket + REST), `Services/ZeroTierService.cs`.
+#### C4. WPF client — Multiplayer tab (2–3 weeks)
+- Internal subtabs: `Rooms` · `Friends` · `Profile` · `History`.
+- Rooms: filterable list (map, ranked, ping), "Create room" button.
+- Room view: 8 slots, color, civilization, map, room chat, "Ready", "Start" (host only).
+- Persistent global chat in sidebar.
+- Friends: list, presence, DMs.
+- Profile: Glicko-2 ELO (computed in Worker), games, replays.
+- Files: `Views/MultiplayerTab.xaml` with subtabs, `Services/LobbyClient.cs` (WebSocket + REST), `Services/ZeroTierService.cs`.
 
-#### C5. Game launch flow (1 semana)
-- Host crea sala → Worker reserva slot + crea red ZT.
-- Peers join → reciben `network_id` + IPs virtuales del resto.
-- Host clickea "Comenzar" → Worker emite evento `start` con la IP virtual del host.
-- Cada cliente: lanza AoE3 (`game.exe -nointro`) con la IP virtual del host como "Direct IP Connect".
-- Launcher mantiene el WebSocket abierto durante la partida solo para chat/admin (no para tráfico de juego).
+#### C5. Game launch flow (1 week)
+- Host creates room → Worker reserves a slot + creates ZT network.
+- Peers join → receive `network_id` + virtual IPs of the rest.
+- Host clicks "Start" → Worker emits `start` event with the host's virtual IP.
+- Each client: launches AoE3 (`game.exe -nointro`) with the host's virtual IP as "Direct IP Connect".
+- Launcher keeps the WebSocket open during the match only for chat/admin (not for game traffic).
 
-#### C6. ELO, replays, anti-cheat liviano (continuo)
-- ELO: Glicko-2 calculado en Worker tras cada partida (host reporta resultado, peers confirman).
-- Replays: `.aoe3rec` subido a R2 (10 GB gratis), descargable desde perfil. Cap 5 MB/replay.
-- Anti-cheat: hash del `age3y.exe` reportado al join; partidas con hashes distintos quedan unranked.
+#### C6. ELO, replays, lightweight anti-cheat (continuous)
+- ELO: Glicko-2 computed in the Worker after each match (host reports the result, peers confirm).
+- Replays: `.aoe3rec` uploaded to R2 (10 GB free), downloadable from profile. Cap 5 MB/replay.
+- Anti-cheat: hash of `age3y.exe` reported on join; games with mismatched hashes stay unranked.
 
-#### C7. Caps y circuit breakers
+#### C7. Caps and circuit breakers
 - `MAX_CONCURRENT_USERS = 60`, `MAX_ACTIVE_GAMES = 8`, `MAX_CHAT_MSG_PER_MIN = 30`, `MAX_REPLAY_SIZE_MB = 5`.
-- Contador diario en D1 (`usage_today`): cuando llega a 80% gasta, rechaza features no-críticas; 95% rechaza nuevos logins.
-- Mensaje claro en UI: "Servidor lleno (free tier). Intentá en unos minutos."
-- Barra superior visible: "🟢 Cuota: 34% · 14 online · 2/8 partidas".
+- Daily counter in D1 (`usage_today`): at 80% spent, reject non-critical features; at 95%, reject new logins.
+- Clear UI message: "Server full (free tier). Try again in a few minutes."
+- Visible top bar: "🟢 Quota: 34% · 14 online · 2/8 games".
 
-**Esfuerzo total Track C**: ~6–9 semanas.
+**Total Track C effort**: ~6–9 weeks.
 
 ---
 
-### 🅳 Track D — Infraestructura / DX (continuo, 2–3 semanas iniciales)
+### 🅳 Track D — Infrastructure / DX (continuous, 2–3 weeks initial)
 
-**Goal**: profesionalizar el ciclo de release y dar paz mental.
+**Goal**: professionalize the release cycle and earn peace of mind.
 
 #### D1. GitHub Actions: build + sign + release
-- Workflow nuevo en `.github/workflows/release.yml` del launcher.
-- Trigger: push de tag `v*`.
-- Steps: `dotnet publish` → firma con cert (almacenado como GitHub secret) → crea release → sube `.exe` + SHA-256.
-- Manual `build-release.ps1` queda como respaldo local.
-- Archivos: nuevo `.github/workflows/release.yml`, ajuste menor en `WarsOfLibertyLauncher.csproj` para CI-aware signing.
+- New workflow at `.github/workflows/release.yml` for the launcher.
+- Trigger: tag push `v*`.
+- Steps: `dotnet publish` → sign with cert (stored as a GitHub secret) → create release → upload `.exe` + SHA-256.
+- The manual `build-release.ps1` stays as a local fallback.
+- Files: new `.github/workflows/release.yml`, minor `.csproj` tweak for CI-aware signing.
 
-#### D2. Tests unitarios
-- Proyecto nuevo `WarsOfLibertyLauncher.Tests` con xUnit.
-- Cobertura prioritaria: parseo de `UpdateInfo.xml`, computación de chain de patches, validación de schema de mod manifest, hashing.
-- No apuntamos a 100% coverage; apuntamos a regresiones de lógica crítica.
-- Archivos: nuevo proyecto, integrado al `.sln`.
+#### D2. Unit tests
+- New project `WarsOfLibertyLauncher.Tests` using xUnit.
+- Priority coverage: `UpdateInfo.xml` parsing, patch chain computation, mod manifest schema validation, hashing.
+- Not aiming at 100% coverage; aiming at regression prevention on critical logic.
+- Files: new project added to the `.sln`.
 
-#### D3. Crash reporting opt-in
-- **Sentry free tier** (5k errors/mo, suficiente para 50 DAU).
-- Setup en `App.xaml.cs` con handler global `DispatcherUnhandledException` + `AppDomain.CurrentDomain.UnhandledException`.
-- Opt-in en `LauncherSettingsDialog`. Default: off.
-- Si off: solo log local (lo de hoy).
-- Archivos: `App.xaml.cs`, `Services/CrashReporter.cs` nuevo, setting en `LauncherConfig`.
+#### D3. Opt-in crash reporting
+- **Sentry free tier** (5k errors/mo, plenty for 50 DAU).
+- Setup in `App.xaml.cs` with global handlers `DispatcherUnhandledException` + `AppDomain.CurrentDomain.UnhandledException`.
+- Opt-in toggle in `LauncherSettingsDialog`. Default: off.
+- If off: local log only (today's behavior).
+- Files: `App.xaml.cs`, new `Services/CrashReporter.cs`, setting in `LauncherConfig`.
 
-#### D4. Telemetría opt-in (postergar, opcional)
-- **PostHog free tier** (1M events/mo) o evitar del todo.
+#### D4. Opt-in telemetry (defer, optional)
+- **PostHog free tier** (1M events/mo), or avoid altogether.
 - Track: `launcher_started`, `mod_installed`, `game_launched`, `update_applied`.
-- Solo si el usuario lo decide más adelante. **Default: postergar**.
+- Only if the user decides to enable it later. **Default: defer**.
 
-#### D5. Code signing — evaluar EV o Azure Trusted Signing
-- Self-signed actual sigue dando warnings de SmartScreen.
-- **Azure Trusted Signing**: ~$10/mes, soporta CI sin cert local, mata warnings de SmartScreen. **Recomendado si hay presupuesto mínimo**.
-- Alternativa gratis: documentar bien en INSTALL.md cómo agregar el cert auto-firmado a `TrustedPublisher`.
-- Sin código, solo decisión.
+#### D5. Code signing — evaluate EV or Azure Trusted Signing
+- Current self-signed still triggers SmartScreen warnings.
+- **Azure Trusted Signing**: ~$10/month, supports CI without a local cert, kills SmartScreen warnings. **Recommended if even a minimal budget is available**.
+- Free alternative: document in INSTALL.md how to add the self-signed cert to `TrustedPublisher`.
+- No code, just a decision.
 
-#### D6. Auto-changelog desde commits
-- GitHub Action que en cada tag genera el changelog desde commits desde el tag anterior (formato Conventional Commits opcional).
-- Hace el body del release automáticamente.
-- Archivos: `.github/workflows/release.yml` (mismo workflow de D1).
+#### D6. Auto-changelog from commits
+- GitHub Action that generates the changelog on each tag from commits since the previous tag (optional Conventional Commits format).
+- Auto-populates the release body.
+- Files: `.github/workflows/release.yml` (same workflow as D1).
 
 #### D7. SmartScreen sample submission automation
-- Después de cada release, script PowerShell que sube el .exe a Microsoft Defender Sample Submission API.
-- Reduce el tiempo en que el binario está "unknown publisher".
-- Archivos: `.github/workflows/release.yml` (step extra).
+- After each release, a PowerShell script uploads the .exe to Microsoft Defender Sample Submission API.
+- Reduces the window during which the binary appears as "unknown publisher".
+- Files: `.github/workflows/release.yml` (extra step).
 
-**Esfuerzo total Track D**: ~2–3 semanas para D1+D2+D3, resto continuo.
+**Total Track D effort**: ~2–3 weeks for D1+D2+D3, the rest continuous.
 
 ---
 
-### 🅴 Track E — Calidad de vida (continuo, sin urgencia)
+### 🅴 Track E — Quality of life (continuous, no urgency)
 
-#### E1. PlayTime tracking
-- `Services/PlayTimeService.cs`: hookea `GameLauncher` start/stop, persiste en `LauncherConfig.Mods[id].PlayTimeHours` + `LauncherConfig.Mods[id].LastPlayed`.
-- Mostrar en `StatusCard`: "Jugaste 12h esta semana".
-- Archivos: nuevo service, extender `Models/ModState.cs`.
+#### E1. Play time tracking
+- `Services/PlayTimeService.cs`: hooks into `GameLauncher` start/stop, persists into `LauncherConfig.Mods[id].PlayTimeHours` + `LauncherConfig.Mods[id].LastPlayed`.
+- Show in `StatusCard`: "Played 12h this week".
+- Files: new service, extend `Models/ModState.cs`.
 
-#### E2. Achievements locales
-- 100% local, sin servidor. JSON con definiciones de logros.
-- Ejemplos: "Primera victoria", "10 horas jugadas", "Probaste 3 mods".
-- Notificación in-app (toast).
-- Archivos: nuevo `Services/AchievementService.cs`, `Models/Achievement.cs`.
+#### E2. Local achievements
+- 100% local, no server. JSON with achievement definitions.
+- Examples: "First victory", "10 hours played", "Tried 3 mods".
+- In-app toast notification.
+- Files: new `Services/AchievementService.cs`, `Models/Achievement.cs`.
 
-#### E3. Notificaciones granulares
-- Hoy: toast on/off global.
-- Mejorar: por evento (update disponible, partida lista, amigo conectado).
-- Archivos: extender `LauncherConfig` con `NotificationPrefs` dict.
+#### E3. Granular notifications
+- Today: global toast on/off.
+- Improve: per-event (update available, match ready, friend online).
+- Files: extend `LauncherConfig` with a `NotificationPrefs` dict.
 
 #### E4. Background update checker
-- Hoy: check on startup.
-- Agregar: timer cada N horas para chequear (configurable).
-- Archivos: `Services/UpdateService.cs`, `MainWindow.xaml.cs`.
+- Today: check on startup.
+- Add: timer every N hours (configurable).
+- Files: `Services/UpdateService.cs`, `MainWindow.xaml.cs`.
 
 #### E5. Keyboard shortcuts
-- `Ctrl+1..5` para cambiar de tab.
-- `F5` para refresh catálogo.
-- `Ctrl+L` para abrir log.
-- Archivos: `MainWindow.xaml.cs` (InputBindings).
+- `Ctrl+1..5` to switch tabs.
+- `F5` to refresh the catalog.
+- `Ctrl+L` to open the log.
+- Files: `MainWindow.xaml.cs` (InputBindings).
 
 ---
 
-### 🅵 Track F — Localización (2 semanas)
+### 🅵 Track F — Localization (2 weeks)
 
-#### F1. Migrar Strings.cs a archivos externos
-- De 103 KB hardcoded → archivos JSON por idioma en `Localization/` (`en.json`, `es.json`).
-- `Strings.cs` queda solo como API que lee de los JSON.
-- Permite hot-reload (cambiar idioma sin recompilar).
-- Archivos: `Localization/Strings.cs` (refactor), nuevos `Localization/Strings.en.json`, `Localization/Strings.es.json`.
+#### F1. Migrate Strings.cs to external files
+- From 103 KB hardcoded → per-language JSON files in `Localization/` (`en.json`, `es.json`).
+- `Strings.cs` stays only as an API reading from the JSON.
+- Allows hot-reload (change language without recompiling).
+- Files: `Localization/Strings.cs` (refactor), new `Localization/Strings.en.json`, `Localization/Strings.es.json`.
 
-#### F2. Sumar idiomas
-- PT-BR (gran comunidad AoE3 en Brasil), FR, DE, RU.
-- Cada idioma es un PR de la comunidad agregando `Strings.<lang>.json`.
+#### F2. Add languages
+- PT-BR (large AoE3 community in Brazil), FR, DE, RU.
+- Each language is a community PR adding `Strings.<lang>.json`.
 
-#### F3. In-launcher translation tool para el propio launcher
-- Similar al `TranslationPackagerDialog` actual (que es para el juego), pero para los strings del launcher.
-- Permite a un usuario editar EN strings → ver resultado → exportar `.json` para PR.
-- Archivos: nuevo `LauncherTranslationDialog.xaml`.
+#### F3. In-launcher translation tool for the launcher itself
+- Similar to the current `TranslationPackagerDialog` (which is for the game), but for launcher strings.
+- Lets a user edit EN strings → see the result → export `.json` for a PR.
+- Files: new `LauncherTranslationDialog.xaml`.
 
 ---
 
-### 🅶 Track G — Seguridad / robustez (sin urgencia, evaluar caso por caso)
+### 🅶 Track G — Security / robustness (no urgency, case by case)
 
-#### G1. Firma ed25519 opcional del `mod.json`
-- Autor del mod firma su `mod.json` con clave privada; clave pública en su perfil de GitHub.
-- Launcher verifica antes de instalar.
-- Defensa contra cuentas de modder comprometidas.
-- Archivos: `Services/ModCatalogService.cs` (validación), `Models/ModCatalogManifest.cs` (campo `signature`).
+#### G1. Optional ed25519 signature for `mod.json`
+- Mod author signs their `mod.json` with a private key; public key in their GitHub profile.
+- Launcher verifies before installing.
+- Defense against compromised modder accounts.
+- Files: `Services/ModCatalogService.cs` (validation), `Models/ModCatalogManifest.cs` (`signature` field).
 
-#### G2. Mirror system extendido
-- Hoy: primary URL + SourceForge fallback.
-- Sumar: R2 mirror (gratis 10 GB), IPFS opcional.
-- Archivos: `Services/DownloadService.cs`, `Models/ModCatalogManifest.cs` (campo `mirrors[]`).
+#### G2. Extended mirror system
+- Today: primary URL + SourceForge fallback.
+- Add: R2 mirror (free 10 GB), optional IPFS.
+- Files: `Services/DownloadService.cs`, `Models/ModCatalogManifest.cs` (`mirrors[]` field).
 
 #### G3. Delta updates (binary diff)
-- En lugar de descargar archivos completos, descargar bsdiff entre versiones.
-- Solo vale la pena si los mods grandes empiezan a tener updates frecuentes.
-- Archivos: nuevo `Services/DeltaUpdateService.cs`, ajustes en `UpdateService.cs`.
+- Instead of downloading full files, download bsdiffs between versions.
+- Only worth it if large mods start releasing frequent updates.
+- Files: new `Services/DeltaUpdateService.cs`, tweaks in `UpdateService.cs`.
 
 #### G4. Quarantine integration
-- En vez de descargar a `%TEMP%`, descargar a un folder cuarentena que Defender escanea antes de extraer.
-- Archivos: `Services/DownloadService.cs`.
+- Instead of downloading to `%TEMP%`, download to a quarantine folder that Defender scans before extraction.
+- Files: `Services/DownloadService.cs`.
 
 ---
 
-### 🅷 Track H — Comunidad / engagement (continuo)
+### 🅷 Track H — Community / engagement (continuous)
 
-#### H1. News feed por mod (ya en A5)
-- Cubierto en Track A5.
+#### H1. Per-mod news feed (already in A5)
+- Covered in Track A5.
 
 #### H2. Discord webhook integration
-- En el WoL Discord, los usuarios pueden ver cuándo alguien crea partida pública.
-- Worker postea a un webhook configurado.
-- Archivos: solo Worker, no toca el launcher.
+- In the WoL Discord, users can see when someone creates a public room.
+- Worker posts to a configured webhook.
+- Files: Worker only, no launcher changes.
 
-#### H3. Botones a comunidad
-- En el banner del mod, botones rápidos: Discord, Reddit, Foro oficial, redes sociales.
-- Datos vienen del `mod.json` (campo nuevo `community: { discord, reddit, forum, twitter }`).
-- Archivos: `Models/ModCatalogManifest.cs`, `Views/HeroBanner.xaml`.
+#### H3. Community buttons
+- In the mod banner, quick buttons: Discord, Reddit, Official forum, social media.
+- Data comes from `mod.json` (new `community: { discord, reddit, forum, twitter }` field).
+- Files: `Models/ModCatalogManifest.cs`, `Views/HeroBanner.xaml`.
 
-#### H4. Sistema de feedback in-app
-- Botón "Reportar problema" → diálogo con: descripción, adjuntar `launcher-debug.log` opcional, enviar a un endpoint del Worker o crear issue de GitHub vía API.
-- Archivos: nuevo `FeedbackDialog.xaml`, endpoint `/feedback` en Worker.
+#### H4. In-app feedback system
+- "Report a problem" button → dialog with: description, optional `launcher-debug.log` attachment, sent to a Worker endpoint or as a GitHub issue via API.
+- Files: new `FeedbackDialog.xaml`, `/feedback` endpoint in Worker.
 
-#### H5. Banners de torneos/eventos
-- Campo opcional en `news.json`: `pinned: true, banner: url, callToAction: { label, url }`.
-- Muestra arriba del tab "Noticias" como banner promocional.
+#### H5. Tournament/event banners
+- Optional field in `news.json`: `pinned: true, banner: url, callToAction: { label, url }`.
+- Shown at the top of the "News" tab as a promotional banner.
 
 ---
 
-### 🅸 Track I — Calidad de código (continuo, sin urgencia)
+### 🅸 Track I — Code quality (continuous, no urgency)
 
-Compatible con el refactor pragmático del usuario (no full MVVM).
+Compatible with the user's pragmatic refactor stance (no full MVVM).
 
-#### I1. Consolidar duplicaciones
-- 3 copias de `GitHubRelease` / `GitHubAsset` (en `GitHubReleaseDownloader`, `LauncherUpdateService`, `TranslationRegistryService`).
-- Unificar en `Models/GitHub/`.
+#### I1. Consolidate duplications
+- 3 copies of `GitHubRelease` / `GitHubAsset` (in `GitHubReleaseDownloader`, `LauncherUpdateService`, `TranslationRegistryService`).
+- Unify into `Models/GitHub/`.
 
-#### I2. Interfaces para servicios críticos (mockables)
+#### I2. Interfaces for critical services (mockable)
 - `IUpdateService`, `IInstallerService`, `IModCatalogService`, `IDownloadService`.
-- Facilita tests sin migrar a DI completa.
+- Enables tests without a full DI migration.
 
-#### I3. Refactorizar servicios grandes
-- `UpdateService.cs` (752 L) → separar en `UpdateOrchestrator` + `PatchApplier` + `VersionDetector`.
-- `NativeInstallService.cs` (772 L) → separar en `InstallOrchestrator` + `Aoe3Cloner` + `ModOverlay`.
-- `TranslationService.cs` (621 L) → ya es bastante focused, dejarlo.
+#### I3. Refactor large services
+- `UpdateService.cs` (752 L) → split into `UpdateOrchestrator` + `PatchApplier` + `VersionDetector`.
+- `NativeInstallService.cs` (772 L) → split into `InstallOrchestrator` + `Aoe3Cloner` + `ModOverlay`.
+- `TranslationService.cs` (621 L) → already fairly focused, leave it.
 
 #### I4. Architecture docs
-- Diagrama de servicios y data flow en `docs/architecture.md`.
-- No es para "vender" el proyecto sino para vos mismo dentro de 6 meses.
+- Service and data-flow diagram in `docs/architecture.md`.
+- Not for "selling" the project — for your future self in 6 months.
 
 ---
 
-### 🅹 Track J — Platform expansion (muy futuro, opcional)
+### 🅹 Track J — Platform expansion (very far future, optional)
 
-#### J1. AoE3: DE soporte completo (ya en B3)
-- Cubierto en Track B.
+#### J1. Full AoE3: DE support (already in B3)
+- Covered in Track B.
 
 #### J2. Linux via Wine wrapper
-- Distribución como AppImage que usa Wine para correr el launcher + AoE3.
-- Mercado pequeño pero presente.
+- Distribute as an AppImage that uses Wine to run the launcher + AoE3.
+- Small but present market.
 
 #### J3. macOS
-- Muy futuro, AoE3 no corre nativo en Mac. Probablemente nunca.
+- Very far future, AoE3 doesn't run natively on Mac. Probably never.
 
 ---
 
-## Secuencia recomendada
+## Recommended sequence
 
-Asumiendo trabajo de tiempo parcial (~10–15 h/semana):
+Assuming part-time work (~10–15 h/week):
 
 ```
-Mes 1–2:   Track A1–A4 (modularizar UI, ResourceDictionary, tabs, tema)
-Mes 2:     Track A5–A8 (news, window state, Discord RPC, animaciones)
-Mes 3:     Track B1–B3 (mod browser, StandardModsFolder, DE soporte)
-Mes 3:     Track B4 (publish wizard)
-Mes 4–5:   Track C1–C2 (backend CF + ZeroTier integration)
-Mes 5–6:   Track C4–C5 (UI multiplayer + game launch flow)
-Mes 6:     Track C6–C7 (ELO, replays, caps)
-Continuo:  Track D (CI, tests, crash report) — se mete entre tracks
-Cuando haya:  Track F (i18n PT-BR, etc.) — depende de community
-Diferido:  Tracks E, G, H, I, J
+Month 1–2:  Track A1–A4 (modularize UI, ResourceDictionary, tabs, theme)
+Month 2:    Track A5–A8 (news, window state, Discord RPC, animations)
+Month 3:    Track B1–B3 (mod browser, StandardModsFolder, DE support)
+Month 3:    Track B4 (publish wizard)
+Month 4–5:  Track C1–C2 (CF backend + ZeroTier integration)
+Month 5–6:  Track C4–C5 (multiplayer UI + game launch flow)
+Month 6:    Track C6–C7 (ELO, replays, caps)
+Continuous: Track D (CI, tests, crash report) — interleaved between tracks
+When ready: Track F (PT-BR i18n, etc.) — depends on community
+Deferred:   Tracks E, G, H, I, J
 ```
 
-**Hito 1 (Mes 2)**: UI moderna shippable → release `v0.8`.
-**Hito 2 (Mes 3)**: Mod browser funcional → release `v0.9`.
-**Hito 3 (Mes 6)**: Multijugador beta → release `v1.0`.
+**Milestone 1 (Month 2)**: shippable modern UI → release `v0.8`.
+**Milestone 2 (Month 3)**: functional mod browser → release `v0.9`.
+**Milestone 3 (Month 6)**: multiplayer beta → release `v1.0`.
 
 ---
 
-## Archivos críticos a modificar (consolidado)
+## Critical files to modify (consolidated)
 
-### Refactor mayor
+### Major refactor
 - `WarsOfLibertyLauncher/MainWindow.xaml` (3998 L → ~600 L) — A1
 - `WarsOfLibertyLauncher/MainWindow.xaml.cs` — A1
 - `WarsOfLibertyLauncher/App.xaml` — A2
 
-### Models extendidos
+### Extended models
 - `WarsOfLibertyLauncher/Models/LauncherConfig.cs` — A3, A6, E1, E3
 - `WarsOfLibertyLauncher/Models/ModProfile.cs` — B2, B3
 - `WarsOfLibertyLauncher/Models/ModCatalogManifest.cs` — B3, B5, G1, G2, H3
 - `WarsOfLibertyLauncher/Models/ModState.cs` — E1
 
-### Services nuevos
+### New services
 - `Services/NewsService.cs` — A5
 - `Services/DiscordPresenceService.cs` — A7
 - `Services/LobbyClient.cs` — C4
@@ -433,7 +435,7 @@ Diferido:  Tracks E, G, H, I, J
 - `Services/AchievementService.cs` — E2
 - `Services/CrashReporter.cs` — D3
 
-### UserControls / Views nuevos
+### New UserControls / Views
 - `Views/HeroBanner.xaml` — A1
 - `Views/StatusCard.xaml` — A1
 - `Views/ActionPanel.xaml` — A1
@@ -444,12 +446,12 @@ Diferido:  Tracks E, G, H, I, J
 - `Views/ModDetailPage.xaml` — B1
 - `Views/MultiplayerTab.xaml` — C4
 
-### Diálogos nuevos
+### New dialogs
 - `PublishModDialog.xaml` — B4
 - `FeedbackDialog.xaml` — H4
 - `LauncherTranslationDialog.xaml` — F3
 
-### Recursos
+### Resources
 - `Styles/Common.xaml` — A2
 - `Styles/Themes/Dark.xaml` — A3
 - `Styles/Themes/Light.xaml` — A3
@@ -458,79 +460,79 @@ Diferido:  Tracks E, G, H, I, J
 
 ### Infra
 - `.github/workflows/release.yml` — D1, D6, D7
-- Proyecto `WarsOfLibertyLauncher.Tests/` — D2
-- Repo externo `wol-launcher-lobby-worker` — C1
+- `WarsOfLibertyLauncher.Tests/` project — D2
+- External repo `wol-launcher-lobby-worker` — C1
 
-### Reutilizar (existente, no romper)
-- `Services/UpdateService.cs` — solo agregar `IUpdateService` interface (I2)
-- `Services/NativeInstallService.cs` — extender para `StandardModsFolder` (B2)
-- `Services/ModCatalogService.cs` — extender con firmas (G1) y mirrors (G2)
-- `Services/ModRegistry.cs` — sin cambios, sigue siendo source of truth
-- `Services/GameLauncher.cs` — extender args para mods de standard folder (B2)
-- `Services/Aoe3DetectorService.cs` — extender para AoE3 DE (B3)
-- `Services/TranslationService.cs` — sin cambios
-- `Services/LauncherUpdateService.cs` — refactor para reusar `GitHubReleaseDownloader` (I1)
+### Reuse (existing, do not break)
+- `Services/UpdateService.cs` — only add `IUpdateService` interface (I2)
+- `Services/NativeInstallService.cs` — extend for `StandardModsFolder` (B2)
+- `Services/ModCatalogService.cs` — extend with signatures (G1) and mirrors (G2)
+- `Services/ModRegistry.cs` — no changes, remains source of truth
+- `Services/GameLauncher.cs` — extend args for standard-folder mods (B2)
+- `Services/Aoe3DetectorService.cs` — extend for AoE3 DE (B3)
+- `Services/TranslationService.cs` — no changes
+- `Services/LauncherUpdateService.cs` — refactor to reuse `GitHubReleaseDownloader` (I1)
 
 ---
 
-## Verificación end-to-end
+## End-to-end verification
 
-Cada track tiene su forma de validar.
+Each track has its own way to validate.
 
 ### Track A — UI
-- Smoke test manual: abrir launcher, cambiar entre tabs, switch tema, ver news, lanzar juego, verificar Discord status.
-- Verificar que diálogos viejos (Aoe3Picker, InstallFolder, etc.) siguen visualmente correctos tras extraer ResourceDictionary.
+- Manual smoke test: open launcher, switch tabs, toggle theme, view news, launch the game, verify Discord status.
+- Verify that old dialogs (Aoe3Picker, InstallFolder, etc.) still render correctly after extracting the ResourceDictionary.
 
 ### Track B — Mods
-- Instalar/desinstalar WoL e IM desde el browser (regresión).
-- Crear un mod de prueba en `StandardModsFolder`, ver que aparece en AoE3.
-- Detección dual de AoE3 TAD + DE (probar con ambas instalaciones).
-- Usar el wizard de publicar, validar el JSON contra el schema, abrir el PR.
+- Install/uninstall WoL and IM from the browser (regression).
+- Create a test mod in `StandardModsFolder`, verify it appears in AoE3.
+- Dual detection of AoE3 TAD + DE (test with both installs).
+- Use the publish wizard, validate the JSON against the schema, open the PR.
 
 ### Track C — Multiplayer
-- 2 cuentas, 2 PCs con NAT distintos, crear sala, join, ver chat, lanzar partida, conectarse, jugar 5 min, terminar, ver replay.
-- Test de NAT simétrica: deshabilitar UPnP en router, probar conexión (espera que falle hasta tener TURN).
-- Test de caps: scripts que simulan 100 conexiones, ver que el Worker rechaza a partir de 60.
-- Test de cuota diaria: forzar contador a 80%, ver mensaje en UI.
+- 2 accounts, 2 PCs behind different NATs, create a room, join, see chat, start a match, connect, play 5 minutes, end, view the replay.
+- Symmetric-NAT test: disable UPnP on the router, attempt connection (expect it to fail until TURN is in place).
+- Caps test: scripts simulating 100 connections, verify the Worker rejects above 60.
+- Daily-quota test: force the counter to 80%, see the UI message.
 
 ### Track D — Infra
-- Push de tag `v0.8.0` dispara workflow, genera release con .exe firmado y SHA-256.
-- Tests corren en CI, fallan PRs que rompen lógica de versioning.
-- Forzar excepción no manejada, ver que aparece en Sentry (si opt-in).
+- A `v0.8.0` tag push triggers the workflow and produces a release with a signed .exe and SHA-256.
+- Tests run in CI, PRs that break versioning logic fail.
+- Force an unhandled exception, verify it shows up in Sentry (if opted in).
 
 ### Track F — i18n
-- Cambiar idioma a PT-BR, ver que todos los strings cambian sin reiniciar.
+- Switch language to PT-BR, verify all strings change without a restart.
 
 ---
 
-## Decisiones diferidas (que el usuario tiene que tomar en algún momento)
+## Deferred decisions (the user has to make these at some point)
 
-1. **EV cert vs self-signed**: pagar ~$10/mes de Azure Trusted Signing o aguantar SmartScreen warnings. Postergable hasta que la cantidad de instaladores nuevos lo justifique.
-2. **Telemetría opt-in**: D4. Sumar PostHog o evitar del todo. Por defecto, no implementar.
-3. **Soporte AoE3 DE**: si el público real es legacy TAD (más probable para WoL), B3 es nice-to-have, no must.
-4. **Achievements**: E2 es 100% nice-to-have, no agrega valor competitivo.
-5. **Mod dependencies (B5)**: implementar solo si llega un mod que las necesite.
-6. **Linux/Mac (J2/J3)**: improbable que valga el esfuerzo. Diferir indefinidamente.
-7. **Donaciones**: no se incluye paywall ni botón de Ko-fi en el roadmap. Decisión del usuario si suma cuando crezca.
-
----
-
-## Riesgos / loose ends
-
-- **MainWindow refactor (A1)**: 3998 líneas tocadas. Riesgo de regresiones. Mitigación: hacer en pasos pequeños, una sección por commit, smoke test después de cada paso.
-- **Multiplayer + ZeroTier requiere admin local**: el cliente ZT corre como servicio. UAC prompt al instalarlo. Documentar.
-- **Cloudflare free tier puede cambiar reglas**: hoy DO está en free, mañana podría no. Mitigación: diseño tal que el Worker pueda apagarse y solo P2P directo siga funcionando degradado.
-- **ZeroTier Central podría cambiar reglas de API o cerrar gratis**: improbable a corto plazo, pero plan B = self-hostear el controller (cuesta una VPS €4/mes).
-- **Audiencia real**: el roadmap asume ~50 DAU. Si la comunidad es de 5 personas, Tracks C completo es overkill. Reevaluar después de Track A+B según engagement.
+1. **EV cert vs self-signed**: pay ~$10/month for Azure Trusted Signing or live with SmartScreen warnings. Defer until the volume of new installs justifies it.
+2. **Opt-in telemetry**: D4. Add PostHog or skip entirely. Default: do not implement.
+3. **AoE3 DE support**: if the real audience is legacy TAD (more likely for WoL), B3 is nice-to-have, not must-have.
+4. **Achievements**: E2 is 100% nice-to-have, no competitive value.
+5. **Mod dependencies (B5)**: only implement when a mod actually needs them.
+6. **Linux/Mac (J2/J3)**: unlikely to be worth the effort. Defer indefinitely.
+7. **Donations**: no paywall or Ko-fi button included in the roadmap. User's call if it makes sense once it grows.
 
 ---
 
-## Qué NO está en este roadmap (intencional)
+## Risks / loose ends
 
-- Reescribir el launcher en Electron / Tauri / otra cosa.
-- Monetización, suscripciones, currencies.
-- Modding tools dentro del launcher (editores, asset packers).
-- Voice chat (Discord ya lo cubre).
-- Matchmaking automático con ELO (ranked queue) — postergado, requiere masa crítica.
-- Ladder global, torneos automatizados.
-- AoE3 DE soporte completo de mods (la API de mods de DE es distinta y menos abierta — solo detección y launch).
+- **MainWindow refactor (A1)**: 3998 lines touched. Regression risk. Mitigation: small steps, one section per commit, smoke-test after each step.
+- **Multiplayer + ZeroTier requires local admin**: the ZT client runs as a service. UAC prompt on install. Document this.
+- **Cloudflare free tier rules can change**: today DOs are free, tomorrow maybe not. Mitigation: design so the Worker can be turned off and direct P2P still works in a degraded mode.
+- **ZeroTier Central could change API rules or kill free tier**: unlikely short-term, but plan B = self-host the controller (≈€4/month VPS).
+- **Real audience**: the roadmap assumes ~50 DAU. If the community is 5 people, full Track C is overkill. Re-evaluate after Tracks A+B based on engagement.
+
+---
+
+## What is NOT in this roadmap (intentional)
+
+- Rewriting the launcher in Electron / Tauri / anything else.
+- Monetization, subscriptions, currencies.
+- Modding tools inside the launcher (editors, asset packers).
+- Voice chat (Discord already covers it).
+- Automatic ELO-based matchmaking (ranked queue) — deferred, requires critical mass.
+- Global ladder, automated tournaments.
+- Full AoE3: DE mod support (DE's mod API is different and less open — only detection and launch).
