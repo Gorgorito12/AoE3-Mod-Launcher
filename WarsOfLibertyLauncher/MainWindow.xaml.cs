@@ -501,10 +501,19 @@ public partial class MainWindow : Window
         DiagnosticLog.Write(
             $"Switching active mod profile in place: '{_updateService.Profile.Id}' -> '{target.Id}'");
 
-        // Persist the choice first so a crash mid-switch comes back up
-        // pointing at the correct profile.
+        // Persist the choice — fire-and-forget so the UI thread doesn't
+        // block on disk I/O for what should feel like an instant tile
+        // click. We've already mutated _config.ActiveModId in memory, so
+        // every code path that reads it sees the new value. The worst case
+        // (process kill before the write finishes) means the launcher
+        // comes up on the previous mod on next launch, which is fine —
+        // not a data-loss scenario.
         _config.ActiveModId = target.Id;
-        _config.Save();
+        _ = Task.Run(() =>
+        {
+            try { _config.Save(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Async config save after mod switch failed: {ex.Message}"); }
+        });
 
         // Fresh service bound to the new profile. Per-mod state in
         // _config.Mods[target.Id] keeps the install path / translation
@@ -528,7 +537,10 @@ public partial class MainWindow : Window
         _cachedTranslationIndex = null;
 
         // Repaint static UI under the new profile (title, subtitle, accent).
-        ApplyLanguage();
+        // Only the mod-specific subset of ApplyLanguage runs here — the rest
+        // (language-only labels, tray strings, section headers) didn't
+        // change so re-touching ~40 controls every switch was wasted work.
+        RefreshActiveModUi();
         RefreshModCards();
         ResetProgressUI();
 
@@ -963,20 +975,21 @@ public partial class MainWindow : Window
         Strings.SetLanguage(lang);
     }
 
-    /// <summary>Refresh every translatable string in the UI from the table.</summary>
-    private void ApplyLanguage()
+    /// <summary>
+    /// Mod-specific UI refresh: only the bits that actually differ between
+    /// profiles (window title, banner, accent-tinted PLAY button, banner
+    /// image, tab/top-tab underlines that use the accent). Mod switches
+    /// call this directly to skip the full ApplyLanguage cost (~40
+    /// control updates and a tray-label rebuild) on what should feel
+    /// like an instant tile click. ApplyLanguage calls it too as its
+    /// first step, so a language change keeps the same surface.
+    /// </summary>
+    private void RefreshActiveModUi()
     {
-        // The window title and the big header are both driven by the active
-        // mod profile, not a fixed "WARS OF LIBERTY" literal — so swapping
-        // the active mod re-renders both with no other changes.
         var profile = _updateService.Profile;
         Title = Strings.Format("WindowTitle", profile.DisplayName);
         ActiveModBanner.Title = profile.DisplayName.ToUpperInvariant();
 
-        // Subtitle: prefer the profile's own (e.g. "AoE3:TAD overhaul") and
-        // fall back to the localized "Launcher" when the profile didn't set
-        // one. Append "(running as administrator)" when elevated — useful
-        // as a visual confirmation after UAC.
         var subtitle = string.IsNullOrWhiteSpace(profile.Subtitle)
             ? Strings.Get("Subtitle")
             : profile.Subtitle;
@@ -984,20 +997,24 @@ public partial class MainWindow : Window
             subtitle += "  " + Strings.Get("StatusRunningAsAdmin");
         ActiveModBanner.Subtitle = subtitle;
 
-        // Tint the PLAY button with the active profile's accent color so
-        // switching mods gives instant visual feedback ("am I in WoL or
-        // IM right now?"). The XAML style sets a default background; this
-        // overrides the base layer only — the hover/disabled states stay
-        // driven by the template triggers for now.
-        try
-        {
-            ActionPanelControl.PlayButton.Background = Brush(profile.AccentColor);
-        }
-        catch
-        {
-            // Bad color string in a profile shouldn't crash the launcher —
-            // just keep the XAML default.
-        }
+        try { ActionPanelControl.PlayButton.Background = Brush(profile.AccentColor); }
+        catch { /* bad hex in a profile — keep the XAML default */ }
+
+        RefreshActiveModBanner();
+        RefreshTabsHighlight();
+        RefreshTopTabHighlight();
+    }
+
+    /// <summary>Refresh every translatable string in the UI from the table.</summary>
+    private void ApplyLanguage()
+    {
+        // Mod-dependent UI (window title, banner, accent-tinted PLAY button,
+        // banner image) factored out so mod-switch can call just that
+        // without paying the cost of re-localising every label in the
+        // window. The split keeps ApplyLanguage as the single source of
+        // truth for language changes — full re-localisation still touches
+        // both halves here.
+        RefreshActiveModUi();
         // Sidebar text (status box, actions, game footer, tabs)
         ModsBarLabel.Text = Strings.Get("ModsBarLabel");
         ActionPanelControl.ActionsLabel.Text = Strings.Get("ActionsLabel");
