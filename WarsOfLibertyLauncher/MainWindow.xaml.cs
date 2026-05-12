@@ -2382,9 +2382,15 @@ public partial class MainWindow : Window
         // much simpler install pipeline: download one .zip from the
         // modder's own pinned release, extract overlay, done. Diverge
         // here before the WoL-specific payload-URL / AoE3-clone path.
+        // TODO: InstallGitHubReleasesAsync is missing from this commit —
+        // stub it out so the WoL/classic-UpdateInfo path keeps working.
         if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
         {
-            await InstallGitHubReleasesAsync();
+            MessageBox.Show(
+                "The installer for GitHub Releases-type mods is not implemented in this build.\n\nUse a mod with a classic UpdateInfo.xml file (like Wars of Liberty).",
+                "Feature not available",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
 
