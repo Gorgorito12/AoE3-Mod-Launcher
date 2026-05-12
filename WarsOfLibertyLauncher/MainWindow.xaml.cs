@@ -24,6 +24,11 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _cts;
     private FolderCloneService? _cloneService;
     private bool _isBusy;
+    // True when _isBusy is held by a read-only CheckAsync (background
+    // refresh, no install / download / uninstall). Mod-switch pre-flight
+    // ignores this kind of busy so the user can keep clicking mods without
+    // the "operation in progress" popup.
+    private bool _isCheckOnly;
     private bool _modIsInstalled = true;  // false when no valid install detected
     private bool _isPaused;
     private bool _warnedAboutBrokenInstall;
@@ -459,8 +464,15 @@ public partial class MainWindow : Window
         if (string.Equals(_updateService.Profile.Id, target.Id, StringComparison.OrdinalIgnoreCase))
             return;
 
-        // Pre-flight: don't switch mid-operation.
-        if (_isBusy)
+        // Pre-flight: only real operations (install / update / uninstall /
+        // verify) block a mod switch. The read-only CheckAsync that refreshes
+        // version + pending-downloads info also flips _isBusy=true, but it's
+        // safe to switch over — we cancel that previous check below and the
+        // new switch starts its own. Without this distinction, clicking mods
+        // faster than the background check completes fired the "operation in
+        // progress" popup even though nothing the user cared about was
+        // actually running.
+        if (_isBusy && !_isCheckOnly)
         {
             MessageBox.Show(this,
                 Strings.Get("DlgModSwitchBusyBody"),
@@ -475,6 +487,15 @@ public partial class MainWindow : Window
                 Strings.Get("DlgModSwitchBlockedTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
+        }
+
+        // Cancel any in-flight background check so the previous profile's
+        // CheckAsync exits quickly. The result-writeback inside CheckAsync
+        // also re-checks the active profile so even if the old call wins
+        // the race, it won't trample the new mod's UI.
+        if (_isCheckOnly)
+        {
+            try { _cts?.Cancel(); } catch { /* already disposed — ignore */ }
         }
 
         DiagnosticLog.Write(
@@ -2175,19 +2196,30 @@ public partial class MainWindow : Window
 
     private async Task CheckAsync()
     {
-        if (_isBusy) return;
-        // checkOnly: this pass is read-only (MD5 hashes + manifest fetch),
-        // so SetBusy keeps Play and Settings live. Otherwise every mod
-        // switch greys them out for a second or two even though there's
-        // nothing happening that would conflict with the user clicking
-        // them.
+        // Only a real (non-checkOnly) busy state blocks re-entry. Rapid mod
+        // switches need to start a fresh CheckAsync even if the previous
+        // mod's CheckAsync hasn't fully unwound yet — the writeback guard
+        // below skips stale results so the second call wins safely.
+        if (_isBusy && !_isCheckOnly) return;
         SetBusy(true, checkOnly: true);
         _cts = new CancellationTokenSource();
+        // Snapshot the active profile so a mod switch mid-await can be
+        // detected before we write check results back to UI fields that
+        // would otherwise belong to the new mod.
+        var profileAtStart = _updateService.Profile.Id;
 
         try
         {
             var statusReporter = new Progress<string>(SetStatus);
             var result = await _updateService.CheckAsync(statusReporter, _cts.Token);
+
+            if (!string.Equals(_updateService.Profile.Id, profileAtStart, StringComparison.OrdinalIgnoreCase))
+            {
+                DiagnosticLog.Write(
+                    $"CheckAsync stale: started for '{profileAtStart}', " +
+                    $"active is now '{_updateService.Profile.Id}'. Skipping result writeback.");
+                return;
+            }
 
             InstallPathText.Text = _updateService.InstallPath ?? "(not detected)";
 
@@ -3933,6 +3965,7 @@ public partial class MainWindow : Window
     private void SetBusy(bool busy, bool checkOnly = false)
     {
         _isBusy = busy;
+        _isCheckOnly = busy && checkOnly;
         // Update button is always disabled while busy — we genuinely don't
         // know what's available to download until the manifest fetch
         // completes, so letting the user click "Update" early would be
