@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Win32;
 
 namespace WarsOfLibertyLauncher.Services;
 
@@ -82,7 +83,99 @@ public static class AoE3Detector
             found.Add(new Installation(gameFolder, modRoot, source));
         }
 
+        // Second pass: Steam libraries added by the user in non-default
+        // locations (D:\SteamLibrary, E:\Games\Steam, …). Read them from
+        // libraryfolders.vdf via Steam's registry-stored install path so
+        // the install dialog finds AoE3 on any drive Steam knows about.
+        var steamSubpaths = new[]
+        {
+            @"steamapps\common\Age Of Empires 3\bin\age3y.exe",
+            @"steamapps\common\Age of Empires 3\bin\age3y.exe",
+            @"steamapps\common\Age of Empires III\bin\age3y.exe",
+        };
+        foreach (var library in EnumerateSteamLibraries())
+        {
+            foreach (var sub in steamSubpaths)
+            {
+                var fullPath = Path.Combine(library, sub);
+                if (!File.Exists(fullPath)) continue;
+
+                var gameFolder = Path.GetDirectoryName(fullPath)!;
+                var modRoot = ResolveModRoot(gameFolder);
+                if (!seenFolders.Add(modRoot)) continue;
+
+                found.Add(new Installation(gameFolder, modRoot, "Steam"));
+            }
+        }
+
         return found;
+    }
+
+    /// <summary>
+    /// Steam install paths: the main one from the registry plus every extra
+    /// library the user added via Steam's "Add library folder" feature, which
+    /// Steam tracks in <c>steamapps\libraryfolders.vdf</c>. Yields whatever
+    /// looks usable; callers probe each for a Steam-layout AoE3 install.
+    /// </summary>
+    private static IEnumerable<string> EnumerateSteamLibraries()
+    {
+        var steamRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in ReadSteamRootCandidates())
+        {
+            if (string.IsNullOrWhiteSpace(root)) continue;
+            steamRoots.Add(root);
+        }
+
+        var seenLibraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var steamRoot in steamRoots)
+        {
+            // The Steam main install is always a library.
+            if (Directory.Exists(steamRoot) && seenLibraries.Add(steamRoot))
+                yield return steamRoot;
+
+            var vdf = Path.Combine(steamRoot, "steamapps", "libraryfolders.vdf");
+            if (!File.Exists(vdf)) continue;
+
+            string content;
+            try { content = File.ReadAllText(vdf); }
+            catch { continue; }
+
+            // Pull every "path" entry. VDF escapes backslashes as "\\";
+            // unescape to get a usable filesystem path.
+            var matches = System.Text.RegularExpressions.Regex.Matches(
+                content, "\"path\"\\s*\"([^\"]+)\"");
+            foreach (System.Text.RegularExpressions.Match m in matches)
+            {
+                var path = m.Groups[1].Value.Replace("\\\\", "\\");
+                if (Directory.Exists(path) && seenLibraries.Add(path))
+                    yield return path;
+            }
+        }
+    }
+
+    private static IEnumerable<string?> ReadSteamRootCandidates()
+    {
+        yield return ReadRegistryString(RegistryHive.LocalMachine, RegistryView.Registry32,
+            @"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath");
+        yield return ReadRegistryString(RegistryHive.LocalMachine, RegistryView.Registry64,
+            @"SOFTWARE\Valve\Steam", "InstallPath");
+        yield return ReadRegistryString(RegistryHive.CurrentUser, RegistryView.Default,
+            @"Software\Valve\Steam", "SteamPath");
+    }
+
+    private static string? ReadRegistryString(RegistryHive hive, RegistryView view, string subKey, string valueName)
+    {
+        try
+        {
+            using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+            using var key = baseKey.OpenSubKey(subKey);
+            return key?.GetValue(valueName) as string;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
