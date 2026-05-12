@@ -70,6 +70,7 @@ public partial class MainWindow : Window
 
         _updateService = new UpdateService(_config, activeProfile);
         _installerService = new InstallerService();
+        UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
         RefreshModCards();
@@ -459,6 +460,7 @@ public partial class MainWindow : Window
         // _updateService.InstallPath is already populated by the time we
         // get here for mods seen in a previous session.
         _updateService = new UpdateService(_config, target);
+        UpdateAccentResources(target);
 
         // Reset session caches that were tied to the old mod.
         _pendingDownloads = new();
@@ -517,6 +519,46 @@ public partial class MainWindow : Window
     {
         try { return Brush(color); }
         catch { return Brush(fallback); }
+    }
+
+    /// <summary>
+    /// Sync Application-level AccentBrush + AccentBrushHover with the active
+    /// mod's accent so DynamicResource consumers (dialog XAMLs) repaint on
+    /// mod switch. Called on startup and on every mod switch.
+    /// </summary>
+    private static void UpdateAccentResources(ModProfile profile)
+    {
+        var accent = ParseAccentColor(profile.AccentColor);
+        var hover = LightenColor(accent, 0.18);
+        var accentBrush = new System.Windows.Media.SolidColorBrush(accent);
+        var hoverBrush = new System.Windows.Media.SolidColorBrush(hover);
+        accentBrush.Freeze();
+        hoverBrush.Freeze();
+        Application.Current.Resources["AccentBrush"] = accentBrush;
+        Application.Current.Resources["AccentBrushHover"] = hoverBrush;
+    }
+
+    private static System.Windows.Media.Color ParseAccentColor(string hex)
+    {
+        try
+        {
+            if (System.Windows.Media.ColorConverter.ConvertFromString(hex)
+                is System.Windows.Media.Color c)
+                return c;
+        }
+        catch { }
+        return System.Windows.Media.Color.FromRgb(0xC8, 0x10, 0x2E);
+    }
+
+    private static System.Windows.Media.Color LightenColor(System.Windows.Media.Color c, double amount)
+    {
+        double r = c.R + (255.0 - c.R) * amount;
+        double g = c.G + (255.0 - c.G) * amount;
+        double b = c.B + (255.0 - c.B) * amount;
+        return System.Windows.Media.Color.FromRgb(
+            (byte)Math.Min(255.0, r),
+            (byte)Math.Min(255.0, g),
+            (byte)Math.Min(255.0, b));
     }
 
     /// <summary>
