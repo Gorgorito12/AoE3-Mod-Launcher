@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        StatusCardControl.BrowseAoE3Click += BrowseAoE3Button_Click;
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
 
@@ -1064,8 +1065,8 @@ public partial class MainWindow : Window
 
         // Default labels for the two version rows. The actual numbers come
         // from CurrentVersion / LatestVersion below.
-        StatusInstalledLabel.Text = Strings.Get("StatusCardCurrentVersion");
-        StatusLatestLabel.Text = Strings.Get("StatusCardLatestVersion");
+        StatusCardControl.InstalledLabel = Strings.Get("StatusCardCurrentVersion");
+        StatusCardControl.LatestLabel = Strings.Get("StatusCardLatestVersion");
 
         // ---- Pick state badge text + color ----
         // Priority: AoE3 missing > Not installed > Update interrupted >
@@ -1102,24 +1103,23 @@ public partial class MainWindow : Window
             stateColor = "#9bd99b";
         }
         var stateBrush = SafeBrush(stateColor, "#9bd99b");
-        StatusValueText.Text = Strings.Get(stateKey);
-        StatusValueText.Foreground = stateBrush;
-        StatusRowIcon.Fill = stateBrush;
+        StatusCardControl.StateText = Strings.Get(stateKey);
+        StatusCardControl.StateForeground = stateBrush;
 
         // ---- Version numbers ----
-        CurrentVersionText.Text = _updateService.CurrentVersion?.Ver ?? "—";
-        LatestVersionText.Text = _updateService.LatestVersion?.Ver ?? "—";
+        StatusCardControl.CurrentVersion = _updateService.CurrentVersion?.Ver ?? "—";
+        StatusCardControl.LatestVersion = _updateService.LatestVersion?.Ver ?? "—";
 
         // ---- AoE3 missing row ----
         if (!aoe3Detected)
         {
-            AoE3MissingRow.Visibility = Visibility.Visible;
-            AoE3MissingText.Text = Strings.Get("IdleStateGameMissing");
-            BrowseAoE3Button.Content = Strings.Get("BtnFindAoE3");
+            StatusCardControl.AoE3MissingVisible = true;
+            StatusCardControl.AoE3MissingMessage = Strings.Get("IdleStateGameMissing");
+            StatusCardControl.BrowseAoE3ButtonContent = Strings.Get("BtnFindAoE3");
         }
         else
         {
-            AoE3MissingRow.Visibility = Visibility.Collapsed;
+            StatusCardControl.AoE3MissingVisible = false;
         }
     }
 
