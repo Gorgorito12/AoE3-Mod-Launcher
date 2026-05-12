@@ -317,19 +317,62 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>   <!-- Top: Mods bar -->
-            <RowDefinition Height="*"/>      <!-- Body: 2 columns -->
+            <RowDefinition Height="Auto"/>   <!-- Top-level tabs -->
+            <RowDefinition Height="*"/>      <!-- Active-tab content -->
         </Grid.RowDefinitions>
 
         <!-- ============================================================
-             TOP: Mods bar. Horizontal cards for every mod profile, plus
-             EN/ES language toggle on the right.
+             TOP-LEVEL TABS. SwitchTopTab() in code-behind toggles which
+             of the views below is visible. The Play tab keeps the
+             original 2-row layout (Mods bar + sidebar/right body) so the
+             existing flow is unchanged when the user lands here.
              ============================================================ -->
         <Border Grid.Row="0"
-                Background="{DynamicResource BgPanel}"
-                Padding="20,12"
+                Background="{DynamicResource BgBase}"
+                Padding="20,0"
                 BorderBrush="{DynamicResource BorderSubtle}"
                 BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="TopTabPlay"
+                        Style="{StaticResource TopTabButton}"
+                        Click="TopTabPlay_Click"/>
+                <Button x:Name="TopTabMods"
+                        Style="{StaticResource TopTabButton}"
+                        Click="TopTabMods_Click"/>
+                <Button x:Name="TopTabMultiplayer"
+                        Style="{StaticResource TopTabButton}"
+                        Click="TopTabMultiplayer_Click"/>
+                <Button x:Name="TopTabNews"
+                        Style="{StaticResource TopTabButton}"
+                        Click="TopTabNews_Click"/>
+                <Button x:Name="TopTabSettings"
+                        Style="{StaticResource TopTabButton}"
+                        Click="TopTabSettings_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ============================================================
+             Content host: only one of the view Grids below is Visible
+             at a time, driven by SwitchTopTab(). Play is the default.
+             ============================================================ -->
+        <Grid Grid.Row="1">
+
+            <!-- Play view: existing 2-row layout (mods bar + body). -->
+            <Grid x:Name="PlayView">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>   <!-- Mods bar -->
+                    <RowDefinition Height="*"/>      <!-- 2-column body -->
+                </Grid.RowDefinitions>
+
+                <!-- ============================================================
+                     MODS BAR. Horizontal cards for every mod profile, plus the
+                     EN/ES language toggle on the right.
+                     ============================================================ -->
+                <Border Grid.Row="0"
+                        Background="{DynamicResource BgPanel}"
+                        Padding="20,12"
+                        BorderBrush="{DynamicResource BorderSubtle}"
+                        BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -456,6 +499,76 @@
                         Visibility="Collapsed"/>
             </Grid>
         </Grid>
+            </Grid>   <!-- /PlayView -->
+
+            <!-- Mods Browser placeholder — full mod catalog UI lands in v0.9. -->
+            <Grid x:Name="ModsBrowserView" Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            MaxWidth="600">
+                    <TextBlock x:Name="ModsBrowserTeaserText"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="16"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Multiplayer placeholder — lobby ships in v1.0. -->
+            <Grid x:Name="MultiplayerView" Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            MaxWidth="600">
+                    <TextBlock x:Name="MultiplayerTeaserText"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="16"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Large News view: full-width news feed. RefreshNewsAsync
+                 populates both this panel and the smaller Noticias feed
+                 inside Play / MainTabs from the same cached data. -->
+            <ScrollViewer x:Name="NewsLargeView"
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto">
+                <Grid Margin="40,32" HorizontalAlignment="Center">
+                    <StackPanel MaxWidth="800">
+                        <StackPanel x:Name="NewsLargeCardsPanel"/>
+                        <TextBlock x:Name="NewsLargePlaceholderText"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontStyle="Italic"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,40,0,0"
+                                   Visibility="Collapsed"/>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+
+            <!-- Settings tab: opens the existing settings dialog. Embedding
+                 the dialog content directly is a larger refactor; for now,
+                 a teaser + button keeps the surface flow consistent without
+                 duplicating the dialog's layout. -->
+            <Grid x:Name="SettingsView" Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            MaxWidth="500">
+                    <TextBlock x:Name="SettingsTeaserText"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="14"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,16"/>
+                    <Button x:Name="OpenSettingsTabButton"
+                            Style="{StaticResource SidebarPrimaryButton}"
+                            HorizontalAlignment="Center"
+                            MinWidth="200"
+                            Click="OpenSettingsTabButton_Click"/>
+                </StackPanel>
+            </Grid>
+
+        </Grid>   <!-- /Content host (root Grid.Row=1) -->
 
         <!-- Hidden compatibility shim. The old layout had an "AoE3PathRow" that
              code-behind sometimes referenced; the new design folds that info

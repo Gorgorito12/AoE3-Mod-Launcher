@@ -984,6 +984,22 @@ public partial class MainWindow : Window
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
         MainTabsControl.NewsPlaceholderText.Text = Strings.Get("NewsPlaceholder");
+        NewsLargePlaceholderText.Text = Strings.Get("NewsPlaceholder");
+
+        // Top-level tab labels.
+        TopTabPlay.Content = Strings.Get("TopTabPlay");
+        TopTabMods.Content = Strings.Get("TopTabMods");
+        TopTabMultiplayer.Content = Strings.Get("TopTabMultiplayer");
+        TopTabNews.Content = Strings.Get("TopTabNews");
+        TopTabSettings.Content = Strings.Get("TopTabSettings");
+
+        // Placeholder copy for the v0.9 / v1.0 tabs and the Settings teaser.
+        ModsBrowserTeaserText.Text = Strings.Get("ModsBrowserComingSoon");
+        MultiplayerTeaserText.Text = Strings.Get("MultiplayerComingSoon");
+        SettingsTeaserText.Text = Strings.Get("SettingsTabTeaser");
+        OpenSettingsTabButton.Content = Strings.Get("SettingsTabOpen");
+
+        RefreshTopTabHighlight();
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
         ProgressPanelControl.LblOverall.Text = Strings.Get("ProgressOverall");
         // Sidebar buttons. Each one's Content is a Grid/StackPanel with an
@@ -1343,11 +1359,13 @@ public partial class MainWindow : Window
     private void RenderNews(NewsFeed? feed)
     {
         MainTabsControl.NewsCardsPanel.Children.Clear();
+        NewsLargeCardsPanel.Children.Clear();
 
         var items = feed?.Items;
         if (items == null || items.Count == 0)
         {
             MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Visible;
+            NewsLargePlaceholderText.Visibility = Visibility.Visible;
             return;
         }
 
@@ -1363,12 +1381,19 @@ public partial class MainWindow : Window
         if (filtered.Count == 0)
         {
             MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Visible;
+            NewsLargePlaceholderText.Visibility = Visibility.Visible;
             return;
         }
 
         MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Collapsed;
+        NewsLargePlaceholderText.Visibility = Visibility.Collapsed;
         foreach (var item in filtered)
+        {
+            // Each panel needs its own card instances — a FrameworkElement
+            // can only have one parent in WPF, so we build the card twice.
             MainTabsControl.NewsCardsPanel.Children.Add(BuildNewsCard(item));
+            NewsLargeCardsPanel.Children.Add(BuildNewsCard(item));
+        }
     }
 
     private FrameworkElement BuildNewsCard(NewsItem item)
@@ -1627,6 +1652,67 @@ public partial class MainWindow : Window
 
     private enum ContentTab { Noticias, Changelog, Ayuda }
     private ContentTab _activeTab = ContentTab.Noticias;
+
+    // ------------------------------------------------------------------------
+    // Top-level tabs (Play / Mods / Multiplayer / News / Settings). Active
+    // tab toggles which view Grid is Visible. Play wraps the original layout
+    // so the existing flow is unchanged when the user lands there.
+    // ------------------------------------------------------------------------
+
+    private enum TopTab { Play, Mods, Multiplayer, News, Settings }
+    private TopTab _activeTopTab = TopTab.Play;
+
+    private void TopTabPlay_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Play);
+    private void TopTabMods_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Mods);
+    private void TopTabMultiplayer_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Multiplayer);
+    private void TopTabNews_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.News);
+    private void TopTabSettings_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Settings);
+
+    private void SwitchTopTab(TopTab tab)
+    {
+        _activeTopTab = tab;
+        PlayView.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
+        ModsBrowserView.Visibility = tab == TopTab.Mods ? Visibility.Visible : Visibility.Collapsed;
+        MultiplayerView.Visibility = tab == TopTab.Multiplayer ? Visibility.Visible : Visibility.Collapsed;
+        NewsLargeView.Visibility = tab == TopTab.News ? Visibility.Visible : Visibility.Collapsed;
+        SettingsView.Visibility = tab == TopTab.Settings ? Visibility.Visible : Visibility.Collapsed;
+        RefreshTopTabHighlight();
+    }
+
+    /// <summary>
+    /// Paints the underline + brighter foreground on the active top tab,
+    /// mirroring RefreshTabsHighlight's approach but using the active mod's
+    /// accent so the colour follows the theme/profile.
+    /// </summary>
+    private void RefreshTopTabHighlight()
+    {
+        var accent = (System.Windows.Media.Brush)FindResource("AccentBrush");
+        var dim = Brush("#888");
+        var transparent = System.Windows.Media.Brushes.Transparent;
+
+        void Paint(System.Windows.Controls.Button btn, bool active)
+        {
+            btn.Foreground = active ? Brush("#fff") : dim;
+            if (btn.Template?.FindName("border", btn) is System.Windows.Controls.Border b)
+                b.BorderBrush = active ? accent : transparent;
+        }
+
+        Paint(TopTabPlay, _activeTopTab == TopTab.Play);
+        Paint(TopTabMods, _activeTopTab == TopTab.Mods);
+        Paint(TopTabMultiplayer, _activeTopTab == TopTab.Multiplayer);
+        Paint(TopTabNews, _activeTopTab == TopTab.News);
+        Paint(TopTabSettings, _activeTopTab == TopTab.Settings);
+    }
+
+    /// <summary>
+    /// "Open settings" button inside the Settings top-tab. Routes through
+    /// the existing LauncherSettingsButton_Click so the dialog wiring (and
+    /// the refresh-after-close logic) stays in one place.
+    /// </summary>
+    private void OpenSettingsTabButton_Click(object sender, RoutedEventArgs e)
+    {
+        LauncherSettingsButton_Click(sender, e);
+    }
 
     private void TabNoticias_Click(object sender, RoutedEventArgs e) => SwitchContentTab(ContentTab.Noticias);
     private void TabChangelog_Click(object sender, RoutedEventArgs e) => SwitchContentTab(ContentTab.Changelog);

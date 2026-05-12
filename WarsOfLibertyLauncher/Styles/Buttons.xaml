@@ -187,8 +187,41 @@
         </Setter>
     </Style>
 
-    <!-- Top tabs in the right content panel. Active underline is set
-         programmatically by RefreshTabs() in code-behind. -->
+    <!-- App-level top tabs (Play / Mods / Multiplayer / News / Settings).
+         The active tab is set programmatically by RefreshTopTabHighlight()
+         which paints the underline + brighter foreground using the active
+         mod's accent. -->
+    <Style x:Key="TopTabButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="#888"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Padding" Value="0,16"/>
+        <Setter Property="Margin" Value="0,0,28,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            BorderThickness="0,0,0,3"
+                            BorderBrush="Transparent"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Right content panel tabs (Noticias / Changelog / Ayuda). Active
+         underline is set programmatically by RefreshTabsHighlight(). -->
     <Style x:Key="TabButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="#888"/>

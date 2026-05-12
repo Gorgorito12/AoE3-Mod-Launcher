@@ -653,6 +653,51 @@ public static class Strings
             [LangEn] = "Read more →",
             [LangEs] = "Leer más →",
         },
+        ["TopTabPlay"] = new()
+        {
+            [LangEn] = "PLAY",
+            [LangEs] = "JUGAR",
+        },
+        ["TopTabMods"] = new()
+        {
+            [LangEn] = "MODS",
+            [LangEs] = "MODS",
+        },
+        ["TopTabMultiplayer"] = new()
+        {
+            [LangEn] = "MULTIPLAYER",
+            [LangEs] = "MULTIJUGADOR",
+        },
+        ["TopTabNews"] = new()
+        {
+            [LangEn] = "NEWS",
+            [LangEs] = "NOTICIAS",
+        },
+        ["TopTabSettings"] = new()
+        {
+            [LangEn] = "SETTINGS",
+            [LangEs] = "AJUSTES",
+        },
+        ["ModsBrowserComingSoon"] = new()
+        {
+            [LangEn] = "Mod browser — coming in v0.9.\nFor now, mods are managed via the gear menu.",
+            [LangEs] = "Explorador de mods — llega en v0.9.\nPor ahora, los mods se gestionan desde el menú de engranaje.",
+        },
+        ["MultiplayerComingSoon"] = new()
+        {
+            [LangEn] = "Multiplayer lobby — coming in v1.0.\nA Voobly-style room browser for AoE3 mods.",
+            [LangEs] = "Sala multijugador — llega en v1.0.\nUn buscador de partidas estilo Voobly para mods de AoE3.",
+        },
+        ["SettingsTabTeaser"] = new()
+        {
+            [LangEn] = "Launcher preferences (language, theme, autostart, mods catalog, …)",
+            [LangEs] = "Preferencias del launcher (idioma, tema, autoarranque, catálogo de mods, …)",
+        },
+        ["SettingsTabOpen"] = new()
+        {
+            [LangEn] = "Open settings",
+            [LangEs] = "Abrir ajustes",
+        },
         ["DlgLauncherSettingsStartWithWindows"] = new()
         {
             [LangEn] = "Start with Windows",
