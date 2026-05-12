@@ -178,22 +178,23 @@ public static class GameLauncher
             $@"GOG.com\Age of Empires III\{exeName}",
         };
 
-        var roots = new[]
-        {
-            @"C:\Program Files (x86)\",
-            @"C:\Program Files\",
-            @"C:\",
-            @"D:\Program Files (x86)\",
-            @"D:\Program Files\",
-            @"D:\",
-            @"E:\Program Files (x86)\",
-            @"E:\Program Files\",
-            @"E:\",
-        };
-
-        foreach (var root in roots)
+        foreach (var root in AoE3Detector.EnumerateProbeRoots())
         foreach (var sub in commonSubpaths)
             yield return Path.Combine(root, sub);
+
+        // 4. Registry-discovered installs (Steam libraries on any drive, GOG
+        //    entries, Microsoft Games retail) — the cached + hardcoded passes
+        //    miss these when AoE3 lives outside Program Files / Program Files
+        //    (x86). Sourced from AoE3Detector so the install dialog and the
+        //    runtime status / menu lookups agree on what counts as "found".
+        foreach (var install in AoE3Detector.FindAll())
+        {
+            // age3y.exe / age3m.exe sits either next to the install root or
+            // inside its bin\ subfolder (Steam layout); yield both shapes.
+            yield return Path.Combine(install.ModRoot, exeName);
+            yield return Path.Combine(install.ModRoot, "bin", exeName);
+            yield return Path.Combine(install.GameFolder, exeName);
+        }
     }
 
     /// <summary>

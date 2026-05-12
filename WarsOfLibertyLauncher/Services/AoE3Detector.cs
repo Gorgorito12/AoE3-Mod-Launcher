@@ -54,18 +54,10 @@ public static class AoE3Detector
             (Path: @"Microsoft Games\Age of Empires III\age3y.exe", Source: "Retail"),
         };
 
-        var roots = new[]
-        {
-            @"C:\Program Files (x86)\",
-            @"C:\Program Files\",
-            @"C:\",
-            @"D:\Program Files (x86)\",
-            @"D:\Program Files\",
-            @"D:\",
-            @"E:\Program Files (x86)\",
-            @"E:\Program Files\",
-            @"E:\",
-        };
+        // Enumerate every fixed drive so AoE3 on F:, G:, etc. (external SSDs,
+        // secondary disks the user added later) is found without the user
+        // having to point the launcher at it manually.
+        var roots = EnumerateFixedDriveRoots().ToArray();
 
         foreach (var root in roots)
         foreach (var (relativePath, source) in probes)
@@ -108,7 +100,90 @@ public static class AoE3Detector
             }
         }
 
+        // Third pass: GOG entries. GOG registers each game under
+        // HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\<gameId>. Iterating every
+        // subkey catches AoE3 Complete Collection no matter which numeric id
+        // the user's install picked, and works regardless of where the user
+        // installed GOG Galaxy / the game.
+        foreach (var gogPath in EnumerateGogAoe3Paths())
+        {
+            if (!Directory.Exists(gogPath)) continue;
+
+            // GOG installs put age3y.exe at the install root (no bin\ subfolder).
+            var exe = Path.Combine(gogPath, "age3y.exe");
+            if (!File.Exists(exe))
+            {
+                // Some GOG releases use the Steam-style bin\ layout.
+                exe = Path.Combine(gogPath, "bin", "age3y.exe");
+                if (!File.Exists(exe)) continue;
+            }
+
+            var gameFolder = Path.GetDirectoryName(exe)!;
+            var modRoot = ResolveModRoot(gameFolder);
+            if (!seenFolders.Add(modRoot)) continue;
+
+            found.Add(new Installation(gameFolder, modRoot, "GOG"));
+        }
+
+        // Fourth pass: Microsoft Games / retail. The legacy retail installer
+        // stores "EXE Path" pointing at the bin folder; the install root is
+        // one level up.
+        foreach (var retailRoot in EnumerateMicrosoftGamesAoe3Roots())
+        {
+            if (!Directory.Exists(retailRoot)) continue;
+
+            var exe = Path.Combine(retailRoot, "age3y.exe");
+            if (!File.Exists(exe))
+            {
+                exe = Path.Combine(retailRoot, "bin", "age3y.exe");
+                if (!File.Exists(exe)) continue;
+            }
+
+            var gameFolder = Path.GetDirectoryName(exe)!;
+            var modRoot = ResolveModRoot(gameFolder);
+            if (!seenFolders.Add(modRoot)) continue;
+
+            found.Add(new Installation(gameFolder, modRoot, "Retail"));
+        }
+
         return found;
+    }
+
+    /// <summary>
+    /// Every fixed drive on the machine, with the three install-prefix
+    /// suffixes we probe (Program Files (x86), Program Files, drive root).
+    /// Replaces the old hardcoded C:/D:/E: list so external SSDs and any
+    /// drive letter the user has work without manual intervention.
+    /// </summary>
+    /// <summary>
+    /// Public-facing wrapper around the same fixed-drive root enumeration
+    /// FindAll() uses internally. Lets GameLauncher.EnumerateCandidates
+    /// stay in sync with whatever drives we currently probe.
+    /// </summary>
+    internal static IEnumerable<string> EnumerateProbeRoots() => EnumerateFixedDriveRoots();
+
+    private static IEnumerable<string> EnumerateFixedDriveRoots()
+    {
+        DriveInfo[] drives;
+        try { drives = DriveInfo.GetDrives(); }
+        catch { yield break; }
+
+        foreach (var d in drives)
+        {
+            // Fixed drives only — skip CD-ROMs / network shares so we don't
+            // spin up an optical drive or block on a stale UNC path.
+            if (d.DriveType != DriveType.Fixed) continue;
+
+            bool ready;
+            try { ready = d.IsReady; }
+            catch { continue; }
+            if (!ready) continue;
+
+            var root = d.RootDirectory.FullName; // e.g. "D:\"
+            yield return Path.Combine(root, "Program Files (x86)") + Path.DirectorySeparatorChar;
+            yield return Path.Combine(root, "Program Files") + Path.DirectorySeparatorChar;
+            yield return root;
+        }
     }
 
     /// <summary>
@@ -175,6 +250,92 @@ public static class AoE3Detector
         catch
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Walks the GOG.com registry tree looking for game entries whose name
+    /// matches Age of Empires III. Returns the install paths reported there.
+    /// </summary>
+    private static IEnumerable<string> EnumerateGogAoe3Paths()
+    {
+        var gogRoots = new[]
+        {
+            (Hive: RegistryHive.LocalMachine, View: RegistryView.Registry32, Key: @"SOFTWARE\WOW6432Node\GOG.com\Games"),
+            (Hive: RegistryHive.LocalMachine, View: RegistryView.Registry64, Key: @"SOFTWARE\GOG.com\Games"),
+        };
+
+        foreach (var (hive, view, gogRoot) in gogRoots)
+        {
+            string[] subKeyNames;
+            try
+            {
+                using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                using var games = baseKey.OpenSubKey(gogRoot);
+                if (games == null) continue;
+                subKeyNames = games.GetSubKeyNames();
+            }
+            catch { continue; }
+
+            foreach (var name in subKeyNames)
+            {
+                // Pull values inside try/catch (a corrupted subkey shouldn't
+                // abort the whole scan) and yield outside — C# forbids yield
+                // inside a try with a catch clause.
+                string? path = null;
+                try
+                {
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var sub = baseKey.OpenSubKey($"{gogRoot}\\{name}");
+                    if (sub != null)
+                    {
+                        var gameName = (sub.GetValue("gameName") as string) ?? "";
+                        if (gameName.Contains("Age of Empires", StringComparison.OrdinalIgnoreCase) &&
+                            (gameName.Contains("III", StringComparison.OrdinalIgnoreCase) ||
+                             gameName.Contains("3", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            path = (sub.GetValue("path") as string)
+                                ?? (sub.GetValue("PATH") as string);
+                        }
+                    }
+                }
+                catch { /* skip this subkey */ }
+
+                if (!string.IsNullOrWhiteSpace(path))
+                    yield return path;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads the legacy retail Microsoft Games AoE3 registry entry. Yields
+    /// the install root (one level up from "EXE Path", which historically
+    /// points at the bin folder).
+    /// </summary>
+    private static IEnumerable<string> EnumerateMicrosoftGamesAoe3Roots()
+    {
+        var keys = new[]
+        {
+            (Hive: RegistryHive.LocalMachine, View: RegistryView.Registry32, Key: @"SOFTWARE\WOW6432Node\Microsoft\Microsoft Games\Age of Empires 3"),
+            (Hive: RegistryHive.LocalMachine, View: RegistryView.Registry64, Key: @"SOFTWARE\Microsoft\Microsoft Games\Age of Empires 3"),
+        };
+
+        foreach (var (hive, view, key) in keys)
+        {
+            var exePath = ReadRegistryString(hive, view, key, "EXE Path");
+            if (string.IsNullOrWhiteSpace(exePath)) continue;
+
+            // "EXE Path" historically points at the bin folder. Strip a
+            // trailing bin\ when present so callers always see the install
+            // root, then validate by checking it exists.
+            var trimmed = exePath.TrimEnd('\\', '/');
+            var leaf = Path.GetFileName(trimmed);
+            var root = string.Equals(leaf, "bin", StringComparison.OrdinalIgnoreCase)
+                ? Path.GetDirectoryName(trimmed)
+                : trimmed;
+
+            if (!string.IsNullOrEmpty(root))
+                yield return root;
         }
     }
 
