@@ -30,6 +30,14 @@ public partial class MainWindow : Window
     // the "operation in progress" popup.
     private bool _isCheckOnly;
     private bool _modIsInstalled = true;  // false when no valid install detected
+    // Cached result of GameLauncher.FindAoe3Install — the full registry +
+    // VDF + all-drive scan can be 50-150ms on machines where AoE3 isn't
+    // installed at all, which RefreshStatusCard (called on every mod
+    // switch) was paying every single time. AoE3 doesn't install/uninstall
+    // while the launcher is open, so a per-session cache is safe; we
+    // invalidate it whenever the user manually picks a path or an install
+    // flow completes.
+    private bool? _aoe3DetectedCache;
     private bool _isPaused;
     private bool _warnedAboutBrokenInstall;
     private bool _isGameRunning;
@@ -327,7 +335,10 @@ public partial class MainWindow : Window
             if (IsActiveModCard(card)) return;
             card.Background = inactiveBg;
         };
-        card.MouseLeftButtonUp += (_, _) =>
+        // Fire the switch on mouse-DOWN, not up. Natural clicks have ~50 ms
+        // between press and release; using ButtonDown collapses that window
+        // so visual feedback shows as soon as the user presses the tile.
+        card.MouseLeftButtonDown += (_, _) =>
         {
             if (IsActiveModCard(card)) return;
             LoadModProfile(profile);
@@ -563,19 +574,6 @@ public partial class MainWindow : Window
         DiagnosticLog.Write(
             $"Switching active mod profile in place: '{_updateService.Profile.Id}' -> '{target.Id}'");
 
-        // Temporary instrumentation to find what's still slow on mod-switch
-        // clicks. Each stage logs its wall time so the user-visible delay
-        // shows up clearly in launcher-debug.log. Remove once perf is dialled
-        // in.
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        long lastMs = 0;
-        void Tick(string stage)
-        {
-            var now = sw.ElapsedMilliseconds;
-            DiagnosticLog.Write($"  switch[{target.Id}] {stage}: +{now - lastMs}ms (total {now}ms)");
-            lastMs = now;
-        }
-
         // Persist the choice — fire-and-forget so the UI thread doesn't
         // block on disk I/O for what should feel like an instant tile
         // click. We've already mutated _config.ActiveModId in memory, so
@@ -589,7 +587,6 @@ public partial class MainWindow : Window
             try { _config.Save(); }
             catch (Exception ex) { DiagnosticLog.Write($"Async config save after mod switch failed: {ex.Message}"); }
         });
-        Tick("config-save scheduled");
 
         // Fresh service bound to the new profile. Per-mod state in
         // _config.Mods[target.Id] keeps the install path / translation
@@ -598,9 +595,7 @@ public partial class MainWindow : Window
         // _updateService.InstallPath is already populated by the time we
         // get here for mods seen in a previous session.
         _updateService = new UpdateService(_config, target);
-        Tick("new UpdateService");
         UpdateAccentResources(target);
-        Tick("UpdateAccentResources");
 
         // Reset session caches that were tied to the old mod.
         _pendingDownloads = new();
@@ -619,15 +614,12 @@ public partial class MainWindow : Window
         // (language-only labels, tray strings, section headers) didn't
         // change so re-touching ~40 controls every switch was wasted work.
         RefreshActiveModUi();
-        Tick("RefreshActiveModUi");
         // In-place highlight swap on the existing tiles instead of a full
         // rebuild (which re-runs per-tile disk probes and image loads).
         // The post-CheckAsync rebuild below still does the full pass once
         // the manifest fetch finishes, so any state-text drift gets fixed.
         UpdateActiveModHighlight();
-        Tick("UpdateActiveModHighlight");
         ResetProgressUI();
-        Tick("ResetProgressUI");
 
         // Sync the primary button (Play / Install / Update / Stop) with the
         // new profile's install state. ApplyLanguage above repaints it but
@@ -637,7 +629,13 @@ public partial class MainWindow : Window
         // finishes. UpdateGameUI reads _modIsInstalled (just refreshed from
         // the cached install path) and picks the right action.
         UpdateGameUI();
-        Tick("UpdateGameUI (end of sync path)");
+        // Refresh the StatusCard (state badge, version rows) synchronously
+        // from cached values so the user sees the new mod's status right
+        // after the click, not 1-2 seconds later when CheckAsync's network
+        // call returns. Cheap now that the AoE3 detection inside is
+        // memoised; before, this would have re-scanned every drive on
+        // every switch.
+        RefreshIdlePanel();
 
         // Re-detect install path + version + pending updates for the new
         // profile. CheckAsync already short-circuits for non-WolPatcher
@@ -1302,6 +1300,10 @@ public partial class MainWindow : Window
 
         // Save and update UI
         _config.GameExecutable = resolvedExe;
+        // Manual path picker invalidates the cached AoE3 detection — the
+        // next StatusCard refresh re-scans so the badge flips from
+        // "AoE3 not found" to ready immediately.
+        InvalidateAoe3DetectedCache();
         _config.Save();
         DiagnosticLog.Write($"User manually set AoE3 path: {resolvedExe}");
 
@@ -1316,6 +1318,26 @@ public partial class MainWindow : Window
     /// idle look (<see cref="RefreshIdleProgressPanel"/>) — this one is
     /// purely about the mod's status.
     /// </summary>
+    /// <summary>
+    /// Cached AoE3-detected check. <see cref="GameLauncher.FindAoe3Install"/>
+    /// does a multi-drive + Steam VDF + GOG registry + retail registry scan
+    /// that's 50-150ms on a machine where AoE3 isn't installed. AoE3 install
+    /// state is stable for the launcher's lifetime so we memoise the result
+    /// and invalidate explicitly on the few events that can change it
+    /// (Browse AoE3, uninstall completion).
+    /// </summary>
+    private bool IsAoe3Detected()
+    {
+        return _aoe3DetectedCache ??= GameLauncher.FindAoe3Install(_config) != null;
+    }
+
+    /// <summary>
+    /// Drop the AoE3-detected cache so the next call re-scans. Cheap enough
+    /// to invoke after any user action that might have changed where the
+    /// launcher should look (manual path picker, uninstall flow).
+    /// </summary>
+    private void InvalidateAoe3DetectedCache() => _aoe3DetectedCache = null;
+
     private void RefreshStatusCard()
     {
         var profile = _updateService.Profile;
@@ -1328,7 +1350,7 @@ public partial class MainWindow : Window
         // The launcher-state below (mod-installed / version / pending
         // updates) still uses mod-specific lookups; only the AoE3 badge is
         // global.
-        bool aoe3Detected = GameLauncher.FindAoe3Install(_config) != null;
+        bool aoe3Detected = IsAoe3Detected();
 
         // Default labels for the two version rows. The actual numbers come
         // from CurrentVersion / LatestVersion below.
