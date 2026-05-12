@@ -9,9 +9,9 @@
 
         <!-- Tabs. Click handlers wired from MainWindow's constructor. -->
         <Border Grid.Row="0"
-                Background="#1a1d24"
+                Background="{DynamicResource BgBase}"
                 Padding="20,14,20,0"
-                BorderBrush="#3a3d44"
+                BorderBrush="{DynamicResource BorderSubtle}"
                 BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal">
                 <Button x:Name="TabNoticias"
@@ -28,7 +28,7 @@
 
         <!-- Content area. Three ScrollViewers stacked; SwitchContentTab
              in MainWindow toggles which one is visible. -->
-        <Grid Grid.Row="1" Background="#1a1d24">
+        <Grid Grid.Row="1" Background="{DynamicResource BgBase}">
             <ScrollViewer x:Name="NoticiasContent"
                           x:FieldModifier="public"
                           VerticalScrollBarVisibility="Auto"

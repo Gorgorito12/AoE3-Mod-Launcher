@@ -5,7 +5,7 @@
         Width="600" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#1a1d24"
+        Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
 
     <StackPanel Margin="24">

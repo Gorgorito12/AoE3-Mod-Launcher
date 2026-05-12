@@ -5,7 +5,7 @@
         Width="640" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#1a1d24"
+        Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
 
     <Window.Resources>
@@ -179,8 +179,8 @@
             <TextBlock x:Name="LblPreview"
                        Style="{StaticResource FieldLabel}"
                        Margin="0,12,0,4"/>
-            <Border Background="#22252c"
-                    BorderBrush="#3a3d44"
+            <Border Background="{DynamicResource BgPanel}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
                     BorderThickness="1"
                     CornerRadius="4"
                     Padding="12,10">

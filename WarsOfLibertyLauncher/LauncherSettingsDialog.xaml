@@ -5,7 +5,7 @@
         Width="600" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#1a1d24"
+        Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
 
     <Window.Resources>
@@ -56,7 +56,7 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="#1a1d24" Padding="24,20">
+    <Border Background="{DynamicResource BgBase}" Padding="24,20">
         <StackPanel>
             <!-- Title -->
             <TextBlock x:Name="TitleText"
@@ -84,6 +84,26 @@
                           HorizontalAlignment="Left">
                     <ComboBoxItem Content="English" Tag="en"/>
                     <ComboBoxItem Content="Español" Tag="es"/>
+                </ComboBox>
+            </Grid>
+
+            <Grid Margin="0,4,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="180"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           x:Name="ThemeLabel"
+                           Foreground="#ddd"
+                           FontSize="12"
+                           VerticalAlignment="Center"/>
+                <ComboBox Grid.Column="1"
+                          x:Name="ThemeCombo"
+                          Width="200"
+                          HorizontalAlignment="Left">
+                    <ComboBoxItem x:Name="ThemeDarkItem" Tag="dark"/>
+                    <ComboBoxItem x:Name="ThemeLightItem" Tag="light"/>
+                    <ComboBoxItem x:Name="ThemeSystemItem" Tag="system"/>
                 </ComboBox>
             </Grid>
 
@@ -180,10 +200,10 @@
             </Grid>
 
             <!-- ===== ACTION BAR ===== -->
-            <Border Background="#22252c"
+            <Border Background="{DynamicResource BgPanel}"
                     Margin="-24,24,-24,-20"
                     Padding="24,16"
-                    BorderBrush="#3a3d44"
+                    BorderBrush="{DynamicResource BorderSubtle}"
                     BorderThickness="0,1,0,0">
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Right">

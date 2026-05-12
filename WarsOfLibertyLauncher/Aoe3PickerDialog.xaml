@@ -5,7 +5,7 @@
         Width="560" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#1a1d24"
+        Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
 
     <StackPanel Margin="24">
@@ -21,9 +21,9 @@
 
         <!-- List of detected AoE3 installations -->
         <ListBox x:Name="InstallsList"
-                 Background="#22252c"
+                 Background="{DynamicResource BgPanel}"
                  BorderThickness="1"
-                 BorderBrush="#3a3d44"
+                 BorderBrush="{DynamicResource BorderSubtle}"
                  Foreground="White"
                  FontSize="13"
                  MaxHeight="220"

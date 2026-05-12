@@ -8,7 +8,7 @@
         MinHeight="620" MinWidth="900"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
-        Background="#1a1d24">
+        Background="{DynamicResource BgBase}">
 
     <Window.Resources>
         <!-- Dark-themed tooltip: matches the rest of the launcher's UI
@@ -326,9 +326,9 @@
              EN/ES language toggle on the right.
              ============================================================ -->
         <Border Grid.Row="0"
-                Background="#22252c"
+                Background="{DynamicResource BgPanel}"
                 Padding="20,12"
-                BorderBrush="#3a3d44"
+                BorderBrush="{DynamicResource BorderSubtle}"
                 BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -393,8 +393,8 @@
 
             <!-- ====================== LEFT SIDEBAR ====================== -->
             <Border Grid.Column="0"
-                    Background="#1a1d24"
-                    BorderBrush="#3a3d44"
+                    Background="{DynamicResource BgBase}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
                     BorderThickness="0,0,1,0">
                 <Grid Margin="20,18">
                     <Grid.RowDefinitions>

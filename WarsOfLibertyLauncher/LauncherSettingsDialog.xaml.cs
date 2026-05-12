@@ -62,6 +62,10 @@ public partial class LauncherSettingsDialog : Window
         SectionCatalogText.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
 
         LanguageLabel.Text = Strings.Get("DlgLauncherSettingsLanguageLabel");
+        ThemeLabel.Text = Strings.Get("DlgLauncherSettingsThemeLabel");
+        ThemeDarkItem.Content = Strings.Get("DlgLauncherSettingsThemeDark");
+        ThemeLightItem.Content = Strings.Get("DlgLauncherSettingsThemeLight");
+        ThemeSystemItem.Content = Strings.Get("DlgLauncherSettingsThemeSystem");
 
         StartWithWindowsCheck.Content = Strings.Get("DlgLauncherSettingsStartWithWindows");
         StartWithWindowsHint.Text = Strings.Get("DlgLauncherSettingsStartWithWindowsHint");
@@ -114,6 +118,17 @@ public partial class LauncherSettingsDialog : Window
         }
         if (LanguageCombo.SelectedItem == null)
             LanguageCombo.SelectedIndex = 0;
+
+        foreach (ComboBoxItem item in ThemeCombo.Items)
+        {
+            if (string.Equals(item.Tag as string, _config.Theme, StringComparison.OrdinalIgnoreCase))
+            {
+                ThemeCombo.SelectedItem = item;
+                break;
+            }
+        }
+        if (ThemeCombo.SelectedItem == null)
+            ThemeCombo.SelectedItem = ThemeDarkItem;
 
         // Start-with-Windows: trust the registry as the source of truth
         // (the user may have removed our entry manually via Task Manager).
@@ -186,8 +201,14 @@ public partial class LauncherSettingsDialog : Window
         //    on.
         var newLang = (LanguageCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "en";
 
-        // 3. Write all the bools / strings into the config object.
+        // 3. Theme: persist + apply live via ThemeService so the swap shows
+        //    instantly when the user clicks Save (DynamicResource consumers
+        //    in the shared styles repaint without an app restart).
+        var newTheme = (ThemeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "dark";
+
+        // 4. Write all the bools / strings into the config object.
         _config.Language = newLang;
+        _config.Theme = newTheme;
         _config.CloseLauncherOnGameStart = CloseOnGameCheck.IsChecked == true;
         _config.MinimizeToTray = MinimizeToTrayCheck.IsChecked == true;
         _config.ShowToastNotifications = ShowToastsCheck.IsChecked == true;
@@ -202,6 +223,7 @@ public partial class LauncherSettingsDialog : Window
         //      app updates immediately.
         StartupRegistrationService.Apply(_config.StartWithWindows);
         Strings.SetLanguage(newLang);
+        ThemeService.Apply(newTheme);
 
         // 5. Persist to disk.
         try

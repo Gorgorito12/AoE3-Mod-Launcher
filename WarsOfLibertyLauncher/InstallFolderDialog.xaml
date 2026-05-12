@@ -5,7 +5,7 @@
         Width="560" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#1a1d24"
+        Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
 
     <StackPanel Margin="24">
@@ -34,9 +34,9 @@
             <TextBox x:Name="Aoe3PathTextBox"
                      Grid.Column="0"
                      FontSize="13"
-                     Background="#2a2d34"
+                     Background="{DynamicResource BgPanelAlt}"
                      Foreground="White"
-                     BorderBrush="#3a3d44"
+                     BorderBrush="{DynamicResource BorderSubtle}"
                      BorderThickness="1"
                      Padding="8,6"
                      CaretBrush="White"
@@ -68,9 +68,9 @@
             <TextBox x:Name="FolderTextBox"
                      Grid.Column="0"
                      FontSize="13"
-                     Background="#2a2d34"
+                     Background="{DynamicResource BgPanelAlt}"
                      Foreground="White"
-                     BorderBrush="#3a3d44"
+                     BorderBrush="{DynamicResource BorderSubtle}"
                      BorderThickness="1"
                      Padding="8,6"
                      CaretBrush="White"

@@ -3,8 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Border x:Name="OuterBorder"
             x:FieldModifier="public"
-            Background="#22252c"
-            BorderBrush="#3a3d44"
+            Background="{DynamicResource BgPanel}"
+            BorderBrush="{DynamicResource BorderSubtle}"
             BorderThickness="1"
             CornerRadius="6"
             Padding="12,10">

@@ -628,6 +628,26 @@ public static class Strings
             [LangEn] = "Launcher language",
             [LangEs] = "Idioma del launcher",
         },
+        ["DlgLauncherSettingsThemeLabel"] = new()
+        {
+            [LangEn] = "Theme",
+            [LangEs] = "Tema",
+        },
+        ["DlgLauncherSettingsThemeDark"] = new()
+        {
+            [LangEn] = "Dark",
+            [LangEs] = "Oscuro",
+        },
+        ["DlgLauncherSettingsThemeLight"] = new()
+        {
+            [LangEn] = "Light",
+            [LangEs] = "Claro",
+        },
+        ["DlgLauncherSettingsThemeSystem"] = new()
+        {
+            [LangEn] = "Follow Windows",
+            [LangEs] = "Seguir Windows",
+        },
         ["DlgLauncherSettingsStartWithWindows"] = new()
         {
             [LangEn] = "Start with Windows",
