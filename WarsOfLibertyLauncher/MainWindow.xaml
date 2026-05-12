@@ -907,87 +907,15 @@
             <!-- ====================== RIGHT CONTENT ====================== -->
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>  <!-- Progress overlay -->
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Tabs -->
-                <Border Grid.Row="0"
-                        Background="#1a1d24"
-                        Padding="20,14,20,0"
-                        BorderBrush="#3a3d44"
-                        BorderThickness="0,0,0,1">
-                    <StackPanel Orientation="Horizontal">
-                        <Button x:Name="TabNoticias"
-                                Style="{StaticResource TabButton}"
-                                Click="TabNoticias_Click"/>
-                        <Button x:Name="TabChangelog"
-                                Style="{StaticResource TabButton}"
-                                Click="TabChangelog_Click"/>
-                        <Button x:Name="TabAyuda"
-                                Style="{StaticResource TabButton}"
-                                Click="TabAyuda_Click"/>
-                    </StackPanel>
-                </Border>
+                <controls:MainTabs Grid.Row="0" x:Name="MainTabsControl"/>
 
-                <!-- Content area. Three ScrollViewers stacked; the active tab
-                     toggles which one is visible. -->
-                <Grid Grid.Row="1" Background="#1a1d24">
-                    <ScrollViewer x:Name="NoticiasContent"
-                                  VerticalScrollBarVisibility="Auto"
-                                  Padding="24,18">
-                        <StackPanel>
-                            <!-- Progress panel moved to the sidebar's bottom slot.
-                                 See ProgressPanel further up in the left column.
-
-                                 StatusText below stays as a hidden compat
-                                 stub so the dozens of SetStatus(...) calls
-                                 across code-behind keep compiling — they
-                                 just write into an invisible control now. -->
-                            <TextBlock x:Name="StatusText"
-                                       Visibility="Collapsed"/>
-
-                            <!-- News cards — populated programmatically when a
-                                 future feed/profile metadata lands. Until then
-                                 the placeholder fills the empty space. -->
-                            <StackPanel x:Name="NewsCardsPanel"/>
-                            <TextBlock x:Name="NewsPlaceholderText"
-                                       Foreground="#666"
-                                       FontStyle="Italic"
-                                       HorizontalAlignment="Center"
-                                       Margin="0,40,0,0"/>
-                        </StackPanel>
-                    </ScrollViewer>
-
-                    <ScrollViewer x:Name="ChangelogContent"
-                                  Visibility="Collapsed"
-                                  VerticalScrollBarVisibility="Auto"
-                                  Padding="24,18">
-                        <TextBlock x:Name="ChangelogText"
-                                   Foreground="#ccc"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"/>
-                    </ScrollViewer>
-
-                    <ScrollViewer x:Name="AyudaContent"
-                                  Visibility="Collapsed"
-                                  VerticalScrollBarVisibility="Auto"
-                                  Padding="24,18">
-                        <TextBlock x:Name="HelpText"
-                                   Foreground="#ccc"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"/>
-                    </ScrollViewer>
-                </Grid>
-
-                <!-- Footer area kept empty — the progress UI moved to the
-                     top of the news content (ProgressPanel) so the user sees
-                     it with the news/changelog/help context instead of as
-                     a sticky footer. The grid row + this stub are kept so
-                     existing references that toggle ProgressOverlay still
-                     resolve to a real (but harmless) control. -->
-                <Border Grid.Row="2"
+                <!-- Hidden compat stub kept so existing references that
+                     toggle ProgressOverlay still resolve to a real control. -->
+                <Border Grid.Row="1"
                         x:Name="ProgressOverlay"
                         Visibility="Collapsed"/>
             </Grid>

@@ -1,0 +1,80 @@
+<UserControl x:Class="WarsOfLibertyLauncher.Controls.MainTabs"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Tabs. Click handlers wired from MainWindow's constructor. -->
+        <Border Grid.Row="0"
+                Background="#1a1d24"
+                Padding="20,14,20,0"
+                BorderBrush="#3a3d44"
+                BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="TabNoticias"
+                        x:FieldModifier="public"
+                        Style="{StaticResource TabButton}"/>
+                <Button x:Name="TabChangelog"
+                        x:FieldModifier="public"
+                        Style="{StaticResource TabButton}"/>
+                <Button x:Name="TabAyuda"
+                        x:FieldModifier="public"
+                        Style="{StaticResource TabButton}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Content area. Three ScrollViewers stacked; SwitchContentTab
+             in MainWindow toggles which one is visible. -->
+        <Grid Grid.Row="1" Background="#1a1d24">
+            <ScrollViewer x:Name="NoticiasContent"
+                          x:FieldModifier="public"
+                          VerticalScrollBarVisibility="Auto"
+                          Padding="24,18">
+                <StackPanel>
+                    <!-- Hidden compat stub so the many SetStatus(...) calls
+                         in code-behind keep compiling — they just write into
+                         an invisible control now. -->
+                    <TextBlock x:Name="StatusText"
+                               x:FieldModifier="public"
+                               Visibility="Collapsed"/>
+
+                    <StackPanel x:Name="NewsCardsPanel"
+                                x:FieldModifier="public"/>
+                    <TextBlock x:Name="NewsPlaceholderText"
+                               x:FieldModifier="public"
+                               Foreground="#666"
+                               FontStyle="Italic"
+                               HorizontalAlignment="Center"
+                               Margin="0,40,0,0"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="ChangelogContent"
+                          x:FieldModifier="public"
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto"
+                          Padding="24,18">
+                <TextBlock x:Name="ChangelogText"
+                           x:FieldModifier="public"
+                           Foreground="#ccc"
+                           FontSize="12"
+                           TextWrapping="Wrap"/>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="AyudaContent"
+                          x:FieldModifier="public"
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto"
+                          Padding="24,18">
+                <TextBlock x:Name="HelpText"
+                           x:FieldModifier="public"
+                           Foreground="#ccc"
+                           FontSize="12"
+                           TextWrapping="Wrap"/>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

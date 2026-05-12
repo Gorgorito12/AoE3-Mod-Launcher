@@ -57,6 +57,9 @@ public partial class MainWindow : Window
         ProgressPanelControl.PauseButton.Click += PauseButton_Click;
         ProgressPanelControl.CancelButton.Click += CancelButton_Click;
         ProgressPanelControl.ProgressActionRetry.Click += ProgressActionRetry_Click;
+        MainTabsControl.TabNoticias.Click += TabNoticias_Click;
+        MainTabsControl.TabChangelog.Click += TabChangelog_Click;
+        MainTabsControl.TabAyuda.Click += TabAyuda_Click;
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
 
@@ -886,7 +889,7 @@ public partial class MainWindow : Window
         // The "INSTALLED VERSION / LATEST AVAILABLE" labels lived in the
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
-        NewsPlaceholderText.Text = Strings.Get("NewsPlaceholder");
+        MainTabsControl.NewsPlaceholderText.Text = Strings.Get("NewsPlaceholder");
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
         ProgressPanelControl.LblOverall.Text = Strings.Get("ProgressOverall");
         // Sidebar buttons. Each one's Content is a Grid/StackPanel with an
@@ -907,9 +910,9 @@ public partial class MainWindow : Window
         // action key picks up the translated text.
         SetPrimaryAction(_primaryAction);
         // Tab labels (right-pane tabs)
-        TabNoticias.Content = Strings.Get("TabNoticias");
-        TabChangelog.Content = Strings.Get("TabChangelog");
-        TabAyuda.Content = Strings.Get("TabAyuda");
+        MainTabsControl.TabNoticias.Content = Strings.Get("TabNoticias");
+        MainTabsControl.TabChangelog.Content = Strings.Get("TabChangelog");
+        MainTabsControl.TabAyuda.Content = Strings.Get("TabAyuda");
         RefreshTabsHighlight();
         // Game footer + banner background tied to the active profile
         RefreshActiveModBanner();
@@ -1353,9 +1356,9 @@ public partial class MainWindow : Window
                 b.BorderBrush = active ? accent : transparent;
         }
 
-        Paint(TabNoticias, _activeTab == ContentTab.Noticias);
-        Paint(TabChangelog, _activeTab == ContentTab.Changelog);
-        Paint(TabAyuda, _activeTab == ContentTab.Ayuda);
+        Paint(MainTabsControl.TabNoticias, _activeTab == ContentTab.Noticias);
+        Paint(MainTabsControl.TabChangelog, _activeTab == ContentTab.Changelog);
+        Paint(MainTabsControl.TabAyuda, _activeTab == ContentTab.Ayuda);
     }
 
     private enum ContentTab { Noticias, Changelog, Ayuda }
@@ -1368,16 +1371,16 @@ public partial class MainWindow : Window
     private void SwitchContentTab(ContentTab tab)
     {
         _activeTab = tab;
-        NoticiasContent.Visibility = tab == ContentTab.Noticias ? Visibility.Visible : Visibility.Collapsed;
-        ChangelogContent.Visibility = tab == ContentTab.Changelog ? Visibility.Visible : Visibility.Collapsed;
-        AyudaContent.Visibility = tab == ContentTab.Ayuda ? Visibility.Visible : Visibility.Collapsed;
+        MainTabsControl.NoticiasContent.Visibility = tab == ContentTab.Noticias ? Visibility.Visible : Visibility.Collapsed;
+        MainTabsControl.ChangelogContent.Visibility = tab == ContentTab.Changelog ? Visibility.Visible : Visibility.Collapsed;
+        MainTabsControl.AyudaContent.Visibility = tab == ContentTab.Ayuda ? Visibility.Visible : Visibility.Collapsed;
 
         // Lazy-fill changelog and help so an empty profile shows a friendly
         // message instead of nothing.
         if (tab == ContentTab.Changelog)
-            ChangelogText.Text = Strings.Get("ChangelogPlaceholder");
+            MainTabsControl.ChangelogText.Text = Strings.Get("ChangelogPlaceholder");
         else if (tab == ContentTab.Ayuda)
-            HelpText.Text = Strings.Get("HelpDefaultBody");
+            MainTabsControl.HelpText.Text = Strings.Get("HelpDefaultBody");
 
         RefreshTabsHighlight();
     }
@@ -3572,9 +3575,9 @@ public partial class MainWindow : Window
     private void SetStatus(string message)
     {
         if (!Dispatcher.CheckAccess())
-            Dispatcher.Invoke(() => StatusText.Text = message);
+            Dispatcher.Invoke(() => MainTabsControl.StatusText.Text = message);
         else
-            StatusText.Text = message;
+            MainTabsControl.StatusText.Text = message;
     }
 
     private void SetBusy(bool busy, bool checkOnly = false)
