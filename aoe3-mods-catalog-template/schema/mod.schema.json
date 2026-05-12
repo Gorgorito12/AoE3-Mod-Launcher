@@ -163,6 +163,26 @@
               }
             }
           }
+        },
+        "github": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "GitHubReleases-specific settings. Used when a modder wants the release tag to remain the version marker but hosts the actual payload OUTSIDE of GitHub Releases (their own CDN, S3, archive.org, etc.). The GitHub release itself can be empty — only the tag matters. Any change to this object is Tier 3 (manual review) because update.* is in TIER_3_FIELDS; this is by design — letting CDN swaps auto-merge would defeat the catalog gatekeeping.",
+          "properties": {
+            "externalAssetUrlTemplate": {
+              "type": "string",
+              "pattern": "^https://",
+              "description": "URL template (HTTPS only). The literal substring '{tag}' is replaced at download time with the value of the top-level 'approvedReleaseTag'. Example: 'https://my-cdn.com/napoleonic-{tag}.zip' with tag 'v1.5' resolves to 'https://my-cdn.com/napoleonic-v1.5.zip'. When omitted, the launcher falls back to picking the asset attached to the GitHub release itself (default GitHubReleases behaviour)."
+            },
+            "externalAssetSha256": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{64}$",
+              "description": "Expected SHA-256 (lowercase hex) of the file served by externalAssetUrlTemplate. REQUIRED whenever externalAssetUrlTemplate is set — the launcher refuses to install when an external URL is configured without a hash, because the host is no longer under GitHub's authenticity boundary."
+            }
+          },
+          "dependentRequired": {
+            "externalAssetUrlTemplate": ["externalAssetSha256"]
+          }
         }
       }
     },

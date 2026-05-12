@@ -30,6 +30,25 @@ public static class HashService
     }
 
     /// <summary>
+    /// Compute the SHA-256 of a file as lowercase hex (64 chars). Returns
+    /// empty string if the file is missing. Used to verify downloaded
+    /// payloads against catalog-pinned hashes — the launcher rejects
+    /// installs whose computed hash doesn't match the value the catalog
+    /// approved via PR (defence against host-side payload tampering).
+    /// </summary>
+    public static async Task<string> ComputeSha256Async(string filePath, CancellationToken ct = default)
+    {
+        if (!File.Exists(filePath))
+            return string.Empty;
+
+        using var sha = SHA256.Create();
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read,
+            FileShare.Read, bufferSize: 1024 * 1024, useAsync: true);
+        var hash = await sha.ComputeHashAsync(stream, ct);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
     /// Compute CRC32 of a file as lowercase hex (8 chars, zero-padded).
     /// Compatible with Java's Guava Hashing.crc32() which uses the same polynomial.
     /// </summary>

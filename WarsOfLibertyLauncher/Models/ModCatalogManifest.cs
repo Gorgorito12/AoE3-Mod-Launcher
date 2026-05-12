@@ -167,6 +167,42 @@ public class ModCatalogUpdate
 
     [JsonPropertyName("wol")]
     public ModCatalogWolSettings? Wol { get; set; }
+
+    /// <summary>
+    /// Optional settings for the <c>GitHubReleases</c> mechanism. Only
+    /// surfaces fields that aren't already top-level on the manifest
+    /// (<c>sourceRepo</c> and <c>approvedReleaseTag</c> stay at the root
+    /// because they identify the mod's authoritative repo regardless of
+    /// mechanism). Used to declare external hosting — see
+    /// <see cref="ModCatalogGitHubSettings"/>.
+    /// </summary>
+    [JsonPropertyName("github")]
+    public ModCatalogGitHubSettings? Github { get; set; }
+}
+
+/// <summary>
+/// Optional GitHubReleases-specific settings inside a catalog manifest.
+/// Lets a modder host the actual payload outside of GitHub Releases while
+/// keeping the release tag as the version marker. See
+/// <see cref="GitHubReleasesSettings.ExternalAssetUrlTemplate"/> for the
+/// full rationale.
+/// </summary>
+public class ModCatalogGitHubSettings
+{
+    /// <summary>
+    /// URL template with a <c>{tag}</c> placeholder for the payload host.
+    /// Empty means "use the GitHub Release asset" (default behaviour).
+    /// </summary>
+    [JsonPropertyName("externalAssetUrlTemplate")]
+    public string? ExternalAssetUrlTemplate { get; set; }
+
+    /// <summary>
+    /// Expected SHA-256 (lowercase hex) of the file at the templated URL.
+    /// Required when <see cref="ExternalAssetUrlTemplate"/> is set;
+    /// rejected at download time if missing.
+    /// </summary>
+    [JsonPropertyName("externalAssetSha256")]
+    public string? ExternalAssetSha256 { get; set; }
 }
 
 public class ModCatalogWolSettings

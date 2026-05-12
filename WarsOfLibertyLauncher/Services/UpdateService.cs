@@ -243,10 +243,54 @@ public class UpdateService
         // detect the install path so the PLAY button works and the gear
         // menu can open the right folder, but we skip the manifest fetch
         // and version match — those are WoL-specific concepts.
+        //
+        // GitHubReleases is a special case: the version IS the catalog's
+        // approved release tag (no MD5-of-files calculus), and the
+        // currently-installed tag was persisted into ModState at install
+        // time. Both are cheap synchronous lookups, so we surface them in
+        // the StatusCard instead of leaving "—" / "—" — the rendering path
+        // already reads CurrentVersion/LatestVersion uniformly.
         if (_profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
         {
             DiagnosticLog.Write(
                 $"Profile '{_profile.Id}' uses '{_profile.UpdateMechanism}'; skipping manifest fetch.");
+
+            if (_profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
+            {
+                var ghTag = _profile.GitHubReleases?.ApprovedReleaseTag ?? "";
+                var ghState = _config.GetState(_profile.Id);
+                var ghInstalled = ghState.LastKnownVersion;
+
+                LatestVersion = !string.IsNullOrEmpty(ghTag)
+                    ? new VersionInfo { Ver = ghTag }
+                    : null;
+                CurrentVersion = (!string.IsNullOrEmpty(ghInstalled) && valid)
+                    ? new VersionInfo { Ver = ghInstalled }
+                    : null;
+
+                // Mirror the WolPatcher path: persist LastKnownLatestVersion
+                // so a cold-start UI render sees the right "Latest" before
+                // the next CheckAsync runs. The installed tag is persisted
+                // separately at install time, so we don't touch it here.
+                if (!string.IsNullOrEmpty(ghTag) && ghState.LastKnownLatestVersion != ghTag)
+                {
+                    ghState.LastKnownLatestVersion = ghTag;
+                    try { _config.Save(); }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLog.Write($"Failed to persist GH latest-version cache: {ex.Message}");
+                    }
+                }
+
+                DiagnosticLog.Write(
+                    $"GitHubReleases: CurrentVersion='{CurrentVersion?.Ver ?? "(null)"}' " +
+                    $"LatestVersion='{LatestVersion?.Ver ?? "(null)"}'");
+
+                return new CheckResult(
+                    new UpdateInfo(), CurrentVersion, LatestVersion,
+                    new List<DownloadInfo>(), valid);
+            }
+
             CurrentVersion = null;
             LatestVersion = null;
             return new CheckResult(new UpdateInfo(), null, null, new List<DownloadInfo>(), valid);

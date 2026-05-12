@@ -89,7 +89,10 @@ public class GitHubReleasesInstallService
         // 1. Resolve the asset URL + size.
         status?.Report(WarsOfLibertyLauncher.Localization.Strings.Format(
             "StatusDetectingInstall", profile.DisplayName));
-        var (url, size) = await _downloader.ResolveAssetAsync(s, ct);
+        var asset = await _downloader.ResolveAssetAsync(s, ct);
+        var url = asset.Url;
+        var size = asset.Size;
+        var expectedSha = asset.ExpectedSha256;
 
         // 2. Download to a per-mod temp file. Including the mod id +
         //    sanitised tag in the filename keeps two parallel mods from
@@ -102,6 +105,27 @@ public class GitHubReleasesInstallService
         status?.Report(WarsOfLibertyLauncher.Localization.Strings.Format(
             "StatusDownloadingPatch", $"{profile.DisplayName} {s.ApprovedReleaseTag}"));
         await _downloader.DownloadAsync(url, zipPath, size, byteProgress, ct);
+
+        // Verify SHA-256 when the catalog pinned one (external-hosting
+        // path). For regular GitHub assets expectedSha is null and the
+        // launcher trusts GitHub's CDN — same behaviour as before.
+        if (!string.IsNullOrEmpty(expectedSha))
+        {
+            var actualSha = await HashService.ComputeSha256Async(zipPath, ct);
+            if (!string.Equals(actualSha, expectedSha, StringComparison.OrdinalIgnoreCase))
+            {
+                try { File.Delete(zipPath); }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Could not delete tampered payload '{zipPath}': {ex.Message}");
+                }
+                throw new InvalidDataException(
+                    $"Payload verification failed: expected SHA-256 '{expectedSha}' " +
+                    $"but got '{actualSha}'. The downloaded file does not match the hash " +
+                    $"approved in the catalog.");
+            }
+            DiagnosticLog.Write("GitHubReleases: payload SHA-256 verified.");
+        }
 
         // 3. Extract over the target folder with backup-and-rollback.
         //    Backup folder lives next to the zip, scoped per install run

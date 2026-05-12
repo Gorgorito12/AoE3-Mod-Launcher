@@ -108,6 +108,17 @@ public class NativeInstallService
     /// and the install manifest. Caller picks the right source (latest WoL
     /// version, the approved GitHub release tag, etc.).
     /// </param>
+    /// <param name="payloadSha256">
+    /// Optional. Parallel array to <paramref name="payloadZipUrls"/>:
+    /// for each URL at index <c>i</c>, the expected lowercase-hex
+    /// SHA-256 of the downloaded part. When provided (non-null and
+    /// non-empty at that index), the launcher verifies the downloaded
+    /// file before concatenation and throws <see cref="InvalidDataException"/>
+    /// on mismatch — the install is aborted, no partial state is left
+    /// behind. Null or all-empty values skip verification (current
+    /// behaviour, e.g. legacy GitHub-Release downloads where we trust
+    /// the asset CDN).
+    /// </param>
     public async Task InstallAsync(
         ModProfile profile,
         string version,
@@ -120,6 +131,7 @@ public class NativeInstallService
         IProgress<InstallPhase>? phaseProgress = null,
         IProgress<ExtractProgress>? extractProgress = null,
         IProgress<ModOverlayProgress>? overlayProgress = null,
+        string[]? payloadSha256 = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install Start ({profile.DisplayName}) ===");
@@ -130,7 +142,8 @@ public class NativeInstallService
         // ---- Phase 1: Download all parts and concatenate ----
         phaseProgress?.Report(InstallPhase.Download);
         statusProgress?.Report($"Downloading {profile.DisplayName} files...");
-        var zipPath = await DownloadAndConcatenatePartsAsync(payloadZipUrls, downloadProgress, statusProgress, ct);
+        var zipPath = await DownloadAndConcatenatePartsAsync(
+            payloadZipUrls, payloadSha256, downloadProgress, statusProgress, ct);
 
         // ---- Phase 2: Extract payload to temp ----
         phaseProgress?.Report(InstallPhase.Extract);
@@ -180,6 +193,10 @@ public class NativeInstallService
     /// Lighter install: skips AoE3 clone. Use this when the destination folder
     /// already contains AoE3 (e.g., user picked an existing AoE3 folder as dest).
     /// </summary>
+    /// <param name="payloadSha256">
+    /// Optional. Parallel array to <paramref name="payloadZipUrls"/> — see
+    /// <see cref="InstallAsync"/> for semantics.
+    /// </param>
     public async Task InstallModOnlyAsync(
         ModProfile profile,
         string version,
@@ -190,6 +207,7 @@ public class NativeInstallService
         IProgress<InstallPhase>? phaseProgress = null,
         IProgress<ExtractProgress>? extractProgress = null,
         IProgress<ModOverlayProgress>? overlayProgress = null,
+        string[]? payloadSha256 = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install (mod-only) Start ({profile.DisplayName}) ===");
@@ -199,7 +217,8 @@ public class NativeInstallService
         // ---- Phase 1: Download ----
         phaseProgress?.Report(InstallPhase.Download);
         statusProgress?.Report($"Downloading {profile.DisplayName} files...");
-        var zipPath = await DownloadAndConcatenatePartsAsync(payloadZipUrls, downloadProgress, statusProgress, ct);
+        var zipPath = await DownloadAndConcatenatePartsAsync(
+            payloadZipUrls, payloadSha256, downloadProgress, statusProgress, ct);
 
         // ---- Phase 2: Extract ----
         phaseProgress?.Report(InstallPhase.Extract);
@@ -238,10 +257,18 @@ public class NativeInstallService
 
     /// <summary>
     /// Downloads all ZIP parts sequentially and concatenates them into a single
-    /// ZIP file. Progress reports accumulated bytes across all parts.
+    /// ZIP file. Progress reports accumulated bytes across all parts. When
+    /// <paramref name="partSha256"/> is non-null and a non-empty value is
+    /// present at the same index as a part URL, the launcher verifies the
+    /// downloaded file's SHA-256 before continuing. A mismatch throws
+    /// <see cref="InvalidDataException"/> and aborts the install — no
+    /// concatenation, no extract. Empty / missing values for a given index
+    /// skip verification for that part (preserves backwards-compatibility
+    /// with downloads that don't pin a hash, e.g. legacy GitHub assets).
     /// </summary>
     private async Task<string> DownloadAndConcatenatePartsAsync(
         string[] partUrls,
+        string[]? partSha256,
         IProgress<DownloadProgress>? progress,
         IProgress<string>? statusProgress,
         CancellationToken ct)
@@ -307,6 +334,39 @@ public class NativeInstallService
 
             totalDownloaded += new FileInfo(partPath).Length;
             DiagnosticLog.Write($"  Part {i + 1} done ({new FileInfo(partPath).Length} bytes).");
+
+            // Verify SHA-256 if the catalog pinned one for this part.
+            // Done immediately after download (not after concat) so a
+            // tampered part trips the abort before we waste cycles on
+            // I/O for the remaining parts. Empty / missing pin = skip
+            // (legacy GitHub asset path).
+            var expectedSha = partSha256 != null && i < partSha256.Length
+                ? (partSha256[i] ?? "").Trim().ToLowerInvariant()
+                : "";
+            if (!string.IsNullOrEmpty(expectedSha))
+            {
+                statusProgress?.Report($"Verifying part {i + 1} of {partUrls.Length}...");
+                var actualSha = await HashService.ComputeSha256Async(partPath, ct);
+                if (!string.Equals(actualSha, expectedSha, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Wipe the bad part so a retry doesn't pick it up
+                    // from cache. Keep earlier parts — they passed
+                    // their own verifications and a manual retry can
+                    // resume from this index.
+                    try { File.Delete(partPath); }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLog.Write($"Could not delete tampered part '{partPath}': {ex.Message}");
+                    }
+
+                    throw new InvalidDataException(
+                        $"Payload verification failed for part {i + 1}: " +
+                        $"expected SHA-256 '{expectedSha}' but got '{actualSha}'. " +
+                        $"The downloaded file does not match the hash approved in the catalog — " +
+                        $"the host may have been compromised or the download corrupted.");
+                }
+                DiagnosticLog.Write($"  Part {i + 1} SHA-256 verified.");
+            }
         }
 
         // Concatenate all parts into one ZIP

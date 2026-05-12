@@ -44,14 +44,42 @@ public class GitHubReleaseDownloader
     private static readonly HttpClient Http = CreateHttpClient();
 
     /// <summary>
-    /// Resolve the modder's release tag into a concrete .zip asset URL.
-    /// Doesn't download the asset — just enumerates and picks. Use this
-    /// to pre-flight before kicking the actual download, e.g. so the
-    /// progress panel can report the expected file size.
+    /// Result of resolving a GitHubReleases asset reference into a
+    /// concrete download URL. <see cref="ExpectedSha256"/> is non-null
+    /// only when the modder pinned the payload to an external host (via
+    /// <see cref="GitHubReleasesSettings.ExternalAssetUrlTemplate"/>) and
+    /// declared its SHA in the catalog — in that case the caller MUST
+    /// verify the downloaded file's hash against this value and reject
+    /// mismatches. For regular GitHub-hosted assets it stays null because
+    /// the launcher trusts the GitHub asset CDN inherently.
+    /// <see cref="Size"/> is <c>-1</c> when unknown (external URLs that
+    /// the launcher hasn't probed); callers should fall back to the
+    /// response's Content-Length header at download time.
     /// </summary>
-    /// <returns>Tuple of (browser_download_url, expected size in bytes).
-    /// Throws if the tag doesn't exist or no matching asset is found.</returns>
-    public async Task<(string Url, long Size)> ResolveAssetAsync(
+    public record ResolvedAsset(string Url, long Size, string? ExpectedSha256);
+
+    /// <summary>
+    /// Resolve the modder's release tag into a concrete .zip asset URL.
+    /// Doesn't download the asset — just enumerates and picks (or, for
+    /// external hosting, templates the URL). Use this to pre-flight
+    /// before kicking the actual download.
+    ///
+    /// Two paths:
+    ///   1. <see cref="GitHubReleasesSettings.ExternalAssetUrlTemplate"/>
+    ///      is set: substitute <c>{tag}</c> with the approved release
+    ///      tag and return that URL. The GitHub release itself is never
+    ///      contacted — it exists purely as the catalog's version
+    ///      marker. The SHA-256 from
+    ///      <see cref="GitHubReleasesSettings.ExternalAssetSha256"/> is
+    ///      returned so the caller can verify post-download.
+    ///   2. Template is empty (the common case): hit the GitHub API and
+    ///      pick the matching asset from the release. No SHA — we trust
+    ///      GitHub's CDN.
+    ///
+    /// Throws when the tag doesn't exist, the release has no matching
+    /// asset, or an external URL was configured without its SHA-256.
+    /// </summary>
+    public async Task<ResolvedAsset> ResolveAssetAsync(
         GitHubReleasesSettings settings, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(settings.SourceRepo))
@@ -59,6 +87,38 @@ public class GitHubReleaseDownloader
         if (string.IsNullOrWhiteSpace(settings.ApprovedReleaseTag))
             throw new ArgumentException("ApprovedReleaseTag is required.", nameof(settings));
 
+        // --- External-hosting path -------------------------------------------
+        // When the modder hosts the binary outside GitHub Releases (their
+        // own CDN, S3, archive.org, ...), the catalog points at a URL
+        // template and a pinned SHA-256. The GitHub release exists only
+        // to anchor the version tag; we never call the GitHub API here.
+        if (!string.IsNullOrWhiteSpace(settings.ExternalAssetUrlTemplate))
+        {
+            if (string.IsNullOrWhiteSpace(settings.ExternalAssetSha256))
+            {
+                // Refuse external URLs without a hash. Otherwise a
+                // compromised host could silently swap the payload and
+                // the launcher would have no way to detect it. The
+                // catalog schema marks SHA-256 as required when the
+                // template is set, so this is a defence-in-depth check.
+                throw new InvalidOperationException(
+                    $"GitHubReleases settings for '{settings.SourceRepo}' declare an external asset URL " +
+                    $"but no externalAssetSha256. Reject for safety — without a pinned hash a compromised " +
+                    $"host could swap the payload undetected.");
+            }
+
+            var external = settings.ExternalAssetUrlTemplate.Replace(
+                "{tag}", settings.ApprovedReleaseTag);
+            DiagnosticLog.Write(
+                $"GitHubReleases: resolved external asset '{external}' " +
+                $"(sha256={settings.ExternalAssetSha256.ToLowerInvariant()})");
+            // Size unknown without a HEAD probe — let the download path
+            // pick it up from Content-Length. The downloader tolerates
+            // -1 by falling through to the response header.
+            return new ResolvedAsset(external, -1, settings.ExternalAssetSha256.ToLowerInvariant());
+        }
+
+        // --- Regular GitHub Release asset path -------------------------------
         var apiUrl = $"https://api.github.com/repos/{settings.SourceRepo}/releases/tags/{settings.ApprovedReleaseTag}";
         DiagnosticLog.Write($"GitHubReleases: fetching {apiUrl}");
 
@@ -76,7 +136,7 @@ public class GitHubReleaseDownloader
 
         DiagnosticLog.Write(
             $"GitHubReleases: resolved asset '{asset.Name}' ({asset.Size} bytes) at {asset.BrowserDownloadUrl}");
-        return (asset.BrowserDownloadUrl, asset.Size);
+        return new ResolvedAsset(asset.BrowserDownloadUrl, asset.Size, null);
     }
 
     /// <summary>

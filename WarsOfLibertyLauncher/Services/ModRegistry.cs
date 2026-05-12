@@ -351,6 +351,12 @@ public static class ModRegistry
                     // the downloader's "first .zip wins" default covers
                     // every mod we've seen.
                     AssetNamePattern = "",
+                    // External-hosting fields ride inside update.github.
+                    // The downloader treats an empty template as "use the
+                    // regular GitHub asset"; only modders who actively
+                    // host elsewhere set these.
+                    ExternalAssetUrlTemplate = m.Update.Github?.ExternalAssetUrlTemplate ?? "",
+                    ExternalAssetSha256 = (m.Update.Github?.ExternalAssetSha256 ?? "").ToLowerInvariant(),
                 };
             }
         }

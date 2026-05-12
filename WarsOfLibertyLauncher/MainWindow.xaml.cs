@@ -1560,8 +1560,10 @@ public partial class MainWindow : Window
         // URL branch and surface "no install URL" — the menu gating in
         // ApplyMenuVisibility hides Repair for them anyway, this is just
         // belt-and-braces.
-        var payloadUrls = await ResolvePayloadUrlsAsync();
-        if (payloadUrls == null) return;
+        var payload = await ResolvePayloadUrlsAsync();
+        if (payload == null) return;
+        var payloadUrls = payload.Urls;
+        var payloadSha256 = payload.Sha256;
 
         if (!EnsureGameNotRunning()) return;
 
@@ -1633,7 +1635,8 @@ public partial class MainWindow : Window
                 phaseProgress: null,
                 extractProgress: null,
                 overlayProgress: null,
-                _cts.Token);
+                payloadSha256: payloadSha256,
+                ct: _cts.Token);
 
             PatchProgress.Value = 100;
             OverallProgress.Value = 100;
@@ -2532,6 +2535,17 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Output of <see cref="ResolvePayloadUrlsAsync"/>. <see cref="Sha256"/>
+    /// is a parallel array to <see cref="Urls"/> (same length) when any
+    /// hash is pinned; null when no hashes are available for this
+    /// mechanism. Individual array slots may be empty strings if only
+    /// some parts have a pin. <see cref="NativeInstallService"/>
+    /// skips verification for empty slots, so passing this through
+    /// is safe even for legacy paths that don't ship hashes.
+    /// </summary>
+    private record PayloadResolution(string[] Urls, string[]? Sha256);
+
+    /// <summary>
     /// Resolves the download URLs for the active mod's install/repair payload.
     /// Shared by <see cref="InstallAsync"/> and <see cref="RepairInstallAsync"/>
     /// so both flows handle every mechanism identically.
@@ -2539,7 +2553,7 @@ public partial class MainWindow : Window
     /// On failure the helper sets a user-facing status and returns null —
     /// callers should bail (no return-bool noise needed).
     /// </summary>
-    private async Task<string[]?> ResolvePayloadUrlsAsync()
+    private async Task<PayloadResolution?> ResolvePayloadUrlsAsync()
     {
         var profile = _updateService.Profile;
         if (profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
@@ -2554,9 +2568,15 @@ public partial class MainWindow : Window
             }
             try
             {
-                var (url, _) = await new GitHubReleaseDownloader()
+                var asset = await new GitHubReleaseDownloader()
                     .ResolveAssetAsync(ghs, default);
-                return new[] { url };
+                // External-hosting path carries a SHA-256 pin (required by
+                // ResolveAssetAsync itself). Regular GitHub-asset path
+                // carries no SHA — we trust the asset CDN, like before.
+                var shas = asset.ExpectedSha256 != null
+                    ? new[] { asset.ExpectedSha256 }
+                    : null;
+                return new PayloadResolution(new[] { asset.Url }, shas);
             }
             catch (Exception ex)
             {
@@ -2568,12 +2588,16 @@ public partial class MainWindow : Window
 
         // Non-GitHubReleases path: legacy WoL multipart URLs from the profile
         // or LauncherConfig.InstallerZipUrl as a last-resort override.
+        // SHA-256 is not yet wired through the WolPatcher catalog entries
+        // surfaced here — keeping it null preserves the previous behaviour
+        // for WoL while leaving the door open for a follow-up that lifts
+        // ModCatalogWolSettings.PayloadSha256 through ModProfile.
         var payloadUrls = _updateService.EffectivePayloadZipUrls();
         if (payloadUrls != null && payloadUrls.Length > 0)
-            return payloadUrls;
+            return new PayloadResolution(payloadUrls, null);
 
         if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
-            return new[] { _config.InstallerZipUrl };
+            return new PayloadResolution(new[] { _config.InstallerZipUrl }, null);
 
         SetStatus(Strings.Get("DlgInstallNoUrlBody"));
         return null;
@@ -2613,8 +2637,10 @@ public partial class MainWindow : Window
         // Check if game is running first
         if (!EnsureGameNotRunning()) return;
 
-        var payloadUrls = await ResolvePayloadUrlsAsync();
-        if (payloadUrls == null) return;
+        var payload = await ResolvePayloadUrlsAsync();
+        if (payload == null) return;
+        var payloadUrls = payload.Urls;
+        var payloadSha256 = payload.Sha256;
 
         // Detect AoE3
         var aoe3Installs = AoE3Detector.FindAll();
@@ -2947,7 +2973,8 @@ public partial class MainWindow : Window
                     phaseProgress,
                     extractProgress,
                     overlayProgress,
-                    _cts.Token);
+                    payloadSha256: payloadSha256,
+                    ct: _cts.Token);
             }
             else
             {
@@ -2962,14 +2989,24 @@ public partial class MainWindow : Window
                     phaseProgress,
                     extractProgress,
                     overlayProgress,
-                    _cts.Token);
+                    payloadSha256: payloadSha256,
+                    ct: _cts.Token);
             }
 
             PatchProgress.Value = 100;
             OverallProgress.Value = 100;
 
-            // Point the launcher at the new install
-            _config.GetActiveState().InstallPath = installFolder;
+            // Point the launcher at the new install and remember which
+            // version we just laid down. For WolPatcher mods CheckAsync
+            // re-hashes the data files on next launch and may refine the
+            // version string, so this is just a hint. For GitHubReleases
+            // mods the tag IS the version, so persisting it here is what
+            // makes the StatusCard render "Installed v1.5" on next launch
+            // without waiting for a manifest fetch.
+            var installState = _config.GetActiveState();
+            installState.InstallPath = installFolder;
+            if (!string.IsNullOrEmpty(installVersion))
+                installState.LastKnownVersion = installVersion;
             _config.Save();
 
             // Verify installation. VerifyInstallation is now profile-aware —
