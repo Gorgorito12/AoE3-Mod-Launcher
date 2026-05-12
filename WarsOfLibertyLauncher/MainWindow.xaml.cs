@@ -324,10 +324,19 @@ public partial class MainWindow : Window
                 return Strings.Get("ModSelectorInstalledNoVersion");
             }
 
-            // Saved per-mod state from a previous session.
+            // Saved per-mod state from a previous session. Validate it
+            // properly — Directory.Exists alone is too loose: a stale
+            // pointer at "...\Age Of Empires 3\bin" passes that check
+            // because vanilla AoE3 has the folder. Require the probe file
+            // to be there AND (for IsolatedFolder mods) the leaf folder
+            // name to look like the mod's expected folder.
             var saved = _config.GetState(profile.Id).InstallPath;
-            if (!string.IsNullOrEmpty(saved) && Directory.Exists(saved))
+            if (!string.IsNullOrEmpty(saved)
+                && Directory.Exists(saved)
+                && SavedPathLooksValid(saved, profile))
+            {
                 return Strings.Get("ModSelectorInstalledNoVersion");
+            }
 
             // One-shot probe at the obvious locations.
             var probe = ResolveProbedInstallPath(profile);
@@ -336,6 +345,42 @@ public partial class MainWindow : Window
         }
         catch { /* probes must never throw */ }
         return Strings.Get("ModSelectorNotInstalled");
+    }
+
+    /// <summary>
+    /// Tile-side equivalent of <see cref="Services.UpdateService"/>'s
+    /// <c>CachedPathLeafLooksValid</c>: rejects a cached install path that
+    /// happens to satisfy <see cref="Directory.Exists(string)"/> but doesn't
+    /// look like a real install of this mod. Two signals:
+    /// <list type="bullet">
+    ///   <item>For IsolatedFolder mods, the leaf folder name must match
+    ///   <see cref="ModProfile.DisplayName"/> or the leaf of
+    ///   <see cref="ModProfile.DefaultInstallFolder"/>.</item>
+    ///   <item>The probe file must exist inside.</item>
+    /// </list>
+    /// </summary>
+    private static bool SavedPathLooksValid(string saved, ModProfile profile)
+    {
+        if (string.IsNullOrEmpty(profile.InstallProbeFile))
+            return true;
+
+        var probe = Path.Combine(saved, profile.InstallProbeFile);
+        if (!File.Exists(probe)) return false;
+
+        if (profile.InstallType != ModInstallType.IsolatedFolder)
+            return true;
+
+        var leaf = Path.GetFileName(saved.TrimEnd('\\', '/'));
+        if (string.IsNullOrEmpty(leaf)) return false;
+
+        string[] expected = new[]
+        {
+            profile.DisplayName,
+            Path.GetFileName(profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? ""),
+        };
+        return expected.Any(e =>
+            !string.IsNullOrEmpty(e)
+            && string.Equals(leaf, e, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -445,6 +490,13 @@ public partial class MainWindow : Window
         // profile. CheckAsync already short-circuits for non-WolPatcher
         // profiles, so this is fast for IM and full-fat for WoL.
         await CheckAsync();
+
+        // CheckAsync may have corrected the install path or version we
+        // initially rendered from cache (e.g. detected a stale "\bin"
+        // pointer and cleared it). Re-render the tile row so the secondary
+        // state text ("Installed · vX" / "Not installed") matches the
+        // freshly-detected reality of the active profile.
+        RefreshModCards();
 
         // The gear menu's translation list is per-mod — repopulate from
         // the new profile's config before the user opens it.

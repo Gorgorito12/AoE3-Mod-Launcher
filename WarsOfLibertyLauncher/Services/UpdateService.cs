@@ -107,9 +107,13 @@ public class UpdateService
 
         // 1. Cached install path. Two syscalls (Directory.Exists +
         //    File.Exists for the probe file) → essentially free. Avoids
-        //    flashing "Not installed" on mod switch.
+        //    flashing "Not installed" on mod switch. The CachedPathLeafLooksValid
+        //    check rejects stale entries that point at a vanilla AoE3 folder
+        //    (probe file alone isn't enough — vanilla AoE3 has it too).
         var cachedPath = state.InstallPath;
-        bool pathCacheHit = !string.IsNullOrWhiteSpace(cachedPath) && IsProfileInstalled(cachedPath);
+        bool pathCacheHit = !string.IsNullOrWhiteSpace(cachedPath)
+            && IsProfileInstalled(cachedPath)
+            && CachedPathLeafLooksValid(cachedPath);
         if (pathCacheHit)
         {
             InstallPath = cachedPath.TrimEnd('\\', '/');
@@ -558,11 +562,34 @@ public class UpdateService
         var state = _config.GetState(_profile.Id);
 
         // 1. Path cached for THIS mod from a previous detection (per-mod —
-        //    cannot leak across profiles).
-        if (!string.IsNullOrWhiteSpace(state.InstallPath)
-            && IsProfileInstalled(state.InstallPath))
+        //    cannot leak across profiles). For IsolatedFolder mods we also
+        //    require the cached path's leaf folder name to look like the mod
+        //    (DisplayName or DefaultInstallFolder leaf): a stale cache that
+        //    points at a vanilla AoE3 location (e.g. <Steam>\…\Age Of Empires 3\bin)
+        //    can pass IsProfileInstalled by accident — the probe file
+        //    (data\stringtabley.xml etc.) exists in vanilla AoE3 too. Rejecting
+        //    such caches forces re-detection on next CheckAsync.
+        if (!string.IsNullOrWhiteSpace(state.InstallPath))
         {
-            return state.InstallPath.TrimEnd('\\', '/');
+            if (IsProfileInstalled(state.InstallPath)
+                && CachedPathLeafLooksValid(state.InstallPath))
+            {
+                return state.InstallPath.TrimEnd('\\', '/');
+            }
+            // Cache is stale or pointing at vanilla AoE3 — wipe it so the
+            // tile-side ProbeInstalledState and the next session both arrive
+            // here with a clean slate. Versions stay (they're a separate
+            // axis); the install-path miss alone is enough to force a fresh
+            // detection.
+            DiagnosticLog.Write(
+                $"ResolveInstallPath: rejecting stale cache for '{_profile.Id}': '{state.InstallPath}' " +
+                "(failed leaf-name or probe-file check). Clearing.");
+            state.InstallPath = "";
+            try { _config.Save(); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Failed to persist cleared install path: {ex.Message}");
+            }
         }
 
         // 2. Registry — only the WoL profile has a known Inno Setup product
@@ -603,23 +630,40 @@ public class UpdateService
         return null;
     }
 
-    /// <summary>Probe locations for an isolated-folder mod (e.g. WoL).</summary>
+    /// <summary>
+    /// Probe locations for an isolated-folder mod (e.g. WoL).
+    /// Only checks folders named after the mod (<c>profile.DisplayName</c>
+    /// or the leaf of <c>profile.DefaultInstallFolder</c>). Older code also
+    /// fell back to <c>install.ModRoot</c> / <c>install.GameFolder</c> —
+    /// "in case the user extracted the mod on top of AoE3" — but for
+    /// IsolatedFolder mods that's a category error: vanilla AoE3 has the
+    /// same probe files (<c>data\stringtabley.xml</c> etc.), so the
+    /// fallback would happily classify a vanilla AoE3 install as a WoL
+    /// install. Users who legitimately overlay on AoE3 should declare their
+    /// mod as <see cref="ModInstallType.InPlaceOverlay"/> instead.
+    /// </summary>
     private IEnumerable<string> IsolatedCandidates(AoE3Detector.Installation install)
     {
-        // Folder name we expect the mod to live in. Falls back to the
-        // profile's display name when DefaultInstallFolder isn't set.
+        // Folder name we expect the mod to live in. Prefer the leaf of an
+        // absolute DefaultInstallFolder ("C:\\…\\Improvement Mod" → "Improvement Mod"),
+        // else fall back to the DisplayName.
         var folderName = string.IsNullOrEmpty(_profile.DefaultInstallFolder)
             ? _profile.DisplayName
             : Path.GetFileName(_profile.DefaultInstallFolder.TrimEnd('\\', '/'));
 
-        if (!string.IsNullOrEmpty(folderName))
-        {
-            yield return Path.Combine(install.ModRoot, folderName);
-            yield return Path.Combine(install.GameFolder, folderName);
-        }
-        // Some users extract the mod files directly on top of AoE3.
-        yield return install.ModRoot;
-        yield return install.GameFolder;
+        if (string.IsNullOrEmpty(folderName))
+            yield break;
+
+        yield return Path.Combine(install.ModRoot, folderName);
+        yield return Path.Combine(install.GameFolder, folderName);
+
+        // Also check sibling-of-AoE3: when the modder leaves DefaultInstallFolder
+        // empty, the install dialog suggests "<parent of AoE3>\<DisplayName>"
+        // as the default (WoL post-cleanup). Detect there too so a follow-up
+        // launch sees the install.
+        var parent = Path.GetDirectoryName(install.ModRoot.TrimEnd('\\', '/'));
+        if (!string.IsNullOrEmpty(parent))
+            yield return Path.Combine(parent, folderName);
     }
 
     /// <summary>Probe locations for an in-place overlay mod (e.g. IM).</summary>
@@ -647,6 +691,34 @@ public class UpdateService
             return RegistryService.IsValidInstall(path);
 
         return File.Exists(Path.Combine(path, _profile.InstallProbeFile));
+    }
+
+    /// <summary>
+    /// Extra sanity gate on a cached install path for IsolatedFolder mods:
+    /// the leaf folder name has to look like the mod's expected folder
+    /// (DisplayName, or the leaf of DefaultInstallFolder). Otherwise a stale
+    /// entry pointing at something like "…\Age Of Empires 3\bin" — which
+    /// also happens to satisfy the probe-file check, since vanilla AoE3
+    /// carries the same data files — would be re-used forever. Always
+    /// passes for InPlaceOverlay mods (which legitimately live under the
+    /// AoE3 root by design) and for mods with no probe file (legacy path).
+    /// </summary>
+    private bool CachedPathLeafLooksValid(string cachedPath)
+    {
+        if (_profile.InstallType != ModInstallType.IsolatedFolder) return true;
+        if (string.IsNullOrEmpty(_profile.InstallProbeFile)) return true;
+
+        var leaf = Path.GetFileName(cachedPath.TrimEnd('\\', '/'));
+        if (string.IsNullOrEmpty(leaf)) return false;
+
+        string[] expected = new[]
+        {
+            _profile.DisplayName,
+            Path.GetFileName(_profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? ""),
+        };
+        return expected.Any(e =>
+            !string.IsNullOrEmpty(e)
+            && string.Equals(leaf, e, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
