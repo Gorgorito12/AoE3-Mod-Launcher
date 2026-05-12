@@ -11,10 +11,12 @@ namespace WarsOfLibertyLauncher.Services;
 /// Source of truth for "which mods does this launcher know about". Two
 /// layers:
 ///
-///   1. <see cref="_builtIn"/> — embedded at compile time. WoL + Improvement
-///      Mod. Always available, no network needed. The launcher boots from
+///   1. <see cref="_builtIn"/> — embedded at compile time. Wars of Liberty
+///      only. Always available, no network needed. The launcher boots from
 ///      this list so the UI is never empty even on a fresh install with no
-///      internet.
+///      internet. WoL stays hardcoded because it's the launcher's reason
+///      for existing and we don't want a catalog outage to leave a fresh
+///      install with zero mods to show.
 ///
 ///   2. <see cref="_runtime"/> — populated lazily by
 ///      <see cref="RefreshFromCatalogAsync(string, CancellationToken)"/>
@@ -26,18 +28,15 @@ namespace WarsOfLibertyLauncher.Services;
 ///      entry to redirect downloads (defence-in-depth on top of the
 ///      catalog's own PR review).
 ///
-/// Phase 1B note: <see cref="RefreshFromCatalogAsync"/> exists but is not
-/// yet called from anywhere in the launcher. Phase 1C wires it into
-/// MainWindow's startup. Until then, the launcher's behaviour is
-/// identical to before — only the built-in list is observable.
+/// Improvement Mod (and any other community mod) lives only in the
+/// catalog — no built-in shadow entry. A cold start without network shows
+/// just WoL until the catalog fetch completes; the 24h cache means after
+/// the first successful fetch the community mods are available offline.
 /// </summary>
 public static class ModRegistry
 {
     /// <summary>Wars of Liberty — full updater pipeline + community translations.</summary>
     public const string WolId = "wol";
-
-    /// <summary>Improvement Mod — uses its own external patcher; the launcher only plays.</summary>
-    public const string ImprovementModId = "improvement-mod";
 
     /// <summary>
     /// The hard-coded set. Never mutated after construction — treat as
@@ -428,35 +427,6 @@ public static class ModRegistry
                     @"data\unithelpstringsy.xml",
                 },
             },
-        },
-        new ModProfile
-        {
-            Id = ImprovementModId,
-            DisplayName = "Improvement Mod",
-            Subtitle = "AoE3:TAD overhaul",
-            // Bluish accent so it's visually distinct from WoL's red without
-            // clashing with the launcher's dark theme.
-            AccentColor = "#3a8cd9",
-            BannerImage = null,
-            // IM extracts its files INTO the AoE3 folder (or its bin\
-            // subfolder for Steam) and ships its own age3m.exe alongside
-            // the original AoE3 binaries.
-            InstallType = ModInstallType.InPlaceOverlay,
-            // No default — IM lives wherever AoE3 lives. The launcher
-            // resolves AoE3's path separately and uses that.
-            DefaultInstallFolder = "",
-            InstallProbeFile = "age3m.exe",
-            GameExecutable = "age3m.exe",
-            GameArguments = "",
-            // Updates are out of scope for the launcher — IM has its own
-            // patcher (which IS age3m.exe, run with a flag). For now we
-            // only expose PLAY; later we can shell out to the patcher.
-            UpdateMechanism = ModUpdateMechanism.DelegatedExternal,
-            Wol = null,
-            // The IM team doesn't currently maintain a community translation
-            // pipeline compatible with our overlay system. Leaving null hides
-            // the language menu for this mod.
-            Translations = null,
         },
     };
 }

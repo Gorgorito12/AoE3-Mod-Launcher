@@ -2382,15 +2382,9 @@ public partial class MainWindow : Window
         // much simpler install pipeline: download one .zip from the
         // modder's own pinned release, extract overlay, done. Diverge
         // here before the WoL-specific payload-URL / AoE3-clone path.
-        // TODO: InstallGitHubReleasesAsync is missing from this commit —
-        // stub it out so the WoL/classic-UpdateInfo path keeps working.
         if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
         {
-            MessageBox.Show(
-                "The installer for GitHub Releases-type mods is not implemented in this build.\n\nUse a mod with a classic UpdateInfo.xml file (like Wars of Liberty).",
-                "Feature not available",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            await InstallGitHubReleasesAsync();
             return;
         }
 
@@ -2737,6 +2731,221 @@ public partial class MainWindow : Window
         }
 
         // Re-check to detect the freshly installed mod
+        await CheckAsync();
+    }
+
+    /// <summary>
+    /// Install flow for mods declared with <see cref="ModUpdateMechanism.GitHubReleases"/>.
+    /// Compared to the WoL pipeline this is short: one .zip from the modder's
+    /// pinned release, extracted on top of the user's AoE3 folder (the mod is
+    /// always InPlaceOverlay in this branch — IsolatedFolder + GitHubReleases
+    /// would work too but no current mod ships that combo). Two phases:
+    /// Download + Extract. No AoE3 clone, no shortcuts, no registry — the
+    /// in-place files coexist with vanilla AoE3 and the modder owns post-
+    /// install updates via their own patcher.
+    /// </summary>
+    private async Task InstallGitHubReleasesAsync()
+    {
+        var profile = _updateService.Profile;
+        if (profile.GitHubReleases == null
+            || string.IsNullOrEmpty(profile.GitHubReleases.SourceRepo)
+            || string.IsNullOrEmpty(profile.GitHubReleases.ApprovedReleaseTag))
+        {
+            SetStatus(Strings.Get("DlgInstallNoUrlBody"));
+            return;
+        }
+
+        // Detect AoE3 — InPlaceOverlay mods need a base AoE3 install to sit on
+        // top of. Without it there's nowhere to extract to.
+        var aoe3Installs = AoE3Detector.FindAll();
+        if (aoe3Installs.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                Strings.Get("IdleStateGameMissing"),
+                profile.DisplayName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+        var aoe3SourcePath = aoe3Installs[0].ModRoot;
+        var aoe3SourceLabel = aoe3Installs[0].Source;
+
+        // Install dialog. For InPlaceOverlay both the AoE3 source and the
+        // destination are the same folder — the user is allowed to change
+        // the destination via the picker but the default is AoE3's root.
+        var dialog = new InstallFolderDialog(aoe3SourcePath, aoe3SourcePath, aoe3SourceLabel)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true) return;
+        var installFolder = dialog.SelectedFolder;
+
+        // Permission check — IM commonly lives under Program Files (x86),
+        // which needs admin to write to.
+        var probeFolder = Directory.Exists(installFolder)
+            ? installFolder
+            : Path.GetDirectoryName(installFolder) ?? installFolder;
+        if (!ElevationService.CanWriteTo(probeFolder))
+        {
+            DiagnosticLog.Write(
+                $"Cannot write to install folder '{probeFolder}'. Prompting for elevation.");
+
+            var elevateResult = MessageBox.Show(
+                this,
+                Strings.Format("DlgElevationRequiredBody", probeFolder),
+                Strings.Get("DlgElevationRequiredTitle"),
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Information);
+
+            if (elevateResult != MessageBoxResult.OK)
+            {
+                SetStatus(Strings.Get("StatusElevationDenied"));
+                return;
+            }
+            if (ElevationService.RelaunchElevated())
+            {
+                Application.Current.Shutdown();
+                return;
+            }
+            SetStatus(Strings.Get("StatusElevationDenied"));
+            return;
+        }
+
+        // ---- Begin installation ----
+        SetBusy(true);
+        _cts = new CancellationTokenSource();
+        ShowDownloadControls(true);
+
+        StartProgressPanel(
+            ProgressOperation.Install,
+            title: Strings.Format("ProgressTitleInstalling", profile.DisplayName),
+            subtitle: Strings.Get("ProgressSubDownloading"));
+
+        LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
+        PatchProgress.Value = 0;
+        OverallProgress.Value = 0;
+        PatchBytesText.Text = "";
+        OverallBytesText.Text = "";
+        SpeedText.Text = "";
+        EtaText.Text = "";
+
+        // Phase weights: download dominates wall-clock for a 1 GB asset.
+        // Extract is fast (local SSD), so 70/30 produces an honest-feeling bar.
+        const double weightDownload = 70;
+        const double weightExtract  = 30;
+
+        var speed = new SpeedTracker();
+        _currentInstallPhase = InstallPhase.Download;
+
+        var statusProgress = new Progress<string>(s =>
+        {
+            SetStatus(s);
+            LblCurrentPatch.Text = s;
+        });
+
+        var byteProgress = new Progress<(long BytesDone, long BytesTotal)>(p =>
+        {
+            speed.Sample(p.BytesDone);
+            bool knowTotal = p.BytesTotal > 0;
+
+            if (knowTotal)
+            {
+                double pct = (double)p.BytesDone / p.BytesTotal * 100.0;
+                PatchProgress.Value = pct;
+                OverallProgress.Value = (pct / 100.0) * weightDownload;
+                PatchBytesText.Text =
+                    $"{FormatBytes(p.BytesDone)} / {FormatBytes(p.BytesTotal)}";
+                var eta = speed.EstimateTimeRemaining(p.BytesTotal - p.BytesDone);
+                EtaText.Text = eta.HasValue
+                    ? Strings.Format("ProgressEta", FormatDuration(eta.Value))
+                    : (speed.BytesPerSecond > 0
+                        ? Strings.Format("ProgressEta", Strings.Get("ProgressEtaCalculating"))
+                        : "");
+            }
+            else
+            {
+                PatchProgress.Value = 0;
+                PatchBytesText.Text = FormatBytes(p.BytesDone);
+                EtaText.Text = "";
+            }
+            OverallBytesText.Text = $"{OverallProgress.Value:0}%";
+            SpeedText.Text = speed.BytesPerSecond > 0
+                ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
+                    FormatBytes((long)speed.BytesPerSecond))
+                : "";
+        });
+
+        // ArchiveService doesn't emit a phase change of its own — it just
+        // starts firing extract events once download is done. We flip the
+        // phase the first time an extract event arrives so the speed label
+        // switches from "Download" to "Extract" cleanly.
+        var extractProgress = new Progress<ArchiveExtractProgress>(p =>
+        {
+            if (_currentInstallPhase != InstallPhase.Extract)
+            {
+                _currentInstallPhase = InstallPhase.Extract;
+                speed.Reset();
+            }
+            speed.Sample(p.BytesRead);
+            double pct = p.BytesTotal > 0
+                ? (double)p.BytesRead / p.BytesTotal * 100.0
+                : 0;
+            PatchProgress.Value = pct;
+            OverallProgress.Value = weightDownload + (pct / 100.0) * weightExtract;
+            PatchBytesText.Text = $"{p.EntriesDone} files";
+            OverallBytesText.Text = $"{OverallProgress.Value:0}%";
+            var displayFile = p.CurrentFile.Length > 80
+                ? "..." + p.CurrentFile[^80..]
+                : p.CurrentFile;
+            LblCurrentPatch.Text = $"📂 {displayFile}";
+            SpeedText.Text = speed.BytesPerSecond > 0
+                ? Strings.Format(SpeedLabelKeyForPhase(_currentInstallPhase),
+                    FormatBytes((long)speed.BytesPerSecond))
+                : "";
+            EtaText.Text = "";
+        });
+
+        try
+        {
+            var installer = new GitHubReleasesInstallService();
+            await installer.InstallAsync(
+                profile,
+                installFolder,
+                statusProgress,
+                byteProgress,
+                extractProgress,
+                _cts.Token);
+
+            PatchProgress.Value = 100;
+            OverallProgress.Value = 100;
+
+            _config.GetActiveState().InstallPath = installFolder;
+            _config.Save();
+
+            SetStatus(Strings.Format("StatusInstallSuccess", profile.DisplayName));
+            ShowProgressCompleted("ProgressTitleCompleted",
+                Strings.Format("StatusInstallSuccess", profile.DisplayName));
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus(Strings.Get("StatusCancelledUpdate"));
+            ShowProgressCancelled();
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error: {ex.Message}");
+            DiagnosticLog.Write($"Install (GitHubReleases) failed: {ex}");
+            ShowProgressError(ex.Message);
+        }
+        finally
+        {
+            SetBusy(false);
+            ShowDownloadControls(false);
+            ResetProgressUI();
+            _currentInstallPhase = InstallPhase.None;
+        }
+
         await CheckAsync();
     }
 

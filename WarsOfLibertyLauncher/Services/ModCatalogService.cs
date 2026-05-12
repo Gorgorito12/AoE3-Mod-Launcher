@@ -31,7 +31,10 @@ namespace WarsOfLibertyLauncher.Services;
 ///   - the JSON is malformed
 /// In all those cases, callers fall back to the built-in
 /// <see cref="ModRegistry"/> entries — the launcher always has at least
-/// the WoL + Improvement Mod profiles available offline.
+/// the WoL profile available offline. Improvement Mod and any other
+/// community mod live in the catalog only, so a cold start with no
+/// network shows just WoL until the first successful fetch (then the
+/// 24h cache keeps them available offline).
 /// </summary>
 public class ModCatalogService
 {
