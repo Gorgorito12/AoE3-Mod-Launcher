@@ -1518,8 +1518,19 @@ public partial class MainWindow : Window
             });
 
             // Mod-only install on top of existing (overwrites damaged files).
+            // Repair re-stamps the manifest with the version we just verified;
+            // for GitHubReleases mods that's the approved tag we'd reinstall.
             // No phase reporter here — repair doesn't show the breadcrumb.
+            var repairVersion = _updateService.Profile.UpdateMechanism switch
+            {
+                ModUpdateMechanism.GitHubReleases =>
+                    _updateService.Profile.GitHubReleases?.ApprovedReleaseTag ?? "",
+                _ => _updateService.CurrentVersion?.Ver
+                    ?? _updateService.LatestVersion?.Ver ?? "",
+            };
             await nativeInstaller.InstallModOnlyAsync(
+                _updateService.Profile,
+                repairVersion,
                 payloadUrls,
                 installPath,
                 dlProgress,
@@ -2699,10 +2710,23 @@ public partial class MainWindow : Window
             // Wire up pause to native installer
             _cloneService = nativeInstaller.CloneService;
 
+            // Version stamped into the install manifest / registry comes from
+            // a different source depending on the mod's update mechanism:
+            //   * GitHubReleases → the approved release tag we just resolved.
+            //   * WolPatcher    → the latest version from UpdateInfo.xml.
+            var installVersion = _updateService.Profile.UpdateMechanism switch
+            {
+                ModUpdateMechanism.GitHubReleases =>
+                    _updateService.Profile.GitHubReleases?.ApprovedReleaseTag ?? "",
+                _ => _updateService.LatestVersion?.Ver ?? "",
+            };
+
             if (aoe3SourcePath != null)
             {
-                // Full install: clone AoE3 + overlay WoL
+                // Full install: clone AoE3 + overlay mod
                 await nativeInstaller.InstallAsync(
+                    _updateService.Profile,
+                    installVersion,
                     payloadUrls,
                     aoe3SourcePath,
                     installFolder,
@@ -2716,8 +2740,10 @@ public partial class MainWindow : Window
             }
             else
             {
-                // Mod-only: just download and copy WoL files
+                // Mod-only: just download and copy mod files
                 await nativeInstaller.InstallModOnlyAsync(
+                    _updateService.Profile,
+                    installVersion,
                     payloadUrls,
                     installFolder,
                     dlProgress,
@@ -4012,7 +4038,7 @@ public partial class MainWindow : Window
         if (!EnsureGameNotRunning()) return;
 
         var uninstaller = new UninstallService();
-        var plan = uninstaller.Plan(_updateService.InstallPath);
+        var plan = uninstaller.Plan(_updateService.Profile, _updateService.InstallPath);
 
         var dialog = new UninstallDialog(plan) { Owner = this };
         if (dialog.ShowDialog() != true) return;
@@ -4046,7 +4072,8 @@ public partial class MainWindow : Window
 
         try
         {
-            var result = await uninstaller.UninstallAsync(plan, dialog.Options, progress);
+            var result = await uninstaller.UninstallAsync(
+                _updateService.Profile, plan, dialog.Options, progress);
 
             // Clear the saved path so re-detection runs from scratch
             if (dialog.Options.ResetConfig || result.Success)

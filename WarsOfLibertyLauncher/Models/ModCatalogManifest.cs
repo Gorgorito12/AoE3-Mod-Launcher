@@ -77,6 +77,17 @@ public class ModCatalogManifest
     [JsonPropertyName("approvedReleaseTag")]
     public string? ApprovedReleaseTag { get; set; }
 
+    /// <summary>
+    /// Optional Add/Remove Programs registry subkey. When set, the launcher
+    /// uses this string as the Inno-style key under
+    /// <c>HKLM\SOFTWARE\…\Uninstall\&lt;here&gt;</c>. Lets modders keep a
+    /// stable key across releases — useful for installers that already had
+    /// one. When omitted, the launcher derives a key from <see cref="Id"/>
+    /// (<c>"&lt;id&gt;_launcher"</c>), which is deterministic and safe.
+    /// </summary>
+    [JsonPropertyName("installProductGuid")]
+    public string? InstallProductGuid { get; set; }
+
     [JsonPropertyName("install")]
     public ModCatalogInstall Install { get; set; } = new();
 

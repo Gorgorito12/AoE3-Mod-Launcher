@@ -298,6 +298,7 @@ public static class ModRegistry
             Author = m.Author ?? "",
             OfficialWebsite = m.OfficialWebsite ?? "",
             Description = m.Description,
+            ProductGuid = m.InstallProductGuid ?? "",
             // Built-in pack URI stays null for community mods — they use
             // IconUrl/BannerUrl resolved against the catalog repo.
             BannerImage = null,
@@ -395,6 +396,11 @@ public static class ModRegistry
             DisplayName = "Wars of Liberty",
             Subtitle = "Launcher",
             AccentColor = "#c8102e",
+            // Preserve the original Inno Setup product GUID so the
+            // launcher continues to find Add/Remove Programs entries written
+            // by older builds and the (legacy) Inno installer.
+            ProductGuid = "{EB448764-CABB-4766-8055-495AEA292020}_is1",
+            Author = "Wars of Liberty Team",
             // Reuse the launcher's app icon (WoL.ico, registered as a
             // pack-resource in the .csproj) so the WoL tile shows the real
             // logo instead of the "W" placeholder.

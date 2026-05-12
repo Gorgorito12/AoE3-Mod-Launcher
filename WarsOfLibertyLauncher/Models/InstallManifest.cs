@@ -9,17 +9,55 @@ namespace WarsOfLibertyLauncher.Models;
 /// <summary>
 /// Records exactly which files and folders the launcher created during a
 /// native install. The manifest lives at the root of the install folder
-/// (wol-manifest.json) and is the source of truth for safe uninstall.
+/// (<see cref="FileName"/>) and is the source of truth for safe uninstall.
 ///
 /// Without this file, the uninstaller falls back to a much more conservative
-/// strategy (delete the whole install folder only if it's clearly a WoL
-/// subfolder — never if it looks like an AoE3 root).
+/// strategy (probe-file marker check + best-effort registry/shortcut lookup
+/// from the active profile).
+///
+/// Backward compat: older builds wrote <see cref="LegacyFileName"/> for the
+/// WoL install. <see cref="TryLoad(string)"/> probes the new filename first,
+/// then falls back to the legacy one — so a WoL folder produced by an old
+/// launcher is still readable.
 /// </summary>
 public class InstallManifest
 {
-    public const string FileName = "wol-manifest.json";
+    /// <summary>Current manifest filename. Mod-agnostic.</summary>
+    public const string FileName = "install-manifest.json";
 
-    /// <summary>Mod version installed (e.g. "1.0.15d").</summary>
+    /// <summary>Legacy filename (WoL-only builds). Kept for read-side fallback.</summary>
+    public const string LegacyFileName = "wol-manifest.json";
+
+    /// <summary>
+    /// Stable identifier of the mod this manifest belongs to (e.g. "wol",
+    /// "improvement-mod"). Empty for manifests written by older builds.
+    /// </summary>
+    [JsonPropertyName("modId")]
+    public string ModId { get; set; } = "";
+
+    /// <summary>
+    /// Add/Remove Programs registry subkey written at install time. The
+    /// uninstaller uses this to delete the exact key that was created —
+    /// safer than re-deriving from the profile, since the profile's
+    /// product GUID may have changed across launcher versions.
+    /// </summary>
+    [JsonPropertyName("productGuid")]
+    public string ProductGuid { get; set; } = "";
+
+    /// <summary>
+    /// Human-readable name written into Add/Remove Programs and used as the
+    /// shortcut filename base. Carrying it in the manifest lets the
+    /// uninstaller match the exact shortcut/registry display without
+    /// having to re-resolve the active profile.
+    /// </summary>
+    [JsonPropertyName("appName")]
+    public string AppName { get; set; } = "";
+
+    /// <summary>"Publisher" field shown in Add/Remove Programs.</summary>
+    [JsonPropertyName("publisher")]
+    public string Publisher { get; set; } = "";
+
+    /// <summary>Mod version installed (free-form string).</summary>
     [JsonPropertyName("version")]
     public string Version { get; set; } = "";
 
@@ -75,17 +113,32 @@ public class InstallManifest
 
     public static InstallManifest? TryLoad(string installPath)
     {
-        try
+        if (string.IsNullOrEmpty(installPath)) return null;
+
+        // Probe the current filename first, then fall back to the legacy
+        // one. Either way deserialise into the same shape — older files
+        // simply leave the new fields empty.
+        var paths = new[]
         {
-            var path = GetManifestPath(installPath);
-            if (!File.Exists(path)) return null;
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<InstallManifest>(json);
-        }
-        catch
+            Path.Combine(installPath, FileName),
+            Path.Combine(installPath, LegacyFileName),
+        };
+
+        foreach (var path in paths)
         {
-            return null;
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var json = File.ReadAllText(path);
+                return JsonSerializer.Deserialize<InstallManifest>(json);
+            }
+            catch
+            {
+                // Skip unreadable / malformed files; try the next candidate.
+                continue;
+            }
         }
+        return null;
     }
 
     public void Save()

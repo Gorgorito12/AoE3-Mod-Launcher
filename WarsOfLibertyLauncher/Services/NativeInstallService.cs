@@ -60,8 +60,12 @@ public enum InstallPhase
 /// </summary>
 public class NativeInstallService
 {
-    private const string ProductGuid = "{EB448764-CABB-4766-8055-495AEA292020}_is1";
-    private const string AppName = "Wars of Liberty";
+    /// <summary>
+    /// Fallback publisher when the profile doesn't declare an author.
+    /// Generic on purpose — community mods rarely set a "Publisher" string
+    /// and this keeps Add/Remove Programs entries from looking empty.
+    /// </summary>
+    private const string DefaultPublisher = "AoE3 Mod";
 
     private readonly DownloadService _downloader;
     private readonly FolderCloneService _cloneService;
@@ -93,7 +97,20 @@ public class NativeInstallService
     /// <summary>
     /// Full installation pipeline using multiple ZIP part URLs.
     /// </summary>
+    /// <param name="profile">
+    /// Active mod profile. Drives the names written to shortcuts, registry,
+    /// and the install manifest, plus selects the right executable for the
+    /// desktop shortcut (<c>age3y.exe</c> for WoL, <c>age3m.exe</c> for IM,
+    /// etc.).
+    /// </param>
+    /// <param name="version">
+    /// Free-form version string written into the registry's DisplayVersion
+    /// and the install manifest. Caller picks the right source (latest WoL
+    /// version, the approved GitHub release tag, etc.).
+    /// </param>
     public async Task InstallAsync(
+        ModProfile profile,
+        string version,
         string[] payloadZipUrls,
         string aoe3SourcePath,
         string destinationFolder,
@@ -105,14 +122,14 @@ public class NativeInstallService
         IProgress<ModOverlayProgress>? overlayProgress = null,
         CancellationToken ct = default)
     {
-        DiagnosticLog.Write($"=== Native Install Start ===");
+        DiagnosticLog.Write($"=== Native Install Start ({profile.DisplayName}) ===");
         DiagnosticLog.Write($"  Parts: {payloadZipUrls.Length}");
         DiagnosticLog.Write($"  AoE3 Source: {aoe3SourcePath}");
         DiagnosticLog.Write($"  Destination: {destinationFolder}");
 
         // ---- Phase 1: Download all parts and concatenate ----
         phaseProgress?.Report(InstallPhase.Download);
-        statusProgress?.Report("Downloading Wars of Liberty files...");
+        statusProgress?.Report($"Downloading {profile.DisplayName} files...");
         var zipPath = await DownloadAndConcatenatePartsAsync(payloadZipUrls, downloadProgress, statusProgress, ct);
 
         // ---- Phase 2: Extract payload to temp ----
@@ -129,31 +146,34 @@ public class NativeInstallService
         // (Still part of the Clone phase from the UI's perspective.)
         FlattenBinSubfolder(destinationFolder, statusProgress);
 
-        // ---- Phase 4: Copy WoL files on top ----
+        // ---- Phase 4: Copy mod files on top ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
-        statusProgress?.Report("Installing Wars of Liberty mod files...");
+        statusProgress?.Report($"Installing {profile.DisplayName} mod files...");
         await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
 
         // ---- Phase 5: Finalize (shortcuts, registry, manifest) ----
         phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
-        var shortcuts = CreateShortcuts(destinationFolder, out var startMenuFolder);
+        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder);
 
         statusProgress?.Report("Writing registry entries...");
-        WriteRegistryEntries(destinationFolder);
+        WriteRegistryEntries(profile, version, destinationFolder);
 
-        WriteManifest(destinationFolder, aoe3SourcePath, clonedAoe3: true,
+        WriteManifest(profile, version, destinationFolder, aoe3SourcePath, clonedAoe3: true,
             shortcuts, startMenuFolder);
 
-        // Snapshot the canonical English files for translation overlay support.
-        // Captures stringtabley.xml + unithelpstringsy.xml so the launcher can
-        // (a) hash them for version detection even when a translation is active,
-        // (b) revert to English on demand.
-        try { new TranslationService(destinationFolder).RefreshOriginalsSnapshot(); }
-        catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
+        // Translation snapshot is WoL-specific (it relies on the WoL-style
+        // <c>data\stringtabley.xml</c> and <c>unithelpstringsy.xml</c> layout
+        // for hash-based version detection). Skip it for other profiles to
+        // avoid scary error logs about missing files.
+        if (profile.Translations != null && profile.Translations.CoveredFiles.Count > 0)
+        {
+            try { new TranslationService(destinationFolder).RefreshOriginalsSnapshot(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
+        }
 
         phaseProgress?.Report(InstallPhase.Complete);
-        DiagnosticLog.Write("=== Native Install Complete ===");
+        DiagnosticLog.Write($"=== Native Install Complete ({profile.DisplayName}) ===");
     }
 
     /// <summary>
@@ -161,6 +181,8 @@ public class NativeInstallService
     /// already contains AoE3 (e.g., user picked an existing AoE3 folder as dest).
     /// </summary>
     public async Task InstallModOnlyAsync(
+        ModProfile profile,
+        string version,
         string[] payloadZipUrls,
         string destinationFolder,
         IProgress<DownloadProgress>? downloadProgress = null,
@@ -170,13 +192,13 @@ public class NativeInstallService
         IProgress<ModOverlayProgress>? overlayProgress = null,
         CancellationToken ct = default)
     {
-        DiagnosticLog.Write($"=== Native Install (mod-only) Start ===");
+        DiagnosticLog.Write($"=== Native Install (mod-only) Start ({profile.DisplayName}) ===");
         DiagnosticLog.Write($"  Parts: {payloadZipUrls.Length}");
         DiagnosticLog.Write($"  Destination: {destinationFolder}");
 
         // ---- Phase 1: Download ----
         phaseProgress?.Report(InstallPhase.Download);
-        statusProgress?.Report("Downloading Wars of Liberty files...");
+        statusProgress?.Report($"Downloading {profile.DisplayName} files...");
         var zipPath = await DownloadAndConcatenatePartsAsync(payloadZipUrls, downloadProgress, statusProgress, ct);
 
         // ---- Phase 2: Extract ----
@@ -184,27 +206,30 @@ public class NativeInstallService
         statusProgress?.Report("Extracting mod files...");
         var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
 
-        // ---- Phase 3: Copy WoL on top (no Clone phase in mod-only) ----
+        // ---- Phase 3: Copy mod on top (no Clone phase in mod-only) ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
-        statusProgress?.Report("Installing Wars of Liberty mod files...");
+        statusProgress?.Report($"Installing {profile.DisplayName} mod files...");
         await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
 
         // ---- Phase 4: Finalize ----
         phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
-        var shortcuts = CreateShortcuts(destinationFolder, out var startMenuFolder);
-        WriteRegistryEntries(destinationFolder);
+        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder);
+        WriteRegistryEntries(profile, version, destinationFolder);
 
-        WriteManifest(destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
+        WriteManifest(profile, version, destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
             shortcuts, startMenuFolder);
 
-        // Same snapshot as the full install — stringtabley.xml /
-        // unithelpstringsy.xml saved for translation overlay support.
-        try { new TranslationService(destinationFolder).RefreshOriginalsSnapshot(); }
-        catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
+        // Translation snapshot only applies to mods that opt into the WoL-
+        // style translation overlay system (CoveredFiles non-empty).
+        if (profile.Translations != null && profile.Translations.CoveredFiles.Count > 0)
+        {
+            try { new TranslationService(destinationFolder).RefreshOriginalsSnapshot(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
+        }
 
         phaseProgress?.Report(InstallPhase.Complete);
-        DiagnosticLog.Write("=== Native Install (mod-only) Complete ===");
+        DiagnosticLog.Write($"=== Native Install (mod-only) Complete ({profile.DisplayName}) ===");
     }
 
     // =========================================================================
@@ -536,44 +561,46 @@ public class NativeInstallService
     }
 
     /// <summary>
-    /// Creates a Desktop and Start Menu shortcut pointing to age3y.exe
-    /// inside the destination folder. Returns the absolute paths of the
-    /// shortcuts created (so the install manifest can record them for
-    /// later cleanup).
+    /// Creates a Desktop and Start Menu shortcut pointing to the profile's
+    /// game executable inside the destination folder. Returns the absolute
+    /// paths of the shortcuts created (so the install manifest can record
+    /// them for later cleanup).
     /// </summary>
-    private static List<string> CreateShortcuts(string installFolder, out string? startMenuFolder)
+    private static List<string> CreateShortcuts(
+        ModProfile profile, string installFolder, out string? startMenuFolder)
     {
         var created = new List<string>();
         startMenuFolder = null;
 
         try
         {
-            var age3yExe = FindAge3yExe(installFolder);
-            if (age3yExe == null)
+            var exePath = FindGameExecutable(installFolder, profile.GameExecutable);
+            if (exePath == null)
             {
-                DiagnosticLog.Write("Cannot create shortcuts: age3y.exe not found.");
+                DiagnosticLog.Write(
+                    $"Cannot create shortcuts: '{profile.GameExecutable}' not found in '{installFolder}'.");
                 return created;
             }
 
-            // Use the mod's WoL.ico as the shortcut icon if it shipped with
-            // the payload. Falls back to the .exe's own icon if not present.
-            var wolIcon = Path.Combine(installFolder, "WoL.ico");
-            string? iconPath = File.Exists(wolIcon) ? wolIcon : null;
+            string? iconPath = FindShortcutIcon(installFolder, profile);
+
+            var appName = profile.DisplayName;
+            var description = $"{appName} - Age of Empires III Mod";
 
             // Desktop shortcut
             var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            var desktopLink = Path.Combine(desktopPath, $"{AppName}.lnk");
-            CreateShortcutFile(desktopLink, age3yExe, installFolder, iconPath);
+            var desktopLink = Path.Combine(desktopPath, $"{appName}.lnk");
+            CreateShortcutFile(desktopLink, exePath, installFolder, description, iconPath);
             created.Add(desktopLink);
 
             // Start Menu shortcut
             var startMenuPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-                AppName);
+                appName);
             Directory.CreateDirectory(startMenuPath);
             startMenuFolder = startMenuPath;
-            var startMenuLink = Path.Combine(startMenuPath, $"{AppName}.lnk");
-            CreateShortcutFile(startMenuLink, age3yExe, installFolder, iconPath);
+            var startMenuLink = Path.Combine(startMenuPath, $"{appName}.lnk");
+            CreateShortcutFile(startMenuLink, exePath, installFolder, description, iconPath);
             created.Add(startMenuLink);
 
             DiagnosticLog.Write(iconPath != null
@@ -588,13 +615,40 @@ public class NativeInstallService
     }
 
     /// <summary>
-    /// Writes the install manifest (wol-manifest.json) at the root of the
-    /// install folder. The manifest records every file and directory the
-    /// installer placed on disk so the uninstaller can later delete them
-    /// safely without touching anything else (especially Age of Empires III
-    /// base game files).
+    /// Picks the icon for the desktop/Start Menu shortcut, in priority
+    /// order: the community-cached profile icon (downloaded by
+    /// <c>ModAssetCacheService</c>); any <c>.ico</c> shipping inside the
+    /// install folder root (e.g. WoL.ico); otherwise null (the shortcut
+    /// falls back to the .exe's embedded icon).
+    /// </summary>
+    private static string? FindShortcutIcon(string installFolder, ModProfile profile)
+    {
+        if (!string.IsNullOrEmpty(profile.LocalIconPath) && File.Exists(profile.LocalIconPath))
+            return profile.LocalIconPath;
+
+        try
+        {
+            var ico = Directory.EnumerateFiles(installFolder, "*.ico", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault();
+            if (!string.IsNullOrEmpty(ico)) return ico;
+        }
+        catch { /* non-fatal, fall through to null */ }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Writes the install manifest at the root of the install folder. The
+    /// manifest records every file and directory the installer placed on
+    /// disk so the uninstaller can later delete them safely without touching
+    /// anything else (especially Age of Empires III base game files), and
+    /// also stamps the mod-id / appName / productGuid / publisher used at
+    /// install time so the uninstaller doesn't have to re-derive them from
+    /// the active profile (which may have changed across launcher versions).
     /// </summary>
     private static void WriteManifest(
+        ModProfile profile,
+        string version,
         string installFolder,
         string? aoe3SourcePath,
         bool clonedAoe3,
@@ -607,7 +661,11 @@ public class NativeInstallService
 
             var manifest = new InstallManifest
             {
-                Version = "1.0.15d",
+                ModId = profile.Id,
+                ProductGuid = profile.EffectiveProductGuid,
+                AppName = profile.DisplayName,
+                Publisher = string.IsNullOrEmpty(profile.Author) ? DefaultPublisher : profile.Author,
+                Version = version,
                 InstallPath = installFolder,
                 InstalledAt = DateTime.UtcNow,
                 Aoe3SourcePath = aoe3SourcePath,
@@ -661,19 +719,22 @@ public class NativeInstallService
     }
 
     /// <summary>
-    /// Writes the Windows registry entries that allow the launcher's
-    /// RegistryService to detect this installation on future runs. Also makes
-    /// the installation appear in Add/Remove Programs.
+    /// Writes the Windows registry entries that make the install visible in
+    /// Add/Remove Programs and let the launcher's RegistryService detect this
+    /// installation on future runs. Subkey, display name, publisher and
+    /// version all come from the active profile / caller — no WoL-specific
+    /// constants here.
     /// </summary>
-    private static void WriteRegistryEntries(string installFolder)
+    private static void WriteRegistryEntries(
+        ModProfile profile, string version, string installFolder)
     {
         try
         {
-            // Write to HKLM (requires admin) first, fall back to HKCU
-            if (!TryWriteRegistryTo(Registry.LocalMachine, installFolder))
+            // Write to HKLM (requires admin) first, fall back to HKCU.
+            if (!TryWriteRegistryTo(Registry.LocalMachine, profile, version, installFolder))
             {
                 DiagnosticLog.Write("HKLM write failed (no admin); trying HKCU...");
-                TryWriteRegistryTo(Registry.CurrentUser, installFolder);
+                TryWriteRegistryTo(Registry.CurrentUser, profile, version, installFolder);
             }
         }
         catch (Exception ex)
@@ -682,20 +743,23 @@ public class NativeInstallService
         }
     }
 
-    private static bool TryWriteRegistryTo(RegistryKey root, string installFolder)
+    private static bool TryWriteRegistryTo(
+        RegistryKey root, ModProfile profile, string version, string installFolder)
     {
         try
         {
-            var keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + ProductGuid;
+            var keyPath =
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + profile.EffectiveProductGuid;
             using var key = root.CreateSubKey(keyPath, writable: true);
             if (key == null) return false;
 
-            key.SetValue("DisplayName", AppName);
+            key.SetValue("DisplayName", profile.DisplayName);
             key.SetValue("Inno Setup: App Path", installFolder);
             key.SetValue("Path", installFolder);
             key.SetValue("InstallLocation", installFolder);
-            key.SetValue("Publisher", "Wars of Liberty Team");
-            key.SetValue("DisplayVersion", "1.0.15d");
+            key.SetValue("Publisher",
+                string.IsNullOrEmpty(profile.Author) ? DefaultPublisher : profile.Author);
+            key.SetValue("DisplayVersion", string.IsNullOrEmpty(version) ? "1.0" : version);
             key.SetValue("UninstallString", ""); // No uninstaller — user deletes folder
             key.SetValue("NoModify", 1, RegistryValueKind.DWord);
             key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
@@ -709,19 +773,33 @@ public class NativeInstallService
         }
     }
 
-    private static string? FindAge3yExe(string installFolder)
+    /// <summary>
+    /// Resolves the absolute path of the game executable inside an install
+    /// folder. Prefers <c>&lt;install&gt;\bin\&lt;exe&gt;</c> (Steam layout),
+    /// then <c>&lt;install&gt;\&lt;exe&gt;</c>, then a recursive search as
+    /// last resort. Returns null when nothing matches — the caller logs the
+    /// missing-exe and skips shortcut creation rather than failing the
+    /// install.
+    /// </summary>
+    private static string? FindGameExecutable(string installFolder, string exeName)
     {
-        // age3y.exe lives in the bin\ folder inside the AoE3/WoL install
-        var binFolder = Path.Combine(installFolder, "bin");
-        if (Directory.Exists(binFolder))
-        {
-            var exe = Path.Combine(binFolder, "age3y.exe");
-            if (File.Exists(exe)) return exe;
-        }
+        if (string.IsNullOrEmpty(exeName)) return null;
 
-        // Fallback: search recursively
-        var candidates = Directory.GetFiles(installFolder, "age3y.exe", SearchOption.AllDirectories);
-        return candidates.FirstOrDefault();
+        var binCandidate = Path.Combine(installFolder, "bin", exeName);
+        if (File.Exists(binCandidate)) return binCandidate;
+
+        var rootCandidate = Path.Combine(installFolder, exeName);
+        if (File.Exists(rootCandidate)) return rootCandidate;
+
+        try
+        {
+            return Directory.GetFiles(installFolder, exeName, SearchOption.AllDirectories)
+                .FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -731,7 +809,8 @@ public class NativeInstallService
     /// target executable.
     /// </summary>
     private static void CreateShortcutFile(
-        string linkPath, string targetExe, string workingDir, string? iconPath = null)
+        string linkPath, string targetExe, string workingDir,
+        string description, string? iconPath = null)
     {
         // Use IWshRuntimeLibrary via dynamic COM interop (available on all Windows)
         var shellType = Type.GetTypeFromProgID("WScript.Shell");
@@ -743,7 +822,7 @@ public class NativeInstallService
             var shortcut = shell.CreateShortcut(linkPath);
             shortcut.TargetPath = targetExe;
             shortcut.WorkingDirectory = workingDir;
-            shortcut.Description = "Wars of Liberty - Age of Empires III Mod";
+            shortcut.Description = description;
             if (!string.IsNullOrEmpty(iconPath) && File.Exists(iconPath))
             {
                 // "<path>,<index>" — index 0 = first icon in the .ico file

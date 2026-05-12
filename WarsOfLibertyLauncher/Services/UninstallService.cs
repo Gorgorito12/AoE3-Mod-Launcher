@@ -43,33 +43,39 @@ public class UninstallOptions
 }
 
 /// <summary>
-/// Removes a Wars of Liberty installation by deleting the entire install
-/// folder. Safe because the launcher always installs WoL into its own
-/// dedicated folder (a clone of AoE3 + the mod overlay), separate from the
-/// original AoE3 installation.
+/// Removes a mod installation produced by the launcher's native installer.
+/// Works for any profile — the install folder is always dedicated to a
+/// single mod (a clone of AoE3 + the mod overlay), separate from the user's
+/// original AoE3 install.
 ///
-/// One safety check: the folder must contain the WoL marker
-/// (<c>art\zulushield\</c>). Without it we abort — we won't delete a folder
-/// that isn't actually a WoL install.
+/// Validity check: the folder must contain the profile's probe file
+/// (<see cref="ModProfile.InstallProbeFile"/>). Without it we abort — we
+/// won't delete a folder that isn't actually a recognised install.
 /// </summary>
 public class UninstallService
 {
-    private const string ProductGuid = "{EB448764-CABB-4766-8055-495AEA292020}_is1";
-    private const string AppName = "Wars of Liberty";
-
     /// <summary>
     /// Builds an <see cref="UninstallPlan"/> describing what we'll remove.
-    /// Validates that the path looks like a WoL install (has the marker).
+    /// Validates that the path looks like a real install for
+    /// <paramref name="profile"/> by checking the probe file.
     /// </summary>
-    public UninstallPlan Plan(string installPath)
+    public UninstallPlan Plan(ModProfile profile, string installPath)
     {
         if (string.IsNullOrEmpty(installPath) || !Directory.Exists(installPath))
             return new UninstallPlan(UninstallMode.NothingToDo, installPath ?? "", 0, 0);
 
-        // Marker check: only delete folders that contain the WoL signature.
-        // This rules out catastrophic accidents like the user pointing at
-        // their AoE3 root, an unrelated folder, or a drive root.
-        if (!Directory.Exists(Path.Combine(installPath, "art", "zulushield")))
+        // Probe check: only delete folders that look like the mod we expect.
+        // Rules out catastrophic accidents — user pointing at the AoE3 root,
+        // an unrelated folder, or a drive root. An empty ProbeFile means the
+        // profile didn't declare one, in which case we require a manifest
+        // (read by callers) before allowing deletion. With neither, refuse.
+        if (!string.IsNullOrEmpty(profile.InstallProbeFile))
+        {
+            var probe = Path.Combine(installPath, profile.InstallProbeFile);
+            if (!File.Exists(probe))
+                return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
+        }
+        else if (InstallManifest.TryLoad(installPath) == null)
         {
             return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
         }
@@ -88,15 +94,19 @@ public class UninstallService
 
     /// <summary>
     /// Performs the uninstall according to the plan + chosen options.
-    /// Reports progress as a percentage (0–100) and current step text.
+    /// Reports progress as a percentage (0–100) and current step text. The
+    /// profile is used for registry / shortcut fallbacks when the on-disk
+    /// install manifest is missing or doesn't carry the relevant fields.
     /// </summary>
     public async Task<UninstallResult> UninstallAsync(
+        ModProfile profile,
         UninstallPlan plan,
         UninstallOptions options,
         IProgress<(double Percent, string Step)>? progress = null,
         CancellationToken ct = default)
     {
-        DiagnosticLog.Write($"=== Uninstall start (mode={plan.Mode}, path='{plan.InstallPath}') ===");
+        DiagnosticLog.Write(
+            $"=== Uninstall start ({profile.DisplayName}, mode={plan.Mode}, path='{plan.InstallPath}') ===");
 
         if (plan.Mode == UninstallMode.NotAValidInstall)
         {
@@ -105,7 +115,7 @@ public class UninstallService
                 FilesDeleted: 0, DirectoriesDeleted: 0, ShortcutsDeleted: 0,
                 RegistryRemoved: false, ConfigRemoved: false,
                 Errors: new(),
-                Message: "Path does not look like a valid Wars of Liberty install.");
+                Message: $"Path does not look like a valid {profile.DisplayName} install.");
         }
 
         if (plan.Mode == UninstallMode.NothingToDo)
@@ -113,10 +123,11 @@ public class UninstallService
             return new UninstallResult(true, 0, 0, 0, false, false, new(), "Nothing to do.");
         }
 
-        return await Task.Run(() => DoUninstall(plan, options, progress, ct), ct);
+        return await Task.Run(() => DoUninstall(profile, plan, options, progress, ct), ct);
     }
 
     private UninstallResult DoUninstall(
+        ModProfile profile,
         UninstallPlan plan,
         UninstallOptions options,
         IProgress<(double, string)>? progress,
@@ -135,7 +146,7 @@ public class UninstallService
         //              manifest reference paths still resolve) ----
         if (options.DeleteShortcuts)
         {
-            shortcutsDeleted = DeleteShortcuts(plan.InstallPath, errors);
+            shortcutsDeleted = DeleteShortcuts(profile, plan.InstallPath, errors);
         }
 
         // ---- Phase 2: delete the install folder, recursively ----
@@ -148,7 +159,7 @@ public class UninstallService
         // ---- Phase 3: registry ----
         if (options.RemoveRegistry)
         {
-            registryRemoved = RemoveRegistryEntries(errors);
+            registryRemoved = RemoveRegistryEntries(profile, plan.InstallPath, errors);
         }
 
         // ---- Phase 4: launcher config ----
@@ -276,7 +287,7 @@ public class UninstallService
     // Shortcuts / registry / config
     // -------------------------------------------------------------------------
 
-    private static int DeleteShortcuts(string installPath, List<string> errors)
+    private static int DeleteShortcuts(ModProfile profile, string installPath, List<string> errors)
     {
         int count = 0;
         var paths = new List<string>();
@@ -291,12 +302,14 @@ public class UninstallService
         }
         else
         {
-            // No manifest — try the well-known default locations
+            // No manifest — try the well-known default locations using the
+            // active profile's display name as the .lnk basename.
+            var appName = profile.DisplayName;
             var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            paths.Add(Path.Combine(desktop, $"{AppName}.lnk"));
+            paths.Add(Path.Combine(desktop, $"{appName}.lnk"));
             startMenuFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Programs), AppName);
-            paths.Add(Path.Combine(startMenuFolder, $"{AppName}.lnk"));
+                Environment.GetFolderPath(Environment.SpecialFolder.Programs), appName);
+            paths.Add(Path.Combine(startMenuFolder, $"{appName}.lnk"));
         }
 
         foreach (var p in paths)
@@ -325,11 +338,20 @@ public class UninstallService
         return count;
     }
 
-    private static bool RemoveRegistryEntries(List<string> errors)
+    private static bool RemoveRegistryEntries(
+        ModProfile profile, string installPath, List<string> errors)
     {
+        // Manifest is the source of truth for the registry subkey we wrote
+        // at install time. If it's missing or doesn't carry one (e.g. old
+        // builds before this field existed), derive from the active profile.
+        var manifest = InstallManifest.TryLoad(installPath);
+        var productGuid = !string.IsNullOrEmpty(manifest?.ProductGuid)
+            ? manifest!.ProductGuid
+            : profile.EffectiveProductGuid;
+
         bool removedAny = false;
-        var keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + ProductGuid;
-        var wow64KeyPath = @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" + ProductGuid;
+        var keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + productGuid;
+        var wow64KeyPath = @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" + productGuid;
 
         foreach (var (root, name) in new[]
         {

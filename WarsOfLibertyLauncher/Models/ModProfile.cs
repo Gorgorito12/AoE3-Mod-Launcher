@@ -235,6 +235,27 @@ public class ModProfile
     /// <summary>How the launcher pulls new versions of this mod.</summary>
     public ModUpdateMechanism UpdateMechanism { get; set; } = ModUpdateMechanism.Manual;
 
+    /// <summary>
+    /// Registry subkey used for the Add/Remove Programs entry. When empty,
+    /// <see cref="EffectiveProductGuid"/> derives a stable key from
+    /// <see cref="Id"/> (e.g. <c>"improvement-mod_launcher"</c>). Built-in
+    /// WoL keeps its Inno Setup GUID
+    /// (<c>"{EB448764-CABB-4766-8055-495AEA292020}_is1"</c>) for backwards
+    /// compatibility with existing installs. Community mods can leave this
+    /// blank or set a stable string in their <c>mod.json</c>.
+    /// </summary>
+    public string ProductGuid { get; set; } = "";
+
+    /// <summary>
+    /// Registry subkey to use for Add/Remove Programs entries. Honours an
+    /// explicit <see cref="ProductGuid"/> when set; otherwise falls back to
+    /// <c>"&lt;id&gt;_launcher"</c>. Either way it's a stable string for a
+    /// given mod id, so future uninstalls find the same key the install
+    /// wrote.
+    /// </summary>
+    public string EffectiveProductGuid =>
+        string.IsNullOrEmpty(ProductGuid) ? $"{Id}_launcher" : ProductGuid;
+
     /// <summary>Settings for the WoL-style updater. Used only when <see cref="UpdateMechanism"/> = <see cref="ModUpdateMechanism.WolPatcher"/>.</summary>
     public WolPatcherSettings? Wol { get; set; }
 

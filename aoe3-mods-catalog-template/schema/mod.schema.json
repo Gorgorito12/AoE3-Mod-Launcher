@@ -63,6 +63,12 @@
       "pattern": "^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$",
       "description": "owner/repo of the mod's own GitHub repository (used by the Pin to Release Tag flow)."
     },
+    "installProductGuid": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "Optional. Stable Add/Remove Programs registry subkey. The launcher uses this exact string under HKLM\\…\\Uninstall\\<here>. When omitted the launcher derives `<id>_launcher`."
+    },
     "approvedReleaseTag": {
       "type": "string",
       "description": "Tag in sourceRepo whose contents the launcher will load. Bumping this is a Tier 2 change (auto-merge if validation passes)."
