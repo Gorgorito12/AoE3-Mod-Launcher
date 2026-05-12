@@ -4,7 +4,7 @@
     <Border x:Name="ModBannerHost"
             Height="140"
             CornerRadius="8"
-            BorderBrush="{StaticResource BorderSubtle}"
+            BorderBrush="{DynamicResource BorderSubtle}"
             BorderThickness="1"
             ClipToBounds="True">
         <Grid>

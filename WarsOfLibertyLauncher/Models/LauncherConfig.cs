@@ -211,6 +211,13 @@ public class LauncherConfig
     public string Language { get; set; } = "en";
 
     /// <summary>
+    /// UI theme: "dark" (default), "light", or "system" (follow Windows).
+    /// Applied at startup and switched live via ThemeService on settings change.
+    /// </summary>
+    [JsonPropertyName("theme")]
+    public string Theme { get; set; } = "dark";
+
+    /// <summary>
     /// URLs of the Wars of Liberty payload ZIP parts. The ZIP is split into
     /// multiple files (.zip.001, .zip.002, ...) to work around GitHub's file
     /// size limits. The launcher downloads all parts, concatenates them into

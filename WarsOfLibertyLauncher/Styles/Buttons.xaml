@@ -3,7 +3,7 @@
 
     <!-- Neutral dialog button. Base for Primary / Danger / Success. -->
     <Style x:Key="DialogButton" TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource BgNeutral}"/>
+        <Setter Property="Background" Value="{DynamicResource BgNeutral}"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="FontSize" Value="13"/>
@@ -22,10 +22,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgNeutralHover}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BgNeutralHover}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgPanelAlt}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BgPanelAlt}"/>
                             <Setter Property="Foreground" Value="#666"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
@@ -44,20 +44,20 @@
                 <Setter Property="Background" Value="{DynamicResource AccentBrushHover}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Background" Value="{StaticResource BgNeutral}"/>
+                <Setter Property="Background" Value="{DynamicResource BgNeutral}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
 
     <!-- Destructive confirm (Uninstall). Never themed per mod. -->
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
-        <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{StaticResource DangerBrushHover}"/>
+                <Setter Property="Background" Value="{DynamicResource DangerBrushHover}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Background" Value="{StaticResource BgNeutral}"/>
+                <Setter Property="Background" Value="{DynamicResource BgNeutral}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -70,7 +70,7 @@
                 <Setter Property="Background" Value="#4ba94b"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Background" Value="{StaticResource BgNeutral}"/>
+                <Setter Property="Background" Value="{DynamicResource BgNeutral}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -101,7 +101,7 @@
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource AccentBrushHover}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgNeutral}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BgNeutral}"/>
                             <Setter Property="Foreground" Value="#888"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
@@ -152,7 +152,7 @@
     </Style>
 
     <Style x:Key="SidebarSecondaryButton" TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource BgPanelAlt}"/>
+        <Setter Property="Background" Value="{DynamicResource BgPanelAlt}"/>
         <Setter Property="Foreground" Value="#ddd"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="FontSize" Value="12"/>
@@ -173,11 +173,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgNeutral}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BgNeutral}"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgPanel}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BgPanel}"/>
                             <Setter Property="Foreground" Value="#666"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
