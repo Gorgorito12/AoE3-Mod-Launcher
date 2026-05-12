@@ -91,6 +91,7 @@ public partial class MainWindow : Window
         ModsBrowserView.OpenWebsiteRequested += ModsBrowserView_OpenWebsiteRequested;
         ModsBrowserView.InstallRequested += ModsBrowserView_InstallRequested;
         ModsBrowserView.UninstallRequested += ModsBrowserView_UninstallRequested;
+        ModsBrowserView.PublishRequested += ModsBrowserView_PublishRequested;
         ActionPanelControl.PlayButton.Click += PlayButton_Click;
         ActionPanelControl.StopButton.Click += StopButton_Click;
         ActionPanelControl.UpdateButton.Click += UpdateButton_Click;
@@ -1208,6 +1209,7 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailActiveLabel = Strings.Get("ModsBrowserDetailActive");
         ModsBrowserView.DetailInstallLabel = Strings.Get("ModsBrowserDetailInstall");
         ModsBrowserView.DetailUninstallLabel = Strings.Get("ModsBrowserDetailUninstall");
+        ModsBrowserView.PublishButtonLabel = Strings.Get("ModsBrowserPublish");
         RefreshModsBrowser();
 
         RefreshTopTabHighlight();
@@ -1999,6 +2001,48 @@ public partial class MainWindow : Window
             InvalidateCheckCacheFor(profile.Id);
             RefreshModsBrowser();
         }
+    }
+
+    /// <summary>
+    /// Opens the v0.9 "Publish my mod" wizard. Step navigation lives in
+    /// the dialog; the form fields, JSON generation and PR-open action
+    /// land in commit 8. Localised step titles / hints come from
+    /// <see cref="ConfigurePublishWizardStrings"/>.
+    /// </summary>
+    private void ModsBrowserView_PublishRequested(object? sender, EventArgs e)
+    {
+        var dlg = new PublishModDialog { Owner = this };
+        ConfigurePublishWizardStrings(dlg);
+        dlg.ShowDialog();
+    }
+
+    /// <summary>
+    /// Pushes the current launcher locale into the wizard's button labels
+    /// and step copy. Kept separate from the dialog constructor so the
+    /// dialog itself stays string-source-agnostic (no <c>Strings.Get</c>
+    /// dependency leaks into a reusable dialog).
+    /// </summary>
+    private static void ConfigurePublishWizardStrings(PublishModDialog dlg)
+    {
+        dlg.HeaderTitleText = Strings.Get("PublishWizardTitle");
+        dlg.CancelLabel = Strings.Get("PublishWizardCancel");
+        dlg.BackLabel = Strings.Get("PublishWizardBack");
+        dlg.NextLabel = Strings.Get("PublishWizardNext");
+        dlg.FinishLabel = Strings.Get("PublishWizardFinish");
+        dlg.StepIndicatorFormat = Strings.Get("PublishWizardStepFormat");
+        dlg.SetStepTitle(1, Strings.Get("PublishWizardStep1Title"));
+        dlg.SetStepHint(1, Strings.Get("PublishWizardStep1Hint"));
+        dlg.SetStepTitle(2, Strings.Get("PublishWizardStep2Title"));
+        dlg.SetStepHint(2, Strings.Get("PublishWizardStep2Hint"));
+        dlg.SetStepTitle(3, Strings.Get("PublishWizardStep3Title"));
+        dlg.SetStepHint(3, Strings.Get("PublishWizardStep3Hint"));
+        dlg.SetStepTitle(4, Strings.Get("PublishWizardStep4Title"));
+        dlg.SetStepHint(4, Strings.Get("PublishWizardStep4Hint"));
+        dlg.SetStepTitle(5, Strings.Get("PublishWizardStep5Title"));
+        dlg.SetStepHint(5, Strings.Get("PublishWizardStep5Hint"));
+        dlg.SetStepTitle(6, Strings.Get("PublishWizardStep6Title"));
+        dlg.SetStepHint(6, Strings.Get("PublishWizardStep6Hint"));
+        dlg.GoTo(1);
     }
 
     /// <summary>

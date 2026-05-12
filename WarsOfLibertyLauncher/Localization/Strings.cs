@@ -748,6 +748,101 @@ public static class Strings
             [LangEn] = "Uninstall",
             [LangEs] = "Desinstalar",
         },
+        ["ModsBrowserPublish"] = new()
+        {
+            [LangEn] = "Publish my mod",
+            [LangEs] = "Publicar mi mod",
+        },
+        ["PublishWizardTitle"] = new()
+        {
+            [LangEn] = "Publish my mod",
+            [LangEs] = "Publicar mi mod",
+        },
+        ["PublishWizardCancel"] = new()
+        {
+            [LangEn] = "Cancel",
+            [LangEs] = "Cancelar",
+        },
+        ["PublishWizardBack"] = new()
+        {
+            [LangEn] = "Back",
+            [LangEs] = "Atrás",
+        },
+        ["PublishWizardNext"] = new()
+        {
+            [LangEn] = "Next",
+            [LangEs] = "Siguiente",
+        },
+        ["PublishWizardFinish"] = new()
+        {
+            [LangEn] = "Finish",
+            [LangEs] = "Finalizar",
+        },
+        ["PublishWizardStepFormat"] = new()
+        {
+            [LangEn] = "Step {0} of {1}",
+            [LangEs] = "Paso {0} de {1}",
+        },
+        ["PublishWizardStep1Title"] = new()
+        {
+            [LangEn] = "Identity",
+            [LangEs] = "Identidad",
+        },
+        ["PublishWizardStep1Hint"] = new()
+        {
+            [LangEn] = "Pick a stable id and a display name. These two fields anchor the catalog entry.",
+            [LangEs] = "Elige un id estable y un nombre visible. Estos dos campos anclan la entrada del catálogo.",
+        },
+        ["PublishWizardStep2Title"] = new()
+        {
+            [LangEn] = "Look & feel",
+            [LangEs] = "Apariencia",
+        },
+        ["PublishWizardStep2Hint"] = new()
+        {
+            [LangEn] = "Accent colour, icon and banner. Optional but recommended.",
+            [LangEs] = "Color de acento, icono y banner. Opcional pero recomendado.",
+        },
+        ["PublishWizardStep3Title"] = new()
+        {
+            [LangEn] = "Install",
+            [LangEs] = "Instalación",
+        },
+        ["PublishWizardStep3Hint"] = new()
+        {
+            [LangEn] = "How the mod's files live on disk and which executable launches it.",
+            [LangEs] = "Cómo se almacenan los archivos del mod y qué ejecutable lo lanza.",
+        },
+        ["PublishWizardStep4Title"] = new()
+        {
+            [LangEn] = "Updates",
+            [LangEs] = "Actualizaciones",
+        },
+        ["PublishWizardStep4Hint"] = new()
+        {
+            [LangEn] = "How the launcher pulls new versions: WoL patcher, GitHub Releases, external updater, or manual.",
+            [LangEs] = "Cómo el launcher obtiene nuevas versiones: parcheador WoL, GitHub Releases, actualizador externo o manual.",
+        },
+        ["PublishWizardStep5Title"] = new()
+        {
+            [LangEn] = "Description & website",
+            [LangEs] = "Descripción y sitio web",
+        },
+        ["PublishWizardStep5Hint"] = new()
+        {
+            [LangEn] = "Per-language description and the mod's homepage URL.",
+            [LangEs] = "Descripción por idioma y la URL del sitio del mod.",
+        },
+        ["PublishWizardStep6Title"] = new()
+        {
+            [LangEn] = "Review & publish",
+            [LangEs] = "Revisar y publicar",
+        },
+        ["PublishWizardStep6Hint"] = new()
+        {
+            [LangEn] = "Inspect the generated mod.json, copy it to the clipboard, and open the catalog PR template on GitHub.",
+            [LangEs] = "Revisa el mod.json generado, cópialo al portapapeles y abre la plantilla de PR del catálogo en GitHub.",
+        },
         ["MultiplayerComingSoon"] = new()
         {
             [LangEn] = "Multiplayer lobby — coming in v1.0.\nA Voobly-style room browser for AoE3 mods.",

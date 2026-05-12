@@ -1,0 +1,147 @@
+<Window x:Class="WarsOfLibertyLauncher.PublishModDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Publish my mod"
+        Width="760" Height="640"
+        MinWidth="640" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BgBase}"
+        ShowInTaskbar="False">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header: title + step breadcrumb. -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource BgPanel}"
+                BorderBrush="{DynamicResource BorderSubtle}"
+                BorderThickness="0,0,0,1"
+                Padding="24,18">
+            <StackPanel>
+                <TextBlock x:Name="HeaderTitle"
+                           Foreground="{DynamicResource TextPrimary}"
+                           FontSize="18"
+                           FontWeight="SemiBold"/>
+                <TextBlock x:Name="HeaderStep"
+                           Foreground="{DynamicResource TextSecondary}"
+                           FontSize="11"
+                           Margin="0,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Body: one Grid per step, only the active one is visible. The
+             contents are minimal placeholders here; the wizard forms +
+             JSON output + PR-open button arrive in commit 8. -->
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      Padding="32,24">
+            <Grid>
+                <StackPanel x:Name="Step1Panel">
+                    <TextBlock x:Name="Step1Title"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step1Hint"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="12" TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
+                </StackPanel>
+                <StackPanel x:Name="Step2Panel" Visibility="Collapsed">
+                    <TextBlock x:Name="Step2Title"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step2Hint"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="12" TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
+                </StackPanel>
+                <StackPanel x:Name="Step3Panel" Visibility="Collapsed">
+                    <TextBlock x:Name="Step3Title"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step3Hint"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="12" TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
+                </StackPanel>
+                <StackPanel x:Name="Step4Panel" Visibility="Collapsed">
+                    <TextBlock x:Name="Step4Title"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step4Hint"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="12" TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
+                </StackPanel>
+                <StackPanel x:Name="Step5Panel" Visibility="Collapsed">
+                    <TextBlock x:Name="Step5Title"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step5Hint"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="12" TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
+                </StackPanel>
+                <StackPanel x:Name="Step6Panel" Visibility="Collapsed">
+                    <TextBlock x:Name="Step6Title"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock x:Name="Step6Hint"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="12" TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Footer: Cancel + Back + Next/Finish. -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource BgPanel}"
+                BorderBrush="{DynamicResource BorderSubtle}"
+                BorderThickness="0,1,0,0"
+                Padding="24,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="CancelButton"
+                        Grid.Column="0"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextSecondary}"
+                        BorderBrush="{DynamicResource BorderSubtle}"
+                        BorderThickness="1"
+                        Padding="16,8"
+                        Cursor="Hand"/>
+                <Button x:Name="BackButton"
+                        Grid.Column="2"
+                        Background="{DynamicResource BgPanelAlt}"
+                        Foreground="{DynamicResource TextPrimary}"
+                        BorderBrush="{DynamicResource BorderSubtle}"
+                        BorderThickness="1"
+                        Padding="16,8"
+                        Margin="0,0,10,0"
+                        Cursor="Hand"/>
+                <Button x:Name="NextButton"
+                        Grid.Column="3"
+                        Background="{DynamicResource AccentBrush}"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Padding="20,8"
+                        FontWeight="SemiBold"
+                        Cursor="Hand"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

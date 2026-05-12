@@ -51,6 +51,13 @@ public partial class ModsBrowser : UserControl
     /// </summary>
     public event EventHandler<ModProfile>? UninstallRequested;
 
+    /// <summary>
+    /// Raised when the user clicks the "Publish my mod" button in the
+    /// header. MainWindow opens <see cref="PublishModDialog"/> in
+    /// response. The wizard's forms / JSON generation arrive in commit 8.
+    /// </summary>
+    public event EventHandler? PublishRequested;
+
     // Cached inputs from the last Populate() call so the filter handlers
     // can re-render without making MainWindow re-supply the data each
     // keystroke. ModRegistry.All is the source of truth; we only stash
@@ -72,6 +79,14 @@ public partial class ModsBrowser : UserControl
         OnlyInstalledToggle.Checked += (_, _) => ApplyFilters();
         OnlyInstalledToggle.Unchecked += (_, _) => ApplyFilters();
         DetailBackButton.Click += (_, _) => HideDetail();
+        PublishButton.Click += (_, _) => PublishRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Label shown on the header "Publish my mod" button.</summary>
+    public string PublishButtonLabel
+    {
+        get => (string)(PublishButton.Content ?? "");
+        set => PublishButton.Content = value;
     }
 
     /// <summary>Placeholder text shown inside the search box when empty.</summary>

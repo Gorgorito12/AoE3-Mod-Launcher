@@ -30,10 +30,10 @@
                                Margin="0,2,0,0"/>
                 </StackPanel>
 
-                <!-- Filter row: search box + "only installed" toggle. Both
-                     re-render via ApplyFilters(); the underlying profile
-                     list is cached so MainWindow only repopulates on real
-                     state changes (mod switch / catalog refresh / install). -->
+                <!-- Filter row: search box + "only installed" toggle + the
+                     "Publish my mod" entry point. ApplyFilters() handles the
+                     first two; PublishRequested raises an event for
+                     MainWindow which opens the wizard dialog. -->
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
@@ -63,7 +63,16 @@
                     <CheckBox x:Name="OnlyInstalledToggle"
                               Foreground="{DynamicResource TextPrimary}"
                               VerticalAlignment="Center"
-                              FontSize="12"/>
+                              FontSize="12"
+                              Margin="0,0,12,0"/>
+                    <Button x:Name="PublishButton"
+                            Background="{DynamicResource AccentBrush}"
+                            Foreground="White"
+                            BorderThickness="0"
+                            Padding="14,6"
+                            FontSize="12"
+                            FontWeight="SemiBold"
+                            Cursor="Hand"/>
                 </StackPanel>
             </Grid>
         </Border>
