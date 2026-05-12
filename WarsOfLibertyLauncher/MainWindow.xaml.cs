@@ -563,6 +563,19 @@ public partial class MainWindow : Window
         DiagnosticLog.Write(
             $"Switching active mod profile in place: '{_updateService.Profile.Id}' -> '{target.Id}'");
 
+        // Temporary instrumentation to find what's still slow on mod-switch
+        // clicks. Each stage logs its wall time so the user-visible delay
+        // shows up clearly in launcher-debug.log. Remove once perf is dialled
+        // in.
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long lastMs = 0;
+        void Tick(string stage)
+        {
+            var now = sw.ElapsedMilliseconds;
+            DiagnosticLog.Write($"  switch[{target.Id}] {stage}: +{now - lastMs}ms (total {now}ms)");
+            lastMs = now;
+        }
+
         // Persist the choice — fire-and-forget so the UI thread doesn't
         // block on disk I/O for what should feel like an instant tile
         // click. We've already mutated _config.ActiveModId in memory, so
@@ -576,6 +589,7 @@ public partial class MainWindow : Window
             try { _config.Save(); }
             catch (Exception ex) { DiagnosticLog.Write($"Async config save after mod switch failed: {ex.Message}"); }
         });
+        Tick("config-save scheduled");
 
         // Fresh service bound to the new profile. Per-mod state in
         // _config.Mods[target.Id] keeps the install path / translation
@@ -584,7 +598,9 @@ public partial class MainWindow : Window
         // _updateService.InstallPath is already populated by the time we
         // get here for mods seen in a previous session.
         _updateService = new UpdateService(_config, target);
+        Tick("new UpdateService");
         UpdateAccentResources(target);
+        Tick("UpdateAccentResources");
 
         // Reset session caches that were tied to the old mod.
         _pendingDownloads = new();
@@ -603,12 +619,15 @@ public partial class MainWindow : Window
         // (language-only labels, tray strings, section headers) didn't
         // change so re-touching ~40 controls every switch was wasted work.
         RefreshActiveModUi();
+        Tick("RefreshActiveModUi");
         // In-place highlight swap on the existing tiles instead of a full
         // rebuild (which re-runs per-tile disk probes and image loads).
         // The post-CheckAsync rebuild below still does the full pass once
         // the manifest fetch finishes, so any state-text drift gets fixed.
         UpdateActiveModHighlight();
+        Tick("UpdateActiveModHighlight");
         ResetProgressUI();
+        Tick("ResetProgressUI");
 
         // Sync the primary button (Play / Install / Update / Stop) with the
         // new profile's install state. ApplyLanguage above repaints it but
@@ -618,6 +637,7 @@ public partial class MainWindow : Window
         // finishes. UpdateGameUI reads _modIsInstalled (just refreshed from
         // the cached install path) and picks the right action.
         UpdateGameUI();
+        Tick("UpdateGameUI (end of sync path)");
 
         // Re-detect install path + version + pending updates for the new
         // profile. CheckAsync already short-circuits for non-WolPatcher
