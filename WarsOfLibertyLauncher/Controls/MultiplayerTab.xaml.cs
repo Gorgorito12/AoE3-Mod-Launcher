@@ -549,103 +549,395 @@ public partial class MultiplayerTab : UserControl
     {
         RoomMembersPanel.Children.Clear();
 
-        var header = new TextBlock
-        {
-            Text = Strings.Get("MpRoomMembersHeader").ToUpperInvariant(),
-            Foreground = (Brush)Application.Current.FindResource("MpTableHeader"),
-            FontSize = 10,
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8),
-        };
-        RoomMembersPanel.Children.Add(header);
-
+        // The "PLAYERS" section header lives in the XAML grid
+        // above the members container now — no need to render
+        // it from code. We just emit one player row per member.
         foreach (var m in _roomMembers.Values)
         {
-            var row = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 2, 0, 2),
-            };
+            RoomMembersPanel.Children.Add(BuildMemberRow(m));
+        }
+    }
 
-            // Ready indicator — green dot for ready, dim for not. Kept
-            // small so the row stays scannable even with 8 players.
-            row.Children.Add(new System.Windows.Shapes.Ellipse
-            {
-                Width = 8,
-                Height = 8,
-                Fill = m.Ready ? Brushes.LimeGreen : new SolidColorBrush(Color.FromRgb(0x55, 0x59, 0x5f)),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0),
-            });
+    /// <summary>
+    /// One row in the players list. Layout:
+    ///   [online dot] [avatar 32] [name + ping (small)] [Host badge] [Ready badge]
+    /// Avatar uses the GitHub URL when we have one for the
+    /// current user; for other members we don't have a URL yet,
+    /// so we draw a coloured circle with their initial (cheap,
+    /// stable, matches the redesign's "warm gold" placeholder).
+    /// </summary>
+    private FrameworkElement BuildMemberRow(RoomMemberEntry m)
+    {
+        var row = new Border
+        {
+            Background = Brushes.Transparent,
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 7, 8, 7),
+            Margin = new Thickness(0, 2, 0, 2),
+        };
 
-            var label = new TextBlock
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // online dot
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // avatar
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // name
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // badges
+
+        // Online dot.
+        grid.Children.Add(WithColumn(new System.Windows.Shapes.Ellipse
+        {
+            Width = 8, Height = 8,
+            Fill = (Brush)Application.Current.FindResource("MpStatusOnline"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        }, 0));
+
+        // Avatar circle. We use the current user's GitHub avatar
+        // when this row IS the current user (only data we have
+        // locally); otherwise an initial-on-coloured-disc tile.
+        var avatarSize = 28.0;
+        var avatarHost = new Border
+        {
+            Width = avatarSize, Height = avatarSize,
+            CornerRadius = new CornerRadius(avatarSize / 2),
+            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+            BorderBrush = (Brush)Application.Current.FindResource("BorderSubtle"),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var me = _session?.CurrentUser;
+        var isMe = me != null && string.Equals(m.UserId, me.Id, StringComparison.Ordinal);
+        var initialText = !string.IsNullOrEmpty(m.Login)
+            ? m.Login.Substring(0, 1).ToUpperInvariant()
+            : "?";
+        try
+        {
+            if (isMe && !string.IsNullOrEmpty(me?.AvatarUrl))
             {
-                Text = m.Login,
-                Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+                var img = new System.Windows.Media.ImageBrush
+                {
+                    ImageSource = new System.Windows.Media.Imaging.BitmapImage(
+                        new Uri(me!.AvatarUrl!, UriKind.Absolute)),
+                    Stretch = System.Windows.Media.Stretch.UniformToFill,
+                };
+                avatarHost.Background = img;
+            }
+            else
+            {
+                avatarHost.Child = new TextBlock
+                {
+                    Text = initialText,
+                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                    FontSize = 12,
+                    FontWeight = FontWeights.Bold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+            }
+        }
+        catch
+        {
+            avatarHost.Child = new TextBlock
+            {
+                Text = initialText,
+                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
                 FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            if (string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal))
-                label.Text += "  ·  host";
-            row.Children.Add(label);
+        }
+        grid.Children.Add(WithColumn(avatarHost, 1));
 
-            // Per-peer P2P quality: look up the mesh channel for this
-            // member and render the RTT + a colour-coded dot. The mesh
-            // is null when WinDivert isn't loaded (legacy ZeroTier path);
-            // in that case we just skip the column rather than show
-            // misleading "0 ms" values.
-            var mesh = _session?.Mesh;
-            if (mesh != null)
+        // Name + (optional) RTT.
+        var nameStack = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        nameStack.Children.Add(new TextBlock
+        {
+            Text = m.Login,
+            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+
+        // Per-peer P2P quality: small ping line under the name.
+        var mesh = _session?.Mesh;
+        if (mesh != null && !isMe)
+        {
+            PeerChannel? ch = null;
+            foreach (var candidate in mesh.Peers)
             {
-                PeerChannel? ch = null;
-                foreach (var candidate in mesh.Peers)
+                if (string.Equals(candidate.UserId, m.UserId, StringComparison.Ordinal))
                 {
-                    if (string.Equals(candidate.UserId, m.UserId, StringComparison.Ordinal))
-                    {
-                        ch = candidate;
-                        break;
-                    }
-                }
-                if (ch != null)
-                {
-                    var (rttText, rttBrush) = ch.State switch
-                    {
-                        PeerLinkState.Connected when ch.RttMs >= 0 =>
-                            ($"{(int)ch.RttMs} ms",
-                                ch.RttMs < 80 ? Brushes.LimeGreen :
-                                ch.RttMs < 200 ? Brushes.Goldenrod : Brushes.IndianRed),
-                        PeerLinkState.Connected => ("…", (Brush)Application.Current.FindResource("TextSecondary")),
-                        PeerLinkState.Punching => ("punching", Brushes.Goldenrod),
-                        PeerLinkState.Lost => ("lost", Brushes.IndianRed),
-                        PeerLinkState.Failed => ("relay", Brushes.IndianRed),
-                        _ => ("…", (Brush)Application.Current.FindResource("TextSecondary")),
-                    };
-
-                    row.Children.Add(new TextBlock
-                    {
-                        Text = "  ·  " + rttText,
-                        Foreground = rttBrush,
-                        FontSize = 11,
-                        VerticalAlignment = VerticalAlignment.Center,
-                    });
+                    ch = candidate;
+                    break;
                 }
             }
-
-            RoomMembersPanel.Children.Add(row);
+            if (ch != null)
+            {
+                var (rttText, rttBrush) = ch.State switch
+                {
+                    PeerLinkState.Connected when ch.RttMs >= 0 =>
+                        ($"{(int)ch.RttMs} ms",
+                            ch.RttMs < 80 ? (Brush)Application.Current.FindResource("MpPingGood") :
+                            ch.RttMs < 200 ? (Brush)Application.Current.FindResource("MpPingMedium") :
+                                              (Brush)Application.Current.FindResource("MpPingBad")),
+                    PeerLinkState.Connected => ("…", (Brush)Application.Current.FindResource("TextSecondary")),
+                    PeerLinkState.Punching => ("punching", (Brush)Application.Current.FindResource("MpPingMedium")),
+                    PeerLinkState.Lost => ("lost", (Brush)Application.Current.FindResource("MpPingBad")),
+                    PeerLinkState.Failed => ("relay", (Brush)Application.Current.FindResource("MpPingBad")),
+                    _ => ("…", (Brush)Application.Current.FindResource("TextSecondary")),
+                };
+                nameStack.Children.Add(new TextBlock
+                {
+                    Text = rttText,
+                    Foreground = rttBrush,
+                    FontSize = 10,
+                    Margin = new Thickness(0, 2, 0, 0),
+                });
+            }
         }
+        grid.Children.Add(WithColumn(nameStack, 2));
+
+        // Badges (Host / Ready). Compact pills so multiple badges
+        // can sit side-by-side without overflowing the 340-wide
+        // left column.
+        var badges = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var isHost = string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal);
+        if (isHost)
+        {
+            badges.Children.Add(BuildBadge("Host  👑",
+                (Brush)Application.Current.FindResource("MpBlueSubtle"),
+                (Brush)Application.Current.FindResource("MpBlue")));
+        }
+        if (m.Ready)
+        {
+            badges.Children.Add(BuildBadge("Ready",
+                Brushes.Transparent,
+                (Brush)Application.Current.FindResource("MpPingGood")));
+        }
+        grid.Children.Add(WithColumn(badges, 3));
+
+        row.Child = grid;
+        return row;
+    }
+
+    /// <summary>Helper: assigns a Grid.Column without verbosity at call sites.</summary>
+    private static T WithColumn<T>(T element, int col) where T : FrameworkElement
+    {
+        Grid.SetColumn(element, col);
+        return element;
+    }
+
+    /// <summary>
+    /// Compact rounded pill ("Host", "Ready"). Background +
+    /// foreground passed in so the caller controls the colour.
+    /// </summary>
+    private static Border BuildBadge(string text, Brush background, Brush foreground)
+    {
+        return new Border
+        {
+            Background = background,
+            BorderBrush = foreground,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(7, 2, 7, 2),
+            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = text,
+                Foreground = foreground,
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+            },
+        };
     }
 
     private void AppendChatLine(WsChatLine line)
     {
         var when = DateTimeOffset.FromUnixTimeMilliseconds(line.AtMs).LocalDateTime;
-        AppendChatRaw($"{when:HH:mm}  {line.Login}: {line.Body}",
-            (Brush)Application.Current.FindResource("TextPrimary"));
+        AppendChatRow(
+            timestamp: when,
+            isSystem: false,
+            authorLogin: line.Login,
+            authorUserId: line.UserId,
+            body: line.Body,
+            severity: ChatSeverity.Info);
     }
 
     private void AppendChatSystem(string body) =>
-        AppendChatRaw($"— {body}",
-            (Brush)Application.Current.FindResource("TextSecondary"));
+        AppendChatRow(
+            timestamp: DateTime.Now,
+            isSystem: true,
+            authorLogin: null,
+            authorUserId: null,
+            body: body,
+            severity: ChatSeverity.Info);
 
+    /// <summary>Severity bucket for a chat row's body colour.</summary>
+    private enum ChatSeverity { Info, Warning, Error }
+
+    /// <summary>
+    /// Render one chat row in the new format:
+    ///   [12:34 PM]  [System | name]  body
+    /// System rows use the blue "[System]" tag; user rows use a
+    /// small avatar circle + the user's blue-coloured login. The
+    /// body wraps and stays selectable.
+    /// </summary>
+    private void AppendChatRow(
+        DateTime timestamp,
+        bool isSystem,
+        string? authorLogin,
+        string? authorUserId,
+        string body,
+        ChatSeverity severity)
+    {
+        if (ChatLogPanel == null) return;
+
+        var rowGrid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(68) });   // timestamp
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });  // tag/avatar+name
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // body
+
+        // Timestamp (column 0).
+        rowGrid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = timestamp.ToString("h:mm tt"),
+            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+            Opacity = 0.75,
+        }, 0));
+
+        // Tag column (column 1).
+        if (isSystem)
+        {
+            rowGrid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = "[System]",
+                Foreground = (Brush)Application.Current.FindResource("MpBlue"),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            }, 1));
+        }
+        else
+        {
+            // Tiny avatar + login. The avatar is the same kind of
+            // 22 px circle the player list uses but smaller.
+            var stack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var avatarSize = 22.0;
+            var avatarHost = new Border
+            {
+                Width = avatarSize, Height = avatarSize,
+                CornerRadius = new CornerRadius(avatarSize / 2),
+                Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+                BorderBrush = (Brush)Application.Current.FindResource("BorderSubtle"),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var me = _session?.CurrentUser;
+            var isMe = !string.IsNullOrEmpty(authorUserId)
+                && me != null
+                && string.Equals(authorUserId, me.Id, StringComparison.Ordinal);
+            try
+            {
+                if (isMe && !string.IsNullOrEmpty(me?.AvatarUrl))
+                {
+                    avatarHost.Background = new System.Windows.Media.ImageBrush
+                    {
+                        ImageSource = new System.Windows.Media.Imaging.BitmapImage(
+                            new Uri(me!.AvatarUrl!, UriKind.Absolute)),
+                        Stretch = System.Windows.Media.Stretch.UniformToFill,
+                    };
+                }
+                else
+                {
+                    avatarHost.Child = new TextBlock
+                    {
+                        Text = !string.IsNullOrEmpty(authorLogin)
+                            ? authorLogin.Substring(0, 1).ToUpperInvariant()
+                            : "?",
+                        Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                        FontSize = 10,
+                        FontWeight = FontWeights.Bold,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    };
+                }
+            }
+            catch
+            {
+                avatarHost.Child = new TextBlock
+                {
+                    Text = !string.IsNullOrEmpty(authorLogin)
+                        ? authorLogin.Substring(0, 1).ToUpperInvariant()
+                        : "?",
+                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                    FontSize = 10,
+                    FontWeight = FontWeights.Bold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+            }
+            stack.Children.Add(avatarHost);
+            stack.Children.Add(new TextBlock
+            {
+                Text = (authorLogin ?? "?") + ":",
+                Foreground = (Brush)Application.Current.FindResource("MpBlue"),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+            rowGrid.Children.Add(WithColumn(stack, 1));
+        }
+
+        // Body (column 2). Wraps. Colour by severity for system
+        // events so warnings / errors stand out without needing a
+        // separate panel.
+        var bodyBrush = severity switch
+        {
+            ChatSeverity.Warning => (Brush)Application.Current.FindResource("WarningBrush"),
+            ChatSeverity.Error => (Brush)Application.Current.FindResource("MpStatusOffline"),
+            _ => (Brush)Application.Current.FindResource("TextPrimary"),
+        };
+        rowGrid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = body,
+            Foreground = bodyBrush,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        }, 2));
+
+        ChatLogPanel.Children.Add(rowGrid);
+
+        // Cap the in-memory log so a marathon session doesn't bloat
+        // the visual tree. 500 rows ≈ 7 hours of moderate chat.
+        while (ChatLogPanel.Children.Count > 500)
+            ChatLogPanel.Children.RemoveAt(0);
+        ChatScroll?.ScrollToBottom();
+    }
+
+    /// <summary>
+    /// Legacy raw-append path. Kept so any caller still in
+    /// transition to AppendChatRow doesn't break. Renders as a
+    /// system info row with a "—" prefix to match the old look.
+    /// </summary>
     private void AppendChatRaw(string text, Brush color)
     {
         ChatLogPanel.Children.Add(new TextBlock
@@ -656,77 +948,73 @@ public partial class MultiplayerTab : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 1, 0, 1),
         });
-        // Cap the in-memory log so a marathon session doesn't bloat
-        // the visual tree. 500 lines ≈ 7 hours of moderate chat.
         while (ChatLogPanel.Children.Count > 500)
             ChatLogPanel.Children.RemoveAt(0);
-        // Auto-scroll on every append. Users who scroll up manually
-        // lose the auto-follow until they scroll back to the bottom —
-        // mirrors Discord / IRC behaviour without needing a position
-        // tracker for v1.0.
-        ChatScroll.ScrollToBottom();
+        ChatScroll?.ScrollToBottom();
     }
 
     /// <summary>
-    /// Append a one-line entry to the bottom "global lobby chat"
-    /// panel. Used for connection-state events (disconnect /
-    /// reconnect) and any cross-room announcement we want to
-    /// surface without polluting the in-room chat log.
-    ///
-    /// Rendered with a [System] tag and a blue tag colour to
-    /// match the redesign reference. Capped at 200 lines.
+    /// Forward a connection-state event to the diagnostic log.
+    /// The old design routed these into a dedicated "global lobby
+    /// chat" strip at the bottom of the tab; the redesign removed
+    /// that strip entirely, so the user-visible signal is now
+    /// just the connection-status pill at the top-right (driven
+    /// by UpdateConnectionStatus). We keep the log line so
+    /// developers can still debug WS hiccups from the trace file.
     /// </summary>
     private void AppendGlobalSystemEvent(string body)
     {
-        if (GlobalChatLogPanel == null) return;
-
-        var line = new TextBlock
-        {
-            FontSize = 11,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 1, 0, 1),
-        };
-        line.Inlines.Add(new System.Windows.Documents.Run("[System] ")
-        {
-            Foreground = (Brush)Application.Current.FindResource("MpStatusWaiting"),
-            FontWeight = FontWeights.SemiBold,
-        });
-        line.Inlines.Add(new System.Windows.Documents.Run(body)
-        {
-            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-        });
-        GlobalChatLogPanel.Children.Add(line);
-        while (GlobalChatLogPanel.Children.Count > 200)
-            GlobalChatLogPanel.Children.RemoveAt(0);
-        GlobalChatScroll?.ScrollToBottom();
-    }
-
-    // ---------- Global chat bar interactions ----------
-
-    /// <summary>
-    /// Collapse / expand the bottom global lobby-chat panel. Only
-    /// the header strip stays visible when collapsed so the room
-    /// view gets the full vertical space back.
-    /// </summary>
-    private void GlobalChatToggle_Click(object sender, RoutedEventArgs e)
-    {
-        if (GlobalChatBody == null) return;
-        var nowVisible = GlobalChatBody.Visibility != Visibility.Visible;
-        GlobalChatBody.Visibility = nowVisible ? Visibility.Visible : Visibility.Collapsed;
-        if (GlobalChatCaret != null)
-            GlobalChatCaret.Text = nowVisible ? " ▲" : " ▼";
+        DiagnosticLog.Write($"Multiplayer event: {body}");
     }
 
     /// <summary>
-    /// Direct-IP join shortcut placeholder. Future work — the
-    /// connect-by-IP flow lives behind a small dialog; for v1.0
-    /// of the redesign the button is wired but the dialog isn't
-    /// implemented yet, so we just announce the gap rather than
-    /// silently no-op.
+    /// (Removed) The old layout had a Lobby Chat strip at the
+    /// bottom with a collapse toggle and a "Join with IP" button.
+    /// We deleted both per the redesign; this comment is the
+    /// only thing left so future readers don't wonder where
+    /// they went. Handler stubs are intentionally absent.
     /// </summary>
-    private void JoinWithIpButton_Click(object sender, RoutedEventArgs e)
+
+    /// <summary>
+    /// "Clear chat" header button: wipes the visible log without
+    /// touching the server side. Useful when the chat got noisy
+    /// during reconnects and the user wants a clean view. We do
+    /// NOT re-emit the room_state replay — only the user's local
+    /// view is cleared.
+    /// </summary>
+    private void ClearChatButton_Click(object sender, RoutedEventArgs e)
     {
-        AppendGlobalSystemEvent("Direct-IP join is not available yet — coming in a future build.");
+        ChatLogPanel?.Children.Clear();
+    }
+
+    /// <summary>
+    /// Emoji button placeholder. A proper picker pulls in a UI
+    /// library we don't need yet — for now this drops a smiley
+    /// at the caret so the button is functional and visibly
+    /// alive instead of a dead icon.
+    /// </summary>
+    private void ChatEmojiButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ChatInputBox == null) return;
+        var caret = ChatInputBox.CaretIndex;
+        ChatInputBox.Text = ChatInputBox.Text.Insert(caret, "🙂");
+        ChatInputBox.CaretIndex = caret + 2; // emoji is a surrogate pair (length 2)
+        ChatInputBox.Focus();
+    }
+
+    /// <summary>
+    /// Toggle the faux placeholder TextBlock over the chat input.
+    /// WPF TextBox has no native placeholder support so we draw
+    /// our own and hide it as soon as the user types. Cheap to
+    /// run on every TextChanged because it's just a Visibility
+    /// flip.
+    /// </summary>
+    private void ChatInputBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (ChatPlaceholderText == null || ChatInputBox == null) return;
+        ChatPlaceholderText.Visibility = string.IsNullOrEmpty(ChatInputBox.Text)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void RefreshFromSession()
@@ -797,18 +1085,20 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        // In a room? Hide the browser and let the room view take
-        // the full multiplayer-tab body — the redesign brief
-        // explicitly calls out that the room should feel like a
-        // real lobby screen, not a small floating modal on top of
-        // an unrelated background.
+        // In a room? Show the room as a centered popup over the
+        // browser. BrowserPanel stays Visible underneath (the
+        // RoomPanel's own backdrop rectangle dims it) so the user
+        // doesn't lose context. Leaving / X closes the popup and
+        // the browser becomes interactive again without any
+        // extra state plumbing.
         if (_session.Lobby == MultiplayerSession.LobbyStatus.InLobby
             || _session.Lobby == MultiplayerSession.LobbyStatus.InGame
             || _session.Lobby == MultiplayerSession.LobbyStatus.Joining
             || _session.Lobby == MultiplayerSession.LobbyStatus.Leaving)
         {
             SignInPanel.Visibility = Visibility.Collapsed;
-            BrowserPanel.Visibility = Visibility.Collapsed;
+            BrowserPanel.Visibility = Visibility.Visible;
+            RenderBrowser();
             RoomPanel.Visibility = Visibility.Visible;
             RenderRoomPanel();
         }
@@ -1598,6 +1888,11 @@ public partial class MultiplayerTab : UserControl
             });
 
             var list = await _session.Api.ListLobbiesAsync();
+            // Cache the snapshot so the room view (and any other
+            // consumer that needs MaxPlayers / IsPrivate / ModId
+            // for the current lobby) can read it without an extra
+            // round-trip.
+            _lastBrowserList = list.Lobbies as List<LobbySummary> ?? new List<LobbySummary>(list.Lobbies);
             RoomsListPanel.Children.Clear();
 
             if (list.Lobbies.Count == 0)
@@ -2089,9 +2384,13 @@ public partial class MultiplayerTab : UserControl
         // OUR message back to us; AppendChatLine for that will draw a
         // second line. Accept that minor double-up rather than building
         // an id-based dedup table for the v1 release.
-        AppendChatRaw(
-            $"{DateTime.Now:HH:mm}  {login}: {text}",
-            (Brush)Application.Current.FindResource("TextPrimary"));
+        AppendChatRow(
+            timestamp: DateTime.Now,
+            isSystem: false,
+            authorLogin: login,
+            authorUserId: _session.CurrentUser.Id,
+            body: text,
+            severity: ChatSeverity.Info);
 
         try { await _session.RoomSocket.SendChatAsync(text); }
         catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.Chat: {ex.Message}"); }

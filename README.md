@@ -9,6 +9,11 @@ self-contained `.exe`. Detects existing installations, downloads missing files
 from the server, applies patches, and clones Age of Empires III into a
 standalone mod folder so the mod runs side-by-side with the base game.
 
+Also ships a **built-in multiplayer** tab (v1.0) — GitHub-authed lobbies on a
+Cloudflare Worker, P2P hole-punching, and a WinDivert-backed virtual LAN that
+brings Voobly/GameRanger-style matchmaking back to AoE3 mods without asking
+players to install a VPN.
+
 > **100% compatible** with each mod's original update server — speaks the same
 > `UpdateInfo.xml` format and processes the same `.tar.xz` patches as the Java
 > updater, but without the Java runtime requirement.
@@ -89,6 +94,55 @@ a different tag appears upstream.
 The user can dismiss an update with "Later"; the launcher remembers that tag
 and won't re-prompt until a different one is published.
 
+### Multiplayer (v1.0)
+A built-in **Multiplayer** tab that turns the launcher into a Voobly-style
+matchmaking client. End-to-end flow: sign in with GitHub → create or join a
+room on a Cloudflare-hosted lobby Worker → P2P mesh hole-punches between
+peers → a WinDivert-backed virtual LAN bridges AoE3's LAN broadcasts so the
+game sees other players as real LAN hosts. No third-party VPN required.
+
+- **GitHub OAuth sign-in** via Device Flow — no redirect URI, no popup
+  browser embedding. The launcher prints a one-time code; users approve it
+  at `github.com/login/device`. The session token (JWT, 7-day TTL) lives in
+  `launcher-config.json` and gets refreshed silently when it nears expiry.
+- **Lobby Worker** (Cloudflare Workers + Hono + D1 + KV + R2 + Durable
+  Objects with hibernatable WebSockets). Hosts the rooms list, room state,
+  in-room chat, replay uploads (R2), and Glicko-2 ELO ratings (D1). Sources
+  live in the companion `wol-launcher-lobby-worker` repo.
+- **Real-time room state** over WebSocket — chat / ready / member-join /
+  game-started frames stream straight from the room's Durable Object.
+  Auto-reconnect with exponential backoff so a brief network hiccup
+  doesn't drop the player from the lobby.
+- **P2P hole-punching** with STUN (RFC 5389) for NAT discovery + UDP
+  simultaneous-send with magic prefixes (`WOLp` punch / `WOLg` game / `WOLk`
+  keepalive). Symmetric-NAT users fall back to a Worker-relayed game
+  channel (`game_relay`) so they're not locked out.
+- **Virtual LAN over WinDivert** — captures AoE3's UDP broadcasts on the
+  game's LAN-discovery range (2200–2500), forwards the payload over the P2P
+  mesh, and re-injects each peer's packets locally with a stable
+  `10.147.x.y` source address derived from a hash of their user id. AoE3
+  sees a small set of distinct LAN hosts — same trick Voobly used, no VPN
+  adapter to install.
+- **Auto skip-intro + IP spoofing** for the game launch — when the host
+  starts the match, AoE3 is spawned with the real (binary-verified) flags
+  `+noIntroCinematics +disableESOProfile +dontDetectNAT +OverrideAddress
+  <virtual-ip> +OverridePort 2300 +hostPort 2300`. Player sees the main
+  menu in ~5 s instead of waiting through intro + ESO login, then clicks
+  Multiplayer → LAN once and the room is there.
+- **Mod fingerprint matching** — every room carries the SHA-256 of three
+  AoE3 critical files (`protoy.xml`, `techtreey.xml`, `stringtabley.xml`)
+  computed locally at create / join time. Joins with a mismatching hash
+  are rejected by the Worker with `mod_mismatch` so no one ever joins a
+  game they can't actually play.
+- **Privacy toggles** — `relayOnly` mode never announces the user's
+  public STUN endpoint, routing all game traffic through the Worker
+  instead (~50 ms extra latency in exchange for not leaking the IP);
+  the virtual IP shown to peers is always `10.147.x.y`, never the real
+  one. The redesigned room view is built around blue accents with red
+  reserved for destructive states (Leave room, errors, disconnects),
+  and connection status (Connected / Reconnecting / Offline) lives in
+  a header pill instead of leaking into the chat.
+
 ### Localization
 English and Spanish, switchable from the top-right corner. All UI strings
 (buttons, dialogs, status messages) are localized. Diagnostic logs stay in
@@ -166,6 +220,48 @@ for what users will see and how to handle Smart App Control.
 │       d. Extract over the install                          │
 │       e. Apply file-deletion list                          │
 │       f. Open post-update page if URL is provided          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## How multiplayer works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. User signs in (GitHub Device Flow). Worker issues a    │
+│     JWT; launcher caches it in launcher-config.json        │
+├─────────────────────────────────────────────────────────────┤
+│  2. Launcher fingerprints the active mod (SHA-256 of       │
+│     protoy.xml / techtreey.xml / stringtabley.xml)         │
+├─────────────────────────────────────────────────────────────┤
+│  3. Host: POST /lobbies with title + mod hash + maxPlayers │
+│     Joiner: GET /lobbies → list → POST /lobbies/<id>/join  │
+│     Worker rejects join if local hash != lobby hash        │
+├─────────────────────────────────────────────────────────────┤
+│  4. Both ends open a WebSocket to the lobby's Durable      │
+│     Object — receive room_state, chat, member_joined,      │
+│     member_ready, game_started frames                      │
+├─────────────────────────────────────────────────────────────┤
+│  5. PeerMesh starts: STUN probe → broadcast public         │
+│     endpoint via peer_announce → simultaneous-send hole    │
+│     punch with WOLp magic prefix. Falls back to game_relay │
+│     (Worker UDP-tunnel) on symmetric NAT                   │
+├─────────────────────────────────────────────────────────────┤
+│  6. VirtualLanService opens WinDivert handles. Capture     │
+│     filter: udp 2200-2500 + broadcast/multicast. Each      │
+│     captured AoE3 packet is forwarded to every peer over   │
+│     the mesh; each incoming peer packet is re-injected     │
+│     with a 10.147.x.y source IP (FNV-1a hash of user id)   │
+├─────────────────────────────────────────────────────────────┤
+│  7. Host presses Start → game_started broadcast → every    │
+│     peer launches age3y.exe with                           │
+│     +noIntroCinematics +disableESOProfile +dontDetectNAT   │
+│     +OverrideAddress <virtual-ip> +OverridePort 2300       │
+│     +hostPort 2300. Players click Multiplayer → LAN once;  │
+│     AoE3 sees the host's broadcast as a normal LAN game    │
+├─────────────────────────────────────────────────────────────┤
+│  8. On game exit: launcher detects the freshest .age3yrec  │
+│     under Documents\My Games\<Mod>\Savegame and offers it  │
+│     for upload to R2 (linked to the match in D1)           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -255,8 +351,15 @@ Most fields auto-populate; edit only when you need to override defaults
   "modInstallPath": "",
   "gameExecutable": "",
   "gameArguments": "",
+  "startWithWindows": false,
+  "closeLauncherOnGameStart": false,
+  "minimizeToTray": false,
+  "showToastNotifications": true,
+  "checkUpdatesOnStartup": true,
   "openPostUpdatePages": true,
   "language": "en",
+  "theme": "dark",
+  "newsUrl": "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/news.json",
   "payloadZipUrls": [
     "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
     "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
@@ -265,9 +368,29 @@ Most fields auto-populate; edit only when you need to override defaults
   "defaultInstallFolder": "C:\\Program Files (x86)\\Wars of Liberty",
   "officialWebsite": "http://aoe3wol.com/",
   "lastInstalledLauncherTag": "",
-  "skippedLauncherTag": ""
+  "skippedLauncherTag": "",
+  "translationsRepo": "papillo12/translations",
+  "modsCatalogRepo": "",
+  "multiplayer": {
+    "lobbyBaseUrl": "https://wol-launcher-lobby.workers.dev",
+    "sessionToken": "",
+    "sessionExpiresAt": 0,
+    "cachedUser": null,
+    "virtualAdapterEnabled": false,
+    "relayOnly": false
+  }
 }
 ```
+
+The `multiplayer.lobbyBaseUrl` points at the Cloudflare Worker deployment.
+For local Worker development the launcher can point at a `cloudflared`
+quick tunnel URL (`https://*.trycloudflare.com`) so the desktop client and
+the Worker can talk without deploying to production.
+
+`relayOnly` forces all game traffic through the Worker (~50 ms extra
+latency) so peers never see the user's public STUN endpoint.
+`virtualAdapterEnabled` is reserved for the optional Microsoft Loopback
+Adapter path; the default WinDivert path doesn't need it.
 
 ---
 
@@ -289,6 +412,24 @@ WarsOfLibertyLauncher/
 ├── RestoreBackupDialog.xaml(.cs)     Restore from a patch-time backup
 ├── TranslationApplyDialog.xaml(.cs)  Apply a community translation
 ├── TranslationPackagerDialog.xaml(.cs) Build a translation .zip from a folder
+├── CreateLobbyDialog.xaml(.cs)       Create-a-room modal (Multiplayer)
+├── GitHubLoginDialog.xaml(.cs)       GitHub Device Flow sign-in dialog
+├── PasswordPromptDialog.xaml(.cs)    Password prompt for joining private rooms
+├── PublishModDialog.xaml(.cs)        Publish a mod profile to the catalog repo
+├── LauncherSettingsDialog.xaml(.cs)  Settings menu (paths / language / advanced)
+│
+├── Controls/
+│   ├── MultiplayerTab.xaml(.cs)      Full multiplayer UI (rooms list + room popup)
+│   ├── ModsBrowser.xaml(.cs)         Catalog of installable mods
+│   ├── StatusCard.xaml(.cs)          Mod status card on the Play tab
+│   ├── ProgressPanel.xaml(.cs)       Download / install progress
+│   └── ActionPanel.xaml(.cs)         Right-rail action buttons
+│
+├── Styles/
+│   ├── Colors.xaml                   Dark theme palette (incl. Mp* multiplayer colors)
+│   ├── Colors.Light.xaml             Light theme overrides
+│   ├── Buttons.xaml                  Shared button styles (Dialog/Primary/Mp*)
+│   └── Chrome.xaml                   Window-chrome / title-bar styling
 │
 ├── Localization/
 │   └── Strings.cs                    EN/ES string table
@@ -296,7 +437,9 @@ WarsOfLibertyLauncher/
 ├── Models/
 │   ├── UpdateInfo.cs                 UpdateInfo.xml schema
 │   ├── LauncherConfig.cs             launcher-config.json schema
-│   └── InstallManifest.cs            <mod>-manifest.json (uninstall tracking)
+│   ├── InstallManifest.cs            <mod>-manifest.json (uninstall tracking)
+│   └── Multiplayer/
+│       └── LobbyDtos.cs              Wire types for the lobby Worker (DTOs / WS frames)
 │
 └── Services/
     ├── HashService.cs                MD5 + CRC32
@@ -320,19 +463,50 @@ WarsOfLibertyLauncher/
     ├── LauncherUpdateService.cs      GitHub Releases self-update
     ├── ElevationService.cs           UAC / admin-rights helpers
     ├── GameLauncher.cs               Launch age3y.exe with the right args
-    └── DiagnosticLog.cs              launcher-debug.log writer
+    ├── DiagnosticLog.cs              launcher-debug.log writer
+    │
+    └── Multiplayer/
+        ├── MultiplayerSession.cs     Top-level state: auth + rooms + mesh + vlan
+        ├── LobbyApiClient.cs         REST client for the Cloudflare Worker
+        ├── LobbyWebSocket.cs         Hibernatable WS client w/ auto-reconnect
+        ├── ModHashService.cs         SHA-256 fingerprint of the 3 critical files
+        ├── NatTypeDetector.cs        STUN-based NAT classification
+        ├── ReplayUploadService.cs    Find + upload .age3yrec to R2
+        ├── DirectPlayService.cs      DirectPlay capability probe (legacy LAN)
+        ├── VirtualAdapterService.cs  Optional Microsoft Loopback Adapter helper
+        └── P2P/
+            ├── PeerMesh.cs           UDP hole-punching + per-peer channel mgmt
+            ├── VirtualLanService.cs  WinDivert capture / inject bridge
+            ├── WinDivertNative.cs    WinDivert P/Invoke surface
+            └── PacketRewriter.cs     IPv4 / UDP packet builder for inject path
 ```
 
 ---
 
 ## Roadmap
 
-- **Radmin VPN integration** — auto-detect Radmin adapter IP, launch with
-  `OverrideAddress` parameter for multiplayer over Radmin networks.
-- **News panel** — surface patch notes and announcements from each mod's
-  official site directly in the launcher.
+Done in v1.0:
+
+- **Built-in multiplayer** — GitHub OAuth sign-in, Cloudflare Worker
+  matchmaking, P2P hole-punching, WinDivert virtual LAN, Voobly-style
+  IP spoofing. Replaced the old "use Radmin VPN" plan with a no-VPN
+  flow that doesn't ask players to install a third-party adapter.
+- **News panel** — markdown news feed pulled from the mod catalog repo.
+
+Next up:
+
+- **Auto-host / auto-join via UI automation** — AoE3 has no CLI flag to
+  jump straight into "Host" or "Join" from the LAN screen (verified
+  against the `age3y.exe` strings). A SendInput-based menu driver would
+  bring the room-to-game experience down to zero clicks once the host
+  presses Start.
 - **More mod profiles** — extend the multi-mod system to other AoE3
   total-conversion mods.
+- **Friends + ELO ladder UI** — the Worker already serves Glicko-2
+  ratings; the in-launcher views (Friends tab, Profile ELO graph,
+  global ladder) are still placeholders in v1.0.
+- **Replay browser** — surface uploaded `.age3yrec` files in the
+  History tab with one-click download / re-watch.
 
 ---
 
