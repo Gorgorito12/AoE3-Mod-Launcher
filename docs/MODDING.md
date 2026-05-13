@@ -1,23 +1,23 @@
-# Guía de integración para modders
+# Modder integration guide
 
-> Cómo conseguir que **tu mod de AoE3** aparezca en el launcher, se instale,
-> se actualice y se desinstale sin que nadie tenga que tocar el código del
-> launcher.
+> How to get **your AoE3 mod** listed in the launcher, installed,
+> updated and uninstalled — without anyone touching the launcher's
+> source code.
 
-Esta guía describe el contrato completo entre un mod y el launcher.
-Está pensada para que un modder con una build funcional —archivos en una
-carpeta, idealmente un `.zip` publicado en algún sitio— pueda en una tarde
-tener su mod listado oficialmente.
+This guide describes the full contract between a mod and the launcher.
+It assumes you already have a working build of your mod — files in a
+folder, ideally a `.zip` published somewhere — and want to be listed
+officially. With that in hand, an afternoon is enough.
 
 ---
 
-## 1. Visión general en una imagen
+## 1. The picture in one diagram
 
 ```
-   tu_mod (tu repo / tu CDN)            aoe3-mods-catalog (repo central)
+   your_mod (your repo / your CDN)      aoe3-mods-catalog (central repo)
    ┌──────────────────────────┐         ┌──────────────────────────────┐
-   │ payload .zip / releases  │◀────────│ mods/<tu-id>/                │
-   │ UpdateInfo.xml (opcional)│         │   ├─ mod.json   ← manifest   │
+   │ payload .zip / releases  │◀────────│ mods/<your-id>/              │
+   │ UpdateInfo.xml (optional)│         │   ├─ mod.json   ← manifest   │
    │                          │         │   ├─ icon.png                │
    └──────────────────────────┘         │   └─ banner.png              │
                                         └────────────┬─────────────────┘
@@ -32,111 +32,111 @@ tener su mod listado oficialmente.
                                         └──────────────────────────────┘
 ```
 
-Lo importante:
+Key points:
 
-- **No tocas el código del launcher.** Tu mod entra al ecosistema por un
-  pull request al repo central `Gorgorito12/aoe3-mods-catalog`, NO al
-  repo `Updater`. El launcher hace fetch del catálogo cada 24 h y muestra
-  lo nuevo automáticamente.
-- **Un único archivo decisivo: `mod.json`.** Ese manifest describe tu mod,
-  dónde se instala, cómo se actualiza, cómo se ejecuta. El launcher lee
-  ese archivo y todo el resto del flujo lo deriva.
-- **El binario del mod vive donde tú quieras** (GitHub Releases, tu CDN,
-  SourceForge, etc.) — el catálogo sólo guarda metadatos + URLs.
-- **CI en el catálogo valida tu PR** contra el schema y verifica el icono
-  y banner. Los cambios cosméticos hacen auto-merge; los críticos pasan
-  por revisión humana (sistema de "tiers", §7).
+- **You don't touch the launcher's code.** Your mod enters the
+  ecosystem through a pull request to the central catalog repo
+  `Gorgorito12/aoe3-mods-catalog`, NOT to the `Updater` repo. The
+  launcher fetches the catalog every 24 h and surfaces new entries
+  automatically.
+- **One file decides everything: `mod.json`.** That manifest describes
+  your mod, where it installs, how it updates, how it runs. The rest
+  of the flow is derived from it.
+- **The mod binary lives wherever you want** (GitHub Releases, your own
+  CDN, SourceForge, …) — the catalog only stores metadata + URLs.
+- **CI in the catalog validates your PR** against the schema and checks
+  the icon/banner specs. Cosmetic changes auto-merge; critical ones go
+  through human review (the "tier" system, §6).
 
 ---
 
-## 2. Las tres rutas para publicar
+## 2. Three ways to publish
 
-Elige la que más cómoda te resulte; el resultado es el mismo PR.
+Pick whichever feels most comfortable; the end result is the same PR.
 
-### 2.1. Asistente in-app — la ruta recomendada
+### 2.1. In-app wizard — the recommended path
 
-En el launcher: pestaña **Mods → "Publish my mod"** (botón). Un wizard de
-6 pasos te pide todos los campos del schema con validación inline:
+In the launcher: **Mods tab → "Publish my mod"** button. A 6-step
+wizard asks for every schema field with inline validation:
 
-1. **Identidad** — `id`, `displayName`.
+1. **Identity** — `id`, `displayName`.
 2. **Look & feel** — `accentColor`, `icon`, `banner`.
 3. **Install** — `type`, `defaultFolder`, `probeFile`, `executable`.
-4. **Updates** — `mechanism` y sus campos dependientes.
-5. **Descripción & website** — `description.en`, `description.es`,
+4. **Updates** — `mechanism` and its dependent fields.
+5. **Description & website** — `description.en`, `description.es`,
    `officialWebsite`.
-6. **Revisión** — preview del `mod.json` generado. Dos botones:
-   **Copy JSON** (copia al portapapeles) y **Open PR on GitHub** (abre
-   `https://github.com/Gorgorito12/aoe3-mods-catalog/new/main` con la
-   ruta `mods/<tu-id>/mod.json` y el contenido pre-rellenado).
+6. **Review** — preview of the generated `mod.json`. Two buttons:
+   **Copy JSON** (copy to clipboard) and **Open PR on GitHub** (opens
+   `https://github.com/Gorgorito12/aoe3-mods-catalog/new/main` with
+   the path `mods/<your-id>/mod.json` and the content pre-populated).
 
-Ventaja: imposible inventarse un campo o equivocarse con un regex —
-el wizard usa las mismas expresiones que el schema y avisa antes de
-enviar.
+Advantage: impossible to invent a field or break a regex — the wizard
+uses the same expressions as the schema and warns before you submit.
 
-### 2.2. Pull request directo
+### 2.2. Direct pull request
 
-Si prefieres trabajar con tu editor:
+If you'd rather work in your editor:
 
 ```
 git clone https://github.com/Gorgorito12/aoe3-mods-catalog
 cd aoe3-mods-catalog
-mkdir -p mods/<tu-id>
-$EDITOR mods/<tu-id>/mod.json
-cp ~/tu-mod/icon.png    mods/<tu-id>/icon.png
-cp ~/tu-mod/banner.png  mods/<tu-id>/banner.png
-git checkout -b add-<tu-id>
-git add mods/<tu-id>
-git commit -s -m "Add <tu-id> to catalog"
-git push origin add-<tu-id>
+mkdir -p mods/<your-id>
+$EDITOR mods/<your-id>/mod.json
+cp ~/your-mod/icon.png    mods/<your-id>/icon.png
+cp ~/your-mod/banner.png  mods/<your-id>/banner.png
+git checkout -b add-<your-id>
+git add mods/<your-id>
+git commit -s -m "Add <your-id> to catalog"
+git push origin add-<your-id>
 ```
 
-Apunta el `$schema` de tu `mod.json` al schema del repo para tener
-autocompletado en VS Code:
+Point `$schema` in your `mod.json` at the schema in the repo to get
+IntelliSense in VS Code:
 
 ```json
 "$schema": "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/schema/mod.schema.json"
 ```
 
-### 2.3. Fork + edición desde GitHub web
+### 2.3. Fork + edit on github.com
 
-Botón **Fork** en `Gorgorito12/aoe3-mods-catalog`, abres tu fork,
-**Add file → Create new file**, pones la ruta `mods/<tu-id>/mod.json`,
-pegas tu JSON y abres PR. Sube los assets en commits siguientes
-(**Add file → Upload files**, target `mods/<tu-id>/`).
+**Fork** `Gorgorito12/aoe3-mods-catalog`, open your fork, **Add file →
+Create new file**, type the path `mods/<your-id>/mod.json`, paste your
+JSON and open a PR. Upload the assets in follow-up commits (**Add file
+→ Upload files**, target `mods/<your-id>/`).
 
 ---
 
-## 3. Anatomía de `mod.json`
+## 3. Anatomy of `mod.json`
 
-Schema completo en
+Full schema at
 [`aoe3-mods-catalog-template/schema/mod.schema.json`](../aoe3-mods-catalog-template/schema/mod.schema.json).
-Lo que sigue son los campos en el orden en el que suelen rellenarse, con
-las restricciones reales que aplica el schema.
+What follows is the same content in the order you usually fill it in,
+with the real constraints the schema enforces.
 
-### 3.1. Identidad
+### 3.1. Identity
 
-| Campo | Obligatorio | Restricciones | Notas |
+| Field | Required | Constraints | Notes |
 |---|---|---|---|
-| `id` | sí | `^[a-z][a-z0-9-]{1,30}$` | Debe coincidir con el nombre de la carpeta bajo `/mods/`. Es la *clave primaria* — cambiarlo después rompe instalaciones existentes. Elígelo bien. |
-| `displayName` | sí | 1–50 caracteres | El que aparece en la card del launcher. Mayúsculas, espacios y acentos permitidos. |
-| `subtitle` | no | ≤ 50 caracteres | Línea pequeña debajo del título (ej. *"AoE3:TAD overhaul"*). |
-| `author` | no | ≤ 100 caracteres | Nombre del equipo o autor. |
-| `officialWebsite` | no | `^https?://` | Se abre en el navegador del usuario, no se descarga nada. HTTP permitido para sitios legacy; HTTPS preferido. |
+| `id` | yes | `^[a-z][a-z0-9-]{1,30}$` | Must match the folder name under `/mods/`. It's the *primary key* — changing it later breaks existing installs. Pick well. |
+| `displayName` | yes | 1–50 chars | What shows on the launcher card. Uppercase, spaces and accents are allowed. |
+| `subtitle` | no | ≤ 50 chars | Small line under the title (e.g. *"AoE3:TAD overhaul"*). |
+| `author` | no | ≤ 100 chars | Team or author name. |
+| `officialWebsite` | no | `^https?://` | Opened in the user's browser, nothing is downloaded from here. HTTP allowed for legacy sites; HTTPS preferred. |
 
 ### 3.2. Look & feel
 
-| Campo | Restricciones | Specs físicas |
+| Field | Constraints | Physical specs |
 |---|---|---|
-| `accentColor` | `^#[0-9a-fA-F]{6}$` | Color del borde de la card, de los badges y del banner sintético si no incluyes uno. |
-| `icon` | nombre de archivo `.png` | **256 × 256 px, PNG con alfa, ≤ 100 KB.** Se valida en CI; un 257×257 lo rechaza. |
-| `banner` | nombre `.png/.jpg/.jpeg` | **1200 × 300 px, ≤ 500 KB.** |
+| `accentColor` | `^#[0-9a-fA-F]{6}$` | Card border, badges, and the synthetic banner gradient when no banner is supplied. |
+| `icon` | filename ending in `.png` | **256 × 256 px, PNG with alpha, ≤ 100 KB.** Validated in CI; a 257×257 fails. |
+| `banner` | filename `.png/.jpg/.jpeg` | **1200 × 300 px, ≤ 500 KB.** |
 
-Los archivos viven en `mods/<tu-id>/` junto al `mod.json`. El launcher
-resuelve `icon: "icon.png"` a
-`https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/<tu-id>/icon.png`
-y los cachea en disco (`ModAssetCacheService`).
+The files live in `mods/<your-id>/` next to `mod.json`. The launcher
+resolves `icon: "icon.png"` to
+`https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/<your-id>/icon.png`
+and caches them on disk (`ModAssetCacheService`).
 
-### 3.3. Descripciones multilingües
+### 3.3. Multilingual descriptions
 
 ```json
 "description": {
@@ -145,16 +145,16 @@ y los cachea en disco (`ModAssetCacheService`).
 }
 ```
 
-Las claves son códigos ISO 639-1. El launcher elige según el idioma de
-la UI y cae a `en` si no encuentra el del usuario. Máximo 500 caracteres
-por idioma.
+Keys are ISO 639-1 codes. The launcher picks one based on UI language
+and falls back to `en` if the user's language isn't present. 500 chars
+max per language.
 
-### 3.4. `install` — cómo se instala el mod
+### 3.4. `install` — how the mod is installed
 
 ```json
 "install": {
   "type": "IsolatedFolder",
-  "defaultFolder": "C:\\Program Files (x86)\\Mi Mod",
+  "defaultFolder": "C:\\Program Files (x86)\\My Mod",
   "probeFile": "data\\stringtable.xml",
   "executable": "age3m.exe",
   "arguments": "",
@@ -163,17 +163,17 @@ por idioma.
 }
 ```
 
-| Campo | Descripción |
+| Field | Meaning |
 |---|---|
-| `type` | `IsolatedFolder` o `InPlaceOverlay`. Detalle en §4. |
-| `defaultFolder` | Sugerencia para el dialog de instalación. Vacío para `InPlaceOverlay` — el launcher usa la ruta de AoE3 detectada. |
-| `probeFile` | Ruta relativa que el launcher comprueba para confirmar que el mod está instalado en una carpeta (`File.Exists(install + probeFile)`). Pon algo que **sólo** exista en tu mod, no `age3y.exe` (eso existe en AoE3 vanilla). |
-| `executable` | Nombre del .exe que arranca el juego (`age3y.exe` para WoL, `age3m.exe` para Improvement Mod). El launcher lo busca dentro de la carpeta de instalación. |
-| `arguments` | Argumentos extra que el launcher añade al ejecutar. Casi siempre vacío. |
-| `payloadUrls` | Array de URLs HTTPS con el zip inicial. Si el mod se distribuye en partes (`.zip.001`, `.002`, …) lístalas en orden: el launcher las concatena y luego descomprime. |
-| `payloadSha256` | **Muy recomendado.** Array paralelo a `payloadUrls` con el SHA-256 de cada parte. Si lo declaras y un download no matchea, el launcher aborta — protege frente a manipulación del payload. |
+| `type` | `IsolatedFolder` or `InPlaceOverlay`. Details in §4. |
+| `defaultFolder` | Suggested path for the install dialog. Empty for `InPlaceOverlay` — the launcher uses the detected AoE3 path. |
+| `probeFile` | Relative path the launcher checks to confirm the mod is installed at a given location (`File.Exists(install + probeFile)`). Pick something **unique** to your mod — `age3y.exe` exists in vanilla AoE3 too. |
+| `executable` | Filename of the .exe that launches the game (`age3y.exe` for WoL, `age3m.exe` for Improvement Mod). The launcher looks for it inside the install folder. |
+| `arguments` | Extra args the launcher appends when running. Usually empty. |
+| `payloadUrls` | Array of HTTPS URLs for the initial install zip. If the mod ships in parts (`.zip.001`, `.002`, …) list them in order — the launcher concatenates and then extracts. |
+| `payloadSha256` | **Strongly recommended.** Parallel array to `payloadUrls` with each part's SHA-256. If you declare it and a download doesn't match, the launcher aborts — defends against payload tampering. |
 
-### 3.5. `update` — cómo se actualizan los archivos
+### 3.5. `update` — how files are kept up to date
 
 ```json
 "update": {
@@ -182,125 +182,126 @@ por idioma.
 }
 ```
 
-`mechanism` es un enum con cuatro valores. Detalle de cada uno en §5.
+`mechanism` is an enum with four values. Details in §5.
 
-### 3.6. Campos opcionales avanzados
+### 3.6. Advanced optional fields
 
-| Campo | Cuándo usarlo |
+| Field | When to use |
 |---|---|
-| `sourceRepo` | `owner/repo` de tu repositorio GitHub. **Requerido** si `update.mechanism = GitHubReleases`. Para otros mecanismos es informativo. |
-| `approvedReleaseTag` | Tag aprobado para `GitHubReleases`. Bumpear este campo es el flujo normal para sacar versión (auto-merge, §7). |
-| `installProductGuid` | Clave estable de Add/Remove Programs (`HKLM\…\Uninstall\<aqui>`). Si tienes un instalador previo con su propio GUID, ponlo aquí para mantener compatibilidad. Si no, omítelo y el launcher genera `<id>_launcher`. |
-| `userDataFolder` | Nombre de la carpeta en `Documents\My Games\<aquí>\` donde tu mod guarda saves/replays. Si lo defines, el launcher activa el alert pre-instalación que ofrece backup, y expone "Open / Create backup / Restore backup" en el menú del engranaje. Omítelo si tu mod reutiliza la carpeta vanilla de AoE3. |
-| `translations` | Define `{ "repo": "owner/repo", "coveredFiles": [...] }` para que el launcher liste traducciones de la comunidad publicadas como releases en ese repo. Sólo tiene sentido si tu mod usa el mismo esquema de overlay que WoL (archivos en `data\`). |
+| `sourceRepo` | `owner/repo` of your GitHub repository. **Required** if `update.mechanism = GitHubReleases`. Informational for other mechanisms. |
+| `approvedReleaseTag` | Approved release tag for `GitHubReleases`. Bumping this is the normal way to ship a new version (auto-merge, §6). |
+| `installProductGuid` | Stable Add/Remove Programs key (`HKLM\…\Uninstall\<here>`). If you have a pre-existing installer with its own GUID, put it here to stay compatible. Otherwise omit and the launcher derives `<id>_launcher`. |
+| `userDataFolder` | Folder name under `Documents\My Games\<here>\` where your mod stores saves/replays. When set, the launcher enables the pre-install backup prompt and exposes "Open / Create backup / Restore backup" in the gear menu. Omit if your mod reuses vanilla AoE3's user-data folder. |
+| `translations` | `{ "repo": "owner/repo", "coveredFiles": [...] }` so the launcher lists community translations published as releases in that repo. Only meaningful if your mod uses the same overlay scheme as WoL (files under `data\`). |
 
 ---
 
-## 4. Tipos de instalación (`install.type`)
+## 4. Install types (`install.type`)
 
-### 4.1. `IsolatedFolder` — la opción por defecto
+### 4.1. `IsolatedFolder` — the default choice
 
-El launcher **clona AoE3 entero** en una carpeta nueva y aplica tu mod
-encima. Resultado: el AoE3 original del usuario queda intacto, tu mod
-vive aislado, y los dos pueden coexistir.
+The launcher **clones the entire AoE3 install** into a new folder and
+overlays your mod on top. Result: the user's original AoE3 stays
+untouched, your mod lives in isolation, and both can coexist.
 
-Pasos internos:
+Internal steps:
 
-1. Detecta AoE3 (Steam / GOG / retail).
-2. Clona la carpeta de AoE3 a `defaultFolder`.
-3. Aplana `bin\` a la raíz (layout Steam) y borra el `bin\` redundante.
-4. Extrae tu payload encima.
-5. Escribe shortcuts, registry entry y `<id>-manifest.json`.
+1. Detect AoE3 (Steam / GOG / retail).
+2. Clone the AoE3 folder to `defaultFolder`.
+3. Flatten `bin\` to the root (Steam layout) and delete the now-empty
+   `bin\` afterwards (~3.7 GB saved).
+4. Extract your payload on top.
+5. Write shortcuts, registry entry and `<id>-manifest.json`.
 
-Úsalo cuando:
+Use it when:
 
-- Tu mod es una **conversión total** (WoL, Napoleonic Era, …).
-- Quieres que el usuario no perciba al instalar que va a tocar su AoE3.
-- Tu ejecutable es distinto al vanilla (ej. `age3y.exe`, `age3m.exe`).
+- Your mod is a **total conversion** (WoL, Napoleonic Era, …).
+- You want users to not feel the install is touching their AoE3.
+- Your executable is different from vanilla (e.g. `age3y.exe`, `age3m.exe`).
 
-Ejemplo real: `aoe3-mods-catalog-template/mods/wol/mod.json`.
+Real example: `aoe3-mods-catalog-template/mods/wol/mod.json`.
 
-### 4.2. `InPlaceOverlay` — encima de AoE3
+### 4.2. `InPlaceOverlay` — on top of AoE3
 
-Los archivos se extraen **directamente sobre la instalación de AoE3
-existente**. No hay clonación; el mod y AoE3 comparten carpeta.
+Files are extracted **directly over the existing AoE3 install**. No
+cloning; the mod and AoE3 share a folder.
 
-Pasos internos:
+Internal steps:
 
-1. Detecta AoE3.
-2. Hace backup de cada archivo a sobreescribir antes de extraer.
-3. Extrae tu payload encima.
-4. Escribe `<id>-manifest.json` para poder revertir.
+1. Detect AoE3.
+2. Back up every file about to be overwritten.
+3. Extract your payload on top.
+4. Write `<id>-manifest.json` so an uninstall can revert.
 
-Úsalo cuando:
+Use it when:
 
-- Tu mod es un **patch/overhaul ligero** que toca pocos archivos.
-- Te basta con que AoE3 vanilla quede modificado (el usuario sabe que
-  para volver al vanilla tendrá que desinstalar).
+- Your mod is a **lightweight patch/overhaul** touching few files.
+- It's acceptable that the user's vanilla AoE3 ends up modified (they
+  understand that going back to vanilla means uninstalling).
 
-**Cuidado:** este modo modifica el AoE3 del usuario. Asegúrate de
-declarar `payloadSha256` y de listar bien qué archivos toca tu mod,
-porque el desinstalador lo usará para limpiar.
+**Caveat:** this mode modifies the user's AoE3. Declare
+`payloadSha256` and list exactly which files your mod ships — the
+uninstaller uses that to clean up.
 
 ---
 
-## 5. Mecanismos de actualización (`update.mechanism`)
+## 5. Update mechanisms (`update.mechanism`)
 
-Árbol de decisión:
+Decision tree:
 
 ```
-¿Tu mod publica versiones como GitHub Releases?
-├─ sí ────────────────────────────────▶ GitHubReleases
+Does your mod ship versions as GitHub Releases?
+├─ yes ───────────────────────────────▶ GitHubReleases
 └─ no
-   ├─ ¿Tienes un UpdateInfo.xml + parches .tar.xz incrementales?
-   │   └─ sí ─────────────────────────▶ WolPatcher
-   ├─ ¿Tienes tu propio updater externo que arranca con el juego?
-   │   └─ sí ─────────────────────────▶ DelegatedExternal
-   └─ ninguno ─────────────────────────▶ Manual
+   ├─ Do you have UpdateInfo.xml + incremental .tar.xz patches?
+   │   └─ yes ────────────────────────▶ WolPatcher
+   ├─ Do you have your own external updater that runs with the game?
+   │   └─ yes ────────────────────────▶ DelegatedExternal
+   └─ none ────────────────────────────▶ Manual
 ```
 
-### 5.1. `GitHubReleases` — recomendado para mods nuevos
+### 5.1. `GitHubReleases` — recommended for new mods
 
-El launcher pinea una versión a un **tag de release** en tu repo
-(`sourceRepo`). Cuando quieres publicar v1.1, abres un PR al catálogo
-que **sólo** cambia `approvedReleaseTag: "v1.0"` → `"v1.1"`. Eso es un
-"Tier 2" y se auto-mergea (§7).
+The launcher pins to a **release tag** on your repo (`sourceRepo`).
+When you ship v1.1, you open a PR to the catalog that **only** changes
+`approvedReleaseTag: "v1.0"` → `"v1.1"`. That's a "Tier 2" change and
+auto-merges (§6).
 
 ```json
-"sourceRepo": "tuusuario/tu-mod",
+"sourceRepo": "youruser/your-mod",
 "approvedReleaseTag": "v1.0",
 "update": { "mechanism": "GitHubReleases" }
 ```
 
-Por defecto el launcher descarga **el primer asset .zip** del release
-tag. Si quieres hostear el payload fuera de GitHub Releases (CDN propio,
-S3, etc.) pero mantener el tag como marcador de versión, declara:
+By default the launcher downloads **the first `.zip` asset** on the
+release tag. If you want to host the payload outside GitHub Releases
+(your own CDN, S3, …) but keep the tag as the version marker, declare:
 
 ```json
 "update": {
   "mechanism": "GitHubReleases",
   "github": {
-    "externalAssetUrlTemplate": "https://tu-cdn.com/tu-mod-{tag}.zip",
+    "externalAssetUrlTemplate": "https://your-cdn.com/your-mod-{tag}.zip",
     "externalAssetSha256": "aabbcc...64-hex"
   }
 }
 ```
 
-El literal `{tag}` se reemplaza por `approvedReleaseTag` al descargar.
-**`externalAssetSha256` es obligatorio** si declaras la plantilla — el
-launcher se niega a instalar desde un host externo sin hash, porque
-GitHub ya no garantiza la autenticidad.
+The literal `{tag}` is replaced with `approvedReleaseTag` at download
+time. **`externalAssetSha256` is mandatory** when you set the template
+— the launcher refuses to install from an external host without a
+hash, because GitHub no longer underwrites the authenticity.
 
-### 5.2. `WolPatcher` — para mods que ya tienen el pipeline legacy
+### 5.2. `WolPatcher` — for mods already running the legacy pipeline
 
-Es el sistema que usa Wars of Liberty: un `UpdateInfo.xml` en el server
-del mod lista versiones, cada una con un `.tar.xz` incremental.
+What Wars of Liberty uses: an `UpdateInfo.xml` on the mod's server
+lists versions, each with an incremental `.tar.xz` patch.
 
 ```json
 "update": {
   "mechanism": "WolPatcher",
   "wol": {
-    "updateInfoUrl": "http://tu-mod.com/updates/UpdateInfo.xml",
+    "updateInfoUrl": "http://your-mod.com/updates/UpdateInfo.xml",
     "updateInfoUrlAlt": "http://mirror.example.com/UpdateInfo.xml",
     "payloadZipUrls": ["https://github.com/.../payload.zip.001", "...002"],
     "payloadSha256": ["...", "..."]
@@ -308,34 +309,32 @@ del mod lista versiones, cada una con un `.tar.xz` incremental.
 }
 ```
 
-El launcher:
+The launcher:
 
-1. Hashea `data\protoy.xml`, `data\techtreey.xml`,
-   `data\stringtabley.xml` para identificar la versión actualmente
-   instalada.
-2. Aplica todos los parches pendientes desde `minreqdownload` hacia
-   arriba.
-3. Verifica CRC32 de cada parche antes de aplicar.
-4. Hace backup de cada archivo antes de sobreescribir.
+1. Hashes `data\protoy.xml`, `data\techtreey.xml`,
+   `data\stringtabley.xml` to identify the installed version.
+2. Applies every pending patch from `minreqdownload` upwards.
+3. Verifies CRC32 of each patch before applying.
+4. Backs up files before overwriting.
 
-Documentación del formato `UpdateInfo.xml`: ver
+`UpdateInfo.xml` format reference: see
 `WarsOfLibertyLauncher/Models/UpdateInfo.cs`.
 
-### 5.3. `DelegatedExternal` — tu mod tiene su propio updater
+### 5.3. `DelegatedExternal` — your mod has its own updater
 
-El launcher se desentiende: instala el payload inicial y luego cada vez
-que el usuario juega, lanza tu .exe — si tu mod arranca su propio
-updater (estilo `age3m.exe` de Improvement Mod), allá tú.
+The launcher stays out of the way: installs the initial payload, and
+on each play session runs your `.exe` — if it spawns its own updater
+(Improvement Mod's `age3m.exe` style), that's your problem now.
 
 ```json
 "update": { "mechanism": "DelegatedExternal" }
 ```
 
-### 5.4. `Manual` — sin actualizaciones automáticas
+### 5.4. `Manual` — no automated updates
 
-El launcher lista tu mod, deja al usuario instalarlo (si declaras
-`install.payloadUrls`) y no intenta actualizarlo. Útil para demos,
-prototipos o mods cuyo flujo de updates aún no está decidido.
+The launcher lists the mod, lets the user install it (if you declared
+`install.payloadUrls`) and never tries to update it. Useful for demos,
+prototypes, or mods whose update story isn't decided yet.
 
 ```json
 "update": { "mechanism": "Manual" }
@@ -343,101 +342,104 @@ prototipos o mods cuyo flujo de updates aún no está decidido.
 
 ---
 
-## 6. Modelo de seguridad
+## 6. Security model
 
-Tres capas:
+Three layers:
 
 ### 6.1. Schema validation (CI)
 
-`ajv validate` corre en cada PR contra `schema/mod.schema.json`. Rechaza
-manifests con campos desconocidos (`additionalProperties: false`),
-regexes que no matchean, longitudes excedidas, URLs sin esquema, etc.
+`ajv validate` runs on every PR against `schema/mod.schema.json`. It
+rejects manifests with unknown fields (`additionalProperties: false`),
+non-matching regexes, exceeded lengths, schemeless URLs, and so on.
 
-### 6.2. Hashes SHA-256
+### 6.2. SHA-256 hashes
 
-| Campo | Cuándo es obligatorio | Cuándo es muy recomendado |
+| Field | Mandatory when | Strongly recommended when |
 |---|---|---|
-| `install.payloadSha256` | nunca | siempre que declares `payloadUrls` |
-| `update.wol.payloadSha256` | nunca | siempre que declares `payloadZipUrls` |
-| `update.github.externalAssetSha256` | **siempre** que declares `externalAssetUrlTemplate` | n/a |
+| `install.payloadSha256` | never | always, when you declare `payloadUrls` |
+| `update.wol.payloadSha256` | never | always, when you declare `payloadZipUrls` |
+| `update.github.externalAssetSha256` | **always**, when `externalAssetUrlTemplate` is set | n/a |
 
-El launcher verifica el hash tras descargar y aborta si no coincide. Sin
-hash, el launcher confía en el host (GitHub Releases, sitio del mod).
-**Con** hash, el launcher detecta manipulación incluso si el host fue
-comprometido después de aprobado el PR.
+The launcher verifies the hash after download and aborts on mismatch.
+Without a hash, the launcher trusts the host (GitHub Releases, the
+mod's own site). **With** a hash, the launcher catches tampering even
+if the host was compromised after the PR was approved.
 
-### 6.3. Sistema de Tiers — qué auto-mergea y qué no
+### 6.3. Tier system — what auto-merges and what doesn't
 
-El script `classify_pr.py` clasifica cada PR según qué campos toca:
+The `classify_pr.py` script classifies every PR by which fields it
+touches:
 
-| Tier | Campos modificados | Acción |
+| Tier | Fields modified | Action |
 |---|---|---|
-| **invalid** | Archivos fuera de `/mods/`, varios mods a la vez, JSON malformado, nombres de archivo desconocidos | PR bloqueado con un comentario explicativo |
-| **tier1** | Sólo: `displayName`, `subtitle`, `description`, `accentColor`, `author`, `officialWebsite`, `icon`, `banner` | **Auto-merge** tras validación |
-| **tier2** | Sólo: `approvedReleaseTag` (bump de versión) | **Auto-merge** tras validación |
-| **tier3** | Cualquiera de: `id`, `sourceRepo`, `install.*`, `update.*`, `translations`, o primera submission del mod | Etiqueta `needs-manual-review` + comentario; el maintainer revisa a mano |
+| **invalid** | Files outside `/mods/`, multiple mods at once, malformed JSON, unknown filenames | PR is blocked with an explanatory comment |
+| **tier1** | Only: `displayName`, `subtitle`, `description`, `accentColor`, `author`, `officialWebsite`, `icon`, `banner` | **Auto-merge** after validation |
+| **tier2** | Only: `approvedReleaseTag` (version bump) | **Auto-merge** after validation |
+| **tier3** | Anything in: `id`, `sourceRepo`, `install.*`, `update.*`, `translations`, OR a first-time submission | Labelled `needs-manual-review` + comment; maintainer reviews manually |
 
-Lo que esto significa para ti como modder:
+What this means for you as a modder:
 
-- **Tu primera submission siempre es tier 3.** Toca esperar review.
-- **Cambiar icono / banner / texto** después: auto-merge en minutos.
-- **Sacar versión nueva** (cambio de `approvedReleaseTag`): auto-merge.
-- **Cambiar URLs, hashes o `install.*`**: review humano, siempre. Esto
-  es deliberado — controla qué descarga el launcher.
+- **Your first submission is always tier 3.** Expect to wait for
+  review.
+- **Changing icon / banner / text** later: auto-merge within minutes.
+- **Shipping a new version** (bumping `approvedReleaseTag`):
+  auto-merge.
+- **Changing URLs, hashes, or `install.*`**: human review, always. This
+  is by design — it controls what the launcher downloads.
 
 ---
 
-## 7. Flujo completo: de cero a publicado
+## 7. End-to-end flow: from zero to published
 
 ```
                                       ┌────────────────────────────┐
-                                      │ Tu repo / tu CDN tiene el  │
-                                      │ payload (.zip / release)   │
+                                      │ Your repo / CDN already    │
+                                      │ hosts the payload          │
                                       └─────────────┬──────────────┘
                                                     │
                                                     ▼
 ┌─────────────────────────┐    ┌────────────────────────────────────┐
-│ Asistente in-app o      │    │ Calcula SHA-256 de cada payload    │
-│ editor manual           │───▶│   certutil -hashfile payload.zip   │
-│ (escribes mod.json)     │    │   SHA256                           │
+│ In-app wizard or your   │    │ Compute SHA-256 of each payload    │
+│ editor (write mod.json) │───▶│   certutil -hashfile payload.zip   │
+│                         │    │   SHA256                           │
 └─────────────────────────┘    └─────────────┬──────────────────────┘
                                              │
                                              ▼
                                ┌────────────────────────────────────┐
-                               │ PR a Gorgorito12/aoe3-mods-catalog │
-                               │   mods/<tu-id>/mod.json            │
-                               │   mods/<tu-id>/icon.png            │
-                               │   mods/<tu-id>/banner.png          │
+                               │ PR to Gorgorito12/aoe3-mods-catalog│
+                               │   mods/<your-id>/mod.json          │
+                               │   mods/<your-id>/icon.png          │
+                               │   mods/<your-id>/banner.png        │
                                └─────────────┬──────────────────────┘
                                              │
                                              ▼
                                ┌────────────────────────────────────┐
                                │ CI: classify → validate            │
-                               │   1ª submission → tier 3           │
+                               │   first submission → tier 3        │
                                └─────────────┬──────────────────────┘
                                              │
                                              ▼
                                ┌────────────────────────────────────┐
-                               │ Maintainer revisa y mergea         │
+                               │ Maintainer reviews and merges      │
                                └─────────────┬──────────────────────┘
                                              │
                                              ▼
                                ┌────────────────────────────────────┐
-                               │ Próximo refresh del catálogo en    │
-                               │ los launchers (≤24 h por cache).   │
-                               │ Tu mod aparece en la UI.           │
+                               │ Next catalog refresh in users'     │
+                               │ launchers (≤24 h cache).           │
+                               │ Your mod shows up in the UI.       │
                                └────────────────────────────────────┘
 ```
 
-Una vez merged, no necesitas hacer nada más: los launchers existentes
-verán tu mod automáticamente cuando expire su cache de 24h
-(`ModCatalogService.CacheTtl`).
+Once merged, you don't need to do anything else: existing launchers
+will see your mod automatically when their cache expires
+(`ModCatalogService.CacheTtl = 24h`).
 
 ---
 
-## 8. Ejemplos reales
+## 8. Real-world examples
 
-### 8.1. Conversión total con WolPatcher (WoL)
+### 8.1. Total conversion with WolPatcher (WoL)
 
 ```json
 {
@@ -481,7 +483,7 @@ verán tu mod automáticamente cuando expire su cache de 24h
 }
 ```
 
-### 8.2. Overhaul con GitHubReleases (Improvement Mod)
+### 8.2. Overhaul with GitHubReleases (Improvement Mod)
 
 ```json
 {
@@ -507,7 +509,7 @@ verán tu mod automáticamente cuando expire su cache de 24h
 }
 ```
 
-### 8.3. Mod nuevo en GitHub con hashes y CDN externo
+### 8.3. New mod on GitHub with hashes and an external CDN
 
 ```json
 {
@@ -543,82 +545,82 @@ verán tu mod automáticamente cuando expire su cache de 24h
 
 ---
 
-## 9. Errores comunes (y cómo el CI los cazaría primero)
+## 9. Common errors (and how CI catches them first)
 
-| Síntoma del PR | Causa | Cómo arreglar |
+| PR symptom | Cause | Fix |
 |---|---|---|
-| `ajv: id should match pattern "^[a-z]…"` | `id` con mayúsculas, espacios o caracteres raros | Usa sólo `a-z0-9-`, empieza por letra |
-| `ajv: install.type should be one of …` | Typo en el enum (ej. `"isolated"`) | `IsolatedFolder` o `InPlaceOverlay`, case-sensitive |
-| `ajv: additionalProperties` | Añadiste un campo que no está en el schema | Quita el campo o pide que se añada al schema en un PR aparte |
-| `validate_images: icon 257x257` | Tu icon no es exactamente 256×256 | Redimensiona; el CI no tolera ±1 px |
-| `validate_images: banner.png > 500 KB` | Banner pesa más de 500 KB | Comprime con TinyPNG o equivalente |
-| PR marcado **invalid** | Tocaste algo fuera de `/mods/<tu-id>/`, o más de un mod a la vez | Una PR por mod. Si necesitas modificar el schema, sepáralo en otro PR |
-| PR sin auto-merge aunque sólo tocaste `displayName` | Es tu primera submission — siempre tier 3 por seguridad | Esperar al maintainer; las siguientes serán auto-merge |
-| El launcher no muestra mi mod después del merge | Cache de 24h aún no expiró | Borra `%LocalAppData%\AoE3ModLauncher\catalog-cache.json` para forzar refresh |
+| `ajv: id should match pattern "^[a-z]…"` | `id` has uppercase, spaces or odd characters | Use only `a-z0-9-`, must start with a letter |
+| `ajv: install.type should be one of …` | Typo in the enum (e.g. `"isolated"`) | `IsolatedFolder` or `InPlaceOverlay`, case-sensitive |
+| `ajv: additionalProperties` | You added a field the schema doesn't know | Remove it, or propose adding it to the schema in a separate PR |
+| `validate_images: icon 257x257` | Icon isn't exactly 256×256 | Resize; CI doesn't tolerate ±1 px |
+| `validate_images: banner.png > 500 KB` | Banner is over 500 KB | Compress (TinyPNG or equivalent) |
+| PR marked **invalid** | You touched something outside `/mods/<your-id>/`, or more than one mod at once | One PR per mod. Schema changes go in a separate PR |
+| PR not auto-merging even though you only changed `displayName` | First-time submission — always tier 3 for safety | Wait for the maintainer; later cosmetic PRs auto-merge |
+| Launcher doesn't show my mod after merge | 24 h cache hasn't expired yet | Delete `%LocalAppData%\AoE3ModLauncher\catalog-cache.json` to force a refresh |
 
 ---
 
-## 10. Lo que **NO** tienes que hacer (y se ve a menudo)
+## 10. What you **don't** need to do (and people often try)
 
-- ❌ **No edites `WarsOfLibertyLauncher/Services/ModRegistry.cs`.** Esa
-  clase tiene una lista hardcoded sólo para WoL (offline fallback). Tu
-  mod va en el catálogo. Editar el `ModRegistry` directamente significa
-  que tu mod requeriría un nuevo release del launcher para aparecer —
-  lo opuesto a lo que el sistema busca.
-- ❌ **No subas el payload del mod al catálogo.** El repo del catálogo
-  guarda solo metadatos (`mod.json` + assets pequeños). El binario va
-  en GitHub Releases / tu CDN.
-- ❌ **No declares `payloadSha256` sin haber calculado realmente el
-  hash.** Si pones un placeholder, el launcher rechaza la instalación
-  para todos los usuarios.
-- ❌ **No reuses un `id` ajeno.** Aunque el schema no lo prohíbe a nivel
-  regex, el CI rechaza el PR si la carpeta `mods/<id>` ya existe y no
-  eres su CODEOWNER.
-- ❌ **No metas `<id>` con mayúsculas o espacios** "porque luce mejor".
-  Para texto visible usa `displayName`; `id` es identificador técnico.
+- **Don't edit `WarsOfLibertyLauncher/Services/ModRegistry.cs`.** That
+  class has a hardcoded list for WoL only (an offline fallback). Your
+  mod goes in the catalog. Editing `ModRegistry` directly would mean
+  your mod needs a new launcher release to appear — the opposite of
+  what the system is designed for.
+- **Don't upload the mod payload to the catalog.** The catalog repo
+  holds only metadata (`mod.json` + small assets). The binary lives in
+  GitHub Releases / your CDN.
+- **Don't declare `payloadSha256` without actually computing the hash.**
+  A placeholder hash means the launcher refuses to install for every
+  user.
+- **Don't reuse someone else's `id`.** Even though the schema regex
+  doesn't forbid it, CI rejects the PR if `mods/<id>` already exists
+  and you're not its CODEOWNER.
+- **Don't put uppercase or spaces in `id`** "because it looks nicer".
+  `displayName` is the user-facing string; `id` is a technical
+  identifier.
 
 ---
 
-## 11. Referencias del código
+## 11. Code references
 
-Si quieres entender qué hace el launcher con tu `mod.json`:
+If you want to understand what the launcher does with your `mod.json`:
 
-| Archivo | Qué hace |
+| File | Role |
 |---|---|
-| [`WarsOfLibertyLauncher/Models/ModCatalogManifest.cs`](../WarsOfLibertyLauncher/Models/ModCatalogManifest.cs) | DTO que mapea 1:1 con `mod.json` |
-| [`WarsOfLibertyLauncher/Services/ModCatalogService.cs`](../WarsOfLibertyLauncher/Services/ModCatalogService.cs) | Fetch + cache del catálogo |
-| [`WarsOfLibertyLauncher/Services/ModRegistry.cs`](../WarsOfLibertyLauncher/Services/ModRegistry.cs) | Proyección a `ModProfile` y merge con built-in |
-| [`WarsOfLibertyLauncher/Models/ModProfile.cs`](../WarsOfLibertyLauncher/Models/ModProfile.cs) | Modelo runtime que consume el resto del launcher |
-| [`WarsOfLibertyLauncher/Services/NativeInstallService.cs`](../WarsOfLibertyLauncher/Services/NativeInstallService.cs) | Pipeline de instalación inicial |
-| [`WarsOfLibertyLauncher/Services/UpdateService.cs`](../WarsOfLibertyLauncher/Services/UpdateService.cs) | Flujo de actualización (WolPatcher) |
-| [`WarsOfLibertyLauncher/Services/GitHubReleasesInstallService.cs`](../WarsOfLibertyLauncher/Services/GitHubReleasesInstallService.cs) | Flujo de actualización (GitHubReleases) |
-| [`aoe3-mods-catalog-template/schema/mod.schema.json`](../aoe3-mods-catalog-template/schema/mod.schema.json) | Schema autoritativo |
-| [`aoe3-mods-catalog-template/.github/scripts/classify_pr.py`](../aoe3-mods-catalog-template/.github/scripts/classify_pr.py) | Clasificador de tiers |
+| [`WarsOfLibertyLauncher/Models/ModCatalogManifest.cs`](../WarsOfLibertyLauncher/Models/ModCatalogManifest.cs) | DTO that maps 1:1 to `mod.json` |
+| [`WarsOfLibertyLauncher/Services/ModCatalogService.cs`](../WarsOfLibertyLauncher/Services/ModCatalogService.cs) | Catalog fetch + cache |
+| [`WarsOfLibertyLauncher/Services/ModRegistry.cs`](../WarsOfLibertyLauncher/Services/ModRegistry.cs) | Projection to `ModProfile` and merge with built-ins |
+| [`WarsOfLibertyLauncher/Models/ModProfile.cs`](../WarsOfLibertyLauncher/Models/ModProfile.cs) | Runtime model the rest of the launcher uses |
+| [`WarsOfLibertyLauncher/Services/NativeInstallService.cs`](../WarsOfLibertyLauncher/Services/NativeInstallService.cs) | Initial install pipeline |
+| [`WarsOfLibertyLauncher/Services/UpdateService.cs`](../WarsOfLibertyLauncher/Services/UpdateService.cs) | Update flow (WolPatcher) |
+| [`WarsOfLibertyLauncher/Services/GitHubReleasesInstallService.cs`](../WarsOfLibertyLauncher/Services/GitHubReleasesInstallService.cs) | Update flow (GitHubReleases) |
+| [`aoe3-mods-catalog-template/schema/mod.schema.json`](../aoe3-mods-catalog-template/schema/mod.schema.json) | Authoritative schema |
+| [`aoe3-mods-catalog-template/.github/scripts/classify_pr.py`](../aoe3-mods-catalog-template/.github/scripts/classify_pr.py) | Tier classifier |
 
 ---
 
-## 12. ¿Y si necesito algo que el schema no soporta?
+## 12. What if I need something the schema doesn't support?
 
-Abre un issue en el repo del launcher describiendo el caso de uso. El
-schema está versionado deliberadamente: añadir un campo nuevo es un
-cambio coordinado entre el launcher, el schema y el clasificador de
-tiers. Lo bueno: una vez aceptado, queda disponible para todos los
-mods.
+Open an issue on the launcher repo describing the use case. The schema
+is versioned deliberately: adding a new field is a coordinated change
+across the launcher, the schema and the tier classifier. The good
+news: once accepted, every mod can use it.
 
-Casos típicos que han salido en el roadmap:
-- `StandardModsFolder` install type para mods que se montan en
+Typical cases that have come up on the roadmap:
+- `StandardModsFolder` install type for mods that drop into
   `Documents\My Games\Age of Empires 3\Mods\` (target v0.9).
-- Soporte para AoE3: Definitive Edition (target v0.9 — detección y
-  lanzamiento; mods de DE quedan para más adelante).
-- `assetNamePattern` para `GitHubReleases` cuando el primer .zip del
-  release no es el correcto.
+- AoE3: Definitive Edition support (target v0.9 — detection and
+  launch; full DE mod support is a later, larger effort).
+- `assetNamePattern` for `GitHubReleases` when the first `.zip` on a
+  release isn't the right one.
 
 ---
 
-**Resumen de un párrafo**: tu mod entra al launcher por un PR al
-catálogo central con un `mod.json` que describe identidad, instalación
-y mecanismo de actualización; el CI valida el JSON contra un schema y
-auto-mergea cambios cosméticos y bumps de versión, dejando los críticos
-(URLs, hashes, instalación) bajo revisión humana; los launchers
-existentes ven tu mod automáticamente al expirar el cache de 24h, sin
-que tengas que tocar ni una línea del launcher.
+**One-paragraph summary**: your mod enters the launcher through a PR
+to the central catalog repo carrying a `mod.json` that describes
+identity, install layout and update mechanism; CI validates the JSON
+against a schema and auto-merges cosmetic changes and version bumps,
+keeping the critical ones (URLs, hashes, install) under human review;
+existing launchers see your mod automatically when their 24 h cache
+expires, without you ever touching a line of the launcher itself.
