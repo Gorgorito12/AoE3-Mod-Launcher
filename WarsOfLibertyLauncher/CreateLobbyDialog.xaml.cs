@@ -63,10 +63,17 @@ public partial class CreateLobbyDialog : Window
         Title = Strings.Get("MpCreateDialogTitle");
         TitleText.Text = Strings.Get("MpCreateDialogTitle");
         ModLabel.Text = Strings.Get("MpCreateDialogModLabel");
-        HashLabel.Text = Strings.Get("MpCreateDialogHashLabel");
+        // HashLabel is rendered next to the "Advanced details" toggle
+        // and uses the localised "(mod fingerprint)" suffix from the
+        // strings table. Wrap in parens to make it read as a hint.
+        HashLabel.Text = "(" + Strings.Get("MpCreateDialogHashLabel") + ")";
         TitleLabel.Text = Strings.Get("MpCreateDialogTitleLabel");
         MaxPlayersLabel.Text = Strings.Get("MpCreateDialogMaxPlayers");
-        PasswordLabel.Text = Strings.Get("MpCreateDialogPassword");
+        // The dialog no longer has a "Password" label per se — the
+        // PasswordBox is grouped under the Private room checkbox.
+        // Keep the resource lookup for future re-localisation but
+        // don't try to assign to a removed control.
+        var _passwordLabel = Strings.Get("MpCreateDialogPassword");
         CancelButton.Content = Strings.Get("MpCreateDialogCancel");
         CreateButton.Content = Strings.Get("MpCreateDialogCreate");
 
@@ -178,13 +185,21 @@ public partial class CreateLobbyDialog : Window
 
         try
         {
+            // Password is only honoured when "Private room" is on —
+            // matches the new UI grouping and prevents the user
+            // from typing a password that the server quietly drops
+            // because IsPrivate was never set.
+            var isPrivate = PrivateRoomCheck?.IsChecked == true;
+            var password = isPrivate && !string.IsNullOrEmpty(PasswordBox.Password)
+                ? PasswordBox.Password
+                : null;
             CreatedLobby = await _session.Api.CreateLobbyAsync(new CreateLobbyRequest
             {
                 Title = title,
                 ModId = _selectedProfile.Id,
                 ModCombinedHash = _selectedHash,
                 MaxPlayers = maxPlayers,
-                Password = string.IsNullOrEmpty(PasswordBox.Password) ? null : PasswordBox.Password,
+                Password = password,
             });
             DialogResult = true;
             Close();
@@ -209,5 +224,65 @@ public partial class CreateLobbyDialog : Window
     {
         ErrorText.Text = message;
         ErrorText.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Live "X / 64" counter under the Room title field. Cheap to
+    /// update; gives the user immediate feedback when they bump
+    /// up against the MaxLength.
+    /// </summary>
+    private void RoomTitleBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (TitleCounter == null) return;
+        var len = RoomTitleBox.Text?.Length ?? 0;
+        TitleCounter.Text = $"{len} / {RoomTitleBox.MaxLength}";
+    }
+
+    /// <summary>
+    /// Gate the PasswordBox on the Private room checkbox so users
+    /// can't accidentally set a password that isn't enforced. When
+    /// unchecked we also clear the field so an old value doesn't
+    /// leak into the request.
+    /// </summary>
+    private void PrivateRoomCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (PasswordBox == null || PrivateRoomCheck == null) return;
+        PasswordBox.IsEnabled = PrivateRoomCheck.IsChecked == true;
+        if (PrivateRoomCheck.IsChecked != true)
+            PasswordBox.Password = "";
+    }
+
+    /// <summary>
+    /// Expand/collapse the "Advanced details" section that holds
+    /// the mod fingerprint. Kept demoted because the redesign brief
+    /// explicitly says the hash shouldn't dominate the dialog.
+    /// </summary>
+    private void AdvancedToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (HashText == null || AdvancedCaret == null) return;
+        var nowVisible = HashText.Visibility != Visibility.Visible;
+        HashText.Visibility = nowVisible ? Visibility.Visible : Visibility.Collapsed;
+        AdvancedCaret.Text = nowVisible ? "▾" : "▸";
+    }
+
+    /// <summary>
+    /// Window drag: with WindowStyle=None we lose the OS-provided
+    /// caption drag, so we forward MouseLeftButtonDown on the
+    /// header strip to DragMove(). Same trick MainWindow uses for
+    /// its custom title bar.
+    /// </summary>
+    private void HeaderDrag_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
+                DragMove();
+        }
+        catch
+        {
+            // DragMove throws when the mouse button is no longer
+            // pressed (race during DPI scaling, etc.). Swallow —
+            // the drag just doesn't happen.
+        }
     }
 }

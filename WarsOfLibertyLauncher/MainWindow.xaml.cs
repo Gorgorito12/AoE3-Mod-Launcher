@@ -163,21 +163,30 @@ public partial class MainWindow : Window
             // resolve the .exe, mirroring its existing FileNotFoundException
             // behaviour without leaking the exception up to UI code.
             //
-            // Inject AoE3's "skip intro + jump to multiplayer menu" flags
-            // so the player lands on the multiplayer screen instead of
-            // sitting through the intro movie and pressing Multiplayer
-            // manually every time. Same flags Voobly/GameRanger used.
-            //   +nostartup  — skip the cinematic + ESO connection dialog
-            //   +nodialog   — skip the "find players" connection tester
-            //   +mp         — open the Multiplayer screen at startup
-            (profile, onExited) =>
+            // The flag set itself is built by MultiplayerTab — it knows
+            // whether we're hosting vs joining and what the virtual-LAN
+            // IP allocator handed out for the current user. We just
+            // plumb the resulting string through to GameLauncher.
+            //
+            // Real flag inventory (verified by string-searching the
+            // age3y.exe binary; lowercase variants like +nointro / +mp /
+            // +hostmpgame / +joinIPaddr do NOT exist — that's why the
+            // earlier attempts silently no-op'd):
+            //   +noIntroCinematics  — skip intro cinematics
+            //   +disableESOProfile  — skip the long ESO login dialog
+            //   +dontDetectNAT      — skip NAT probing delay
+            //   +OverrideAddress    — Voobly-style fake LAN IP
+            //   +OverridePort       — companion to OverrideAddress
+            //   +hostPort           — fix LAN host port (DirectPlay 2300)
+            //   +xres / +yres       — force resolution (unused here)
+            (profile, onExited, extraArgs) =>
             {
                 try
                 {
                     var installPath = _config.GetState(profile.Id).InstallPath;
                     return GameLauncher.LaunchAndWatch(
                         _config, installPath, profile, onExited,
-                        extraArgs: "+nostartup +nodialog +mp");
+                        extraArgs: extraArgs);
                 }
                 catch (Exception ex)
                 {

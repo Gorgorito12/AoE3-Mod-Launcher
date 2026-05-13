@@ -52,4 +52,50 @@
     <SolidColorBrush x:Key="StatusErrorBg" Color="#3a1a20"/>
     <SolidColorBrush x:Key="StatusErrorFg" Color="#e63950"/>
 
+    <!-- =========================================================
+         Multiplayer-tab specific palette.
+         Multiplayer uses blue (not the per-mod red accent) as its
+         primary action colour so the section is visually distinct
+         from the mod-management screens and so red can be reserved
+         for purely destructive states (leave room, disconnected,
+         errors). All keys are prefixed Mp* so a quick grep tells
+         you what's part of the multiplayer redesign vs. shared.
+         ========================================================= -->
+
+    <!-- Primary CTA blue + subtle variants. -->
+    <SolidColorBrush x:Key="MpBlue" Color="#2f6fed"/>
+    <SolidColorBrush x:Key="MpBlueHover" Color="#4581f0"/>
+    <SolidColorBrush x:Key="MpBluePressed" Color="#245bc7"/>
+    <!-- Subtle "blue tint" used for selected rows / hover backgrounds
+         and for the outline variant of the empty-state Create room
+         button. Low-saturation so it doesn't fight the dark base. -->
+    <SolidColorBrush x:Key="MpBlueSubtle" Color="#1d2a44"/>
+
+    <!-- Surfaces specific to multiplayer: slightly lighter than the
+         shared BgPanel so the room table / chat bar feel "raised". -->
+    <SolidColorBrush x:Key="MpSurface" Color="#1e222a"/>
+    <SolidColorBrush x:Key="MpSurfaceAlt" Color="#262a33"/>
+    <SolidColorBrush x:Key="MpDivider" Color="#2e323b"/>
+    <SolidColorBrush x:Key="MpTableHeader" Color="#9aa0aa"/>
+
+    <!-- Status dots used in the top-right connection pill, status
+         column of the rooms table, and the inline lobby-chat status
+         indicator. Online matches the existing SuccessBrush family. -->
+    <SolidColorBrush x:Key="MpStatusOnline" Color="#3ec46d"/>
+    <SolidColorBrush x:Key="MpStatusReconnect" Color="#e0b85f"/>
+    <SolidColorBrush x:Key="MpStatusOffline" Color="#e63950"/>
+    <SolidColorBrush x:Key="MpStatusWaiting" Color="#5b9bd5"/>
+    <SolidColorBrush x:Key="MpStatusInGame" Color="#3ec46d"/>
+
+    <!-- Destructive (Leave room). Darker than the shared DangerBrush
+         so it doesn't compete with the blue primary. -->
+    <SolidColorBrush x:Key="MpDanger" Color="#7a2030"/>
+    <SolidColorBrush x:Key="MpDangerHover" Color="#962a3c"/>
+
+    <!-- Ping bars — green / yellow / red. Used by the rooms-table
+         "Ping" column and the in-room per-member RTT indicator. -->
+    <SolidColorBrush x:Key="MpPingGood" Color="#3ec46d"/>
+    <SolidColorBrush x:Key="MpPingMedium" Color="#e0b85f"/>
+    <SolidColorBrush x:Key="MpPingBad" Color="#e63950"/>
+
 </ResourceDictionary>

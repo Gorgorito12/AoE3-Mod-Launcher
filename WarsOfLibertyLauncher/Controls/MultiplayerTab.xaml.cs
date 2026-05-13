@@ -39,8 +39,13 @@ public partial class MultiplayerTab : UserControl
     /// upload, match reporting). Null when the host has no active mod
     /// install — in that case the multiplayer tab declines to launch
     /// rather than guessing.
+    ///
+    /// 3rd param is the room-aware extra args string built by
+    /// <see cref="BuildMultiplayerLaunchArgs"/> — keeps the
+    /// multiplayer-specific flag knowledge local to this control so
+    /// MainWindow stays a dumb plumber.
     /// </summary>
-    private Func<ModProfile, EventHandler, System.Diagnostics.Process?>? _launchGame;
+    private Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? _launchGame;
 
     private Subtab _activeSubtab = Subtab.Rooms;
     private bool _isRefreshingList;
@@ -104,7 +109,7 @@ public partial class MultiplayerTab : UserControl
         MultiplayerSession session,
         Func<ModProfile?> getActiveProfile,
         Func<ModProfile, Task<string>> computeModFingerprint,
-        Func<ModProfile, EventHandler, System.Diagnostics.Process?>? launchGame = null)
+        Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? launchGame = null)
     {
         if (_session != null)
             _session.StateChanged -= OnSessionStateChanged;
@@ -152,16 +157,35 @@ public partial class MultiplayerTab : UserControl
         SignInButton.Content = Strings.Get("MpSignInButton");
 
         SignOutLink.Content = Strings.Get("MpSignOutButton");
-        RefreshButton.Content = Strings.Get("MpRoomsRefresh");
-        CreateRoomButton.Content = Strings.Get("MpRoomsCreate");
+        // Compose icon + label using inline runs so the look stays
+        // close to the reference (small glyph + word). Plain content
+        // strings would be fine too — we keep them simple to avoid
+        // pulling icon fonts.
+        RefreshButton.Content = "↻  " + Strings.Get("MpRoomsRefresh");
+        CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
 
         ReadyButton.Content = Strings.Get("MpRoomReady");
         StartButton.Content = Strings.Get("MpRoomStart");
         LeaveRoomButton.Content = Strings.Get("MpRoomLeave");
         ChatInputBox.Tag = Strings.Get("MpRoomChatPlaceholder");
 
+        // Table column headers + empty-state copy. These have no
+        // translation keys today; we use the wording from the
+        // redesign brief directly. When localisation lands, route
+        // them through Strings.Get like everything else.
+        ColHeaderRoom.Text = "ROOM";
+        ColHeaderHost.Text = "HOST";
+        ColHeaderPlayers.Text = "PLAYERS";
+        ColHeaderPing.Text = "PING";
+        ColHeaderStatus.Text = "STATUS";
+        ColHeaderAction.Text = "ACTION";
+        EmptyTitleText.Text = "No rooms available right now";
+        EmptyBodyText.Text = "Be the first to create one and start a game!";
+        EmptyCreateButton.Content = "+  " + Strings.Get("MpRoomsCreate");
+
         UpdateSubtabHighlights();
         RenderNatBadge();
+        UpdateConnectionStatus();
     }
 
     /// <summary>
@@ -266,8 +290,14 @@ public partial class MultiplayerTab : UserControl
             {
                 _attachedSocket.FrameReceived -= OnRoomFrame;
                 _attachedSocket.Disconnected -= OnRoomDisconnected;
+                _attachedSocket.Reconnecting -= OnRoomReconnecting;
             }
             _attachedSocket = nextSocket;
+            // Detaching a socket always means "we're no longer in
+            // an active room" — reset the reconnect flag so the
+            // status pill goes back to plain Connected.
+            _isReconnecting = false;
+            UpdateConnectionStatus();
         }
 
         if (meshChanged)
@@ -314,6 +344,7 @@ public partial class MultiplayerTab : UserControl
         {
             nextSocket.FrameReceived += OnRoomFrame;
             nextSocket.Disconnected += OnRoomDisconnected;
+            nextSocket.Reconnecting += OnRoomReconnecting;
         }
     }
 
@@ -354,7 +385,21 @@ public partial class MultiplayerTab : UserControl
     private void OnRoomDisconnected(object? sender, string reason) =>
         Dispatcher.InvokeAsync(() =>
         {
-            AppendChatSystem($"Disconnected: {reason}. Reconnecting…");
+            // Connection-state events used to spam the room chat
+            // log, which the redesign brief explicitly calls out as
+            // wrong — they're now routed to the global chat bar at
+            // the bottom AND drive the status pill at the top.
+            _isReconnecting = true;
+            UpdateConnectionStatus();
+            AppendGlobalSystemEvent($"Disconnected: {reason}. Reconnecting…");
+        });
+
+    private void OnRoomReconnecting(object? sender, string nextAttempt) =>
+        Dispatcher.InvokeAsync(() =>
+        {
+            _isReconnecting = true;
+            UpdateConnectionStatus();
+            AppendGlobalSystemEvent($"Reconnecting… ({nextAttempt})");
         });
 
     /// <summary>
@@ -409,6 +454,17 @@ public partial class MultiplayerTab : UserControl
 
     private void HandleRoomState(JsonElement json)
     {
+        // Receiving a room_state means the socket is alive — clear
+        // the "Reconnecting…" pill if it was set. Cheap to do here
+        // and keeps the status indicator in sync with reality
+        // without polling the WS object directly.
+        if (_isReconnecting)
+        {
+            _isReconnecting = false;
+            UpdateConnectionStatus();
+            AppendGlobalSystemEvent("Reconnected to multiplayer server.");
+        }
+
         var state = JsonSerializer.Deserialize<WsRoomState>(json.GetRawText());
         if (state == null) return;
 
@@ -495,11 +551,11 @@ public partial class MultiplayerTab : UserControl
 
         var header = new TextBlock
         {
-            Text = Strings.Get("MpRoomMembersHeader"),
-            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-            FontSize = 11,
+            Text = Strings.Get("MpRoomMembersHeader").ToUpperInvariant(),
+            Foreground = (Brush)Application.Current.FindResource("MpTableHeader"),
+            FontSize = 10,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 8),
         };
         RoomMembersPanel.Children.Add(header);
 
@@ -611,8 +667,75 @@ public partial class MultiplayerTab : UserControl
         ChatScroll.ScrollToBottom();
     }
 
+    /// <summary>
+    /// Append a one-line entry to the bottom "global lobby chat"
+    /// panel. Used for connection-state events (disconnect /
+    /// reconnect) and any cross-room announcement we want to
+    /// surface without polluting the in-room chat log.
+    ///
+    /// Rendered with a [System] tag and a blue tag colour to
+    /// match the redesign reference. Capped at 200 lines.
+    /// </summary>
+    private void AppendGlobalSystemEvent(string body)
+    {
+        if (GlobalChatLogPanel == null) return;
+
+        var line = new TextBlock
+        {
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 1, 0, 1),
+        };
+        line.Inlines.Add(new System.Windows.Documents.Run("[System] ")
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpStatusWaiting"),
+            FontWeight = FontWeights.SemiBold,
+        });
+        line.Inlines.Add(new System.Windows.Documents.Run(body)
+        {
+            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+        });
+        GlobalChatLogPanel.Children.Add(line);
+        while (GlobalChatLogPanel.Children.Count > 200)
+            GlobalChatLogPanel.Children.RemoveAt(0);
+        GlobalChatScroll?.ScrollToBottom();
+    }
+
+    // ---------- Global chat bar interactions ----------
+
+    /// <summary>
+    /// Collapse / expand the bottom global lobby-chat panel. Only
+    /// the header strip stays visible when collapsed so the room
+    /// view gets the full vertical space back.
+    /// </summary>
+    private void GlobalChatToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (GlobalChatBody == null) return;
+        var nowVisible = GlobalChatBody.Visibility != Visibility.Visible;
+        GlobalChatBody.Visibility = nowVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (GlobalChatCaret != null)
+            GlobalChatCaret.Text = nowVisible ? " ▲" : " ▼";
+    }
+
+    /// <summary>
+    /// Direct-IP join shortcut placeholder. Future work — the
+    /// connect-by-IP flow lives behind a small dialog; for v1.0
+    /// of the redesign the button is wired but the dialog isn't
+    /// implemented yet, so we just announce the gap rather than
+    /// silently no-op.
+    /// </summary>
+    private void JoinWithIpButton_Click(object sender, RoutedEventArgs e)
+    {
+        AppendGlobalSystemEvent("Direct-IP join is not available yet — coming in a future build.");
+    }
+
     private void RefreshFromSession()
     {
+        // Refresh the top-right connection pill on every state
+        // pass so signing in / out / reconnecting always flow
+        // through to the UI without extra plumbing.
+        UpdateConnectionStatus();
+
         if (_session == null)
         {
             ShowSignInPanel(null);
@@ -674,7 +797,11 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        // In a room? Show the room panel; otherwise the browser.
+        // In a room? Hide the browser and let the room view take
+        // the full multiplayer-tab body — the redesign brief
+        // explicitly calls out that the room should feel like a
+        // real lobby screen, not a small floating modal on top of
+        // an unrelated background.
         if (_session.Lobby == MultiplayerSession.LobbyStatus.InLobby
             || _session.Lobby == MultiplayerSession.LobbyStatus.InGame
             || _session.Lobby == MultiplayerSession.LobbyStatus.Joining
@@ -829,12 +956,45 @@ public partial class MultiplayerTab : UserControl
         SignedInAsText.Text = user != null
             ? $"@{user.GithubLogin}"
             : "";
+
+        // Fill the avatar circle either with the user's GitHub
+        // avatar (cached_user.avatar_url) or, when we have no URL
+        // / it fails to load, with the uppercase first letter of
+        // the login as a placeholder. Both cases keep the circle
+        // the same physical size so the toolbar layout doesn't
+        // shift when the network is slow.
+        try
+        {
+            if (user != null && !string.IsNullOrEmpty(user.AvatarUrl))
+            {
+                UserAvatarBrush.ImageSource = new System.Windows.Media.Imaging.BitmapImage(
+                    new Uri(user.AvatarUrl, UriKind.Absolute));
+                UserAvatarInitial.Text = "";
+            }
+            else
+            {
+                UserAvatarBrush.ImageSource = null;
+                UserAvatarInitial.Text = !string.IsNullOrEmpty(user?.GithubLogin)
+                    ? user.GithubLogin.Substring(0, 1).ToUpperInvariant()
+                    : "?";
+            }
+        }
+        catch
+        {
+            // BitmapImage throws on malformed URLs; fall back to
+            // the initial so the toolbar still renders cleanly.
+            UserAvatarBrush.ImageSource = null;
+            UserAvatarInitial.Text = !string.IsNullOrEmpty(user?.GithubLogin)
+                ? user.GithubLogin.Substring(0, 1).ToUpperInvariant()
+                : "?";
+        }
     }
 
     private void RenderRoomPanel()
     {
         var s = _session!;
         RoomTitleText.Text = s.CurrentLobbyTitle ?? s.CurrentLobbyId ?? "";
+
         var status = s.Lobby switch
         {
             MultiplayerSession.LobbyStatus.Joining => "Joining…",
@@ -848,8 +1008,80 @@ public partial class MultiplayerTab : UserControl
         // running AND at least one peer is Connected on the mesh.
         // For solo rooms (host alone) we still show "P2P ready" once
         // VirtualLan is up — peers will join later.
-        var p2pStatus = s.IsVirtualLanActive ? "P2P LAN ready" : "P2P starting…";
-        RoomMetaText.Text = $"{status} · {p2pStatus}";
+        var p2pReady = s.IsVirtualLanActive;
+        var p2pStatus = p2pReady ? "P2P LAN ready" : "P2P starting…";
+
+        // Build the meta line as inline runs so the P2P state can
+        // wear its own (green) colour without having to maintain
+        // two TextBlocks. Mirrors the reference: status in muted
+        // text, P2P readiness highlighted.
+        RoomMetaText.Inlines.Clear();
+        RoomMetaText.Inlines.Add(new System.Windows.Documents.Run(status)
+        {
+            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+        });
+        RoomMetaText.Inlines.Add(new System.Windows.Documents.Run("  ·  ")
+        {
+            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+        });
+        RoomMetaText.Inlines.Add(new System.Windows.Documents.Run(p2pStatus)
+        {
+            Foreground = (Brush)Application.Current.FindResource(
+                p2pReady ? "MpStatusOnline" : "MpStatusReconnect"),
+            FontWeight = FontWeights.SemiBold,
+        });
+
+        // ---------- Stat blocks (HOST / PLAYERS / ROOM ID) ----------
+
+        // Host display: pick the member entry that matches
+        // _roomHostUserId, fall back to the user-id itself when
+        // we haven't received the room_state yet (e.g. right
+        // after EnterHostedLobbyAsync, before WS catches up).
+        string hostLabel = "—";
+        if (!string.IsNullOrEmpty(_roomHostUserId)
+            && _roomMembers.TryGetValue(_roomHostUserId, out var hostEntry))
+        {
+            hostLabel = hostEntry.Login;
+        }
+        else if (!string.IsNullOrEmpty(_roomHostUserId))
+        {
+            hostLabel = _roomHostUserId;
+        }
+        RoomHostText.Text = hostLabel;
+
+        // Players: live count from the roster vs. configured max.
+        // We don't have MaxPlayers in the local snapshot today —
+        // it's only on the lobby summary the browser fetches; for
+        // v1 the count vs "?" is honest. If we later cache the
+        // CreateLobbyResponse server-side, wire it through here.
+        var playerCount = _roomMembers.Count;
+        var maxPlayers = TryGetCurrentLobbyMaxPlayers(out var maxP) ? maxP.ToString() : "?";
+        RoomPlayersText.Text = $"{playerCount} / {maxPlayers} players";
+
+        // ROOM ID: short uppercase code if the worker assigns
+        // one, otherwise the raw lobby id (truncated for sanity).
+        var rid = s.CurrentLobbyId ?? "";
+        if (rid.Length > 12) rid = rid.Substring(0, 12);
+        RoomIdText.Text = rid.ToUpperInvariant();
+
+        // ---------- Network info card ----------
+        RoomConnectionText.Text = p2pReady ? "P2P LAN" : "P2P starting";
+        RoomModText.Text = TryGetCurrentLobbyModName(out var modName) ? modName : "—";
+        RoomMaxPlayersText.Text = maxPlayers;
+        var hasPwd = TryGetCurrentLobbyHasPassword(out var hp) && hp;
+        RoomPasswordText.Text = hasPwd ? "Required" : "None";
+
+        // ---------- Action buttons ----------
+        // Ready toggle visual: render with a check glyph + label
+        // so the state ("Ready" / "Not ready") is obvious. The
+        // actual roster-side ready flag lives in the room state
+        // frame; the local user is found via session.CurrentUser.
+        var me = s.CurrentUser;
+        var iAmReady = me != null
+            && _roomMembers.TryGetValue(me.Id, out var meEntry)
+            && meEntry.Ready;
+        ReadyButton.Content = iAmReady ? "✓  Ready" : "○  Mark as ready";
+        ReadyButton.Tag = iAmReady ? "ready" : "";
 
         // The Start button only appears for the host; enabled once
         // the virtual LAN is active so AoE3 launches into a working
@@ -858,7 +1090,88 @@ public partial class MultiplayerTab : UserControl
             ? Visibility.Visible
             : Visibility.Collapsed;
         StartButton.IsEnabled = _isHostInCurrentRoom && s.IsVirtualLanActive;
+        StartButton.Content = "▶  " + Strings.Get("MpRoomStart");
+        LeaveRoomButton.Content = "↩  " + Strings.Get("MpRoomLeave");
     }
+
+    /// <summary>
+    /// Try to look up MaxPlayers for the current lobby. The session
+    /// keeps the ID/title but not the full LobbySummary, so we walk
+    /// the cached browser list (last /lobbies fetch) for a match.
+    /// Cheap because the list is bounded at ~8 active rooms.
+    /// </summary>
+    private bool TryGetCurrentLobbyMaxPlayers(out int maxPlayers)
+    {
+        maxPlayers = 0;
+        var lobbyId = _session?.CurrentLobbyId;
+        if (string.IsNullOrEmpty(lobbyId) || _lastBrowserList == null) return false;
+        foreach (var l in _lastBrowserList)
+        {
+            if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
+            {
+                maxPlayers = l.MaxPlayers;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Try to resolve the human-readable mod name for the current
+    /// lobby. Same approach as MaxPlayers — walks the cached
+    /// browser list, then falls back to <see cref="ModRegistry"/>
+    /// to translate the mod id into a display name.
+    /// </summary>
+    private bool TryGetCurrentLobbyModName(out string modName)
+    {
+        modName = "";
+        var lobbyId = _session?.CurrentLobbyId;
+        if (string.IsNullOrEmpty(lobbyId) || _lastBrowserList == null) return false;
+        foreach (var l in _lastBrowserList)
+        {
+            if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
+            {
+                // Look the id up in the registry for the friendly
+                // name; fall back to the raw id if not registered.
+                foreach (var p in ModRegistry.All)
+                {
+                    if (string.Equals(p.Id, l.ModId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        modName = p.DisplayName;
+                        return true;
+                    }
+                }
+                modName = l.ModId;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private bool TryGetCurrentLobbyHasPassword(out bool hasPwd)
+    {
+        hasPwd = false;
+        var lobbyId = _session?.CurrentLobbyId;
+        if (string.IsNullOrEmpty(lobbyId) || _lastBrowserList == null) return false;
+        foreach (var l in _lastBrowserList)
+        {
+            if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
+            {
+                hasPwd = l.IsPrivate;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Most recent /lobbies snapshot. Cached so the room view can
+    /// read MaxPlayers / IsPrivate / ModId without re-fetching. We
+    /// don't expire it aggressively — the data is mostly static
+    /// for the duration of a single match and worst case the user
+    /// sees "?" until the next refresh tick.
+    /// </summary>
+    private List<LobbySummary>? _lastBrowserList;
 
     private void RenderProfileTab()
     {
@@ -882,7 +1195,11 @@ public partial class MultiplayerTab : UserControl
 
     private void UpdateSubtabHighlights()
     {
-        var accent = (Brush)Application.Current.FindResource("AccentBrush");
+        // Multiplayer subtabs use the blue accent instead of the
+        // per-mod red — the redesign brief makes blue the section's
+        // own identity colour. The underline is the only visual
+        // indicator (no background pill), matching the reference.
+        var accent = (Brush)Application.Current.FindResource("MpBlue");
         var transparent = Brushes.Transparent;
         var dim = (Brush)Application.Current.FindResource("TextSecondary");
         var bright = (Brush)Application.Current.FindResource("TextPrimary");
@@ -897,6 +1214,46 @@ public partial class MultiplayerTab : UserControl
         Paint(SubtabFriends, _activeSubtab == Subtab.Friends);
         Paint(SubtabProfile, _activeSubtab == Subtab.Profile);
         Paint(SubtabHistory, _activeSubtab == Subtab.History);
+    }
+
+    /// <summary>
+    /// Reconnection state tracked from WS events. The LobbyWebSocket
+    /// raises Disconnected / Reconnecting; we flip this flag and the
+    /// status pill picks it up on the next UpdateConnectionStatus
+    /// pass. <c>true</c> means "we lost the room socket and the
+    /// retry loop is running"; cleared back to <c>false</c> on the
+    /// next successful room_state frame or when the socket is
+    /// detached entirely (left room).
+    /// </summary>
+    private bool _isReconnecting;
+
+    /// <summary>
+    /// Repaint the connection-status pill at the top-right of the
+    /// header. Three states: Connected (green dot), Reconnecting
+    /// (amber), Offline (red). Idempotent — safe to call on every
+    /// state change or on a poll.
+    /// </summary>
+    private void UpdateConnectionStatus()
+    {
+        // Default to "signed out" appearance when there's no session
+        // — keeps the pill from claiming "Connected" before sign-in.
+        if (_session == null
+            || _session.Status != MultiplayerSession.SessionStatus.SignedIn)
+        {
+            ConnDot.Fill = (Brush)Application.Current.FindResource("MpStatusOffline");
+            ConnStatusText.Text = "Offline";
+            return;
+        }
+
+        if (_isReconnecting)
+        {
+            ConnDot.Fill = (Brush)Application.Current.FindResource("MpStatusReconnect");
+            ConnStatusText.Text = "Reconnecting…";
+            return;
+        }
+
+        ConnDot.Fill = (Brush)Application.Current.FindResource("MpStatusOnline");
+        ConnStatusText.Text = "Connected";
     }
 
     // ---------- Subtab clicks ----------
@@ -1225,12 +1582,19 @@ public partial class MultiplayerTab : UserControl
         _isRefreshingList = true;
         try
         {
+            // Loading skeleton: a single dim line so the user knows
+            // a fetch is in flight. The empty-state card and error
+            // box are siblings (not children of RoomsListPanel) so
+            // we hide both while loading and re-decide afterwards.
             RoomsListPanel.Children.Clear();
+            RoomsEmptyState.Visibility = Visibility.Collapsed;
+            RoomsErrorBox.Visibility = Visibility.Collapsed;
             RoomsListPanel.Children.Add(new TextBlock
             {
                 Text = Strings.Get("MpRoomsLoading"),
                 Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
                 FontStyle = FontStyles.Italic,
+                Margin = new Thickness(24, 12, 24, 0),
             });
 
             var list = await _session.Api.ListLobbiesAsync();
@@ -1238,30 +1602,30 @@ public partial class MultiplayerTab : UserControl
 
             if (list.Lobbies.Count == 0)
             {
-                RoomsListPanel.Children.Add(new TextBlock
-                {
-                    Text = Strings.Get("MpRoomsEmpty"),
-                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(0, 20, 0, 0),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                });
+                // Show the dedicated empty-state card (defined in
+                // XAML with the crossed-flags illustration and the
+                // outlined Create-room CTA). Better than dumping an
+                // italic line in the table because the table header
+                // strip stays visible above for context.
+                RoomsEmptyState.Visibility = Visibility.Visible;
                 return;
             }
 
+            // Render alternating row backgrounds so the table reads
+            // as a table, not a stack of cards. The header strip
+            // above defines the column widths; BuildRoomRow mirrors
+            // them so the columns line up.
+            int idx = 0;
             foreach (var lobby in list.Lobbies)
-                RoomsListPanel.Children.Add(BuildRoomRow(lobby));
+                RoomsListPanel.Children.Add(BuildRoomRow(lobby, idx++));
         }
         catch (Exception ex)
         {
+            // Network / API errors land in a dedicated banner so
+            // they don't look like a row that "happens to be red".
             RoomsListPanel.Children.Clear();
-            RoomsListPanel.Children.Add(new TextBlock
-            {
-                Text = ex.Message,
-                Foreground = Brushes.Salmon,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 20, 0, 0),
-            });
+            RoomsErrorText.Text = ex.Message;
+            RoomsErrorBox.Visibility = Visibility.Visible;
         }
         finally
         {
@@ -1275,7 +1639,12 @@ public partial class MultiplayerTab : UserControl
         try
         {
             var q = await _session.Api.GetQuotaAsync();
-            QuotaText.Text = Strings.Format("MpQuotaBar",
+            // Render in the "12 players online · 4 active rooms"
+            // style from the redesign reference. Drop the /max
+            // counter on the visible label — it lives in the
+            // tooltip instead so the header strip stays compact.
+            QuotaText.Text = $"👥 {q.Players.Active} players online   ·   🏠 {q.Lobbies.Active} active rooms";
+            QuotaText.ToolTip = Strings.Format("MpQuotaBar",
                 q.Players.Active, q.Players.Max,
                 q.Lobbies.Active, q.Lobbies.Max);
         }
@@ -1285,75 +1654,241 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
-    private Border BuildRoomRow(LobbySummary lobby)
+    /// <summary>
+    /// Build one row of the rooms table. Column widths match the
+    /// header Grid declared in MultiplayerTab.xaml so the columns
+    /// line up. The row uses alternating zebra-stripe backgrounds
+    /// driven by <paramref name="rowIndex"/> so a long list stays
+    /// scannable.
+    /// </summary>
+    private Border BuildRoomRow(LobbySummary lobby, int rowIndex)
     {
         // Is the lobby's mod actually installed on this PC? If not,
         // the user can't join (they wouldn't pass the fingerprint
         // check). Show the row dimmed with a "mod not installed"
         // note so it's obvious why Join is disabled.
         var modInstalled = IsModInstalledLocally(lobby.ModId);
+        var inGame = lobby.Status == "in_game";
+        var textPrimary = (Brush)Application.Current.FindResource("TextPrimary");
+        var textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
+        var divider = (Brush)Application.Current.FindResource("MpDivider");
 
-        var card = new Border
+        // Zebra stripes — base = MpSurface, alt = transparent.
+        // Even-index rows get the subtle tint so the first row
+        // doesn't bleed into the header strip above.
+        Brush rowBg = (rowIndex % 2 == 0)
+            ? Brushes.Transparent
+            : (Brush)Application.Current.FindResource("MpSurface");
+
+        var row = new Border
         {
-            Background = (Brush)Application.Current.FindResource("BgPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("BorderSubtle"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(14, 10, 14, 10),
-            Margin = new Thickness(0, 0, 16, 8),
+            Background = rowBg,
+            BorderBrush = divider,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(24, 10, 24, 10),
             Opacity = modInstalled ? 1.0 : 0.55,
         };
 
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // Mirror the header column widths exactly.
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.4, GridUnitType.Star), MinWidth = 160 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.6, GridUnitType.Star), MinWidth = 110 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
 
-        var left = new StackPanel();
-        left.Children.Add(new TextBlock
+        // -- Col 0: favorite star. Local-only flag (not persisted
+        // for v1) — purely cosmetic, but keeps the row width
+        // matching the reference and gives users a click target
+        // for the future "starred lobbies" feature.
+        var starBtn = new Button
+        {
+            Content = "☆",
+            Style = (Style)Application.Current.FindResource("MpIconButton"),
+            FontSize = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Star this room (local)",
+            Tag = lobby,
+        };
+        Grid.SetColumn(starBtn, 0);
+        grid.Children.Add(starBtn);
+
+        // -- Col 1: Room (title + optional 🔒 / private chip).
+        var roomCell = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        roomCell.Children.Add(new TextBlock
         {
             Text = lobby.Title,
-            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
-            FontSize = 14,
+            Foreground = textPrimary,
+            FontSize = 13,
             FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
         });
-        var metaParts = new List<string>
+        if (lobby.IsPrivate)
         {
-            lobby.Host.DisplayName,
-            lobby.ModId,
-            $"{lobby.CurrentPlayers}/{lobby.MaxPlayers}",
+            roomCell.Children.Add(new TextBlock
+            {
+                Text = "  🔒",
+                Foreground = textSecondary,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+        if (!modInstalled)
+        {
+            roomCell.Children.Add(new TextBlock
+            {
+                Text = "  · mod not installed",
+                Foreground = textSecondary,
+                FontSize = 11,
+                FontStyle = FontStyles.Italic,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+        Grid.SetColumn(roomCell, 1);
+        grid.Children.Add(roomCell);
+
+        // -- Col 2: Host display name.
+        var hostText = new TextBlock
+        {
+            Text = lobby.Host.DisplayName,
+            Foreground = textSecondary,
+            FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
         };
-        if (lobby.IsPrivate) metaParts.Add("🔒");
-        if (lobby.Status == "in_game") metaParts.Add("in game");
-        if (!modInstalled) metaParts.Add("mod not installed");
-        left.Children.Add(new TextBlock
+        Grid.SetColumn(hostText, 2);
+        grid.Children.Add(hostText);
+
+        // -- Col 3: Players "X/Y".
+        var playersText = new TextBlock
         {
-            Text = string.Join(" · ", metaParts),
-            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-            FontSize = 11,
-            Margin = new Thickness(0, 2, 0, 0),
-        });
+            Text = $"{lobby.CurrentPlayers} / {lobby.MaxPlayers}",
+            Foreground = textPrimary,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(playersText, 3);
+        grid.Children.Add(playersText);
 
-        Grid.SetColumn(left, 0);
-        grid.Children.Add(left);
+        // -- Col 4: Ping. The Worker's /lobbies payload doesn't
+        // include a per-lobby ping; we don't have one to show
+        // until the user joins. Render an em-dash with a muted
+        // colour so the column doesn't look empty — the reference
+        // does the same for unknown values.
+        var pingCell = BuildPingCell(null);
+        Grid.SetColumn(pingCell, 4);
+        grid.Children.Add(pingCell);
 
+        // -- Col 5: Status dot + label.
+        var statusCell = BuildStatusCell(inGame ? "In game" : "Waiting", inGame);
+        Grid.SetColumn(statusCell, 5);
+        grid.Children.Add(statusCell);
+
+        // -- Col 6: Join button. Hover state turns blue (matches
+        // the MpRowJoinButton template). Disabled if mod isn't
+        // installed, room is full, or game is in progress.
         var joinBtn = new Button
         {
             Content = Strings.Get("MpRoomJoin"),
-            Style = (Style)Application.Current.FindResource("SidebarPrimaryButton"),
-            MinWidth = 110,
-            Padding = new Thickness(14, 6, 14, 6),
+            Style = (Style)Application.Current.FindResource("MpRowJoinButton"),
             VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
             IsEnabled = modInstalled
-                && lobby.Status != "in_game"
+                && !inGame
                 && lobby.CurrentPlayers < lobby.MaxPlayers,
             Tag = lobby,
         };
         joinBtn.Click += JoinRoomButton_Click;
-        Grid.SetColumn(joinBtn, 1);
+        Grid.SetColumn(joinBtn, 6);
         grid.Children.Add(joinBtn);
 
-        card.Child = grid;
-        return card;
+        row.Child = grid;
+        return row;
+    }
+
+    /// <summary>
+    /// Render the Ping column for a row. <paramref name="rttMs"/>
+    /// null = no value yet (em-dash + muted); otherwise a small
+    /// "signal bars" glyph coloured by RTT bucket plus the number.
+    /// </summary>
+    private FrameworkElement BuildPingCell(double? rttMs)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        if (rttMs is null)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "—",
+                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            return panel;
+        }
+
+        var rtt = rttMs.Value;
+        var brush = rtt < 80
+            ? (Brush)Application.Current.FindResource("MpPingGood")
+            : rtt < 200
+                ? (Brush)Application.Current.FindResource("MpPingMedium")
+                : (Brush)Application.Current.FindResource("MpPingBad");
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "▂▄▆ ",
+            Foreground = brush,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"{(int)rtt} ms",
+            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return panel;
+    }
+
+    /// <summary>
+    /// Status cell: coloured dot + label. <paramref name="inGame"/>
+    /// switches the dot colour (green for in-game match in progress,
+    /// blue for waiting in the lobby).
+    /// </summary>
+    private FrameworkElement BuildStatusCell(string label, bool inGame)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        panel.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Width = 8, Height = 8,
+            Fill = (Brush)Application.Current.FindResource(
+                inGame ? "MpStatusInGame" : "MpStatusWaiting"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 7, 0),
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return panel;
     }
 
     /// <summary>
@@ -1600,13 +2135,16 @@ public partial class MultiplayerTab : UserControl
 
         try
         {
+            var extraArgs = BuildMultiplayerLaunchArgs();
+            DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: extraArgs='{extraArgs}'");
+
             var gameStartedAt = DateTime.UtcNow;
             var process = _launchGame(profile, async (_, _) =>
             {
                 // Run on the UI thread so we can render chat messages
                 // and access session state safely.
                 await Dispatcher.InvokeAsync(async () => await OnGameExitedAsync(profile, gameStartedAt));
-            });
+            }, extraArgs);
 
             if (process == null)
             {
@@ -1614,7 +2152,9 @@ public partial class MultiplayerTab : UserControl
                 return;
             }
 
-            AppendChatSystem("Game launched. The launcher will detect the replay when AoE3 closes.");
+            AppendChatSystem(_isHostInCurrentRoom
+                ? "Game launched. In AoE3: click Multiplayer → LAN → Host Game."
+                : "Game launched. In AoE3: click Multiplayer → LAN → Join Game.");
         }
         catch (Exception ex)
         {
@@ -1622,6 +2162,69 @@ public partial class MultiplayerTab : UserControl
             AppendChatSystem($"Launch failed: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Builds the AoE3 command-line tail for the current room context.
+    /// All flag names here were verified against age3y.exe's string
+    /// table (Wars of Liberty 1.2.0c2) — the previous attempt with
+    /// <c>+nostartup +nodialog +mp</c> failed because none of those
+    /// tokens exist in the binary. Confirmed flags (with the descriptive
+    /// text the engine prints when it lists switches):
+    ///   * <c>+noIntroCinematics</c> — "suppresses intro cinematics on app start"
+    ///   * <c>+disableESOProfile</c> — "toggles the use of ESO for storing the player profile"
+    ///   * <c>+dontDetectNAT</c>     — "Doth we not detect NAT addresses?"
+    ///   * <c>+OverrideAddress &lt;ip&gt;</c> / <c>+OverridePort &lt;port&gt;</c>
+    ///       — undocumented but listed; used by ESO's "address-grabbing
+    ///         server" path so AoE3 advertises a chosen IP/port instead
+    ///         of probing the local NIC. Voobly-style IP spoofing.
+    ///
+    /// AoE3 has NO command-line flag to auto-host or auto-join a LAN
+    /// game (we searched for hostmpgame / joinIPaddr / joinmpgame /
+    /// jumpTo etc. — none exist). The classic Voobly/GameRanger flow
+    /// drove the menus via SendInput from outside the process; that's
+    /// a separate Fase 2.5 if we want it. For now, the player still
+    /// has to click "Multiplayer → LAN" once after the game opens, but
+    /// the launcher has cut every other startup delay we can cut.
+    /// </summary>
+    private string BuildMultiplayerLaunchArgs()
+    {
+        // The intro / ESO / NAT skips are always safe to apply: they
+        // just kill the splash + the long "connecting to ESO" wait.
+        // Use a StringBuilder so we can append room-context flags
+        // conditionally without paying for repeated string copies.
+        var sb = new System.Text.StringBuilder("+noIntroCinematics +disableESOProfile +dontDetectNAT");
+
+        // OverrideAddress is the Voobly-style fake-LAN trick. We only
+        // do it when the WinDivert virtual LAN is up — otherwise the
+        // address we'd advertise has nobody to route it. AllocateIpFor
+        // is deterministic, so every peer in the room derives the same
+        // 10.147.x.y mapping for the same user-id.
+        var session = _session;
+        var vlan = session?.VirtualLan;
+        var myUserId = session?.CurrentUser?.Id;
+        if (vlan != null && !string.IsNullOrEmpty(myUserId))
+        {
+            var myVip = vlan.AllocateIpFor(myUserId!);
+            sb.Append(" +OverrideAddress ").Append(myVip.ToString());
+
+            // Pin the LAN port too. AoE3 LAN games default to 2300
+            // (DirectPlay); fixing it makes the host/join match
+            // predictable across both ends.
+            sb.Append(" +OverridePort ").Append(LanGamePort);
+            sb.Append(" +hostPort ").Append(LanGamePort);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Fixed UDP port both ends advertise via <c>+OverridePort</c> /
+    /// <c>+hostPort</c>. 2300 is the AoE3-era DirectPlay default and
+    /// what the LAN browser scans first. WinDivert's capture filter
+    /// (2200-2500) is already wider than this, so the virtual LAN
+    /// service picks the host packets up regardless.
+    /// </summary>
+    private const int LanGamePort = 2300;
 
     /// <summary>
     /// Called when the AoE3 process spawned by <see cref="LaunchActiveModGame"/>

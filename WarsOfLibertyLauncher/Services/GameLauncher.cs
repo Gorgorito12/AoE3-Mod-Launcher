@@ -251,10 +251,13 @@ public static class GameLauncher
     ///
     /// <paramref name="extraArgs"/> is appended to the resolved
     /// command line after the profile/config args. The multiplayer
-    /// flow uses it to inject AoE3's own "skip intro / jump to MP
-    /// menu" flags (<c>+nostartup +nodialog +mp</c>) so players don't
-    /// click through the same menus every time they enter a lobby —
-    /// matches the auto-launch UX Voobly/GameRanger had.
+    /// flow uses it to inject AoE3's real (binary-verified) startup
+    /// flags — typically
+    /// <c>+noIntroCinematics +disableESOProfile +dontDetectNAT
+    /// +OverrideAddress &lt;vip&gt; +OverridePort 2300 +hostPort 2300</c>.
+    /// The lowercase tokens we initially tried (<c>+nointro</c>,
+    /// <c>+mp</c>, <c>+hostmpgame</c>, <c>+joinIPaddr</c>) are NOT in
+    /// age3y.exe, so they no-op silently — be careful what you add.
     /// </summary>
     public static Process? LaunchAndWatch(
         LauncherConfig config,
