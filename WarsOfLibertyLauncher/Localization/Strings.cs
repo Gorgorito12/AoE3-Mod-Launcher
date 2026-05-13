@@ -2046,6 +2046,35 @@ public static class Strings
             [LangEs] = "La instalación finalizó pero {0} elemento(s) podrían faltar. Revisa el log para más detalles.",
         },
 
+        // -------- Download corruption retry (NativeInstall) --------
+        // Shown when ZIP extraction fails because the downloaded payload is
+        // corrupted (usually a flipped byte during the multi-GB download).
+        // {0} = attempt just failed (1-based); {1} = total attempts allowed.
+        ["DlgInstallRetryCorruptTitle"] = new()
+        {
+            [LangEn] = "Download appears corrupted",
+            [LangEs] = "La descarga parece estar corrupta",
+        },
+        ["DlgInstallRetryCorruptBody"] = new()
+        {
+            [LangEn] = "The downloaded mod files failed integrity check (attempt {0} of {1}). " +
+                       "This usually means a few bytes got dropped during the download.\n\n" +
+                       "Retry the download from scratch?",
+            [LangEs] = "Los archivos descargados del mod fallaron la verificación de integridad (intento {0} de {1}). " +
+                       "Esto suele significar que se perdieron algunos bytes durante la descarga.\n\n" +
+                       "¿Reintentar la descarga desde cero?",
+        },
+        ["StatusInstallRetrying"] = new()
+        {
+            [LangEn] = "Retrying install (attempt {0} of {1})...",
+            [LangEs] = "Reintentando instalación (intento {0} de {1})...",
+        },
+        ["StatusInstallCorruptedGaveUp"] = new()
+        {
+            [LangEn] = "Download kept arriving corrupted after {0} attempts. Try again later or from a different network.",
+            [LangEs] = "La descarga siguió llegando corrupta después de {0} intentos. Probá de nuevo más tarde o desde otra red.",
+        },
+
         // -------- Verification --------
         ["StatusVerifying"] = new()
         {

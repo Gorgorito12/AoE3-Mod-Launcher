@@ -95,6 +95,35 @@ public class NativeInstallService
         Path.Combine(Path.GetTempPath(), "WarsOfLibertyLauncher", "native-install");
 
     /// <summary>
+    /// Wipes the native-install temp folder (downloaded ZIP parts, the
+    /// combined ZIP, and the extracted payload). Used by the corruption
+    /// retry path in the UI: when extraction fails with a corrupt ZIP
+    /// we can't trust any of the on-disk bytes for the affected parts,
+    /// so the safe thing is to start the next attempt with a clean slate.
+    /// </summary>
+    /// <remarks>
+    /// Failures here are swallowed and logged — if a file is locked
+    /// (antivirus scan in progress, Explorer preview, etc.) we'd rather
+    /// let the next install attempt fail loudly than throw from a
+    /// helper that's meant to be best-effort.
+    /// </remarks>
+    public static void CleanupTempPayload()
+    {
+        try
+        {
+            if (Directory.Exists(TempDirectory))
+            {
+                Directory.Delete(TempDirectory, recursive: true);
+                DiagnosticLog.Write($"Cleaned up native-install temp folder: {TempDirectory}");
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Could not clean up temp folder '{TempDirectory}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Full installation pipeline using multiple ZIP part URLs.
     /// </summary>
     /// <param name="profile">

@@ -4133,39 +4133,95 @@ public partial class MainWindow : Window
 
             var installVersion = ResolveInstallVersion(service);
 
-            if (aoe3SourcePath != null)
+            // Retry loop for corruption failures (InvalidDataException —
+            // raised by the ZIP extractor when a local file header is bad,
+            // or by the SHA-256 pin check when a part's hash doesn't match
+            // the catalog). Both indicate the bytes on disk can't be
+            // trusted, so we wipe the temp folder and ask the user whether
+            // to redownload. Other exception types (OperationCanceledException,
+            // network errors, IO errors during clone) skip this loop and go
+            // straight to the outer catch.
+            const int MaxInstallAttempts = 3;
+            for (int attempt = 1; ; attempt++)
             {
-                // Full install: clone AoE3 + overlay mod
-                await nativeInstaller.InstallAsync(
-                    profile,
-                    installVersion,
-                    payloadUrls,
-                    aoe3SourcePath,
-                    installFolder,
-                    dlProgress,
-                    cloneProgress,
-                    statusProgress,
-                    phaseProgress,
-                    extractProgress,
-                    overlayProgress,
-                    payloadSha256: payloadSha256,
-                    ct: _cts.Token);
-            }
-            else
-            {
-                // Mod-only: just download and copy mod files
-                await nativeInstaller.InstallModOnlyAsync(
-                    profile,
-                    installVersion,
-                    payloadUrls,
-                    installFolder,
-                    dlProgress,
-                    statusProgress,
-                    phaseProgress,
-                    extractProgress,
-                    overlayProgress,
-                    payloadSha256: payloadSha256,
-                    ct: _cts.Token);
+                try
+                {
+                    if (aoe3SourcePath != null)
+                    {
+                        // Full install: clone AoE3 + overlay mod
+                        await nativeInstaller.InstallAsync(
+                            profile,
+                            installVersion,
+                            payloadUrls,
+                            aoe3SourcePath,
+                            installFolder,
+                            dlProgress,
+                            cloneProgress,
+                            statusProgress,
+                            phaseProgress,
+                            extractProgress,
+                            overlayProgress,
+                            payloadSha256: payloadSha256,
+                            ct: _cts.Token);
+                    }
+                    else
+                    {
+                        // Mod-only: just download and copy mod files
+                        await nativeInstaller.InstallModOnlyAsync(
+                            profile,
+                            installVersion,
+                            payloadUrls,
+                            installFolder,
+                            dlProgress,
+                            statusProgress,
+                            phaseProgress,
+                            extractProgress,
+                            overlayProgress,
+                            payloadSha256: payloadSha256,
+                            ct: _cts.Token);
+                    }
+                    break; // success — exit retry loop
+                }
+                catch (InvalidDataException ex)
+                {
+                    DiagnosticLog.Write(
+                        $"Install attempt {attempt}/{MaxInstallAttempts} failed with corrupted payload: {ex.Message}");
+
+                    bool canRetry = attempt < MaxInstallAttempts;
+                    bool userAgreesToRetry = canRetry && MessageBox.Show(
+                        this,
+                        Strings.Format("DlgInstallRetryCorruptBody", attempt, MaxInstallAttempts),
+                        Strings.Get("DlgInstallRetryCorruptTitle"),
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning) == MessageBoxResult.Yes;
+
+                    if (!userAgreesToRetry)
+                    {
+                        // Either the user declined or we burned every attempt.
+                        // Surface a clear message via the outer error handler.
+                        if (!canRetry)
+                        {
+                            throw new InvalidDataException(
+                                Strings.Format("StatusInstallCorruptedGaveUp", MaxInstallAttempts), ex);
+                        }
+                        throw;
+                    }
+
+                    // Wipe the bad bytes so the next attempt downloads fresh.
+                    NativeInstallService.CleanupTempPayload();
+
+                    // Repaint the progress block so the user sees we're
+                    // starting over (not just stuck on the prior step).
+                    SetStatus(Strings.Format("StatusInstallRetrying", attempt + 1, MaxInstallAttempts));
+                    ProgressPanelControl.PatchProgress.Value = 0;
+                    ProgressPanelControl.OverallProgress.Value = 0;
+                    ProgressPanelControl.PatchBytesText.Text = "";
+                    ProgressPanelControl.OverallBytesText.Text = "";
+                    ProgressPanelControl.SpeedText.Text = "";
+                    ProgressPanelControl.EtaText.Text = "";
+                    ProgressPanelControl.LblCurrentPatch.Text =
+                        Strings.Format("StatusInstallRetrying", attempt + 1, MaxInstallAttempts);
+                }
             }
 
             ProgressPanelControl.PatchProgress.Value = 100;

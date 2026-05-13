@@ -19,6 +19,18 @@
       5. Prints the path, size, and SHA-256 hash — paste the hash into the
          GitHub release notes so users can verify the download.
 
+.PARAMETER Version
+    Optional. Overrides the <Version> baked into WarsOfLibertyLauncher.csproj
+    for this build only — it is NOT written back to disk. Must be a SemVer
+    string like "0.7.0" or "1.0.0-rc1". When omitted, the build uses
+    whatever <Version> the csproj declares.
+
+    The version flows into:
+      * Assembly metadata (file properties shown by right-click → Properties
+        → Details on the .exe).
+      * The launcher's startup log line ("AssemblyVersion: …") and the
+        self-update tag comparison.
+
 .PARAMETER Configuration
     Build configuration. Defaults to Release. Use Debug only for diagnosing
     publish-pipeline issues.
@@ -41,12 +53,17 @@
     Standard release build → <repo>\WarsOfLibertyLauncher\publish\Aoe3ModLauncher.exe
 
 .EXAMPLE
+    .\build-release.ps1 -Version 0.7.0
+    Same release build, but stamps the .exe with version 0.7.0.
+
+.EXAMPLE
     .\build-release.ps1 -Configuration Debug
     Debug-flavored single-file (rare; for diagnosing publish issues).
 #>
 
 [CmdletBinding()]
 param(
+    [string]$Version,
     [string]$Configuration = 'Release',
     [string]$Runtime = 'win-x64'
 )
@@ -112,15 +129,28 @@ if (Test-Path $publishRoot) {
 #                                         libs get unpacked into a temp
 #                                         folder under %TEMP% on first
 #                                         launch, leaving disk artefacts.
-Write-Host "Publishing ($Configuration | $Runtime, single-file, self-contained)..." -ForegroundColor Cyan
-& dotnet publish $projectFile `
-    -c $Configuration `
-    -r $Runtime `
-    --self-contained `
-    -p:PublishSingleFile=true `
-    -p:IncludeNativeLibrariesForSelfExtract=true `
-    -o $publishRoot `
-    -nologo
+# Assemble the args list incrementally so the optional -Version override
+# only appears when the caller passed one. Using -p:Version on the dotnet
+# command line takes precedence over the csproj for this build only —
+# the file on disk is not modified.
+$publishLabel = if ($Version) { "$Configuration | $Runtime | v$Version" } else { "$Configuration | $Runtime" }
+Write-Host "Publishing ($publishLabel, single-file, self-contained)..." -ForegroundColor Cyan
+
+$publishArgs = @(
+    'publish', $projectFile,
+    '-c', $Configuration,
+    '-r', $Runtime,
+    '--self-contained',
+    '-p:PublishSingleFile=true',
+    '-p:IncludeNativeLibrariesForSelfExtract=true',
+    '-o', $publishRoot,
+    '-nologo'
+)
+if ($Version) {
+    $publishArgs += "-p:Version=$Version"
+}
+
+& dotnet @publishArgs
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed (exit $LASTEXITCODE)"
 }
@@ -137,9 +167,15 @@ $sig = Get-AuthenticodeSignature -FilePath $exePath
 $sizeMB = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
 $hash = (Get-FileHash -Algorithm SHA256 -Path $exePath).Hash
 
+# The .exe always carries a 4-part FileVersion (e.g. "0.7.0.0"). Reading
+# it back from disk is the truth — confirms the -p:Version override actually
+# applied and matches whatever the csproj declared if no override was passed.
+$fileVersion = (Get-Item $exePath).VersionInfo.ProductVersion
+
 Write-Host ''
 Write-Host '=== Build complete ===' -ForegroundColor Green
 Write-Host "  Path:      $exePath"
+Write-Host "  Version:   $fileVersion"
 Write-Host "  Size:      $sizeMB MB"
 Write-Host "  SHA-256:   $hash"
 Write-Host "  Signature: $($sig.Status)"
