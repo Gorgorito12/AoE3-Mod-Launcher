@@ -338,8 +338,14 @@ WarsOfLibertyLauncher/
 
 ## License
 
-MIT (see `LICENSE.txt`).
+Apache License 2.0 — see [`LICENSE`](LICENSE).
+
+Apache 2.0 was chosen over MIT for the explicit patent grant from
+contributors. Pull requests are accepted under the same license via a DCO
+sign-off — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 The mods themselves are the work of their respective teams (Wars of Liberty,
 Improvement Mod, …) — this launcher is an unofficial alternative client and
-not affiliated with them.
+not affiliated with them. *Age of Empires III* is a trademark of Microsoft
+Corporation; see [`DISCLAIMER.md`](DISCLAIMER.md) for trademark and
+third-party-component notes.
