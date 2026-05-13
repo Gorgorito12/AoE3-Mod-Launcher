@@ -47,6 +47,36 @@ public class MultiplayerConfig
     /// </summary>
     [JsonPropertyName("cachedUser")]
     public Multiplayer.LobbyUserSummary? CachedUser { get; set; }
+
+    /// <summary>
+    /// Enable the Voobly-style virtual network adapter so AoE3 shows
+    /// a <c>10.147.x.y</c> IP in its multiplayer lobby UI instead of
+    /// the user's real LAN address. Purely cosmetic — peers still
+    /// receive the public IP for hole-punching. Off by default
+    /// because the install step needs a one-time UAC prompt and the
+    /// LAN IP isn't actually sensitive.
+    /// </summary>
+    [JsonPropertyName("virtualAdapterEnabled")]
+    public bool VirtualAdapterEnabled { get; set; } = false;
+
+    /// <summary>
+    /// "Relay-only" privacy mode. When ON, the launcher does NOT
+    /// announce its public STUN endpoint over <c>peer_announce</c> —
+    /// only the private LAN candidates. Other peers can't hole-punch
+    /// the user directly and fall back to <c>game_relay</c> through
+    /// the lobby Worker for game traffic. Net effect: the user's
+    /// public IP never reaches another player.
+    ///
+    /// Trade-off: ~50 ms extra latency per packet (one round-trip via
+    /// Cloudflare's edge instead of P2P direct) and consumes more of
+    /// the Worker's request budget per session.
+    ///
+    /// Off by default — for a community of mutually-known players,
+    /// the privacy cost of direct P2P is negligible and the latency
+    /// gain is real. Users who want anonymity flip it on themselves.
+    /// </summary>
+    [JsonPropertyName("relayOnly")]
+    public bool RelayOnly { get; set; } = false;
 }
 
 /// <summary>

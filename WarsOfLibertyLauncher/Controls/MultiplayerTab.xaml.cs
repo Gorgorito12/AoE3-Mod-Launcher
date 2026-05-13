@@ -12,6 +12,7 @@ using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Services;
 using WarsOfLibertyLauncher.Services.Multiplayer;
+using WarsOfLibertyLauncher.Services.Multiplayer.P2P;
 
 namespace WarsOfLibertyLauncher.Controls;
 
@@ -32,23 +33,42 @@ public partial class MultiplayerTab : UserControl
     private MultiplayerSession? _session;
     private Func<ModProfile?>? _getActiveProfile;
     private Func<ModProfile, Task<string>>? _computeModFingerprint;
+    /// <summary>
+    /// MainWindow-provided launch hook. Returns the spawned process so
+    /// the multiplayer flow can subscribe to its Exited event (replay
+    /// upload, match reporting). Null when the host has no active mod
+    /// install — in that case the multiplayer tab declines to launch
+    /// rather than guessing.
+    /// </summary>
+    private Func<ModProfile, EventHandler, System.Diagnostics.Process?>? _launchGame;
 
     private Subtab _activeSubtab = Subtab.Rooms;
     private bool _isRefreshingList;
     private bool _isRefreshingHistory;
-    private bool _isProbingZt;
+    private bool _isProbingVlan;
 
     /// <summary>
-    /// Last known state of the local ZeroTier install. Refreshed on
-    /// every <c>StateChanged</c> pass; drives whether the ZT bootstrap
-    /// gate or the sign-in/browser are visible.
+    /// State of the WinDivert-based P2P stack:
+    ///   * <c>missing</c> — driver files not on disk, need download.
+    ///   * <c>needs_elevation</c> — files present but the current
+    ///     process can't open WinDivert (no admin).
+    ///   * <c>ready</c> — IsAvailable() returns true.
     /// </summary>
-    private ZeroTierState _ztState = ZeroTierState.Unknown;
+    private string _vlanState = "unknown";
 
     private System.Windows.Threading.DispatcherTimer? _quotaTimer;
 
+    /// <summary>
+    /// Last NAT probe result. Cached so re-renders of the header don't
+    /// re-probe; refreshed on demand by <see cref="ProbeNatTypeAsync"/>.
+    /// </summary>
+    private NatProbeResult? _natProbe;
+
     /// <summary>Currently-subscribed WS, so we can unsubscribe cleanly on room change.</summary>
     private LobbyWebSocket? _attachedSocket;
+
+    /// <summary>Mesh we're listening to for peer-state transitions; cleared on room change.</summary>
+    private PeerMesh? _attachedMesh;
 
     /// <summary>Live state of the current room, rebuilt as WS frames arrive.</summary>
     private readonly System.Collections.Generic.Dictionary<string, RoomMemberEntry> _roomMembers = new();
@@ -83,7 +103,8 @@ public partial class MultiplayerTab : UserControl
     public void Attach(
         MultiplayerSession session,
         Func<ModProfile?> getActiveProfile,
-        Func<ModProfile, Task<string>> computeModFingerprint)
+        Func<ModProfile, Task<string>> computeModFingerprint,
+        Func<ModProfile, EventHandler, System.Diagnostics.Process?>? launchGame = null)
     {
         if (_session != null)
             _session.StateChanged -= OnSessionStateChanged;
@@ -91,6 +112,7 @@ public partial class MultiplayerTab : UserControl
         _session = session;
         _getActiveProfile = getActiveProfile;
         _computeModFingerprint = computeModFingerprint;
+        _launchGame = launchGame;
         session.StateChanged += OnSessionStateChanged;
 
         RefreshFromSession();
@@ -98,7 +120,8 @@ public partial class MultiplayerTab : UserControl
         // Fire-and-forget refreshes — UI-thread safe because each one
         // marshals back via Dispatcher.InvokeAsync in its own continuation.
         _ = RefreshQuotaAsync();
-        _ = ProbeZeroTierAsync();
+        _ = ProbeNatTypeAsync();
+        _ = ProbeVlanAsync();
         if (session.Status == MultiplayerSession.SessionStatus.SignedIn)
             _ = RefreshRoomsListAsync();
 
@@ -138,6 +161,80 @@ public partial class MultiplayerTab : UserControl
         ChatInputBox.Tag = Strings.Get("MpRoomChatPlaceholder");
 
         UpdateSubtabHighlights();
+        RenderNatBadge();
+    }
+
+    /// <summary>
+    /// Paint the NAT badge from <see cref="_natProbe"/>. Idempotent.
+    /// Called on every language/state refresh so the badge keeps its
+    /// tooltip + colour in sync.
+    /// </summary>
+    private void RenderNatBadge()
+    {
+        Brush bgPanelAlt = (Brush)Application.Current.FindResource("BgPanelAlt");
+        Brush textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
+
+        if (_natProbe == null)
+        {
+            NatBadgeText.Text = Strings.Format("MpNatBadge", Strings.Get("MpNatProbing"));
+            NatBadgeBorder.Background = bgPanelAlt;
+            NatBadgeText.Foreground = textSecondary;
+            NatBadgeBorder.ToolTip = null;
+            return;
+        }
+
+        // Map enum to label + colour + tooltip. Colours pulled from a
+        // simple "traffic light" palette so users grok at a glance:
+        //   Open      → green
+        //   Moderate  → green-ish
+        //   Strict    → amber
+        //   Symmetric → red
+        //   Unknown   → grey
+        var (labelKey, descKey, bg, fg) = _natProbe.Type switch
+        {
+            NatType.Open      => ("Open",     "MpNatOpen",      "#1f3d1f", "#9aff9a"),
+            NatType.Moderate  => ("Moderate", "MpNatModerate",  "#1f3d2f", "#9affd1"),
+            NatType.Strict    => ("Strict",   "MpNatStrict",    "#3d2f1f", "#ffcc88"),
+            NatType.Symmetric => ("Symmetric","MpNatSymmetric", "#3d1f1f", "#ff9090"),
+            _                 => ("Unknown",  "MpNatUnknown",   "#2a2d34", "#888888"),
+        };
+
+        NatBadgeText.Text = Strings.Format("MpNatBadge", labelKey);
+        NatBadgeBorder.Background = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(bg));
+        NatBadgeText.Foreground = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(fg));
+
+        var tip = Strings.Get(descKey);
+        if (_natProbe.PublicEndpoint != null)
+            tip += $"\nPublic address: {_natProbe.PublicEndpoint}";
+        if (!string.IsNullOrEmpty(_natProbe.ErrorMessage))
+            tip += $"\n{_natProbe.ErrorMessage}";
+        NatBadgeBorder.ToolTip = tip;
+    }
+
+    /// <summary>
+    /// Run the NAT type probe in the background. Two STUN Binding
+    /// Requests against different public servers. Result is cached
+    /// in <see cref="_natProbe"/> and rendered via
+    /// <see cref="RenderNatBadge"/>.
+    /// </summary>
+    private async Task ProbeNatTypeAsync()
+    {
+        try
+        {
+            _natProbe = await NatTypeDetector.DetectAsync();
+            DiagnosticLog.Write(
+                $"NAT probe: type={_natProbe.Type} public={_natProbe.PublicEndpoint} " +
+                $"secondary={_natProbe.SecondaryEndpoint} err={_natProbe.ErrorMessage}");
+            await Dispatcher.InvokeAsync(RenderNatBadge);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.ProbeNatTypeAsync: {ex.Message}");
+            _natProbe = new NatProbeResult(NatType.Unknown, null, null, ex.Message);
+            await Dispatcher.InvokeAsync(RenderNatBadge);
+        }
     }
 
     private void OnSessionStateChanged(object? sender, EventArgs e) =>
@@ -157,30 +254,102 @@ public partial class MultiplayerTab : UserControl
     {
         var s = _session;
         var nextSocket = s?.RoomSocket;
-        if (ReferenceEquals(_attachedSocket, nextSocket)) return;
+        var nextMesh = s?.Mesh;
 
-        if (_attachedSocket != null)
+        var socketChanged = !ReferenceEquals(_attachedSocket, nextSocket);
+        var meshChanged = !ReferenceEquals(_attachedMesh, nextMesh);
+        if (!socketChanged && !meshChanged) return;
+
+        if (socketChanged)
         {
-            _attachedSocket.FrameReceived -= OnRoomFrame;
-            _attachedSocket.Disconnected -= OnRoomDisconnected;
+            if (_attachedSocket != null)
+            {
+                _attachedSocket.FrameReceived -= OnRoomFrame;
+                _attachedSocket.Disconnected -= OnRoomDisconnected;
+            }
+            _attachedSocket = nextSocket;
         }
 
-        _attachedSocket = nextSocket;
+        if (meshChanged)
+        {
+            if (_attachedMesh != null)
+                _attachedMesh.PeerStateChanged -= OnPeerStateChanged;
+            _attachedMesh = nextMesh;
+            if (_attachedMesh != null)
+                _attachedMesh.PeerStateChanged += OnPeerStateChanged;
+        }
 
-        // Reset per-room UI state whenever the underlying socket
-        // changes — entering a new room, or leaving one.
-        _roomMembers.Clear();
-        _roomHostUserId = null;
-        _isHostInCurrentRoom = false;
-        ChatLogPanel.Children.Clear();
-        RoomMembersPanel.Children.Clear();
+        // Reset per-room UI state whenever we change rooms (we keep
+        // the existing chat/members when only the mesh changed mid-
+        // session, which shouldn't happen but doesn't hurt to guard).
+        if (socketChanged)
+        {
+            _roomMembers.Clear();
+            _roomHostUserId = null;
+            _isHostInCurrentRoom = false;
+            ChatLogPanel.Children.Clear();
+            RoomMembersPanel.Children.Clear();
 
-        if (nextSocket != null)
+            // Seed the members map with the local user before any
+            // server frame arrives. Without this, a brief delay or
+            // a tunnel-side WS hiccup leaves the Players panel
+            // completely empty — confusing because the user clearly
+            // IS in a room. The real room_state frame from the DO
+            // will overwrite this with the authoritative list as
+            // soon as it lands.
+            var me = _session?.CurrentUser;
+            if (me != null && nextSocket != null)
+            {
+                _roomMembers[me.Id] = new RoomMemberEntry
+                {
+                    UserId = me.Id,
+                    Login = string.IsNullOrEmpty(me.GithubLogin) ? me.DisplayName : me.GithubLogin,
+                    Ready = false,
+                };
+                RenderRoomMembers();
+            }
+        }
+
+        if (socketChanged && nextSocket != null)
         {
             nextSocket.FrameReceived += OnRoomFrame;
             nextSocket.Disconnected += OnRoomDisconnected;
         }
     }
+
+    /// <summary>
+    /// Render peer connection transitions as system chat lines. The
+    /// mesh fires this from a background thread; marshal to UI.
+    /// </summary>
+    private PeerLinkState _lastLoggedState = (PeerLinkState)(-1);
+    private string _lastLoggedUser = "";
+
+    private void OnPeerStateChanged(object? sender, PeerChannel ch) =>
+        Dispatcher.InvokeAsync(() =>
+        {
+            // Repaint the members panel so the RTT column reflects the
+            // new state / latency sample. This fires on every pong
+            // arrival (every 2 s while Connected) — cheap because the
+            // panel only holds N members.
+            RenderRoomMembers();
+
+            // Avoid spamming the chat with one line per pong: only
+            // emit a system line on actual state transitions.
+            if (ch.State == _lastLoggedState && ch.UserId == _lastLoggedUser) return;
+            _lastLoggedState = ch.State;
+            _lastLoggedUser = ch.UserId;
+
+            var label = ch.State switch
+            {
+                PeerLinkState.Discovering => "discovering",
+                PeerLinkState.Punching => "punching",
+                PeerLinkState.Connected => $"direct ({ch.ConfirmedEndpoint})",
+                PeerLinkState.Lost => "lost — retrying",
+                PeerLinkState.Failed => "direct failed (need relay)",
+                _ => ch.State.ToString(),
+            };
+            AppendChatSystem($"P2P [{ch.Login}]: {label}");
+        });
 
     private void OnRoomDisconnected(object? sender, string reason) =>
         Dispatcher.InvokeAsync(() =>
@@ -221,6 +390,7 @@ public partial class MultiplayerTab : UserControl
                     case "game_started":
                         AppendChatSystem("The game has started.");
                         RefreshFromSession();
+                        LaunchActiveModGame();
                         break;
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? c.GetString() : "";
@@ -248,7 +418,9 @@ public partial class MultiplayerTab : UserControl
             _roomMembers[kv.Key] = new RoomMemberEntry
             {
                 UserId = kv.Key,
-                Login = kv.Key,        // login filled in by member_joined frames
+                // Prefer the server-provided login; fall back to the
+                // user id for legacy rooms that don't carry it yet.
+                Login = string.IsNullOrEmpty(kv.Value.Login) ? kv.Key : kv.Value.Login,
                 Ready = kv.Value.Ready,
             };
         }
@@ -361,6 +533,48 @@ public partial class MultiplayerTab : UserControl
                 label.Text += "  ·  host";
             row.Children.Add(label);
 
+            // Per-peer P2P quality: look up the mesh channel for this
+            // member and render the RTT + a colour-coded dot. The mesh
+            // is null when WinDivert isn't loaded (legacy ZeroTier path);
+            // in that case we just skip the column rather than show
+            // misleading "0 ms" values.
+            var mesh = _session?.Mesh;
+            if (mesh != null)
+            {
+                PeerChannel? ch = null;
+                foreach (var candidate in mesh.Peers)
+                {
+                    if (string.Equals(candidate.UserId, m.UserId, StringComparison.Ordinal))
+                    {
+                        ch = candidate;
+                        break;
+                    }
+                }
+                if (ch != null)
+                {
+                    var (rttText, rttBrush) = ch.State switch
+                    {
+                        PeerLinkState.Connected when ch.RttMs >= 0 =>
+                            ($"{(int)ch.RttMs} ms",
+                                ch.RttMs < 80 ? Brushes.LimeGreen :
+                                ch.RttMs < 200 ? Brushes.Goldenrod : Brushes.IndianRed),
+                        PeerLinkState.Connected => ("…", (Brush)Application.Current.FindResource("TextSecondary")),
+                        PeerLinkState.Punching => ("punching", Brushes.Goldenrod),
+                        PeerLinkState.Lost => ("lost", Brushes.IndianRed),
+                        PeerLinkState.Failed => ("relay", Brushes.IndianRed),
+                        _ => ("…", (Brush)Application.Current.FindResource("TextSecondary")),
+                    };
+
+                    row.Children.Add(new TextBlock
+                    {
+                        Text = "  ·  " + rttText,
+                        Foreground = rttBrush,
+                        FontSize = 11,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    });
+                }
+            }
+
             RoomMembersPanel.Children.Add(row);
         }
     }
@@ -440,17 +654,18 @@ public partial class MultiplayerTab : UserControl
 
     private void RenderRoomsTab()
     {
-        // ZeroTier gate first — without a working daemon the rest of
-        // the flow can't succeed. The probe runs async; until it
-        // returns _ztState stays Unknown which we treat as "OK so
-        // far" so the UI doesn't flash a transient install card.
-        if (_ztState != ZeroTierState.Running && _ztState != ZeroTierState.Unknown)
+        // WinDivert gate — without the P2P driver, AoE3 broadcasts
+        // can't reach other players. We bias toward showing the
+        // bootstrap card unless we KNOW the driver is ready; an
+        // unknown state is still treated as "needs setup" so users
+        // don't sign in only to fail at game launch.
+        if (_vlanState == "missing" || _vlanState == "needs_elevation")
         {
-            ShowZtBootstrapPanel();
+            ShowVlanBootstrapPanel();
             return;
         }
 
-        ZtBootstrapPanel.Visibility = Visibility.Collapsed;
+        VlanBootstrapPanel.Visibility = Visibility.Collapsed;
 
         if (_session == null
             || _session.Status != MultiplayerSession.SessionStatus.SignedIn)
@@ -480,130 +695,121 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Paint the bootstrap card with text/button tailored to the current
-    /// ZeroTier state. The button click handler picks which action to
-    /// fire by inspecting <see cref="_ztState"/> again, so this method
-    /// stays purely presentational.
+    /// Paint the WinDivert bootstrap card. Mirrors the ZT bootstrap
+    /// flow but uses our own installer instead of an external MSI.
     /// </summary>
-    private void ShowZtBootstrapPanel()
+    private void ShowVlanBootstrapPanel()
     {
-        ZtBootstrapPanel.Visibility = Visibility.Visible;
+        VlanBootstrapPanel.Visibility = Visibility.Visible;
         SignInPanel.Visibility = Visibility.Collapsed;
         BrowserPanel.Visibility = Visibility.Collapsed;
         RoomPanel.Visibility = Visibility.Collapsed;
-        ZtErrorText.Visibility = Visibility.Collapsed;
-        ZtBootstrapProgress.Visibility = Visibility.Collapsed;
+        VlanErrorText.Visibility = Visibility.Collapsed;
+        VlanBootstrapProgress.Visibility = Visibility.Collapsed;
 
-        ZtBootstrapTitle.Text = Strings.Get("MpZtNotInstalledTitle");
-        switch (_ztState)
+        VlanBootstrapTitle.Text = Strings.Get("MpVlanNotInstalledTitle");
+        if (_vlanState == "needs_elevation")
         {
-            case ZeroTierState.NotInstalled:
-                ZtBootstrapBody.Text = Strings.Get("MpZtNotInstalledBody");
-                ZtActionButton.Content = Strings.Get("MpZtInstall");
-                break;
-            case ZeroTierState.InstalledServiceDown:
-                ZtBootstrapBody.Text = Strings.Get("MpZtStarting");
-                ZtActionButton.Content = Strings.Get("MpZtStarting");
-                break;
-            case ZeroTierState.RunningNotAuthorized:
-                ZtBootstrapBody.Text = Strings.Get("MpZtAuthorizeBody");
-                ZtActionButton.Content = Strings.Get("MpZtAuthorize");
-                break;
-            default:
-                ZtBootstrapBody.Text = Strings.Get("MpZtNotInstalledBody");
-                ZtActionButton.Content = Strings.Get("MpZtInstall");
-                break;
+            VlanBootstrapBody.Text = Strings.Get("MpVlanElevateBody");
+            VlanActionButton.Content = Strings.Get("MpVlanElevate");
+        }
+        else
+        {
+            VlanBootstrapBody.Text = Strings.Get("MpVlanNotInstalledBody");
+            VlanActionButton.Content = Strings.Get("MpVlanInstall");
         }
     }
 
-    private async Task ProbeZeroTierAsync()
+    private async Task ProbeVlanAsync()
     {
-        if (_isProbingZt) return;
-        _isProbingZt = true;
+        if (_isProbingVlan) return;
+        _isProbingVlan = true;
         try
         {
-            _ztState = await ZeroTierService.DetectAsync();
-            RefreshFromSession();
+            // Three-state classifier:
+            //   files missing → bootstrap card shows "Install"
+            //   files present + IsAvailable false → "needs_elevation"
+            //   files present + IsAvailable true  → ready
+            string next;
+            if (!WinDivertInstaller.IsInstalled())
+                next = "missing";
+            else if (!WinDivertNative.IsAvailable())
+                next = "needs_elevation";
+            else
+                next = "ready";
+
+            _vlanState = next;
+            await Dispatcher.InvokeAsync(RefreshFromSession);
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"MultiplayerTab.ProbeZeroTierAsync: {ex.Message}");
+            DiagnosticLog.Write($"MultiplayerTab.ProbeVlanAsync: {ex.Message}");
         }
         finally
         {
-            _isProbingZt = false;
+            _isProbingVlan = false;
         }
     }
 
-    private async void ZtActionButton_Click(object sender, RoutedEventArgs e)
+    private async void VlanActionButton_Click(object sender, RoutedEventArgs e)
     {
-        ZtErrorText.Visibility = Visibility.Collapsed;
-        ZtActionButton.IsEnabled = false;
-        ZtBootstrapProgress.Visibility = Visibility.Visible;
+        VlanErrorText.Visibility = Visibility.Collapsed;
+        VlanActionButton.IsEnabled = false;
+        VlanBootstrapProgress.Visibility = Visibility.Visible;
         try
         {
-            switch (_ztState)
+            if (_vlanState == "needs_elevation")
             {
-                case ZeroTierState.NotInstalled:
-                    var progress = new Progress<double>(p =>
-                    {
-                        ZtBootstrapProgress.IsIndeterminate = false;
-                        ZtBootstrapProgress.Value = p * 100.0;
-                        ZtBootstrapProgress.Maximum = 100.0;
-                    });
-                    ZtBootstrapProgress.IsIndeterminate = false;
-                    var installResult = await ZeroTierService.InstallAsync(progress);
-                    if (installResult == ZeroTierInstallResult.UserDeclinedElevation)
-                    {
-                        ShowZtError("Installation needs admin rights. Try again when ready.");
-                        return;
-                    }
-                    if (installResult == ZeroTierInstallResult.DownloadFailed
-                        || installResult == ZeroTierInstallResult.InstallFailed)
-                    {
-                        ShowZtError("ZeroTier install failed — see launcher-debug.log.");
-                        return;
-                    }
-                    break;
-
-                case ZeroTierState.InstalledServiceDown:
-                    ZtBootstrapProgress.IsIndeterminate = true;
-                    if (!await ZeroTierService.StartServiceAsync())
-                    {
-                        ShowZtError("Could not start the ZeroTier service. Try again with admin rights.");
-                        return;
-                    }
-                    break;
-
-                case ZeroTierState.RunningNotAuthorized:
-                    ZtBootstrapProgress.IsIndeterminate = true;
-                    if (!await ZeroTierService.EnsureUserAuthTokenAsync())
-                    {
-                        ShowZtError("Could not read the local API token. Try again with admin rights.");
-                        return;
-                    }
-                    break;
+                // Loading the WinDivert kernel driver needs admin. We
+                // relaunch ourselves elevated; the elevated instance
+                // re-runs the probe and sees ready=true.
+                if (!WinDivertInstaller.RelaunchElevated())
+                {
+                    VlanErrorText.Text = "Admin rights are needed once to load the driver.";
+                    VlanErrorText.Visibility = Visibility.Visible;
+                    return;
+                }
+                // RelaunchElevated calls Application.Current.Shutdown()
+                // on success; if we reach here, the new instance is
+                // running and we'll exit shortly.
+                return;
             }
 
-            // Give the daemon a moment to come up after install/start.
-            await Task.Delay(TimeSpan.FromSeconds(2));
-            await ProbeZeroTierAsync();
+            // Missing — download the release zip and unpack.
+            VlanActionButton.Content = Strings.Get("MpVlanInstalling");
+            var progress = new Progress<double>(p =>
+            {
+                VlanBootstrapProgress.IsIndeterminate = false;
+                VlanBootstrapProgress.Maximum = 100;
+                VlanBootstrapProgress.Value = p * 100;
+            });
+            VlanBootstrapProgress.IsIndeterminate = false;
+
+            var result = await WinDivertInstaller.EnsureInstalledAsync(progress);
+            if (result == WinDivertInstallResult.DownloadFailed
+                || result == WinDivertInstallResult.InstallFailed)
+            {
+                VlanErrorText.Text = "Could not install the P2P driver. Check launcher-debug.log.";
+                VlanErrorText.Visibility = Visibility.Visible;
+                VlanActionButton.Content = Strings.Get("MpVlanInstall");
+                return;
+            }
+
+            // Re-probe — typically transitions to needs_elevation now
+            // (files on disk but driver not loaded yet).
+            await ProbeVlanAsync();
         }
         catch (Exception ex)
         {
-            ShowZtError(ex.Message);
+            DiagnosticLog.Write($"MultiplayerTab.VlanActionButton_Click: {ex.Message}");
+            VlanErrorText.Text = ex.Message;
+            VlanErrorText.Visibility = Visibility.Visible;
         }
         finally
         {
-            ZtActionButton.IsEnabled = true;
-            ZtBootstrapProgress.Visibility = Visibility.Collapsed;
+            VlanActionButton.IsEnabled = true;
+            VlanBootstrapProgress.Visibility = Visibility.Collapsed;
         }
-    }
-
-    private void ShowZtError(string message)
-    {
-        ZtErrorText.Text = message;
-        ZtErrorText.Visibility = Visibility.Visible;
     }
 
     private void ShowSignInPanel(string? errorMessage)
@@ -636,14 +842,22 @@ public partial class MultiplayerTab : UserControl
             MultiplayerSession.LobbyStatus.InGame => "In game",
             _ => "In lobby",
         };
-        RoomMetaText.Text = $"{status} · ZT {s.CurrentZtNetworkId ?? "-"}";
-        // The Start button only appears for the host — we approximate
-        // "host" by the absence of a join token (the host enters via
-        // SessionToken). A real isHost flag is read off room_state
-        // when it arrives.
+
+        // P2P readiness: with the WinDivert virtual-LAN stack, the
+        // "ready to play" condition is whether the local capture is
+        // running AND at least one peer is Connected on the mesh.
+        // For solo rooms (host alone) we still show "P2P ready" once
+        // VirtualLan is up — peers will join later.
+        var p2pStatus = s.IsVirtualLanActive ? "P2P LAN ready" : "P2P starting…";
+        RoomMetaText.Text = $"{status} · {p2pStatus}";
+
+        // The Start button only appears for the host; enabled once
+        // the virtual LAN is active so AoE3 launches into a working
+        // network rather than discovering nothing.
         StartButton.Visibility = _isHostInCurrentRoom
             ? Visibility.Visible
             : Visibility.Collapsed;
+        StartButton.IsEnabled = _isHostInCurrentRoom && s.IsVirtualLanActive;
     }
 
     private void RenderProfileTab()
@@ -918,29 +1132,42 @@ public partial class MultiplayerTab : UserControl
     {
         if (_session == null || _getActiveProfile == null || _computeModFingerprint == null) return;
 
-        var profile = _getActiveProfile();
-        if (profile == null)
+        // Build the list of mods the host can pick from. We restrict
+        // the dropdown to mods that are actually installed on this PC
+        // — picking an uninstalled mod would just fail at fingerprint
+        // time. The active profile (from the Play tab) is highlighted
+        // as the default but the host can change it.
+        var allProfiles = ModRegistry.All;
+        var installedProfiles = new List<ModProfile>();
+        foreach (var p in allProfiles)
         {
-            SignInErrorText.Text = Strings.Get("MpModNotInstalled");
-            SignInErrorText.Visibility = Visibility.Visible;
+            var installPath = _session.Api != null
+                ? GetInstallPath(p)
+                : null;
+            if (!string.IsNullOrEmpty(installPath))
+                installedProfiles.Add(p);
+        }
+
+        if (installedProfiles.Count == 0)
+        {
+            MessageBox.Show(
+                Strings.Get("MpModNotInstalled"),
+                "Multiplayer",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
-        // Compute the mod fingerprint up front so we don't block the
-        // dialog with file I/O after it opens.
-        string fingerprint;
-        try
-        {
-            fingerprint = await _computeModFingerprint(profile);
-        }
-        catch (Exception ex)
-        {
-            SignInErrorText.Text = ex.Message;
-            SignInErrorText.Visibility = Visibility.Visible;
-            return;
-        }
+        var initiallySelected = _getActiveProfile() ?? installedProfiles[0];
 
-        var dlg = new CreateLobbyDialog(_session, profile, fingerprint)
+        var dlg = new CreateLobbyDialog(
+            _session,
+            installedProfiles,
+            initiallySelected,
+            // The dialog hands us each picked profile and we return
+            // its on-disk fingerprint. Bridge through the same
+            // callback the tab already received from MainWindow.
+            profile => _computeModFingerprint!(profile))
         {
             Owner = Window.GetWindow(this),
         };
@@ -948,17 +1175,47 @@ public partial class MultiplayerTab : UserControl
 
         try
         {
+            DiagnosticLog.Write($"CreateRoom: dialog returned lobby id {dlg.CreatedLobby.Id}, entering room");
             await _session.EnterHostedLobbyAsync(dlg.CreatedLobby);
-            // _isHostInCurrentRoom is set authoritatively when the
-            // WS room_state frame arrives — it carries host_user_id,
-            // which is the canonical source of truth.
+            // Optimistic host flag — we created the room, so we ARE the
+            // host. The WS room_state frame will reaffirm this when it
+            // arrives. Setting it here means the Start button shows up
+            // immediately even if the WS hiccups (e.g. a tunnel idle
+            // drop) before room_state lands.
+            _isHostInCurrentRoom = true;
+            RenderRoomPanel();
+            DiagnosticLog.Write($"CreateRoom: EnterHostedLobbyAsync completed for {dlg.CreatedLobby.Id}");
         }
         catch (Exception ex)
         {
+            DiagnosticLog.Write($"CreateRoom: EnterHostedLobbyAsync THREW: {ex.GetType().Name}: {ex.Message}");
+            MessageBox.Show(
+                $"Could not enter the lobby:\n\n{ex.Message}",
+                "Multiplayer error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
             SignInErrorText.Text = ex.Message;
             SignInErrorText.Visibility = Visibility.Visible;
         }
     }
+
+    /// <summary>
+    /// Look up the user's install path for a given mod profile via
+    /// LauncherConfig — without that, we'd be hammering the disk
+    /// inside the dialog for every selection change.
+    /// </summary>
+    private string? GetInstallPath(ModProfile profile)
+    {
+        // The launcher config is owned by MainWindow; we don't have a
+        // direct reference here. Probe heuristically: try the saved
+        // path via the same registry the rest of the launcher uses,
+        // then fall back to "any non-empty install probe file under
+        // the default folder".
+        var saved = WarsOfLibertyLauncher.Models.LauncherConfig
+            .Load().GetState(profile.Id).InstallPath;
+        return string.IsNullOrEmpty(saved) ? null : saved;
+    }
+
 
     // ---------- Rooms list polling + rendering ----------
 
@@ -1030,6 +1287,12 @@ public partial class MultiplayerTab : UserControl
 
     private Border BuildRoomRow(LobbySummary lobby)
     {
+        // Is the lobby's mod actually installed on this PC? If not,
+        // the user can't join (they wouldn't pass the fingerprint
+        // check). Show the row dimmed with a "mod not installed"
+        // note so it's obvious why Join is disabled.
+        var modInstalled = IsModInstalledLocally(lobby.ModId);
+
         var card = new Border
         {
             Background = (Brush)Application.Current.FindResource("BgPanel"),
@@ -1038,6 +1301,7 @@ public partial class MultiplayerTab : UserControl
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(14, 10, 14, 10),
             Margin = new Thickness(0, 0, 16, 8),
+            Opacity = modInstalled ? 1.0 : 0.55,
         };
 
         var grid = new Grid();
@@ -1052,11 +1316,18 @@ public partial class MultiplayerTab : UserControl
             FontSize = 14,
             FontWeight = FontWeights.SemiBold,
         });
+        var metaParts = new List<string>
+        {
+            lobby.Host.DisplayName,
+            lobby.ModId,
+            $"{lobby.CurrentPlayers}/{lobby.MaxPlayers}",
+        };
+        if (lobby.IsPrivate) metaParts.Add("🔒");
+        if (lobby.Status == "in_game") metaParts.Add("in game");
+        if (!modInstalled) metaParts.Add("mod not installed");
         left.Children.Add(new TextBlock
         {
-            Text = $"{lobby.Host.DisplayName} · {lobby.ModId} · {lobby.CurrentPlayers}/{lobby.MaxPlayers}"
-                   + (lobby.IsPrivate ? " · 🔒" : "")
-                   + (lobby.Status == "in_game" ? " · in game" : ""),
+            Text = string.Join(" · ", metaParts),
             Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
             FontSize = 11,
             Margin = new Thickness(0, 2, 0, 0),
@@ -1072,7 +1343,9 @@ public partial class MultiplayerTab : UserControl
             MinWidth = 110,
             Padding = new Thickness(14, 6, 14, 6),
             VerticalAlignment = VerticalAlignment.Center,
-            IsEnabled = lobby.Status != "in_game" && lobby.CurrentPlayers < lobby.MaxPlayers,
+            IsEnabled = modInstalled
+                && lobby.Status != "in_game"
+                && lobby.CurrentPlayers < lobby.MaxPlayers,
             Tag = lobby,
         };
         joinBtn.Click += JoinRoomButton_Click;
@@ -1081,6 +1354,27 @@ public partial class MultiplayerTab : UserControl
 
         card.Child = grid;
         return card;
+    }
+
+    /// <summary>
+    /// Quick local check: do we have a saved install path for the
+    /// given mod id? Used to grey out rooms whose mod isn't installed
+    /// on this PC. We don't probe the actual files — the saved path
+    /// in LauncherConfig is already gated by an on-disk probe at
+    /// install time, so it's a safe proxy.
+    /// </summary>
+    private bool IsModInstalledLocally(string modId)
+    {
+        try
+        {
+            var cfg = WarsOfLibertyLauncher.Models.LauncherConfig.Load();
+            var state = cfg.GetState(modId);
+            return !string.IsNullOrEmpty(state.InstallPath);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async void JoinRoomButton_Click(object sender, RoutedEventArgs e)
@@ -1162,16 +1456,57 @@ public partial class MultiplayerTab : UserControl
 
     private async void ReadyButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_session?.RoomSocket == null) return;
-        try { await _session.RoomSocket.SendReadyAsync(true); }
+        if (_session?.CurrentUser == null) return;
+
+        // Toggle locally first so the UI gives instant feedback even
+        // if the WS is mid-reconnect. The server-side member_ready
+        // frame from the next room_state will reconcile if anything
+        // drifted. Without this the button felt dead during the
+        // brief WS hiccups caused by quick-tunnel idle disconnects.
+        var meId = _session.CurrentUser.Id;
+        var ready = !(_roomMembers.TryGetValue(meId, out var prev) && prev.Ready);
+        if (_roomMembers.TryGetValue(meId, out var entry))
+            entry.Ready = ready;
+        RenderRoomMembers();
+
+        if (_session.RoomSocket == null)
+        {
+            AppendChatSystem("Ready saved locally — will sync when the room reconnects.");
+            return;
+        }
+
+        try { await _session.RoomSocket.SendReadyAsync(ready); }
         catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.Ready: {ex.Message}"); }
     }
 
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_session?.RoomSocket == null) return;
-        try { await _session.RoomSocket.SendStartAsync(); }
-        catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.Start: {ex.Message}"); }
+        if (_session == null) return;
+
+        // Host-side semantics: clicking Start ALWAYS launches AoE3 on
+        // this PC. The WS `start` frame is just the "tell the other
+        // peers to launch too" signal — best-effort. Previously we
+        // waited for the DO's `game_started` echo before launching
+        // locally, which meant a transient WS drop (quick-tunnel
+        // idle disconnect) silently swallowed the launch.
+        AppendChatSystem("Starting game…");
+        LaunchActiveModGame();
+
+        if (_session.RoomSocket != null)
+        {
+            try
+            {
+                await _session.RoomSocket.SendStartAsync();
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"MultiplayerTab.Start (notify peers): {ex.Message}");
+            }
+        }
+        else
+        {
+            DiagnosticLog.Write("MultiplayerTab.Start: WS down — peers will pick up via room_state on reconnect");
+        }
     }
 
     private async void LeaveRoomButton_Click(object sender, RoutedEventArgs e)
@@ -1195,11 +1530,128 @@ public partial class MultiplayerTab : UserControl
 
     private async Task SendChatAsync()
     {
-        if (_session?.RoomSocket == null) return;
+        if (_session?.CurrentUser == null) return;
         var text = ChatInputBox.Text.Trim();
         if (string.IsNullOrEmpty(text)) return;
         ChatInputBox.Text = "";
+
+        var login = string.IsNullOrEmpty(_session.CurrentUser.GithubLogin)
+            ? _session.CurrentUser.DisplayName
+            : _session.CurrentUser.GithubLogin;
+
+        if (_session.RoomSocket == null)
+        {
+            // Offline echo so the user still gets visual feedback. The
+            // line is local-only — the server never sees it. Marker
+            // makes that obvious.
+            AppendChatLine(new WsPeerlessChatLine($"{login} (pending): {text}"));
+            return;
+        }
+
+        // Optimistic local echo first so the message appears the very
+        // moment the user presses Enter — independent of WS round-trip
+        // latency. The server will broadcast a `chat` frame including
+        // OUR message back to us; AppendChatLine for that will draw a
+        // second line. Accept that minor double-up rather than building
+        // an id-based dedup table for the v1 release.
+        AppendChatRaw(
+            $"{DateTime.Now:HH:mm}  {login}: {text}",
+            (Brush)Application.Current.FindResource("TextPrimary"));
+
         try { await _session.RoomSocket.SendChatAsync(text); }
         catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.Chat: {ex.Message}"); }
+    }
+
+    /// <summary>Tiny wrapper to render a non-server chat line via the
+    /// same path AppendChatLine uses for real ones.</summary>
+    private sealed class WsPeerlessChatLine : WsChatLine
+    {
+        public WsPeerlessChatLine(string body)
+        {
+            Login = "system";
+            Body = body;
+            AtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+    }
+
+    /// <summary>
+    /// Launch the active mod's executable when a <c>game_started</c>
+    /// frame arrives. Every member of the room sees the same frame and
+    /// fires this — that's intentional: each player launches AoE3 on
+    /// their own machine, then AoE3's own LAN code (broadcasting on
+    /// the ZeroTier network) discovers the other peers.
+    ///
+    /// We use the launch callback MainWindow injected via Attach so
+    /// this control doesn't need direct access to LauncherConfig. The
+    /// callback returns the started Process; we subscribe to Exited so
+    /// the post-game flow (replay upload, match reporting) can run
+    /// without spinning up a watcher thread of our own.
+    /// </summary>
+    private void LaunchActiveModGame()
+    {
+        if (_launchGame == null || _getActiveProfile == null) return;
+
+        var profile = _getActiveProfile();
+        if (profile == null)
+        {
+            AppendChatSystem("Cannot launch — no active mod profile.");
+            return;
+        }
+
+        try
+        {
+            var gameStartedAt = DateTime.UtcNow;
+            var process = _launchGame(profile, async (_, _) =>
+            {
+                // Run on the UI thread so we can render chat messages
+                // and access session state safely.
+                await Dispatcher.InvokeAsync(async () => await OnGameExitedAsync(profile, gameStartedAt));
+            });
+
+            if (process == null)
+            {
+                AppendChatSystem("Could not spawn the game process.");
+                return;
+            }
+
+            AppendChatSystem("Game launched. The launcher will detect the replay when AoE3 closes.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: {ex.Message}");
+            AppendChatSystem($"Launch failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Called when the AoE3 process spawned by <see cref="LaunchActiveModGame"/>
+    /// exits. Best-effort post-game flow: find the freshest
+    /// <c>.age3yrec</c> in the mod's user-data folder and surface it
+    /// in the chat. Full upload + match reporting requires per-player
+    /// result data that we don't auto-extract for v1.0 — that polish
+    /// pass comes once AoE3 result parsing is in scope.
+    /// </summary>
+    private async Task OnGameExitedAsync(ModProfile profile, DateTime gameStartedAtUtc)
+    {
+        AppendChatSystem("Game closed.");
+        try
+        {
+            // The mod's user-data folder usually lives under Documents/My Games/<userDataFolder>.
+            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var modUserData = string.IsNullOrEmpty(profile.UserDataFolder)
+                ? null
+                : System.IO.Path.Combine(docs, "My Games", profile.UserDataFolder);
+
+            if (string.IsNullOrEmpty(modUserData)) return;
+
+            var replay = ReplayUploadService.FindLatestReplay(modUserData, gameStartedAtUtc);
+            if (replay != null)
+                AppendChatSystem($"Replay saved: {replay.Name} ({replay.Length / 1024} KB). Upload from History.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.OnGameExitedAsync: {ex.Message}");
+        }
+        await Task.CompletedTask;
     }
 }

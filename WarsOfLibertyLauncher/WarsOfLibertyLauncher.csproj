@@ -61,6 +61,26 @@
          WPF UI code load it at runtime via pack://application:,,,/WoL.ico
          — used as the WoL profile's tile in the mod selector. -->
     <Resource Include="WoL.ico" />
+
+    <!--
+      WinDivert userspace DLL + signed kernel driver. Required by the
+      v1.0 multiplayer's virtual-LAN bridge (Services/Multiplayer/P2P/).
+      Shipped unchanged from the upstream release zip:
+        * WinDivert.dll    — LGPL v3 (userspace)
+        * WinDivert64.sys  — GPL v3  (kernel driver, EV-signed)
+      We distribute both as "aggregate" alongside the launcher .exe;
+      this satisfies LGPL §4 / GPL §6 without forcing our own code to
+      either licence. The kernel driver is loaded on first call to
+      WinDivertOpen() and needs SeLoadDriverPrivilege — i.e. UAC.
+    -->
+    <None Include="third_party\windivert\WinDivert.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>WinDivert.dll</Link>
+    </None>
+    <None Include="third_party\windivert\WinDivert64.sys">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>WinDivert64.sys</Link>
+    </None>
   </ItemGroup>
 
   <!--

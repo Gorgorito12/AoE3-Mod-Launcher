@@ -51,11 +51,18 @@
 
         <StackPanel Grid.Row="1">
             <TextBlock x:Name="ModLabel" Style="{StaticResource LabelText}"/>
-            <TextBlock x:Name="ModNameText"
-                       Foreground="{DynamicResource TextPrimary}"
-                       FontSize="13"
-                       FontWeight="SemiBold"
-                       Margin="0,0,0,2"/>
+            <!-- Mod selector: lists every installed mod profile so the
+                 host can pick which one the room is for. Switching it
+                 recomputes HashText below (fingerprint of the selected
+                 mod's data files on this PC). -->
+            <ComboBox x:Name="ModCombo"
+                      Background="#2a2d34"
+                      Foreground="White"
+                      BorderBrush="#3a3d44"
+                      FontSize="13"
+                      Padding="8,5"
+                      Margin="0,0,0,2"
+                      SelectionChanged="ModCombo_SelectionChanged"/>
             <TextBlock x:Name="HashLabel" Style="{StaticResource LabelText}"/>
             <TextBlock x:Name="HashText"
                        Foreground="{DynamicResource TextSecondary}"

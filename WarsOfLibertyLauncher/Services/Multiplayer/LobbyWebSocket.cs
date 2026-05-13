@@ -79,25 +79,22 @@ public sealed class LobbyWebSocket : IAsyncDisposable
         _runLoop = Task.Run(() => RunLoopAsync(_cts.Token));
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        _cts.Cancel();
-        try
-        {
-            if (_ws?.State == WebSocketState.Open)
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                await _ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "client_dispose", cts.Token);
-            }
-        }
-        catch { /* dispose path swallows errors on purpose */ }
-
-        _ws?.Dispose();
-        _cts.Dispose();
-        if (_runLoop != null)
-        {
-            try { await _runLoop; } catch { /* ignore */ }
-        }
+        // Aggressive close: cancel the loop's CTS and Abort the socket
+        // directly instead of doing CloseOutputAsync. The polite close
+        // frame was adding ~2 s to every Leave because Workers' WS
+        // doesn't always echo back promptly; we don't care since the
+        // REST /leave call already told the server we're gone.
+        try { _cts.Cancel(); } catch { /* already disposed */ }
+        try { _ws?.Abort(); } catch { /* socket already dying */ }
+        try { _ws?.Dispose(); } catch { /* ditto */ }
+        try { _cts.Dispose(); } catch { /* ditto */ }
+        // _runLoop is left to its own devices — it'll see the
+        // cancelled token on its next iteration and return. Awaiting
+        // it here added latency without giving us anything we could
+        // act on (we're disposing).
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>
@@ -116,6 +113,23 @@ public sealed class LobbyWebSocket : IAsyncDisposable
 
     public Task SendStartAsync(CancellationToken ct = default) =>
         SendAsync(new { type = "start" }, ct);
+
+    /// <summary>
+    /// Tunnel a game packet via the lobby DO when direct hole-punch
+    /// to the peer has failed. The payload is base64 because JSON
+    /// WS frames don't carry binary cleanly; AoE3 packets are small
+    /// (&lt; 1 KB typical) so the base64 overhead is acceptable.
+    /// </summary>
+    public Task SendGameRelayAsync(string toUserId, ushort srcPort, ushort dstPort, byte[] payload,
+        CancellationToken ct = default)
+        => SendAsync(new
+        {
+            type = "game_relay",
+            to_user = toUserId,
+            src_port = (int)srcPort,
+            dst_port = (int)dstPort,
+            payload_b64 = Convert.ToBase64String(payload),
+        }, ct);
 
     // ---------- internals -----------------------------------------
 

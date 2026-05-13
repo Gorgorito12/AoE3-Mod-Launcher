@@ -248,12 +248,20 @@ public static class GameLauncher
     /// usable <c>Exited</c> event back from <see cref="Process.Start"/>.
     /// Returns null if the OS couldn't spawn the process (rare; same
     /// rules as <see cref="Process.Start(ProcessStartInfo)"/>).
+    ///
+    /// <paramref name="extraArgs"/> is appended to the resolved
+    /// command line after the profile/config args. The multiplayer
+    /// flow uses it to inject AoE3's own "skip intro / jump to MP
+    /// menu" flags (<c>+nostartup +nodialog +mp</c>) so players don't
+    /// click through the same menus every time they enter a lobby —
+    /// matches the auto-launch UX Voobly/GameRanger had.
     /// </summary>
     public static Process? LaunchAndWatch(
         LauncherConfig config,
         string? modInstallPath,
         ModProfile profile,
-        EventHandler onExited)
+        EventHandler onExited,
+        string? extraArgs = null)
     {
         var exePath = Find(config, modInstallPath, profile);
         if (exePath == null)
@@ -269,11 +277,18 @@ public static class GameLauncher
             config.Save();
         }
 
-        DiagnosticLog.Write($"Launching game (watched): {exePath} (profile '{profile.Id}')");
-
         var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
             ? profile.GameArguments
             : config.GameArguments;
+        if (!string.IsNullOrWhiteSpace(extraArgs))
+        {
+            arguments = string.IsNullOrWhiteSpace(arguments)
+                ? extraArgs
+                : $"{arguments} {extraArgs}";
+        }
+
+        DiagnosticLog.Write(
+            $"Launching game (watched): {exePath} (profile '{profile.Id}') args='{arguments}'");
 
         var startInfo = new ProcessStartInfo
         {

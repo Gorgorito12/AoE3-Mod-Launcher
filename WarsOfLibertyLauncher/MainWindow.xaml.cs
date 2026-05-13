@@ -155,6 +155,35 @@ public partial class MainWindow : Window
                         "The active mod is not installed on this PC. Install it before joining or hosting.");
                 var fp = await Services.Multiplayer.ModHashService.FingerprintAsync(profile, installPath);
                 return fp.CombinedHash;
+            },
+            // Launch callback wired through to GameLauncher.LaunchAndWatch.
+            // We expose the watched variant (vs Launch) so the multiplayer
+            // flow can subscribe to Process.Exited for the post-game
+            // replay/match flow. Returns null when GameLauncher can't
+            // resolve the .exe, mirroring its existing FileNotFoundException
+            // behaviour without leaking the exception up to UI code.
+            //
+            // Inject AoE3's "skip intro + jump to multiplayer menu" flags
+            // so the player lands on the multiplayer screen instead of
+            // sitting through the intro movie and pressing Multiplayer
+            // manually every time. Same flags Voobly/GameRanger used.
+            //   +nostartup  — skip the cinematic + ESO connection dialog
+            //   +nodialog   — skip the "find players" connection tester
+            //   +mp         — open the Multiplayer screen at startup
+            (profile, onExited) =>
+            {
+                try
+                {
+                    var installPath = _config.GetState(profile.Id).InstallPath;
+                    return GameLauncher.LaunchAndWatch(
+                        _config, installPath, profile, onExited,
+                        extraArgs: "+nostartup +nodialog +mp");
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"MultiplayerTab launch hook: {ex.Message}");
+                    return null;
+                }
             });
         UpdateAccentResources(activeProfile);
 
@@ -993,14 +1022,63 @@ public partial class MainWindow : Window
         // up where the user left it.
         SaveWindowState();
 
-        // Tear down the multiplayer session in the background so we don't
-        // block the close. DisposeAsync sends a polite WebSocket close
-        // frame; we fire-and-forget because the window is about to die
-        // anyway and async OnClosing is awkward in WPF.
-        try { _ = _multiplayerSession.DisposeAsync().AsTask(); }
+        // The Hardcodet TaskbarIcon creates a hidden Win32 window for
+        // its shell-notification message loop. With WPF's default
+        // ShutdownMode=OnLastWindowClose that hidden window would keep
+        // the process alive even after MainWindow is gone — and the
+        // user would see `Aoe3ModLauncher` stuck in Task Manager at
+        // 0% CPU. App.xaml already sets ShutdownMode=OnMainWindowClose
+        // to fix that; disposing the tray icon here is a belt-and-
+        // suspenders so the icon also vanishes from the system tray
+        // immediately rather than after Windows polls for it.
+        try { TrayIcon?.Dispose(); } catch { /* shutdown path */ }
+
+        // Polite multiplayer teardown — REST /leave so the Worker
+        // marks the lobby `closed` and notifies other members.
+        //
+        // IMPORTANT: we run the leave on Task.Run, NOT directly on
+        // the UI thread. `LeaveCurrentLobbyAsync` awaits HttpClient
+        // which by default captures the current SynchronizationContext
+        // for its continuations. If we blocked the UI thread on
+        // GetResult(), the HTTP continuation would queue back onto
+        // the (blocked) UI thread → classic deadlock. The user would
+        // see the launcher freeze instead of closing.
+        //
+        // Task.Run runs the work on a thread-pool thread whose
+        // SyncContext is null, so the continuations resume there
+        // safely. We then Wait() with a tight 600 ms cap — long
+        // enough to flush one HTTPS POST in normal conditions,
+        // short enough not to feel hangy on a flaky network.
+        try
+        {
+            var session = _multiplayerSession;
+            if (session.Lobby != Services.Multiplayer.MultiplayerSession.LobbyStatus.Idle
+                && session.CurrentLobbyId != null)
+            {
+                var leaveTask = Task.Run(async () =>
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(550));
+                    await session.LeaveCurrentLobbyAsync(cts.Token).ConfigureAwait(false);
+                });
+                leaveTask.Wait(TimeSpan.FromMilliseconds(600));
+            }
+        }
+        catch (Exception ex) { DiagnosticLog.Write($"MP graceful leave: {ex.Message}"); }
+
+        // Dispose is also fire-and-forget on the thread pool so it
+        // never blocks the close.
+        try { _ = Task.Run(async () => await _multiplayerSession.DisposeAsync().ConfigureAwait(false)); }
         catch (Exception ex) { DiagnosticLog.Write($"MP session dispose: {ex.Message}"); }
 
         base.OnClosing(e);
+
+        // Last-resort guarantee that the process exits even if a
+        // background thread we don't control (cloudflared HTTPS keep-
+        // alive, a leftover Hardcodet timer) tried to keep it pinned.
+        // OnLastWindowClose alone has been observed to miss this on
+        // Windows 11 when third-party UI libraries register hidden
+        // windows; an explicit Shutdown closes that gap.
+        System.Windows.Application.Current.Shutdown();
     }
 
     /// <summary>

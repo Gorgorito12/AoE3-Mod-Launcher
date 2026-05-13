@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace WarsOfLibertyLauncher.Models.Multiplayer;
@@ -153,21 +154,12 @@ public class CreateLobbyResponse
     [JsonPropertyName("id")]
     public string Id { get; set; } = "";
 
-    [JsonPropertyName("zt_network_id")]
-    public string ZtNetworkId { get; set; } = "";
-
-    [JsonPropertyName("zt_network_name")]
-    public string ZtNetworkName { get; set; } = "";
-
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
 }
 
 public class JoinLobbyRequest
 {
-    [JsonPropertyName("zt_node_id")]
-    public string ZtNodeId { get; set; } = "";
-
     [JsonPropertyName("mod_combined_hash")]
     public string ModCombinedHash { get; set; } = "";
 
@@ -179,15 +171,6 @@ public class JoinLobbyResponse
 {
     [JsonPropertyName("lobby_id")]
     public string LobbyId { get; set; } = "";
-
-    [JsonPropertyName("zt_network_id")]
-    public string ZtNetworkId { get; set; } = "";
-
-    [JsonPropertyName("zt_network_name")]
-    public string ZtNetworkName { get; set; } = "";
-
-    [JsonPropertyName("zt_ipv4")]
-    public string? ZtIpv4 { get; set; }
 
     [JsonPropertyName("join_token")]
     public string JoinToken { get; set; } = "";
@@ -391,6 +374,12 @@ public class WsRoomMemberFlags
 {
     [JsonPropertyName("ready")]
     public bool Ready { get; set; }
+
+    /// <summary>GitHub login at the time the member joined. Empty when
+    /// the server didn't have it cached (rare; only legacy lobbies that
+    /// pre-date the member-with-login schema).</summary>
+    [JsonPropertyName("login")]
+    public string Login { get; set; } = "";
 }
 
 /// <summary>Initial snapshot sent by the DO when our hello succeeds.</summary>
@@ -407,6 +396,65 @@ public class WsRoomState
 
     [JsonPropertyName("chat")]
     public List<WsChatLine> Chat { get; set; } = new();
+}
+
+// ---------------------------------------------------------------------------
+// P2P signaling DTOs — sent over the lobby room WebSocket. The DO does
+// not interpret the payloads; it just routes peer_announce broadcasts and
+// peer_relay unicasts between members. The launcher uses these to
+// coordinate STUN/ICE-style hole-punching.
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// One candidate address a peer can be reached at. The launcher
+/// announces every reachable candidate it knows about — typically:
+///   * a public address from STUN, and
+///   * one or more LAN addresses for same-network fallbacks.
+/// Peers race the candidates simultaneously and stick with whichever
+/// one answers first.
+/// </summary>
+public class WsPeerEndpoint
+{
+    [JsonPropertyName("ip")]
+    public string Ip { get; set; } = "";
+
+    [JsonPropertyName("port")]
+    public int Port { get; set; }
+
+    /// <summary>"stun" (public via NAT), "lan" (private LAN), "turn" (relayed).</summary>
+    [JsonPropertyName("kind")]
+    public string Kind { get; set; } = "";
+}
+
+/// <summary>Incoming <c>peer_announce</c> frame broadcast by the DO.</summary>
+public class WsPeerAnnounce
+{
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = "";
+
+    [JsonPropertyName("login")]
+    public string Login { get; set; } = "";
+
+    [JsonPropertyName("endpoints")]
+    public List<WsPeerEndpoint> Endpoints { get; set; } = new();
+}
+
+/// <summary>Incoming <c>peer_relay</c> frame unicast by the DO.</summary>
+public class WsPeerRelay
+{
+    [JsonPropertyName("from_user")]
+    public string FromUser { get; set; } = "";
+
+    [JsonPropertyName("from_login")]
+    public string FromLogin { get; set; } = "";
+
+    /// <summary>
+    /// Opaque payload defined by the launcher's hole-punching
+    /// protocol. We deserialise into <see cref="JsonElement"/> so
+    /// new fields can land on the client without server changes.
+    /// </summary>
+    [JsonPropertyName("payload")]
+    public JsonElement Payload { get; set; }
 }
 
 /// <summary>Standard error envelope returned by every endpoint on failure.</summary>

@@ -40,52 +40,74 @@
                     <Button x:Name="SubtabProfile" Click="SubtabProfile_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabHistory" Click="SubtabHistory_Click" Style="{StaticResource SubTab}"/>
                 </StackPanel>
-                <TextBlock Grid.Column="1"
-                           x:Name="QuotaText"
-                           Foreground="{DynamicResource TextSecondary}"
-                           FontSize="11"
-                           VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <!-- NAT badge — populated by NatTypeDetector probe.
+                         Background colour changes with the result so a
+                         glance at the header tells the user whether
+                         their network is going to give them trouble. -->
+                    <Border x:Name="NatBadgeBorder"
+                            Background="{DynamicResource BgPanelAlt}"
+                            BorderBrush="{DynamicResource BorderSubtle}"
+                            BorderThickness="1"
+                            CornerRadius="3"
+                            Padding="8,3"
+                            Margin="0,0,12,0"
+                            Cursor="Help">
+                        <TextBlock x:Name="NatBadgeText"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"/>
+                    </Border>
+                    <TextBlock x:Name="QuotaText"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="11"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
             </Grid>
         </Border>
 
         <!-- ============================================================
-             ROOMS view: ZeroTier gate / sign-in gate / room list /
+             ROOMS view: WinDivert gate / sign-in gate / room list /
              current-room panel. Only one of the four groups is visible
              at a time, driven from code-behind by RefreshFromSession().
              ============================================================ -->
         <Grid Grid.Row="1" x:Name="RoomsView">
 
-            <!-- ZeroTier bootstrap gate. Shown when the local daemon is
-                 not yet usable; supersedes the sign-in gate because
-                 there's no point signing in if multiplayer traffic
-                 can't flow. -->
-            <StackPanel x:Name="ZtBootstrapPanel"
+            <!-- WinDivert bootstrap gate. The launcher needs WinDivert
+                 (DLL + signed kernel driver) to capture AoE3's LAN
+                 broadcasts and bridge them to peers over the P2P mesh.
+                 Without it, even with hole-punching working, AoE3 sees
+                 no other players. Supersedes the sign-in gate because
+                 there's no point signing in if game traffic can't flow. -->
+            <StackPanel x:Name="VlanBootstrapPanel"
                         Visibility="Collapsed"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         MaxWidth="520">
-                <TextBlock x:Name="ZtBootstrapTitle"
+                <TextBlock x:Name="VlanBootstrapTitle"
                            Foreground="{DynamicResource TextPrimary}"
                            FontSize="18"
                            FontWeight="Bold"
                            TextAlignment="Center"
                            TextWrapping="Wrap"/>
-                <TextBlock x:Name="ZtBootstrapBody"
+                <TextBlock x:Name="VlanBootstrapBody"
                            Foreground="{DynamicResource TextSecondary}"
                            FontSize="12"
                            TextAlignment="Center"
                            TextWrapping="Wrap"
                            Margin="0,12,0,18"/>
-                <ProgressBar x:Name="ZtBootstrapProgress"
+                <ProgressBar x:Name="VlanBootstrapProgress"
                              Height="4"
                              Visibility="Collapsed"
                              Margin="0,0,0,12"/>
-                <Button x:Name="ZtActionButton"
-                        Click="ZtActionButton_Click"
+                <Button x:Name="VlanActionButton"
+                        Click="VlanActionButton_Click"
                         Style="{StaticResource SidebarPrimaryButton}"
                         HorizontalAlignment="Center"
                         MinWidth="220"/>
-                <TextBlock x:Name="ZtErrorText"
+                <TextBlock x:Name="VlanErrorText"
                            Foreground="Salmon"
                            FontSize="11"
                            TextWrapping="Wrap"
@@ -93,6 +115,8 @@
                            Margin="0,12,0,0"
                            Visibility="Collapsed"/>
             </StackPanel>
+
+            <!-- (ZeroTier bootstrap panel removed — superseded by WinDivert) -->
 
             <!-- Signed-out gate. -->
             <StackPanel x:Name="SignInPanel"

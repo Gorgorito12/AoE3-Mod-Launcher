@@ -1157,6 +1157,29 @@ public static class Strings
             [LangEn] = "Install the mod first to host or join a room for it.",
             [LangEs] = "Instala primero el mod para crear o unirte a una sala suya.",
         },
+        // -------- WinDivert bootstrap (replaces ZeroTier as the LAN bridge) --------
+        ["MpVlanNotInstalledTitle"] = new()
+        {
+            [LangEn] = "P2P driver required for multiplayer",
+            [LangEs] = "Driver P2P necesario para el multijugador",
+        },
+        ["MpVlanNotInstalledBody"] = new()
+        {
+            [LangEn] = "The launcher uses WinDivert (a small open-source driver) to bridge AoE3's LAN traffic between players directly, without any third-party VPN. Click below to download and install it (~80 KB).",
+            [LangEs] = "El launcher usa WinDivert (un driver pequeño open source) para conectar el tráfico LAN de AoE3 entre jugadores directamente, sin VPN de terceros. Pulsa abajo para descargarlo e instalarlo (~80 KB).",
+        },
+        ["MpVlanInstall"] = new() { [LangEn] = "Install P2P driver", [LangEs] = "Instalar driver P2P" },
+        ["MpVlanInstalling"] = new()
+        {
+            [LangEn] = "Downloading…",
+            [LangEs] = "Descargando…",
+        },
+        ["MpVlanElevateBody"] = new()
+        {
+            [LangEn] = "The driver is installed. The launcher needs to restart with admin rights once so the kernel can load it. Click below — Windows will ask for permission.",
+            [LangEs] = "El driver está instalado. El launcher tiene que reiniciarse una vez con permisos de admin para que el kernel pueda cargarlo. Pulsa abajo — Windows pedirá permiso.",
+        },
+        ["MpVlanElevate"] = new() { [LangEn] = "Restart elevated", [LangEs] = "Reiniciar como admin" },
         ["MpZtNotInstalledTitle"] = new()
         {
             [LangEn] = "ZeroTier is required for multiplayer",
@@ -1180,6 +1203,43 @@ public static class Strings
         {
             [LangEn] = "{0}/{1} players online · {2}/{3} active rooms",
             [LangEs] = "{0}/{1} jugadores online · {2}/{3} salas activas",
+        },
+        // -------- NAT badge (Multiplayer header) --------
+        // {0} is the human-readable NAT type label.
+        ["MpNatBadge"] = new()
+        {
+            [LangEn] = "NAT: {0}",
+            [LangEs] = "NAT: {0}",
+        },
+        ["MpNatProbing"] = new()
+        {
+            [LangEn] = "checking…",
+            [LangEs] = "comprobando…",
+        },
+        ["MpNatUnknown"] = new()
+        {
+            [LangEn] = "unknown",
+            [LangEs] = "desconocido",
+        },
+        ["MpNatOpen"] = new()
+        {
+            [LangEn] = "Open — hole-punching works trivially.",
+            [LangEs] = "Abierta — la conexión directa funciona sin problema.",
+        },
+        ["MpNatModerate"] = new()
+        {
+            [LangEn] = "Moderate — direct connection with other players works.",
+            [LangEs] = "Moderada — la conexión directa con otros jugadores funciona.",
+        },
+        ["MpNatStrict"] = new()
+        {
+            [LangEn] = "Strict — direct connection needs coordinated punching.",
+            [LangEs] = "Estricta — la conexión directa necesita coordinación extra.",
+        },
+        ["MpNatSymmetric"] = new()
+        {
+            [LangEn] = "Symmetric — direct connection won't work; relay required.",
+            [LangEs] = "Simétrica — sin conexión directa; hace falta usar relay.",
         },
         ["SettingsTabTeaser"] = new()
         {
