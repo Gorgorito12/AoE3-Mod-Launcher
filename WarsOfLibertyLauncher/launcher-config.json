@@ -13,5 +13,11 @@
   ],
   "installerZipUrl": "",
   "defaultInstallFolder": "C:\\Program Files (x86)\\Wars of Liberty",
-  "officialWebsite": "http://aoe3wol.com/"
+  "officialWebsite": "http://aoe3wol.com/",
+  "multiplayer": {
+    "lobbyBaseUrl": "http://127.0.0.1:8787",
+    "sessionToken": "",
+    "sessionExpiresAt": 0,
+    "cachedUser": null
+  }
 }

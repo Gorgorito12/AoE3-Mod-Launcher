@@ -20,6 +20,13 @@ public partial class MainWindow : Window
     // the chosen profile so we don't have to restart the whole process.
     private UpdateService _updateService;
     private readonly InstallerService _installerService;
+    /// <summary>
+    /// v1.0 multiplayer state. Constructed once per launcher run and
+    /// attached to the Multiplayer tab UserControl. Disposed on window
+    /// close so the WebSocket and ZeroTier auth resources are released
+    /// even if the process is kept alive in the tray.
+    /// </summary>
+    private readonly Services.Multiplayer.MultiplayerSession _multiplayerSession;
     private List<DownloadInfo> _pendingDownloads = new();
     private CancellationTokenSource? _cts;
     private FolderCloneService? _cloneService;
@@ -130,6 +137,25 @@ public partial class MainWindow : Window
 
         _updateService = new UpdateService(_config, activeProfile);
         _installerService = new InstallerService();
+
+        // v1.0 multiplayer. The session restores a saved JWT from config
+        // if it's still valid; otherwise it stays in SignedOut and the
+        // Multiplayer tab shows the sign-in gate. The hashing callback
+        // points at ModHashService — kept as a delegate so the
+        // UserControl doesn't need a direct dependency on the service.
+        _multiplayerSession = new Services.Multiplayer.MultiplayerSession(_config);
+        MultiplayerView.Attach(
+            _multiplayerSession,
+            () => _config.GetActiveProfile(),
+            async profile =>
+            {
+                var installPath = _config.GetState(profile.Id).InstallPath;
+                if (string.IsNullOrEmpty(installPath))
+                    throw new InvalidOperationException(
+                        "The active mod is not installed on this PC. Install it before joining or hosting.");
+                var fp = await Services.Multiplayer.ModHashService.FingerprintAsync(profile, installPath);
+                return fp.CombinedHash;
+            });
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -966,6 +992,14 @@ public partial class MainWindow : Window
         // Real close — persist size/position/tab so the next launch comes
         // up where the user left it.
         SaveWindowState();
+
+        // Tear down the multiplayer session in the background so we don't
+        // block the close. DisposeAsync sends a polite WebSocket close
+        // frame; we fire-and-forget because the window is about to die
+        // anyway and async OnClosing is awkward in WPF.
+        try { _ = _multiplayerSession.DisposeAsync().AsTask(); }
+        catch (Exception ex) { DiagnosticLog.Write($"MP session dispose: {ex.Message}"); }
+
         base.OnClosing(e);
     }
 
@@ -1240,8 +1274,10 @@ public partial class MainWindow : Window
         TopTabNews.Content = Strings.Get("TopTabNews");
         TopTabSettings.Content = Strings.Get("TopTabSettings");
 
-        // Placeholder copy for the v1.0 Multiplayer tab and the Settings teaser.
-        MultiplayerTeaserText.Text = Strings.Get("MultiplayerComingSoon");
+        // v1.0 multiplayer tab — propagate language changes into the
+        // UserControl's own string cache. Layout strings (subtabs, sign-in
+        // gate copy) are owned by the control itself.
+        MultiplayerView.RefreshStrings();
         SettingsTeaserText.Text = Strings.Get("SettingsTabTeaser");
         OpenSettingsTabButton.Content = Strings.Get("SettingsTabOpen");
 

@@ -1077,6 +1077,110 @@ public static class Strings
             [LangEn] = "Multiplayer lobby — coming in v1.0.\nA Voobly-style room browser for AoE3 mods.",
             [LangEs] = "Sala multijugador — llega en v1.0.\nUn buscador de partidas estilo Voobly para mods de AoE3.",
         },
+        // -------- Multiplayer (v1.0) --------
+        ["MpSubtabRooms"] = new() { [LangEn] = "Rooms", [LangEs] = "Salas" },
+        ["MpSubtabFriends"] = new() { [LangEn] = "Friends", [LangEs] = "Amigos" },
+        ["MpSubtabProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
+        ["MpSubtabHistory"] = new() { [LangEn] = "History", [LangEs] = "Historial" },
+        ["MpSignInTitle"] = new()
+        {
+            [LangEn] = "Sign in to play online",
+            [LangEs] = "Inicia sesión para jugar online",
+        },
+        ["MpSignInBody"] = new()
+        {
+            [LangEn] = "Multiplayer uses GitHub to sign you in — no new account needed. Your username and avatar are read; nothing else is requested.",
+            [LangEs] = "El multijugador usa GitHub para iniciar sesión: no necesitas crear una cuenta nueva. Solo se leen tu usuario y avatar; nada más.",
+        },
+        ["MpSignInButton"] = new() { [LangEn] = "Sign in with GitHub", [LangEs] = "Iniciar sesión con GitHub" },
+        ["MpSignOutButton"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
+        ["MpSignInDialogTitle"] = new() { [LangEn] = "GitHub sign-in", [LangEs] = "Inicio de sesión GitHub" },
+        ["MpSignInStep1"] = new()
+        {
+            [LangEn] = "1. Open this URL in your browser:",
+            [LangEs] = "1. Abre esta URL en tu navegador:",
+        },
+        ["MpSignInStep2"] = new()
+        {
+            [LangEn] = "2. Type or paste this code, then approve:",
+            [LangEs] = "2. Escribe o pega este código y aprueba:",
+        },
+        ["MpSignInWaiting"] = new()
+        {
+            [LangEn] = "Waiting for you to approve in the browser…",
+            [LangEs] = "Esperando tu aprobación en el navegador…",
+        },
+        ["MpSignInOpenBrowser"] = new() { [LangEn] = "Open browser", [LangEs] = "Abrir navegador" },
+        ["MpSignInCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
+        ["MpSignInCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
+        ["DlgClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
+        ["MpRoomsCreate"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
+        ["MpRoomsRefresh"] = new() { [LangEn] = "Refresh", [LangEs] = "Actualizar" },
+        ["MpRoomsEmpty"] = new()
+        {
+            [LangEn] = "No rooms right now. Be the first to create one.",
+            [LangEs] = "No hay salas ahora mismo. Sé el primero en crear una.",
+        },
+        ["MpRoomsLoading"] = new() { [LangEn] = "Loading rooms…", [LangEs] = "Cargando salas…" },
+        ["MpRoomJoin"] = new() { [LangEn] = "Join", [LangEs] = "Unirse" },
+        ["MpRoomLeave"] = new() { [LangEn] = "Leave room", [LangEs] = "Salir de la sala" },
+        ["MpRoomReady"] = new() { [LangEn] = "Ready", [LangEs] = "Listo" },
+        ["MpRoomStart"] = new() { [LangEn] = "Start game", [LangEs] = "Empezar partida" },
+        ["MpRoomChatPlaceholder"] = new()
+        {
+            [LangEn] = "Type a message…",
+            [LangEs] = "Escribe un mensaje…",
+        },
+        ["MpRoomMembersHeader"] = new() { [LangEn] = "Players", [LangEs] = "Jugadores" },
+        ["MpCreateDialogTitle"] = new() { [LangEn] = "Create a room", [LangEs] = "Crear una sala" },
+        ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "Room title", [LangEs] = "Título de la sala" },
+        ["MpCreateDialogMaxPlayers"] = new() { [LangEn] = "Max players", [LangEs] = "Jugadores máx." },
+        ["MpCreateDialogPassword"] = new()
+        {
+            [LangEn] = "Password (optional)",
+            [LangEs] = "Contraseña (opcional)",
+        },
+        ["MpCreateDialogModLabel"] = new()
+        {
+            [LangEn] = "Mod",
+            [LangEs] = "Mod",
+        },
+        ["MpCreateDialogHashLabel"] = new()
+        {
+            [LangEn] = "Mod fingerprint",
+            [LangEs] = "Huella del mod",
+        },
+        ["MpCreateDialogCreate"] = new() { [LangEn] = "Create", [LangEs] = "Crear" },
+        ["MpCreateDialogCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
+        ["MpModNotInstalled"] = new()
+        {
+            [LangEn] = "Install the mod first to host or join a room for it.",
+            [LangEs] = "Instala primero el mod para crear o unirte a una sala suya.",
+        },
+        ["MpZtNotInstalledTitle"] = new()
+        {
+            [LangEn] = "ZeroTier is required for multiplayer",
+            [LangEs] = "ZeroTier es necesario para el multijugador",
+        },
+        ["MpZtNotInstalledBody"] = new()
+        {
+            [LangEn] = "ZeroTier creates the virtual LAN that lets AoE3 see other players. Click below to install it — Windows will ask for permission.",
+            [LangEs] = "ZeroTier crea la LAN virtual que permite a AoE3 ver a otros jugadores. Pulsa abajo para instalarlo — Windows te pedirá permiso.",
+        },
+        ["MpZtInstall"] = new() { [LangEn] = "Install ZeroTier", [LangEs] = "Instalar ZeroTier" },
+        ["MpZtStarting"] = new() { [LangEn] = "Starting ZeroTier service…", [LangEs] = "Arrancando el servicio ZeroTier…" },
+        ["MpZtRunning"] = new() { [LangEn] = "ZeroTier ready", [LangEs] = "ZeroTier listo" },
+        ["MpZtAuthorizeBody"] = new()
+        {
+            [LangEn] = "We need to read ZeroTier's local API token. Click below — Windows will ask once.",
+            [LangEs] = "Necesitamos leer el token local de ZeroTier. Pulsa abajo — Windows lo pedirá una sola vez.",
+        },
+        ["MpZtAuthorize"] = new() { [LangEn] = "Authorize", [LangEs] = "Autorizar" },
+        ["MpQuotaBar"] = new()
+        {
+            [LangEn] = "{0}/{1} players online · {2}/{3} active rooms",
+            [LangEs] = "{0}/{1} jugadores online · {2}/{3} salas activas",
+        },
         ["SettingsTabTeaser"] = new()
         {
             [LangEn] = "Launcher preferences (language, theme, autostart, mods catalog, …)",

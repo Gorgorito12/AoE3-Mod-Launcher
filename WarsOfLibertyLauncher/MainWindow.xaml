@@ -507,18 +507,11 @@
                  calls Populate() whenever the underlying state changes. -->
             <controls:ModsBrowser x:Name="ModsBrowserView" Visibility="Collapsed"/>
 
-            <!-- Multiplayer placeholder — lobby ships in v1.0. -->
-            <Grid x:Name="MultiplayerView" Visibility="Collapsed">
-                <StackPanel HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            MaxWidth="600">
-                    <TextBlock x:Name="MultiplayerTeaserText"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="16"
-                               TextAlignment="Center"
-                               TextWrapping="Wrap"/>
-                </StackPanel>
-            </Grid>
+            <!-- v1.0 multiplayer lobby. The UserControl owns its own
+                 internal layout (subtabs + browser + room view + chat);
+                 MainWindow only toggles its Visibility when the user
+                 picks the Multiplayer top-tab. -->
+            <controls:MultiplayerTab x:Name="MultiplayerView" Visibility="Collapsed"/>
 
             <!-- Large News view: full-width news feed. RefreshNewsAsync
                  populates both this panel and the smaller Noticias feed

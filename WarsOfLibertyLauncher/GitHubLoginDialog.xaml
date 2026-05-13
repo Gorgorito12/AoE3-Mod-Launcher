@@ -1,0 +1,117 @@
+<Window x:Class="WarsOfLibertyLauncher.GitHubLoginDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GitHub sign-in"
+        Width="520"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource BgBase}"
+        ShowInTaskbar="False">
+    <Grid Margin="28,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   x:Name="TitleText"
+                   Foreground="{DynamicResource TextPrimary}"
+                   FontSize="18"
+                   FontWeight="Bold"/>
+
+        <TextBlock Grid.Row="1"
+                   x:Name="Step1Text"
+                   Foreground="{DynamicResource TextSecondary}"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Margin="0,14,0,6"/>
+
+        <!-- The verification URI + Open browser button. -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource BgPanel}"
+                BorderBrush="{DynamicResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="12,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           x:Name="VerificationUriText"
+                           Foreground="{DynamicResource TextPrimary}"
+                           FontFamily="Consolas, Courier New, monospace"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"/>
+                <Button Grid.Column="1"
+                        x:Name="OpenBrowserButton"
+                        Click="OpenBrowserButton_Click"
+                        Style="{StaticResource SidebarPrimaryButton}"
+                        Padding="14,6"
+                        MinWidth="120"/>
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="3"
+                   x:Name="Step2Text"
+                   Foreground="{DynamicResource TextSecondary}"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Margin="0,18,0,6"/>
+
+        <!-- Big user code + Copy button. -->
+        <Border Grid.Row="4"
+                Background="{DynamicResource BgPanel}"
+                BorderBrush="{DynamicResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="14,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           x:Name="UserCodeText"
+                           Foreground="{DynamicResource TextPrimary}"
+                           FontFamily="Consolas, Courier New, monospace"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+                <Button Grid.Column="1"
+                        x:Name="CopyButton"
+                        Click="CopyButton_Click"
+                        Style="{StaticResource SidebarPrimaryButton}"
+                        Padding="14,6"
+                        MinWidth="120"
+                        VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- Status row (waiting…) + Cancel. -->
+        <Grid Grid.Row="5" Margin="0,22,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       x:Name="StatusText"
+                       Foreground="{DynamicResource TextSecondary}"
+                       FontSize="12"
+                       VerticalAlignment="Center"/>
+            <Button Grid.Column="1"
+                    x:Name="CancelButton"
+                    Click="CancelButton_Click"
+                    Style="{StaticResource SidebarPrimaryButton}"
+                    Padding="18,6"
+                    MinWidth="110"/>
+        </Grid>
+    </Grid>
+</Window>

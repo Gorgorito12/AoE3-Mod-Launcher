@@ -236,4 +236,63 @@ public static class GameLauncher
         };
         Process.Start(startInfo);
     }
+
+    /// <summary>
+    /// Launch the active mod's game and return the underlying
+    /// <see cref="Process"/> so the caller can subscribe to
+    /// <see cref="Process.Exited"/> (e.g. the multiplayer flow that
+    /// wants to upload a replay once AoE3 closes).
+    ///
+    /// Differs from <see cref="Launch"/> only in <c>UseShellExecute=false</c>
+    /// and <c>EnableRaisingEvents=true</c>; both are needed to get a
+    /// usable <c>Exited</c> event back from <see cref="Process.Start"/>.
+    /// Returns null if the OS couldn't spawn the process (rare; same
+    /// rules as <see cref="Process.Start(ProcessStartInfo)"/>).
+    /// </summary>
+    public static Process? LaunchAndWatch(
+        LauncherConfig config,
+        string? modInstallPath,
+        ModProfile profile,
+        EventHandler onExited)
+    {
+        var exePath = Find(config, modInstallPath, profile);
+        if (exePath == null)
+        {
+            throw new FileNotFoundException(
+                WarsOfLibertyLauncher.Localization.Strings.Format(
+                    "ErrGameExeNotFound", profile.DisplayName));
+        }
+
+        if (config.GameExecutable != exePath)
+        {
+            config.GameExecutable = exePath;
+            config.Save();
+        }
+
+        DiagnosticLog.Write($"Launching game (watched): {exePath} (profile '{profile.Id}')");
+
+        var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
+            ? profile.GameArguments
+            : config.GameArguments;
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = exePath,
+            Arguments = arguments ?? "",
+            WorkingDirectory = Path.GetDirectoryName(exePath),
+            // Must be false so Process.Exited can fire — ShellExecute
+            // returns true on launch but never raises events on the
+            // returned object.
+            UseShellExecute = false,
+        };
+
+        var process = new Process
+        {
+            StartInfo = startInfo,
+            EnableRaisingEvents = true,
+        };
+        process.Exited += onExited;
+        if (!process.Start()) return null;
+        return process;
+    }
 }

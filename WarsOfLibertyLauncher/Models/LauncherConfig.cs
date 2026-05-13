@@ -9,6 +9,47 @@ using WarsOfLibertyLauncher.Services;
 namespace WarsOfLibertyLauncher.Models;
 
 /// <summary>
+/// Multiplayer-specific persistent state. Lives nested under
+/// <see cref="LauncherConfig.Multiplayer"/> so the JSON layout stays
+/// flat at the top level even as the multiplayer feature grows.
+/// </summary>
+public class MultiplayerConfig
+{
+    /// <summary>
+    /// Base URL of the lobby Worker. The default is the launcher's
+    /// official deployment; power users can point at a self-hosted
+    /// Worker by editing this field (or via a Settings entry).
+    /// </summary>
+    [JsonPropertyName("lobbyBaseUrl")]
+    public string LobbyBaseUrl { get; set; } = "https://wol-launcher-lobby.workers.dev";
+
+    /// <summary>
+    /// Session JWT issued by the Worker after a successful GitHub
+    /// device-flow sign-in. Empty when the user is not signed in (the
+    /// Multiplayer tab will prompt them on first visit). Treat this
+    /// like a password — it's a bearer credential.
+    /// </summary>
+    [JsonPropertyName("sessionToken")]
+    public string SessionToken { get; set; } = "";
+
+    /// <summary>
+    /// Unix seconds when the <see cref="SessionToken"/> stops being
+    /// accepted by the Worker. The launcher refreshes silently when the
+    /// remaining lifetime drops below 24 h.
+    /// </summary>
+    [JsonPropertyName("sessionExpiresAt")]
+    public long SessionExpiresAt { get; set; }
+
+    /// <summary>
+    /// Cached profile of the signed-in user — saves a /me round trip on
+    /// every launcher start. Refreshed whenever the user signs in or
+    /// when /me is called for any other reason.
+    /// </summary>
+    [JsonPropertyName("cachedUser")]
+    public Multiplayer.LobbyUserSummary? CachedUser { get; set; }
+}
+
+/// <summary>
 /// Per-mod state that has to survive launcher restarts AND has to be kept
 /// separate per profile. Stored under <see cref="LauncherConfig.Mods"/>
 /// keyed by mod id so switching between mods doesn't cross-contaminate
@@ -355,6 +396,24 @@ public class LauncherConfig
     [JsonPropertyName("activeTranslationId")]
     public string ActiveTranslationId { get; set; } = "";
 
+    // ------------------------------------------------------------------------
+    // Multiplayer (v1.0). Empty / unset values mean "user hasn't opted in";
+    // the Multiplayer tab handles bootstrap (sign-in, ZeroTier install) on
+    // first open, so a fresh launcher with no MP config still works fully
+    // for single-player updates.
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Multiplayer state — backend URL and the session token issued by
+    /// the lobby Worker after a GitHub device-flow sign-in. Lives in its
+    /// own nested object so the JSON layout stays tidy and so adding new
+    /// multiplayer fields later doesn't keep ballooning the root schema.
+    /// Initialised lazily; <see cref="Multiplayer"/> is never null after
+    /// <see cref="Load"/> returns.
+    /// </summary>
+    [JsonPropertyName("multiplayer")]
+    public MultiplayerConfig Multiplayer { get; set; } = new();
+
     private const string ConfigFileName = "launcher-config.json";
 
     public static LauncherConfig Load()
@@ -368,6 +427,11 @@ public class LauncherConfig
         }
         var json = File.ReadAllText(path);
         var cfg = JsonSerializer.Deserialize<LauncherConfig>(json) ?? new LauncherConfig();
+        // The JSON may have been written by an older launcher (no
+        // "multiplayer" key) or by a user who edited it and set the
+        // section to null. Either way, callers rely on Multiplayer
+        // being non-null, so normalise here.
+        cfg.Multiplayer ??= new MultiplayerConfig();
         cfg.MigrateLegacyState();
         return cfg;
     }
