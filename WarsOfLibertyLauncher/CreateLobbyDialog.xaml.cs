@@ -40,6 +40,15 @@ public partial class CreateLobbyDialog : Window
     public CreateLobbyResponse? CreatedLobby { get; private set; }
 
     /// <summary>
+    /// The mod profile that was selected when the dialog closed
+    /// with DialogResult=true. Exposed so the caller can stamp the
+    /// room's mod id (CreateLobbyResponse only carries the lobby
+    /// id + status, not the mod). Used by MultiplayerTab to make
+    /// sure the right AoE3 install launches when the game starts.
+    /// </summary>
+    public ModProfile? CreatedLobbyProfile { get; private set; }
+
+    /// <summary>
     /// Build the dialog. <paramref name="profiles"/> populates the mod
     /// dropdown; <paramref name="initiallySelected"/> is the entry that
     /// starts highlighted (typically the active profile from the Play
@@ -193,6 +202,7 @@ public partial class CreateLobbyDialog : Window
             var password = isPrivate && !string.IsNullOrEmpty(PasswordBox.Password)
                 ? PasswordBox.Password
                 : null;
+            CreatedLobbyProfile = _selectedProfile;
             CreatedLobby = await _session.Api.CreateLobbyAsync(new CreateLobbyRequest
             {
                 Title = title,

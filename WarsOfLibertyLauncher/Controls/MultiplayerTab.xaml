@@ -432,56 +432,64 @@
                 </Grid>
             </Grid>
 
-            <!-- Inside-a-room view, rendered as a centered floating
-                 popup over BrowserPanel. The browser stays visible
-                 (dimmed) behind so the user doesn't lose context.
-                 Closing the room (Leave or X) just hides this
-                 overlay; nothing in the host frame moves. Content
-                 layout (header strip → players + info + actions |
-                 chat) is the same as the full-area version — just
-                 wrapped in a sized card with a backdrop. -->
+            <!-- Inside-a-room view, rendered as a *non-modal*
+                 floating popup positioned on a Canvas. The browser
+                 stays fully interactive behind: the user can scroll
+                 the rooms list, see who else is hosting, etc. The
+                 popup is draggable by its header strip. During the
+                 game-start countdown / InGame state it gets locked
+                 (X hidden, drag disabled) so accidental clicks
+                 don't kill an active match. -->
             <Grid x:Name="RoomPanel" Visibility="Collapsed">
-                <!-- Backdrop. Click is deliberately NOT a "close"
-                     gesture — leaving needs the explicit Leave
-                     button or X so accidental clicks mid-handshake
-                     don't orphan the room on the server. -->
-                <Rectangle Fill="Black" Opacity="0.55"/>
-
-                <!-- Floating card. Min sizes keep the new lobby
-                     layout readable; Max sizes keep it under the
-                     launcher's default 1100×700 with a comfortable
-                     margin. -->
-                <Border Background="{DynamicResource BgBase}"
-                        BorderBrush="{DynamicResource MpDivider}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        MinWidth="820"
-                        MinHeight="520"
-                        MaxWidth="1000"
-                        MaxHeight="640"
-                        Margin="20"
-                        SnapsToDevicePixels="True">
+                <Canvas x:Name="RoomPopupCanvas"
+                        ClipToBounds="False"
+                        SizeChanged="RoomPopupCanvas_SizeChanged">
+                    <Border x:Name="RoomPopupCard"
+                            Background="{DynamicResource BgBase}"
+                            BorderBrush="{DynamicResource MpDivider}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Width="820"
+                            Height="520"
+                            SnapsToDevicePixels="True"
+                            Canvas.Left="0"
+                            Canvas.Top="0">
                     <Border.Effect>
                         <DropShadowEffect Color="Black"
                                           BlurRadius="28"
                                           ShadowDepth="0"
                                           Opacity="0.6"/>
                     </Border.Effect>
+                    <!-- One Grid hosts everything inside the popup
+                         card: the lobby content (header + body) +
+                         the two overlays (countdown, in-game). The
+                         overlays stack on top because they're later
+                         in z-order; their Visibility flips when the
+                         match phase changes. -->
+                    <Grid x:Name="RoomPopupContentRoot">
                     <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>   <!-- Header strip -->
                     <RowDefinition Height="*"/>      <!-- Body (Players | Chat) -->
                 </Grid.RowDefinitions>
 
-                <!-- ========== Header strip ========== -->
+                <!-- ========== Header strip ==========
+                     Doubles as the popup's drag handle. Mouse-down
+                     here captures the pointer and the move handler
+                     in code-behind translates the card via
+                     Canvas.SetLeft/SetTop. Drag is disabled while
+                     the room is in the Starting / InGame state. -->
                 <Border Grid.Row="0"
+                        x:Name="RoomHeaderStrip"
                         Background="{DynamicResource MpSurface}"
                         BorderBrush="{DynamicResource MpDivider}"
                         BorderThickness="0,0,0,1"
                         Margin="14,14,14,0"
-                        CornerRadius="6">
+                        CornerRadius="6"
+                        Cursor="SizeAll"
+                        MouseLeftButtonDown="RoomHeaderStrip_MouseLeftButtonDown"
+                        MouseLeftButtonUp="RoomHeaderStrip_MouseLeftButtonUp"
+                        MouseMove="RoomHeaderStrip_MouseMove">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>   <!-- Blue icon square -->
@@ -837,7 +845,162 @@
                     </Border>
                 </Grid>
                     </Grid>     <!-- inner Grid wrapping the popup card content -->
-                </Border>       <!-- floating card -->
+
+                    <!-- ===== Countdown overlay =====
+                         Shown over the popup contents during the 3-s
+                         "Starting…" window before AoE3 launches. Sits
+                         inside the card so the drop-shadow + corners
+                         carry over. Hidden by default; toggled by
+                         StartCountdown() in code-behind. -->
+                    <Border x:Name="CountdownOverlay"
+                            Background="#E61a1d24"
+                            CornerRadius="8"
+                            Visibility="Collapsed">
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <TextBlock x:Name="CountdownLabel"
+                                       Text="Starting in"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="14"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock x:Name="CountdownNumber"
+                                       Text="3"
+                                       Foreground="{DynamicResource MpBlue}"
+                                       FontSize="96"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="CountdownHint"
+                                       Text="AoE3 will open automatically — keep the launcher running."
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="12"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== In-game P2P status overlay =====
+                         Replaces the lobby contents while the match
+                         is running. Shows a pulsing "live" dot, a
+                         match timer, per-peer connection quality +
+                         RTT + bytes transferred, and a single big
+                         "Cancel game" / "Leave game" button.
+                         Code-behind refreshes it every ~1 s by
+                         reading PeerMesh + VirtualLanService — no
+                         Worker calls. -->
+                    <Border x:Name="InGameOverlay"
+                            Background="{DynamicResource BgBase}"
+                            CornerRadius="8"
+                            Visibility="Collapsed">
+                        <Grid Margin="32,28">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>     <!-- live header -->
+                                <RowDefinition Height="Auto"/>     <!-- match meta line -->
+                                <RowDefinition Height="*"/>        <!-- peers list -->
+                                <RowDefinition Height="Auto"/>     <!-- action -->
+                            </Grid.RowDefinitions>
+
+                            <!-- Pulsing dot + headline. -->
+                            <StackPanel Grid.Row="0"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <Ellipse x:Name="InGameLiveDot"
+                                         Width="14" Height="14"
+                                         Fill="{DynamicResource MpStatusOnline}"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,12,0"/>
+                                <TextBlock Text="GAME IN PROGRESS"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           FontSize="20"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock x:Name="InGameModeText"
+                                           Text=" — Connected via P2P LAN"
+                                           Foreground="{DynamicResource MpStatusOnline}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Margin="6,0,0,0"/>
+                            </StackPanel>
+
+                            <!-- Match timer + total traffic counter. -->
+                            <Grid Grid.Row="1" Margin="0,16,0,18">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="MATCH TIME"
+                                               Foreground="{DynamicResource MpTableHeader}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="InGameMatchTimer"
+                                               Text="00:00"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="20"
+                                               FontFamily="Consolas, Courier New, monospace"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="TRAFFIC"
+                                               Foreground="{DynamicResource MpTableHeader}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="InGameTrafficText"
+                                               Text="0 KB"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="20"
+                                               FontFamily="Consolas, Courier New, monospace"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="ROOM"
+                                               Foreground="{DynamicResource MpTableHeader}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="InGameRoomText"
+                                               Text=""
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Per-peer connection rows. -->
+                            <Border Grid.Row="2"
+                                    Background="{DynamicResource MpSurface}"
+                                    BorderBrush="{DynamicResource MpDivider}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="14,10">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="InGamePeersPanel"/>
+                                </ScrollViewer>
+                            </Border>
+
+                            <!-- Cancel / Leave action. Caption +
+                                 colour change is driven from code-
+                                 behind depending on whether the
+                                 current user is the host. -->
+                            <Button Grid.Row="3"
+                                    x:Name="InGameCancelButton"
+                                    Click="InGameCancelButton_Click"
+                                    Style="{StaticResource MpDangerButton}"
+                                    Padding="18,12"
+                                    Margin="0,18,0,0"
+                                    HorizontalContentAlignment="Center"
+                                    FontSize="13"
+                                    Content="⚠  Cancel game"/>
+                        </Grid>
+                    </Border>
+                    </Grid>        <!-- x:Name="RoomPopupContentRoot" -->
+                </Border>          <!-- floating card -->
+                </Canvas>          <!-- popup canvas -->
             </Grid>             <!-- x:Name="RoomPanel" -->
         </Grid>                 <!-- x:Name="RoomsView" -->
 

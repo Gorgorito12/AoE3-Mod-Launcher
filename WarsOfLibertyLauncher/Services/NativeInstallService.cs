@@ -57,6 +57,16 @@ public enum InstallPhase
 ///
 /// The payload ZIP is split into multiple parts (.zip.001, .zip.002, ...)
 /// to work around GitHub's 2 GB file size limit.
+///
+/// **This is the single canonical install entry-point for every mod**
+/// — Wars of Liberty (multi-part WolPatcher payloads), Improvement Mod
+/// (single-asset GitHub Releases), and any future mod profile all flow
+/// through <see cref="InstallAsync"/> for fresh installs and through
+/// <see cref="InstallModOnlyAsync"/> for repair / mod-only overlays.
+/// Keeping a single pipeline guarantees every mod gets the same
+/// guarantees: sibling-mod exclusion during clone, payload SHA-256
+/// verification when the catalog pins one, atomic backup-and-rollback
+/// on extract, and consistent manifest / registry / shortcut writes.
 /// </summary>
 public class NativeInstallService
 {
@@ -161,6 +171,7 @@ public class NativeInstallService
         IProgress<ExtractProgress>? extractProgress = null,
         IProgress<ModOverlayProgress>? overlayProgress = null,
         string[]? payloadSha256 = null,
+        IEnumerable<string>? extraExcludedSubtrees = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install Start ({profile.DisplayName}) ===");
@@ -180,9 +191,15 @@ public class NativeInstallService
         var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
 
         // ---- Phase 3: Clone AoE3 to destination ----
+        // extraExcludedSubtrees carries the install paths of every OTHER
+        // mod profile (e.g. when installing Improvement Mod, the user's
+        // existing Wars of Liberty install path is passed here). Without
+        // it, AoE3 clones nested mod folders into the new install — see
+        // the "improvement mod copies wars of liberty" regression.
         phaseProgress?.Report(InstallPhase.Clone);
         statusProgress?.Report("Copying Age of Empires III files...");
-        await _cloneService.CloneAsync(aoe3SourcePath, destinationFolder, cloneProgress, ct);
+        await _cloneService.CloneAsync(aoe3SourcePath, destinationFolder, cloneProgress, ct,
+            extraExcludedSubtrees: extraExcludedSubtrees);
 
         // ---- Phase 3b: Flatten bin\ subfolder if present ----
         // (Still part of the Clone phase from the UI's perspective.)
@@ -214,8 +231,293 @@ public class NativeInstallService
             catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
         }
 
+        // ---- Phase 5b: Remove stale precompiled XMB files ----
+        // The legacy WolPayload.zip ships .xml.xmb files alongside
+        // their .xml originals. AoE3 prefers .xmb when present (it's
+        // the parsed binary form, faster to load) and falls back to
+        // re-compiling from .xml when the .xmb is missing.
+        //
+        // Two reasons we strip the shipped .xmb:
+        //   1. They're built against an older revision of the .xml.
+        //      Patches update the .xml but NOT the .xmb, so post-
+        //      patch the .xmb is stale and represents a different
+        //      game state than what the .xml describes.
+        //   2. AoE3's LAN "version match" handshake hashes the .xmb
+        //      bytes. A peer who installed via the original installer
+        //      (no .xmb shipped — gets generated at first run from
+        //      the patched .xml) ends up with a DIFFERENT .xmb hash,
+        //      so the two installs can't see each other on LAN.
+        //
+        // Removing the shipped .xmb files (plus a small set of known
+        // dev-leftover files we found by diffing canonical vs
+        // launcher installs) lets AoE3 regenerate them fresh on
+        // first launch, matching what original-installer peers have.
+        RemoveStaleBuildArtifacts(profile, destinationFolder);
+
+        // ---- Phase 6: Post-install integrity dump ----
+        // Counts + MD5s of the three files AoE3 uses for its version
+        // matching, plus a per-subfolder file count breakdown. This
+        // is purely diagnostic — it doesn't change install behaviour.
+        // When users report "version mismatch" against a peer who
+        // installed manually, the log lets us diff their install
+        // against the canonical layout without asking them to ship
+        // gigabytes of game files.
+        LogInstallIntegritySnapshot(profile, destinationFolder);
+
         phaseProgress?.Report(InstallPhase.Complete);
         DiagnosticLog.Write($"=== Native Install Complete ({profile.DisplayName}) ===");
+    }
+
+    /// <summary>
+    /// Strip files that ship in the WoL payload zip but cause LAN
+    /// version-mismatch errors when the launcher install meets a
+    /// peer who installed via the legacy Inno installer.
+    ///
+    /// Two categories:
+    ///
+    ///   * <b>Precompiled <c>.xml.xmb</c> files</b> — binary
+    ///     copies of XML game data (protoy.xml.xmb,
+    ///     techtreey.xml.xmb, stringtabley.xml.xmb, ui*.xml.xmb).
+    ///     The payload zip ships them precompiled against an older
+    ///     revision of the .xml. Patches refresh the .xml but not
+    ///     the .xmb, leaving the install with mismatched pairs.
+    ///     AoE3 hashes the .xmb for LAN match — peers regenerated
+    ///     from the patched .xml get a different hash, blocking
+    ///     the connection. Deleting them lets AoE3 rebuild fresh
+    ///     on first launch.
+    ///
+    ///   * <b>Dev leftovers</b> — files with garbled Unicode names
+    ///     (Portuguese "cópia" mis-encoded as "c¢pia" / "cã³pia"),
+    ///     `.bak` backups, and files without extensions
+    ///     (`nativebolasmatrero`). These slipped into the bootstrap
+    ///     zip but aren't part of any released WoL patch; the
+    ///     canonical install doesn't have them.
+    ///
+    /// Only runs for the WoL profile; other mods aren't affected.
+    /// Idempotent — re-running on an already-clean folder is a no-op.
+    /// </summary>
+    public static void RemoveStaleBuildArtifacts(ModProfile profile, string destinationFolder)
+    {
+        // Currently only the WoL payload is known to ship stale
+        // precompiled .xmb files. Other mods that route through this
+        // pipeline (Improvement Mod, future ones) might legitimately
+        // need their own .xmb files — keep them as-is.
+        if (!string.Equals(profile.Id, ModRegistry.WolId, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var dataFolder = Path.Combine(destinationFolder, "data");
+        if (!Directory.Exists(dataFolder)) return;
+
+        int removedXmb = 0;
+        int removedJunk = 0;
+        long bytesFreed = 0;
+
+        // 1) Strip every .xml.xmb. AoE3 will regenerate them from
+        //    the .xml at first launch and they'll match what other
+        //    peers' installs produce.
+        try
+        {
+            foreach (var xmb in Directory.EnumerateFiles(dataFolder, "*.xml.xmb", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    var len = new FileInfo(xmb).Length;
+                    File.Delete(xmb);
+                    removedXmb++;
+                    bytesFreed += len;
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"  RemoveStaleBuildArtifacts: could not delete '{xmb}': {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RemoveStaleBuildArtifacts: enumerating .xmb in '{dataFolder}' failed: {ex.Message}");
+        }
+
+        // 2) Strip .bak files (XML backups left behind by editor
+        //    tools) and known dev-leftover file names. Be defensive
+        //    with the EnumerateFiles call — corrupt filenames have
+        //    been known to throw here on Windows.
+        try
+        {
+            foreach (var bak in Directory.EnumerateFiles(dataFolder, "*.bak", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    var len = new FileInfo(bak).Length;
+                    File.Delete(bak);
+                    removedJunk++;
+                    bytesFreed += len;
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"  RemoveStaleBuildArtifacts: could not delete '{bak}': {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RemoveStaleBuildArtifacts: enumerating .bak in '{dataFolder}' failed: {ex.Message}");
+        }
+
+        // 3) Named-file blacklist — observed only-in-launcher files
+        //    that aren't part of the canonical install. Hard-coded
+        //    here because they have no common pattern (and we'd
+        //    rather be surgical than risk deleting legitimate game
+        //    assets via wildcard).
+        string[] devLeftovers = new[]
+        {
+            // Portuguese "cópia" mojibake from a WoL dev's machine.
+            @"data\tactics\musketcavalry - c¢pia.tactics",
+            @"data\tactics\musketcavalry - cã³pia.tactics",
+            // Tactics file with no extension — orphaned.
+            @"data\tactics\nativebolasmatrero",
+            // Bayonet conscript tactics — typo in filename
+            // ("consripto" vs "conscripto"); not referenced from
+            // any techtree we checked.
+            @"data\tactics\musketbayonetconsripto.tactics",
+        };
+        foreach (var rel in devLeftovers)
+        {
+            var full = Path.Combine(destinationFolder, rel);
+            if (!File.Exists(full)) continue;
+            try
+            {
+                var len = new FileInfo(full).Length;
+                File.Delete(full);
+                removedJunk++;
+                bytesFreed += len;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"  RemoveStaleBuildArtifacts: could not delete '{rel}': {ex.Message}");
+            }
+        }
+
+        if (removedXmb > 0 || removedJunk > 0)
+        {
+            DiagnosticLog.Write(
+                $"RemoveStaleBuildArtifacts ({profile.Id}): " +
+                $"removed {removedXmb} .xml.xmb + {removedJunk} other junk files " +
+                $"({FormatBytes(bytesFreed)} freed). " +
+                $"AoE3 will regenerate .xmb files from .xml on first launch.");
+        }
+        else
+        {
+            DiagnosticLog.Write($"RemoveStaleBuildArtifacts ({profile.Id}): no stale artifacts found (install is clean).");
+        }
+    }
+
+    /// <summary>
+    /// Walk the destination folder after install and write to the log:
+    ///   * total file count + total bytes
+    ///   * file count per top-level subdirectory (data/, art/, sound/, etc.)
+    ///   * MD5 hashes of the three files AoE3 keys its LAN-version match on:
+    ///     <c>data\protoy.xml</c>, <c>data\techtreey.xml</c>,
+    ///     <c>data\stringtabley.xml</c>
+    ///   * Whether the legacy <c>bin\</c> subfolder is still present
+    ///     (it shouldn't be — FlattenBinSubfolder removes it)
+    ///
+    /// Users can paste this snapshot into a bug report when their
+    /// install rejects a peer's "version mismatch", letting us
+    /// compare hashes against the canonical 1.2.0c2 layout.
+    /// </summary>
+    private static void LogInstallIntegritySnapshot(ModProfile profile, string destinationFolder)
+    {
+        try
+        {
+            DiagnosticLog.Write($"--- Install integrity snapshot for '{profile.Id}' at '{destinationFolder}' ---");
+            if (!Directory.Exists(destinationFolder))
+            {
+                DiagnosticLog.Write("  (destination folder doesn't exist — install may have failed silently)");
+                return;
+            }
+
+            long totalBytes = 0;
+            int totalFiles = 0;
+            var perTopFolder = new Dictionary<string, (int Files, long Bytes)>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var f in Directory.EnumerateFiles(destinationFolder, "*", SearchOption.AllDirectories))
+            {
+                FileInfo fi;
+                try { fi = new FileInfo(f); }
+                catch { continue; }
+                totalFiles++;
+                totalBytes += fi.Length;
+
+                // Identify the top-level subfolder (or "<root>" if the
+                // file is directly under destinationFolder).
+                var rel = Path.GetRelativePath(destinationFolder, f);
+                var firstSep = rel.IndexOfAny(new[] { '\\', '/' });
+                var topName = firstSep < 0 ? "<root>" : rel.Substring(0, firstSep);
+                if (!perTopFolder.TryGetValue(topName, out var agg))
+                    agg = (0, 0L);
+                perTopFolder[topName] = (agg.Files + 1, agg.Bytes + fi.Length);
+            }
+
+            DiagnosticLog.Write($"  total: {totalFiles} files, {FormatBytes(totalBytes)}");
+            foreach (var kv in perTopFolder.OrderByDescending(k => k.Value.Files))
+            {
+                DiagnosticLog.Write($"    {kv.Key}/  {kv.Value.Files} files  {FormatBytes(kv.Value.Bytes)}");
+            }
+
+            // MD5 of AoE3's version-key files. These are the ones the
+            // legacy WoL Java updater computes against UpdateInfo.xml
+            // to match an install to a release; LAN matchmaking in
+            // age3y.exe uses the same hashes for peer compatibility.
+            string[] keyFiles = new[]
+            {
+                @"data\protoy.xml",
+                @"data\techtreey.xml",
+                @"data\stringtabley.xml",
+            };
+            using var md5 = System.Security.Cryptography.MD5.Create();
+            foreach (var rel in keyFiles)
+            {
+                var full = Path.Combine(destinationFolder, rel);
+                if (!File.Exists(full))
+                {
+                    DiagnosticLog.Write($"  MD5  {rel} = (MISSING)");
+                    continue;
+                }
+                try
+                {
+                    using var fs = File.OpenRead(full);
+                    var hash = md5.ComputeHash(fs);
+                    var hex = Convert.ToHexString(hash).ToLowerInvariant();
+                    DiagnosticLog.Write($"  MD5  {rel} = {hex}");
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"  MD5  {rel} = (error: {ex.Message})");
+                }
+            }
+
+            // bin\ shouldn't be there after FlattenBinSubfolder. If it
+            // is, we kept a duplicate copy of part of AoE3 — explains
+            // a few GB of extra size but doesn't affect LAN matching.
+            var leftoverBin = Path.Combine(destinationFolder, "bin");
+            if (Directory.Exists(leftoverBin))
+            {
+                var binCount = Directory.EnumerateFiles(leftoverBin, "*", SearchOption.AllDirectories).Count();
+                DiagnosticLog.Write($"  WARNING: leftover bin/ subfolder with {binCount} files — FlattenBinSubfolder did not clean it up.");
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Install integrity snapshot failed: {ex.Message}");
+        }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024L * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+        return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
     }
 
     /// <summary>
@@ -527,7 +829,16 @@ public class NativeInstallService
         DiagnosticLog.Write($"Flattening bin\\ subfolder of '{destinationFolder}' to root...");
 
         int copied = 0;
-        int skipped = 0;
+        int skippedConflict = 0;
+        int skippedError = 0;
+        // Log up to N conflicts by full filename so we can spot which
+        // files inside bin\ were silently dropped because they
+        // overlapped with a root-level filename. Unbounded logging
+        // here would balloon the debug file if a developer ever
+        // points the clone at a weird source folder.
+        const int MaxConflictsLogged = 20;
+        int conflictsLogged = 0;
+
         foreach (var srcFile in Directory.EnumerateFiles(binFolder, "*", SearchOption.AllDirectories))
         {
             // Preserve directory structure relative to bin\ when promoting,
@@ -540,7 +851,16 @@ public class NativeInstallService
             // be a WoL-provided file from the payload (we run before the
             // payload overlay, but in practice the clone runs first so the
             // root is mostly empty here).
-            if (File.Exists(destFile)) { skipped++; continue; }
+            if (File.Exists(destFile))
+            {
+                skippedConflict++;
+                if (conflictsLogged < MaxConflictsLogged)
+                {
+                    DiagnosticLog.Write($"  flatten conflict (already at root, skipped): {relative}");
+                    conflictsLogged++;
+                }
+                continue;
+            }
 
             try
             {
@@ -552,12 +872,18 @@ public class NativeInstallService
             }
             catch (Exception ex)
             {
-                DiagnosticLog.Write($"  flatten skip: {relative} — {ex.Message}");
-                skipped++;
+                DiagnosticLog.Write($"  flatten error: {relative} — {ex.Message}");
+                skippedError++;
             }
         }
 
-        DiagnosticLog.Write($"Flatten bin\\ complete: {copied} files promoted, {skipped} skipped.");
+        if (conflictsLogged < skippedConflict)
+        {
+            DiagnosticLog.Write($"  (… {skippedConflict - conflictsLogged} more conflict-skips omitted)");
+        }
+        DiagnosticLog.Write(
+            $"Flatten bin\\ complete: {copied} files promoted, " +
+            $"{skippedConflict} skipped (root collision), {skippedError} skipped (error).");
 
         // Now drop the bin\ subfolder entirely. It's redundant after the
         // promotion (the files are already at the root) and keeping it

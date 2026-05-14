@@ -100,7 +100,13 @@ public class LobbyApiClient : IDisposable
         CancellationToken ct = default)
     {
         var deadline = DateTime.UtcNow + timeout;
-        var currentInterval = Math.Max(5, intervalSeconds);
+        // Floor at 10 s (was 5 s). GitHub's Device Flow happily accepts
+        // 10 s polling and it halves the number of Worker requests
+        // generated during the sign-in window (typical user takes
+        // 30-60 s to approve; that's 6-12 polls instead of 12-24).
+        // When the server explicitly returns `slow_down`, the loop
+        // below still backs off another 5 s per occurrence.
+        var currentInterval = Math.Max(10, intervalSeconds);
 
         while (DateTime.UtcNow < deadline)
         {

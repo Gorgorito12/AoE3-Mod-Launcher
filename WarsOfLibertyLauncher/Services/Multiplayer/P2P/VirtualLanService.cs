@@ -77,6 +77,56 @@ public sealed class VirtualLanService : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _captureLoop;
 
+    // Traffic counters — exposed to the UI so the InGame status
+    // panel can show "X KB/s in / out" per peer and a running total
+    // for the whole session. These are mutated on the hot path of
+    // every captured / injected packet, so we use Interlocked rather
+    // than locks. They live in-process — the Worker never sees them,
+    // which is exactly what we want (zero telemetry cost).
+    private long _totalBytesIn;
+    private long _totalBytesOut;
+    private readonly ConcurrentDictionary<string, long> _bytesInByUser = new();
+    private readonly ConcurrentDictionary<string, long> _bytesOutByUser = new();
+
+    /// <summary>Total bytes received from peers since Start().</summary>
+    public long TotalBytesIn => System.Threading.Interlocked.Read(ref _totalBytesIn);
+
+    /// <summary>Total bytes sent to peers since Start().</summary>
+    public long TotalBytesOut => System.Threading.Interlocked.Read(ref _totalBytesOut);
+
+    /// <summary>Bytes received from a specific peer user-id since Start(). 0 if unknown.</summary>
+    public long GetBytesInFor(string userId) =>
+        _bytesInByUser.TryGetValue(userId, out var v) ? v : 0;
+
+    /// <summary>Bytes sent to a specific peer user-id since Start(). 0 if unknown.</summary>
+    public long GetBytesOutFor(string userId) =>
+        _bytesOutByUser.TryGetValue(userId, out var v) ? v : 0;
+
+    /// <summary>
+    /// Record bytes received from a peer (incoming packet on the
+    /// inject path). Mesh consumer calls this from the receive loop;
+    /// it's a single Interlocked add so the hot path stays cheap.
+    /// </summary>
+    public void RecordBytesIn(string fromUserId, int byteCount)
+    {
+        if (byteCount <= 0) return;
+        System.Threading.Interlocked.Add(ref _totalBytesIn, byteCount);
+        _bytesInByUser.AddOrUpdate(fromUserId, byteCount, (_, v) => v + byteCount);
+    }
+
+    /// <summary>
+    /// Record bytes sent to a peer (outgoing packet on the capture
+    /// path). Called once per peer per captured AoE3 broadcast so
+    /// the value reflects what we actually fanned out across the
+    /// mesh, not just what AoE3 emitted locally.
+    /// </summary>
+    public void RecordBytesOut(string toUserId, int byteCount)
+    {
+        if (byteCount <= 0) return;
+        System.Threading.Interlocked.Add(ref _totalBytesOut, byteCount);
+        _bytesOutByUser.AddOrUpdate(toUserId, byteCount, (_, v) => v + byteCount);
+    }
+
     /// <summary>
     /// Open the WinDivert handles and start the capture loop. Throws
     /// if the driver isn't available — caller should check

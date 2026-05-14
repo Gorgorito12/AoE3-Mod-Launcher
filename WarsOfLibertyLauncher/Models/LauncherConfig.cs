@@ -16,12 +16,19 @@ namespace WarsOfLibertyLauncher.Models;
 public class MultiplayerConfig
 {
     /// <summary>
-    /// Base URL of the lobby Worker. The default is the launcher's
-    /// official deployment; power users can point at a self-hosted
-    /// Worker by editing this field (or via a Settings entry).
+    /// Base URL of the lobby Worker. The default points at the
+    /// launcher's production Cloudflare Workers deployment under
+    /// the maintainer's workers.dev subdomain — every fresh install
+    /// hits this URL until the user explicitly overrides it in
+    /// Settings. The subdomain (jeisonso1997) is mandatory: the
+    /// bare `wol-launcher-lobby.workers.dev` doesn't resolve in DNS
+    /// (that name would only exist if Cloudflare owned the apex,
+    /// which they don't — every Worker lives under
+    /// `<your-account>.workers.dev`). Power users can point at a
+    /// self-hosted Worker by editing this field.
     /// </summary>
     [JsonPropertyName("lobbyBaseUrl")]
-    public string LobbyBaseUrl { get; set; } = "https://wol-launcher-lobby.workers.dev";
+    public string LobbyBaseUrl { get; set; } = "https://wol-launcher-lobby.jeisonso1997.workers.dev";
 
     /// <summary>
     /// Session JWT issued by the Worker after a successful GitHub
@@ -177,6 +184,33 @@ public class LauncherConfig
 
     /// <summary>Convenience overload: state of the currently active profile.</summary>
     public ModState GetActiveState() => GetState(GetActiveProfile().Id);
+
+    /// <summary>
+    /// Returns every non-empty install path currently registered for a
+    /// mod profile OTHER than <paramref name="excludeModId"/>. Used by
+    /// the install pipeline as the canonical "sibling-mod exclusion
+    /// list" so a fresh install of mod B never scoops up the on-disk
+    /// folder of mod A that happens to live inside the same AoE3 root.
+    ///
+    /// Centralised here (instead of inlined at each call site) so that
+    /// every install / repair / update entry point uses the same rule —
+    /// future code paths just call this method and get the same
+    /// exclusion behaviour the WoL → Improvement Mod install fix
+    /// introduced.
+    /// </summary>
+    public IReadOnlyList<string> GetSiblingInstallPaths(string excludeModId)
+    {
+        var paths = new List<string>();
+        foreach (var p in ModRegistry.All)
+        {
+            if (string.Equals(p.Id, excludeModId, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var path = GetState(p.Id).InstallPath;
+            if (!string.IsNullOrEmpty(path))
+                paths.Add(path);
+        }
+        return paths;
+    }
 
     /// <summary>Primary URL of UpdateInfo.xml. Default: official aoe3wol.com server.</summary>
     [JsonPropertyName("updateInfoUrl")]
@@ -463,7 +497,57 @@ public class LauncherConfig
         // being non-null, so normalise here.
         cfg.Multiplayer ??= new MultiplayerConfig();
         cfg.MigrateLegacyState();
+        cfg.MigrateLobbyBaseUrl();
         return cfg;
+    }
+
+    /// <summary>
+    /// Heal stale <c>multiplayer.lobbyBaseUrl</c> values that point
+    /// at addresses which no longer (or never) resolved. Two known
+    /// bad values shipped in early builds:
+    ///
+    ///   * <c>https://wol-launcher-lobby.workers.dev</c> — looked
+    ///     like a public Cloudflare URL but doesn't include the
+    ///     account subdomain, so DNS fails with "Host desconocido".
+    ///   * <c>http://127.0.0.1:8787</c> — the local wrangler dev
+    ///     server. Useful only on the developer's PC.
+    ///   * <c>https://*.trycloudflare.com</c> — quick tunnels
+    ///     baked into a release; tunnels die when the dev closes
+    ///     the terminal.
+    ///
+    /// When we spot any of these, rewrite to the current production
+    /// Worker URL and save. Idempotent — once migrated, subsequent
+    /// loads see a healthy URL and do nothing.
+    /// </summary>
+    private void MigrateLobbyBaseUrl()
+    {
+        var url = Multiplayer.LobbyBaseUrl ?? "";
+        bool isBroken = url == "https://wol-launcher-lobby.workers.dev"
+            || url == "http://wol-launcher-lobby.workers.dev"
+            || url.StartsWith("http://127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || url.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase)
+            || url.Contains(".trycloudflare.com", StringComparison.OrdinalIgnoreCase);
+        if (!isBroken) return;
+
+        var oldUrl = url;
+        Multiplayer.LobbyBaseUrl = new MultiplayerConfig().LobbyBaseUrl;
+        // Old sessionToken was signed by a different Worker / JWT
+        // key, so clear it too — otherwise the next /me call fails
+        // with `invalid_token` and the user can't sign in until
+        // they manually edit the config. Forcing a fresh GitHub
+        // device-flow login is the right reset.
+        Multiplayer.SessionToken = "";
+        Multiplayer.SessionExpiresAt = 0;
+        Multiplayer.CachedUser = null;
+
+        try { Save(); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Config lobbyBaseUrl migration save failed: {ex.Message}");
+        }
+        DiagnosticLog.Write(
+            $"Migrated multiplayer.lobbyBaseUrl: '{oldUrl}' -> '{Multiplayer.LobbyBaseUrl}'. " +
+            $"Session cleared; user needs to sign in again with GitHub.");
     }
 
     /// <summary>

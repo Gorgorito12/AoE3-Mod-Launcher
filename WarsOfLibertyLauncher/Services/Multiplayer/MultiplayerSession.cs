@@ -356,9 +356,29 @@ public sealed class MultiplayerSession : IAsyncDisposable
             try
             {
                 var mesh = new PeerMesh();
-                mesh.PeerStateChanged += (_, _) => Raise();
+                mesh.PeerStateChanged += (_, peer) =>
+                {
+                    Raise();
+                    // Verbose per-state-change log so a future P2P
+                    // investigation can read off the timeline of
+                    // "peer X went Discovering → Punching → Connected"
+                    // without instrumenting the launcher.
+                    try
+                    {
+                        DiagnosticLog.Write(
+                            $"PeerMesh state change: user={peer.UserId} login={peer.Login} " +
+                            $"state={peer.State} rtt={peer.RttMs:F0}ms endpoint={peer.ConfirmedEndpoint}");
+                    }
+                    catch { /* logging should never throw */ }
+                };
                 await mesh.StartAsync(ownUserId, _config.Multiplayer.RelayOnly);
                 Mesh = mesh;
+                var epSummary = mesh.LocalEndpoints != null && mesh.LocalEndpoints.Count > 0
+                    ? string.Join(", ", mesh.LocalEndpoints.Select(ep => $"{ep.Ip}:{ep.Port}({ep.Kind})"))
+                    : "(none)";
+                DiagnosticLog.Write(
+                    $"PeerMesh started for user '{ownUserId}'. " +
+                    $"Local endpoints announced: {mesh.LocalEndpoints?.Count ?? 0} [{epSummary}]");
 
                 // Publish our endpoints to everyone else in the room.
                 // Fire-and-forget — the WS is already up. Peers will
@@ -445,6 +465,17 @@ public sealed class MultiplayerSession : IAsyncDisposable
                 {
                     var relayTargets = new System.Collections.Generic.List<string>();
                     await mesh.BroadcastGamePacketAsync(packet, relayTargets);
+                    // Tally outgoing traffic per peer. mesh.Peers
+                    // gives us the live set of recipients; each one
+                    // received a copy of `packet.Payload`, so we
+                    // record the same byte count per peer. Counters
+                    // live in-process and feed the InGame status
+                    // panel — no Worker calls, no KV writes.
+                    var payloadLen = packet.Payload?.Length ?? 0;
+                    foreach (var peer in mesh.Peers)
+                    {
+                        vlan.RecordBytesOut(peer.UserId, payloadLen);
+                    }
                     if (relayTargets.Count > 0 && RoomSocket != null)
                     {
                         foreach (var uid in relayTargets)
@@ -472,7 +503,11 @@ public sealed class MultiplayerSession : IAsyncDisposable
             // treats it like a real LAN host.
             mesh.GamePacketReceived += (_, payload) =>
             {
-                try { vlan.Inject(payload.FromUserId, payload.Packet); }
+                try
+                {
+                    vlan.Inject(payload.FromUserId, payload.Packet);
+                    vlan.RecordBytesIn(payload.FromUserId, payload.Packet.Payload?.Length ?? 0);
+                }
                 catch (Exception ex)
                 {
                     DiagnosticLog.Write($"MultiplayerSession.GamePacketReceived: {ex.Message}");
@@ -576,6 +611,7 @@ public sealed class MultiplayerSession : IAsyncDisposable
                     {
                         var payload = Convert.FromBase64String(payloadB64);
                         vlan.Inject(fromUser, new GamePacket(srcPort, dstPort, payload));
+                        vlan.RecordBytesIn(fromUser, payload.Length);
                     }
                     catch (Exception ex)
                     {

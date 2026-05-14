@@ -55,12 +55,21 @@ public class FolderCloneService
 
     /// <summary>
     /// Clone <paramref name="sourceFolder"/> to <paramref name="destFolder"/>.
+    /// <paramref name="extraExcludedSubtrees"/> lists additional folders that
+    /// must NOT be copied even though they live inside the source. The
+    /// canonical use is: when installing Improvement Mod, AoE3 lives at
+    /// <c>...\Age Of Empires 3\</c> and the user's previous WoL install
+    /// lives at <c>...\Age Of Empires 3\Wars of Liberty\</c>. Without the
+    /// exclusion, cloning AoE3 → Improvement Mod destination would scoop
+    /// up the entire WoL clone as a sub-folder, blowing up the install size
+    /// and producing a confusingly nested layout.
     /// </summary>
     public async Task CloneAsync(
         string sourceFolder,
         string destFolder,
         IProgress<CloneProgress>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IEnumerable<string>? extraExcludedSubtrees = null)
     {
         if (!Directory.Exists(sourceFolder))
             throw new DirectoryNotFoundException($"Source folder not found: {sourceFolder}");
@@ -69,15 +78,54 @@ public class FolderCloneService
 
         DiagnosticLog.Write($"Cloning '{sourceFolder}' -> '{destFolder}'");
 
+        // Assemble the full exclusion set. We always exclude destFolder
+        // (to prevent self-recursion when dest lives inside source) and
+        // any caller-supplied subtrees (sibling mod installs). On top of
+        // that we auto-detect any direct subfolder of source that looks
+        // like a launcher-managed mod clone — i.e. contains a file named
+        // "<something>-manifest.json" in its root. Defense in depth: even
+        // if the caller forgets to pass a sibling install path, we still
+        // skip it instead of cloning a multi-GB mod into another mod.
+        var excludedSubtrees = new List<string> { destFolder };
+        if (extraExcludedSubtrees != null)
+        {
+            foreach (var s in extraExcludedSubtrees)
+                if (!string.IsNullOrEmpty(s))
+                    excludedSubtrees.Add(s);
+        }
+        try
+        {
+            foreach (var sub in Directory.EnumerateDirectories(sourceFolder))
+            {
+                bool looksLikeModClone = Directory.EnumerateFiles(sub, "*-manifest.json",
+                    SearchOption.TopDirectoryOnly).Any();
+                if (looksLikeModClone)
+                {
+                    DiagnosticLog.Write($"Clone: auto-excluding mod-clone subfolder '{sub}'");
+                    excludedSubtrees.Add(sub);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Don't fail the install just because the auto-detect probe
+            // can't enumerate one of the source subfolders.
+            DiagnosticLog.Write($"Clone: auto-exclude probe failed: {ex.Message}");
+        }
+
         // Step 1: enumerate everything to copy. We do this up-front so we can
         // show a real percentage instead of the indeterminate "files copied so
         // far" pattern.
-        // Pass destFolder as an excluded subtree — when destination is inside
-        // source (e.g. AoE3\Wars of Liberty\ is inside AoE3\), we must NOT
-        // recurse into it or the copy will infinite-loop into itself.
-        var files = await Task.Run(() => EnumerateFiles(sourceFolder, destFolder, ct), ct);
+        var files = await Task.Run(() => EnumerateFiles(sourceFolder, excludedSubtrees, ct), ct);
         long totalBytes = files.Sum(f => f.Length);
         DiagnosticLog.Write($"Files to copy: {files.Count} ({FormatBytes(totalBytes)})");
+        // Per-pattern skip tally so we can spot accidental overmatch
+        // by the SkipPatterns list (e.g. a future pattern that ends
+        // up catching game asset names by mistake).
+        foreach (var kv in LastSkipCounts.Where(k => k.Value > 0))
+        {
+            DiagnosticLog.Write($"  SkipPattern '{kv.Key}' matched {kv.Value} file(s)");
+        }
 
         // Step 2: copy with progress
         long bytesCopied = 0;
@@ -182,22 +230,51 @@ public class FolderCloneService
 
     /// <summary>
     /// Walks the source folder and returns every file that should be copied.
-    /// Filters out files matching <see cref="SkipPatterns"/>.
+    /// Filters out files matching <see cref="SkipPatterns"/> and any path
+    /// that lives inside one of <paramref name="excludeSubtrees"/>.
     /// </summary>
-    private static List<FileInfo> EnumerateFiles(string root, string? excludeSubtree, CancellationToken ct)
+    /// <summary>
+    /// Tally of files skipped per <see cref="SkipPatterns"/> entry
+    /// during the most recent EnumerateFiles call. Diagnostic only —
+    /// gives a quick view of "the clone dropped 6 .vdf files and
+    /// 1 Steam.dll" so we can verify SkipPatterns isn't accidentally
+    /// catching something it shouldn't (no game asset matches those
+    /// patterns by design, but a future SkipPatterns addition could
+    /// regress that). Reset on each EnumerateFiles invocation.
+    /// </summary>
+    public static IReadOnlyDictionary<string, int> LastSkipCounts { get; private set; } =
+        new Dictionary<string, int>();
+
+    private static List<FileInfo> EnumerateFiles(string root, IEnumerable<string> excludeSubtrees, CancellationToken ct)
     {
         var result = new List<FileInfo>();
         var stack = new Stack<string>();
         stack.Push(root);
+        var skipCounts = SkipPatterns.ToDictionary(p => p, _ => 0);
 
-        // Normalize the excluded subtree path for case-insensitive prefix matching.
-        // If the destination lives inside the source we must skip it entirely,
-        // otherwise the clone recurses into the folder it's currently writing.
-        string? excludeNormalized = null;
-        if (!string.IsNullOrEmpty(excludeSubtree))
+        // Normalize each excluded subtree once so the per-directory check
+        // in the loop is a cheap prefix string compare. Bad/missing paths
+        // are silently dropped — they just don't contribute an exclusion.
+        var excludeNormalized = new List<string>();
+        foreach (var s in excludeSubtrees)
         {
-            try { excludeNormalized = Path.GetFullPath(excludeSubtree).TrimEnd('\\', '/'); }
-            catch { /* ignore */ }
+            if (string.IsNullOrEmpty(s)) continue;
+            try { excludeNormalized.Add(Path.GetFullPath(s).TrimEnd('\\', '/')); }
+            catch { /* ignore malformed path */ }
+        }
+
+        bool IsUnderAnyExclusion(string currentFull)
+        {
+            foreach (var ex in excludeNormalized)
+            {
+                if (string.Equals(currentFull, ex, StringComparison.OrdinalIgnoreCase)
+                    || currentFull.StartsWith(ex + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    || currentFull.StartsWith(ex + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         while (stack.Count > 0)
@@ -205,19 +282,17 @@ public class FolderCloneService
             ct.ThrowIfCancellationRequested();
             var current = stack.Pop();
 
-            // Skip the excluded subtree (and everything beneath it).
-            if (excludeNormalized != null)
+            // Skip the current directory entirely if it sits under any
+            // exclusion subtree. Same semantics as the old single-subtree
+            // check, just generalised to a list.
+            if (excludeNormalized.Count > 0)
             {
                 string currentFull;
                 try { currentFull = Path.GetFullPath(current).TrimEnd('\\', '/'); }
                 catch { continue; }
 
-                if (string.Equals(currentFull, excludeNormalized, StringComparison.OrdinalIgnoreCase)
-                    || currentFull.StartsWith(excludeNormalized + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                    || currentFull.StartsWith(excludeNormalized + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                {
+                if (IsUnderAnyExclusion(currentFull))
                     continue;
-                }
             }
 
             IEnumerable<string> subdirs;
@@ -238,14 +313,27 @@ public class FolderCloneService
             foreach (var file in files)
             {
                 var name = Path.GetFileName(file);
-                if (SkipPatterns.Any(pat => MatchesWildcard(name, pat)))
+                string? matchedPattern = null;
+                foreach (var pat in SkipPatterns)
+                {
+                    if (MatchesWildcard(name, pat))
+                    {
+                        matchedPattern = pat;
+                        break;
+                    }
+                }
+                if (matchedPattern != null)
+                {
+                    skipCounts[matchedPattern]++;
                     continue;
+                }
 
                 try { result.Add(new FileInfo(file)); }
                 catch { /* file disappeared; skip */ }
             }
         }
 
+        LastSkipCounts = skipCounts;
         return result;
     }
 

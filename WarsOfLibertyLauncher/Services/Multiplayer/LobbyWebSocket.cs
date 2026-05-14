@@ -112,7 +112,16 @@ public sealed class LobbyWebSocket : IAsyncDisposable
         SendAsync(new { type = "ready", ready }, ct);
 
     public Task SendStartAsync(CancellationToken ct = default) =>
-        SendAsync(new { type = "start" }, ct);
+        SendAsync(new { type = "start_game" }, ct);
+
+    /// <summary>
+    /// Host-only: ask the DO to cancel the active game. Triggers a
+    /// <c>game_cancelled</c> broadcast back to every member so each
+    /// client kills its AoE3 process and unlocks the room popup.
+    /// Reuses the existing WS — no extra HTTP round-trip.
+    /// </summary>
+    public Task SendCancelGameAsync(string reason = "host_cancelled", CancellationToken ct = default) =>
+        SendAsync(new { type = "cancel_game", reason }, ct);
 
     /// <summary>
     /// Tunnel a game packet via the lobby DO when direct hole-punch

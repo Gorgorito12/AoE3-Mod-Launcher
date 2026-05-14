@@ -47,6 +47,17 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? _launchGame;
 
+    /// <summary>
+    /// MainWindow-provided callback to switch the launcher's active
+    /// mod profile in place (same path the Play-tab tiles use). The
+    /// multiplayer-join flow asks for the switch when the user
+    /// clicks Join on a room hosted by a different mod than the
+    /// one currently active — instead of forcing them to navigate
+    /// to Play, click the tile, then come back. Returns true when
+    /// the switch succeeded (or the target was already active).
+    /// </summary>
+    private Func<ModProfile, bool>? _switchActiveMod;
+
     private Subtab _activeSubtab = Subtab.Rooms;
     private bool _isRefreshingList;
     private bool _isRefreshingHistory;
@@ -87,6 +98,63 @@ public partial class MultiplayerTab : UserControl
         public bool Ready { get; set; }
     }
 
+    // -------- Popup drag state --------------------------------------
+    //
+    // Floating-card drag: the user grabs the header strip and moves
+    // the whole RoomPopupCard around within RoomPopupCanvas. Drag is
+    // disabled while the room is in the Starting / InGame phase to
+    // prevent accidental clicks during a live match.
+
+    private bool _isDraggingPopup;
+    private System.Windows.Point _dragStartCursorOnCanvas;
+    private double _dragStartCardLeft;
+    private double _dragStartCardTop;
+    private bool _popupPositionInitialised;
+
+    // -------- Match lifecycle state ---------------------------------
+    //
+    // Three logical phases:
+    //   Lobby     — popup is fully interactive, drag enabled, X visible
+    //   Starting  — countdown overlay shown, popup locked, no X
+    //   InGame    — InGame overlay shown, popup locked, only Cancel/Leave
+    //
+    // We track the phase locally so the UI gates immediately without
+    // waiting for a round-trip to the server. The Worker's
+    // game_countdown / game_started / game_cancelled frames flip
+    // this; the popup's UI responds to changes.
+
+    private enum MatchPhase { Lobby, Starting, InGame }
+    private MatchPhase _matchPhase = MatchPhase.Lobby;
+
+    /// <summary>
+    /// AoE3 process spawned when the countdown completed. Cached so
+    /// <see cref="InGameCancelButton_Click"/> can <c>Kill()</c> it on
+    /// cancel without re-walking the process table. Cleared when the
+    /// process exits or we leave the room.
+    /// </summary>
+    private System.Diagnostics.Process? _aoe3Process;
+    private DateTime _matchStartedAtUtc;
+    private long _matchTimerStartTicks;
+
+    /// <summary>Drives the breathing animation of the InGame "live" dot + match timer.</summary>
+    private System.Windows.Threading.DispatcherTimer? _inGameTickTimer;
+
+    /// <summary>Drives the per-frame countdown number 3 → 2 → 1.</summary>
+    private System.Windows.Threading.DispatcherTimer? _countdownTickTimer;
+
+    /// <summary>
+    /// Local tick count when the countdown started + the total
+    /// duration in ms. We use a purely-local timer (not the
+    /// server's `starts_at_ms` absolute timestamp) because client
+    /// and server clocks can drift by seconds, which made the
+    /// countdown either skip entirely (client ahead → remaining
+    /// is negative the moment the frame arrives) or run too long
+    /// (client behind). Per-peer drift is bounded by WS latency
+    /// variance (~50 ms), which is fine for AoE3 LAN host setup.
+    /// </summary>
+    private long _countdownStartedAtTicks;
+    private int _countdownDurationMs = 3000;
+
     public MultiplayerTab()
     {
         InitializeComponent();
@@ -109,7 +177,8 @@ public partial class MultiplayerTab : UserControl
         MultiplayerSession session,
         Func<ModProfile?> getActiveProfile,
         Func<ModProfile, Task<string>> computeModFingerprint,
-        Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? launchGame = null)
+        Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? launchGame = null,
+        Func<ModProfile, bool>? switchActiveMod = null)
     {
         if (_session != null)
             _session.StateChanged -= OnSessionStateChanged;
@@ -118,29 +187,70 @@ public partial class MultiplayerTab : UserControl
         _getActiveProfile = getActiveProfile;
         _computeModFingerprint = computeModFingerprint;
         _launchGame = launchGame;
+        _switchActiveMod = switchActiveMod;
         session.StateChanged += OnSessionStateChanged;
 
         RefreshFromSession();
 
-        // Fire-and-forget refreshes — UI-thread safe because each one
-        // marshals back via Dispatcher.InvokeAsync in its own continuation.
-        _ = RefreshQuotaAsync();
+        // Fire-and-forget probes that don't hit the Worker (cheap, no
+        // budget cost). The expensive ones — RefreshQuotaAsync /
+        // RefreshRoomsListAsync — are gated below so they only run
+        // when the user is actually looking at the Multiplayer tab.
         _ = ProbeNatTypeAsync();
         _ = ProbeVlanAsync();
-        if (session.Status == MultiplayerSession.SessionStatus.SignedIn)
-            _ = RefreshRoomsListAsync();
 
-        // Auto-refresh the quota bar every 60 s while this control is
-        // alive. The bar surfaces server load + remaining daily budget;
-        // refreshing keeps the "Server full" indicator accurate without
-        // the user having to navigate away and back.
+        // Auto-refresh the quota bar every 60 s. Only ticks while
+        // the control is *visible* — when the user switches to
+        // Play / Mods / News / Settings, the IsVisibleChanged hook
+        // stops the timer so we don't burn ~60 Worker requests/hour
+        // on the launcher just being open in another tab. Resumes
+        // when they come back to Multiplayer.
         _quotaTimer?.Stop();
         _quotaTimer = new System.Windows.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(60),
         };
         _quotaTimer.Tick += async (_, _) => await RefreshQuotaAsync();
-        _quotaTimer.Start();
+
+        // Subscribe once. Multiple calls to Attach are guarded by
+        // the unsubscribe step on the previous session above, but
+        // IsVisibleChanged on this control is process-lifetime, so
+        // we unsubscribe-then-resubscribe to keep the count at 1.
+        IsVisibleChanged -= OnVisibleChangedTabGate;
+        IsVisibleChanged += OnVisibleChangedTabGate;
+
+        // Initial state: kick off the cheap fetches + the timer only
+        // when we're already the visible tab (e.g. user launched the
+        // app with Multiplayer as last-active-tab). Otherwise the
+        // IsVisibleChanged handler will pick it up when the user
+        // navigates here.
+        if (IsVisible)
+            StartQuotaPolling();
+    }
+
+    /// <summary>
+    /// Toggles the quota timer + initial fetches when this control's
+    /// Visibility flips. Switching to the Multiplayer tab → fetch a
+    /// fresh quota + lobbies snapshot and start the 60 s poll.
+    /// Switching away → stop the poll so the launcher stops burning
+    /// Worker requests while the user is reading the news or
+    /// fiddling with settings.
+    /// </summary>
+    private void OnVisibleChangedTabGate(object sender, System.Windows.DependencyPropertyChangedEventArgs e)
+    {
+        if (IsVisible) StartQuotaPolling();
+        else _quotaTimer?.Stop();
+    }
+
+    private void StartQuotaPolling()
+    {
+        // One-shot fetch on activation so the user sees fresh data
+        // immediately (otherwise they'd wait up to 60 s for the
+        // first timer tick after switching to this tab).
+        _ = RefreshQuotaAsync();
+        if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+            _ = RefreshRoomsListAsync();
+        _quotaTimer?.Start();
     }
 
     public void RefreshStrings() => ApplyStrings();
@@ -295,9 +405,26 @@ public partial class MultiplayerTab : UserControl
             _attachedSocket = nextSocket;
             // Detaching a socket always means "we're no longer in
             // an active room" — reset the reconnect flag so the
-            // status pill goes back to plain Connected.
+            // status pill goes back to plain Connected, and clear
+            // the room-mod cache so a stale value doesn't drive a
+            // future LaunchActiveModGame.
             _isReconnecting = false;
+            if (nextSocket == null) _currentLobbyModId = null;
             UpdateConnectionStatus();
+            // Also reset the match-phase machinery. If we somehow
+            // exit a room with an active game (forced disconnect,
+            // host left), tear down the local AoE3 process and
+            // unlock the popup chrome.
+            try
+            {
+                var p = _aoe3Process;
+                if (p != null && !p.HasExited) p.Kill(entireProcessTree: true);
+            }
+            catch { /* best-effort cleanup */ }
+            ExitInGamePhase();
+            // Re-center the popup on next show so the user always
+            // sees it at a sane position when they enter a new room.
+            _popupPositionInitialised = false;
         }
 
         if (meshChanged)
@@ -319,6 +446,11 @@ public partial class MultiplayerTab : UserControl
             _isHostInCurrentRoom = false;
             ChatLogPanel.Children.Clear();
             RoomMembersPanel.Children.Clear();
+            // Fresh room → fresh chat replay cursor. Otherwise the
+            // first room_state of the new room would skip lines whose
+            // atMs happens to be smaller than the last one we saw in
+            // the previous room.
+            _highestSeenChatAtMs = 0;
 
             // Seed the members map with the local user before any
             // server frame arrives. Without this, a brief delay or
@@ -432,11 +564,70 @@ public partial class MultiplayerTab : UserControl
                     case "member_ready":
                         HandleMemberReady(e.Json);
                         break;
-                    case "game_started":
-                        AppendChatSystem("The game has started.");
-                        RefreshFromSession();
-                        LaunchActiveModGame();
+                    case "game_countdown":
+                    {
+                        // Host pressed Start — server broadcasts the
+                        // canonical countdown duration. Switch popup
+                        // into Starting phase and run a purely-local
+                        // countdown timer (no dependence on absolute
+                        // server timestamps, which would let clock
+                        // skew skip the wait entirely on a host with
+                        // a fast-running clock).
+                        var durationMs = e.Json.TryGetProperty("duration_ms", out var dm)
+                            && dm.ValueKind == System.Text.Json.JsonValueKind.Number
+                                ? dm.GetInt32()
+                                : 3000;
+                        StartCountdown(durationMs);
+                        AppendChatSystem($"Game starting in {durationMs / 1000} seconds…");
                         break;
+                    }
+                    case "game_started":
+                        // Legacy-compat path: this frame is broadcast
+                        // alongside `game_countdown` for clients that
+                        // don't know about the countdown protocol. The
+                        // CURRENT launcher routes the actual launch
+                        // through the countdown timer's expiry (see
+                        // UpdateCountdownTick) so we only honour
+                        // game_started when we're still in the bare
+                        // Lobby phase — meaning the host pressed Start
+                        // on a server old enough not to emit the
+                        // countdown frame. In Starting / InGame phase
+                        // we ignore game_started (the countdown handles
+                        // the launch, or we're already running).
+                        if (_matchPhase == MatchPhase.Lobby)
+                        {
+                            AppendChatSystem("The game has started.");
+                            var process = LaunchActiveModGame();
+                            EnterInGamePhase(process);
+                        }
+                        RefreshFromSession();
+                        break;
+                    case "game_cancelled":
+                    {
+                        var reason = e.Json.TryGetProperty("reason", out var r)
+                            ? (r.GetString() ?? "host_cancelled")
+                            : "host_cancelled";
+                        AppendChatSystem(reason == "host_cancelled"
+                            ? "Host cancelled the game. Returning to lobby."
+                            : $"Game cancelled: {reason}.");
+                        // Kill local AoE3 if running and exit the
+                        // InGame phase. We don't send a follow-up
+                        // frame back — the server already cleared
+                        // the lobby state in its UPDATE.
+                        try
+                        {
+                            var p = _aoe3Process;
+                            if (p != null && !p.HasExited)
+                                p.Kill(entireProcessTree: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            DiagnosticLog.Write($"MultiplayerTab.game_cancelled: kill — {ex.Message}");
+                        }
+                        ExitInGamePhase();
+                        RefreshFromSession();
+                        break;
+                    }
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? c.GetString() : "";
                         var msg = e.Json.TryGetProperty("message", out var m) ? m.GetString() : "";
@@ -484,13 +675,63 @@ public partial class MultiplayerTab : UserControl
         _isHostInCurrentRoom = !string.IsNullOrEmpty(_session?.CurrentUser?.Id)
             && string.Equals(_roomHostUserId, _session!.CurrentUser!.Id, StringComparison.Ordinal);
 
-        // Replay any chat history the DO buffered for us.
-        ChatLogPanel.Children.Clear();
-        foreach (var line in state.Chat) AppendChatLine(line);
+        // Replay the server-buffered chat WITHOUT wiping local lines.
+        // Why: room_state fires on every WS reconnect (auto-reconnect
+        // backoff). If the user typed a message right before a brief
+        // tunnel hiccup, the server's chatRing might not contain that
+        // message yet (the send arrived after the reconnect snapshot),
+        // and the old "clear + replay" path would erase the message
+        // the user JUST saw appear as a local echo. The bug we shipped
+        // looked exactly like "I type, the message flashes, then it
+        // disappears".
+        //
+        // New behaviour: only append lines whose atMs is newer than the
+        // newest one we already have rendered. The local echo uses
+        // DateTime.Now so its effective atMs is "now" — server lines
+        // for that same message will carry a slightly different atMs
+        // and may produce one duplicate, which is an acceptable cost
+        // (the alternative was making messages vanish). For the
+        // initial connect (chat panel empty) this still replays the
+        // entire ring exactly once.
+        ReplayChatRing(state.Chat);
 
         RenderRoomMembers();
         RenderRoomPanel();
     }
+
+    /// <summary>
+    /// Append any chat lines from the server's ring buffer that we
+    /// haven't shown yet, in chronological order. Idempotent across
+    /// repeated calls — re-running with the same ring is a no-op.
+    /// </summary>
+    private void ReplayChatRing(System.Collections.Generic.IEnumerable<WsChatLine> ring)
+    {
+        if (ChatLogPanel == null) return;
+        foreach (var line in ring)
+        {
+            if (line == null) continue;
+            if (line.AtMs <= _highestSeenChatAtMs) continue;
+            AppendChatLine(line);
+        }
+    }
+
+    /// <summary>
+    /// Cursor for the chat-replay dedup. AppendChatLine bumps this
+    /// every time it processes a server-sourced line. Local echoes
+    /// don't touch it (they're rendered out-of-band with DateTime.Now).
+    /// </summary>
+    private long _highestSeenChatAtMs;
+
+    /// <summary>
+    /// Bodies of messages we just sent locally that haven't been
+    /// "echoed" back by the server yet. Used to skip the duplicate
+    /// render when the broadcast `chat` frame for our own message
+    /// lands a few hundred ms after the optimistic local echo.
+    /// Bounded by a 5 s TTL so a stale entry can't shadow a genuine
+    /// later duplicate (e.g. user repeats themselves after a delay).
+    /// </summary>
+    private readonly System.Collections.Generic.List<(string Body, long SentTicks)> _recentLocalEchoes = new();
+    private const int LocalEchoMatchWindowMs = 5000;
 
     private void HandleChat(JsonElement json)
     {
@@ -763,6 +1004,35 @@ public partial class MultiplayerTab : UserControl
 
     private void AppendChatLine(WsChatLine line)
     {
+        // Dedup the local optimistic echo. When the server broadcasts
+        // OUR message back to us, it carries our user_id and the same
+        // body we typed; we already drew that line as a local echo on
+        // send, so re-rendering would produce a visible duplicate.
+        // We match by (userId, body, within the 5 s send window) and
+        // consume one entry per matched echo so a second identical
+        // message from us later still renders.
+        var me = _session?.CurrentUser;
+        if (me != null
+            && string.Equals(line.UserId, me.Id, StringComparison.Ordinal))
+        {
+            var nowTicks = Environment.TickCount64;
+            // GC stale local-echo records first so a hours-old entry
+            // can't accidentally swallow a brand-new server line.
+            _recentLocalEchoes.RemoveAll(x =>
+                nowTicks - x.SentTicks > LocalEchoMatchWindowMs);
+
+            for (int i = 0; i < _recentLocalEchoes.Count; i++)
+            {
+                if (string.Equals(_recentLocalEchoes[i].Body, line.Body, StringComparison.Ordinal))
+                {
+                    _recentLocalEchoes.RemoveAt(i);
+                    if (line.AtMs > _highestSeenChatAtMs)
+                        _highestSeenChatAtMs = line.AtMs;
+                    return;
+                }
+            }
+        }
+
         var when = DateTimeOffset.FromUnixTimeMilliseconds(line.AtMs).LocalDateTime;
         AppendChatRow(
             timestamp: when,
@@ -771,6 +1041,10 @@ public partial class MultiplayerTab : UserControl
             authorUserId: line.UserId,
             body: line.Body,
             severity: ChatSeverity.Info);
+        // Track the newest server-sourced timestamp so a later
+        // room_state replay can skip lines we already rendered.
+        if (line.AtMs > _highestSeenChatAtMs)
+            _highestSeenChatAtMs = line.AtMs;
     }
 
     private void AppendChatSystem(string body) =>
@@ -1463,6 +1737,15 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private List<LobbySummary>? _lastBrowserList;
 
+    /// <summary>
+    /// The mod id of the CURRENT room — set when the user creates
+    /// or joins a lobby, cleared on leave. <see cref="LaunchActiveModGame"/>
+    /// uses this to pick the right profile (NOT the Play tab's
+    /// active profile, which can disagree with the room's mod
+    /// when the user was browsing other mods between sessions).
+    /// </summary>
+    private string? _currentLobbyModId;
+
     private void RenderProfileTab()
     {
         var user = _session?.CurrentUser;
@@ -1822,7 +2105,15 @@ public partial class MultiplayerTab : UserControl
 
         try
         {
-            DiagnosticLog.Write($"CreateRoom: dialog returned lobby id {dlg.CreatedLobby.Id}, entering room");
+            var createdModId = dlg.CreatedLobbyProfile?.Id ?? "";
+            DiagnosticLog.Write($"CreateRoom: dialog returned lobby id {dlg.CreatedLobby.Id} (mod={createdModId}), entering room");
+            // Stamp the current room's mod id so LaunchActiveModGame
+            // picks the right profile, even if the user later
+            // switches the Play tab to a different mod while still
+            // inside the room. CreateLobbyResponse doesn't carry
+            // the mod id back (it only has id + status), so we read
+            // it from the dialog's selected profile.
+            _currentLobbyModId = createdModId;
             await _session.EnterHostedLobbyAsync(dlg.CreatedLobby);
             // Optimistic host flag — we created the room, so we ARE the
             // host. The WS room_state frame will reaffirm this when it
@@ -2219,16 +2510,82 @@ public partial class MultiplayerTab : UserControl
             SignInErrorText.Visibility = Visibility.Visible;
             return;
         }
-        // The mod the user has active must match the lobby's mod; mod
-        // browser switching is a separate UX flow.
+
+        // Profile-vs-room mod resolution. Three cases:
+        //   1. Active profile == lobby.ModId      → proceed.
+        //   2. Active profile != lobby.ModId but
+        //      the room's mod IS installed locally → auto-switch
+        //      to it (silently, no popup) and proceed.
+        //   3. Active profile != lobby.ModId AND
+        //      the room's mod is NOT installed    → tell the user
+        //      they need to install it first.
+        //
+        // Path #2 replaces the older "Wrong mod active" popup that
+        // told the user to manually go switch the mod — a
+        // frustrating UX since the launcher knows the right mod
+        // already.
         if (!string.Equals(profile.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show(
-                $"This room is for {lobby.ModId}. Switch to that mod first.",
-                "Wrong mod active",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
+            if (!IsModInstalledLocally(lobby.ModId))
+            {
+                // Resolve a friendly display name for the message.
+                string displayName = lobby.ModId;
+                foreach (var p in ModRegistry.All)
+                {
+                    if (string.Equals(p.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        displayName = p.DisplayName;
+                        break;
+                    }
+                }
+                MessageBox.Show(
+                    $"This room is for {displayName}, but you don't have that mod installed yet.\n\n" +
+                    "Install it from the Mods tab and try again.",
+                    "Mod not installed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            // Find the target profile in the registry.
+            ModProfile? target = null;
+            foreach (var p in ModRegistry.All)
+            {
+                if (string.Equals(p.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
+                {
+                    target = p;
+                    break;
+                }
+            }
+            if (target == null)
+            {
+                MessageBox.Show(
+                    $"This room uses an unknown mod ('{lobby.ModId}'). The launcher can't switch to it.",
+                    "Unknown mod",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
+
+            // Ask MainWindow to switch the active profile. It runs
+            // the same path the Play-tab tiles use (LoadModProfile),
+            // including the busy-state pre-flight (in-progress
+            // install / game running blocks the switch).
+            if (_switchActiveMod == null || !_switchActiveMod(target))
+            {
+                MessageBox.Show(
+                    $"Could not switch to {target.DisplayName}. Make sure no install / update is " +
+                    "in progress, then try again.",
+                    "Mod switch failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+            // Use the new profile from here on. The active-profile
+            // getter would also return it now, but reading the
+            // local variable is faster and avoids an extra ref-eq.
+            profile = target;
+            DiagnosticLog.Write($"JoinRoom: auto-switched active mod to '{target.Id}' to match lobby '{lobby.Id}'");
         }
 
         string fingerprint;
@@ -2256,6 +2613,10 @@ public partial class MultiplayerTab : UserControl
         btn.IsEnabled = false;
         try
         {
+            // Stamp the room's mod id so LaunchActiveModGame uses
+            // the right profile when the host starts the game — see
+            // the same step in the create-room path above.
+            _currentLobbyModId = lobby.ModId;
             // Host vs joiner is decided by the WS room_state frame that
             // arrives once we connect — clearing it here is just for the
             // brief window before that frame lands.
@@ -2313,30 +2674,62 @@ public partial class MultiplayerTab : UserControl
     {
         if (_session == null) return;
 
-        // Host-side semantics: clicking Start ALWAYS launches AoE3 on
-        // this PC. The WS `start` frame is just the "tell the other
-        // peers to launch too" signal — best-effort. Previously we
-        // waited for the DO's `game_started` echo before launching
-        // locally, which meant a transient WS drop (quick-tunnel
-        // idle disconnect) silently swallowed the launch.
+        // Host-side semantics:
+        //   1. Tell the Worker to start the game. The Worker will
+        //      broadcast `game_countdown` back to every member,
+        //      including us. The countdown handler in OnRoomFrame
+        //      runs the local 3-second timer and launches AoE3 at
+        //      the end — same path for host AND joiners, so the
+        //      pre-game UX is symmetric.
+        //   2. If the WS is dead (rare — tunnel idle drop, network
+        //      blink) we won't get a server echo back. After a
+        //      short grace window we start the countdown locally so
+        //      the host can still launch a solo session for testing.
+        //
+        // This replaces the older "launch AoE3 immediately and just
+        // signal peers" path, which made the host bypass the
+        // 3-second countdown entirely (countdown overlay never
+        // showed, AoE3 spawned on Start press instantly).
         AppendChatSystem("Starting game…");
-        LaunchActiveModGame();
 
         if (_session.RoomSocket != null)
         {
             try
             {
                 await _session.RoomSocket.SendStartAsync();
+                // Grace fallback: if the server's game_countdown
+                // hasn't landed in 2 s (e.g. WS dropped right after
+                // our send), kick off a local countdown so the host
+                // isn't left frozen with nothing happening. The
+                // countdown handler is idempotent — if the server
+                // frame still arrives later, the duplicate
+                // StartCountdown is a no-op (phase already Starting).
+                _ = Dispatcher.InvokeAsync(async () =>
+                {
+                    await Task.Delay(2000);
+                    if (_matchPhase == MatchPhase.Lobby)
+                    {
+                        DiagnosticLog.Write("MultiplayerTab.Start: server didn't echo countdown in 2s, " +
+                            "starting local fallback countdown");
+                        StartCountdown(3000);
+                    }
+                });
+                return;
             }
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"MultiplayerTab.Start (notify peers): {ex.Message}");
+                // Fall through to the offline-host path below.
             }
         }
         else
         {
             DiagnosticLog.Write("MultiplayerTab.Start: WS down — peers will pick up via room_state on reconnect");
         }
+        // WS unavailable / SendStart threw: still kick off the
+        // local countdown so the host can launch solo. Peers won't
+        // hear about it but a single-player test session works.
+        StartCountdown(3000);
     }
 
     private async void LeaveRoomButton_Click(object sender, RoutedEventArgs e)
@@ -2380,10 +2773,9 @@ public partial class MultiplayerTab : UserControl
 
         // Optimistic local echo first so the message appears the very
         // moment the user presses Enter — independent of WS round-trip
-        // latency. The server will broadcast a `chat` frame including
-        // OUR message back to us; AppendChatLine for that will draw a
-        // second line. Accept that minor double-up rather than building
-        // an id-based dedup table for the v1 release.
+        // latency. The matching server broadcast that lands a few
+        // hundred ms later is suppressed by AppendChatLine via the
+        // _recentLocalEchoes registry below, so no double-up.
         AppendChatRow(
             timestamp: DateTime.Now,
             isSystem: false,
@@ -2391,6 +2783,7 @@ public partial class MultiplayerTab : UserControl
             authorUserId: _session.CurrentUser.Id,
             body: text,
             severity: ChatSeverity.Info);
+        _recentLocalEchoes.Add((text, Environment.TickCount64));
 
         try { await _session.RoomSocket.SendChatAsync(text); }
         catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.Chat: {ex.Message}"); }
@@ -2421,16 +2814,65 @@ public partial class MultiplayerTab : UserControl
     /// the post-game flow (replay upload, match reporting) can run
     /// without spinning up a watcher thread of our own.
     /// </summary>
-    private void LaunchActiveModGame()
+    private System.Diagnostics.Process? LaunchActiveModGame()
     {
-        if (_launchGame == null || _getActiveProfile == null) return;
+        if (_launchGame == null || _getActiveProfile == null) return null;
 
-        var profile = _getActiveProfile();
+        // Pick the profile to launch from the ROOM, not the Play
+        // tab's currently-active mod. The room carries its own
+        // mod_id (chosen by the host at create time); launching
+        // whatever happens to be selected on the Play tab is wrong
+        // — it'd open AoE3 from a different mod's folder and the
+        // peer's virtual LAN bridge would never match.
+        //
+        // Source of the mod id, in priority order:
+        //   1. _currentLobbyModId — stamped at create / join time,
+        //      so it works even for brand-new rooms that aren't in
+        //      the browser snapshot yet.
+        //   2. The cached browser snapshot (_lastBrowserList) —
+        //      backup for cases where the user pre-existed the
+        //      current session somehow.
+        //   3. The active profile from the Play tab — last-resort
+        //      defensive fallback so the launcher never throws.
+        ModProfile? profile = null;
+        var lobbyId = _session?.CurrentLobbyId;
+        if (!string.IsNullOrEmpty(_currentLobbyModId))
+        {
+            foreach (var candidate in ModRegistry.All)
+            {
+                if (string.Equals(candidate.Id, _currentLobbyModId, StringComparison.OrdinalIgnoreCase))
+                {
+                    profile = candidate;
+                    break;
+                }
+            }
+        }
+        if (profile == null && !string.IsNullOrEmpty(lobbyId) && _lastBrowserList != null)
+        {
+            foreach (var l in _lastBrowserList)
+            {
+                if (!string.Equals(l.Id, lobbyId, StringComparison.Ordinal)) continue;
+                foreach (var candidate in ModRegistry.All)
+                {
+                    if (string.Equals(candidate.Id, l.ModId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        profile = candidate;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        if (profile == null)
+        {
+            profile = _getActiveProfile();
+        }
         if (profile == null)
         {
             AppendChatSystem("Cannot launch — no active mod profile.");
-            return;
+            return null;
         }
+        DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: launching profile '{profile.Id}' ({profile.DisplayName}) for lobby '{lobbyId}'");
 
         try
         {
@@ -2442,24 +2884,34 @@ public partial class MultiplayerTab : UserControl
             {
                 // Run on the UI thread so we can render chat messages
                 // and access session state safely.
-                await Dispatcher.InvokeAsync(async () => await OnGameExitedAsync(profile, gameStartedAt));
+                await Dispatcher.InvokeAsync(async () =>
+                {
+                    // The OS-side "game closed" path: exit InGame and
+                    // run the post-match flow. If the user cancels
+                    // via the popup, ExitInGamePhase has already
+                    // fired — calling it again is a no-op.
+                    if (_matchPhase == MatchPhase.InGame) ExitInGamePhase();
+                    await OnGameExitedAsync(profile, gameStartedAt);
+                });
             }, extraArgs);
 
             if (process == null)
             {
                 AppendChatSystem("Could not spawn the game process.");
-                return;
+                return null;
             }
 
             AppendChatSystem(_isHostInCurrentRoom
                 ? "Game launched. In AoE3: click Multiplayer → LAN → Host Game."
                 : "Game launched. In AoE3: click Multiplayer → LAN → Join Game.");
+            return process;
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: {ex.Message}");
             AppendChatSystem($"Launch failed: {ex.Message}");
         }
+        return null;
     }
 
     /// <summary>
@@ -2555,5 +3007,528 @@ public partial class MultiplayerTab : UserControl
             DiagnosticLog.Write($"MultiplayerTab.OnGameExitedAsync: {ex.Message}");
         }
         await Task.CompletedTask;
+    }
+
+    // ==================================================================
+    // Floating popup: drag handlers + position management
+    // ==================================================================
+
+    /// <summary>
+    /// First time the popup canvas gets a real size, center the card
+    /// inside it. Subsequent size changes (launcher window resize)
+    /// re-clamp the popup so it never sits half-off-screen.
+    /// </summary>
+    private void RoomPopupCanvas_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
+    {
+        if (RoomPopupCard == null || RoomPopupCanvas == null) return;
+
+        if (!_popupPositionInitialised)
+        {
+            CenterPopup();
+            _popupPositionInitialised = true;
+            return;
+        }
+        // Re-clamp to keep the popup inside the visible area when
+        // the launcher window shrinks. We don't re-center — the
+        // user-dragged position is preserved as long as it fits.
+        ClampPopupPosition();
+    }
+
+    private void CenterPopup()
+    {
+        if (RoomPopupCard == null || RoomPopupCanvas == null) return;
+        var canvasW = RoomPopupCanvas.ActualWidth;
+        var canvasH = RoomPopupCanvas.ActualHeight;
+        if (canvasW <= 0 || canvasH <= 0) return;
+        var x = Math.Max(0, (canvasW - RoomPopupCard.Width) / 2.0);
+        var y = Math.Max(0, (canvasH - RoomPopupCard.Height) / 2.0);
+        System.Windows.Controls.Canvas.SetLeft(RoomPopupCard, x);
+        System.Windows.Controls.Canvas.SetTop(RoomPopupCard, y);
+    }
+
+    private void ClampPopupPosition()
+    {
+        if (RoomPopupCard == null || RoomPopupCanvas == null) return;
+        var canvasW = RoomPopupCanvas.ActualWidth;
+        var canvasH = RoomPopupCanvas.ActualHeight;
+        var left = System.Windows.Controls.Canvas.GetLeft(RoomPopupCard);
+        var top = System.Windows.Controls.Canvas.GetTop(RoomPopupCard);
+        // Always keep at least 80 px of the header visible on the
+        // right edge / 40 px on the others so the user can always
+        // grab the popup back even if they dragged it weird.
+        var minLeft = -(RoomPopupCard.Width - 200);
+        var maxLeft = canvasW - 80;
+        var minTop = 0.0;
+        var maxTop = canvasH - 60;
+        left = Math.Max(minLeft, Math.Min(maxLeft, left));
+        top = Math.Max(minTop, Math.Min(maxTop, top));
+        System.Windows.Controls.Canvas.SetLeft(RoomPopupCard, left);
+        System.Windows.Controls.Canvas.SetTop(RoomPopupCard, top);
+    }
+
+    private void RoomHeaderStrip_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        // Drag is forbidden while the game is starting or in
+        // progress — the popup is "locked" so the user can't
+        // accidentally drag it around mid-match. Clicks still go
+        // through to the X button when in Lobby phase.
+        if (_matchPhase != MatchPhase.Lobby) return;
+
+        // Don't start drag if the user clicked on a child button
+        // (close X). The original source is the actual hit element;
+        // if it's a Button we let WPF handle it normally.
+        if (e.OriginalSource is System.Windows.Controls.Button) return;
+
+        if (RoomPopupCard == null || RoomPopupCanvas == null) return;
+        _isDraggingPopup = true;
+        _dragStartCursorOnCanvas = e.GetPosition(RoomPopupCanvas);
+        _dragStartCardLeft = System.Windows.Controls.Canvas.GetLeft(RoomPopupCard);
+        _dragStartCardTop = System.Windows.Controls.Canvas.GetTop(RoomPopupCard);
+        if (double.IsNaN(_dragStartCardLeft)) _dragStartCardLeft = 0;
+        if (double.IsNaN(_dragStartCardTop)) _dragStartCardTop = 0;
+        ((System.Windows.UIElement)sender).CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void RoomHeaderStrip_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (!_isDraggingPopup || RoomPopupCard == null || RoomPopupCanvas == null) return;
+        var current = e.GetPosition(RoomPopupCanvas);
+        var dx = current.X - _dragStartCursorOnCanvas.X;
+        var dy = current.Y - _dragStartCursorOnCanvas.Y;
+        System.Windows.Controls.Canvas.SetLeft(RoomPopupCard, _dragStartCardLeft + dx);
+        System.Windows.Controls.Canvas.SetTop(RoomPopupCard, _dragStartCardTop + dy);
+        ClampPopupPosition();
+    }
+
+    private void RoomHeaderStrip_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_isDraggingPopup) return;
+        _isDraggingPopup = false;
+        ((System.Windows.UIElement)sender).ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    // ==================================================================
+    // Match lifecycle: phases + countdown + in-game overlay
+    // ==================================================================
+
+    /// <summary>
+    /// Apply visual state for the current <see cref="_matchPhase"/>:
+    /// shows / hides the X button, drag cursor, overlays, and the
+    /// Ready / Start / Leave buttons. Idempotent — safe to call on
+    /// every state change.
+    /// </summary>
+    private void ApplyMatchPhaseUi()
+    {
+        // Header drag handle: only "SizeAll" cursor when draggable.
+        if (RoomHeaderStrip != null)
+        {
+            RoomHeaderStrip.Cursor = _matchPhase == MatchPhase.Lobby
+                ? System.Windows.Input.Cursors.SizeAll
+                : System.Windows.Input.Cursors.Arrow;
+        }
+
+        // Close X: hidden during Starting / InGame so a stray click
+        // can't accidentally abort the match. The same behaviour is
+        // enforced on the OnClosing path of the main window.
+        if (RoomCloseXButton != null)
+        {
+            RoomCloseXButton.Visibility = _matchPhase == MatchPhase.Lobby
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        // Overlays.
+        if (CountdownOverlay != null)
+            CountdownOverlay.Visibility = _matchPhase == MatchPhase.Starting
+                ? Visibility.Visible : Visibility.Collapsed;
+        if (InGameOverlay != null)
+            InGameOverlay.Visibility = _matchPhase == MatchPhase.InGame
+                ? Visibility.Visible : Visibility.Collapsed;
+
+        // Cancel button caption + style differ for host vs joiner.
+        if (InGameCancelButton != null)
+        {
+            InGameCancelButton.Content = _isHostInCurrentRoom
+                ? "⚠  Cancel game (host)"
+                : "↩  Leave game";
+        }
+    }
+
+    /// <summary>
+    /// Begin the local 3-second countdown after receiving
+    /// <c>game_countdown</c> from the Worker. <paramref name="startsAtMsUnix"/>
+    /// is the server-issued epoch time at which AoE3 should launch;
+    /// every client uses the same value so the countdown stays in
+    /// sync across peers regardless of WS latency.
+    /// </summary>
+    private void StartCountdown(int durationMs)
+    {
+        _matchPhase = MatchPhase.Starting;
+        _countdownStartedAtTicks = Environment.TickCount64;
+        _countdownDurationMs = Math.Max(500, durationMs);   // sanity floor
+        DiagnosticLog.Write($"MultiplayerTab.StartCountdown: duration={_countdownDurationMs}ms, phase=Starting");
+        ApplyMatchPhaseUi();
+
+        _countdownTickTimer?.Stop();
+        _countdownTickTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            // 100 ms tick keeps the number animation crisp without
+            // flickering — UI only repaints when the displayed digit
+            // changes (see UpdateCountdownTick).
+            Interval = TimeSpan.FromMilliseconds(100),
+        };
+        _countdownTickTimer.Tick += (_, _) => UpdateCountdownTick();
+        _countdownTickTimer.Start();
+        UpdateCountdownTick();
+    }
+
+    private void UpdateCountdownTick()
+    {
+        if (CountdownNumber == null) return;
+        // Pure local timer — no server timestamp involved, so clock
+        // skew between client and server can't shortcut the wait.
+        var elapsedMs = Environment.TickCount64 - _countdownStartedAtTicks;
+        var remainingMs = _countdownDurationMs - elapsedMs;
+        if (remainingMs <= 0)
+        {
+            _countdownTickTimer?.Stop();
+            CountdownNumber.Text = "Go";
+            DiagnosticLog.Write("MultiplayerTab.UpdateCountdownTick: countdown expired, launching AoE3");
+            // This is the *only* path that launches AoE3 in the
+            // happy case. If for any reason we're already in InGame
+            // (defensive), don't re-launch.
+            if (_matchPhase != MatchPhase.InGame)
+            {
+                var process = LaunchActiveModGame();
+                EnterInGamePhase(process);
+            }
+            return;
+        }
+        var seconds = Math.Max(1, (int)Math.Ceiling(remainingMs / 1000.0));
+        CountdownNumber.Text = seconds.ToString();
+    }
+
+    private void CancelLocalCountdownIfRunning()
+    {
+        _countdownTickTimer?.Stop();
+        _countdownTickTimer = null;
+    }
+
+    /// <summary>
+    /// Enter the InGame phase: lock the popup, start the match
+    /// timer + the 1-Hz refresh of the P2P status panel. Caches
+    /// the spawned AoE3 process so Cancel can kill it.
+    /// </summary>
+    private void EnterInGamePhase(System.Diagnostics.Process? gameProcess)
+    {
+        _matchPhase = MatchPhase.InGame;
+        _aoe3Process = gameProcess;
+        _matchStartedAtUtc = DateTime.UtcNow;
+        _matchTimerStartTicks = Environment.TickCount64;
+
+        if (InGameRoomText != null)
+            InGameRoomText.Text = _session?.CurrentLobbyTitle ?? _session?.CurrentLobbyId ?? "";
+
+        CancelLocalCountdownIfRunning();
+        ApplyMatchPhaseUi();
+
+        _inGameTickTimer?.Stop();
+        _inGameTickTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            // 1 s is plenty — RTT / bytes counters drift slowly. The
+            // pulsing "live" dot animates via XAML opacity ticks
+            // independent of this timer to stay smooth.
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _inGameTickTimer.Tick += (_, _) => RefreshInGamePanel();
+        _inGameTickTimer.Start();
+        RefreshInGamePanel();
+    }
+
+    private void ExitInGamePhase()
+    {
+        _matchPhase = MatchPhase.Lobby;
+        _aoe3Process = null;
+        _inGameTickTimer?.Stop();
+        _inGameTickTimer = null;
+        CancelLocalCountdownIfRunning();
+        ApplyMatchPhaseUi();
+    }
+
+    /// <summary>
+    /// Repaint the InGame status overlay from local data: match
+    /// timer, per-peer rows (login + connection type + RTT + bytes),
+    /// and the global traffic counter. All sources are in-process —
+    /// PeerMesh for state/RTT, VirtualLanService for byte counters.
+    /// No network calls.
+    /// </summary>
+    private void RefreshInGamePanel()
+    {
+        // Match timer.
+        if (InGameMatchTimer != null)
+        {
+            var elapsedMs = Environment.TickCount64 - _matchTimerStartTicks;
+            var elapsed = TimeSpan.FromMilliseconds(Math.Max(0, elapsedMs));
+            InGameMatchTimer.Text = elapsed.TotalHours >= 1
+                ? elapsed.ToString(@"h\:mm\:ss")
+                : elapsed.ToString(@"mm\:ss");
+        }
+
+        var vlan = _session?.VirtualLan;
+        var mesh = _session?.Mesh;
+
+        // Global traffic counter.
+        if (InGameTrafficText != null)
+        {
+            var totalBytes = (vlan?.TotalBytesIn ?? 0) + (vlan?.TotalBytesOut ?? 0);
+            InGameTrafficText.Text = FormatBytes(totalBytes);
+        }
+
+        // Mode badge.
+        if (InGameModeText != null)
+        {
+            InGameModeText.Text = vlan != null && mesh != null
+                ? " — Connected via P2P LAN"
+                : " — P2P link starting…";
+            InGameModeText.Foreground = (Brush)Application.Current.FindResource(
+                vlan != null && mesh != null ? "MpStatusOnline" : "MpStatusReconnect");
+        }
+
+        // Peer list.
+        if (InGamePeersPanel != null)
+        {
+            InGamePeersPanel.Children.Clear();
+            // Always show the local player first so they see themselves.
+            var me = _session?.CurrentUser;
+            if (me != null)
+            {
+                InGamePeersPanel.Children.Add(BuildInGamePeerRow(
+                    login: string.IsNullOrEmpty(me.GithubLogin) ? me.DisplayName : me.GithubLogin,
+                    state: "you",
+                    rttMs: 0,
+                    bytesIn: vlan?.TotalBytesIn ?? 0,
+                    bytesOut: vlan?.TotalBytesOut ?? 0,
+                    isSelf: true));
+            }
+            int peerCount = 0;
+            if (mesh != null)
+            {
+                foreach (var p in mesh.Peers)
+                {
+                    peerCount++;
+                    var stateLabel = p.State switch
+                    {
+                        PeerLinkState.Connected => p.ConfirmedEndpoint != null
+                            ? "Direct P2P"
+                            : "Connected",
+                        PeerLinkState.Punching => "Punching…",
+                        PeerLinkState.Discovering => "Discovering…",
+                        PeerLinkState.Lost => "Lost",
+                        PeerLinkState.Failed => "Relay",
+                        _ => p.State.ToString(),
+                    };
+                    InGamePeersPanel.Children.Add(BuildInGamePeerRow(
+                        login: p.Login,
+                        state: stateLabel,
+                        rttMs: p.RttMs,
+                        bytesIn: vlan?.GetBytesInFor(p.UserId) ?? 0,
+                        bytesOut: vlan?.GetBytesOutFor(p.UserId) ?? 0,
+                        isSelf: false));
+                }
+            }
+
+            // Solo-room hint. When there's only the local player and
+            // nobody else has joined yet, the peer rows panel looks
+            // empty / confusing — without this label users think the
+            // P2P stack failed when actually they're just alone in
+            // the room. The same hint appears during the InGame
+            // phase if peers haven't joined / hole-punched yet.
+            if (peerCount == 0)
+            {
+                InGamePeersPanel.Children.Add(new TextBlock
+                {
+                    Text = "Waiting for peers — you're the only player in the room right now.\n" +
+                           "P2P stack ready; another launcher needs to Join this room for game traffic to flow.",
+                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                    FontSize = 11,
+                    FontStyle = FontStyles.Italic,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 12, 0, 0),
+                });
+            }
+        }
+
+        // "Pulsing" dot — toggle opacity for a breathing effect.
+        if (InGameLiveDot != null)
+        {
+            InGameLiveDot.Opacity = InGameLiveDot.Opacity > 0.6 ? 0.4 : 1.0;
+        }
+    }
+
+    private FrameworkElement BuildInGamePeerRow(
+        string login, string state, double rttMs, long bytesIn, long bytesOut, bool isSelf)
+    {
+        var row = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) }); // name
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) }); // state
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });  // rtt
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // bytes
+
+        var nameTb = new TextBlock
+        {
+            Text = login,
+            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        Grid.SetColumn(nameTb, 0);
+        row.Children.Add(nameTb);
+
+        var stateBrush = state switch
+        {
+            "Direct P2P" or "Connected" or "you" =>
+                (Brush)Application.Current.FindResource("MpStatusOnline"),
+            "Relay" =>
+                (Brush)Application.Current.FindResource("MpPingMedium"),
+            "Lost" =>
+                (Brush)Application.Current.FindResource("MpStatusOffline"),
+            _ => (Brush)Application.Current.FindResource("TextSecondary"),
+        };
+        var stateTb = new TextBlock
+        {
+            Text = state,
+            Foreground = stateBrush,
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(stateTb, 1);
+        row.Children.Add(stateTb);
+
+        var rttTb = new TextBlock
+        {
+            Text = isSelf ? "—" : (rttMs > 0 ? $"{(int)rttMs} ms" : "…"),
+            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(rttTb, 2);
+        row.Children.Add(rttTb);
+
+        var bytesTb = new TextBlock
+        {
+            Text = $"↑ {FormatBytes(bytesOut)}   ↓ {FormatBytes(bytesIn)}",
+            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+            FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(bytesTb, 3);
+        row.Children.Add(bytesTb);
+
+        return row;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024L * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+        return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+    }
+
+    /// <summary>
+    /// Cancel / Leave game button click.
+    /// Host → asks the Worker to broadcast game_cancelled so every
+    /// peer kills its AoE3 and the room returns to "open" status.
+    /// Non-host → just kills the local AoE3 process and leaves the
+    /// room; the other players keep playing.
+    /// </summary>
+    private async void InGameCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        var verb = _isHostInCurrentRoom ? "Cancel the game for everyone?" : "Leave the game?";
+        var detail = _isHostInCurrentRoom
+            ? "All players will be disconnected and the room returns to the lobby."
+            : "AoE3 will close. The room keeps playing for the other players.";
+        var result = MessageBox.Show(
+            $"{verb}\n\n{detail}",
+            "Multiplayer",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        await EndMatchAsync(_isHostInCurrentRoom ? "host_cancelled" : "joiner_left");
+    }
+
+    /// <summary>
+    /// Shared kill path: stops the local AoE3 process, exits the
+    /// InGame phase locally, and if the user is the host, asks the
+    /// Worker to broadcast game_cancelled. Idempotent — calling
+    /// twice (e.g. host cancel + window-close confirm) is safe.
+    /// </summary>
+    private async Task EndMatchAsync(string reason)
+    {
+        try
+        {
+            var p = _aoe3Process;
+            if (p != null)
+            {
+                try
+                {
+                    if (!p.HasExited) p.Kill(entireProcessTree: true);
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"MultiplayerTab.EndMatch: kill AoE3 failed — {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            ExitInGamePhase();
+        }
+
+        if (_isHostInCurrentRoom && _session?.RoomSocket != null)
+        {
+            try { await _session.RoomSocket.SendCancelGameAsync(reason); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"MultiplayerTab.EndMatch: SendCancelGameAsync — {ex.Message}");
+            }
+        }
+        AppendChatSystem(_isHostInCurrentRoom
+            ? "You cancelled the game. Room returned to lobby."
+            : "You left the game. Other players continue.");
+    }
+
+    /// <summary>
+    /// True while a game is actively running locally. Used by
+    /// MainWindow.OnClosing to confirm with the user before
+    /// terminating, since closing the launcher mid-match would
+    /// kill AoE3 without giving the host the chance to cancel
+    /// cleanly first.
+    /// </summary>
+    public bool IsMatchActive => _matchPhase == MatchPhase.InGame || _matchPhase == MatchPhase.Starting;
+
+    /// <summary>
+    /// Called from MainWindow.OnClosing when the user attempts to
+    /// close the launcher with an active game. Confirms and (on
+    /// yes) cancels cleanly. Returns false if the user said "no"
+    /// so the close can be aborted.
+    /// </summary>
+    public async Task<bool> ConfirmCloseDuringMatchAsync()
+    {
+        var msg = _isHostInCurrentRoom
+            ? "A game is in progress. Cancelling now will disconnect every player. Continue?"
+            : "AoE3 is running. Closing the launcher will terminate it. Continue?";
+        var r = MessageBox.Show(msg, "Multiplayer", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (r != MessageBoxResult.Yes) return false;
+        await EndMatchAsync("launcher_closed");
+        return true;
     }
 }

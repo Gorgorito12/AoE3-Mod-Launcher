@@ -193,6 +193,35 @@ public partial class MainWindow : Window
                     DiagnosticLog.Write($"MultiplayerTab launch hook: {ex.Message}");
                     return null;
                 }
+            },
+            // Switch-active-mod hook. Used by the multiplayer join
+            // flow when the user clicks Join on a room whose mod
+            // doesn't match the current active profile: instead of
+            // forcing them to navigate to the Play tab and switch
+            // by hand, we run the exact same LoadModProfile path
+            // here. Returns true on success / no-op when already
+            // active; false when LoadModProfile bailed (e.g. install
+            // currently in progress).
+            switchActiveMod: target =>
+            {
+                try
+                {
+                    if (string.Equals(_updateService.Profile.Id, target.Id, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                    LoadModProfile(target);
+                    // LoadModProfile is async-void and updates the
+                    // active profile synchronously on the UI thread
+                    // before kicking off the background CheckAsync,
+                    // so by the time we return the new mod is the
+                    // active one as far as the multiplayer flow can
+                    // tell.
+                    return string.Equals(_updateService.Profile.Id, target.Id, StringComparison.OrdinalIgnoreCase);
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"MultiplayerTab switchActiveMod hook: {ex.Message}");
+                    return false;
+                }
             });
         UpdateAccentResources(activeProfile);
 
@@ -267,6 +296,31 @@ public partial class MainWindow : Window
             {
                 _ = Task.Run(InstallerService.TryCleanupTemp);
                 _ = Task.Run(NativeInstallService.TryCleanupTemp);
+
+                // One-time cleanup for existing installs that were
+                // produced by an older launcher build. Those left
+                // stale .xml.xmb files (and a few mojibake dev
+                // leftovers) in data\ which caused LAN "version
+                // mismatch" errors with peers who installed via
+                // the original WoL installer. Idempotent — on a
+                // clean install this finds nothing and logs a
+                // single "install is clean" line.
+                var activeProfile = _updateService.Profile;
+                var activeInstall = _updateService.InstallPath;
+                if (!string.IsNullOrEmpty(activeInstall))
+                {
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            NativeInstallService.RemoveStaleBuildArtifacts(activeProfile, activeInstall);
+                        }
+                        catch (Exception ex)
+                        {
+                            DiagnosticLog.Write($"Startup RemoveStaleBuildArtifacts: {ex.Message}");
+                        }
+                    });
+                }
             }
             if (autoUpdate && _modIsInstalled && _pendingDownloads.Count > 0)
             {
@@ -1026,6 +1080,36 @@ public partial class MainWindow : Window
             e.Cancel = true;
             HideToTray();
             return;
+        }
+
+        // Active multiplayer match? Ask before terminating — closing
+        // the launcher kills AoE3 and (for hosts) drops every peer
+        // mid-game. The dialog handles the cancel-broadcast cleanly
+        // so we don't orphan room state on the Worker.
+        try
+        {
+            if (MultiplayerView?.IsMatchActive == true)
+            {
+                // Run the dialog synchronously: OnClosing must complete
+                // before WPF tears down the window. We can't await
+                // inside OnClosing without re-entering, so we block
+                // on the Task with a short timeout — the dialog runs
+                // on the UI thread anyway, this is effectively
+                // synchronous from the user's POV.
+                var task = MultiplayerView.ConfirmCloseDuringMatchAsync();
+                task.Wait(TimeSpan.FromSeconds(10));
+                if (!task.IsCompleted || task.Result == false)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MainWindow.OnClosing: in-match confirm failed — {ex.Message}");
+            // Fall through and let the close happen anyway — we'd
+            // rather close than soft-lock the user out of the X.
         }
         // Real close — persist size/position/tab so the next launch comes
         // up where the user left it.
@@ -4271,6 +4355,24 @@ public partial class MainWindow : Window
                 {
                     if (aoe3SourcePath != null)
                     {
+                        // Canonical sibling-mod exclusion list. When the
+                        // user installs Improvement Mod and already has
+                        // Wars of Liberty cloned under the AoE3 root
+                        // (common Steam layout: ...\Age Of Empires 3\
+                        // Wars of Liberty\), the clone phase would
+                        // otherwise scoop that whole sibling install
+                        // into the new destination. The helper lives on
+                        // LauncherConfig so every install / repair flow
+                        // shares the exact same rule — see
+                        // GetSiblingInstallPaths for the contract. The
+                        // clone service ALSO auto-detects mod folders
+                        // via "*-manifest.json" probes as defense in
+                        // depth, but the explicit list covers the
+                        // config-tracked cases reliably.
+                        var siblingExcludes = _config.GetSiblingInstallPaths(profile.Id);
+                        if (siblingExcludes.Count > 0)
+                            DiagnosticLog.Write($"Install: excluding sibling mod paths: {string.Join(" ; ", siblingExcludes)}");
+
                         // Full install: clone AoE3 + overlay mod
                         await nativeInstaller.InstallAsync(
                             profile,
@@ -4285,6 +4387,7 @@ public partial class MainWindow : Window
                             extractProgress,
                             overlayProgress,
                             payloadSha256: payloadSha256,
+                            extraExcludedSubtrees: siblingExcludes,
                             ct: _cts.Token);
                     }
                     else
