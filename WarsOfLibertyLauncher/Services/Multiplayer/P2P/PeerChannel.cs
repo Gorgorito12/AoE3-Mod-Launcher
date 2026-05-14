@@ -97,6 +97,14 @@ public sealed class PeerChannel
     public PeerLinkState State { get; private set; } = PeerLinkState.Discovering;
 
     /// <summary>
+    /// Diagnostic flag set by <see cref="PeerMesh"/> the first time
+    /// any packet from this peer is routed to the channel. Prevents
+    /// the "FIRST inbound" log line from firing on every datagram —
+    /// once is enough to confirm hole-punch succeeded.
+    /// </summary>
+    public bool LoggedFirstInbound { get; set; }
+
+    /// <summary>
     /// Address we've confirmed the peer is reachable at. Null until
     /// the first inbound packet from one of the candidates.
     /// </summary>

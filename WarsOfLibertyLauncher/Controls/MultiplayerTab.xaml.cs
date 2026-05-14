@@ -660,16 +660,51 @@ public partial class MultiplayerTab : UserControl
         if (state == null) return;
 
         _roomMembers.Clear();
+        var mesh = _session?.Mesh;
         foreach (var kv in state.Members)
         {
+            var memberLogin = string.IsNullOrEmpty(kv.Value.Login) ? kv.Key : kv.Value.Login;
             _roomMembers[kv.Key] = new RoomMemberEntry
             {
                 UserId = kv.Key,
                 // Prefer the server-provided login; fall back to the
                 // user id for legacy rooms that don't carry it yet.
-                Login = string.IsNullOrEmpty(kv.Value.Login) ? kv.Key : kv.Value.Login,
+                Login = memberLogin,
                 Ready = kv.Value.Ready,
             };
+
+            // Make sure PeerMesh knows about every member listed in
+            // room_state, not just the ones we observed joining
+            // afterwards. Without this, a fresh joiner sees the host
+            // in the snapshot members list but PeerMesh has no
+            // channel for them, so the host's peer_announce can't be
+            // routed to a PeerChannel and hole-punching never starts.
+            // OnMemberJoined is idempotent and skips the local user
+            // itself, so calling it for every entry is safe.
+            mesh?.OnMemberJoined(kv.Key, memberLogin);
+        }
+
+        // (Re)publish our local endpoints now that we know the WS
+        // hello completed successfully. MultiplayerSession does send
+        // an initial peer_announce right after sock.Start(), but
+        // that fire-and-forget happens BEFORE LobbyWebSocket has
+        // finished its async connect — SendRawAsync silently drops
+        // any frame written while the WS isn't yet Open. Resending
+        // from HandleRoomState (which only fires once auth completed
+        // and the server sent us its snapshot) guarantees every
+        // peer already in the room sees our endpoints, even when we
+        // are the late joiner.
+        if (mesh != null && _session?.RoomSocket != null
+            && mesh.LocalEndpoints != null && mesh.LocalEndpoints.Count > 0)
+        {
+            _ = _session.RoomSocket.SendAsync(new
+            {
+                type = "peer_announce",
+                endpoints = mesh.LocalEndpoints,
+            });
+            DiagnosticLog.Write(
+                $"HandleRoomState: sent peer_announce with " +
+                $"{mesh.LocalEndpoints.Count} endpoint(s) after auth-completed snapshot.");
         }
         _roomHostUserId = state.HostUserId;
         _isHostInCurrentRoom = !string.IsNullOrEmpty(_session?.CurrentUser?.Id)
@@ -758,6 +793,37 @@ public partial class MultiplayerTab : UserControl
         }
         AppendChatSystem($"{login} joined.");
         RenderRoomMembers();
+
+        // Wire the new peer into PeerMesh and re-publish our local
+        // endpoints so the joiner can hole-punch us.
+        //
+        // Why the re-announce matters: peer_announce frames are
+        // broadcast-once at WS connect. The joiner gets a
+        // room_state snapshot (with our user-id in the members
+        // list) but NO endpoints for us — the server doesn't
+        // persist them. Without this re-publish, the joiner sees
+        // a member ID with no addresses to punch, so the link
+        // never goes from Discovering to Punching. The host runs
+        // this on every member_joined; cost is one extra WS frame
+        // per join, free at the Worker (outgoing WS messages on
+        // an already-open socket).
+        var mesh = _session?.Mesh;
+        if (mesh != null)
+        {
+            mesh.OnMemberJoined(userId, login);
+            var sock = _session?.RoomSocket;
+            if (sock != null && mesh.LocalEndpoints != null && mesh.LocalEndpoints.Count > 0)
+            {
+                _ = sock.SendAsync(new
+                {
+                    type = "peer_announce",
+                    endpoints = mesh.LocalEndpoints,
+                });
+                DiagnosticLog.Write(
+                    $"HandleMemberJoined: re-sent peer_announce for '{userId}' ({login}) " +
+                    $"with {mesh.LocalEndpoints.Count} endpoint(s)");
+            }
+        }
     }
 
     private void HandleMemberLeft(JsonElement json)
