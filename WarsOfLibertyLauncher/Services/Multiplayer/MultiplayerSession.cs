@@ -17,8 +17,9 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 ///     auth, lobbies, chat, ELO).
 ///   * <see cref="LobbyWebSocket"/> — per-room realtime channel.
 ///   * <see cref="PeerMesh"/> — direct UDP P2P fabric (hole-punched).
-///   * <see cref="VirtualLanService"/> — WinDivert bridge that makes
-///     AoE3 think it's playing on a LAN.
+///   * <see cref="NativeHook.AoeP2pHookInjector"/> — DLL injected into
+///     age3y.exe that captures DirectPlay traffic in-process and ships
+///     it to the mesh. Replaces the old WinDivert+Wintun bridge.
 ///
 /// The UI binds to <see cref="StateChanged"/> and queries the public
 /// properties; it never reaches into the underlying services directly.
@@ -77,21 +78,23 @@ public sealed class MultiplayerSession : IAsyncDisposable
     public PeerMesh? Mesh { get; private set; }
 
     /// <summary>
-    /// WinDivert-backed virtual LAN bridge. Captures AoE3's local
-    /// broadcasts and forwards them via <see cref="Mesh"/> to peers;
-    /// receives peers' game packets and re-injects them locally so
-    /// AoE3 sees a LAN. Null when WinDivert isn't installed or the
-    /// launcher isn't running elevated.
+    /// True when both halves of the P2P plumbing are in place: the
+    /// <see cref="Mesh"/> is up for this room AND the DLL-injector
+    /// helper (<see cref="NativeHook.AoeP2pHookInjector.IsAvailable"/>)
+    /// is shipped next to the launcher .exe, so when the user hits
+    /// Start Game the launcher can inject <c>AoeP2pHook.dll</c> into
+    /// age3y.exe and own LAN traffic forwarding from inside the game
+    /// process.
+    ///
+    /// "Ready" means we will be able to spin up the bridge — we do
+    /// NOT block here on the hook's actual IPC handshake, because the
+    /// hook can only connect AFTER the game spawns. From the lobby's
+    /// perspective, "injector present" is the right "we can handle
+    /// LAN" promise. Drives the lobby header banner and the Start
+    /// Game button's enable state.
     /// </summary>
-    public VirtualLanService? VirtualLan { get; private set; }
-
-    /// <summary>
-    /// True when both <see cref="Mesh"/> is connected to at least one
-    /// peer AND <see cref="VirtualLan"/> is capturing. Drives the
-    /// "P2P ready" indicator in the lobby header — if this is false
-    /// the host should fall back to the ZeroTier path for game traffic.
-    /// </summary>
-    public bool IsVirtualLanActive => VirtualLan != null && Mesh != null;
+    public bool IsP2pBridgeReady =>
+        Mesh != null && NativeHook.AoeP2pHookInjector.IsAvailable();
 
     public MultiplayerSession(LauncherConfig config)
     {
@@ -119,11 +122,6 @@ public sealed class MultiplayerSession : IAsyncDisposable
         {
             await Mesh.DisposeAsync();
             Mesh = null;
-        }
-        if (VirtualLan != null)
-        {
-            try { VirtualLan.Dispose(); } catch { /* shutdown path */ }
-            VirtualLan = null;
         }
         Api.Dispose();
     }
@@ -214,10 +212,10 @@ public sealed class MultiplayerSession : IAsyncDisposable
                 Password = password,
             }, ct);
 
-            // Open the room WS — that triggers PeerMesh + VirtualLan
-            // bootstrap inside OpenRoomSocketAsync. Hole-punching to
-            // the other room members starts as soon as their
-            // peer_announce frames arrive.
+            // Open the room WS — that triggers PeerMesh bootstrap
+            // inside OpenRoomSocketAsync. Hole-punching to the other
+            // room members starts as soon as their peer_announce
+            // frames arrive.
             await OpenRoomSocketAsync(lobbyId, join.JoinToken, LobbyWebSocket.HelloMode.JoinToken);
             CurrentLobbyId = lobbyId;
             Lobby = LobbyStatus.InLobby;
@@ -281,7 +279,6 @@ public sealed class MultiplayerSession : IAsyncDisposable
         var lobbyId = CurrentLobbyId;
         var socket = RoomSocket;
         var mesh = Mesh;
-        var vlan = VirtualLan;
 
         // Optimistic UI transition first — the user sees the room
         // collapse and the lobby list reappear within a single frame.
@@ -289,21 +286,12 @@ public sealed class MultiplayerSession : IAsyncDisposable
         CurrentLobbyTitle = null;
         RoomSocket = null;
         Mesh = null;
-        VirtualLan = null;
         Lobby = LobbyStatus.Idle;
         Raise();
 
         // Tear down P2P fabric in the background — sockets close,
-        // hole-punch loops bail, WinDivert handles release.
+        // hole-punch loops bail.
         if (mesh != null) _ = mesh.DisposeAsync().AsTask();
-        if (vlan != null)
-        {
-            _ = Task.Run(() =>
-            {
-                try { vlan.Dispose(); }
-                catch (Exception ex) { DiagnosticLog.Write($"VLan dispose: {ex.Message}"); }
-            });
-        }
 
         // The REST /leave call is the only thing that matters for
         // server-side cleanup — it marks the lobby `closed` in D1 and
@@ -383,145 +371,31 @@ public sealed class MultiplayerSession : IAsyncDisposable
                 // Publish our endpoints to everyone else in the room.
                 // Fire-and-forget — the WS is already up. Peers will
                 // start hole-punching us as soon as this lands.
+                //
+                // We pass user_id explicitly: the Worker echoes
+                // peer_announce back unchanged, and PeerMesh.OnPeerAnnounceFromWs
+                // drops any frame without a user_id as defensive
+                // hygiene against malformed broadcasts. Without this
+                // field, a freshly-deployed Worker that no longer
+                // injects user_id server-side silently breaks all P2P.
                 _ = sock.SendAsync(new
                 {
                     type = "peer_announce",
+                    user_id = ownUserId,
                     endpoints = mesh.LocalEndpoints,
                 });
 
-                // Spin up the WinDivert virtual-LAN bridge if the
-                // driver is available + the launcher has the privileges
-                // to open a capture handle. Failures are non-fatal:
-                // ZeroTier keeps working as the game-traffic transport
-                // until the new stack is mature.
-                StartVirtualLan(mesh);
+                // No further bridge bring-up is needed here: the LAN
+                // traffic forwarding lives entirely inside the hook
+                // DLL that gets injected into age3y.exe when the user
+                // hits Start Game. IsP2pBridgeReady will flip to true
+                // as soon as this mesh is up, and the launch path
+                // takes care of the rest.
             }
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"MultiplayerSession: PeerMesh start failed: {ex.Message}");
             }
-        }
-    }
-
-    /// <summary>
-    /// Start the WinDivert virtual-LAN bridge for this room. Idempotent
-    /// — if WinDivert isn't installed or we lack admin rights, this
-    /// logs the reason and leaves <see cref="VirtualLan"/> null so the
-    /// caller can fall back to the legacy transport.
-    /// </summary>
-    private void StartVirtualLan(PeerMesh mesh)
-    {
-        // Voobly-style virtual NIC: if the user opted into it, ensure
-        // a Microsoft Loopback adapter exists and carries a derived
-        // 10.147.x.y IP so AoE3's lobby UI shows that instead of the
-        // real LAN address. Fire-and-forget — failures are logged and
-        // do not block the rest of the multiplayer setup.
-        if (_config.Multiplayer.VirtualAdapterEnabled && CurrentUser != null)
-        {
-            var ownIp = VirtualAdapterService.DeriveIpFor(CurrentUser.Id);
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    if (!await VirtualAdapterService.IsInstalledAsync())
-                    {
-                        var ok = await VirtualAdapterService.InstallAsync();
-                        if (!ok)
-                        {
-                            DiagnosticLog.Write("VirtualAdapter: install failed; the lobby will show the real LAN IP this session.");
-                            return;
-                        }
-                    }
-                    await VirtualAdapterService.ConfigureAsync(ownIp);
-                    DiagnosticLog.Write($"VirtualAdapter: configured with {ownIp} for {CurrentUser.GithubLogin}");
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write($"VirtualAdapter setup: {ex.Message}");
-                }
-            });
-        }
-
-        if (!WinDivertNative.IsAvailable())
-        {
-            DiagnosticLog.Write(
-                "MultiplayerSession: WinDivert not available — virtual LAN disabled. " +
-                "Game traffic will not flow until the driver is installed and the " +
-                "launcher is restarted elevated.");
-            return;
-        }
-
-        try
-        {
-            var vlan = new VirtualLanService();
-
-            // Outgoing path: AoE3 broadcasts → captured → fan-out.
-            // Connected peers get a direct UDP send; peers whose
-            // hole-punching failed are TURN-relayed through the
-            // lobby WS so they stay in the session.
-            vlan.GamePacketCaptured += async (_, packet) =>
-            {
-                try
-                {
-                    var relayTargets = new System.Collections.Generic.List<string>();
-                    await mesh.BroadcastGamePacketAsync(packet, relayTargets);
-                    // Tally outgoing traffic per peer. mesh.Peers
-                    // gives us the live set of recipients; each one
-                    // received a copy of `packet.Payload`, so we
-                    // record the same byte count per peer. Counters
-                    // live in-process and feed the InGame status
-                    // panel — no Worker calls, no KV writes.
-                    var payloadLen = packet.Payload?.Length ?? 0;
-                    foreach (var peer in mesh.Peers)
-                    {
-                        vlan.RecordBytesOut(peer.UserId, payloadLen);
-                    }
-                    if (relayTargets.Count > 0 && RoomSocket != null)
-                    {
-                        foreach (var uid in relayTargets)
-                        {
-                            try
-                            {
-                                await RoomSocket.SendGameRelayAsync(
-                                    uid, packet.SrcPort, packet.DstPort, packet.Payload);
-                            }
-                            catch (Exception ex)
-                            {
-                                DiagnosticLog.Write($"MultiplayerSession.GameRelay → {uid}: {ex.Message}");
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write($"MultiplayerSession.GamePacketCaptured: {ex.Message}");
-                }
-            };
-
-            // Incoming path: peer's packet → inject locally with the
-            // peer's allocated 10.147.x.y virtual address so AoE3
-            // treats it like a real LAN host.
-            mesh.GamePacketReceived += (_, payload) =>
-            {
-                try
-                {
-                    vlan.Inject(payload.FromUserId, payload.Packet);
-                    vlan.RecordBytesIn(payload.FromUserId, payload.Packet.Payload?.Length ?? 0);
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write($"MultiplayerSession.GamePacketReceived: {ex.Message}");
-                }
-            };
-
-            vlan.Start();
-            VirtualLan = vlan;
-            Raise();
-            DiagnosticLog.Write("MultiplayerSession: VirtualLanService active for this room.");
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"MultiplayerSession.StartVirtualLan: {ex.Message}");
         }
     }
 
@@ -596,27 +470,52 @@ public sealed class MultiplayerSession : IAsyncDisposable
                 }
                 case "game_relay":
                 {
-                    // Worker-as-TURN inbound: another peer couldn't
-                    // hole-punch us, so they tunneled their game
-                    // packet through the lobby WS. Decode and inject
-                    // locally just like a direct mesh frame.
-                    var vlan = VirtualLan;
-                    if (vlan == null) break;
-                    var fromUser = e.Json.TryGetProperty("from_user", out var fu) ? fu.GetString() : null;
-                    var srcPort = e.Json.TryGetProperty("src_port", out var sp) ? sp.GetUInt16() : (ushort)0;
-                    var dstPort = e.Json.TryGetProperty("dst_port", out var dp) ? dp.GetUInt16() : (ushort)0;
-                    var payloadB64 = e.Json.TryGetProperty("payload_b64", out var pb) ? pb.GetString() : null;
-                    if (string.IsNullOrEmpty(fromUser) || string.IsNullOrEmpty(payloadB64)) break;
-                    try
+                    // Worker-as-TURN inbound (Phase 2.c): a peer whose
+                    // hole-punch with us failed tunnelled their game
+                    // packet through the lobby WS. We hand it to the
+                    // hook DLL via the bridge so AoE3 sees it as a
+                    // normal recvfrom (with the sender's virtual IP).
+                    //
+                    // Frame shape mirrors LobbyWebSocket.SendGameRelayAsync:
+                    //   { type: "game_relay", from_user, src_port,
+                    //     dst_port, payload_b64 }
+                    // (The Worker rewrites the outbound `to_user` into
+                    // `from_user` for the recipient — same pattern as
+                    // peer_relay → from_user/from_login.)
+                    var bridge = NativeHook.AoeP2pBridgeService.Current;
+                    if (bridge == null) break;  // no game running, nothing to inject into
+
+                    var fromUser = e.Json.TryGetProperty("from_user", out var fu)
+                        ? (fu.GetString() ?? "") : "";
+                    var srcPort = e.Json.TryGetProperty("src_port", out var sp) && sp.ValueKind == JsonValueKind.Number
+                        ? sp.GetInt32() : 0;
+                    var dstPort = e.Json.TryGetProperty("dst_port", out var dp) && dp.ValueKind == JsonValueKind.Number
+                        ? dp.GetInt32() : 0;
+                    byte[] payload = Array.Empty<byte>();
+                    if (e.Json.TryGetProperty("payload_b64", out var pb) && pb.ValueKind == JsonValueKind.String)
                     {
-                        var payload = Convert.FromBase64String(payloadB64);
-                        vlan.Inject(fromUser, new GamePacket(srcPort, dstPort, payload));
-                        vlan.RecordBytesIn(fromUser, payload.Length);
+                        var b64 = pb.GetString();
+                        if (!string.IsNullOrEmpty(b64))
+                        {
+                            try { payload = Convert.FromBase64String(b64); }
+                            catch (FormatException) { /* malformed; leave empty so we bail below */ }
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        DiagnosticLog.Write($"MultiplayerSession.game_relay inject: {ex.Message}");
-                    }
+                    if (string.IsNullOrEmpty(fromUser) || payload.Length == 0)
+                        break;
+
+                    var srcVip = WarsOfLibertyLauncher.Services.Multiplayer.NativeHook
+                        .VirtualIpAllocator.DeriveFor(fromUser);
+
+                    // The hook's PACKET_IN handler delivers to every g_lanSockets
+                    // entry bound to dstPort, so dstIp is informational only.
+                    // Use broadcast as a sane placeholder.
+                    bridge.InjectIntoGame(
+                        srcVirtualIp: srcVip,
+                        srcPort: (ushort)srcPort,
+                        dstIp: System.Net.IPAddress.Broadcast,
+                        dstPort: (ushort)dstPort,
+                        payload: payload);
                     break;
                 }
             }

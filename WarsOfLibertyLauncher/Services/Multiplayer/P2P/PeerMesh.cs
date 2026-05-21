@@ -47,17 +47,75 @@ public sealed class PeerMesh : IAsyncDisposable
     /// <summary>
     /// Fired when a peer's launcher pushed an AoE3 game frame to us
     /// over the mesh. Args: (peer user id, decoded packet). The
-    /// <see cref="VirtualLanService"/> consumes these and injects them
-    /// onto the local stack so AoE3 sees a LAN broadcast.
+    /// hook-IPC bridge (Phase 2.b) consumes these and forwards them
+    /// to the in-game DLL hook so AoE3 sees a LAN datagram.
     /// </summary>
     public event EventHandler<(string FromUserId, GamePacket Packet)>? GamePacketReceived;
+
+    /// <summary>
+    /// Fired whenever the set returned by <see cref="RoutableUserIds"/>
+    /// changes — i.e. a peer transitions into or out of
+    /// <see cref="PeerLinkState.Connected"/> OR <see cref="PeerLinkState.Failed"/>,
+    /// or a member is removed outright. Subscribers (notably the
+    /// hook-IPC bridge) re-derive the peer virtual IP set and resend
+    /// it to the hook so AoE3's sendto interception stays aligned with
+    /// the live mesh.
+    ///
+    /// Phase 2.c: Failed peers are now "routable" via the Cloudflare
+    /// Worker WS as a TURN fallback, so transitions in / out of Failed
+    /// also belong in the hook's peer set and fire this event.
+    ///
+    /// Fires on whatever thread caused the state change — usually the
+    /// receive loop or the lobby WS handler. Keep handlers cheap or
+    /// dispatch elsewhere.
+    /// </summary>
+    public event EventHandler? PeersChanged;
 
     /// <summary>Snapshot of all channels, for UI rendering.</summary>
     public IReadOnlyCollection<PeerChannel> Peers => _peers.Values.ToArray();
 
+    /// <summary>
+    /// User ids of every peer currently in <see cref="PeerLinkState.Connected"/>.
+    /// Used by callers that only care about peers reachable by direct
+    /// UDP. The hook-IPC bridge should prefer <see cref="RoutableUserIds"/>
+    /// so it also intercepts sendtos targeted at Failed peers (which
+    /// we relay through the Worker WS).
+    /// </summary>
+    public IEnumerable<string> ConnectedUserIds =>
+        _peers.Values
+            .Where(p => p.State == PeerLinkState.Connected)
+            .Select(p => p.UserId);
+
+    /// <summary>
+    /// User ids of every peer the launcher can deliver a game packet
+    /// to right now: either a direct UDP hole-punched path
+    /// (<see cref="PeerLinkState.Connected"/>) OR a Worker-relayed
+    /// fallback (<see cref="PeerLinkState.Failed"/>, Phase 2.c TURN).
+    ///
+    /// The hook DLL uses this set to decide which sendto destinations
+    /// to divert into the launcher: anything aimed at a Failed peer
+    /// must still hit the bridge, because BroadcastGamePacketAsync
+    /// reports those peers via its needsRelay list and the caller
+    /// tunnels through RoomSocket.SendGameRelayAsync.
+    /// </summary>
+    public IEnumerable<string> RoutableUserIds =>
+        _peers.Values
+            .Where(p => p.State == PeerLinkState.Connected
+                     || p.State == PeerLinkState.Failed)
+            .Select(p => p.UserId);
+
     /// <summary>Endpoints to announce over the lobby WS so peers know how to reach us.</summary>
     public IReadOnlyList<WsPeerEndpoint> LocalEndpoints { get; private set; } =
         Array.Empty<WsPeerEndpoint>();
+
+    /// <summary>
+    /// User id used for our half of the mesh. Empty string before
+    /// <see cref="StartAsync"/> has set it. Exposed so peer-side code
+    /// (notably <c>AoeP2pBridgeService</c>'s outbound IP rewriter)
+    /// can derive our virtual IP via <c>VirtualIpAllocator.DeriveFor</c>
+    /// without piping it through every constructor.
+    /// </summary>
+    public string OwnUserId => _ownUserId;
 
     private readonly ConcurrentDictionary<string, PeerChannel> _peers = new();
     private readonly CancellationTokenSource _cts = new();
@@ -179,8 +237,32 @@ public sealed class PeerMesh : IAsyncDisposable
         {
             wasNew = true;
             var ch = new PeerChannel(userId, login, _ownUserId);
+            // Capture the previous state across firings so we can fire
+            // PeersChanged exactly when this peer crosses a "routable"
+            // boundary in either direction. Phase 2.c made BOTH
+            // Connected and Failed routable (direct UDP vs Worker
+            // relay), so we treat both states as part of the set the
+            // hook bridge cares about.
+            var prevState = ch.State;
             ch.StateChanged += (s, _) =>
-                PeerStateChanged?.Invoke(this, (PeerChannel)s!);
+            {
+                var asChannel = (PeerChannel)s!;
+                PeerStateChanged?.Invoke(this, asChannel);
+                var newState = asChannel.State;
+                bool wasRoutable = prevState == PeerLinkState.Connected
+                                || prevState == PeerLinkState.Failed;
+                bool nowRoutable = newState == PeerLinkState.Connected
+                                || newState == PeerLinkState.Failed;
+                prevState = newState;
+                if (wasRoutable != nowRoutable)
+                {
+                    try { PeersChanged?.Invoke(this, EventArgs.Empty); }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLog.Write($"PeerMesh.PeersChanged handler: {ex.Message}");
+                    }
+                }
+            };
             return ch;
         });
         if (wasNew)
@@ -193,7 +275,23 @@ public sealed class PeerMesh : IAsyncDisposable
     public void OnMemberLeft(string userId)
     {
         if (_peers.TryRemove(userId, out var ch))
+        {
             PeerStateChanged?.Invoke(this, ch);    // last paint
+            // Removing a routable peer (Connected OR Failed) shrinks
+            // the set the bridge tracks — let subscribers refresh the
+            // hook's peer list. Phase 2.c added Failed to the
+            // "routable" set since it's now reachable via the Worker
+            // WS relay.
+            if (ch.State == PeerLinkState.Connected
+                || ch.State == PeerLinkState.Failed)
+            {
+                try { PeersChanged?.Invoke(this, EventArgs.Empty); }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"PeerMesh.PeersChanged handler: {ex.Message}");
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -358,23 +456,37 @@ public sealed class PeerMesh : IAsyncDisposable
                 continue;
             }
 
-            // Game-data frame? Decode and surface to VirtualLanService.
-            // Hole-punch probes already updated state above and need
-            // no further routing.
+            // Game-data frame? Decode and surface to the hook-IPC
+            // bridge (via the GamePacketReceived subscriber). Hole-
+            // punch probes already updated state above and need no
+            // further routing.
             if (PeerChannel.IsGameFrame(data, data.Length))
             {
                 if (PeerChannel.TryParseGameFrame(data, data.Length,
-                        out var srcPort, out var dstPort, out var payload))
+                        out var srcPort, out var dstPort, out var srcIp, out var dstIp, out var payload))
                 {
+                    // Diagnostic (Phase 2.c bring-up): trace every
+                    // game frame we successfully decode + dispatch.
+                    // Pairs with AoeP2pBridgeService's TX/RX traces
+                    // to localise where the chain breaks.
+                    DiagnosticLog.Write(
+                        $"PeerMesh.RX GamePacket from={owner.UserId} src={srcIp}:{srcPort} " +
+                        $"dst={dstIp}:{dstPort} len={payload.Length}");
                     try
                     {
                         GamePacketReceived?.Invoke(this,
-                            (owner.UserId, new GamePacket(srcPort, dstPort, payload)));
+                            (owner.UserId, new GamePacket(srcPort, dstPort, srcIp, dstIp, payload)));
                     }
                     catch (Exception ex)
                     {
                         DiagnosticLog.Write($"PeerMesh.GamePacketReceived handler: {ex.Message}");
                     }
+                }
+                else
+                {
+                    DiagnosticLog.Write(
+                        $"PeerMesh.RX dropped malformed game frame from {owner.UserId} " +
+                        $"(len={data.Length}).");
                 }
             }
         }
@@ -394,19 +506,25 @@ public sealed class PeerMesh : IAsyncDisposable
     {
         var socket = _socket;
         if (socket == null) return;
-        var frame = PeerChannel.BuildGameFrame(packet.SrcPort, packet.DstPort, packet.Payload);
+        var frame = PeerChannel.BuildGameFrame(packet.SrcPort, packet.DstPort, packet.SrcIp, packet.DstIp, packet.Payload);
+        int sent = 0, skipPunching = 0, skipFailed = 0;
         foreach (var ch in _peers.Values)
         {
             if (ch.State == PeerLinkState.Failed)
             {
                 needsRelay?.Add(ch.UserId);
+                ++skipFailed;
                 continue;
             }
             if (ch.State != PeerLinkState.Connected || ch.ConfirmedEndpoint == null)
+            {
+                ++skipPunching;
                 continue;
+            }
             try
             {
                 await socket.SendAsync(frame, frame.Length, ch.ConfirmedEndpoint);
+                ++sent;
             }
             catch (ObjectDisposedException) { return; }
             catch (Exception ex)
@@ -414,6 +532,13 @@ public sealed class PeerMesh : IAsyncDisposable
                 DiagnosticLog.Write($"PeerMesh.BroadcastGamePacket → {ch.UserId}: {ex.Message}");
             }
         }
+        // Diagnostic (Phase 2.c bring-up): one line per outbound game
+        // frame so we can confirm the bridge actually invoked us. Pairs
+        // with AoeP2pBridgeService's RX PACKET_OUT log on the same side
+        // and the RX GamePacket log on the receiving side.
+        DiagnosticLog.Write(
+            $"PeerMesh.TX GamePacket dst={packet.DstIp}:{packet.DstPort} len={packet.Payload?.Length ?? 0} " +
+            $"peers={_peers.Count} sent={sent} relay={skipFailed} punching={skipPunching}");
     }
 
     private async Task TickLoopAsync(CancellationToken ct)
@@ -458,9 +583,10 @@ public sealed class PeerMesh : IAsyncDisposable
     ///     A laptop with an unplugged Ethernet or a disabled WiFi
     ///     adapter often has 4-5 of these, each useless to anyone
     ///     trying to reach us.
-    ///   * <c>10.147.0.0/16</c> — historical ZeroTier-launcher range.
-    ///     Now used as the virtual-LAN address by WinDivert; not a
-    ///     real network adapter peers could reach us through.
+    ///   * <c>10.147.0.0/16</c> — historical ZeroTier / WinDivert
+    ///     virtual-LAN range. The bridge that produced these aliases
+    ///     is gone, but the filter stays defensive in case a user
+    ///     still has the orphaned NIC alias from an older build.
     ///   * Down interfaces — operational status must be Up.
     ///   * Tunnel / loopback / virtual adapters declared as such by
     ///     Windows.
@@ -484,9 +610,10 @@ public sealed class PeerMesh : IAsyncDisposable
                 var bytes = ip.Address.GetAddressBytes();
                 // APIPA link-local — never useful peer-to-peer.
                 if (bytes[0] == 169 && bytes[1] == 254) continue;
-                // Our own virtual-LAN range injected by WinDivert.
-                // Peers can't reach this NIC; including it just
-                // wastes 15 seconds of hole-punch on a dead route.
+                // The old WinDivert / Wintun virtual-LAN range.
+                // Bridge is gone, but a leftover NIC alias from an
+                // older build would still resolve here and waste
+                // 15 seconds of hole-punch on a dead route.
                 if (bytes[0] == 10 && bytes[1] == 147) continue;
                 yield return ip.Address;
             }

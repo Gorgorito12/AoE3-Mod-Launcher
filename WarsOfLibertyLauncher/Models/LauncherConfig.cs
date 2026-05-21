@@ -56,17 +56,6 @@ public class MultiplayerConfig
     public Multiplayer.LobbyUserSummary? CachedUser { get; set; }
 
     /// <summary>
-    /// Enable the Voobly-style virtual network adapter so AoE3 shows
-    /// a <c>10.147.x.y</c> IP in its multiplayer lobby UI instead of
-    /// the user's real LAN address. Purely cosmetic — peers still
-    /// receive the public IP for hole-punching. Off by default
-    /// because the install step needs a one-time UAC prompt and the
-    /// LAN IP isn't actually sensitive.
-    /// </summary>
-    [JsonPropertyName("virtualAdapterEnabled")]
-    public bool VirtualAdapterEnabled { get; set; } = false;
-
-    /// <summary>
     /// "Relay-only" privacy mode. When ON, the launcher does NOT
     /// announce its public STUN endpoint over <c>peer_announce</c> —
     /// only the private LAN candidates. Other peers can't hole-punch

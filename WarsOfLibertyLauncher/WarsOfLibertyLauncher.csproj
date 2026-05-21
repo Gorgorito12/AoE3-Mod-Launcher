@@ -38,7 +38,50 @@
          the launcher; subsequent launches read from the cache and are the
          same speed as before. Zero behavioral change. -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- We deliberately do NOT use IncludeAllContentForSelfExtract.
+         When that flag is on, AppContext.BaseDirectory points at the
+         %TEMP%\.net\<appname>\<hash>\ extract directory instead of the
+         .exe's folder, which means launcher-config.json, the debug log
+         and other "next to the .exe" artefacts end up in temp — losing
+         user sessions between runs and making the log hard to find for
+         support. Several files in the codebase rely on AppContext.BaseDirectory
+         to mean "the .exe directory", and AoeP2pHookInjector's lookup
+         for AoeP2pInjector.exe / AoeP2pHook.dll next to the launcher
+         also assumes that layout. Shipping the launcher as a small
+         folder (Aoe3ModLauncher.exe + AoeP2pInjector.exe +
+         AoeP2pHook.dll + launcher-config.json) is the lesser pain. -->
+    <!-- <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract> -->
   </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Exclude vendored native code and third-party sources from the C#
+      compile. Without this, the SDK's default Compile glob (**\*.cs)
+      sweeps up files like third_party\Detours\samples\tryman\managed.cs
+      — a sample C# program shipped inside the Detours repo — and tries
+      to build them as part of the launcher. That sample carries its own
+      [assembly: AssemblyCompany] etc. attributes, which collide with
+      the SDK-generated AssemblyInfo and produce CS0579 duplicate-
+      attribute errors. Same risk for any future C# file we might
+      ship in native\ alongside the C++ injector / hook DLL sources.
+    -->
+    <Compile Remove="third_party\**\*.cs" />
+    <Compile Remove="native\**\*.cs" />
+    <!--
+      Also strip the SDK's default <None> glob from these trees. Without
+      these Removes, MSBuild auto-includes EVERY file under third_party/
+      and native/ (Detours samples, MSVC .obj intermediates, .pdb files,
+      build batch scripts, etc.) as <None> items. That noise is mostly
+      harmless at build time, but it COLLIDES with the explicit
+      <None Include="…WinDivert.dll" …><CopyToPublishDirectory>…</None>
+      items below: MSBuild deduplicates by Identity and the auto-globbed
+      copy (which has no CopyToPublishDirectory metadata) wins, so the
+      native files silently fall out of the publish folder and the .exe
+      ships missing its sibling DLLs.
+    -->
+    <None Remove="third_party\**" />
+    <None Remove="native\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- For .tar.xz extraction (the original updater uses this format) -->
@@ -55,6 +98,7 @@
   <ItemGroup>
     <None Update="launcher-config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
     <!-- WoL.ico is also referenced as ApplicationIcon (above) so it ends up
          as the .exe's Windows icon. Including it again as a Resource lets
@@ -63,23 +107,27 @@
     <Resource Include="WoL.ico" />
 
     <!--
-      WinDivert userspace DLL + signed kernel driver. Required by the
-      v1.0 multiplayer's virtual-LAN bridge (Services/Multiplayer/P2P/).
-      Shipped unchanged from the upstream release zip:
-        * WinDivert.dll    — LGPL v3 (userspace)
-        * WinDivert64.sys  — GPL v3  (kernel driver, EV-signed)
-      We distribute both as "aggregate" alongside the launcher .exe;
-      this satisfies LGPL §4 / GPL §6 without forcing our own code to
-      either licence. The kernel driver is loaded on first call to
-      WinDivertOpen() and needs SeLoadDriverPrivilege — i.e. UAC.
+      AoeP2pHook native artefacts (Phase 1 of the DirectPlay-replacement
+      work). These are built from native\AoeP2pHook\ and native\AoeP2pInjector\
+      with a Developer Command Prompt + build-all.bat. They are NOT
+      committed to the repo, so the includes are conditional: when the
+      C++ workload is missing on a dev machine, the launcher still
+      builds and falls back to a plain Process.Start (see
+      GameLauncher.LaunchAndWatch's IsAvailable check).
     -->
-    <None Include="third_party\windivert\WinDivert.dll">
+    <None Include="native\AoeP2pInjector\bin\AoeP2pInjector.exe"
+          Condition="Exists('native\AoeP2pInjector\bin\AoeP2pInjector.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>WinDivert.dll</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <Link>AoeP2pInjector.exe</Link>
     </None>
-    <None Include="third_party\windivert\WinDivert64.sys">
+    <None Include="native\AoeP2pHook\bin\AoeP2pHook.dll"
+          Condition="Exists('native\AoeP2pHook\bin\AoeP2pHook.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>WinDivert64.sys</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <Link>AoeP2pHook.dll</Link>
     </None>
   </ItemGroup>
 
@@ -120,19 +168,25 @@
   </Target>
 
   <!--
-    Sign the single-file .exe produced by `dotnet publish`. Build's target
-    (above) signs the framework-dependent intermediate in bin/<config>/—
-    Publish then bundles the runtime + the launcher into a brand-new .exe
-    in $(PublishDir), and that one is what we actually distribute. So we
-    sign it again here, after Publish writes it.
+    Sign the .exe and our own .dll(s) produced by `dotnet publish`. Build's
+    target (above) signs the framework-dependent intermediate in
+    bin/<config>/ — Publish then bundles the runtime + the launcher into a
+    brand-new .exe in $(PublishDir), and that one is what we actually
+    distribute. So we sign it again here, after Publish writes it.
 
-    Publish single-file output is just one .exe; we don't bother with .dll
-    because everything's embedded.
+    Before the AoeP2pHook DLL injection work, publish output was just one
+    self-contained .exe, so this target only signed .exe files. Now we also
+    ship two loose binaries alongside the launcher (AoeP2pInjector.exe and
+    AoeP2pHook.dll), so the file pattern is broadened to match all our own
+    artefacts by name prefix:
+      * Aoe3ModLauncher.exe   — the launcher itself
+      * AoeP2pInjector.exe    — x86 helper that does CreateRemoteThread
+      * AoeP2pHook.dll        — ws2_32 hook DLL loaded into age3y.exe
   -->
   <Target Name="SignPublishedFiles"
           AfterTargets="Publish"
           Condition="'$(OS)' == 'Windows_NT'">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $cert = Get-Item 'Cert:\CurrentUser\My\$(SignCertThumbprint)' -ErrorAction SilentlyContinue; if (-not $cert) { Write-Host 'Cert $(SignCertThumbprint) not found — skipping signing.'; exit 0 }; Get-ChildItem -Path '$(PublishDir).' -Filter '*.exe' -File | ForEach-Object { Set-AuthenticodeSignature -FilePath $_.FullName -Certificate $cert -TimestampServer '$(SignTimestampServer)' -HashAlgorithm SHA256 | Out-Null; Write-Host ('Signed publish output: ' + $_.FullName) }&quot;"
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $cert = Get-Item 'Cert:\CurrentUser\My\$(SignCertThumbprint)' -ErrorAction SilentlyContinue; if (-not $cert) { Write-Host 'Cert $(SignCertThumbprint) not found — skipping signing.'; exit 0 }; Get-ChildItem -Path '$(PublishDir).' -File | Where-Object { $_.Name -match '^Aoe(3ModLauncher|P2p)' -and $_.Extension -in '.exe','.dll' } | ForEach-Object { Set-AuthenticodeSignature -FilePath $_.FullName -Certificate $cert -TimestampServer '$(SignTimestampServer)' -HashAlgorithm SHA256 | Out-Null; Write-Host ('Signed publish output: ' + $_.FullName) }&quot;"
           IgnoreExitCode="true" />
   </Target>
 

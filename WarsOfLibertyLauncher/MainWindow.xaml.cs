@@ -175,9 +175,6 @@ public partial class MainWindow : Window
             //   +noIntroCinematics  — skip intro cinematics
             //   +disableESOProfile  — skip the long ESO login dialog
             //   +dontDetectNAT      — skip NAT probing delay
-            //   +OverrideAddress    — Voobly-style fake LAN IP
-            //   +OverridePort       — companion to OverrideAddress
-            //   +hostPort           — fix LAN host port (DirectPlay 2300)
             //   +xres / +yres       — force resolution (unused here)
             (profile, onExited, extraArgs) =>
             {

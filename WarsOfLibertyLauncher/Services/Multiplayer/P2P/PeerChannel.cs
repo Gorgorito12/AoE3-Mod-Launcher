@@ -64,6 +64,12 @@ public sealed class PeerChannel
     /// "WOLg". Frame format after the magic:
     ///   2 bytes  src game port (big-endian)
     ///   2 bytes  dst game port (big-endian)
+    ///   4 bytes  original IPv4 source (network order) — the address
+    ///            AoE3 announced itself on; the receiver injects with
+    ///            this src so the peer's AoE3 sees the lobby at the
+    ///            host's real IP and can later send a Join to it.
+    ///   4 bytes  original IPv4 destination (network order) — lets the
+    ///            receiver pick broadcast vs unicast on injection
     ///   N bytes  raw UDP payload from AoE3
     /// </summary>
     public static readonly byte[] GameMagic = new byte[] { 0x57, 0x4f, 0x4c, 0x67 };
@@ -124,6 +130,33 @@ public sealed class PeerChannel
     public event EventHandler? StateChanged;
 
     private readonly List<IPEndPoint> _candidates = new();
+
+    /// <summary>
+    /// Snapshot of the addresses this peer announced via the lobby WS
+    /// (typically one public STUN-mapped endpoint plus one or more LAN
+    /// endpoints). Exposed so the hook's PEER_SET can include every IP
+    /// this peer might be reachable on — that way AoE3's own LAN
+    /// discovery, which often re-sends packets to the host's RAW LAN
+    /// address rather than the virtual mesh IP we synthesised, still
+    /// gets diverted into the bridge instead of leaving through the
+    /// real wire (where it would never reach a peer on a different
+    /// network, and where on the same WiFi it would create a confusing
+    /// dual delivery path).
+    ///
+    /// Returns a fresh array each call so callers can iterate without
+    /// holding any locks; the list is small (≤ a handful of endpoints).
+    /// </summary>
+    public IPAddress[] AnnouncedAddresses
+    {
+        get
+        {
+            var snap = _candidates.ToArray();
+            var ips = new IPAddress[snap.Length];
+            for (int i = 0; i < snap.Length; i++) ips[i] = snap[i].Address;
+            return ips;
+        }
+    }
+
     private DateTime _punchingStartedUtc;
     private DateTime _lastSendUtc = DateTime.MinValue;
     private DateTime _lastPingSentUtc = DateTime.MinValue;
@@ -366,18 +399,24 @@ public sealed class PeerChannel
         && buffer[3] == GameMagic[3];
 
     /// <summary>
-    /// Wrap a UDP payload + (srcPort, dstPort) into the game-frame
-    /// wire format described next to <see cref="GameMagic"/>.
+    /// Wrap a UDP payload + (srcPort, dstPort, srcIp, dstIp) into the
+    /// game-frame wire format described next to <see cref="GameMagic"/>.
     /// </summary>
-    public static byte[] BuildGameFrame(ushort srcPort, ushort dstPort, byte[] payload)
+    public static byte[] BuildGameFrame(
+        ushort srcPort, ushort dstPort, IPAddress srcIp, IPAddress dstIp, byte[] payload)
     {
-        var frame = new byte[GameMagic.Length + 4 + payload.Length];
+        // Force IPv4 — AoE3's LAN protocol is IPv4-only.
+        var srcBytes = srcIp.MapToIPv4().GetAddressBytes();
+        var dstBytes = dstIp.MapToIPv4().GetAddressBytes();
+        var frame = new byte[GameMagic.Length + 4 + 4 + 4 + payload.Length];
         Buffer.BlockCopy(GameMagic, 0, frame, 0, GameMagic.Length);
         frame[4] = (byte)((srcPort >> 8) & 0xFF);
         frame[5] = (byte)(srcPort & 0xFF);
         frame[6] = (byte)((dstPort >> 8) & 0xFF);
         frame[7] = (byte)(dstPort & 0xFF);
-        Buffer.BlockCopy(payload, 0, frame, 8, payload.Length);
+        Buffer.BlockCopy(srcBytes, 0, frame, 8, 4);
+        Buffer.BlockCopy(dstBytes, 0, frame, 12, 4);
+        Buffer.BlockCopy(payload, 0, frame, 16, payload.Length);
         return frame;
     }
 
@@ -386,14 +425,19 @@ public sealed class PeerChannel
     /// Returns false if the buffer isn't a recognisable game frame.
     /// </summary>
     public static bool TryParseGameFrame(byte[] buffer, int length,
-        out ushort srcPort, out ushort dstPort, out byte[] payload)
+        out ushort srcPort, out ushort dstPort,
+        out IPAddress srcIp, out IPAddress dstIp, out byte[] payload)
     {
-        srcPort = 0; dstPort = 0; payload = Array.Empty<byte>();
-        if (!IsGameFrame(buffer, length) || length < 8) return false;
+        srcPort = 0; dstPort = 0;
+        srcIp = IPAddress.Any; dstIp = IPAddress.Broadcast;
+        payload = Array.Empty<byte>();
+        if (!IsGameFrame(buffer, length) || length < 16) return false;
         srcPort = (ushort)((buffer[4] << 8) | buffer[5]);
         dstPort = (ushort)((buffer[6] << 8) | buffer[7]);
-        payload = new byte[length - 8];
-        Buffer.BlockCopy(buffer, 8, payload, 0, payload.Length);
+        srcIp = new IPAddress(new byte[] { buffer[8], buffer[9], buffer[10], buffer[11] });
+        dstIp = new IPAddress(new byte[] { buffer[12], buffer[13], buffer[14], buffer[15] });
+        payload = new byte[length - 16];
+        Buffer.BlockCopy(buffer, 16, payload, 0, payload.Length);
         return true;
     }
 }

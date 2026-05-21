@@ -253,8 +253,7 @@ public static class GameLauncher
     /// command line after the profile/config args. The multiplayer
     /// flow uses it to inject AoE3's real (binary-verified) startup
     /// flags — typically
-    /// <c>+noIntroCinematics +disableESOProfile +dontDetectNAT
-    /// +OverrideAddress &lt;vip&gt; +OverridePort 2300 +hostPort 2300</c>.
+    /// <c>+noIntroCinematics +disableESOProfile +dontDetectNAT</c>.
     /// The lowercase tokens we initially tried (<c>+nointro</c>,
     /// <c>+mp</c>, <c>+hostmpgame</c>, <c>+joinIPaddr</c>) are NOT in
     /// age3y.exe, so they no-op silently — be careful what you add.
@@ -288,6 +287,43 @@ public static class GameLauncher
             arguments = string.IsNullOrWhiteSpace(arguments)
                 ? extraArgs
                 : $"{arguments} {extraArgs}";
+        }
+
+        // Prefer the AoeP2pHook injector when its native artefacts are
+        // shipped alongside the launcher. The injector spawns age3y.exe
+        // with AoeP2pHook.dll already loaded so the launcher can later
+        // (Phase 3+) intercept its WinSock calls and synthesise LAN
+        // discovery without ever bouncing a real broadcast through the
+        // bridge. Falls back to a plain Process.Start when the native
+        // artefacts aren't present (developer machines without the C++
+        // workload, fresh checkouts, etc.).
+        if (Services.Multiplayer.NativeHook.AoeP2pHookInjector.IsAvailable())
+        {
+            try
+            {
+                DiagnosticLog.Write(
+                    $"Launching game (hook-injected): {exePath} (profile '{profile.Id}') args='{arguments}'");
+                // The async API is awaited synchronously because the
+                // surrounding callback signature is sync — this matches
+                // the legacy Process.Start path's behaviour (no await
+                // upstream) and the helper exits in well under a second.
+                var injected = Services.Multiplayer.NativeHook.AoeP2pHookInjector
+                    .LaunchWithHookAsync(exePath, arguments ?? string.Empty)
+                    .GetAwaiter().GetResult();
+                injected.EnableRaisingEvents = true;
+                injected.Exited += onExited;
+                return injected;
+            }
+            catch (Exception ex)
+            {
+                // Anything that goes wrong on the inject path falls
+                // through to the plain launch. Logging the failure is
+                // important because callers won't see the hook-vs-plain
+                // distinction in the success path.
+                DiagnosticLog.Write(
+                    $"GameLauncher: hook inject failed ({ex.GetType().Name}: {ex.Message}); " +
+                    "falling back to direct Process.Start.");
+            }
         }
 
         DiagnosticLog.Write(

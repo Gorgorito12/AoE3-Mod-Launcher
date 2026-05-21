@@ -113,51 +113,11 @@
         </Border>
 
         <!-- ============================================================
-             ROOMS view: WinDivert gate / sign-in gate / room list /
-             current-room panel. Only one of the four groups is visible
-             at a time, driven from code-behind by RefreshFromSession().
+             ROOMS view: sign-in gate / room list / current-room panel.
+             Only one of the three groups is visible at a time, driven
+             from code-behind by RefreshFromSession().
              ============================================================ -->
         <Grid Grid.Row="1" x:Name="RoomsView">
-
-            <!-- WinDivert bootstrap gate. Renders the install /
-                 elevate prompt when the local capture stack isn't
-                 ready yet. Same logic as before, just visually
-                 tidied. -->
-            <StackPanel x:Name="VlanBootstrapPanel"
-                        Visibility="Collapsed"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        MaxWidth="520">
-                <TextBlock x:Name="VlanBootstrapTitle"
-                           Foreground="{DynamicResource TextPrimary}"
-                           FontSize="18"
-                           FontWeight="Bold"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"/>
-                <TextBlock x:Name="VlanBootstrapBody"
-                           Foreground="{DynamicResource TextSecondary}"
-                           FontSize="12"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           Margin="0,12,0,18"/>
-                <ProgressBar x:Name="VlanBootstrapProgress"
-                             Height="4"
-                             Visibility="Collapsed"
-                             Margin="0,0,0,12"/>
-                <Button x:Name="VlanActionButton"
-                        Click="VlanActionButton_Click"
-                        Style="{StaticResource MpPrimaryButton}"
-                        HorizontalAlignment="Center"
-                        Padding="20,10"
-                        MinWidth="220"/>
-                <TextBlock x:Name="VlanErrorText"
-                           Foreground="{DynamicResource MpStatusOffline}"
-                           FontSize="11"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           Margin="0,12,0,0"
-                           Visibility="Collapsed"/>
-            </StackPanel>
 
             <!-- Signed-out gate. -->
             <StackPanel x:Name="SignInPanel"
@@ -886,8 +846,7 @@
                          RTT + bytes transferred, and a single big
                          "Cancel game" / "Leave game" button.
                          Code-behind refreshes it every ~1 s by
-                         reading PeerMesh + VirtualLanService — no
-                         Worker calls. -->
+                         reading PeerMesh state — no Worker calls. -->
                     <Border x:Name="InGameOverlay"
                             Background="{DynamicResource BgBase}"
                             CornerRadius="8"

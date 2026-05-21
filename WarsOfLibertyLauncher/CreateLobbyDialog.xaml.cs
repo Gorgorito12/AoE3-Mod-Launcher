@@ -131,7 +131,7 @@ public partial class CreateLobbyDialog : Window
 
         _selectedProfile = profile;
         ModNameDefaultTitle(profile);
-        HashText.Text = Strings.Get("MpVlanInstalling");   // "Loading…"
+        HashText.Text = "Loading…";
         CreateButton.IsEnabled = false;
 
         try

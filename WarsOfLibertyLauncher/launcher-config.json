@@ -19,7 +19,6 @@
     "sessionToken": "",
     "sessionExpiresAt": 0,
     "cachedUser": null,
-    "virtualAdapterEnabled": false,
     "relayOnly": false
   }
 }
