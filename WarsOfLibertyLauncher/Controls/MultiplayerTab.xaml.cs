@@ -64,6 +64,15 @@ public partial class MultiplayerTab : UserControl
 
     private System.Windows.Threading.DispatcherTimer? _quotaTimer;
 
+    // Radmin banner state. The timer polls the install/connection
+    // status every 3 s while the tab is visible so the user gets
+    // immediate feedback when they finish installing or connecting in
+    // Radmin's own window. _lastRadminStatus is kept so the primary
+    // button's click handler knows which branch (install vs launch) to
+    // take without re-querying.
+    private System.Windows.Threading.DispatcherTimer? _radminTimer;
+    private RadminStatus? _lastRadminStatus;
+
     // (Pre-Radmin: there used to be n2n bootstrap status here for the
     //  header badge. With the n2n stack removed and Radmin as the
     //  user-managed VPN, the header badge just shows a static label.)
@@ -150,67 +159,189 @@ public partial class MultiplayerTab : UserControl
     {
         InitializeComponent();
         ApplyStrings();
-        ApplyRadminBannerVisibility();
+        // Initial Radmin banner render (state poll + paint). The timer
+        // starts ticking only once IsVisible flips to true via the
+        // OnVisibleChangedTabGate hook installed by Attach().
+        RefreshRadminBanner();
         // Initial state is the signed-out gate; once Attach() runs we
         // re-render against the real session.
         RefreshFromSession();
     }
 
+    // ------------------------------------------------------------------
+    // Radmin VPN banner — reactive 3-state UI driven by RadminVpnService.
+    //
+    // The banner sits at the top of the rooms browser. We re-render it
+    // every 3 s while the tab is visible so manual state changes the
+    // user makes in Radmin's own window (connect, disconnect, install
+    // mid-session) are reflected without them having to navigate away
+    // and back.
+    //
+    // The user dismiss flag is intentionally NOT honoured anymore: the
+    // new banner is informative (small, colour-coded) rather than
+    // nagging, and a dismissed user who later forgets why their game
+    // isn't connecting has no recourse otherwise.
+    // LauncherConfig.Multiplayer.RadminBannerDismissed stays for
+    // forward/backward config compat but is no longer read here.
+    // ------------------------------------------------------------------
+
     /// <summary>
-    /// Hide the Radmin VPN banner if the user has previously clicked
-    /// the dismiss button (the preference persists across launcher
-    /// runs via <see cref="LauncherConfig.RadminBannerDismissed"/>).
-    /// We don't try to be clever about resurfacing — once dismissed,
-    /// dismissed forever; the user can rediscover Radmin via Help.
+    /// Query Radmin's current state and update the banner's icon,
+    /// title, body and primary-action button to match. Cheap (sub-ms
+    /// registry + NIC enumeration), safe to call on the UI thread.
     /// </summary>
-    private void ApplyRadminBannerVisibility()
+    private void RefreshRadminBanner()
     {
         if (RadminBanner == null) return;
-        bool dismissed = false;
-        try { dismissed = LauncherConfig.Load().Multiplayer.RadminBannerDismissed; }
-        catch { /* config read failed; show the banner by default */ }
-        RadminBanner.Visibility = dismissed ? Visibility.Collapsed : Visibility.Visible;
+
+        var status = RadminVpnService.GetStatus();
+        _lastRadminStatus = status;
+
+        // Three-way switch. Colours stay close to the original banner's
+        // blue palette so the change is subtle when nothing's wrong.
+        if (status.InstallState == RadminInstallState.NotInstalled)
+        {
+            RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#3d1f1f")!;
+            RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#8c3a3a")!;
+            RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#8c3a3a")!;
+            RadminStatusGlyph.Text = "!";
+            RadminBannerTitle.Text = Strings.Get("MpRadminNotInstalledTitle");
+            RadminBannerBody.Text = Strings.Get("MpRadminNotInstalledBody");
+            RadminPrimaryButton.Content = Strings.Get("MpRadminInstallButton");
+            RadminPrimaryButton.Visibility = Visibility.Visible;
+            RadminPrimaryButton.IsEnabled = true;
+        }
+        else if (!status.IsConnected)
+        {
+            RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#1f2c3d")!;
+            RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#3a5a8c")!;
+            RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#3a5a8c")!;
+            RadminStatusGlyph.Text = "i";
+            RadminBannerTitle.Text = Strings.Get("MpRadminNotConnectedTitle");
+            RadminBannerBody.Text = Strings.Get("MpRadminNotConnectedBody");
+            RadminPrimaryButton.Content = Strings.Get("MpRadminOpenButton");
+            RadminPrimaryButton.Visibility = Visibility.Visible;
+            RadminPrimaryButton.IsEnabled = true;
+        }
+        else
+        {
+            RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#1f3d2a")!;
+            RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#3a8c5a")!;
+            RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#3a8c5a")!;
+            RadminStatusGlyph.Text = "✓"; // check mark
+            RadminBannerTitle.Text = Strings.Get("MpRadminConnectedTitle");
+            RadminBannerBody.Text = string.Format(
+                Strings.Get("MpRadminConnectedBody"),
+                status.AdapterIp ?? "26.x.x.x");
+            // No primary action needed when already connected — collapse
+            // the button so the banner shrinks back to "just info".
+            RadminPrimaryButton.Visibility = Visibility.Collapsed;
+        }
     }
 
     /// <summary>
-    /// Click handler for the Radmin banner's "Download Radmin" button.
-    /// Opens the official download page in the user's browser. We
-    /// don't try to bundle the installer — Radmin VPN is closed-
-    /// source and Famatech's terms don't permit silent redistribution.
+    /// State-aware click handler for the banner's primary button. Routes
+    /// to install / launch based on the last polled status — that's
+    /// what was on screen when the user clicked, so it's always the
+    /// right action to perform even if the world changed mid-frame.
     /// </summary>
-    private void RadminDownloadButton_Click(object sender, RoutedEventArgs e)
+    private async void RadminPrimaryButton_Click(object sender, RoutedEventArgs e)
     {
-        try
+        var status = _lastRadminStatus ?? RadminVpnService.GetStatus();
+
+        if (status.InstallState == RadminInstallState.NotInstalled)
         {
-            var psi = new System.Diagnostics.ProcessStartInfo
+            await RunRadminAutoInstallAsync();
+        }
+        else
+        {
+            // Pre-load the AoE3 TAD network name into the clipboard so
+            // the user only has to Ctrl+V into Radmin's "Join network"
+            // dialog instead of typing 38 characters of mixed case.
+            // Clipboard access can fail under restricted RDP / locked
+            // workstation sessions; swallow + log so the launcher still
+            // lifts the GUI window.
+            try { Clipboard.SetText(RadminVpnService.AoE3TadNetworkName); }
+            catch (Exception ex) { DiagnosticLog.Write($"RadminPrimaryButton_Click: clipboard: {ex.Message}"); }
+
+            if (!string.IsNullOrEmpty(status.ExePath))
             {
-                FileName = "https://www.radmin-vpn.com/",
-                UseShellExecute = true,
-            };
-            System.Diagnostics.Process.Start(psi);
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"MultiplayerTab.RadminDownloadButton_Click: {ex.Message}");
+                var launched = RadminVpnService.LaunchGui(status.ExePath);
+                if (!launched)
+                {
+                    MessageBox.Show(
+                        Strings.Get("MpRadminLaunchFailed"),
+                        "Wars of Liberty Launcher",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+            }
+            // Immediate refresh — the new connection state will only
+            // show once the user actually clicks Join inside Radmin,
+            // but if Radmin was already connected and the launcher
+            // just opened the window, the banner should still tick
+            // visibly so the click feels responsive.
+            RefreshRadminBanner();
         }
     }
 
     /// <summary>
-    /// Persist the user's choice to hide the Radmin banner.
+    /// Download Famatech's MSI and run a silent install, with a
+    /// progress label in the banner body. UAC fires once because the
+    /// MSI installs a system service + TAP driver. On any failure
+    /// we degrade gracefully to opening the download page in the
+    /// browser so the user still has a path forward.
     /// </summary>
-    private void RadminDismissButton_Click(object sender, RoutedEventArgs e)
+    private async Task RunRadminAutoInstallAsync()
     {
+        if (RadminBanner == null) return;
+        RadminPrimaryButton.IsEnabled = false;
+
+        var progress = new Progress<int>(p =>
+        {
+            RadminBannerBody.Text = string.Format(Strings.Get("MpRadminInstalling"), p);
+        });
+
+        bool ok;
         try
         {
-            var cfg = LauncherConfig.Load();
-            cfg.Multiplayer.RadminBannerDismissed = true;
-            cfg.Save();
+            ok = await RadminVpnService.InstallSilentAsync(progress, CancellationToken.None);
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"MultiplayerTab.RadminDismissButton_Click: persist failed: {ex.Message}");
+            DiagnosticLog.Write($"MultiplayerTab.RunRadminAutoInstallAsync: {ex.Message}");
+            ok = false;
         }
-        if (RadminBanner != null) RadminBanner.Visibility = Visibility.Collapsed;
+
+        if (!ok)
+        {
+            RadminBannerBody.Text = Strings.Get("MpRadminInstallFailed");
+            RadminVpnService.OpenDownloadPageInBrowser();
+        }
+
+        // One immediate refresh to flip the banner to "installed but
+        // not connected" if msiexec succeeded. The 3 s timer will keep
+        // it honest if the user proceeds to join a network manually.
+        RefreshRadminBanner();
+    }
+
+    /// <summary>
+    /// Start the 3-second poll. Called from the IsVisible hook so we
+    /// don't burn CPU enumerating NICs while the user is on another
+    /// tab. Idempotent — calling twice is safe.
+    /// </summary>
+    private void StartRadminPolling()
+    {
+        if (_radminTimer == null)
+        {
+            _radminTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(3),
+            };
+            _radminTimer.Tick += (_, _) => RefreshRadminBanner();
+        }
+        RefreshRadminBanner();   // one-shot so the user sees fresh data immediately
+        _radminTimer.Start();
     }
 
     /// <summary>
@@ -275,7 +406,10 @@ public partial class MultiplayerTab : UserControl
         // IsVisibleChanged handler will pick it up when the user
         // navigates here.
         if (IsVisible)
+        {
             StartQuotaPolling();
+            StartRadminPolling();
+        }
     }
 
     /// <summary>
@@ -288,8 +422,16 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void OnVisibleChangedTabGate(object sender, System.Windows.DependencyPropertyChangedEventArgs e)
     {
-        if (IsVisible) StartQuotaPolling();
-        else _quotaTimer?.Stop();
+        if (IsVisible)
+        {
+            StartQuotaPolling();
+            StartRadminPolling();
+        }
+        else
+        {
+            _quotaTimer?.Stop();
+            _radminTimer?.Stop();
+        }
     }
 
     private void StartQuotaPolling()

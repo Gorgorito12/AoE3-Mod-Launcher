@@ -163,16 +163,19 @@
                     <RowDefinition Height="*"/>      <!-- rows / empty state -->
                 </Grid.RowDefinitions>
 
-                <!-- Radmin VPN banner. The launcher only owns the
-                     "meta" layer (rooms, chat, match history); the
-                     actual game-to-game connection runs over Radmin
-                     VPN, which the user installs once and joins the
-                     community network manually. The banner is here so
-                     a fresh installer knows what to do BEFORE they
-                     try to start a game and get stuck on "Failed to
-                     join". Dismissable so it doesn't nag once read. -->
+                <!-- Radmin VPN banner. Three live states driven by
+                     RadminVpnService.GetStatus():
+                       * NotInstalled  → red warning + "Install Radmin" button
+                       * NotConnected  → blue info + "Open Radmin" button
+                                         (clipboard preloads the AoE3 TAD network
+                                          name so the user just Ctrl+V into Join)
+                       * Connected     → green check + IP, no action button
+                     The state colours are driven from code-behind so
+                     XAML stays declarative. Polls every 3 s while this
+                     panel is mounted. -->
                 <Border Grid.Row="0"
                         x:Name="RadminBanner"
+                        x:FieldModifier="private"
                         Background="#1f2c3d"
                         BorderBrush="#3a5a8c"
                         BorderThickness="1"
@@ -184,17 +187,19 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Icon (info dot) -->
+                        <!-- Status icon. Glyph + colour are set by
+                             RefreshRadminBanner() in code-behind. -->
                         <Border Grid.Column="0"
+                                x:Name="RadminStatusIcon"
                                 Width="24" Height="24"
                                 CornerRadius="12"
                                 Background="#3a5a8c"
                                 VerticalAlignment="Center"
                                 Margin="0,0,12,0">
-                            <TextBlock Text="i"
+                            <TextBlock x:Name="RadminStatusGlyph"
+                                       Text="i"
                                        Foreground="White"
                                        FontWeight="Bold"
                                        FontSize="14"
@@ -204,46 +209,28 @@
 
                         <!-- Message -->
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Foreground="{DynamicResource TextPrimary}"
+                            <TextBlock x:Name="RadminBannerTitle"
+                                       Foreground="{DynamicResource TextPrimary}"
                                        FontSize="12"
                                        FontWeight="SemiBold"
-                                       TextWrapping="Wrap">
-                                Multiplayer games need Radmin VPN
-                            </TextBlock>
+                                       TextWrapping="Wrap"/>
                             <TextBlock x:Name="RadminBannerBody"
                                        Foreground="{DynamicResource TextSecondary}"
                                        FontSize="11"
                                        TextWrapping="Wrap"
-                                       Margin="0,2,0,0">
-                                Install Radmin VPN and join the community network so AoE3 can see other players' games. Lobby chat works without it; the actual game does not.
-                            </TextBlock>
+                                       Margin="0,2,0,0"/>
                         </StackPanel>
 
-                        <!-- Action buttons -->
+                        <!-- Primary action (Install / Open Radmin).
+                             Hidden in the Connected state. -->
                         <Button Grid.Column="2"
-                                x:Name="RadminDownloadButton"
-                                Click="RadminDownloadButton_Click"
-                                Content="Download Radmin"
+                                x:Name="RadminPrimaryButton"
+                                Click="RadminPrimaryButton_Click"
                                 Style="{StaticResource MpSecondaryButton}"
                                 Padding="12,6"
                                 Margin="12,0,0,0"
                                 VerticalAlignment="Center"
                                 FontSize="11"/>
-
-                        <!-- Dismiss × -->
-                        <Button Grid.Column="3"
-                                x:Name="RadminDismissButton"
-                                Click="RadminDismissButton_Click"
-                                Content="✕"
-                                Background="Transparent"
-                                BorderBrush="Transparent"
-                                Foreground="{DynamicResource TextSecondary}"
-                                FontSize="14"
-                                Cursor="Hand"
-                                Padding="8,0"
-                                Margin="6,0,0,0"
-                                ToolTip="Hide this banner"
-                                VerticalAlignment="Center"/>
                     </Grid>
                 </Border>
 

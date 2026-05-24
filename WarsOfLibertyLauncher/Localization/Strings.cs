@@ -1082,6 +1082,57 @@ public static class Strings
         ["MpSubtabFriends"] = new() { [LangEn] = "Friends", [LangEs] = "Amigos" },
         ["MpSubtabProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
         ["MpSubtabHistory"] = new() { [LangEn] = "History", [LangEs] = "Historial" },
+
+        // --- Radmin VPN banner (reactive, three states) ---
+        ["MpRadminNotInstalledTitle"] = new()
+        {
+            [LangEn] = "Multiplayer needs Radmin VPN",
+            [LangEs] = "El multijugador necesita Radmin VPN",
+        },
+        ["MpRadminNotInstalledBody"] = new()
+        {
+            [LangEn] = "AoE3 LAN games discover each other through Radmin's virtual network. Lobby chat works without it; the actual game does not.",
+            [LangEs] = "Las partidas LAN de AoE3 se descubren a través de la red virtual de Radmin. El chat del lobby funciona sin Radmin; la partida en sí no.",
+        },
+        ["MpRadminInstallButton"] = new() { [LangEn] = "Install Radmin VPN", [LangEs] = "Instalar Radmin VPN" },
+        ["MpRadminInstalling"] = new()
+        {
+            [LangEn] = "Downloading and installing Radmin VPN… ({0}%)",
+            [LangEs] = "Descargando e instalando Radmin VPN… ({0}%)",
+        },
+        ["MpRadminInstallFailed"] = new()
+        {
+            [LangEn] = "Auto-install failed. Opening Radmin's download page in your browser.",
+            [LangEs] = "La auto-instalación falló. Abriendo la página de descarga de Radmin en tu navegador.",
+        },
+
+        ["MpRadminNotConnectedTitle"] = new()
+        {
+            [LangEn] = "Open Radmin and join the AoE3 network",
+            [LangEs] = "Abre Radmin y únete a la red de AoE3",
+        },
+        ["MpRadminNotConnectedBody"] = new()
+        {
+            [LangEn] = "In Radmin, click \"Join network\" → \"Gaming\", then paste \"Age of Empires III: The Asian Dynasties\" (we'll copy it for you) and click Join.",
+            [LangEs] = "En Radmin, clic en \"Unirse a la red\" → \"Gaming\", pega \"Age of Empires III: The Asian Dynasties\" (te lo copiamos al portapapeles) y clic Unirse.",
+        },
+        ["MpRadminOpenButton"] = new() { [LangEn] = "Open Radmin VPN", [LangEs] = "Abrir Radmin VPN" },
+        ["MpRadminLaunchFailed"] = new()
+        {
+            [LangEn] = "Could not launch Radmin VPN.",
+            [LangEs] = "No se pudo iniciar Radmin VPN.",
+        },
+
+        ["MpRadminConnectedTitle"] = new()
+        {
+            [LangEn] = "Connected to Radmin VPN",
+            [LangEs] = "Conectado a Radmin VPN",
+        },
+        ["MpRadminConnectedBody"] = new()
+        {
+            [LangEn] = "Your Radmin IP: {0}. You're ready to host or join AoE3 games on the community network.",
+            [LangEs] = "Tu IP de Radmin: {0}. Listo para hostear o unirte a partidas de AoE3 en la red de la comunidad.",
+        },
         ["MpSignInTitle"] = new()
         {
             [LangEn] = "Sign in to play online",
