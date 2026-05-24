@@ -2964,12 +2964,31 @@ public partial class MultiplayerTab : UserControl
     {
         // The intro / ESO / NAT skips are always safe to apply: they
         // just kill the splash + the long "connecting to ESO" wait.
-        // The old +OverrideAddress / +OverridePort / +hostPort flags
-        // (used to advertise a Voobly-style virtual LAN IP) are gone
-        // along with the WinDivert + Wintun bridge — the hook DLL now
-        // sees AoE3's real DirectPlay socket directly inside age3y.exe
-        // and forwards traffic through the mesh from there.
-        return "+noIntroCinematics +disableESOProfile +dontDetectNAT";
+        var sb = new System.Text.StringBuilder();
+        sb.Append("+noIntroCinematics +disableESOProfile +dontDetectNAT");
+
+        // Bind AoE3's DirectPlay LAN discovery to the Radmin VPN
+        // adapter when it's up. Without this, AoE3 broadcasts on the
+        // physical wifi NIC and peers on different networks can't see
+        // each other's lobbies — works for two PCs on the same wifi,
+        // breaks the moment one switches to mobile data or another
+        // network. The 26.x.x.x address belongs to Radmin's virtual
+        // /8 overlay and is reachable from every Radmin peer
+        // regardless of physical location.
+        //
+        // The community tutorial that goes around the AoE3 forums
+        // tells users to add `OverrideAddress="<your radmin ip>"` to
+        // the launch line by hand; this just does it automatically.
+        // When Radmin isn't running, we omit the flag entirely so
+        // local-LAN play (e.g. two laptops on the same router with no
+        // Radmin) keeps working unmodified.
+        var radmin = RadminVpnService.GetStatus();
+        if (radmin.IsServiceRunning && !string.IsNullOrEmpty(radmin.AdapterIp))
+        {
+            sb.Append(" OverrideAddress=").Append(radmin.AdapterIp);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
