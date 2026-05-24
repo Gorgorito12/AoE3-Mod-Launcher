@@ -70,14 +70,17 @@ public sealed class MultiplayerSession : IAsyncDisposable
     public string? LastError { get; private set; }
 
     /// <summary>
-    /// True once the user has both signed in AND entered a room. The
+    /// True once the user has both signed in AND entered a lobby. The
     /// launcher's "Start Game" button is gated by this so we never
     /// spawn AoE3 from outside a lobby context (the match-report POST
     /// at the end needs the lobby id). The actual game-network
     /// connectivity is the user's responsibility (Radmin VPN) — the
-    /// launcher just orchestrates the meta layer.
+    /// launcher just orchestrates the meta layer. (Pre-Radmin: this
+    /// used to be called IsP2pBridgeReady when an in-process n2n
+    /// bridge had to come up before launch; renamed because the gate
+    /// is now purely "are we in a lobby?".)
     /// </summary>
-    public bool IsP2pBridgeReady => Lobby != LobbyStatus.Idle;
+    public bool IsInLobby => Lobby != LobbyStatus.Idle;
 
     public MultiplayerSession(LauncherConfig config)
     {

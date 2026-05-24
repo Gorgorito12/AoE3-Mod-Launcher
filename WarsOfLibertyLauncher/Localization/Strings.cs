@@ -1123,24 +1123,6 @@ public static class Strings
             [LangEs] = "No se pudo iniciar Radmin VPN.",
         },
 
-        // "Radmin service is running but I can see < 3 real peers" —
-        // either the user hasn't joined any network OR joined one
-        // where most peers are offline / not yet known to our ARP
-        // cache. We can't tell those apart without polling Famatech's
-        // API, so the actionable advice is the same: open Radmin and
-        // verify network membership.
-        // {0} = own IP, {1} = visible peer count (0..2)
-        ["MpRadminAloneTitle"] = new()
-        {
-            [LangEn] = "Radmin running — make sure you're in the AoE3 network",
-            [LangEs] = "Radmin corriendo — verifica que estés en la red de AoE3",
-        },
-        ["MpRadminAloneBody"] = new()
-        {
-            [LangEn] = "Your IP: {0}. Only {1} peer(s) visible right now. Open Radmin and join \"Age of Empires III: The Asian Dynasties\" — we'll copy the name to your clipboard.",
-            [LangEs] = "Tu IP: {0}. Solo {1} peer(s) visible(s) ahora. Abre Radmin y únete a \"Age of Empires III: The Asian Dynasties\" — te copiamos el nombre al portapapeles.",
-        },
-
         // Honest wording: we can verify the Radmin service is running
         // with a 26.x.x.x identity, but Radmin's per-network membership
         // lives inside its process and is not visible to the OS. So
@@ -1219,11 +1201,6 @@ public static class Strings
         ["DlgClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
         ["MpRoomsCreate"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
         ["MpRoomsRefresh"] = new() { [LangEn] = "Refresh", [LangEs] = "Actualizar" },
-        ["MpRoomsEmpty"] = new()
-        {
-            [LangEn] = "No rooms right now. Be the first to create one.",
-            [LangEs] = "No hay salas ahora mismo. Sé el primero en crear una.",
-        },
         ["MpRoomsLoading"] = new() { [LangEn] = "Loading rooms…", [LangEs] = "Cargando salas…" },
         ["MpRoomJoin"] = new() { [LangEn] = "Join", [LangEs] = "Unirse" },
         ["MpRoomLeave"] = new() { [LangEn] = "Leave room", [LangEs] = "Salir de la sala" },
@@ -1234,7 +1211,6 @@ public static class Strings
             [LangEn] = "Type a message…",
             [LangEs] = "Escribe un mensaje…",
         },
-        ["MpRoomMembersHeader"] = new() { [LangEn] = "Players", [LangEs] = "Jugadores" },
         ["MpCreateDialogTitle"] = new() { [LangEn] = "Create a room", [LangEs] = "Crear una sala" },
         ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "Room title", [LangEs] = "Título de la sala" },
         ["MpCreateDialogMaxPlayers"] = new() { [LangEn] = "Max players", [LangEs] = "Jugadores máx." },
@@ -1260,66 +1236,10 @@ public static class Strings
             [LangEn] = "Install the mod first to host or join a room for it.",
             [LangEs] = "Instala primero el mod para crear o unirte a una sala suya.",
         },
-        ["MpZtNotInstalledTitle"] = new()
-        {
-            [LangEn] = "ZeroTier is required for multiplayer",
-            [LangEs] = "ZeroTier es necesario para el multijugador",
-        },
-        ["MpZtNotInstalledBody"] = new()
-        {
-            [LangEn] = "ZeroTier creates the virtual LAN that lets AoE3 see other players. Click below to install it — Windows will ask for permission.",
-            [LangEs] = "ZeroTier crea la LAN virtual que permite a AoE3 ver a otros jugadores. Pulsa abajo para instalarlo — Windows te pedirá permiso.",
-        },
-        ["MpZtInstall"] = new() { [LangEn] = "Install ZeroTier", [LangEs] = "Instalar ZeroTier" },
-        ["MpZtStarting"] = new() { [LangEn] = "Starting ZeroTier service…", [LangEs] = "Arrancando el servicio ZeroTier…" },
-        ["MpZtRunning"] = new() { [LangEn] = "ZeroTier ready", [LangEs] = "ZeroTier listo" },
-        ["MpZtAuthorizeBody"] = new()
-        {
-            [LangEn] = "We need to read ZeroTier's local API token. Click below — Windows will ask once.",
-            [LangEs] = "Necesitamos leer el token local de ZeroTier. Pulsa abajo — Windows lo pedirá una sola vez.",
-        },
-        ["MpZtAuthorize"] = new() { [LangEn] = "Authorize", [LangEs] = "Autorizar" },
         ["MpQuotaBar"] = new()
         {
             [LangEn] = "{0}/{1} players online · {2}/{3} active rooms",
             [LangEs] = "{0}/{1} jugadores online · {2}/{3} salas activas",
-        },
-        // -------- NAT badge (Multiplayer header) --------
-        // {0} is the human-readable NAT type label.
-        ["MpNatBadge"] = new()
-        {
-            [LangEn] = "NAT: {0}",
-            [LangEs] = "NAT: {0}",
-        },
-        ["MpNatProbing"] = new()
-        {
-            [LangEn] = "checking…",
-            [LangEs] = "comprobando…",
-        },
-        ["MpNatUnknown"] = new()
-        {
-            [LangEn] = "unknown",
-            [LangEs] = "desconocido",
-        },
-        ["MpNatOpen"] = new()
-        {
-            [LangEn] = "Open — hole-punching works trivially.",
-            [LangEs] = "Abierta — la conexión directa funciona sin problema.",
-        },
-        ["MpNatModerate"] = new()
-        {
-            [LangEn] = "Moderate — direct connection with other players works.",
-            [LangEs] = "Moderada — la conexión directa con otros jugadores funciona.",
-        },
-        ["MpNatStrict"] = new()
-        {
-            [LangEn] = "Strict — direct connection needs coordinated punching.",
-            [LangEs] = "Estricta — la conexión directa necesita coordinación extra.",
-        },
-        ["MpNatSymmetric"] = new()
-        {
-            [LangEn] = "Symmetric — direct connection won't work; relay required.",
-            [LangEs] = "Simétrica — sin conexión directa; hace falta usar relay.",
         },
         ["SettingsTabTeaser"] = new()
         {

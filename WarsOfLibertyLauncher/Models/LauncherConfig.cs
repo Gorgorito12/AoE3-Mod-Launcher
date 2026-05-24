@@ -54,13 +54,11 @@ public class MultiplayerConfig
     [JsonPropertyName("cachedUser")]
     public Multiplayer.LobbyUserSummary? CachedUser { get; set; }
 
-    /// <summary>
-    /// True once the user has clicked the "✕" on the Radmin VPN
-    /// banner in the Multiplayer tab. Persists so the banner doesn't
-    /// reappear every launch after the user has read it.
-    /// </summary>
-    [JsonPropertyName("radminBannerDismissed")]
-    public bool RadminBannerDismissed { get; set; } = false;
+    // (The previous RadminBannerDismissed flag was removed when the
+    //  banner became reactive — colour + content change with state and
+    //  a dismiss button no longer made sense. Old JSON configs with
+    //  "radminBannerDismissed":true deserialise harmlessly: the
+    //  unknown key is dropped on the next save.)
 }
 
 /// <summary>

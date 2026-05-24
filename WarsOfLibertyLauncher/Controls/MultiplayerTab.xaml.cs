@@ -177,12 +177,11 @@ public partial class MultiplayerTab : UserControl
     // mid-session) are reflected without them having to navigate away
     // and back.
     //
-    // The user dismiss flag is intentionally NOT honoured anymore: the
-    // new banner is informative (small, colour-coded) rather than
-    // nagging, and a dismissed user who later forgets why their game
-    // isn't connecting has no recourse otherwise.
-    // LauncherConfig.Multiplayer.RadminBannerDismissed stays for
-    // forward/backward config compat but is no longer read here.
+    // The user dismiss flag (previously RadminBannerDismissed) was
+    // removed in this iteration: the new banner is informative (small,
+    // colour-coded) rather than nagging, and a dismissed user who
+    // later forgets why their game isn't connecting has no recourse
+    // otherwise. The config field has also been deleted.
     // ------------------------------------------------------------------
 
     /// <summary>
@@ -1592,7 +1591,7 @@ public partial class MultiplayerTab : UserControl
         // are shipped — there's no per-machine driver install gate
         // anymore. For solo rooms (host alone) we still show
         // "P2P ready"; peers will join later.
-        var p2pReady = s.IsP2pBridgeReady;
+        var p2pReady = s.IsInLobby;
         var p2pStatus = p2pReady ? "P2P LAN ready" : "P2P starting…";
 
         // Build the meta line as inline runs so the P2P state can
@@ -1673,7 +1672,7 @@ public partial class MultiplayerTab : UserControl
         StartButton.Visibility = _isHostInCurrentRoom
             ? Visibility.Visible
             : Visibility.Collapsed;
-        StartButton.IsEnabled = _isHostInCurrentRoom && s.IsP2pBridgeReady;
+        StartButton.IsEnabled = _isHostInCurrentRoom && s.IsInLobby;
         StartButton.Content = "▶  " + Strings.Get("MpRoomStart");
         LeaveRoomButton.Content = "↩  " + Strings.Get("MpRoomLeave");
     }
@@ -3301,7 +3300,7 @@ public partial class MultiplayerTab : UserControl
                 : elapsed.ToString(@"mm\:ss");
         }
 
-        var bridgeReady = _session?.IsP2pBridgeReady ?? false;
+        var bridgeReady = _session?.IsInLobby ?? false;
 
         // Global traffic counter — n2n doesn't surface byte totals to
         // the launcher (the edge process keeps them internally). Show
@@ -3315,8 +3314,8 @@ public partial class MultiplayerTab : UserControl
         if (InGameModeText != null)
         {
             InGameModeText.Text = bridgeReady
-                ? " — Connected via virtual LAN (n2n)"
-                : " — Virtual LAN starting…";
+                ? " — In lobby (Radmin VPN expected)"
+                : " — Waiting for lobby…";
             InGameModeText.Foreground = (Brush)Application.Current.FindResource(
                 bridgeReady ? "MpStatusOnline" : "MpStatusReconnect");
         }

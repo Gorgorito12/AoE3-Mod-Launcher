@@ -1,10 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.NetworkInformation;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
@@ -30,8 +27,9 @@ public enum RadminInstallState
 /// True when the Radmin VPN virtual adapter is up with a 26.x.x.x IP.
 /// That means the user's Radmin client has signed in to Famatech and
 /// received its identity IP — but does NOT imply they're joined to any
-/// specific network. Use <see cref="PeerCount"/> to distinguish "logged
-/// in but alone" from "in an active network with players".
+/// specific network. Radmin's per-network membership lives inside its
+/// own process and isn't reliably observable from the OS, so the
+/// banner asks the user to verify the AoE3 network themselves.
 /// </param>
 /// <param name="AdapterIp">The user's own 26.x.x.x address when the service is running.</param>
 public sealed record RadminStatus(
@@ -162,8 +160,7 @@ public static class RadminVpnService
     /// is running AND the client has signed in to Famatech and been
     /// assigned its identity IP. It does NOT mean the user is joined
     /// to any network — Radmin will assign you the same 26.x.x.x even
-    /// when you're logged in but in zero networks. Pair with
-    /// <see cref="CountRadminPeers"/> to detect actual network membership.
+    /// when you're logged in but in zero networks.
     /// </summary>
     private static (bool running, string? ip) DetectServiceRunning()
     {

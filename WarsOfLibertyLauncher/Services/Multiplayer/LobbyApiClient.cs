@@ -179,6 +179,19 @@ public class LobbyApiClient : IDisposable
     public Task<MatchHistoryResponse> GetHistoryAsync(string userId, CancellationToken ct = default)
         => GetAsync<MatchHistoryResponse>($"matches/history/{userId}", requireAuth: false, ct);
 
+    // TODO(elo): not wired yet. The backend's POST /matches endpoint
+    // is live and the DTOs (ReportMatchRequest / ReportMatchResponse /
+    // MatchParticipantReport / RatingChange) are kept here for the day
+    // we hook it up. The expected call site is
+    // MultiplayerTab.OnGameExitedAsync — when AoE3 closes, fill the
+    // request from the room state we still have in memory (lobby_id,
+    // mod_id, mod_combined_hash, started_at, ended_at, durations) and
+    // post it so the backend can update ELO. Per-player win/loss has
+    // to come from replay parsing because AoE3 doesn't expose results
+    // on the command line, so v1 reports may just carry participants
+    // with result=0.5 (no rating change) until the replay parser
+    // lands. Endpoint behaviour is identical to the old Worker —
+    // safe to call from the launcher whenever we're ready.
     public Task<ReportMatchResponse> ReportMatchAsync(ReportMatchRequest req, CancellationToken ct = default)
         => PostAsync<ReportMatchResponse>("matches", req, requireAuth: true, ct);
 
