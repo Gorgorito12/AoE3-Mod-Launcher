@@ -2982,10 +2982,20 @@ public partial class MultiplayerTab : UserControl
         // When Radmin isn't running, we omit the flag entirely so
         // local-LAN play (e.g. two laptops on the same router with no
         // Radmin) keeps working unmodified.
+        //
+        // Syntax notes:
+        //   * AoE3 cvars all use `+` prefix (`+noIntroCinematics`,
+        //     `+disableESOProfile`, etc.) — the tutorial's no-prefix
+        //     `OverrideAddress=...` was parsed as a positional argument
+        //     and silently ignored, leaving AoE3 to auto-pick whatever
+        //     adapter IP it found first.
+        //   * Cvar assignments use space, not `=` (`+OverrideAddress
+        //     26.x.x.x`, not `+OverrideAddress=26.x.x.x`). The engine
+        //     treats `+name value` as "set cvar to value".
         var radmin = RadminVpnService.GetStatus();
         if (radmin.IsServiceRunning && !string.IsNullOrEmpty(radmin.AdapterIp))
         {
-            sb.Append(" OverrideAddress=").Append(radmin.AdapterIp);
+            sb.Append(" +OverrideAddress ").Append(radmin.AdapterIp);
         }
 
         return sb.ToString();
