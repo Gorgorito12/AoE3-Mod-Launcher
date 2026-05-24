@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
@@ -17,14 +20,25 @@ public enum RadminInstallState
 /// <summary>
 /// Snapshot of Radmin VPN's state at one moment in time. Held by the
 /// UI so it can render a reactive banner that shows the right action
-/// (install / open / nothing) without having to re-query the registry
-/// + network adapters from XAML.
+/// (install / open / join / nothing) without having to re-query the
+/// registry + network adapters from XAML.
 /// </summary>
+/// <param name="InstallState">Whether Radmin's MSI is installed.</param>
+/// <param name="ExePath">Path to RvGuiStarter.exe / RvRvpnGui.exe when installed; null otherwise.</param>
+/// <param name="Version">Installed version string from the uninstall registry.</param>
+/// <param name="IsServiceRunning">
+/// True when the Radmin VPN virtual adapter is up with a 26.x.x.x IP.
+/// That means the user's Radmin client has signed in to Famatech and
+/// received its identity IP — but does NOT imply they're joined to any
+/// specific network. Use <see cref="PeerCount"/> to distinguish "logged
+/// in but alone" from "in an active network with players".
+/// </param>
+/// <param name="AdapterIp">The user's own 26.x.x.x address when the service is running.</param>
 public sealed record RadminStatus(
     RadminInstallState InstallState,
     string? ExePath,
     string? Version,
-    bool IsConnected,
+    bool IsServiceRunning,
     string? AdapterIp);
 
 /// <summary>
@@ -82,8 +96,8 @@ public static class RadminVpnService
         {
             return new RadminStatus(RadminInstallState.NotInstalled, null, null, false, null);
         }
-        var (connected, ip) = DetectConnection();
-        return new RadminStatus(RadminInstallState.Installed, exe, version, connected, ip);
+        var (running, ip) = DetectServiceRunning();
+        return new RadminStatus(RadminInstallState.Installed, exe, version, running, ip);
     }
 
     /// <summary>
@@ -116,14 +130,21 @@ public static class RadminVpnService
                 var version = sub.GetValue("DisplayVersion") as string;
                 if (string.IsNullOrEmpty(loc)) continue;
 
-                // Prefer RvGuiStarter.exe (small launcher stub Famatech
-                // ships specifically to bring the GUI up cleanly), fall
-                // back to RvRvpnGui.exe (the main Qt process) for older
-                // installs that don't have the stub.
+                // Prefer RvRvpnGui.exe (the main Qt process — actually
+                // opens the window). RvGuiStarter.exe is a stub
+                // intended for Start-menu shortcuts that relies on the
+                // Radmin VPN Control Service being in a specific
+                // state, and we've observed it sit there as a zombie
+                // process without ever launching the GUI when called
+                // from outside its expected context (e.g. via
+                // Process.Start from the launcher). Falling back to
+                // RvGuiStarter only if the main GUI binary is missing
+                // — that should never happen on a healthy install but
+                // gives us a graceful degradation path.
                 string[] candidates =
                 {
-                    Path.Combine(loc, "RvGuiStarter.exe"),
                     Path.Combine(loc, "RvRvpnGui.exe"),
+                    Path.Combine(loc, "RvGuiStarter.exe"),
                 };
                 foreach (var c in candidates)
                 {
@@ -137,13 +158,14 @@ public static class RadminVpnService
     /// <summary>
     /// True when there's an "up" network adapter whose name contains
     /// "Radmin" AND that has an IPv4 address in 26.0.0.0/8 (Radmin
-    /// VPN's reserved CIDR). That's the cheapest proxy for "the user
-    /// is signed in to Radmin and connected to at least one network".
-    /// We don't bother distinguishing WHICH network — verifying that
-    /// would mean ARP-probing for a known peer IP, and the AoE3
-    /// community network has no fixed peer to probe.
+    /// VPN's reserved CIDR). That means the Radmin VPN Control Service
+    /// is running AND the client has signed in to Famatech and been
+    /// assigned its identity IP. It does NOT mean the user is joined
+    /// to any network — Radmin will assign you the same 26.x.x.x even
+    /// when you're logged in but in zero networks. Pair with
+    /// <see cref="CountRadminPeers"/> to detect actual network membership.
     /// </summary>
-    private static (bool connected, string? ip) DetectConnection()
+    private static (bool running, string? ip) DetectServiceRunning()
     {
         try
         {
@@ -162,12 +184,32 @@ public static class RadminVpnService
         catch (Exception ex)
         {
             // NIC enumeration occasionally throws on machines with WMI
-            // service issues; treat as "not connected" instead of
+            // service issues; treat as "not running" instead of
             // crashing the polling loop.
-            DiagnosticLog.Write($"RadminVpnService.DetectConnection: {ex.Message}");
+            DiagnosticLog.Write($"RadminVpnService.DetectServiceRunning: {ex.Message}");
         }
         return (false, null);
     }
+
+    // NOTE: peer-count detection was removed. We tried to infer "is the
+    // user in an active Radmin network with N other people" by counting
+    // 26.x.x.x peers visible via arp -a / Get-NetNeighbor. The reality:
+    // Radmin learns its peer list from a private TCP control channel to
+    // its server at 148.113.190.78 — that information is held entirely
+    // inside the Radmin VPN process and never surfaces to the OS until
+    // there's actual IP traffic with a specific peer. Even after
+    // joining a network of 20+ active members, the local ARP cache
+    // typically only contains 1-2 peers (those the user previously
+    // exchanged packets with). Broadcast pings don't help because
+    // Radmin peers don't respond to ICMP broadcast.
+    //
+    // So the banner can't truthfully say "you're connected to the AoE3
+    // network with N peers". It now reports a simpler honest signal —
+    // "Radmin's service is running and you have a 26.x.x.x identity" —
+    // and asks the user to verify network membership themselves in the
+    // Radmin window. Reading the Radmin GUI via UI Automation would
+    // give us the real peer list but breaks on every Radmin update
+    // (and runs afoul of Famatech's TOS).
 
     /// <summary>
     /// Launch the Radmin GUI. Process.Start with UseShellExecute lets

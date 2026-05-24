@@ -66,10 +66,10 @@ public partial class MultiplayerTab : UserControl
 
     // Radmin banner state. The timer polls the install/connection
     // status every 3 s while the tab is visible so the user gets
-    // immediate feedback when they finish installing or connecting in
-    // Radmin's own window. _lastRadminStatus is kept so the primary
-    // button's click handler knows which branch (install vs launch) to
-    // take without re-querying.
+    // immediate feedback when they finish installing or starting
+    // Radmin from its own window. _lastRadminStatus is kept so the
+    // primary button's click handler knows which branch (install vs
+    // launch) to take without re-querying.
     private System.Windows.Threading.DispatcherTimer? _radminTimer;
     private RadminStatus? _lastRadminStatus;
 
@@ -197,8 +197,21 @@ public partial class MultiplayerTab : UserControl
         var status = RadminVpnService.GetStatus();
         _lastRadminStatus = status;
 
-        // Three-way switch. Colours stay close to the original banner's
-        // blue palette so the change is subtle when nothing's wrong.
+        // Three-way switch driven by (InstallState, IsServiceRunning):
+        //   * NotInstalled              → red    "Install"
+        //   * Installed, service off    → blue   "Open Radmin"
+        //   * Service on (any state)    → green  "Radmin running — copy/paste the AoE3 network name"
+        //
+        // We DON'T try to distinguish "in the AoE3 network" from "in
+        // some other Radmin network" or "in no network at all". Radmin
+        // keeps per-network membership inside its own process — the OS
+        // only learns about specific peers when there's actual IP
+        // traffic with them (typically 1-2 entries even for a 20+
+        // member active network), so any peer-count heuristic produces
+        // misleading false negatives. We report the honest signal
+        // ("Radmin is on"), put the network name + a Copy button
+        // directly in the banner, and number the manual steps. That's
+        // as low-friction as the GUI-only manual flow can be made.
         if (status.InstallState == RadminInstallState.NotInstalled)
         {
             RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#3d1f1f")!;
@@ -210,8 +223,11 @@ public partial class MultiplayerTab : UserControl
             RadminPrimaryButton.Content = Strings.Get("MpRadminInstallButton");
             RadminPrimaryButton.Visibility = Visibility.Visible;
             RadminPrimaryButton.IsEnabled = true;
+            // No actionable network info to show while Radmin isn't on yet.
+            RadminNetworkNamePanel.Visibility = Visibility.Collapsed;
+            RadminInstructionsText.Visibility = Visibility.Collapsed;
         }
-        else if (!status.IsConnected)
+        else if (!status.IsServiceRunning)
         {
             RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#1f2c3d")!;
             RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#3a5a8c")!;
@@ -222,21 +238,77 @@ public partial class MultiplayerTab : UserControl
             RadminPrimaryButton.Content = Strings.Get("MpRadminOpenButton");
             RadminPrimaryButton.Visibility = Visibility.Visible;
             RadminPrimaryButton.IsEnabled = true;
+            RadminNetworkNamePanel.Visibility = Visibility.Collapsed;
+            RadminInstructionsText.Visibility = Visibility.Collapsed;
         }
         else
         {
             RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#1f3d2a")!;
             RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#3a8c5a")!;
             RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#3a8c5a")!;
-            RadminStatusGlyph.Text = "✓"; // check mark
+            RadminStatusGlyph.Text = "✓";
             RadminBannerTitle.Text = Strings.Get("MpRadminConnectedTitle");
             RadminBannerBody.Text = string.Format(
                 Strings.Get("MpRadminConnectedBody"),
                 status.AdapterIp ?? "26.x.x.x");
-            // No primary action needed when already connected — collapse
-            // the button so the banner shrinks back to "just info".
-            RadminPrimaryButton.Visibility = Visibility.Collapsed;
+            RadminPrimaryButton.Content = Strings.Get("MpRadminOpenButton");
+            RadminPrimaryButton.Visibility = Visibility.Visible;
+            RadminPrimaryButton.IsEnabled = true;
+
+            // Show the network-name copier + numbered steps. The
+            // TextBox is read-only and pre-filled with the canonical
+            // network name so the user can verify visually that we're
+            // pointing them at the right thing (no hidden clipboard
+            // surprises) AND can select-and-copy with their own
+            // keyboard shortcuts if they prefer that flow.
+            RadminNetworkNameBox.Text = RadminVpnService.AoE3TadNetworkName;
+            RadminCopyNameButton.Content = Strings.Get("MpRadminCopyNameButton");
+            RadminInstructionsText.Text = Strings.Get("MpRadminInstructions");
+            RadminNetworkNamePanel.Visibility = Visibility.Visible;
+            RadminInstructionsText.Visibility = Visibility.Visible;
         }
+    }
+
+    /// <summary>
+    /// Dedicated "copy the network name" button — separate from the
+    /// auto-copy that happens when "Open Radmin" is clicked, so the
+    /// user can grab a fresh copy without re-launching the GUI (handy
+    /// when they accidentally overwrote the clipboard with something
+    /// else before pasting into Radmin's Join dialog).
+    /// </summary>
+    private void RadminCopyNameButton_Click(object sender, RoutedEventArgs e)
+    {
+        try { Clipboard.SetText(RadminVpnService.AoE3TadNetworkName); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RadminCopyNameButton_Click: clipboard: {ex.Message}");
+            return;
+        }
+        FlashCopiedToast(RadminCopyNameButton);
+    }
+
+    /// <summary>
+    /// Briefly swap a button's label to "Copied!" so the click feels
+    /// acknowledged, then restore the original text after a short
+    /// delay. Pure UI candy — no behavioural consequence beyond the
+    /// visual feedback.
+    /// </summary>
+    private void FlashCopiedToast(System.Windows.Controls.Button button)
+    {
+        var original = button.Content;
+        button.Content = Strings.Get("MpRadminCopiedToast");
+        button.IsEnabled = false;
+        var revert = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(1500),
+        };
+        revert.Tick += (_, _) =>
+        {
+            revert.Stop();
+            button.Content = original;
+            button.IsEnabled = true;
+        };
+        revert.Start();
     }
 
     /// <summary>

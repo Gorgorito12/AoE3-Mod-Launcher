@@ -1123,15 +1123,63 @@ public static class Strings
             [LangEs] = "No se pudo iniciar Radmin VPN.",
         },
 
+        // "Radmin service is running but I can see < 3 real peers" —
+        // either the user hasn't joined any network OR joined one
+        // where most peers are offline / not yet known to our ARP
+        // cache. We can't tell those apart without polling Famatech's
+        // API, so the actionable advice is the same: open Radmin and
+        // verify network membership.
+        // {0} = own IP, {1} = visible peer count (0..2)
+        ["MpRadminAloneTitle"] = new()
+        {
+            [LangEn] = "Radmin running — make sure you're in the AoE3 network",
+            [LangEs] = "Radmin corriendo — verifica que estés en la red de AoE3",
+        },
+        ["MpRadminAloneBody"] = new()
+        {
+            [LangEn] = "Your IP: {0}. Only {1} peer(s) visible right now. Open Radmin and join \"Age of Empires III: The Asian Dynasties\" — we'll copy the name to your clipboard.",
+            [LangEs] = "Tu IP: {0}. Solo {1} peer(s) visible(s) ahora. Abre Radmin y únete a \"Age of Empires III: The Asian Dynasties\" — te copiamos el nombre al portapapeles.",
+        },
+
+        // Honest wording: we can verify the Radmin service is running
+        // with a 26.x.x.x identity, but Radmin's per-network membership
+        // lives inside its process and is not visible to the OS. So
+        // the launcher confirms "Radmin is on" and asks the user to
+        // verify the specific network in Radmin's own window — with
+        // the network name spelled out + a copy button + numbered
+        // steps so the manual flow is as low-friction as possible.
+        // {0} = own IP
         ["MpRadminConnectedTitle"] = new()
         {
-            [LangEn] = "Connected to Radmin VPN",
-            [LangEs] = "Conectado a Radmin VPN",
+            [LangEn] = "Radmin VPN is running",
+            [LangEs] = "Radmin VPN está corriendo",
         },
         ["MpRadminConnectedBody"] = new()
         {
-            [LangEn] = "Your Radmin IP: {0}. You're ready to host or join AoE3 games on the community network.",
-            [LangEs] = "Tu IP de Radmin: {0}. Listo para hostear o unirte a partidas de AoE3 en la red de la comunidad.",
+            [LangEn] = "Your IP: {0}. To play AoE3 online, make sure you're in this Radmin network:",
+            [LangEs] = "Tu IP: {0}. Para jugar AoE3 online, asegúrate de estar en esta red de Radmin:",
+        },
+
+        // Button next to the network-name TextBox. Briefly flashes to
+        // "Copied!" after the click so the user sees the action worked.
+        ["MpRadminCopyNameButton"] = new()
+        {
+            [LangEn] = "Copy name",
+            [LangEs] = "Copiar nombre",
+        },
+        ["MpRadminCopiedToast"] = new()
+        {
+            [LangEn] = "✓ Copied!",
+            [LangEs] = "✓ ¡Copiado!",
+        },
+
+        // Numbered steps shown under the network-name copier when in
+        // the Connected state. Kept short — the user reads them while
+        // alt-tabbing to Radmin, not as a tutorial.
+        ["MpRadminInstructions"] = new()
+        {
+            [LangEn] = "1. In Radmin, click \"Join network\" → \"Gaming\" tab\n2. Paste the name (Ctrl+V) → click \"Join\"",
+            [LangEs] = "1. En Radmin, clic \"Unirse a la red\" → pestaña \"Red de gaming\"\n2. Pega el nombre (Ctrl+V) → clic \"Unirse\"",
         },
         ["MpSignInTitle"] = new()
         {
