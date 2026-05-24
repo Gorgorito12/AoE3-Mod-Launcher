@@ -451,7 +451,7 @@ public partial class MultiplayerTab : UserControl
                 _roomMembers[me.Id] = new RoomMemberEntry
                 {
                     UserId = me.Id,
-                    Login = string.IsNullOrEmpty(me.GithubLogin) ? me.DisplayName : me.GithubLogin,
+                    Login = string.IsNullOrEmpty(me.DiscordUsername) ? me.DisplayName : me.DiscordUsername,
                     Ready = false,
                 };
                 RenderRoomMembers();
@@ -704,7 +704,7 @@ public partial class MultiplayerTab : UserControl
         if (!json.TryGetProperty("user_id", out var u)) return;
         var userId = u.GetString();
         if (string.IsNullOrEmpty(userId)) return;
-        var login = json.TryGetProperty("github_login", out var l) ? (l.GetString() ?? userId) : userId;
+        var login = json.TryGetProperty("discord_username", out var l) ? (l.GetString() ?? userId) : userId;
 
         if (_roomMembers.TryGetValue(userId, out var existing))
         {
@@ -766,7 +766,7 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// One row in the players list. Layout:
     ///   [online dot] [avatar 32] [name + ping (small)] [Host badge] [Ready badge]
-    /// Avatar uses the GitHub URL when we have one for the
+    /// Avatar uses the Discord avatar URL when we have one for the
     /// current user; for other members we don't have a URL yet,
     /// so we draw a coloured circle with their initial (cheap,
     /// stable, matches the redesign's "warm gold" placeholder).
@@ -796,7 +796,7 @@ public partial class MultiplayerTab : UserControl
             Margin = new Thickness(0, 0, 8, 0),
         }, 0));
 
-        // Avatar circle. We use the current user's GitHub avatar
+        // Avatar circle. We use the current user's Discord avatar
         // when this row IS the current user (only data we have
         // locally); otherwise an initial-on-coloured-disc tile.
         var avatarSize = 28.0;
@@ -1324,10 +1324,10 @@ public partial class MultiplayerTab : UserControl
     {
         var user = _session?.CurrentUser;
         SignedInAsText.Text = user != null
-            ? $"@{user.GithubLogin}"
+            ? $"@{user.DiscordUsername}"
             : "";
 
-        // Fill the avatar circle either with the user's GitHub
+        // Fill the avatar circle either with the user's Discord
         // avatar (cached_user.avatar_url) or, when we have no URL
         // / it fails to load, with the uppercase first letter of
         // the login as a placeholder. Both cases keep the circle
@@ -1344,8 +1344,8 @@ public partial class MultiplayerTab : UserControl
             else
             {
                 UserAvatarBrush.ImageSource = null;
-                UserAvatarInitial.Text = !string.IsNullOrEmpty(user?.GithubLogin)
-                    ? user.GithubLogin.Substring(0, 1).ToUpperInvariant()
+                UserAvatarInitial.Text = !string.IsNullOrEmpty(user?.DiscordUsername)
+                    ? user.DiscordUsername.Substring(0, 1).ToUpperInvariant()
                     : "?";
             }
         }
@@ -1354,8 +1354,8 @@ public partial class MultiplayerTab : UserControl
             // BitmapImage throws on malformed URLs; fall back to
             // the initial so the toolbar still renders cleanly.
             UserAvatarBrush.ImageSource = null;
-            UserAvatarInitial.Text = !string.IsNullOrEmpty(user?.GithubLogin)
-                ? user.GithubLogin.Substring(0, 1).ToUpperInvariant()
+            UserAvatarInitial.Text = !string.IsNullOrEmpty(user?.DiscordUsername)
+                ? user.DiscordUsername.Substring(0, 1).ToUpperInvariant()
                 : "?";
         }
     }
@@ -1564,7 +1564,7 @@ public partial class MultiplayerTab : UserControl
             return;
         }
         ProfileNameText.Text = user.DisplayName;
-        ProfileLoginText.Text = $"@{user.GithubLogin}";
+        ProfileLoginText.Text = $"@{user.DiscordUsername}";
         // ELO is fetched lazily; cached value would live in extended
         // cachedUser later. For now leave the line empty so we don't
         // lie about an unknown rating.
@@ -2564,9 +2564,9 @@ public partial class MultiplayerTab : UserControl
         if (string.IsNullOrEmpty(text)) return;
         ChatInputBox.Text = "";
 
-        var login = string.IsNullOrEmpty(_session.CurrentUser.GithubLogin)
+        var login = string.IsNullOrEmpty(_session.CurrentUser.DiscordUsername)
             ? _session.CurrentUser.DisplayName
-            : _session.CurrentUser.GithubLogin;
+            : _session.CurrentUser.DiscordUsername;
 
         if (_session.RoomSocket == null)
         {
@@ -3088,7 +3088,7 @@ public partial class MultiplayerTab : UserControl
             if (me != null)
             {
                 InGamePeersPanel.Children.Add(BuildInGamePeerRow(
-                    login: string.IsNullOrEmpty(me.GithubLogin) ? me.DisplayName : me.GithubLogin,
+                    login: string.IsNullOrEmpty(me.DiscordUsername) ? me.DisplayName : me.DiscordUsername,
                     state: "you",
                     rttMs: 0,
                     bytesIn: 0,

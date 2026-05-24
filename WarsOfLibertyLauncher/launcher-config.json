@@ -15,7 +15,7 @@
   "defaultInstallFolder": "C:\\Program Files (x86)\\Wars of Liberty",
   "officialWebsite": "http://aoe3wol.com/",
   "multiplayer": {
-    "lobbyBaseUrl": "https://wol-launcher-lobby.jeisonso1997.workers.dev",
+    "lobbyBaseUrl": "https://wol-lobby.duckdns.org",
     "sessionToken": "",
     "sessionExpiresAt": 0,
     "cachedUser": null,

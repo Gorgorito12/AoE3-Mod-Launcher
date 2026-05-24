@@ -6,12 +6,13 @@ using System.Text.Json.Serialization;
 namespace WarsOfLibertyLauncher.Models.Multiplayer;
 
 /// <summary>
-/// All DTOs the launcher (de)serialises when talking to the Worker.
-/// Property names match the JSON the Worker emits exactly; keeping them
-/// in one file makes it easy to spot drift between the two repos.
+/// All DTOs the launcher (de)serialises when talking to the lobby
+/// backend. Property names match the JSON the backend emits exactly;
+/// keeping them in one file makes it easy to spot drift between the
+/// two repos.
 /// </summary>
 
-/// <summary>Result of <c>POST /auth/github/device</c>.</summary>
+/// <summary>Result of <c>POST /auth/login/device</c>.</summary>
 public class DeviceFlowStart
 {
     [JsonPropertyName("user_code")]
@@ -31,7 +32,7 @@ public class DeviceFlowStart
     public string PollHandle { get; set; } = "";
 }
 
-/// <summary>Successful <c>POST /auth/github/poll</c> result.</summary>
+/// <summary>Successful <c>POST /auth/login/poll</c> result.</summary>
 public class DeviceFlowComplete
 {
     [JsonPropertyName("status")]
@@ -55,8 +56,11 @@ public class LobbyUserSummary
     [JsonPropertyName("id")]
     public string Id { get; set; } = "";
 
-    [JsonPropertyName("github_login")]
-    public string GithubLogin { get; set; } = "";
+    /// <summary>Discord username (snowflake-account legacy field; lowercase,
+    /// unique for newer accounts). May differ from <see cref="DisplayName"/>,
+    /// which is Discord's user-editable "global name".</summary>
+    [JsonPropertyName("discord_username")]
+    public string DiscordUsername { get; set; } = "";
 
     [JsonPropertyName("display_name")]
     public string DisplayName { get; set; } = "";
@@ -85,8 +89,8 @@ public class LobbyHost
     [JsonPropertyName("id")]
     public string Id { get; set; } = "";
 
-    [JsonPropertyName("github_login")]
-    public string GithubLogin { get; set; } = "";
+    [JsonPropertyName("discord_username")]
+    public string DiscordUsername { get; set; } = "";
 
     [JsonPropertyName("display_name")]
     public string DisplayName { get; set; } = "";
@@ -375,9 +379,11 @@ public class WsRoomMemberFlags
     [JsonPropertyName("ready")]
     public bool Ready { get; set; }
 
-    /// <summary>GitHub login at the time the member joined. Empty when
-    /// the server didn't have it cached (rare; only legacy lobbies that
-    /// pre-date the member-with-login schema).</summary>
+    /// <summary>Display login (Discord username) at the time the member
+    /// joined. Empty when the server didn't have it cached (rare; only
+    /// legacy lobbies that pre-date the member-with-login schema). The
+    /// JSON key stays the generic "login" so the room WS protocol is
+    /// provider-agnostic.</summary>
     [JsonPropertyName("login")]
     public string Login { get; set; } = "";
 }

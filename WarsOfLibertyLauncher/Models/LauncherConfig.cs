@@ -16,32 +16,31 @@ namespace WarsOfLibertyLauncher.Models;
 public class MultiplayerConfig
 {
     /// <summary>
-    /// Base URL of the lobby Worker. The default points at the
-    /// launcher's production Cloudflare Workers deployment under
-    /// the maintainer's workers.dev subdomain — every fresh install
-    /// hits this URL until the user explicitly overrides it in
-    /// Settings. The subdomain (jeisonso1997) is mandatory: the
-    /// bare `wol-launcher-lobby.workers.dev` doesn't resolve in DNS
-    /// (that name would only exist if Cloudflare owned the apex,
-    /// which they don't — every Worker lives under
-    /// `<your-account>.workers.dev`). Power users can point at a
-    /// self-hosted Worker by editing this field.
+    /// Base URL of the lobby backend. The default points at the
+    /// maintainer's self-hosted Node.js + Fastify deployment on an
+    /// Oracle Cloud VM, fronted by DuckDNS + Let's Encrypt. Every
+    /// fresh install hits this URL until the user explicitly
+    /// overrides it in Settings. Power users can point at their
+    /// own deployment by editing this field. Configs written by
+    /// older launchers (which defaulted to the now-retired
+    /// Cloudflare Worker URL) are auto-healed by
+    /// <see cref="MigrateLobbyBaseUrl"/> on next load.
     /// </summary>
     [JsonPropertyName("lobbyBaseUrl")]
-    public string LobbyBaseUrl { get; set; } = "https://wol-launcher-lobby.jeisonso1997.workers.dev";
+    public string LobbyBaseUrl { get; set; } = "https://wol-lobby.duckdns.org";
 
     /// <summary>
-    /// Session JWT issued by the Worker after a successful GitHub
-    /// device-flow sign-in. Empty when the user is not signed in (the
-    /// Multiplayer tab will prompt them on first visit). Treat this
-    /// like a password — it's a bearer credential.
+    /// Session JWT issued by the backend after a successful Discord
+    /// sign-in. Empty when the user is not signed in (the Multiplayer
+    /// tab will prompt them on first visit). Treat this like a
+    /// password — it's a bearer credential.
     /// </summary>
     [JsonPropertyName("sessionToken")]
     public string SessionToken { get; set; } = "";
 
     /// <summary>
     /// Unix seconds when the <see cref="SessionToken"/> stops being
-    /// accepted by the Worker. The launcher refreshes silently when the
+    /// accepted by the backend. The launcher refreshes silently when the
     /// remaining lifetime drops below 24 h.
     /// </summary>
     [JsonPropertyName("sessionExpiresAt")]
@@ -447,11 +446,11 @@ public class LauncherConfig
 
     /// <summary>
     /// Multiplayer state — backend URL and the session token issued by
-    /// the lobby Worker after a GitHub device-flow sign-in. Lives in its
-    /// own nested object so the JSON layout stays tidy and so adding new
-    /// multiplayer fields later doesn't keep ballooning the root schema.
-    /// Initialised lazily; <see cref="Multiplayer"/> is never null after
-    /// <see cref="Load"/> returns.
+    /// the lobby backend after a Discord sign-in. Lives in its own
+    /// nested object so the JSON layout stays tidy and so adding new
+    /// multiplayer fields later doesn't keep ballooning the root
+    /// schema. Initialised lazily; <see cref="Multiplayer"/> is never
+    /// null after <see cref="Load"/> returns.
     /// </summary>
     [JsonPropertyName("multiplayer")]
     public MultiplayerConfig Multiplayer { get; set; } = new();
@@ -481,9 +480,13 @@ public class LauncherConfig
 
     /// <summary>
     /// Heal stale <c>multiplayer.lobbyBaseUrl</c> values that point
-    /// at addresses which no longer (or never) resolved. Two known
-    /// bad values shipped in early builds:
+    /// at addresses which no longer (or never) resolved. Known bad
+    /// values shipped in earlier builds:
     ///
+    ///   * <c>https://wol-launcher-lobby.jeisonso1997.workers.dev</c>
+    ///     — the previous production URL, served by a Cloudflare
+    ///     Worker that has been retired in favour of the self-hosted
+    ///     Node backend at wol-lobby.duckdns.org.
     ///   * <c>https://wol-launcher-lobby.workers.dev</c> — looked
     ///     like a public Cloudflare URL but doesn't include the
     ///     account subdomain, so DNS fails with "Host desconocido".
@@ -494,13 +497,15 @@ public class LauncherConfig
     ///     the terminal.
     ///
     /// When we spot any of these, rewrite to the current production
-    /// Worker URL and save. Idempotent — once migrated, subsequent
+    /// backend URL and save. Idempotent — once migrated, subsequent
     /// loads see a healthy URL and do nothing.
     /// </summary>
     private void MigrateLobbyBaseUrl()
     {
         var url = Multiplayer.LobbyBaseUrl ?? "";
-        bool isBroken = url == "https://wol-launcher-lobby.workers.dev"
+        bool isBroken = url == "https://wol-launcher-lobby.jeisonso1997.workers.dev"
+            || url == "http://wol-launcher-lobby.jeisonso1997.workers.dev"
+            || url == "https://wol-launcher-lobby.workers.dev"
             || url == "http://wol-launcher-lobby.workers.dev"
             || url.StartsWith("http://127.0.0.1", StringComparison.OrdinalIgnoreCase)
             || url.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase)
@@ -509,11 +514,11 @@ public class LauncherConfig
 
         var oldUrl = url;
         Multiplayer.LobbyBaseUrl = new MultiplayerConfig().LobbyBaseUrl;
-        // Old sessionToken was signed by a different Worker / JWT
+        // Old sessionToken was signed by a different backend / JWT
         // key, so clear it too — otherwise the next /me call fails
-        // with `invalid_token` and the user can't sign in until
-        // they manually edit the config. Forcing a fresh GitHub
-        // device-flow login is the right reset.
+        // with `invalid_token` and the user can't sign in until they
+        // manually edit the config. Forcing a fresh Discord sign-in
+        // is the right reset.
         Multiplayer.SessionToken = "";
         Multiplayer.SessionExpiresAt = 0;
         Multiplayer.CachedUser = null;
@@ -525,7 +530,7 @@ public class LauncherConfig
         }
         DiagnosticLog.Write(
             $"Migrated multiplayer.lobbyBaseUrl: '{oldUrl}' -> '{Multiplayer.LobbyBaseUrl}'. " +
-            $"Session cleared; user needs to sign in again with GitHub.");
+            $"Session cleared; user needs to sign in again with Discord.");
     }
 
     /// <summary>

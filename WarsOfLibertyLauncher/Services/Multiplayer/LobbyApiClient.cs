@@ -12,7 +12,7 @@ using WarsOfLibertyLauncher.Models.Multiplayer;
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
 /// <summary>
-/// Exception carrying the Worker's <c>{code, message, details}</c> envelope.
+/// Exception carrying the backend's <c>{code, message, details}</c> envelope.
 /// The UI layer branches on <see cref="Code"/> to surface the right
 /// message (rate_limited → "slow down", mod_mismatch → diff dialog, …).
 /// </summary>
@@ -32,7 +32,8 @@ public class LobbyApiException : Exception
 }
 
 /// <summary>
-/// HTTP client for the multiplayer Worker. One instance per launcher
+/// HTTP client for the multiplayer lobby backend (self-hosted Node +
+/// Fastify; previously a Cloudflare Worker). One instance per launcher
 /// lifetime; thread-safe by virtue of <see cref="HttpClient"/>'s own
 /// guarantees.
 ///
@@ -41,7 +42,7 @@ public class LobbyApiException : Exception
 ///     has on disk (may be null/expired).
 ///   * On a 401 the client raises <see cref="LobbyApiException"/> with
 ///     code "unauthorized" or "invalid_token"; the UI layer re-runs the
-///     GitHub device flow and calls <see cref="SetSessionToken"/> with
+///     Discord sign-in flow and calls <see cref="SetSessionToken"/> with
 ///     the fresh token.
 /// </summary>
 public class LobbyApiClient : IDisposable
@@ -81,17 +82,18 @@ public class LobbyApiClient : IDisposable
     public Uri BaseUri => _http.BaseAddress!;
 
     // ---------------------------------------------------------------
-    // Auth — GitHub device flow
+    // Auth — Discord (state-based flow, shaped like a device flow so the
+    // launcher code path is unchanged from the old GitHub implementation).
     // ---------------------------------------------------------------
 
     public Task<DeviceFlowStart> StartDeviceFlowAsync(CancellationToken ct = default)
-        => PostAsync<DeviceFlowStart>("auth/github/device", body: null, requireAuth: false, ct);
+        => PostAsync<DeviceFlowStart>("auth/login/device", body: null, requireAuth: false, ct);
 
     /// <summary>
-    /// Poll the Worker until the device flow completes or times out.
+    /// Poll the backend until the sign-in flow completes or times out.
     /// Returns the completed payload (includes a JWT). Throws
     /// <see cref="LobbyApiException"/> for terminal errors (expired
-    /// code, access denied).
+    /// state, access denied).
     /// </summary>
     public async Task<DeviceFlowComplete> PollDeviceFlowAsync(
         string pollHandle,
@@ -100,10 +102,10 @@ public class LobbyApiClient : IDisposable
         CancellationToken ct = default)
     {
         var deadline = DateTime.UtcNow + timeout;
-        // Floor at 10 s (was 5 s). GitHub's Device Flow happily accepts
-        // 10 s polling and it halves the number of Worker requests
-        // generated during the sign-in window (typical user takes
-        // 30-60 s to approve; that's 6-12 polls instead of 12-24).
+        // Floor at 10 s (was 5 s). The backend's per-IP poll rate limit
+        // tolerates this comfortably and it halves the number of HTTP
+        // requests generated during the sign-in window (typical user
+        // takes 30-60 s to approve; that's 6-12 polls instead of 12-24).
         // When the server explicitly returns `slow_down`, the loop
         // below still backs off another 5 s per occurrence.
         var currentInterval = Math.Max(10, intervalSeconds);
@@ -113,7 +115,7 @@ public class LobbyApiClient : IDisposable
             ct.ThrowIfCancellationRequested();
             await Task.Delay(TimeSpan.FromSeconds(currentInterval), ct);
 
-            using var req = new HttpRequestMessage(HttpMethod.Post, "auth/github/poll")
+            using var req = new HttpRequestMessage(HttpMethod.Post, "auth/login/poll")
             {
                 Content = JsonContent.Create(new { poll_handle = pollHandle }, options: _jsonOptions),
             };
@@ -139,7 +141,7 @@ public class LobbyApiClient : IDisposable
             return complete;
         }
 
-        throw new LobbyApiException(408, "device_flow_timeout", "GitHub authorisation timed out.", null);
+        throw new LobbyApiException(408, "device_flow_timeout", "Discord authorisation timed out.", null);
     }
 
     public Task<LobbyUserSummary> GetMeAsync(CancellationToken ct = default)
@@ -188,9 +190,10 @@ public class LobbyApiClient : IDisposable
             ct);
 
     /// <summary>
-    /// Stream a replay file body to the Worker. The endpoint returned by
+    /// Stream a replay file body to the backend. The endpoint returned by
     /// <see cref="RequestReplayUploadAsync"/> is a single-use handle: the
-    /// Worker validates size + auth and forwards the bytes into R2.
+    /// backend validates size + auth and writes the bytes to the replays
+    /// directory.
     /// </summary>
     public async Task UploadReplayAsync(
         string uploadUrlPath,
@@ -222,9 +225,9 @@ public class LobbyApiClient : IDisposable
         }
         else if (requireAuth)
         {
-            // Throw early instead of bouncing off the Worker — saves a
+            // Throw early instead of bouncing off the backend — saves a
             // request and gives the UI a clearer signal.
-            throw new LobbyApiException(401, "unauthorized", "Sign in with GitHub first.", null);
+            throw new LobbyApiException(401, "unauthorized", "Sign in with Discord first.", null);
         }
     }
 

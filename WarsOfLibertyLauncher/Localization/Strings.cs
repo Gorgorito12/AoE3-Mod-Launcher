@@ -1089,26 +1089,30 @@ public static class Strings
         },
         ["MpSignInBody"] = new()
         {
-            [LangEn] = "Multiplayer uses GitHub to sign you in — no new account needed. Your username and avatar are read; nothing else is requested.",
-            [LangEs] = "El multijugador usa GitHub para iniciar sesión: no necesitas crear una cuenta nueva. Solo se leen tu usuario y avatar; nada más.",
+            [LangEn] = "Multiplayer uses Discord to sign you in — no new account needed. Your username and avatar are read; nothing else is requested.",
+            [LangEs] = "El multijugador usa Discord para iniciar sesión: no necesitas crear una cuenta nueva. Solo se leen tu usuario y avatar; nada más.",
         },
-        ["MpSignInButton"] = new() { [LangEn] = "Sign in with GitHub", [LangEs] = "Iniciar sesión con GitHub" },
+        ["MpSignInButton"] = new() { [LangEn] = "Sign in with Discord", [LangEs] = "Iniciar sesión con Discord" },
         ["MpSignOutButton"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
-        ["MpSignInDialogTitle"] = new() { [LangEn] = "GitHub sign-in", [LangEs] = "Inicio de sesión GitHub" },
+        ["MpSignInDialogTitle"] = new() { [LangEn] = "Discord sign-in", [LangEs] = "Inicio de sesión Discord" },
         ["MpSignInStep1"] = new()
         {
-            [LangEn] = "1. Open this URL in your browser:",
-            [LangEs] = "1. Abre esta URL en tu navegador:",
+            [LangEn] = "Open this URL in your browser and click Authorize:",
+            [LangEs] = "Abre esta URL en tu navegador y haz clic en Autorizar:",
         },
         ["MpSignInStep2"] = new()
         {
-            [LangEn] = "2. Type or paste this code, then approve:",
-            [LangEs] = "2. Escribe o pega este código y aprueba:",
+            // Only shown for legacy GitHub-style flows where the user has to
+            // type a code into the browser. Discord skips this step entirely;
+            // the dialog hides this text when the server returns an empty
+            // user_code.
+            [LangEn] = "Type or paste this code into the browser, then approve:",
+            [LangEs] = "Escribe o pega este código en el navegador y aprueba:",
         },
         ["MpSignInWaiting"] = new()
         {
-            [LangEn] = "Waiting for you to approve in the browser…",
-            [LangEs] = "Esperando tu aprobación en el navegador…",
+            [LangEn] = "Waiting for you to authorize in the browser…",
+            [LangEs] = "Esperando tu autorización en el navegador…",
         },
         ["MpSignInOpenBrowser"] = new() { [LangEn] = "Open browser", [LangEs] = "Abrir navegador" },
         ["MpSignInCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },

@@ -11,15 +11,21 @@ using WarsOfLibertyLauncher.Services.Multiplayer;
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Modal dialog that drives a GitHub OAuth Device Flow against the lobby
-/// Worker. Shown when the user clicks "Sign in with GitHub" on the
-/// Multiplayer tab.
+/// Modal dialog that drives the sign-in flow against the lobby backend.
+/// Currently backed by Discord OAuth, exposed as a device-flow-shaped
+/// API so this dialog stayed the same after the GitHub → Discord swap;
+/// the class name is kept for git-blame continuity.
+///
+/// Shown when the user clicks "Sign in with Discord" on the Multiplayer
+/// tab.
 ///
 /// Flow inside the dialog:
-///   1. On Loaded → POST /auth/github/device, get user_code + URL.
-///   2. Display both, plus "Open browser" and "Copy code" buttons.
-///   3. Start polling /auth/github/poll in the background until either
-///      the Worker returns a JWT, the user cancels, or the device code
+///   1. On Loaded → POST /auth/login/device, get verification_uri (and
+///      for legacy flows a user_code).
+///   2. Display the URL + "Open browser" button. For Discord, user_code
+///      is empty, so the "type this code" panel is hidden.
+///   3. Start polling /auth/login/poll in the background until either
+///      the backend returns a JWT, the user cancels, or the state
 ///      expires.
 ///   4. On success → set DialogResult = true; caller reads
 ///      <see cref="CompletedSession"/>.
@@ -61,10 +67,22 @@ public partial class GitHubLoginDialog : Window
         try
         {
             _start = await _session.StartSignInAsync(_cts.Token);
-            UserCodeText.Text = _start.UserCode;
             VerificationUriText.Text = _start.VerificationUri;
             OpenBrowserButton.IsEnabled = true;
-            CopyButton.IsEnabled = true;
+
+            // Hide the "type this code" panel when the server didn't
+            // give us one. Discord's flow doesn't have a user_code —
+            // clicking Authorize in the browser is the whole thing.
+            if (string.IsNullOrEmpty(_start.UserCode))
+            {
+                Step2Text.Visibility = Visibility.Collapsed;
+                UserCodeBorder.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                UserCodeText.Text = _start.UserCode;
+                CopyButton.IsEnabled = true;
+            }
 
             // Kick off polling. PollDeviceFlowAsync internally waits
             // `interval` between attempts, so we just await it here.
@@ -75,13 +93,13 @@ public partial class GitHubLoginDialog : Window
         }
         catch (OperationCanceledException)
         {
-            DiagnosticLog.Write("GitHubLoginDialog: cancelled by user");
+            DiagnosticLog.Write("DiscordLoginDialog: cancelled by user");
             DialogResult = false;
             Close();
         }
         catch (LobbyApiException ex)
         {
-            DiagnosticLog.Write($"GitHubLoginDialog: LobbyApiException status={ex.Status} code={ex.Code} msg={ex.Message}");
+            DiagnosticLog.Write($"DiscordLoginDialog: LobbyApiException status={ex.Status} code={ex.Code} msg={ex.Message}");
             StatusText.Text = ex.Message;
             StatusText.Foreground = System.Windows.Media.Brushes.Salmon;
             CancelButton.Content = Strings.Get("DlgClose");
@@ -99,7 +117,7 @@ public partial class GitHubLoginDialog : Window
                 details.Append(" || ").Append(inner.GetType().Name).Append(": ").Append(inner.Message);
                 inner = inner.InnerException;
             }
-            DiagnosticLog.Write($"GitHubLoginDialog: {details}");
+            DiagnosticLog.Write($"DiscordLoginDialog: {details}");
             StatusText.Text = details.ToString();
             StatusText.Foreground = System.Windows.Media.Brushes.Salmon;
             CancelButton.Content = Strings.Get("DlgClose");
@@ -119,7 +137,7 @@ public partial class GitHubLoginDialog : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"GitHubLoginDialog: failed to open browser: {ex.Message}");
+            DiagnosticLog.Write($"DiscordLoginDialog: failed to open browser: {ex.Message}");
         }
     }
 
@@ -127,7 +145,7 @@ public partial class GitHubLoginDialog : Window
     {
         if (_start == null) return;
         try { Clipboard.SetText(_start.UserCode); }
-        catch (Exception ex) { DiagnosticLog.Write($"GitHubLoginDialog: clipboard: {ex.Message}"); }
+        catch (Exception ex) { DiagnosticLog.Write($"DiscordLoginDialog: clipboard: {ex.Message}"); }
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
