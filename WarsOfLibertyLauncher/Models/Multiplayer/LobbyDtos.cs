@@ -398,64 +398,11 @@ public class WsRoomState
     public List<WsChatLine> Chat { get; set; } = new();
 }
 
-// ---------------------------------------------------------------------------
-// P2P signaling DTOs — sent over the lobby room WebSocket. The DO does
-// not interpret the payloads; it just routes peer_announce broadcasts and
-// peer_relay unicasts between members. The launcher uses these to
-// coordinate STUN/ICE-style hole-punching.
-// ---------------------------------------------------------------------------
-
-/// <summary>
-/// One candidate address a peer can be reached at. The launcher
-/// announces every reachable candidate it knows about — typically:
-///   * a public address from STUN, and
-///   * one or more LAN addresses for same-network fallbacks.
-/// Peers race the candidates simultaneously and stick with whichever
-/// one answers first.
-/// </summary>
-public class WsPeerEndpoint
-{
-    [JsonPropertyName("ip")]
-    public string Ip { get; set; } = "";
-
-    [JsonPropertyName("port")]
-    public int Port { get; set; }
-
-    /// <summary>"stun" (public via NAT), "lan" (private LAN), "turn" (relayed).</summary>
-    [JsonPropertyName("kind")]
-    public string Kind { get; set; } = "";
-}
-
-/// <summary>Incoming <c>peer_announce</c> frame broadcast by the DO.</summary>
-public class WsPeerAnnounce
-{
-    [JsonPropertyName("user_id")]
-    public string UserId { get; set; } = "";
-
-    [JsonPropertyName("login")]
-    public string Login { get; set; } = "";
-
-    [JsonPropertyName("endpoints")]
-    public List<WsPeerEndpoint> Endpoints { get; set; } = new();
-}
-
-/// <summary>Incoming <c>peer_relay</c> frame unicast by the DO.</summary>
-public class WsPeerRelay
-{
-    [JsonPropertyName("from_user")]
-    public string FromUser { get; set; } = "";
-
-    [JsonPropertyName("from_login")]
-    public string FromLogin { get; set; } = "";
-
-    /// <summary>
-    /// Opaque payload defined by the launcher's hole-punching
-    /// protocol. We deserialise into <see cref="JsonElement"/> so
-    /// new fields can land on the client without server changes.
-    /// </summary>
-    [JsonPropertyName("payload")]
-    public JsonElement Payload { get; set; }
-}
+// (Pre-n2n: this file used to carry WsPeerEndpoint / WsPeerAnnounce /
+//  WsPeerRelay DTOs the launcher serialised over the room WS to
+//  coordinate STUN-based hole-punching with each peer. With n2n the
+//  edges find each other through the supernode by community name —
+//  there is no per-peer launcher-side signaling left to model.)
 
 /// <summary>Standard error envelope returned by every endpoint on failure.</summary>
 public class ApiErrorBody

@@ -56,23 +56,12 @@ public class MultiplayerConfig
     public Multiplayer.LobbyUserSummary? CachedUser { get; set; }
 
     /// <summary>
-    /// "Relay-only" privacy mode. When ON, the launcher does NOT
-    /// announce its public STUN endpoint over <c>peer_announce</c> —
-    /// only the private LAN candidates. Other peers can't hole-punch
-    /// the user directly and fall back to <c>game_relay</c> through
-    /// the lobby Worker for game traffic. Net effect: the user's
-    /// public IP never reaches another player.
-    ///
-    /// Trade-off: ~50 ms extra latency per packet (one round-trip via
-    /// Cloudflare's edge instead of P2P direct) and consumes more of
-    /// the Worker's request budget per session.
-    ///
-    /// Off by default — for a community of mutually-known players,
-    /// the privacy cost of direct P2P is negligible and the latency
-    /// gain is real. Users who want anonymity flip it on themselves.
+    /// True once the user has clicked the "✕" on the Radmin VPN
+    /// banner in the Multiplayer tab. Persists so the banner doesn't
+    /// reappear every launch after the user has read it.
     /// </summary>
-    [JsonPropertyName("relayOnly")]
-    public bool RelayOnly { get; set; } = false;
+    [JsonPropertyName("radminBannerDismissed")]
+    public bool RadminBannerDismissed { get; set; } = false;
 }
 
 /// <summary>

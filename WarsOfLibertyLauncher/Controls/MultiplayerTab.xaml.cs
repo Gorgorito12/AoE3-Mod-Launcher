@@ -13,8 +13,6 @@ using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Services;
 using WarsOfLibertyLauncher.Services.Multiplayer;
-using WarsOfLibertyLauncher.Services.Multiplayer.NativeHook;
-using WarsOfLibertyLauncher.Services.Multiplayer.P2P;
 
 namespace WarsOfLibertyLauncher.Controls;
 
@@ -66,17 +64,18 @@ public partial class MultiplayerTab : UserControl
 
     private System.Windows.Threading.DispatcherTimer? _quotaTimer;
 
-    /// <summary>
-    /// Last NAT probe result. Cached so re-renders of the header don't
-    /// re-probe; refreshed on demand by <see cref="ProbeNatTypeAsync"/>.
-    /// </summary>
-    private NatProbeResult? _natProbe;
+    // (Pre-Radmin: there used to be n2n bootstrap status here for the
+    //  header badge. With the n2n stack removed and Radmin as the
+    //  user-managed VPN, the header badge just shows a static label.)
 
     /// <summary>Currently-subscribed WS, so we can unsubscribe cleanly on room change.</summary>
     private LobbyWebSocket? _attachedSocket;
 
-    /// <summary>Mesh we're listening to for peer-state transitions; cleared on room change.</summary>
-    private PeerMesh? _attachedMesh;
+    // (Pre-n2n: a per-room PeerMesh lived here so the tab could repaint
+    //  when peer RTT/state changed. With n2n the local edge is owned by
+    //  the session, peer-by-peer ping is no longer something we can
+    //  observe at this layer, and connection state is just N2n.State on
+    //  the session. The whole subscription dance is gone.)
 
     /// <summary>Live state of the current room, rebuilt as WS frames arrive.</summary>
     private readonly System.Collections.Generic.Dictionary<string, RoomMemberEntry> _roomMembers = new();
@@ -151,9 +150,67 @@ public partial class MultiplayerTab : UserControl
     {
         InitializeComponent();
         ApplyStrings();
+        ApplyRadminBannerVisibility();
         // Initial state is the signed-out gate; once Attach() runs we
         // re-render against the real session.
         RefreshFromSession();
+    }
+
+    /// <summary>
+    /// Hide the Radmin VPN banner if the user has previously clicked
+    /// the dismiss button (the preference persists across launcher
+    /// runs via <see cref="LauncherConfig.RadminBannerDismissed"/>).
+    /// We don't try to be clever about resurfacing — once dismissed,
+    /// dismissed forever; the user can rediscover Radmin via Help.
+    /// </summary>
+    private void ApplyRadminBannerVisibility()
+    {
+        if (RadminBanner == null) return;
+        bool dismissed = false;
+        try { dismissed = LauncherConfig.Load().Multiplayer.RadminBannerDismissed; }
+        catch { /* config read failed; show the banner by default */ }
+        RadminBanner.Visibility = dismissed ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Click handler for the Radmin banner's "Download Radmin" button.
+    /// Opens the official download page in the user's browser. We
+    /// don't try to bundle the installer — Radmin VPN is closed-
+    /// source and Famatech's terms don't permit silent redistribution.
+    /// </summary>
+    private void RadminDownloadButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://www.radmin-vpn.com/",
+                UseShellExecute = true,
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.RadminDownloadButton_Click: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Persist the user's choice to hide the Radmin banner.
+    /// </summary>
+    private void RadminDismissButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var cfg = LauncherConfig.Load();
+            cfg.Multiplayer.RadminBannerDismissed = true;
+            cfg.Save();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.RadminDismissButton_Click: persist failed: {ex.Message}");
+        }
+        if (RadminBanner != null) RadminBanner.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -188,7 +245,9 @@ public partial class MultiplayerTab : UserControl
         // budget cost). The expensive ones — RefreshQuotaAsync /
         // RefreshRoomsListAsync — are gated below so they only run
         // when the user is actually looking at the Multiplayer tab.
-        _ = ProbeNatTypeAsync();
+        // No async bootstrap to fire anymore — the game-network layer
+        // (Radmin VPN) is user-managed; the launcher just paints the
+        // static badge once via RenderNatBadge() further down.
 
         // Auto-refresh the quota bar every 60 s. Only ticks while
         // the control is *visible* — when the user switches to
@@ -290,76 +349,25 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Paint the NAT badge from <see cref="_natProbe"/>. Idempotent.
-    /// Called on every language/state refresh so the badge keeps its
-    /// tooltip + colour in sync.
+    /// Paint the header badge. Used to flip between NAT-type colours
+    /// and later between n2n bootstrap states; now that the actual
+    /// game network is Radmin VPN (managed by the user outside the
+    /// launcher), the badge is purely informational — it reminds the
+    /// user that Radmin is the connectivity layer and points at the
+    /// banner above the rooms list for setup instructions.
     /// </summary>
     private void RenderNatBadge()
     {
-        Brush bgPanelAlt = (Brush)Application.Current.FindResource("BgPanelAlt");
-        Brush textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
-
-        if (_natProbe == null)
-        {
-            NatBadgeText.Text = Strings.Format("MpNatBadge", Strings.Get("MpNatProbing"));
-            NatBadgeBorder.Background = bgPanelAlt;
-            NatBadgeText.Foreground = textSecondary;
-            NatBadgeBorder.ToolTip = null;
-            return;
-        }
-
-        // Map enum to label + colour + tooltip. Colours pulled from a
-        // simple "traffic light" palette so users grok at a glance:
-        //   Open      → green
-        //   Moderate  → green-ish
-        //   Strict    → amber
-        //   Symmetric → red
-        //   Unknown   → grey
-        var (labelKey, descKey, bg, fg) = _natProbe.Type switch
-        {
-            NatType.Open      => ("Open",     "MpNatOpen",      "#1f3d1f", "#9aff9a"),
-            NatType.Moderate  => ("Moderate", "MpNatModerate",  "#1f3d2f", "#9affd1"),
-            NatType.Strict    => ("Strict",   "MpNatStrict",    "#3d2f1f", "#ffcc88"),
-            NatType.Symmetric => ("Symmetric","MpNatSymmetric", "#3d1f1f", "#ff9090"),
-            _                 => ("Unknown",  "MpNatUnknown",   "#2a2d34", "#888888"),
-        };
-
-        NatBadgeText.Text = Strings.Format("MpNatBadge", labelKey);
+        if (NatBadgeText == null || NatBadgeBorder == null) return;
+        NatBadgeText.Text = "Radmin VPN";
         NatBadgeBorder.Background = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(bg));
+            (Color)ColorConverter.ConvertFromString("#2a2d34"));
         NatBadgeText.Foreground = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(fg));
-
-        var tip = Strings.Get(descKey);
-        if (_natProbe.PublicEndpoint != null)
-            tip += $"\nPublic address: {_natProbe.PublicEndpoint}";
-        if (!string.IsNullOrEmpty(_natProbe.ErrorMessage))
-            tip += $"\n{_natProbe.ErrorMessage}";
-        NatBadgeBorder.ToolTip = tip;
-    }
-
-    /// <summary>
-    /// Run the NAT type probe in the background. Two STUN Binding
-    /// Requests against different public servers. Result is cached
-    /// in <see cref="_natProbe"/> and rendered via
-    /// <see cref="RenderNatBadge"/>.
-    /// </summary>
-    private async Task ProbeNatTypeAsync()
-    {
-        try
-        {
-            _natProbe = await NatTypeDetector.DetectAsync();
-            DiagnosticLog.Write(
-                $"NAT probe: type={_natProbe.Type} public={_natProbe.PublicEndpoint} " +
-                $"secondary={_natProbe.SecondaryEndpoint} err={_natProbe.ErrorMessage}");
-            await Dispatcher.InvokeAsync(RenderNatBadge);
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"MultiplayerTab.ProbeNatTypeAsync: {ex.Message}");
-            _natProbe = new NatProbeResult(NatType.Unknown, null, null, ex.Message);
-            await Dispatcher.InvokeAsync(RenderNatBadge);
-        }
+            (Color)ColorConverter.ConvertFromString("#cccccc"));
+        NatBadgeBorder.ToolTip =
+            "Multiplayer rooms and chat run through this launcher, but the actual game-to-game " +
+            "connection is established over Radmin VPN. Make sure Radmin is installed and you " +
+            "have joined the community network before starting a game.";
     }
 
     private void OnSessionStateChanged(object? sender, EventArgs e) =>
@@ -379,11 +387,9 @@ public partial class MultiplayerTab : UserControl
     {
         var s = _session;
         var nextSocket = s?.RoomSocket;
-        var nextMesh = s?.Mesh;
 
         var socketChanged = !ReferenceEquals(_attachedSocket, nextSocket);
-        var meshChanged = !ReferenceEquals(_attachedMesh, nextMesh);
-        if (!socketChanged && !meshChanged) return;
+        if (!socketChanged) return;
 
         if (socketChanged)
         {
@@ -418,18 +424,7 @@ public partial class MultiplayerTab : UserControl
             _popupPositionInitialised = false;
         }
 
-        if (meshChanged)
-        {
-            if (_attachedMesh != null)
-                _attachedMesh.PeerStateChanged -= OnPeerStateChanged;
-            _attachedMesh = nextMesh;
-            if (_attachedMesh != null)
-                _attachedMesh.PeerStateChanged += OnPeerStateChanged;
-        }
-
-        // Reset per-room UI state whenever we change rooms (we keep
-        // the existing chat/members when only the mesh changed mid-
-        // session, which shouldn't happen but doesn't hurt to guard).
+        // Reset per-room UI state whenever we change rooms.
         if (socketChanged)
         {
             _roomMembers.Clear();
@@ -470,40 +465,6 @@ public partial class MultiplayerTab : UserControl
             nextSocket.Reconnecting += OnRoomReconnecting;
         }
     }
-
-    /// <summary>
-    /// Render peer connection transitions as system chat lines. The
-    /// mesh fires this from a background thread; marshal to UI.
-    /// </summary>
-    private PeerLinkState _lastLoggedState = (PeerLinkState)(-1);
-    private string _lastLoggedUser = "";
-
-    private void OnPeerStateChanged(object? sender, PeerChannel ch) =>
-        Dispatcher.InvokeAsync(() =>
-        {
-            // Repaint the members panel so the RTT column reflects the
-            // new state / latency sample. This fires on every pong
-            // arrival (every 2 s while Connected) — cheap because the
-            // panel only holds N members.
-            RenderRoomMembers();
-
-            // Avoid spamming the chat with one line per pong: only
-            // emit a system line on actual state transitions.
-            if (ch.State == _lastLoggedState && ch.UserId == _lastLoggedUser) return;
-            _lastLoggedState = ch.State;
-            _lastLoggedUser = ch.UserId;
-
-            var label = ch.State switch
-            {
-                PeerLinkState.Discovering => "discovering",
-                PeerLinkState.Punching => "punching",
-                PeerLinkState.Connected => $"direct ({ch.ConfirmedEndpoint})",
-                PeerLinkState.Lost => "lost — retrying",
-                PeerLinkState.Failed => "direct failed (need relay)",
-                _ => ch.State.ToString(),
-            };
-            AppendChatSystem($"P2P [{ch.Login}]: {label}");
-        });
 
     private void OnRoomDisconnected(object? sender, string reason) =>
         Dispatcher.InvokeAsync(() =>
@@ -651,7 +612,6 @@ public partial class MultiplayerTab : UserControl
         if (state == null) return;
 
         _roomMembers.Clear();
-        var mesh = _session?.Mesh;
         foreach (var kv in state.Members)
         {
             var memberLogin = string.IsNullOrEmpty(kv.Value.Login) ? kv.Key : kv.Value.Login;
@@ -663,44 +623,12 @@ public partial class MultiplayerTab : UserControl
                 Login = memberLogin,
                 Ready = kv.Value.Ready,
             };
-
-            // Make sure PeerMesh knows about every member listed in
-            // room_state, not just the ones we observed joining
-            // afterwards. Without this, a fresh joiner sees the host
-            // in the snapshot members list but PeerMesh has no
-            // channel for them, so the host's peer_announce can't be
-            // routed to a PeerChannel and hole-punching never starts.
-            // OnMemberJoined is idempotent and skips the local user
-            // itself, so calling it for every entry is safe.
-            mesh?.OnMemberJoined(kv.Key, memberLogin);
         }
 
-        // (Re)publish our local endpoints now that we know the WS
-        // hello completed successfully. MultiplayerSession does send
-        // an initial peer_announce right after sock.Start(), but
-        // that fire-and-forget happens BEFORE LobbyWebSocket has
-        // finished its async connect — SendRawAsync silently drops
-        // any frame written while the WS isn't yet Open. Resending
-        // from HandleRoomState (which only fires once auth completed
-        // and the server sent us its snapshot) guarantees every
-        // peer already in the room sees our endpoints, even when we
-        // are the late joiner.
-        if (mesh != null && _session?.RoomSocket != null
-            && mesh.LocalEndpoints != null && mesh.LocalEndpoints.Count > 0)
-        {
-            // user_id is included explicitly so the frame survives any
-            // Worker change that stops auto-injecting it. PeerMesh drops
-            // peer_announce frames with empty user_id.
-            _ = _session.RoomSocket.SendAsync(new
-            {
-                type = "peer_announce",
-                user_id = _session.CurrentUser?.Id,
-                endpoints = mesh.LocalEndpoints,
-            });
-            DiagnosticLog.Write(
-                $"HandleRoomState: sent peer_announce with " +
-                $"{mesh.LocalEndpoints.Count} endpoint(s) after auth-completed snapshot.");
-        }
+        // The n2n edge bring-up is owned by MultiplayerSession.OnFrame —
+        // it sees the same room_state snapshot we do and uses the
+        // sorted member list to derive each peer's slot index + virtual
+        // IP deterministically. No extra signaling from this tab.
         _roomHostUserId = state.HostUserId;
         _isHostInCurrentRoom = !string.IsNullOrEmpty(_session?.CurrentUser?.Id)
             && string.Equals(_roomHostUserId, _session!.CurrentUser!.Id, StringComparison.Ordinal);
@@ -789,36 +717,11 @@ public partial class MultiplayerTab : UserControl
         AppendChatSystem($"{login} joined.");
         RenderRoomMembers();
 
-        // Wire the new peer into PeerMesh and re-publish our local
-        // endpoints so the joiner can hole-punch us.
-        //
-        // Why the re-announce matters: peer_announce frames are
-        // broadcast-once at WS connect. The joiner gets a
-        // room_state snapshot (with our user-id in the members
-        // list) but NO endpoints for us — the server doesn't
-        // persist them. Without this re-publish, the joiner sees
-        // a member ID with no addresses to punch, so the link
-        // never goes from Discovering to Punching. The host runs
-        // this on every member_joined; cost is one extra WS frame
-        // per join, free at the Worker (outgoing WS messages on
-        // an already-open socket).
-        var mesh = _session?.Mesh;
-        if (mesh != null)
-        {
-            mesh.OnMemberJoined(userId, login);
-            var sock = _session?.RoomSocket;
-            if (sock != null && mesh.LocalEndpoints != null && mesh.LocalEndpoints.Count > 0)
-            {
-                _ = sock.SendAsync(new
-                {
-                    type = "peer_announce",
-                    endpoints = mesh.LocalEndpoints,
-                });
-                DiagnosticLog.Write(
-                    $"HandleMemberJoined: re-sent peer_announce for '{userId}' ({login}) " +
-                    $"with {mesh.LocalEndpoints.Count} endpoint(s)");
-            }
-        }
+        // n2n discovery is supernode-mediated: edges find each other
+        // by community, not by per-room signaling. The session's
+        // OnFrame handler watches member_joined frames too and may
+        // re-derive our slot index when the roster changes; nothing
+        // else for this tab to do.
     }
 
     private void HandleMemberLeft(JsonElement json)
@@ -965,43 +868,12 @@ public partial class MultiplayerTab : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
 
-        // Per-peer P2P quality: small ping line under the name.
-        var mesh = _session?.Mesh;
-        if (mesh != null && !isMe)
-        {
-            PeerChannel? ch = null;
-            foreach (var candidate in mesh.Peers)
-            {
-                if (string.Equals(candidate.UserId, m.UserId, StringComparison.Ordinal))
-                {
-                    ch = candidate;
-                    break;
-                }
-            }
-            if (ch != null)
-            {
-                var (rttText, rttBrush) = ch.State switch
-                {
-                    PeerLinkState.Connected when ch.RttMs >= 0 =>
-                        ($"{(int)ch.RttMs} ms",
-                            ch.RttMs < 80 ? (Brush)Application.Current.FindResource("MpPingGood") :
-                            ch.RttMs < 200 ? (Brush)Application.Current.FindResource("MpPingMedium") :
-                                              (Brush)Application.Current.FindResource("MpPingBad")),
-                    PeerLinkState.Connected => ("…", (Brush)Application.Current.FindResource("TextSecondary")),
-                    PeerLinkState.Punching => ("punching", (Brush)Application.Current.FindResource("MpPingMedium")),
-                    PeerLinkState.Lost => ("lost", (Brush)Application.Current.FindResource("MpPingBad")),
-                    PeerLinkState.Failed => ("relay", (Brush)Application.Current.FindResource("MpPingBad")),
-                    _ => ("…", (Brush)Application.Current.FindResource("TextSecondary")),
-                };
-                nameStack.Children.Add(new TextBlock
-                {
-                    Text = rttText,
-                    Foreground = rttBrush,
-                    FontSize = 10,
-                    Margin = new Thickness(0, 2, 0, 0),
-                });
-            }
-        }
+        // Per-peer ping used to come from the in-launcher PeerMesh
+        // (each PeerChannel ran its own STUN ping cadence). With n2n,
+        // game traffic flows through the virtual NIC and we don't see
+        // per-peer pings at this layer. The row stays without an RTT
+        // line — could be filled in with a manual ICMP probe to the
+        // peer's 10.99.0.X address later if the UI calls for it.
         grid.Children.Add(WithColumn(nameStack, 2));
 
         // Badges (Host / Ready). Compact pills so multiple badges
@@ -2813,388 +2685,13 @@ public partial class MultiplayerTab : UserControl
             var extraArgs = BuildMultiplayerLaunchArgs();
             DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: extraArgs='{extraArgs}'");
 
-            // Bring up the hook-IPC bridge BEFORE spawning age3y.exe.
-            // The hook DLL connects back inside DllMain — if the pipe
-            // isn't already listening it will give up and the launcher
-            // would silently lose the chance to route LAN↔mesh traffic.
-            // No-op when the native injector artefacts aren't shipped
-            // (dev builds without the C++ workload); the bridge just
-            // never sees a HELLO and DisposeAsync below is fast.
-            AoeP2pBridgeService? bridge = null;
-            // Subscriptions on the live mesh that we open during the
-            // game session. Captured here so we can unwind them on the
-            // game-exited path even if the bridge already disposed —
-            // otherwise we leak handlers (and partial peer-set sends)
-            // across consecutive launches.
-            EventHandler<GamePacket>? onBridgeCapturedPacket = null;
-            EventHandler<(string FromUserId, GamePacket Packet)>? onMeshGamePacket = null;
-            EventHandler? onMeshPeersChanged = null;
-            EventHandler<int>? onHookConnected = null;
-            var subscribedMesh = _session?.Mesh;
-
-            // ---- Phase 2.g/h: lobby heartbeat (host-side) ---------
-            //
-            // AoE3 LAN discovery is purely reactive: when a probe lands
-            // on the host, AoE3 responds ONCE with a 1669-byte lobby
-            // info packet — and then dedupes any subsequent probe from
-            // the same source IP. The joiner's UI displays the lobby
-            // when it sees that response, but ages it out after ~1
-            // second if no fresh response refreshes the entry. In
-            // Voobly/GameRanger the host's NIC is a virtual adapter
-            // so each new probe carries a fresh ephemeral port and
-            // AoE3 doesn't dedupe; in our setup every probe comes
-            // from the same virtual mesh IP so AoE3 sees them as
-            // duplicates after the first.
-            //
-            // Workaround: cache the last "large" PACKET_OUT (>1000 B
-            // ⇒ has to be a lobby response, not a 21-byte probe) keyed
-            // by the TARGET PEER's user id, and re-broadcast it through
-            // the mesh every 1.5 seconds. The joiner's launcher then
-            // injects a fresh PACKET_IN into its AoE3 on each tick —
-            // same payload, but AoE3 sees an "alive" beacon and keeps
-            // the lobby in the LAN list long enough for the user to
-            // actually click Join. Entries auto-expire after 30 s of
-            // no refresh so a host that closed its lobby stops
-            // beaconing without explicit teardown.
-            //
-            // Phase 2.h: key by user id (not by IP+port) and track each
-            // peer's CURRENT scanner port so the heartbeat retargets
-            // when AoE3 rebinds its ephemeral scanner socket. AoE3
-            // creates a fresh socket roughly every probe, so the port
-            // we originally responded to goes stale within a second or
-            // two. Without retargeting, the heartbeat lands on a port
-            // nothing's bound to → packet parks in the hook's warmup
-            // buffer → AoE3 never sees the refresh → lobby ages out
-            // anyway. With retargeting, each tick uses the freshest
-            // port we've observed in incoming probes from that peer.
-            var heartbeatCache = new System.Collections.Generic.Dictionary<
-                string /* peerUserId */, (GamePacket Packet, DateTime LastSeen)>();
-            var peerScannerPorts = new System.Collections.Generic.Dictionary<
-                string /* peerUserId */, ushort>();
-            var heartbeatLock = new object();
-            System.Threading.Timer? heartbeatTimer = null;
-
-            if (AoeP2pHookInjector.IsAvailable())
-            {
-                bridge = AoeP2pBridgeService.CreateAndStart();
-
-                // Phase 2.f: arm the outbound IP rewriter as soon as
-                // the bridge exists so the very first PACKET_OUT
-                // (which is usually the discovery broadcast carrying
-                // our local IP in the probe header) already has its
-                // embedded LAN address replaced with our virtual one.
-                // Without this, the host sees "joiner is at our LAN
-                // IP" and any unicast reply targets that real LAN IP
-                // instead of the virtual one — the hook wouldn't
-                // divert it (LAN IP isn't in g_peerIps) and the
-                // packet leaves through the real wire, never reaching
-                // the joiner.
-                try
-                {
-                    var mesh = subscribedMesh ?? _session?.Mesh;
-                    if (mesh != null && !string.IsNullOrEmpty(mesh.OwnUserId))
-                    {
-                        var ownVip = VirtualIpAllocator.DeriveFor(mesh.OwnUserId);
-                        bridge.SetLocalRewriteContext(ownVip);
-                    }
-                    else
-                    {
-                        DiagnosticLog.Write(
-                            "MultiplayerTab: skipping outbound rewriter arm — " +
-                            "mesh or own user id not available yet.");
-                    }
-                }
-                catch (Exception rewriteEx)
-                {
-                    DiagnosticLog.Write(
-                        $"MultiplayerTab: SetLocalRewriteContext failed: {rewriteEx.Message}");
-                }
-
-                onHookConnected = (_, hookPid) =>
-                {
-                    DiagnosticLog.Write(
-                        $"MultiplayerTab: hook bridge confirmed (age3y PID={hookPid}).");
-                    PushPeerSetToHook();
-                };
-                bridge.HookConnected += onHookConnected;
-
-                // OUTBOUND: hook captured a sendto destined for a
-                // peer / broadcast. Forward it across the mesh so the
-                // remote launcher injects it into its own age3y.exe
-                // as recvfrom. Awaiting BroadcastGamePacketAsync inside
-                // the pipe reader thread is fine — UDP sendto is fast
-                // and we're not blocking the UI dispatcher.
-                //
-                // Phase 2.c: BroadcastGamePacketAsync also reports any
-                // peers whose hole-punch with us failed via the
-                // needsRelay list. For those, we tunnel the same
-                // payload through the Cloudflare Worker WS via
-                // RoomSocket.SendGameRelayAsync — the Worker forwards
-                // it to that peer's lobby WS where MultiplayerSession.OnFrame
-                // picks it up under case "game_relay" and injects it
-                // into their hook DLL via bridge.InjectIntoGame.
-                onBridgeCapturedPacket = async (_, gp) =>
-                {
-                    try
-                    {
-                        var session = _session;
-                        var mesh = subscribedMesh ?? session?.Mesh;
-                        var roomSocket = session?.RoomSocket;
-                        if (mesh == null) return;
-
-                        // Phase 2.g/h: if this looks like a host lobby
-                        // response (large, unicast destination), cache
-                        // it for the heartbeat timer. Skip discovery
-                        // probes (21 B) and game-state traffic to peers
-                        // we don't want to beacon at — only "big and
-                        // unicast to a peer" qualifies as lobby info.
-                        // We don't bother caching broadcasts: a broadcast
-                        // is the joiner SCANNING, not the host
-                        // responding, and re-broadcasting probes would
-                        // just spam discovery noise without keeping any
-                        // specific lobby alive.
-                        //
-                        // Phase 2.h: key by the TARGET PEER's user id
-                        // (resolved via the virtual-IP allocator, which
-                        // is a pure SHA-256 hash so the reverse lookup
-                        // is just "iterate known peers, match"). Keying
-                        // by IP+port doesn't survive AoE3's habit of
-                        // rebinding its scanner socket roughly every
-                        // probe — by the second heartbeat tick the
-                        // joiner is on a different port.
-                        if (gp.Payload.Length > 1000 &&
-                            !IPAddress.Broadcast.Equals(gp.DstIp))
-                        {
-                            string? targetUserId = null;
-                            foreach (var p in mesh.Peers)
-                            {
-                                var pip = VirtualIpAllocator.DeriveFor(p.UserId);
-                                if (pip.Equals(gp.DstIp))
-                                {
-                                    targetUserId = p.UserId;
-                                    break;
-                                }
-                            }
-                            if (targetUserId != null)
-                            {
-                                lock (heartbeatLock)
-                                {
-                                    heartbeatCache[targetUserId] = (gp, DateTime.UtcNow);
-                                }
-                            }
-                        }
-
-                        var needsRelay = new System.Collections.Generic.List<string>();
-                        await mesh.BroadcastGamePacketAsync(gp, needsRelay).ConfigureAwait(false);
-
-                        if (needsRelay.Count > 0 && roomSocket != null)
-                        {
-                            foreach (var uid in needsRelay)
-                            {
-                                try
-                                {
-                                    await roomSocket.SendGameRelayAsync(
-                                        uid, gp.SrcPort, gp.DstPort, gp.Payload)
-                                        .ConfigureAwait(false);
-                                }
-                                catch (Exception relayEx)
-                                {
-                                    DiagnosticLog.Write(
-                                        $"PacketCapturedFromGame -> relay({uid}): {relayEx.Message}");
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception bex)
-                    {
-                        DiagnosticLog.Write(
-                            $"MultiplayerTab: bridge -> mesh forward failed: {bex.Message}");
-                    }
-                };
-                bridge.PacketCapturedFromGame += onBridgeCapturedPacket;
-
-                // Phase 2.g: spin up the heartbeat timer. Fires every
-                // 1.5 s; on each tick it re-broadcasts every cached
-                // lobby response so the joiner's launcher keeps
-                // injecting fresh PACKET_INs into its AoE3 and the
-                // lobby entry stays "alive" in the LAN browser. Uses
-                // the same forwarder path as a real capture
-                // (BroadcastGamePacketAsync + relay fallback) so any
-                // mesh state change automatically applies.
-                heartbeatTimer = new System.Threading.Timer(_ =>
-                {
-                    System.Collections.Generic.List<GamePacket> toBeacon;
-                    lock (heartbeatLock)
-                    {
-                        var now = DateTime.UtcNow;
-                        // Evict entries that haven't been refreshed for
-                        // 30 s — most lobbies don't last that long
-                        // between probes, so anything stale is from a
-                        // host who closed their lobby and moved on.
-                        var stale = new System.Collections.Generic.List<string>();
-                        foreach (var kv in heartbeatCache)
-                        {
-                            if ((now - kv.Value.LastSeen).TotalSeconds > 30)
-                                stale.Add(kv.Key);
-                        }
-                        foreach (var k in stale)
-                        {
-                            heartbeatCache.Remove(k);
-                            peerScannerPorts.Remove(k);
-                        }
-
-                        // Phase 2.h: build each beacon packet with the
-                        // freshest known scanner port for that peer.
-                        // If we've never seen a probe from this peer
-                        // (cache populated from a non-probe response
-                        // somehow), fall back to whatever port the
-                        // original response used — better than dropping
-                        // the beacon entirely.
-                        toBeacon = new System.Collections.Generic.List<GamePacket>(heartbeatCache.Count);
-                        foreach (var kv in heartbeatCache)
-                        {
-                            var pkt = kv.Value.Packet;
-                            ushort dstPort = pkt.DstPort;
-                            if (peerScannerPorts.TryGetValue(kv.Key, out var freshPort))
-                                dstPort = freshPort;
-                            // GamePacket is a record, so we get a clean
-                            // copy with the rebound DstPort.
-                            toBeacon.Add(pkt with { DstPort = dstPort });
-                        }
-                    }
-                    if (toBeacon.Count == 0) return;
-
-                    // Re-fire each cached packet through the same
-                    // capture handler so it walks the normal mesh /
-                    // relay path. Wrapped in try/catch — a beacon
-                    // failure mustn't kill the timer.
-                    foreach (var gp in toBeacon)
-                    {
-                        try
-                        {
-                            onBridgeCapturedPacket?.Invoke(null, gp);
-                        }
-                        catch (Exception bex)
-                        {
-                            DiagnosticLog.Write(
-                                $"MultiplayerTab: heartbeat beacon failed: {bex.Message}");
-                        }
-                    }
-                }, null, dueTime: 1500, period: 1500);
-
-                // INBOUND: a peer's game frame arrived over the mesh.
-                // Synthesise the deterministic virtual IP for the
-                // sender and push a PACKET_IN into the hook; AoE3's
-                // next recvfrom on the matching socket reads our
-                // bytes back as if a real LAN device sent them.
-                onMeshGamePacket = (_, payload) =>
-                {
-                    var b = bridge;
-                    if (b == null) return;
-                    try
-                    {
-                        // Phase 2.h: snoop probes for the peer's current
-                        // scanner port. AoE3 cycles its ephemeral
-                        // scanner socket every probe, so the only way
-                        // to keep heartbeats reaching it is to update
-                        // our target every time a fresh probe lands.
-                        // A "probe" is any small (≤100 B) packet whose
-                        // hook reported it as broadcast-to-2299 — the
-                        // exact shape of AoE3's LAN discovery query.
-                        var pkt = payload.Packet;
-                        if (pkt.Payload.Length <= 100 &&
-                            IPAddress.Broadcast.Equals(pkt.DstIp) &&
-                            pkt.DstPort == 2299 &&
-                            pkt.SrcPort != 0)
-                        {
-                            lock (heartbeatLock)
-                            {
-                                peerScannerPorts[payload.FromUserId] = pkt.SrcPort;
-                            }
-                        }
-
-                        var srcVip = VirtualIpAllocator.DeriveFor(payload.FromUserId);
-                        b.InjectIntoGame(
-                            srcVirtualIp: srcVip,
-                            srcPort: pkt.SrcPort,
-                            dstIp: pkt.DstIp,
-                            dstPort: pkt.DstPort,
-                            payload: pkt.Payload);
-                    }
-                    catch (Exception bex)
-                    {
-                        DiagnosticLog.Write(
-                            $"MultiplayerTab: mesh → InjectIntoGame failed: {bex.Message}");
-                    }
-                };
-                if (subscribedMesh != null)
-                    subscribedMesh.GamePacketReceived += onMeshGamePacket;
-
-                // PEER SET: rebuild + push every time the live set of
-                // connected peers changes so the hook always intercepts
-                // the right sendto destinations.
-                onMeshPeersChanged = (_, _) => PushPeerSetToHook();
-                if (subscribedMesh != null)
-                    subscribedMesh.PeersChanged += onMeshPeersChanged;
-
-                // Local helper to keep the push site small and clear.
-                //
-                // Phase 2.c: use mesh.RoutableUserIds (Connected OR Failed)
-                // instead of ConnectedUserIds so the hook also intercepts
-                // sendtos aimed at Failed peers. The outbound forwarder
-                // above gets those back in needsRelay from
-                // BroadcastGamePacketAsync and tunnels them through
-                // RoomSocket.SendGameRelayAsync.
-                void PushPeerSetToHook()
-                {
-                    var b = bridge;
-                    if (b == null) return;
-                    try
-                    {
-                        var mesh = subscribedMesh ?? _session?.Mesh;
-                        if (mesh == null)
-                        {
-                            // No mesh = empty set; the hook still
-                            // diverts broadcast traffic, which is
-                            // enough for the LAN-discovery phase.
-                            b.SendPeerSet(Array.Empty<IPAddress>());
-                            return;
-                        }
-                        // Phase 2.i: include each peer's announced
-                        // STUN + LAN addresses alongside their virtual
-                        // mesh IP. AoE3 sometimes echoes back to the
-                        // "real" LAN address it learned from the lobby
-                        // probe payload — packets to those addresses
-                        // need to be diverted into the bridge too, or
-                        // they'd leak out the real wire (failing on a
-                        // different network, double-delivering on the
-                        // same WiFi). The dedupe via HashSet handles
-                        // peers who happen to announce overlapping
-                        // endpoints (rare, but cheap to guard).
-                        var divertSet = new System.Collections.Generic.HashSet<IPAddress>();
-                        foreach (var p in mesh.Peers)
-                        {
-                            if (p.State != PeerLinkState.Connected &&
-                                p.State != PeerLinkState.Failed)
-                                continue;
-                            divertSet.Add(VirtualIpAllocator.DeriveFor(p.UserId));
-                            foreach (var ip in p.AnnouncedAddresses)
-                            {
-                                if (ip == null) continue;
-                                if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
-                                    continue;
-                                divertSet.Add(ip);
-                            }
-                        }
-                        b.SendPeerSet(divertSet);
-                    }
-                    catch (Exception bex)
-                    {
-                        DiagnosticLog.Write(
-                            $"MultiplayerTab: SendPeerSet failed: {bex.Message}");
-                    }
-                }
-            }
+            // With n2n in place, this method used to bring up a Detours-
+            // based hook DLL inside age3y.exe and a named-pipe bridge
+            // that forwarded each WinSock send/recv across PeerMesh.
+            // None of that exists anymore — every peer in the room is
+            // already on the same 10.99.0.0/24 virtual LAN via the
+            // edge.exe process the session spun up at join time, so
+            // AoE3's stock LAN multiplayer code just works.
 
             var gameStartedAt = DateTime.UtcNow;
             var process = _launchGame(profile, async (_, _) =>
@@ -3203,56 +2700,6 @@ public partial class MultiplayerTab : UserControl
                 // and access session state safely.
                 await Dispatcher.InvokeAsync(async () =>
                 {
-                    // Unhook every bridge↔mesh handler we registered up
-                    // top BEFORE disposing the bridge — otherwise the
-                    // next game launch wires a fresh set of handlers
-                    // and we leak the old ones (the mesh outlives the
-                    // bridge).
-                    if (subscribedMesh != null)
-                    {
-                        if (onMeshGamePacket != null)
-                            subscribedMesh.GamePacketReceived -= onMeshGamePacket;
-                        if (onMeshPeersChanged != null)
-                            subscribedMesh.PeersChanged -= onMeshPeersChanged;
-                    }
-                    if (bridge != null)
-                    {
-                        if (onBridgeCapturedPacket != null)
-                            bridge.PacketCapturedFromGame -= onBridgeCapturedPacket;
-                        if (onHookConnected != null)
-                            bridge.HookConnected -= onHookConnected;
-                    }
-
-                    // Phase 2.g: stop the heartbeat timer BEFORE
-                    // disposing the bridge so a final tick can't fire
-                    // after PacketCapturedFromGame's subscribers are
-                    // already gone (would log a confusing
-                    // NullReferenceException from inside the timer
-                    // callback).
-                    if (heartbeatTimer != null)
-                    {
-                        try { heartbeatTimer.Dispose(); }
-                        catch (Exception hbEx)
-                        {
-                            DiagnosticLog.Write(
-                                $"MultiplayerTab: heartbeatTimer.Dispose: {hbEx.Message}");
-                        }
-                        heartbeatTimer = null;
-                    }
-                    lock (heartbeatLock) { heartbeatCache.Clear(); }
-
-                    // Bridge first: the game process is gone, the pipe
-                    // is half-open, drop it before any other teardown.
-                    if (bridge != null)
-                    {
-                        try { await bridge.DisposeAsync(); }
-                        catch (Exception bex)
-                        {
-                            DiagnosticLog.Write(
-                                $"MultiplayerTab: bridge dispose failed: {bex.Message}");
-                        }
-                    }
-
                     // The OS-side "game closed" path: exit InGame and
                     // run the post-match flow. If the user cancels
                     // via the popup, ExitInGamePhase has already
@@ -3262,28 +2709,17 @@ public partial class MultiplayerTab : UserControl
                 });
             }, extraArgs);
 
+
             if (process == null)
             {
-                // We brought the bridge up but the spawn never happened
-                // — drop the pipe immediately so the next attempt gets
-                // a fresh server, not a stuck one waiting on a hook
-                // that will never connect.
-                if (subscribedMesh != null)
-                {
-                    if (onMeshGamePacket != null)
-                        subscribedMesh.GamePacketReceived -= onMeshGamePacket;
-                    if (onMeshPeersChanged != null)
-                        subscribedMesh.PeersChanged -= onMeshPeersChanged;
-                }
-                if (bridge != null) _ = bridge.DisposeAsync();
                 AppendChatSystem("Could not spawn the game process.");
                 return null;
             }
 
-            // Native LAN flow: the hook DLL inside age3y.exe now bridges
-            // DirectPlay traffic through the mesh, so both host and
-            // joiner just walk through AoE3's stock LAN UI — no virtual
-            // IPs to copy, no Direct IP textbox to paste into.
+            // n2n virtual-LAN flow: every peer's edge.exe presents the
+            // room as a real LAN segment on 10.99.0.0/24, so both host
+            // and joiner just walk through AoE3's stock LAN UI — no
+            // virtual IPs to copy, no Direct IP textbox to paste into.
             AppendChatSystem("Partida lanzada. En AoE3: Multiplayer → LAN.");
             return process;
         }
@@ -3604,12 +3040,11 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// Repaint the InGame status overlay from local data: match
-    /// timer, per-peer rows (login + connection type + RTT), and the
-    /// "mode" badge. All sources are in-process — PeerMesh for state /
-    /// RTT. No network calls. Per-peer byte counters used to come from
-    /// the old WinDivert bridge; the hook-IPC bridge that replaces it
-    /// doesn't expose them yet, so byte columns show 0 until Phase 2.b
-    /// wires per-peer accounting through the hook pipe.
+    /// timer, the n2n connection badge, and a list of room members
+    /// alongside us in the virtual LAN. Per-peer RTT used to come
+    /// from PeerMesh's STUN ping cadence — n2n hides that detail
+    /// (the supernode does its own keepalive), so RTT shows as "—"
+    /// for remote players.
     /// </summary>
     private void RefreshInGamePanel()
     {
@@ -3623,31 +3058,32 @@ public partial class MultiplayerTab : UserControl
                 : elapsed.ToString(@"mm\:ss");
         }
 
-        var mesh = _session?.Mesh;
         var bridgeReady = _session?.IsP2pBridgeReady ?? false;
 
-        // Global traffic counter — placeholder until the hook bridge
-        // surfaces byte totals over IPC.
+        // Global traffic counter — n2n doesn't surface byte totals to
+        // the launcher (the edge process keeps them internally). Show
+        // a dash so the field doesn't look broken.
         if (InGameTrafficText != null)
         {
-            InGameTrafficText.Text = FormatBytes(0);
+            InGameTrafficText.Text = "—";
         }
 
         // Mode badge.
         if (InGameModeText != null)
         {
             InGameModeText.Text = bridgeReady
-                ? " — Connected via P2P LAN"
-                : " — P2P link starting…";
+                ? " — Connected via virtual LAN (n2n)"
+                : " — Virtual LAN starting…";
             InGameModeText.Foreground = (Brush)Application.Current.FindResource(
                 bridgeReady ? "MpStatusOnline" : "MpStatusReconnect");
         }
 
-        // Peer list.
+        // Peer list. We just enumerate room members minus ourselves
+        // — every member that's in the lobby IS reachable on the
+        // virtual LAN as long as their edge is connected.
         if (InGamePeersPanel != null)
         {
             InGamePeersPanel.Children.Clear();
-            // Always show the local player first so they see themselves.
             var me = _session?.CurrentUser;
             if (me != null)
             {
@@ -3660,38 +3096,20 @@ public partial class MultiplayerTab : UserControl
                     isSelf: true));
             }
             int peerCount = 0;
-            if (mesh != null)
+            foreach (var member in _roomMembers.Values)
             {
-                foreach (var p in mesh.Peers)
-                {
-                    peerCount++;
-                    var stateLabel = p.State switch
-                    {
-                        PeerLinkState.Connected => p.ConfirmedEndpoint != null
-                            ? "Direct P2P"
-                            : "Connected",
-                        PeerLinkState.Punching => "Punching…",
-                        PeerLinkState.Discovering => "Discovering…",
-                        PeerLinkState.Lost => "Lost",
-                        PeerLinkState.Failed => "Relay",
-                        _ => p.State.ToString(),
-                    };
-                    InGamePeersPanel.Children.Add(BuildInGamePeerRow(
-                        login: p.Login,
-                        state: stateLabel,
-                        rttMs: p.RttMs,
-                        bytesIn: 0,
-                        bytesOut: 0,
-                        isSelf: false));
-                }
+                if (me != null && string.Equals(member.UserId, me.Id, StringComparison.Ordinal))
+                    continue;
+                peerCount++;
+                InGamePeersPanel.Children.Add(BuildInGamePeerRow(
+                    login: member.Login,
+                    state: bridgeReady ? "Virtual LAN" : "Connecting…",
+                    rttMs: 0,
+                    bytesIn: 0,
+                    bytesOut: 0,
+                    isSelf: false));
             }
 
-            // Solo-room hint. When there's only the local player and
-            // nobody else has joined yet, the peer rows panel looks
-            // empty / confusing — without this label users think the
-            // P2P stack failed when actually they're just alone in
-            // the room. The same hint appears during the InGame
-            // phase if peers haven't joined / hole-punched yet.
             if (peerCount == 0)
             {
                 InGamePeersPanel.Children.Add(new TextBlock
@@ -3878,4 +3296,5 @@ public partial class MultiplayerTab : UserControl
         await EndMatchAsync("launcher_closed");
         return true;
     }
+
 }

@@ -45,11 +45,11 @@
          and other "next to the .exe" artefacts end up in temp — losing
          user sessions between runs and making the log hard to find for
          support. Several files in the codebase rely on AppContext.BaseDirectory
-         to mean "the .exe directory", and AoeP2pHookInjector's lookup
-         for AoeP2pInjector.exe / AoeP2pHook.dll next to the launcher
-         also assumes that layout. Shipping the launcher as a small
-         folder (Aoe3ModLauncher.exe + AoeP2pInjector.exe +
-         AoeP2pHook.dll + launcher-config.json) is the lesser pain. -->
+         to mean "the .exe directory" — N2nBootstrap's lookup for the
+         bundled tap-windows installer and N2nClient's lookup for
+         edge.exe both resolve relative to it. Shipping the launcher as
+         a small folder (Aoe3ModLauncher.exe + native\n2n\bin\*.exe +
+         launcher-config.json) is the lesser pain. -->
     <!-- <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract> -->
   </PropertyGroup>
 
@@ -107,28 +107,16 @@
     <Resource Include="WoL.ico" />
 
     <!--
-      AoeP2pHook native artefacts (Phase 1 of the DirectPlay-replacement
-      work). These are built from native\AoeP2pHook\ and native\AoeP2pInjector\
-      with a Developer Command Prompt + build-all.bat. They are NOT
-      committed to the repo, so the includes are conditional: when the
-      C++ workload is missing on a dev machine, the launcher still
-      builds and falls back to a plain Process.Start (see
-      GameLauncher.LaunchAndWatch's IsAvailable check).
+      No sibling native binaries to ship right now. (Previous launcher
+      versions bundled a Detours-based hook DLL + injector, and later
+      an n2n virtual-LAN edge with TAP-Windows installer. Both were
+      removed: the hook approach never survived AoE3's host listener,
+      and the n2n approach fought endless TAP driver / firewall / MTU
+      issues on Windows. The community went back to using Radmin VPN
+      for the actual game-traffic network, and the launcher stayed as
+      the meta layer — lobby, chat, match history — so there are no
+      loose native artefacts to include here anymore.)
     -->
-    <None Include="native\AoeP2pInjector\bin\AoeP2pInjector.exe"
-          Condition="Exists('native\AoeP2pInjector\bin\AoeP2pInjector.exe')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <Link>AoeP2pInjector.exe</Link>
-    </None>
-    <None Include="native\AoeP2pHook\bin\AoeP2pHook.dll"
-          Condition="Exists('native\AoeP2pHook\bin\AoeP2pHook.dll')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <Link>AoeP2pHook.dll</Link>
-    </None>
   </ItemGroup>
 
   <!--
@@ -174,19 +162,17 @@
     brand-new .exe in $(PublishDir), and that one is what we actually
     distribute. So we sign it again here, after Publish writes it.
 
-    Before the AoeP2pHook DLL injection work, publish output was just one
-    self-contained .exe, so this target only signed .exe files. Now we also
-    ship two loose binaries alongside the launcher (AoeP2pInjector.exe and
-    AoeP2pHook.dll), so the file pattern is broadened to match all our own
-    artefacts by name prefix:
-      * Aoe3ModLauncher.exe   — the launcher itself
-      * AoeP2pInjector.exe    — x86 helper that does CreateRemoteThread
-      * AoeP2pHook.dll        — ws2_32 hook DLL loaded into age3y.exe
+    Before the n2n virtual-LAN work, publish output was just one
+    self-contained .exe, so this target only signed .exe files. Now we
+    also ship third-party binaries alongside the launcher (edge.exe,
+    the TAP-Windows installer), but those already carry their own
+    signatures (ntop / OpenVPN respectively) so we don't re-sign them
+    — only the launcher .exe itself needs Authenticode here.
   -->
   <Target Name="SignPublishedFiles"
           AfterTargets="Publish"
           Condition="'$(OS)' == 'Windows_NT'">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $cert = Get-Item 'Cert:\CurrentUser\My\$(SignCertThumbprint)' -ErrorAction SilentlyContinue; if (-not $cert) { Write-Host 'Cert $(SignCertThumbprint) not found — skipping signing.'; exit 0 }; Get-ChildItem -Path '$(PublishDir).' -File | Where-Object { $_.Name -match '^Aoe(3ModLauncher|P2p)' -and $_.Extension -in '.exe','.dll' } | ForEach-Object { Set-AuthenticodeSignature -FilePath $_.FullName -Certificate $cert -TimestampServer '$(SignTimestampServer)' -HashAlgorithm SHA256 | Out-Null; Write-Host ('Signed publish output: ' + $_.FullName) }&quot;"
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $cert = Get-Item 'Cert:\CurrentUser\My\$(SignCertThumbprint)' -ErrorAction SilentlyContinue; if (-not $cert) { Write-Host 'Cert $(SignCertThumbprint) not found — skipping signing.'; exit 0 }; Get-ChildItem -Path '$(PublishDir).' -File | Where-Object { $_.Name -match '^Aoe3ModLauncher' -and $_.Extension -in '.exe','.dll' } | ForEach-Object { Set-AuthenticodeSignature -FilePath $_.FullName -Certificate $cert -TimestampServer '$(SignTimestampServer)' -HashAlgorithm SHA256 | Out-Null; Write-Host ('Signed publish output: ' + $_.FullName) }&quot;"
           IgnoreExitCode="true" />
   </Target>
 

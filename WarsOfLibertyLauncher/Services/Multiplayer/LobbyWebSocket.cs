@@ -123,22 +123,12 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     public Task SendCancelGameAsync(string reason = "host_cancelled", CancellationToken ct = default) =>
         SendAsync(new { type = "cancel_game", reason }, ct);
 
-    /// <summary>
-    /// Tunnel a game packet via the lobby DO when direct hole-punch
-    /// to the peer has failed. The payload is base64 because JSON
-    /// WS frames don't carry binary cleanly; AoE3 packets are small
-    /// (&lt; 1 KB typical) so the base64 overhead is acceptable.
-    /// </summary>
-    public Task SendGameRelayAsync(string toUserId, ushort srcPort, ushort dstPort, byte[] payload,
-        CancellationToken ct = default)
-        => SendAsync(new
-        {
-            type = "game_relay",
-            to_user = toUserId,
-            src_port = (int)srcPort,
-            dst_port = (int)dstPort,
-            payload_b64 = Convert.ToBase64String(payload),
-        }, ct);
+    // (Pre-n2n: a SendGameRelayAsync helper here tunneled UDP packets
+    //  through the lobby WS when peer-to-peer hole-punching failed.
+    //  With n2n the supernode handles all relaying transparently at
+    //  the IP layer, so the launcher doesn't need a Worker-side game
+    //  relay path anymore. The Worker still understands the frame for
+    //  legacy clients but new launchers never send it.)
 
     // ---------- internals -----------------------------------------
 

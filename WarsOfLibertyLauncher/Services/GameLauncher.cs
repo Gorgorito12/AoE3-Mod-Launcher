@@ -289,42 +289,15 @@ public static class GameLauncher
                 : $"{arguments} {extraArgs}";
         }
 
-        // Prefer the AoeP2pHook injector when its native artefacts are
-        // shipped alongside the launcher. The injector spawns age3y.exe
-        // with AoeP2pHook.dll already loaded so the launcher can later
-        // (Phase 3+) intercept its WinSock calls and synthesise LAN
-        // discovery without ever bouncing a real broadcast through the
-        // bridge. Falls back to a plain Process.Start when the native
-        // artefacts aren't present (developer machines without the C++
-        // workload, fresh checkouts, etc.).
-        if (Services.Multiplayer.NativeHook.AoeP2pHookInjector.IsAvailable())
-        {
-            try
-            {
-                DiagnosticLog.Write(
-                    $"Launching game (hook-injected): {exePath} (profile '{profile.Id}') args='{arguments}'");
-                // The async API is awaited synchronously because the
-                // surrounding callback signature is sync — this matches
-                // the legacy Process.Start path's behaviour (no await
-                // upstream) and the helper exits in well under a second.
-                var injected = Services.Multiplayer.NativeHook.AoeP2pHookInjector
-                    .LaunchWithHookAsync(exePath, arguments ?? string.Empty)
-                    .GetAwaiter().GetResult();
-                injected.EnableRaisingEvents = true;
-                injected.Exited += onExited;
-                return injected;
-            }
-            catch (Exception ex)
-            {
-                // Anything that goes wrong on the inject path falls
-                // through to the plain launch. Logging the failure is
-                // important because callers won't see the hook-vs-plain
-                // distinction in the success path.
-                DiagnosticLog.Write(
-                    $"GameLauncher: hook inject failed ({ex.GetType().Name}: {ex.Message}); " +
-                    "falling back to direct Process.Start.");
-            }
-        }
+        // Previous launcher versions wrapped this in a DLL-injection
+        // path (AoeP2pHookInjector) that pre-loaded AoeP2pHook.dll into
+        // age3y.exe to detour ws2_32 and rewrite LAN traffic on the
+        // fly. That approach didn't survive contact with AoE3's host
+        // discovery (which reads a single probe and stops polling the
+        // socket forever), so we now ship a virtual NIC instead: an
+        // n2n edge bound to 10.99.0.X presents the room as a real LAN
+        // and AoE3's stock multiplayer code path takes care of itself.
+        // The launch path is back to a plain Process.Start.
 
         DiagnosticLog.Write(
             $"Launching game (watched): {exePath} (profile '{profile.Id}') args='{arguments}'");

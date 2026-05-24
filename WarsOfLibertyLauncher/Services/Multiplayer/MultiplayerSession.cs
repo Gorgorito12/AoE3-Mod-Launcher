@@ -1,10 +1,8 @@
 using System;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
-using WarsOfLibertyLauncher.Services.Multiplayer.P2P;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
@@ -13,13 +11,14 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// launcher run. Coordinates the subsystems that the UI shouldn't have
 /// to glue together itself:
 ///
-///   * <see cref="LobbyApiClient"/> — REST to the Worker (meta layer:
-///     auth, lobbies, chat, ELO).
+///   * <see cref="LobbyApiClient"/> — REST to the backend (meta layer:
+///     auth, lobbies, chat, ELO, match history).
 ///   * <see cref="LobbyWebSocket"/> — per-room realtime channel.
-///   * <see cref="PeerMesh"/> — direct UDP P2P fabric (hole-punched).
-///   * <see cref="NativeHook.AoeP2pHookInjector"/> — DLL injected into
-///     age3y.exe that captures DirectPlay traffic in-process and ships
-///     it to the mesh. Replaces the old WinDivert+Wintun bridge.
+///
+/// The actual game-traffic transport is OUT of scope for the launcher.
+/// The community uses Radmin VPN to put every player on the same virtual
+/// LAN, and AoE3's stock LAN multiplayer code finds peers over that
+/// network — no hooks, no virtual NICs, no per-room signaling here.
 ///
 /// The UI binds to <see cref="StateChanged"/> and queries the public
 /// properties; it never reaches into the underlying services directly.
@@ -46,9 +45,9 @@ public sealed class MultiplayerSession : IAsyncDisposable
     {
         /// <summary>Not in a lobby.</summary>
         Idle,
-        /// <summary>Joining a lobby (REST in flight + ZT auth wait).</summary>
+        /// <summary>Joining a lobby (REST in flight).</summary>
         Joining,
-        /// <summary>In a lobby; WS open, ZT membership OK.</summary>
+        /// <summary>In a lobby; WS open.</summary>
         InLobby,
         /// <summary>In a lobby that has transitioned to in_game.</summary>
         InGame,
@@ -71,30 +70,14 @@ public sealed class MultiplayerSession : IAsyncDisposable
     public string? LastError { get; private set; }
 
     /// <summary>
-    /// Direct P2P fabric for the current room. Recreated on every
-    /// room enter; null when the user isn't in a room. UI may query
-    /// <c>Peers</c> for connection state per member.
+    /// True once the user has both signed in AND entered a room. The
+    /// launcher's "Start Game" button is gated by this so we never
+    /// spawn AoE3 from outside a lobby context (the match-report POST
+    /// at the end needs the lobby id). The actual game-network
+    /// connectivity is the user's responsibility (Radmin VPN) — the
+    /// launcher just orchestrates the meta layer.
     /// </summary>
-    public PeerMesh? Mesh { get; private set; }
-
-    /// <summary>
-    /// True when both halves of the P2P plumbing are in place: the
-    /// <see cref="Mesh"/> is up for this room AND the DLL-injector
-    /// helper (<see cref="NativeHook.AoeP2pHookInjector.IsAvailable"/>)
-    /// is shipped next to the launcher .exe, so when the user hits
-    /// Start Game the launcher can inject <c>AoeP2pHook.dll</c> into
-    /// age3y.exe and own LAN traffic forwarding from inside the game
-    /// process.
-    ///
-    /// "Ready" means we will be able to spin up the bridge — we do
-    /// NOT block here on the hook's actual IPC handshake, because the
-    /// hook can only connect AFTER the game spawns. From the lobby's
-    /// perspective, "injector present" is the right "we can handle
-    /// LAN" promise. Drives the lobby header banner and the Start
-    /// Game button's enable state.
-    /// </summary>
-    public bool IsP2pBridgeReady =>
-        Mesh != null && NativeHook.AoeP2pHookInjector.IsAvailable();
+    public bool IsP2pBridgeReady => Lobby != LobbyStatus.Idle;
 
     public MultiplayerSession(LauncherConfig config)
     {
@@ -117,11 +100,6 @@ public sealed class MultiplayerSession : IAsyncDisposable
         {
             await RoomSocket.DisposeAsync();
             RoomSocket = null;
-        }
-        if (Mesh != null)
-        {
-            await Mesh.DisposeAsync();
-            Mesh = null;
         }
         Api.Dispose();
     }
@@ -183,10 +161,10 @@ public sealed class MultiplayerSession : IAsyncDisposable
     // -------- Lobby flow ------------------------------------------------
 
     /// <summary>
-    /// Full join flow: validates ZT, joins the network locally, calls
-    /// REST /join on the Worker, then opens the room WebSocket. Returns
-    /// once the WS hello has been sent — incoming room_state, member_*,
-    /// chat events arrive via the <see cref="RoomSocket"/> event after.
+    /// Full join flow: REST /join with the backend, then open the room
+    /// WebSocket. Returns once the WS hello has been sent — incoming
+    /// room_state, member_*, chat events arrive via the
+    /// <see cref="RoomSocket"/> event after.
     /// </summary>
     public async Task<JoinLobbyResponse> JoinLobbyAsync(
         string lobbyId,
@@ -203,19 +181,12 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
         try
         {
-            // Ask the Worker for permission to join the lobby. The
-            // mod fingerprint check happens server-side; on success we
-            // get a short-lived join_token that authenticates our WS.
             var join = await Api.JoinLobbyAsync(lobbyId, new JoinLobbyRequest
             {
                 ModCombinedHash = modCombinedHash,
                 Password = password,
             }, ct);
 
-            // Open the room WS — that triggers PeerMesh bootstrap
-            // inside OpenRoomSocketAsync. Hole-punching to the other
-            // room members starts as soon as their peer_announce
-            // frames arrive.
             await OpenRoomSocketAsync(lobbyId, join.JoinToken, LobbyWebSocket.HelloMode.JoinToken);
             CurrentLobbyId = lobbyId;
             Lobby = LobbyStatus.InLobby;
@@ -234,9 +205,8 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
     /// <summary>
     /// Variant for the host: REST /lobbies has already created the room
-    /// row in D1; we just need to open the room WS with our JWT
-    /// (no join_token for the host path) and let OpenRoomSocketAsync
-    /// bring up the P2P stack.
+    /// row in the backend; we just need to open the room WS with our
+    /// JWT (no join_token for the host path).
     /// </summary>
     public async Task EnterHostedLobbyAsync(
         CreateLobbyResponse created,
@@ -278,25 +248,19 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
         var lobbyId = CurrentLobbyId;
         var socket = RoomSocket;
-        var mesh = Mesh;
 
         // Optimistic UI transition first — the user sees the room
         // collapse and the lobby list reappear within a single frame.
         CurrentLobbyId = null;
         CurrentLobbyTitle = null;
         RoomSocket = null;
-        Mesh = null;
         Lobby = LobbyStatus.Idle;
         Raise();
 
-        // Tear down P2P fabric in the background — sockets close,
-        // hole-punch loops bail.
-        if (mesh != null) _ = mesh.DisposeAsync().AsTask();
-
         // The REST /leave call is the only thing that matters for
-        // server-side cleanup — it marks the lobby `closed` in D1 and
+        // server-side cleanup — it marks the lobby `closed` and
         // notifies the other members via the room WS. We await it so
-        // MainWindow.OnClosing can guarantee the Worker received the
+        // MainWindow.OnClosing can guarantee the backend received the
         // message before the launcher process exits.
         try
         {
@@ -332,71 +296,6 @@ public sealed class MultiplayerSession : IAsyncDisposable
         RoomSocket = sock;
         sock.Start();
         DiagnosticLog.Write($"OpenRoomSocketAsync: WS started for {lobbyId}");
-
-        // Build a fresh P2P mesh for this room. Doing it here (after
-        // the WS is up but before we start it) means the mesh's STUN
-        // probe runs in parallel with the room_state arrival — by the
-        // time peers announce themselves we already know our public
-        // endpoint and can answer with our own peer_announce.
-        var ownUserId = CurrentUser?.Id;
-        if (!string.IsNullOrEmpty(ownUserId))
-        {
-            try
-            {
-                var mesh = new PeerMesh();
-                mesh.PeerStateChanged += (_, peer) =>
-                {
-                    Raise();
-                    // Verbose per-state-change log so a future P2P
-                    // investigation can read off the timeline of
-                    // "peer X went Discovering → Punching → Connected"
-                    // without instrumenting the launcher.
-                    try
-                    {
-                        DiagnosticLog.Write(
-                            $"PeerMesh state change: user={peer.UserId} login={peer.Login} " +
-                            $"state={peer.State} rtt={peer.RttMs:F0}ms endpoint={peer.ConfirmedEndpoint}");
-                    }
-                    catch { /* logging should never throw */ }
-                };
-                await mesh.StartAsync(ownUserId, _config.Multiplayer.RelayOnly);
-                Mesh = mesh;
-                var epSummary = mesh.LocalEndpoints != null && mesh.LocalEndpoints.Count > 0
-                    ? string.Join(", ", mesh.LocalEndpoints.Select(ep => $"{ep.Ip}:{ep.Port}({ep.Kind})"))
-                    : "(none)";
-                DiagnosticLog.Write(
-                    $"PeerMesh started for user '{ownUserId}'. " +
-                    $"Local endpoints announced: {mesh.LocalEndpoints?.Count ?? 0} [{epSummary}]");
-
-                // Publish our endpoints to everyone else in the room.
-                // Fire-and-forget — the WS is already up. Peers will
-                // start hole-punching us as soon as this lands.
-                //
-                // We pass user_id explicitly: the Worker echoes
-                // peer_announce back unchanged, and PeerMesh.OnPeerAnnounceFromWs
-                // drops any frame without a user_id as defensive
-                // hygiene against malformed broadcasts. Without this
-                // field, a freshly-deployed Worker that no longer
-                // injects user_id server-side silently breaks all P2P.
-                _ = sock.SendAsync(new
-                {
-                    type = "peer_announce",
-                    user_id = ownUserId,
-                    endpoints = mesh.LocalEndpoints,
-                });
-
-                // No further bridge bring-up is needed here: the LAN
-                // traffic forwarding lives entirely inside the hook
-                // DLL that gets injected into age3y.exe when the user
-                // hits Start Game. IsP2pBridgeReady will flip to true
-                // as soon as this mesh is up, and the launch path
-                // takes care of the rest.
-            }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write($"MultiplayerSession: PeerMesh start failed: {ex.Message}");
-            }
-        }
     }
 
     private void OnFrame(object? sender, LobbyWebSocket.FrameReceivedEventArgs e)
@@ -409,120 +308,6 @@ public sealed class MultiplayerSession : IAsyncDisposable
         {
             Lobby = LobbyStatus.InGame;
             Raise();
-        }
-
-        // Route P2P signaling + membership events into the mesh so
-        // hole-punching kicks in / cleans up as peers come and go.
-        // The mesh is set up to ignore frames for our own user id, so
-        // looping a peer_announce echo back to ourselves is harmless.
-        var mesh = Mesh;
-        if (mesh == null) return;
-
-        try
-        {
-            switch (e.Type)
-            {
-                case "peer_announce":
-                {
-                    var a = JsonSerializer.Deserialize<WsPeerAnnounce>(e.Json.GetRawText());
-                    if (a != null) mesh.OnPeerAnnounceFromWs(a);
-                    break;
-                }
-                case "peer_relay":
-                {
-                    var r = JsonSerializer.Deserialize<WsPeerRelay>(e.Json.GetRawText());
-                    if (r != null) mesh.OnPeerRelayFromWs(r);
-                    break;
-                }
-                case "member_joined":
-                {
-                    var uid = e.Json.TryGetProperty("user_id", out var u) ? u.GetString() : null;
-                    var login = e.Json.TryGetProperty("github_login", out var l) ? l.GetString() : null;
-                    if (!string.IsNullOrEmpty(uid))
-                        mesh.OnMemberJoined(uid, login ?? uid);
-                    break;
-                }
-                case "member_left":
-                {
-                    var uid = e.Json.TryGetProperty("user_id", out var u) ? u.GetString() : null;
-                    if (!string.IsNullOrEmpty(uid))
-                        mesh.OnMemberLeft(uid);
-                    break;
-                }
-                case "room_state":
-                {
-                    // Seed the mesh with every member from the initial
-                    // snapshot. Their endpoints will follow via
-                    // peer_announce frames each one sends.
-                    if (e.Json.TryGetProperty("members", out var members) &&
-                        members.ValueKind == JsonValueKind.Object)
-                    {
-                        foreach (var m in members.EnumerateObject())
-                        {
-                            var uid = m.Name;
-                            var login = m.Value.TryGetProperty("login", out var l)
-                                ? (l.GetString() ?? uid)
-                                : uid;
-                            mesh.OnMemberJoined(uid, login);
-                        }
-                    }
-                    break;
-                }
-                case "game_relay":
-                {
-                    // Worker-as-TURN inbound (Phase 2.c): a peer whose
-                    // hole-punch with us failed tunnelled their game
-                    // packet through the lobby WS. We hand it to the
-                    // hook DLL via the bridge so AoE3 sees it as a
-                    // normal recvfrom (with the sender's virtual IP).
-                    //
-                    // Frame shape mirrors LobbyWebSocket.SendGameRelayAsync:
-                    //   { type: "game_relay", from_user, src_port,
-                    //     dst_port, payload_b64 }
-                    // (The Worker rewrites the outbound `to_user` into
-                    // `from_user` for the recipient — same pattern as
-                    // peer_relay → from_user/from_login.)
-                    var bridge = NativeHook.AoeP2pBridgeService.Current;
-                    if (bridge == null) break;  // no game running, nothing to inject into
-
-                    var fromUser = e.Json.TryGetProperty("from_user", out var fu)
-                        ? (fu.GetString() ?? "") : "";
-                    var srcPort = e.Json.TryGetProperty("src_port", out var sp) && sp.ValueKind == JsonValueKind.Number
-                        ? sp.GetInt32() : 0;
-                    var dstPort = e.Json.TryGetProperty("dst_port", out var dp) && dp.ValueKind == JsonValueKind.Number
-                        ? dp.GetInt32() : 0;
-                    byte[] payload = Array.Empty<byte>();
-                    if (e.Json.TryGetProperty("payload_b64", out var pb) && pb.ValueKind == JsonValueKind.String)
-                    {
-                        var b64 = pb.GetString();
-                        if (!string.IsNullOrEmpty(b64))
-                        {
-                            try { payload = Convert.FromBase64String(b64); }
-                            catch (FormatException) { /* malformed; leave empty so we bail below */ }
-                        }
-                    }
-                    if (string.IsNullOrEmpty(fromUser) || payload.Length == 0)
-                        break;
-
-                    var srcVip = WarsOfLibertyLauncher.Services.Multiplayer.NativeHook
-                        .VirtualIpAllocator.DeriveFor(fromUser);
-
-                    // The hook's PACKET_IN handler delivers to every g_lanSockets
-                    // entry bound to dstPort, so dstIp is informational only.
-                    // Use broadcast as a sane placeholder.
-                    bridge.InjectIntoGame(
-                        srcVirtualIp: srcVip,
-                        srcPort: (ushort)srcPort,
-                        dstIp: System.Net.IPAddress.Broadcast,
-                        dstPort: (ushort)dstPort,
-                        payload: payload);
-                    break;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"MultiplayerSession.OnFrame P2P route ({e.Type}): {ex.Message}");
         }
     }
 

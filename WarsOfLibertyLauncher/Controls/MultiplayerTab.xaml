@@ -157,13 +157,98 @@
                  list of rooms or the empty-state illustration. -->
             <Grid x:Name="BrowserPanel" Visibility="Collapsed">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>   <!-- Radmin banner -->
                     <RowDefinition Height="Auto"/>   <!-- toolbar -->
                     <RowDefinition Height="Auto"/>   <!-- table header -->
                     <RowDefinition Height="*"/>      <!-- rows / empty state -->
                 </Grid.RowDefinitions>
 
+                <!-- Radmin VPN banner. The launcher only owns the
+                     "meta" layer (rooms, chat, match history); the
+                     actual game-to-game connection runs over Radmin
+                     VPN, which the user installs once and joins the
+                     community network manually. The banner is here so
+                     a fresh installer knows what to do BEFORE they
+                     try to start a game and get stuck on "Failed to
+                     join". Dismissable so it doesn't nag once read. -->
+                <Border Grid.Row="0"
+                        x:Name="RadminBanner"
+                        Background="#1f2c3d"
+                        BorderBrush="#3a5a8c"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Margin="24,12,24,0"
+                        Padding="14,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Icon (info dot) -->
+                        <Border Grid.Column="0"
+                                Width="24" Height="24"
+                                CornerRadius="12"
+                                Background="#3a5a8c"
+                                VerticalAlignment="Center"
+                                Margin="0,0,12,0">
+                            <TextBlock Text="i"
+                                       Foreground="White"
+                                       FontWeight="Bold"
+                                       FontSize="14"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+
+                        <!-- Message -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap">
+                                Multiplayer games need Radmin VPN
+                            </TextBlock>
+                            <TextBlock x:Name="RadminBannerBody"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0">
+                                Install Radmin VPN and join the community network so AoE3 can see other players' games. Lobby chat works without it; the actual game does not.
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Action buttons -->
+                        <Button Grid.Column="2"
+                                x:Name="RadminDownloadButton"
+                                Click="RadminDownloadButton_Click"
+                                Content="Download Radmin"
+                                Style="{StaticResource MpSecondaryButton}"
+                                Padding="12,6"
+                                Margin="12,0,0,0"
+                                VerticalAlignment="Center"
+                                FontSize="11"/>
+
+                        <!-- Dismiss × -->
+                        <Button Grid.Column="3"
+                                x:Name="RadminDismissButton"
+                                Click="RadminDismissButton_Click"
+                                Content="✕"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                Foreground="{DynamicResource TextSecondary}"
+                                FontSize="14"
+                                Cursor="Hand"
+                                Padding="8,0"
+                                Margin="6,0,0,0"
+                                ToolTip="Hide this banner"
+                                VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+
                 <!-- Toolbar -->
-                <Grid Grid.Row="0" Margin="24,18,24,10">
+                <Grid Grid.Row="1" Margin="24,18,24,10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
@@ -235,7 +320,7 @@
                 <!-- Table header row. Column widths defined here so
                      code-behind can mirror them when it builds each
                      data row (BuildRoomRow). -->
-                <Border Grid.Row="1"
+                <Border Grid.Row="2"
                         Background="{DynamicResource MpSurface}"
                         BorderBrush="{DynamicResource MpDivider}"
                         BorderThickness="0,1,0,1"
@@ -295,7 +380,7 @@
                      RoomsListPanel is the same x:Name the old
                      code-behind already populates, just with the
                      row builder updated to a Grid layout. -->
-                <Grid Grid.Row="2">
+                <Grid Grid.Row="3">
                     <ScrollViewer x:Name="RoomsListScroll"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
