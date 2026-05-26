@@ -161,6 +161,93 @@ public class LauncherConfig
     public ModState GetActiveState() => GetState(GetActiveProfile().Id);
 
     /// <summary>
+    /// IDs of mods the user has explicitly added to their personal
+    /// collection from the Workshop. Drives the Dashboard's MODS
+    /// popup, which lists only what the user has curated rather than
+    /// the full catalog. Built-in profiles (WoL) are always treated
+    /// as added regardless of this list (see <see cref="IsUserMod"/>),
+    /// so a fresh install never has an empty MODS popup.
+    ///
+    /// Migration: on first launch with this field present but empty,
+    /// MainWindow seeds it from the currently-installed mods so users
+    /// upgrading from older configs don't lose their setup. After
+    /// that, the list only changes via the Workshop's Add / Remove
+    /// buttons.
+    /// </summary>
+    [JsonPropertyName("userModIds")]
+    public List<string> UserModIds { get; set; } = new();
+
+    /// <summary>
+    /// True when the given mod id belongs to the user's collection
+    /// (either explicitly added via Workshop or a built-in profile
+    /// like WoL). Drives the Dashboard's MODS popup filter and the
+    /// Workshop's per-row Add/Remove button state.
+    /// </summary>
+    public bool IsUserMod(string? modId)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return false;
+        if (ModRegistry.IsBuiltIn(modId)) return true;
+        return UserModIds.Any(id => string.Equals(id, modId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Adds the given mod id to <see cref="UserModIds"/> if not
+    /// already present. No-op for built-in ids (those are always
+    /// implicitly present via <see cref="IsUserMod"/>). Caller is
+    /// responsible for invoking <see cref="Save"/> after batching the
+    /// changes that should land on disk.
+    /// </summary>
+    public void AddUserMod(string? modId)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return;
+        if (ModRegistry.IsBuiltIn(modId)) return;
+        if (!UserModIds.Any(id => string.Equals(id, modId, StringComparison.OrdinalIgnoreCase)))
+            UserModIds.Add(modId);
+    }
+
+    /// <summary>
+    /// Removes the given mod id from <see cref="UserModIds"/>. No-op
+    /// for built-in ids. Caller is responsible for <see cref="Save"/>.
+    /// </summary>
+    public void RemoveUserMod(string? modId)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return;
+        if (ModRegistry.IsBuiltIn(modId)) return;
+        UserModIds.RemoveAll(id => string.Equals(id, modId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Mod ids the user has starred via the right-click context
+    /// menu (Add to Favorites). Favorites pin to the top of the
+    /// Dashboard MODS popup so the user can switch between their
+    /// most-played mods in one click. Distinct from
+    /// <see cref="UserModIds"/> (which controls visibility);
+    /// favorites only control ORDERING — a favorite mod must also
+    /// be in UserModIds to appear at all.
+    /// </summary>
+    [JsonPropertyName("favoriteModIds")]
+    public List<string> FavoriteModIds { get; set; } = new();
+
+    public bool IsFavoriteMod(string? modId)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return false;
+        return FavoriteModIds.Any(id => string.Equals(id, modId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void AddFavoriteMod(string? modId)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return;
+        if (!IsFavoriteMod(modId))
+            FavoriteModIds.Add(modId);
+    }
+
+    public void RemoveFavoriteMod(string? modId)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return;
+        FavoriteModIds.RemoveAll(id => string.Equals(id, modId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Returns every non-empty install path currently registered for a
     /// mod profile OTHER than <paramref name="excludeModId"/>. Used by
     /// the install pipeline as the canonical "sibling-mod exclusion
@@ -290,12 +377,10 @@ public class LauncherConfig
     [JsonPropertyName("language")]
     public string Language { get; set; } = "en";
 
-    /// <summary>
-    /// UI theme: "dark" (default), "light", or "system" (follow Windows).
-    /// Applied at startup and switched live via ThemeService on settings change.
-    /// </summary>
-    [JsonPropertyName("theme")]
-    public string Theme { get; set; } = "dark";
+    // (Theme property removed — the launcher is dorado-imperial
+    //  dark-only by design now. Old configs with a "theme" key
+    //  deserialise harmlessly: System.Text.Json ignores unknown
+    //  properties and the next Save drops it from the JSON.)
 
     /// <summary>
     /// URL of the catalog news.json feed. Default points at the official

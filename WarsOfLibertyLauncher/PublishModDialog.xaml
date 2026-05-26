@@ -35,7 +35,7 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
         <Style x:Key="ErrorText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#e63950"/>
+            <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="Margin" Value="0,4,0,0"/>
             <Setter Property="TextWrapping" Value="Wrap"/>

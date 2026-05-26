@@ -56,6 +56,18 @@ public class ModAssetCacheService
         => GetAssetAsync(modId, "banner", remoteUrl, ct);
 
     /// <summary>
+    /// Same as <see cref="GetBannerPathAsync"/> but for the dashboard hero
+    /// image. The hero is the large 1920×1080 background painted behind
+    /// the title + PLAY button on the dashboard — distinct from the
+    /// banner (which is a 1200×300 horizontal thumbnail used in the
+    /// Workshop mod card). Hero is optional; callers should expect
+    /// <c>null</c> and fall through to the banner / gradient.
+    /// </summary>
+    public Task<string?> GetHeroImagePathAsync(
+        string modId, string? remoteUrl, CancellationToken ct = default)
+        => GetAssetAsync(modId, "hero", remoteUrl, ct);
+
+    /// <summary>
     /// Removes every cached file for a single mod. Called when the mod is
     /// removed from the catalog so the disk doesn't slowly fill with
     /// orphaned assets.
@@ -112,9 +124,16 @@ public class ModAssetCacheService
 
             // Sanity guard: refuse to cache anything wildly larger than the
             // schema's documented per-asset limits (icon ≤100 KB, banner
-            // ≤500 KB). 1 MB ceiling matches both with headroom for HTTP
-            // overhead, and stops a hostile catalog from filling the disk.
-            const long maxBytes = 1024 * 1024;
+            // ≤500 KB, hero ≤2 MB). Pick the ceiling per role so we don't
+            // accidentally reject a valid hero image while keeping the
+            // tight icon/banner cap. Hostile catalog can't fill the disk
+            // either way — the schema's CI validation rejects images
+            // outside spec before the modder can merge.
+            long maxBytes = role switch
+            {
+                "hero" => 2L * 1024 * 1024,   // 2 MB — hero images
+                _      => 1L * 1024 * 1024,   // 1 MB — icon + banner with headroom
+            };
             if (response.Content.Headers.ContentLength is long len && len > maxBytes)
             {
                 DiagnosticLog.Write(

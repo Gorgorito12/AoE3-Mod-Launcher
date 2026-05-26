@@ -204,6 +204,25 @@ public class ModProfile
     /// </summary>
     public string? LocalBannerPath { get; set; }
 
+    /// <summary>
+    /// Remote URL of the mod's 1920×1080 dashboard hero image (PNG/JPG,
+    /// ≤2 MB). When present, this image is painted behind the title +
+    /// PLAY button on the dashboard. Higher priority than
+    /// <see cref="BannerUrl"/> for that surface — the banner targets the
+    /// Workshop mod card thumbnail (1200×300), the hero targets the
+    /// full-bleed dashboard panel. Optional even for community mods;
+    /// when null the dashboard falls back to <see cref="BannerUrl"/>
+    /// and ultimately to a neutral gradient.
+    /// </summary>
+    public string? HeroImageUrl { get; set; }
+
+    /// <summary>
+    /// Local file path of the cached hero image. Same lifecycle as
+    /// <see cref="LocalBannerPath"/>: null until <see cref="HeroImageUrl"/>
+    /// is downloaded.
+    /// </summary>
+    public string? LocalHeroImagePath { get; set; }
+
     /// <summary>How the mod's files relate to the AoE3 install folder.</summary>
     public ModInstallType InstallType { get; set; } = ModInstallType.IsolatedFolder;
 

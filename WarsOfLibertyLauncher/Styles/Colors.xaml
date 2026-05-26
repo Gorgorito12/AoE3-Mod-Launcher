@@ -1,101 +1,343 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Surfaces -->
-    <SolidColorBrush x:Key="BgBase" Color="#1a1d24"/>
-    <SolidColorBrush x:Key="BgPanel" Color="#22252c"/>
-    <SolidColorBrush x:Key="BgPanelAlt" Color="#2a2d34"/>
-    <SolidColorBrush x:Key="BgNeutral" Color="#3a3d44"/>
-    <SolidColorBrush x:Key="BgNeutralHover" Color="#4a4d54"/>
-    <SolidColorBrush x:Key="BgNeutralPressed" Color="#5a5d64"/>
+    <!-- ================================================================
+         MODERN COLONIAL INTERFACE — global palette.
 
-    <!-- Border -->
-    <SolidColorBrush x:Key="BorderSubtle" Color="#3a3d44"/>
+         Design goal: dark, sober, elegant. Cool blue-grey colonial
+         structure (chrome, panels, borders) paired with a warm aged-
+         gold accent for primary actions. Reads as "Age of Empires III
+         launcher" without being attached to any single mod's brand.
 
-    <!-- Text -->
-    <SolidColorBrush x:Key="TextPrimary" Color="#f0f0f0"/>
-    <SolidColorBrush x:Key="TextSecondary" Color="#b8b8b8"/>
+         Identity colors per mod live in ModAccentBrush only — that
+         brush is reserved for decorative spots (mod card border,
+         banner fallback, mod initial) and MUST NOT be used for global
+         chrome. The rest of the launcher stays neutral so different
+         mods look at home in the same shell.
 
-    <!-- Accent: per-mod theme. Static here today; swapped to a runtime
-         DynamicResource on mod switch in commit 5. -->
-    <SolidColorBrush x:Key="AccentBrush" Color="#c8102e"/>
-    <SolidColorBrush x:Key="AccentBrushHover" Color="#e63950"/>
-
-    <!-- Destructive (Uninstall). Stays static — never themed per mod. -->
-    <SolidColorBrush x:Key="DangerBrush" Color="#8b0000"/>
-    <SolidColorBrush x:Key="DangerBrushHover" Color="#a71d1d"/>
-
-    <!-- Status foregrounds -->
-    <SolidColorBrush x:Key="ErrorBrush" Color="#e63950"/>
-    <SolidColorBrush x:Key="SuccessBrush" Color="#9bd99b"/>
-    <SolidColorBrush x:Key="InfoBrush" Color="#5b9bd5"/>
-    <SolidColorBrush x:Key="InfoBrushHover" Color="#3a8cd9"/>
-    <SolidColorBrush x:Key="WarningBrush" Color="#d4a04a"/>
-
-    <!-- Catalog redesign palette. Selection / primary CTA are blue (NOT
-         the per-mod accent — that would make the selected row scream
-         in WoL red). Status badges use desaturated tints so the list
-         doesn't feel like a Christmas tree when many mods are shown. -->
-    <SolidColorBrush x:Key="CatalogBlue" Color="#2f6fed"/>
-    <SolidColorBrush x:Key="CatalogBlueHover" Color="#4581f0"/>
-    <SolidColorBrush x:Key="CatalogBlueSubtle" Color="#1d2a44"/>
-
-    <!-- Status badge backgrounds (use the matching *Text brush for fg). -->
-    <SolidColorBrush x:Key="StatusInstalledBg" Color="#1f3a25"/>
-    <SolidColorBrush x:Key="StatusInstalledFg" Color="#7ed28b"/>
-    <SolidColorBrush x:Key="StatusNotInstalledBg" Color="#2c2f36"/>
-    <SolidColorBrush x:Key="StatusNotInstalledFg" Color="#b8b8b8"/>
-    <SolidColorBrush x:Key="StatusUpdateBg" Color="#3a2f1a"/>
-    <SolidColorBrush x:Key="StatusUpdateFg" Color="#e0b85f"/>
-    <SolidColorBrush x:Key="StatusIncompatibleBg" Color="#2a223a"/>
-    <SolidColorBrush x:Key="StatusIncompatibleFg" Color="#a98cd6"/>
-    <SolidColorBrush x:Key="StatusErrorBg" Color="#3a1a20"/>
-    <SolidColorBrush x:Key="StatusErrorFg" Color="#e63950"/>
+         Naming contract:
+           Bg*           = surface backgrounds (darkest → lightest)
+           Border*       = outline strokes
+           Text*         = body / heading text
+           AccentBrush*  = primary action (gold)
+           ModAccentBrush* = per-mod identity (decorative only)
+           Secondary*    = inactive labels, muted icons
+           Success/Error/Warning/Info = semantic state colors
+           Mp*           = multiplayer-specific (blue palette)
+           Tint*         = low-alpha hover fills
+           Fg*           = hover/active foreground tones
+         ================================================================ -->
 
     <!-- =========================================================
-         Multiplayer-tab specific palette.
-         Multiplayer uses blue (not the per-mod red accent) as its
-         primary action colour so the section is visually distinct
-         from the mod-management screens and so red can be reserved
-         for purely destructive states (leave room, disconnected,
-         errors). All keys are prefixed Mp* so a quick grep tells
-         you what's part of the multiplayer redesign vs. shared.
+         CORE SURFACES — the darkest backdrop progressively lifted
+         through panel / panel-alt / neutral layers. Cool-grey-blue
+         undertone (vs. the old warm-near-black) so the gold accent
+         reads warm by contrast.
+         ========================================================= -->
+    <SolidColorBrush x:Key="BgBase" Color="#0E1113"/>           <!-- main app background -->
+    <SolidColorBrush x:Key="BgPanel" Color="#15191C"/>          <!-- cards, surfaces inside the main view -->
+    <SolidColorBrush x:Key="BgPanelAlt" Color="#1B2025"/>       <!-- slightly raised panel variant -->
+    <SolidColorBrush x:Key="BgNeutral" Color="#2A323A"/>        <!-- neutral controls (dialog buttons idle) -->
+    <SolidColorBrush x:Key="BgNeutralHover" Color="#36404A"/>   <!-- neutral controls hover -->
+    <SolidColorBrush x:Key="BgNeutralPressed" Color="#404B57"/> <!-- neutral controls pressed -->
+
+    <!-- =========================================================
+         BORDERS — single cool-grey tone used for every outline so
+         cards / dialogs / sidebars share the same edge colour. The
+         legacy warm "BorderSubtle" (#4e4639) is gone — that tone
+         was leftover from the imperial-warm Stitch palette and
+         clashed with the cooler Modern Colonial chrome.
+         ========================================================= -->
+    <SolidColorBrush x:Key="BorderSubtle" Color="#3C4650"/>
+    <SolidColorBrush x:Key="BorderSecondary" Color="#3C4650"/>
+
+    <!-- =========================================================
+         TYPOGRAPHY — warm off-white primary, cool muted secondary.
+         The warm primary keeps the launcher from feeling clinical;
+         the cool secondary recedes into the chrome so labels don't
+         compete with values for attention.
+         ========================================================= -->
+    <SolidColorBrush x:Key="TextPrimary" Color="#E8E1D1"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#A8B0B8"/>
+
+    <!-- =========================================================
+         ACCENT — the warm aged-gold "colonial" primary action.
+         Used for: PLAY button, Install / Update / Apply CTAs, hover
+         underlines on the active nav tab, dorado pill badges, the
+         hero title text. NEVER themed per mod — every mod sees the
+         same dorado chrome so the launcher identity stays stable
+         when the user switches between mods.
+         ========================================================= -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#D8B66A"/>
+    <SolidColorBrush x:Key="AccentBrushHover" Color="#E3C77B"/>
+    <!-- Bottom stop of the PLAY-button gradient — a richer ochre
+         that anchors the gradient instead of fading to flat dorado. -->
+    <SolidColorBrush x:Key="AccentDeep" Color="#A88A45"/>
+
+    <!-- =========================================================
+         PER-MOD ACCENT — decorative only.
+
+         IMPORTANT: this brush IS allowed to vary per active mod
+         (UpdateAccentResources publishes a new value on every mod
+         switch from profile.AccentColor). It MUST only be consumed
+         in places where "this is THIS mod's color" makes sense:
+           • Mod card border tint in the Workshop list
+           • Hero banner fallback gradient (when the mod has no
+             banner image)
+           • The big circular "mod initial" badge in the right
+             detail panel of the Workshop
+           • Selected-row border on the mods list
+
+         It MUST NOT be used in:
+           • Global chrome (sidebar / title bar / nav strip)
+           • CTAs (PLAY / Install / Update / Apply / Close)
+           • Progress bar or status badges
+           • Any dialog that's not specifically a "mod detail" view
+
+         Seeded with the legacy WoL red as the fallback so things
+         render before the first UpdateAccentResources() runs; once
+         the active mod is loaded this gets republished.
+         ========================================================= -->
+    <SolidColorBrush x:Key="ModAccentBrush" Color="#c8102e"/>
+    <SolidColorBrush x:Key="ModAccentBrushHover" Color="#e63950"/>
+
+    <!-- =========================================================
+         SECONDARY PALETTE — cool blue-grey muted tones. Used for
+         inactive sidebar text, metadata labels, secondary button
+         outlines, sub-surfaces. Same cool family as the chrome so
+         the dorado accent stays warm-by-contrast.
+
+         Roles mirror the M3 colour-system naming:
+           Secondary               muted icons, inactive labels
+           SecondaryFixed          high-contrast cool text
+           SecondaryContainer      sub-surface tint
+           OnSecondary             on top of Secondary
+           OnSecondaryContainer    on top of SecondaryContainer
+           OnSecondaryFixedVariant muted borders
+         ========================================================= -->
+    <SolidColorBrush x:Key="Secondary" Color="#A8B0B8"/>
+    <SolidColorBrush x:Key="SecondaryFixed" Color="#E8E1D1"/>
+    <SolidColorBrush x:Key="SecondaryContainer" Color="#3C4650"/>
+    <SolidColorBrush x:Key="OnSecondary" Color="#1A2028"/>
+    <SolidColorBrush x:Key="OnSecondaryContainer" Color="#A8B0B8"/>
+    <SolidColorBrush x:Key="OnSecondaryFixedVariant" Color="#3C4650"/>
+
+    <!-- Sidebar / title-bar surface. Brighter than BgPanel so the
+         chrome reads as a distinct "navigation" surface and the
+         dorado active state still pops against it. Unified between
+         the top title bar and any vertical sidebar so the launcher
+         chrome feels like one continuous band. -->
+    <SolidColorBrush x:Key="BgSidebar" Color="#314556"/>
+
+    <!-- =========================================================
+         PER-OPERATION PROGRESS GRADIENTS.
+         Painted onto the dashboard's progress bar via the
+         ProgressBar.Foreground property. Each gradient runs dark →
+         mid → bright left-to-right for a premium "metal sheen"
+         while still reading as the operation's identity colour.
+
+         Tone mapping:
+           Install   blue   → "new content arriving"
+           Update    dorado → "refresh, main happy path"
+           Repair    amber  → "warning, fixing things"
+           Verify    lilac  → "checking, informational"
+           Uninstall red    → "destructive, removing"
+
+         All recalibrated to the Modern Colonial palette so the
+         progress bar feels like it belongs to the same theme as
+         the rest of the launcher.
+         ========================================================= -->
+    <LinearGradientBrush x:Key="ProgressGradientInstall" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#1F3958" Offset="0.0"/>
+        <GradientStop Color="#3F6FAE" Offset="0.5"/>
+        <GradientStop Color="#6F9FCE" Offset="1.0"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="ProgressGradientUpdate" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#756036" Offset="0.0"/>
+        <GradientStop Color="#A88A45" Offset="0.5"/>
+        <GradientStop Color="#D8B66A" Offset="1.0"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="ProgressGradientRepair" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#56401C" Offset="0.0"/>
+        <GradientStop Color="#B58A3D" Offset="0.5"/>
+        <GradientStop Color="#E0BC6D" Offset="1.0"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="ProgressGradientVerify" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#3D245A" Offset="0.0"/>
+        <GradientStop Color="#8055B5" Offset="0.5"/>
+        <GradientStop Color="#C49DE0" Offset="1.0"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="ProgressGradientUninstall" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#5A2820" Offset="0.0"/>
+        <GradientStop Color="#B85A4A" Offset="0.5"/>
+        <GradientStop Color="#D88575" Offset="1.0"/>
+    </LinearGradientBrush>
+
+    <!-- Solid tone accents — paint the matching operation icon
+         in the progress bar's icon column with the same colour as
+         the bar gradient peak, so icon + bar read as one element. -->
+    <SolidColorBrush x:Key="ToneInstall" Color="#5F8FBE"/>
+    <SolidColorBrush x:Key="ToneUpdate" Color="#D8B66A"/>
+    <SolidColorBrush x:Key="ToneRepair" Color="#B58A3D"/>
+    <SolidColorBrush x:Key="ToneVerify" Color="#8055B5"/>
+    <SolidColorBrush x:Key="ToneUninstall" Color="#B85A4A"/>
+
+    <!-- Misc decorative tones used by older surfaces that still
+         reference these keys (PLAY-button gradient internals,
+         inactive sidebar Outline tone). -->
+    <SolidColorBrush x:Key="Outline" Color="#A8B0B8"/>
+    <SolidColorBrush x:Key="DangerAlert" Color="#8E2A22"/>
+    <SolidColorBrush x:Key="DangerAlertFg" Color="#FFB4AB"/>
+
+    <!-- =========================================================
+         DESTRUCTIVE — Uninstall, Leave room, error confirmations.
+         The new Modern Colonial red is a desaturated terracotta
+         (#B85A4A) — reads as "warning, important" without screaming
+         like the old pure-blood-red (#8b0000) did. Stays static —
+         never themed per mod.
+         ========================================================= -->
+    <SolidColorBrush x:Key="DangerBrush" Color="#B85A4A"/>
+    <SolidColorBrush x:Key="DangerBrushHover" Color="#C66A5A"/>
+
+    <!-- =========================================================
+         SEMANTIC STATE COLORS.
+         Use these for state-only signals (badges, status pills,
+         dot indicators), NOT for primary actions or chrome.
+           Success → installed / compatible / connected   (green)
+           Error   → uninstall / disconnected / failure   (red)
+           Info    → tip / informational                  (blue)
+           Warning → repair / pending / outdated          (amber)
+         ========================================================= -->
+    <SolidColorBrush x:Key="ErrorBrush" Color="#B85A4A"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="#4FA66A"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="#3F6FAE"/>
+    <SolidColorBrush x:Key="InfoBrushHover" Color="#4F7FBE"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="#D4A04A"/>
+
+    <!-- =========================================================
+         CATALOG (Workshop browser) — selection / CTAs use the
+         neutral colonial blue (NOT the per-mod accent — that
+         would make the selected row scream in WoL red whenever
+         WoL is the active mod). Status badges use desaturated
+         tints so the list doesn't feel like a Christmas tree
+         when many mods are visible.
+         ========================================================= -->
+    <SolidColorBrush x:Key="CatalogBlue" Color="#3F6FAE"/>
+    <SolidColorBrush x:Key="CatalogBlueHover" Color="#4F7FBE"/>
+    <SolidColorBrush x:Key="CatalogBlueSubtle" Color="#1D2840"/>
+
+    <!-- Status badge fill+stroke pairs. Bg = low-alpha tint of the
+         matching Fg colour so badges read as quiet labels rather
+         than buttons. All recalibrated for the Modern Colonial
+         palette. -->
+    <SolidColorBrush x:Key="StatusInstalledBg" Color="#1D2E22"/>
+    <SolidColorBrush x:Key="StatusInstalledFg" Color="#4FA66A"/>
+    <SolidColorBrush x:Key="StatusNotInstalledBg" Color="#2A323A"/>
+    <SolidColorBrush x:Key="StatusNotInstalledFg" Color="#A8B0B8"/>
+    <SolidColorBrush x:Key="StatusUpdateBg" Color="#2E2818"/>
+    <SolidColorBrush x:Key="StatusUpdateFg" Color="#D8B66A"/>
+    <SolidColorBrush x:Key="StatusIncompatibleBg" Color="#2A203A"/>
+    <SolidColorBrush x:Key="StatusIncompatibleFg" Color="#A98CD6"/>
+    <SolidColorBrush x:Key="StatusErrorBg" Color="#2E1D1A"/>
+    <SolidColorBrush x:Key="StatusErrorFg" Color="#B85A4A"/>
+
+    <!-- =========================================================
+         MULTIPLAYER PALETTE.
+         The Multiplayer tab uses the same colonial blue family as
+         the rest of the launcher's secondary actions. Prefixed Mp*
+         so a grep clearly separates multiplayer-specific surfaces
+         from shared chrome.
          ========================================================= -->
 
-    <!-- Primary CTA blue + subtle variants. -->
-    <SolidColorBrush x:Key="MpBlue" Color="#2f6fed"/>
-    <SolidColorBrush x:Key="MpBlueHover" Color="#4581f0"/>
-    <SolidColorBrush x:Key="MpBluePressed" Color="#245bc7"/>
-    <!-- Subtle "blue tint" used for selected rows / hover backgrounds
-         and for the outline variant of the empty-state Create room
-         button. Low-saturation so it doesn't fight the dark base. -->
-    <SolidColorBrush x:Key="MpBlueSubtle" Color="#1d2a44"/>
+    <!-- Primary blue CTA + variants. -->
+    <SolidColorBrush x:Key="MpBlue" Color="#3F6FAE"/>
+    <SolidColorBrush x:Key="MpBlueHover" Color="#4F7FBE"/>
+    <SolidColorBrush x:Key="MpBluePressed" Color="#34608E"/>
+    <!-- Subtle blue tint for selected rows / hover backgrounds /
+         outline-variant button fills. Low saturation so it doesn't
+         compete with the dark base. -->
+    <SolidColorBrush x:Key="MpBlueSubtle" Color="#1D2840"/>
 
-    <!-- Surfaces specific to multiplayer: slightly lighter than the
+    <!-- Multiplayer-specific surfaces. Slightly lighter than the
          shared BgPanel so the room table / chat bar feel "raised". -->
-    <SolidColorBrush x:Key="MpSurface" Color="#1e222a"/>
-    <SolidColorBrush x:Key="MpSurfaceAlt" Color="#262a33"/>
-    <SolidColorBrush x:Key="MpDivider" Color="#2e323b"/>
-    <SolidColorBrush x:Key="MpTableHeader" Color="#9aa0aa"/>
+    <SolidColorBrush x:Key="MpSurface" Color="#1B2025"/>
+    <SolidColorBrush x:Key="MpSurfaceAlt" Color="#232830"/>
+    <SolidColorBrush x:Key="MpDivider" Color="#2C313A"/>
+    <SolidColorBrush x:Key="MpTableHeader" Color="#A8B0B8"/>
 
-    <!-- Status dots used in the top-right connection pill, status
-         column of the rooms table, and the inline lobby-chat status
-         indicator. Online matches the existing SuccessBrush family. -->
-    <SolidColorBrush x:Key="MpStatusOnline" Color="#3ec46d"/>
-    <SolidColorBrush x:Key="MpStatusReconnect" Color="#e0b85f"/>
-    <SolidColorBrush x:Key="MpStatusOffline" Color="#e63950"/>
-    <SolidColorBrush x:Key="MpStatusWaiting" Color="#5b9bd5"/>
-    <SolidColorBrush x:Key="MpStatusInGame" Color="#3ec46d"/>
+    <!-- Connection status dots. Online matches SuccessBrush;
+         Offline matches ErrorBrush; in-flight states get their
+         own warm amber so they don't read as "everything's fine"
+         or "everything's broken". -->
+    <SolidColorBrush x:Key="MpStatusOnline" Color="#4FA66A"/>
+    <SolidColorBrush x:Key="MpStatusReconnect" Color="#D4A04A"/>
+    <SolidColorBrush x:Key="MpStatusOffline" Color="#B85A4A"/>
+    <SolidColorBrush x:Key="MpStatusWaiting" Color="#3F6FAE"/>
+    <SolidColorBrush x:Key="MpStatusInGame" Color="#4FA66A"/>
 
-    <!-- Destructive (Leave room). Darker than the shared DangerBrush
-         so it doesn't compete with the blue primary. -->
-    <SolidColorBrush x:Key="MpDanger" Color="#7a2030"/>
-    <SolidColorBrush x:Key="MpDangerHover" Color="#962a3c"/>
+    <!-- Destructive (Leave room). A touch darker than the shared
+         DangerBrush so it doesn't compete with the blue primary. -->
+    <SolidColorBrush x:Key="MpDanger" Color="#8E3F37"/>
+    <SolidColorBrush x:Key="MpDangerHover" Color="#A65049"/>
 
-    <!-- Ping bars — green / yellow / red. Used by the rooms-table
+    <!-- Ping bars (green / amber / red) — used in the rooms table
          "Ping" column and the in-room per-member RTT indicator. -->
-    <SolidColorBrush x:Key="MpPingGood" Color="#3ec46d"/>
-    <SolidColorBrush x:Key="MpPingMedium" Color="#e0b85f"/>
-    <SolidColorBrush x:Key="MpPingBad" Color="#e63950"/>
+    <SolidColorBrush x:Key="MpPingGood" Color="#4FA66A"/>
+    <SolidColorBrush x:Key="MpPingMedium" Color="#D4A04A"/>
+    <SolidColorBrush x:Key="MpPingBad" Color="#B85A4A"/>
+
+    <!-- =========================================================
+         INTERACTION TOKENS — semantic colors for hover/active
+         states. Centralized so changing the dorado interaction
+         tint future-proofs every button at once instead of
+         hunting through 23 styles for `#1FD8B66A` literals.
+
+         Naming contract:
+           Tint*  = background fill colors (low-alpha tints)
+           Fg*    = foreground colors for text/icons
+
+         Recipe per palette (paired with the role taxonomy
+         documented in Styles/Buttons.xaml):
+
+           GOLD section (mod chrome, dashboard, properties):
+             SECONDARY hover = bg TintGoldHover    + fg FgHoverGold
+             TERTIARY  hover = bg transparent      + fg FgHoverGold
+             TERTIARY  active = bg transparent + bold + gold underline
+
+           BLUE section (multiplayer):
+             SECONDARY hover = bg TintBlueHover    + fg FgHoverBlue
+             TERTIARY  hover = bg transparent      + fg FgHoverBlue
+
+           NEUTRAL section (workshop, generic dialogs):
+             SECONDARY hover = bg BgNeutralHover   + fg FgBright
+             TERTIARY  hover = bg transparent      + fg FgHoverNeutral
+
+         FgHoverGold (#FFF4E0) is a warm cream — pure white reads
+         "too clinical" against the imperial dorado palette; the
+         cream reads as "lit by candlelight" instead.
+         ========================================================= -->
+    <SolidColorBrush x:Key="TintGoldHover" Color="#1FD8B66A"/>         <!-- 12% gold -->
+    <SolidColorBrush x:Key="TintGoldHoverSubtle" Color="#14D8B66A"/>   <!-- 8% gold -->
+    <SolidColorBrush x:Key="TintBlueHover" Color="#1D2840"/>           <!-- = MpBlueSubtle -->
+    <SolidColorBrush x:Key="TintBlueHoverSubtle" Color="#0F1A2E"/>     <!-- ~50% of above -->
+
+    <SolidColorBrush x:Key="FgBright" Color="#FFFFFF"/>                <!-- pure white, for active state -->
+    <SolidColorBrush x:Key="FgHoverGold" Color="#FFF4E0"/>             <!-- warm cream for gold palette -->
+    <SolidColorBrush x:Key="FgHoverBlue" Color="#CFE1FF"/>             <!-- soft sky for blue palette -->
+    <SolidColorBrush x:Key="FgHoverNeutral" Color="#E6EEF8"/>          <!-- cool near-white for neutral -->
+
+    <!-- =========================================================
+         PILL BADGE / DECORATIVE TINTS.
+         New tokens introduced to centralize the hardcoded pill
+         badge colours that used to live inline in
+         ModPropertiesDialog.xaml (e.g. #33e9c176 / #55e9c176 /
+         #55e63950). Anything that needs a "low-alpha accent fill"
+         or "low-alpha danger outline" pulls from these tokens
+         instead of hard-coding the hex itself.
+         ========================================================= -->
+    <SolidColorBrush x:Key="TintAccentBadge" Color="#33D8B66A"/>       <!-- 20% gold bg for pill badges -->
+    <SolidColorBrush x:Key="BorderAccentBadge" Color="#55D8B66A"/>     <!-- 33% gold border for pill badges -->
+    <SolidColorBrush x:Key="BorderDangerSubtle" Color="#55B85A4A"/>    <!-- 33% red border for danger-zone cards -->
+    <SolidColorBrush x:Key="BgDangerSubtle" Color="#1E1614"/>          <!-- whisper red surface for danger zone cards -->
 
 </ResourceDictionary>

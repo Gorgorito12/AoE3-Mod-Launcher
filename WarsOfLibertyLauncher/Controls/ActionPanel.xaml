@@ -37,8 +37,8 @@
             <Button x:Name="StopButton"
                     x:FieldModifier="public"
                     Style="{StaticResource SidebarSecondaryButton}"
-                    Background="#5a1a1a"
-                    Foreground="#e63950"
+                    Background="{DynamicResource StatusErrorBg}"
+                    Foreground="{DynamicResource ErrorBrush}"
                     Visibility="Collapsed"
                     Margin="0,6,0,0"/>
 
@@ -297,7 +297,7 @@
                                       x:FieldModifier="public"
                                       Foreground="{DynamicResource TextSecondary}">
                                 <MenuItem.Icon>
-                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="#c8102e"
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="{DynamicResource AccentBrush}"
                                           Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/>
                                 </MenuItem.Icon>
                             </MenuItem>
@@ -305,7 +305,7 @@
                                       x:FieldModifier="public"
                                       Foreground="{DynamicResource TextSecondary}">
                                 <MenuItem.Icon>
-                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="#5b9bd5"
+                                    <Path Width="16" Height="16" Stretch="Uniform" Fill="{DynamicResource InfoBrush}"
                                           Data="M7.97,16L5,19C4.67,19.3 4.23,19.5 3.75,19.5A1.75,1.75 0 0,1 2,17.75V17.5L3,10.12C3.21,7.81 5.14,6 7.5,6H16.5C18.86,6 20.79,7.81 21,10.12L22,17.5V17.75A1.75,1.75 0 0,1 20.25,19.5C19.77,19.5 19.33,19.3 19,19L16.03,16H7.97M7,8V10H5V11H7V13H8V11H10V10H8V8H7M14.5,9A0.5,0.5 0 0,0 14,9.5A0.5,0.5 0 0,0 14.5,10A0.5,0.5 0 0,0 15,9.5A0.5,0.5 0 0,0 14.5,9M16.5,11A0.5,0.5 0 0,0 16,11.5A0.5,0.5 0 0,0 16.5,12A0.5,0.5 0 0,0 17,11.5A0.5,0.5 0 0,0 16.5,11M16.5,9A0.5,0.5 0 0,0 16,9.5A0.5,0.5 0 0,0 16.5,10A0.5,0.5 0 0,0 17,9.5A0.5,0.5 0 0,0 16.5,9M18.5,11A0.5,0.5 0 0,0 18,11.5A0.5,0.5 0 0,0 18.5,12A0.5,0.5 0 0,0 19,11.5A0.5,0.5 0 0,0 18.5,11Z"/>
                                 </MenuItem.Icon>
                             </MenuItem>
@@ -442,9 +442,9 @@
 
                         <MenuItem x:Name="UninstallMenuItem"
                                   x:FieldModifier="public"
-                                  Foreground="#e63950">
+                                  Foreground="{DynamicResource ErrorBrush}">
                             <MenuItem.Icon>
-                                <Path Width="16" Height="16" Stretch="Uniform" Fill="#e63950"
+                                <Path Width="16" Height="16" Stretch="Uniform" Fill="{DynamicResource ErrorBrush}"
                                       Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
                             </MenuItem.Icon>
                         </MenuItem>

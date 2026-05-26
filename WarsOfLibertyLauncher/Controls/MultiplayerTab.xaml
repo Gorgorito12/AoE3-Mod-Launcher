@@ -3,9 +3,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
         <!-- Subtab buttons (Rooms / Friends / Profile / History).
-             Look matches the redesign brief: dim gray when inactive,
-             white text + bright blue underline when active. Active
-             state is set programmatically by UpdateSubtabHighlights. -->
+             TERTIARY BLUE recipe — dim gray when inactive, soft sky
+             (FgHoverBlue) on hover, white + bold + blue underline
+             when active (active state still set programmatically by
+             UpdateSubtabHighlights via BorderBrush/Foreground).
+
+             ControlTemplate is REQUIRED — without it WPF falls back
+             to the Aero default which paints a sky-blue gradient
+             on hover (the "muy blancos" bug). TemplateBinding the
+             BorderBrush + BorderThickness so the code-behind active-
+             state setters still work without re-templating. -->
         <Style x:Key="SubTab" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
@@ -16,6 +23,29 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,24,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <!-- No background fill, just lift the
+                                     text to soft sky. The blue identity
+                                     stays in the underline (active) +
+                                     hover text, never in a tile. -->
+                                <Setter Property="Foreground" Value="{DynamicResource FgHoverBlue}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- Right-aligned status pill (Connected / Reconnecting /

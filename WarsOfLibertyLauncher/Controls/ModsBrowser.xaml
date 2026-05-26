@@ -2,10 +2,16 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
-        <!-- Compact button used for the filter chips. The selected chip gets
-             a CatalogBlue background via code-behind so we don't need a
-             trigger-heavy ControlTemplate for the four-state look. -->
-        <Style x:Key="FilterChip" TargetType="Button">
+        <!-- Compact button used for the filter chips. The selected chip
+             gets a CatalogBlue background via code-behind so we don't
+             need a trigger-heavy template for the four-state look.
+
+             BasedOn={x:Type Button} pulls in the implicit Button style
+             from Styles/Buttons.xaml — that's where the overlay-scrim
+             hover template lives. Without BasedOn, this Style would
+             fall back to the Aero default and the chip would paint a
+             sky-blue gradient on hover. -->
+        <Style x:Key="FilterChip" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="{DynamicResource BgPanelAlt}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
@@ -13,9 +19,13 @@
             <Setter Property="Padding" Value="14,6"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
         </Style>
+        <!-- Subtab buttons (My mods / Catalog). TERTIARY NEUTRAL recipe —
+             same fix as the multiplayer SubTab: without an explicit
+             ControlTemplate, WPF Aero default paints a sky-blue gradient
+             on hover. Template binding the BorderBrush so the
+             selected-state setter in code-behind still works. -->
         <Style x:Key="SubTab" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
@@ -26,6 +36,25 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,22,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource FgHoverNeutral}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 

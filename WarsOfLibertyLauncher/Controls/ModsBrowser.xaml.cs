@@ -46,6 +46,19 @@ public sealed class ModRowState
     public bool IsActive { get; init; }
     /// <summary>Optional short reason string for Incompatible / Error rows.</summary>
     public string Note { get; init; } = "";
+    /// <summary>
+    /// Workshop redesign: true when the profile is in the user's
+    /// personal mod collection (added via the Workshop's Add button
+    /// or a built-in profile). Drives the per-row Add/Remove toggle.
+    /// </summary>
+    public bool IsInUserCollection { get; init; }
+    /// <summary>
+    /// True for hard-coded built-in profiles (currently only WoL).
+    /// Built-ins always appear in the user's collection and can't be
+    /// removed — the row button shows a disabled "Built-in" pill
+    /// instead of Add/Remove.
+    /// </summary>
+    public bool IsBuiltIn { get; init; }
 }
 
 /// <summary>
@@ -78,6 +91,14 @@ public partial class ModsBrowser : UserControl
     public event EventHandler? PublishRequested;
     public event EventHandler? RefreshCatalogRequested;
     public event EventHandler? AddLocalModRequested;
+
+    /// <summary>Workshop "Add to my mods" button click.</summary>
+    public event EventHandler<ModProfile>? AddToCollectionRequested;
+    /// <summary>Workshop "Remove from my mods" button click.</summary>
+    public event EventHandler<ModProfile>? RemoveFromCollectionRequested;
+    // (RightClicked event removed — right-click on Workshop rows
+    // no longer triggers a per-mod context popup. Per-mod admin
+    // actions live in the dashboard gear button now.)
 
     // ------------------------------------------------------------------------
     // Filter / sort modes.
@@ -216,6 +237,16 @@ public partial class ModsBrowser : UserControl
     public string DetailViewWebsiteLabel { get; set; } = "View mod page";
     public string DetailSwitchActiveLabel { get; set; } = "Set as active mod";
     public string DetailUninstallLabel { get; set; } = "Uninstall";
+
+    /// <summary>
+    /// Workshop redesign — per-row button labels for the user's
+    /// personal mod collection. Workshop doesn't install/update/repair
+    /// anymore; it just adds/removes profiles from the user's list.
+    /// All maintenance lives on the Dashboard.
+    /// </summary>
+    public string BtnAddToCollectionLabel { get; set; } = "Add to my mods";
+    public string BtnRemoveFromCollectionLabel { get; set; } = "Remove from my mods";
+    public string BtnBuiltinLabel { get; set; } = "Built-in";
 
     /// <summary>Status badge labels (localised text shown inside each badge).</summary>
     public string BadgeNotInstalled { get; set; } = "No instalado";
@@ -536,6 +567,10 @@ public partial class ModsBrowser : UserControl
             CardClicked?.Invoke(this, profile);
             ShowDetail(profile);
         };
+        // (Right-click handler removed — per-user redesign moved all
+        // mod admin into the dashboard gear button's Administrar
+        // submenu / Properties dialog. Workshop row left-click is
+        // the only mouse interaction now.)
 
         return row;
     }
@@ -606,41 +641,60 @@ public partial class ModsBrowser : UserControl
 
     private Button BuildRowAction(ModProfile profile, ModRowState state)
     {
-        (string label, Action? click, bool enabled) = state.Status switch
+        // Workshop redesign — the per-row CTA is now a toggle for the
+        // user's personal collection, not an install/update/play
+        // dispatcher. Three modes:
+        //   1. Built-in profile (WoL) → small disabled "Built-in" pill.
+        //      Can't be removed because the launcher needs something
+        //      to fall back on if the user empties their collection.
+        //   2. In user's collection → "Remove from my mods" (neutral
+        //      ghost button — destructive-looking but recoverable).
+        //   3. Not in user's collection → "Add to my mods" (primary
+        //      CatalogBlue button — the main Workshop action).
+        // All install / update / repair / uninstall happens on the
+        // Dashboard (PLAY state machine + gear menu).
+        if (state.IsBuiltIn)
         {
-            ModRowStatus.UpdateAvailable => (DetailUpdateLabel, (Action?)(() => UpdateRequested?.Invoke(this, profile)), true),
-            ModRowStatus.Installed       => (DetailPlayLabel,   (Action?)(() => PlayRequested?.Invoke(this, profile)),   true),
-            ModRowStatus.Incompatible    => (DetailIncompatibleLabel, (Action?)null, false),
-            ModRowStatus.Error           => (DetailRepairLabel, (Action?)(() => RepairRequested?.Invoke(this, profile)), true),
-            _                            => (DetailInstallLabel, (Action?)(() => InstallRequested?.Invoke(this, profile)), true),
-        };
+            return new Button
+            {
+                Content = BtnBuiltinLabel,
+                Foreground = (Brush)FindResource("TextSecondary"),
+                Background = (Brush)FindResource("BgPanelAlt"),
+                BorderBrush = (Brush)FindResource("BorderSubtle"),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(14, 5, 14, 5),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Cursor = Cursors.Arrow,
+                IsEnabled = false,
+            };
+        }
 
-        bool primary = enabled && state.Status != ModRowStatus.Installed;
+        bool added = state.IsInUserCollection;
         var btn = new Button
         {
-            Content = label,
-            Foreground = enabled ? Brushes.White : (Brush)FindResource("TextSecondary"),
-            Background = primary
-                ? (Brush)FindResource("CatalogBlue")
-                : (Brush)FindResource("BgPanelAlt"),
-            BorderBrush = primary
-                ? (Brush)FindResource("CatalogBlue")
-                : (Brush)FindResource("BorderSubtle"),
+            Content = added ? BtnRemoveFromCollectionLabel : BtnAddToCollectionLabel,
+            Foreground = added ? (Brush)FindResource("TextSecondary") : Brushes.White,
+            Background = added
+                ? (Brush)FindResource("BgPanelAlt")
+                : (Brush)FindResource("CatalogBlue"),
+            BorderBrush = added
+                ? (Brush)FindResource("BorderSubtle")
+                : (Brush)FindResource("CatalogBlue"),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(14, 5, 14, 5),
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
-            Cursor = enabled ? Cursors.Hand : Cursors.Arrow,
-            IsEnabled = enabled,
+            Cursor = Cursors.Hand,
         };
-        if (enabled && click is not null)
+        btn.Click += (_, _) =>
         {
-            btn.Click += (_, _) =>
-            {
-                ShowDetail(profile);
-                click();
-            };
-        }
+            ShowDetail(profile);
+            if (added)
+                RemoveFromCollectionRequested?.Invoke(this, profile);
+            else
+                AddToCollectionRequested?.Invoke(this, profile);
+        };
         return btn;
     }
 
@@ -797,26 +851,47 @@ public partial class ModsBrowser : UserControl
 
     private void BuildDetailActions(ModProfile profile, ModRowState state)
     {
-        // Primary CTA — dynamic per status. CatalogBlue when enabled,
-        // greyed when Incompatible.
-        (string label, Action? click, bool enabled) = state.Status switch
+        // Workshop redesign — primary CTA mirrors the per-row button:
+        // Built-in (disabled "Built-in" pill) / Add to my mods (primary)
+        // / Remove from my mods (ghost). Install / Update / Repair /
+        // Uninstall live on the Dashboard via PLAY + gear menu.
+        string label;
+        Action? click;
+        bool enabled;
+        bool primaryStyle;
+
+        if (state.IsBuiltIn)
         {
-            ModRowStatus.UpdateAvailable => (DetailUpdateLabel, (Action)(() => UpdateRequested?.Invoke(this, profile)), true),
-            ModRowStatus.Installed       => (DetailPlayLabel,   (Action)(() => PlayRequested?.Invoke(this, profile)),   true),
-            ModRowStatus.Incompatible    => (DetailIncompatibleLabel, null, false),
-            ModRowStatus.Error           => (DetailRepairLabel, (Action)(() => RepairRequested?.Invoke(this, profile)), true),
-            _                            => (DetailInstallLabel, (Action)(() => InstallRequested?.Invoke(this, profile)), true),
-        };
+            label = BtnBuiltinLabel;
+            click = null;
+            enabled = false;
+            primaryStyle = false;
+        }
+        else if (state.IsInUserCollection)
+        {
+            label = BtnRemoveFromCollectionLabel;
+            click = () => RemoveFromCollectionRequested?.Invoke(this, profile);
+            enabled = true;
+            primaryStyle = false;
+        }
+        else
+        {
+            label = BtnAddToCollectionLabel;
+            click = () => AddToCollectionRequested?.Invoke(this, profile);
+            enabled = true;
+            primaryStyle = true;
+        }
+
         DetailPrimaryButton.Content = label;
         DetailPrimaryButton.IsEnabled = enabled;
-        DetailPrimaryButton.Background = enabled
+        DetailPrimaryButton.Background = primaryStyle
             ? (Brush)FindResource("CatalogBlue")
             : (Brush)FindResource("BgPanelAlt");
-        DetailPrimaryButton.Foreground = enabled
+        DetailPrimaryButton.Foreground = enabled && primaryStyle
             ? Brushes.White
             : (Brush)FindResource("TextSecondary");
         // Replace handler each rebuild — Click is rewired to whichever
-        // action matches the current state.
+        // action matches the current Add/Remove state.
         DetailPrimaryButton.Click -= OnPrimaryClick;
         _primaryAction = click;
         DetailPrimaryButton.Click += OnPrimaryClick;
@@ -850,30 +925,12 @@ public partial class ModsBrowser : UserControl
 
     private void BuildDetailMoreMenu(ModProfile profile, ModRowState state)
     {
+        // Workshop redesign — More menu used to hold "Set as active" +
+        // "Uninstall"; both moved to the Dashboard (MODS popup +
+        // gear menu). Workshop is purely discovery + add/remove now,
+        // so the menu has nothing to show and stays collapsed.
         DetailMoreMenu.Items.Clear();
-        bool installed = state.Status == ModRowStatus.Installed
-            || state.Status == ModRowStatus.UpdateAvailable;
-        bool isActive = string.Equals(profile.Id, _activeId, StringComparison.OrdinalIgnoreCase);
-
-        if (!isActive && installed)
-        {
-            var mi = new MenuItem { Header = DetailSwitchActiveLabel };
-            mi.Click += (_, _) => SwitchActiveRequested?.Invoke(this, profile);
-            DetailMoreMenu.Items.Add(mi);
-        }
-        if (installed)
-        {
-            var mi = new MenuItem { Header = DetailUninstallLabel };
-            mi.Click += (_, _) => UninstallRequested?.Invoke(this, profile);
-            DetailMoreMenu.Items.Add(mi);
-        }
-        DetailMoreButton.Visibility = DetailMoreMenu.Items.Count > 0
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        // Show the menu on click — WPF doesn't fire ContextMenu on
-        // primary click by default.
-        DetailMoreButton.Click -= OnDetailMoreClick;
-        DetailMoreButton.Click += OnDetailMoreClick;
+        DetailMoreButton.Visibility = Visibility.Collapsed;
     }
 
     private void OnDetailMoreClick(object sender, RoutedEventArgs e)

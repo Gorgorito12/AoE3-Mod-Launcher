@@ -160,6 +160,7 @@ public class ModCatalogService
                     Manifest = manifest,
                     IconUrl = ResolveAssetUrl(repo, item.Name, manifest.Icon),
                     BannerUrl = ResolveAssetUrl(repo, item.Name, manifest.Banner),
+                    HeroImageUrl = ResolveAssetUrl(repo, item.Name, manifest.HeroImage),
                 };
                 entries.Add(entry);
                 DiagnosticLog.Write(
@@ -339,4 +340,13 @@ public class ModCatalogEntry
 
     /// <summary>Absolute URL of the banner, or null if the manifest didn't ship one.</summary>
     public string? BannerUrl { get; set; }
+
+    /// <summary>
+    /// Absolute URL of the dashboard hero image, or null if the manifest
+    /// didn't ship one. When non-null, the launcher prefers this over
+    /// <see cref="BannerUrl"/> for the dashboard background — the banner
+    /// is meant for the Workshop card thumbnail, the hero for the
+    /// full-bleed dashboard.
+    /// </summary>
+    public string? HeroImageUrl { get; set; }
 }

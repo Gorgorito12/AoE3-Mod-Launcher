@@ -62,8 +62,7 @@
                 </Grid>
                 <ProgressBar x:Name="PatchProgress"
                              x:FieldModifier="public"
-                             Height="6"
-                             Foreground="#3a8cd9"/>
+                             Style="{StaticResource ShimmerProgressBar}"/>
                 <Grid Margin="0,6,0,2">
                     <TextBlock x:Name="LblOverall"
                                x:FieldModifier="public"
@@ -75,8 +74,7 @@
                 </Grid>
                 <ProgressBar x:Name="OverallProgress"
                              x:FieldModifier="public"
-                             Height="6"
-                             Foreground="#3a8cd9"/>
+                             Style="{StaticResource ShimmerProgressBar}"/>
                 <Grid Margin="0,6,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>

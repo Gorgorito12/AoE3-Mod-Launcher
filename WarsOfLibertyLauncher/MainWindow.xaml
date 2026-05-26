@@ -2,13 +2,30 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:tb="http://www.hardcodet.net/taskbar"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="AoE3 Mod Launcher"
         Height="700" Width="1100"
         MinHeight="620" MinWidth="900"
         WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
         ResizeMode="CanResize"
-        Background="{DynamicResource BgBase}">
+        Background="{DynamicResource BgBase}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed">
+    <!-- Custom title bar: WindowStyle=None removes the Windows
+         default white chrome and lets us paint our own. WindowChrome
+         keeps the OS-level Windows niceties (snap, Aero Peek, drag-
+         to-edge, double-click-to-maximize) so we don't lose any
+         native behaviour, we just get to skin the surface. -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="40"
+                            ResizeBorderThickness="6"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
         <!-- Dark-themed tooltip: matches the rest of the launcher's UI
@@ -44,41 +61,11 @@
             </Setter>
         </Style>
 
-        <!-- Sidebar primary action — the big "JUGAR / INSTALAR" button. -->
-        <Style x:Key="SidebarPrimaryButton" TargetType="Button">
-            <Setter Property="Background" Value="#c8102e"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="14,12"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="4"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#e63950"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Background" Value="#3a3d44"/>
-                                <Setter Property="Foreground" Value="#888"/>
-                                <Setter Property="Cursor" Value="Arrow"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- (Removed local SidebarPrimaryButton style — the redesign
+             relies on the global one from Styles/Buttons.xaml which
+             has the gold gradient + glow effect. Window.Resources used
+             to override it with a flat fill, which defeated the
+             premium hero CTA look.) -->
 
         <!-- Sidebar action buttons coded by operation. Background + border
              come from each button instance, so the same template handles
@@ -221,8 +208,8 @@
         </Style>
 
         <Style TargetType="ProgressBar">
-            <Setter Property="Background" Value="#2a2d34"/>
-            <Setter Property="Foreground" Value="#c8102e"/>
+            <Setter Property="Background" Value="{DynamicResource BgPanelAlt}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Height" Value="8"/>
         </Style>
@@ -313,230 +300,606 @@
         <Style TargetType="ScrollViewer">
             <Setter Property="Padding" Value="0,0,8,0"/>
         </Style>
+
+        <!-- ============================================================
+             Title-bar buttons (Min / Max / Close). Flat Win11-style
+             squares that match the launcher chrome. Min and Max
+             hover gold; Close hovers DangerAlert red (Windows
+             convention so a stray click reads as "destructive").
+             ============================================================ -->
+        <Style x:Key="TitleBarButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <!-- GHOST GOLD recipe — only the
+                                     glyph colour changes, lifting
+                                     from Secondary (dim grey-blue)
+                                     to FgHoverGold (warm cream).
+                                     No fill, no glow, same contract
+                                     as the brand button + nav strip
+                                     + sidebar navigation. -->
+                                <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Close (✕) — DESTRUCTIVE role, always red. Restored to
+             the Windows-convention DangerAlert fill after the global
+             white-everywhere pass dropped it (mistake — a destructive
+             action should never share its hover treatment with the
+             quiet glyphs next to it). Red fill + white glyph makes
+             a stray hover near the X read as "danger" instantly. -->
+        <Style x:Key="TitleBarCloseButton" TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerAlert}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>   <!-- Top-level tabs -->
-            <RowDefinition Height="*"/>      <!-- Active-tab content -->
+            <RowDefinition Height="40"/>   <!-- Custom title bar -->
+            <RowDefinition Height="56"/>   <!-- Horizontal nav strip (Steam-style) -->
+            <RowDefinition Height="*"/>    <!-- App content -->
         </Grid.RowDefinitions>
 
-        <!-- ============================================================
-             TOP-LEVEL TABS. SwitchTopTab() in code-behind toggles which
-             of the views below is visible. The Play tab keeps the
-             original 2-row layout (Mods bar + sidebar/right body) so the
-             existing flow is unchanged when the user lands here.
-             ============================================================ -->
+        <!-- =============================================================
+             CUSTOM TITLE BAR — replaces the white Windows-default
+             chrome with our own painted strip in BgSidebar so the
+             whole window reads as one cohesive dark surface. App
+             icon + window title on the left; min / max / close on
+             the right. Drag works automatically over CaptionHeight
+             (set in WindowChrome above); buttons mark themselves
+             hit-test-visible-in-chrome so they aren't blocked by
+             the drag area.
+             ============================================================= -->
         <Border Grid.Row="0"
-                Background="{DynamicResource BgBase}"
-                Padding="20,0"
-                BorderBrush="{DynamicResource BorderSubtle}"
+                Background="{DynamicResource BgSidebar}"
+                BorderBrush="{DynamicResource BorderSecondary}"
                 BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal">
-                <Button x:Name="TopTabPlay"
-                        Style="{StaticResource TopTabButton}"
-                        Click="TopTabPlay_Click"/>
-                <Button x:Name="TopTabMods"
-                        Style="{StaticResource TopTabButton}"
-                        Click="TopTabMods_Click"/>
-                <Button x:Name="TopTabMultiplayer"
-                        Style="{StaticResource TopTabButton}"
-                        Click="TopTabMultiplayer_Click"/>
-                <Button x:Name="TopTabNews"
-                        Style="{StaticResource TopTabButton}"
-                        Click="TopTabNews_Click"/>
-                <Button x:Name="TopTabSettings"
-                        Style="{StaticResource TopTabButton}"
-                        Click="TopTabSettings_Click"/>
-            </StackPanel>
-        </Border>
-
-        <!-- ============================================================
-             Content host: only one of the view Grids below is Visible
-             at a time, driven by SwitchTopTab(). Play is the default.
-             ============================================================ -->
-        <Grid Grid.Row="1">
-
-            <!-- Play view: existing 2-row layout (mods bar + body). -->
-            <Grid x:Name="PlayView">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>   <!-- Mods bar -->
-                    <RowDefinition Height="*"/>      <!-- 2-column body -->
-                </Grid.RowDefinitions>
-
-                <!-- ============================================================
-                     MODS BAR. Horizontal cards for every mod profile, plus the
-                     EN/ES language toggle on the right.
-                     ============================================================ -->
-                <Border Grid.Row="0"
-                        Background="{DynamicResource BgPanel}"
-                        Padding="20,12"
-                        BorderBrush="{DynamicResource BorderSubtle}"
-                        BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock x:Name="ModsBarLabel"
-                               Foreground="#666"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <StackPanel x:Name="ModCardsPanel"
-                                Orientation="Horizontal"/>
-                </StackPanel>
+                <!-- Title-bar brand button — clickable, opens the same
+                     brand menu as the AOE3 LAUNCHER button in the nav
+                     strip below. Steam-pattern: clicking the launcher
+                     name in the title bar should open the launcher
+                     menu (Launcher settings / About / Exit).
+                     IsHitTestVisibleInChrome=True so WindowChrome's
+                     drag handler doesn't swallow the click. -->
+                <Button x:Name="TitleBarBrandButton"
+                        Grid.Column="0"
+                        HorizontalAlignment="Left"
+                        Background="Transparent"
+                        Foreground="{DynamicResource Secondary}"
+                        BorderThickness="0"
+                        Padding="12,0"
+                        Cursor="Hand"
+                        Click="BrandMenuButton_Click"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- GHOST GOLD recipe — same as NavTabButton /
+                         SidebarNavButton: idle Foreground sits at the
+                         dim Secondary tone, hover lifts it to the
+                         warm cream FgHoverGold token. No background
+                         fill, no overlay, no glow effects — the
+                         text colour change alone signals interaction.
+
+                         Foreground is set on the Button so the
+                         TextBlock children inherit it via
+                         TextElement.Foreground propagation. -->
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border"
+                                    Background="{TemplateBinding Background}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Left"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Image Source="pack://application:,,,/WoL.ico"
+                               Width="16" Height="16"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <TextBlock Text="AoE3 Mod Launcher"
+                                   FontFamily="{DynamicResource DisplayFont}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="&#xE70D;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="9"
+                                   VerticalAlignment="Center"
+                                   Margin="6,1,0,0"
+                                   Opacity="0.7"/>
+                    </StackPanel>
+                </Button>
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
-                            VerticalAlignment="Center">
-                    <!-- "Launcher Settings" entry point. Opens a modal
-                         dialog with launcher-wide preferences (theme-style
-                         scope: language, autostart, catalog source, etc.).
-                         Distinct from the gear button in the sidebar,
-                         which is per-mod (paths, user data, mod-level
-                         maintenance). -->
-                    <Button x:Name="LauncherSettingsButton"
-                            Style="{StaticResource LangToggle}"
-                            Click="LauncherSettingsButton_Click"
-                            ToolTip="Launcher Settings"
-                            Margin="0,0,8,0">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Width="12" Height="12"
-                                  Stretch="Uniform"
-                                  Fill="#888"
-                                  VerticalAlignment="Center"
-                                  Data="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
-                            <TextBlock x:Name="LauncherSettingsButtonText"
-                                       VerticalAlignment="Center"
-                                       Margin="6,0,0,0"/>
-                        </StackPanel>
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button x:Name="TitleBarMinimizeButton"
+                            Click="TitleBarMinimizeButton_Click"
+                            Width="46" Height="40"
+                            Style="{StaticResource TitleBarButton}"
+                            ToolTip="Minimize">
+                        <TextBlock Text="&#xE921;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="10"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
                     </Button>
-                    <TextBlock Text="|" Foreground="#444"
-                               VerticalAlignment="Center" Margin="2,0"/>
-                    <Button x:Name="LangEnButton" Style="{StaticResource LangToggle}"
-                            Content="EN" Click="LangEnButton_Click"/>
-                    <TextBlock Text="|" Foreground="#444"
-                               VerticalAlignment="Center" Margin="2,0"/>
-                    <Button x:Name="LangEsButton" Style="{StaticResource LangToggle}"
-                            Content="ES" Click="LangEsButton_Click"/>
+                    <Button x:Name="TitleBarMaximizeButton"
+                            Click="TitleBarMaximizeButton_Click"
+                            Width="46" Height="40"
+                            Style="{StaticResource TitleBarButton}"
+                            ToolTip="Maximize / Restore">
+                        <TextBlock x:Name="TitleBarMaximizeGlyph"
+                                   Text="&#xE922;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="10"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="TitleBarCloseButton"
+                            Click="TitleBarCloseButton_Click"
+                            Width="46" Height="40"
+                            Style="{StaticResource TitleBarCloseButton}"
+                            ToolTip="Close">
+                        <TextBlock Text="&#xE8BB;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="10"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ============================================================
-             BODY: two-column layout. Left = active-mod info + actions;
-             right = tabs (Noticias / Changelog / Ayuda) + content host.
-             ============================================================ -->
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+        <!-- =============================================================
+             HORIZONTAL NAVIGATION (Steam-style redesign). Replaces
+             the old 240px vertical sidebar. Three content tabs only
+             — the brand dropdown (Launcher settings / About / Exit)
+             lives EXCLUSIVELY in the title bar above, so it's not
+             duplicated here. Same x:Names as the old vertical
+             sidebar so code-behind (RefreshTopTabHighlight,
+             ApplyStrings, SwitchTopTab) keeps working unchanged.
+             ============================================================= -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource BgSidebar}"
+                BorderBrush="{DynamicResource BorderSecondary}"
+                BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch">
+                <!-- Content tabs — icon + label inline. Active state
+                     is driven by Tag="active" via RefreshTopTabHighlight
+                     in code-behind. -->
+                <Button x:Name="TopTabPlay"
+                        Style="{StaticResource NavTabButton}"
+                        Click="TopTabPlay_Click">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE80F;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="15"
+                                   Margin="0,0,10,0"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="TopTabMods"
+                        Style="{StaticResource NavTabButton}"
+                        Click="TopTabMods_Click">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE7C5;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="15"
+                                   Margin="0,0,10,0"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SidebarLabelCatalog" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="TopTabMultiplayer"
+                        Style="{StaticResource NavTabButton}"
+                        Click="TopTabMultiplayer_Click">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE716;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="15"
+                                   Margin="0,0,10,0"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
 
-            <!-- ====================== LEFT SIDEBAR ====================== -->
-            <Border Grid.Column="0"
-                    Background="{DynamicResource BgBase}"
-                    BorderBrush="{DynamicResource BorderSubtle}"
-                    BorderThickness="0,0,1,0">
-                <Grid Margin="20,18">
+        <!-- =============================================================
+             Content area. Now full-width (no sidebar column eating
+             240px). PlayView is the "cinema" dashboard. Other tabs
+             (Workshop, Multiplayer, Settings) overlay on top when
+             active.
+             ============================================================= -->
+        <Grid Grid.Row="2">
+
+            <!-- ============================================================
+                 PLAY VIEW — cinema dashboard.
+                 Hero background image of active mod + dark gradient
+                 overlays + bottom-anchored title/desc/PLAY/Settings/
+                 ChangeMod row + progress strip.
+                 All the legacy controls (ModsBar, HeroBanner, StatusCard,
+                 ActionPanel, ProgressPanel, MainTabs) stay alive inside
+                 LegacyPlayContent (Visibility=Collapsed) so the dozens
+                 of code-behind references resolve and the install /
+                 update / progress data still pumps through them. The
+                 visible Dashboard buttons forward to those hidden
+                 controls' click handlers.
+                 ============================================================ -->
+            <Grid x:Name="PlayView">
+
+                <!-- Layer 1: full-bleed background image of active mod. -->
+                <Border x:Name="DashboardBgFill" Background="{DynamicResource BgPanelAlt}"/>
+
+                <!-- Layer 2: vertical gradient — transparent at top,
+                     opaque at bottom — so the title/desc/buttons at the
+                     bottom-left stay readable on any hero image. -->
+                <Rectangle IsHitTestVisible="False">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#66000000" Offset="0.0"/>
+                            <GradientStop Color="#22000000" Offset="0.40"/>
+                            <GradientStop Color="#ee131313" Offset="1.0"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <!-- Layer 2b: horizontal left-side dim so the title
+                     reads even on bright images. -->
+                <Rectangle IsHitTestVisible="False"
+                           HorizontalAlignment="Left"
+                           Width="640">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#cc000000" Offset="0.0"/>
+                            <GradientStop Color="#00000000" Offset="1.0"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+
+                <!-- (Layer 3 removed — the top-right utility row with the
+                     gear-cog Launcher Settings button and EN/ES language
+                     toggles was retired per user request. Both flows are
+                     still reachable from the title-bar brand menu
+                     (🛡 AoE3 Mod Launcher ▼ → "Launcher settings"),
+                     where the LauncherSettingsDialog hosts the language
+                     combo too. The handlers stay in code-behind because
+                     LauncherSettingsButton_Click is reused by the brand
+                     menu wiring.) -->
+
+                <!-- Layer 4: hero content — title, description, action
+                     row, and the progress strip. Anchored bottom-left
+                     so it sits over the dimmest part of the overlay. -->
+                <Grid Margin="48,0,48,32" VerticalAlignment="Bottom">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>  <!-- Banner -->
-                        <RowDefinition Height="Auto"/>  <!-- StatusCard -->
-                        <RowDefinition Height="*"/>     <!-- Actions (fills rest) -->
-                        <RowDefinition Height="Auto"/>  <!-- ProgressPanel -->
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Mod banner. Title/subtitle overlay + background image
-                         (or accent gradient when no image) — driven by
-                         RefreshActiveModBanner() in code-behind. -->
-                    <controls:HeroBanner Grid.Row="0"
-                                         x:Name="ActiveModBanner"/>
+                    <!-- Title + description block. -->
+                    <StackPanel Grid.Row="0" MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock x:Name="DashboardTitleText"
+                                   FontFamily="{DynamicResource DisplayFont}"
+                                   FontSize="48"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   LineHeight="56"
+                                   LineStackingStrategy="BlockLineHeight">
+                            <TextBlock.Effect>
+                                <DropShadowEffect BlurRadius="14" ShadowDepth="2" Color="Black" Opacity="0.85"/>
+                            </TextBlock.Effect>
+                        </TextBlock>
+                        <!-- Version chip — installed-version of the active
+                             mod. Painted in the green Status-Installed
+                             palette (same as the Catalog "Installed"
+                             badge) so the colour itself reads as "you
+                             have this version on disk, everything's
+                             healthy" — green = good, like the rest of
+                             the app's status badges. Hidden by code-
+                             behind when no version is known (fresh
+                             machine before CheckAsync ran, or for mods
+                             that haven't been installed yet). -->
+                        <Border x:Name="DashboardVersionChip"
+                                HorizontalAlignment="Left"
+                                Margin="0,10,0,0"
+                                Padding="10,3"
+                                CornerRadius="10"
+                                BorderBrush="{DynamicResource StatusInstalledFg}"
+                                BorderThickness="1"
+                                Background="{DynamicResource StatusInstalledBg}"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="DashboardVersionText"
+                                       FontFamily="{DynamicResource DisplayFont}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource StatusInstalledFg}"/>
+                        </Border>
+                        <!-- Description copy: SecondaryFixed (#d2e4fb)
+                             — bright cool body tone so the paragraph
+                             reads against the dim hero background
+                             without competing with the dorado title. -->
+                        <TextBlock x:Name="DashboardDescText"
+                                   FontFamily="{DynamicResource BodyFont}"
+                                   FontSize="14"
+                                   Foreground="{DynamicResource SecondaryFixed}"
+                                   LineHeight="22"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="780"
+                                   Margin="0,14,0,0">
+                            <TextBlock.Effect>
+                                <DropShadowEffect BlurRadius="6" ShadowDepth="1" Color="Black" Opacity="0.7"/>
+                            </TextBlock.Effect>
+                        </TextBlock>
+                    </StackPanel>
 
-                    <!-- StatusCard: state badge + installed/latest version
-                         rows + a conditional "AoE3 not found" row. Driven
-                         from code by RefreshStatusCard(). -->
-                    <controls:StatusCard Grid.Row="1"
-                                         x:Name="StatusCardControl"
-                                         Margin="0,12,0,0"/>
+                    <!-- Action row: PLAY (gold gradient + glow) +
+                         settings gear + change mod. -->
+                    <StackPanel Grid.Row="1"
+                                Orientation="Horizontal"
+                                Margin="0,28,0,0">
+                        <Button x:Name="DashboardPlayButton"
+                                Style="{StaticResource SidebarPrimaryButton}"
+                                MinWidth="220"
+                                Padding="34,16"
+                                Click="DashboardPlayButton_Click">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="&#xE768;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="20"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock x:Name="DashboardPlayButtonText"
+                                           Margin="12,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontSize="18"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="DashboardSettingsButton"
+                                Style="{StaticResource DashboardSecondaryButton}"
+                                Width="64"
+                                Margin="14,0,0,0"
+                                Padding="0"
+                                Click="DashboardSettingsButton_Click"
+                                ToolTip="Mod actions">
+                            <TextBlock Text="&#xE713;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="22"
+                                       HorizontalAlignment="Center"/>
+                        </Button>
+                        <Button x:Name="DashboardChangeModButton"
+                                Style="{StaticResource DashboardSecondaryButton}"
+                                Margin="14,0,0,0"
+                                Padding="22,0"
+                                Click="DashboardChangeModButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8FD;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="18"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock x:Name="DashboardChangeModButtonText"
+                                           Margin="12,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontFamily="{DynamicResource DisplayFont}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
 
-                    <!-- ProgressPanel (Grid.Row="3") is declared further
-                         down in the source for readability, but renders
-                         at the bottom of the sidebar. Idle state: a
-                         neutral "Listo para operaciones" line. Operation
-                         state: full bars + speed/step + Pause/Cancel,
-                         driven by StartProgressPanel and friends. -->
+                    <!-- Progress strip. Always visible; the label flips
+                         between "Ready for operations" (idle) and the
+                         live update label (running). Speed/Eta/Pct cells
+                         show "—" when idle.
+                         Capped at MaxWidth so the bar doesn't stretch
+                         the full hero width — the HTML mock has a much
+                         tighter progress footprint that lives next to
+                         the bottom-left content column, not flush to
+                         the right edge of the panel. -->
+                    <StackPanel Grid.Row="2"
+                                x:Name="DashboardProgressContainer"
+                                HorizontalAlignment="Left"
+                                MaxWidth="860"
+                                Margin="0,28,0,0">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <!-- Pause / Cancel column. Only visible
+                                     while an op is running; the
+                                     SyncDashboardProgressFromLegacyPanel
+                                     pump flips its visibility from the
+                                     legacy ProgressRunningActions row. -->
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="DashboardProgressIcon"
+                                               Text="&#xE73E;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock x:Name="DashboardProgressLabel"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               FontFamily="{DynamicResource DisplayFont}"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <!-- Cool secondary tone for the subtitle "Listo
+                                     para operaciones / Descargando…" so the
+                                     bigger gold label above carries the
+                                     visual weight. -->
+                                <TextBlock x:Name="DashboardProgressSubtitle"
+                                           Foreground="{DynamicResource OnSecondaryContainer}"
+                                           FontSize="11"
+                                           Margin="22,2,0,0"/>
+                            </StackPanel>
+                            <!-- Column-header microtype labels switch to the
+                                 cool Secondary tone so they read as quiet
+                                 metadata. Data values stay dorado so the
+                                 user's eye locks onto the actual numbers. -->
+                            <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                                <TextBlock Text="VELOCIDAD"
+                                           Foreground="{DynamicResource Secondary}"
+                                           FontSize="9"
+                                           FontWeight="SemiBold"/>
+                                <!-- Data values use SecondaryFixed (cool
+                                     bright blue-white) so progress reads
+                                     as informational metadata. Dorado is
+                                     reserved for the main progress label
+                                     + the indicator bar. -->
+                                <TextBlock x:Name="DashboardProgressSpeed"
+                                           Foreground="{DynamicResource SecondaryFixed}"
+                                           FontSize="13"
+                                           Text="—"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Margin="14,0,0,0">
+                                <TextBlock Text="TIEMPO RESTANTE"
+                                           Foreground="{DynamicResource Secondary}"
+                                           FontSize="9"
+                                           FontWeight="SemiBold"/>
+                                <TextBlock x:Name="DashboardProgressEta"
+                                           Foreground="{DynamicResource SecondaryFixed}"
+                                           FontSize="13"
+                                           Text="—"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" Margin="14,0,0,0">
+                                <TextBlock Text="PROGRESO"
+                                           Foreground="{DynamicResource Secondary}"
+                                           FontSize="9"
+                                           FontWeight="SemiBold"/>
+                                <TextBlock x:Name="DashboardProgressPercent"
+                                           Foreground="{DynamicResource SecondaryFixed}"
+                                           FontSize="13"
+                                           Text="—"/>
+                            </StackPanel>
 
-
-                    <!-- Actions. Primary button + secondaries + the gear
-                         More menu (which carries the per-mod ContextMenu). -->
-                    <controls:ActionPanel Grid.Row="2" x:Name="ActionPanelControl"/>
-
-
-                    <!-- Bottom slot: a single panel always visible. Tone
-                         (color + icon) and content (idle / progress bars /
-                         final-state banner) are driven from code by
-                         SetProgressTone() + the idle/state setters. -->
-                    <controls:ProgressPanel Grid.Row="3"
-                                            x:Name="ProgressPanelControl"
-                                            Margin="0,12,0,0"/>
-                </Grid>
-            </Border>
-
-            <!-- ====================== RIGHT CONTENT ====================== -->
-            <Grid Grid.Column="1">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-                <controls:MainTabs Grid.Row="0" x:Name="MainTabsControl"/>
-
-                <!-- Hidden compat stub kept so existing references that
-                     toggle ProgressOverlay still resolve to a real control. -->
-                <Border Grid.Row="1"
-                        x:Name="ProgressOverlay"
-                        Visibility="Collapsed"/>
-            </Grid>
-        </Grid>
-            </Grid>   <!-- /PlayView -->
-
-            <!-- v0.9 mod browser: header + scrollable card grid populated
-                 from ModRegistry.All (built-ins + community catalog). The
-                 UserControl is decoupled from runtime services — MainWindow
-                 calls Populate() whenever the underlying state changes. -->
-            <controls:ModsBrowser x:Name="ModsBrowserView" Visibility="Collapsed"/>
-
-            <!-- v1.0 multiplayer lobby. The UserControl owns its own
-                 internal layout (subtabs + browser + room view + chat);
-                 MainWindow only toggles its Visibility when the user
-                 picks the Multiplayer top-tab. -->
-            <controls:MultiplayerTab x:Name="MultiplayerView" Visibility="Collapsed"/>
-
-            <!-- Large News view: full-width news feed. RefreshNewsAsync
-                 populates both this panel and the smaller Noticias feed
-                 inside Play / MainTabs from the same cached data. -->
-            <ScrollViewer x:Name="NewsLargeView"
-                          Visibility="Collapsed"
-                          VerticalScrollBarVisibility="Auto">
-                <Grid Margin="40,32" HorizontalAlignment="Center">
-                    <StackPanel MaxWidth="800">
-                        <StackPanel x:Name="NewsLargeCardsPanel"/>
-                        <TextBlock x:Name="NewsLargePlaceholderText"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontStyle="Italic"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,40,0,0"
-                                   Visibility="Collapsed"/>
+                            <!-- Pause + Cancel for the currently running
+                                 operation. Hidden in idle state; visible
+                                 only when ProgressRunningActions on the
+                                 legacy panel is visible. Clicks are
+                                 forwarded to the legacy buttons so the
+                                 existing pause/resume/cancel logic in
+                                 PauseButton_Click / CancelButton_Click
+                                 keeps owning the decisions. -->
+                            <StackPanel Grid.Column="4"
+                                        x:Name="DashboardProgressActions"
+                                        Orientation="Horizontal"
+                                        Margin="16,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="Collapsed">
+                                <Button x:Name="DashboardPauseButton"
+                                        Style="{StaticResource DashboardSecondaryButton}"
+                                        Width="36" Height="36"
+                                        Padding="0"
+                                        Click="DashboardPauseButton_Click"
+                                        ToolTip="Pause/Resume">
+                                    <TextBlock x:Name="DashboardPauseButtonIcon"
+                                               Text="&#xE769;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="13"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Button>
+                                <Button x:Name="DashboardCancelButton"
+                                        Style="{StaticResource DashboardSecondaryButton}"
+                                        Width="36" Height="36"
+                                        Padding="0"
+                                        Margin="8,0,0,0"
+                                        Click="DashboardCancelButton_Click"
+                                        ToolTip="Cancel">
+                                    <TextBlock Text="&#xE711;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="13"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                        <ProgressBar x:Name="DashboardProgressBar"
+                                     Style="{StaticResource ShimmerProgressBar}"
+                                     Height="4"
+                                     Value="0"/>
                     </StackPanel>
                 </Grid>
-            </ScrollViewer>
 
-            <!-- Settings tab: opens the existing settings dialog. Embedding
-                 the dialog content directly is a larger refactor; for now,
-                 a teaser + button keeps the surface flow consistent without
-                 duplicating the dialog's layout. -->
-            <Grid x:Name="SettingsView" Visibility="Collapsed">
+                <!-- LEGACY COMPAT: hidden but tree-attached so the
+                     existing code-behind keeps working (RefreshActiveMod,
+                     RefreshActionPanel, RefreshStatusCard, all the
+                     MainTabs handlers, etc.). The visible Dashboard
+                     above mirrors data from these on Refresh*. -->
+                <Grid x:Name="LegacyPlayContent" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="ModsBarLabel"/>
+                        <StackPanel x:Name="ModCardsPanel" Orientation="Horizontal"/>
+                        <controls:HeroBanner x:Name="ActiveModBanner"/>
+                        <controls:StatusCard x:Name="StatusCardControl"/>
+                        <controls:ActionPanel x:Name="ActionPanelControl"/>
+                        <controls:ProgressPanel x:Name="ProgressPanelControl"/>
+                        <controls:MainTabs x:Name="MainTabsControl"/>
+                        <Border x:Name="ProgressOverlay" Visibility="Collapsed"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>   <!-- /PlayView -->
+
+            <!-- v0.9 mod browser — appears overlaying the cinema dashboard
+                 when CATALOG is active in the sidebar. -->
+            <controls:ModsBrowser x:Name="ModsBrowserView" Visibility="Collapsed"/>
+
+            <!-- v1.0 multiplayer lobby. -->
+            <controls:MultiplayerTab x:Name="MultiplayerView" Visibility="Collapsed"/>
+
+            <!-- Settings tab placeholder. -->
+            <Grid x:Name="SettingsView" Visibility="Collapsed"
+                  Background="{DynamicResource BgBase}">
                 <StackPanel HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             MaxWidth="500">
@@ -554,7 +917,7 @@
                 </StackPanel>
             </Grid>
 
-        </Grid>   <!-- /Content host (root Grid.Row=1) -->
+        </Grid>   <!-- /Content host (root Grid.Column=1) -->
 
         <!-- Hidden compatibility shim. The old layout had an "AoE3PathRow" that
              code-behind sometimes referenced; the new design folds that info

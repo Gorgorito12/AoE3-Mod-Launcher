@@ -45,10 +45,10 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="Background" Value="#2a2d34"/>
+                                        <Setter TargetName="border" Property="Background" Value="{DynamicResource BgNeutralHover}"/>
                                     </Trigger>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter TargetName="border" Property="Background" Value="#c8102e"/>
+                                        <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerBrush}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -67,7 +67,7 @@
 
         <TextBlock x:Name="WarningText"
                    FontSize="11"
-                   Foreground="#e63950"
+                   Foreground="{DynamicResource ErrorBrush}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,12"
                    Visibility="Collapsed"/>

@@ -628,68 +628,551 @@ public static class Strings
             [LangEn] = "Launcher language",
             [LangEs] = "Idioma del launcher",
         },
-        ["DlgLauncherSettingsThemeLabel"] = new()
-        {
-            [LangEn] = "Theme",
-            [LangEs] = "Tema",
-        },
-        ["DlgLauncherSettingsThemeDark"] = new()
-        {
-            [LangEn] = "Dark",
-            [LangEs] = "Oscuro",
-        },
-        ["DlgLauncherSettingsThemeLight"] = new()
-        {
-            [LangEn] = "Light",
-            [LangEs] = "Claro",
-        },
-        ["DlgLauncherSettingsThemeSystem"] = new()
-        {
-            [LangEn] = "Follow Windows",
-            [LangEs] = "Seguir Windows",
-        },
+        // (Theme picker strings removed — see LauncherSettingsDialog.xaml.
+        //  The launcher is dorado-imperial dark-only now.)
         ["NewsReadMore"] = new()
         {
             [LangEn] = "Read more →",
             [LangEs] = "Leer más →",
         },
+        // Sidebar nav labels (Fase 2 redesign). Keys kept as TopTab* for
+        // backward compat with the existing ApplyStrings wiring; the
+        // labels now read "DASHBOARD / CATALOG / ..." to match the
+        // Stitch sidebar instead of the old "PLAY / MODS" horizontal
+        // tab strip.
         ["TopTabPlay"] = new()
         {
-            [LangEn] = "PLAY",
-            [LangEs] = "JUGAR",
+            [LangEn] = "LIBRARY",
+            [LangEs] = "BIBLIOTECA",
         },
         ["TopTabMods"] = new()
         {
-            [LangEn] = "MODS",
-            [LangEs] = "MODS",
+            [LangEn] = "WORKSHOP",
+            [LangEs] = "WORKSHOP",
         },
         ["TopTabMultiplayer"] = new()
         {
             [LangEn] = "MULTIPLAYER",
             [LangEs] = "MULTIJUGADOR",
         },
-        ["TopTabNews"] = new()
+        ["SidebarSupport"] = new()
         {
-            [LangEn] = "NEWS",
-            [LangEs] = "NOTICIAS",
+            [LangEn] = "SUPPORT",
+            [LangEs] = "AYUDA",
+        },
+        ["SidebarWiki"] = new()
+        {
+            [LangEn] = "WIKI",
+            [LangEs] = "WIKI",
         },
         ["TopTabSettings"] = new()
         {
             [LangEn] = "SETTINGS",
             [LangEs] = "AJUSTES",
         },
+        // "MODS" pill below the cinema-dashboard PLAY button. Opens
+        // a popup with the mods the user added via the Workshop
+        // (built-in profiles are always included).
+        ["DashboardChangeMod"] = new()
+        {
+            [LangEn] = "MODS",
+            [LangEs] = "MODS",
+        },
+        // Header caption for the cinema-dashboard gear popup (the
+        // redesigned per-mod settings menu that replaced the legacy
+        // WPF ContextMenu with a MODS-style popup + sub-views).
+        ["SettingsMenuTitle"] = new()
+        {
+            [LangEn] = "SETTINGS",
+            [LangEs] = "AJUSTES",
+        },
+        // Steam-style brand menu — opens when the user clicks the
+        // "AOE3 LAUNCHER" wordmark in the top-left of the sidebar.
+        // Holds launcher-wide actions (settings dialog, about, exit)
+        // — per-mod settings live in the dashboard gear popup, not
+        // here.
+        ["BrandMenuTitle"] = new()
+        {
+            [LangEn] = "AOE3 LAUNCHER",
+            [LangEs] = "AOE3 LAUNCHER",
+        },
+        ["BrandMenuLauncherSettings"] = new()
+        {
+            [LangEn] = "Launcher settings",
+            [LangEs] = "Ajustes del launcher",
+        },
+        ["BrandMenuLauncherSettingsSubtitle"] = new()
+        {
+            [LangEn] = "Language, autostart, notifications…",
+            [LangEs] = "Idioma, inicio automático, notificaciones…",
+        },
+        ["BrandMenuAbout"] = new()
+        {
+            [LangEn] = "About",
+            [LangEs] = "Acerca de",
+        },
+        ["BrandMenuAboutSubtitle"] = new()
+        {
+            [LangEn] = "Version and credits",
+            [LangEs] = "Versión y créditos",
+        },
+        ["BrandMenuExit"] = new()
+        {
+            [LangEn] = "Exit",
+            [LangEs] = "Salir",
+        },
+        ["BrandMenuExitSubtitle"] = new()
+        {
+            [LangEn] = "Close the launcher",
+            [LangEs] = "Cerrar el launcher",
+        },
+        ["AboutDialogTitle"] = new()
+        {
+            [LangEn] = "About AoE3 Mod Launcher",
+            [LangEs] = "Acerca de AoE3 Mod Launcher",
+        },
+        ["AboutDialogBody"] = new()
+        {
+            [LangEn] = "AoE3 Mod Launcher\nVersion {0}\n\nA dorado-imperial mod manager for Age of Empires III.\n\n© Wars of Liberty Team",
+            [LangEs] = "AoE3 Mod Launcher\nVersión {0}\n\nGestor de mods dorado-imperial para Age of Empires III.\n\n© Wars of Liberty Team",
+        },
+        // Right-click context menu (Steam-style) on mod rows in the
+        // MODS popup and Workshop. Each row's right-click opens a
+        // ContextMenu with Play / Manage submenu / Favorite toggle
+        // / Properties — mirrors the per-game context menu Steam
+        // surfaces in its library list.
+        ["ModContextPlay"] = new()
+        {
+            [LangEn] = "Play",
+            [LangEs] = "Jugar",
+        },
+        ["ModContextManage"] = new()
+        {
+            [LangEn] = "Manage",
+            [LangEs] = "Administrar",
+        },
+        ["ModContextRepair"] = new()
+        {
+            [LangEn] = "Repair install",
+            [LangEs] = "Reparar instalación",
+        },
+        ["ModContextVerify"] = new()
+        {
+            [LangEn] = "Verify files",
+            [LangEs] = "Verificar archivos",
+        },
+        ["ModContextUninstall"] = new()
+        {
+            [LangEn] = "Uninstall…",
+            [LangEs] = "Desinstalar…",
+        },
+        ["ModContextOpenFolder"] = new()
+        {
+            [LangEn] = "Open mod folder",
+            [LangEs] = "Abrir carpeta del mod",
+        },
+        ["ModContextFavoriteAdd"] = new()
+        {
+            [LangEn] = "Add to Favorites",
+            [LangEs] = "Añadir a Favoritos",
+        },
+        ["ModContextFavoriteRemove"] = new()
+        {
+            [LangEn] = "Remove from Favorites",
+            [LangEs] = "Quitar de Favoritos",
+        },
+        ["ModContextProperties"] = new()
+        {
+            [LangEn] = "Properties…",
+            [LangEs] = "Propiedades…",
+        },
+        // ModPropertiesDialog labels (Fase 3b).
+        ["ModPropTitle"] = new()
+        {
+            [LangEn] = "{0} — Properties",
+            [LangEs] = "{0} — Propiedades",
+        },
+        ["ModPropTabGeneral"] = new()
+        {
+            [LangEn] = "GENERAL",
+            [LangEs] = "GENERAL",
+        },
+        ["ModPropTabLocalFiles"] = new()
+        {
+            [LangEn] = "LOCAL FILES",
+            [LangEs] = "ARCHIVOS LOCALES",
+        },
+        ["ModPropTabLanguage"] = new()
+        {
+            [LangEn] = "LANGUAGE",
+            [LangEs] = "IDIOMA",
+        },
+        ["ModPropName"] = new()
+        {
+            [LangEn] = "Name",
+            [LangEs] = "Nombre",
+        },
+        ["ModPropAuthor"] = new()
+        {
+            [LangEn] = "Author",
+            [LangEs] = "Autor",
+        },
+        ["ModPropVersion"] = new()
+        {
+            [LangEn] = "Installed version",
+            [LangEs] = "Versión instalada",
+        },
+        ["ModPropWebsite"] = new()
+        {
+            [LangEn] = "Website",
+            [LangEs] = "Sitio web",
+        },
+        ["ModPropInstallPath"] = new()
+        {
+            [LangEn] = "Install path",
+            [LangEs] = "Ruta de instalación",
+        },
+        ["ModPropOpenFolder"] = new()
+        {
+            [LangEn] = "Open folder",
+            [LangEs] = "Abrir carpeta",
+        },
+        ["ModPropClose"] = new()
+        {
+            [LangEn] = "Close",
+            [LangEs] = "Cerrar",
+        },
+        ["ModPropNotInstalled"] = new()
+        {
+            [LangEn] = "(not installed)",
+            [LangEs] = "(no instalado)",
+        },
+        ["ModPropNoTranslations"] = new()
+        {
+            [LangEn] = "This mod ships no translation packs.",
+            [LangEs] = "Este mod no incluye paquetes de traducción.",
+        },
+        ["ModPropLanguageCurrent"] = new()
+        {
+            [LangEn] = "Current language",
+            [LangEs] = "Idioma actual",
+        },
+        // Properties dialog expansion — folds the old SETTINGS
+        // popup into the dialog so the gear button has a single
+        // destination for all per-mod actions.
+        ["ModPropTabUserData"] = new()
+        {
+            [LangEn] = "USER DATA",
+            [LangEs] = "DATOS",
+        },
+        ["ModPropCheckUpdates"] = new()
+        {
+            [LangEn] = "Check for updates",
+            [LangEs] = "Buscar actualizaciones",
+        },
+        ["ModPropOpenAoE3Folder"] = new()
+        {
+            [LangEn] = "Open AoE3 folder",
+            [LangEs] = "Abrir carpeta AoE3",
+        },
+        ["ModPropChangeModFolder"] = new()
+        {
+            [LangEn] = "Change mod folder",
+            [LangEs] = "Cambiar carpeta del mod",
+        },
+        ["ModPropChangeAoE3Folder"] = new()
+        {
+            [LangEn] = "Change AoE3 folder",
+            [LangEs] = "Cambiar carpeta AoE3",
+        },
+        ["ModPropViewLogs"] = new()
+        {
+            [LangEn] = "View logs",
+            [LangEs] = "Ver registros",
+        },
+        ["ModPropDangerZone"] = new()
+        {
+            [LangEn] = "DANGER ZONE",
+            [LangEs] = "ZONA PELIGROSA",
+        },
+        ["ModPropUninstall"] = new()
+        {
+            [LangEn] = "Uninstall mod…",
+            [LangEs] = "Desinstalar mod…",
+        },
+        ["ModPropOpenUserDataFolder"] = new()
+        {
+            [LangEn] = "Open user data folder",
+            [LangEs] = "Abrir carpeta de datos",
+        },
+        ["ModPropCreateBackup"] = new()
+        {
+            [LangEn] = "Create backup",
+            [LangEs] = "Crear respaldo",
+        },
+        ["ModPropRestoreBackup"] = new()
+        {
+            [LangEn] = "Restore from backup",
+            [LangEs] = "Restaurar desde respaldo",
+        },
+        ["ModPropDiagnostics"] = new()
+        {
+            [LangEn] = "DIAGNOSTICS",
+            [LangEs] = "DIAGNÓSTICO",
+        },
+        ["ModPropPathsSection"] = new()
+        {
+            [LangEn] = "PATHS",
+            [LangEs] = "RUTAS",
+        },
+        ["ModPropMaintenanceSection"] = new()
+        {
+            [LangEn] = "MAINTENANCE",
+            [LangEs] = "MANTENIMIENTO",
+        },
+        // ----------------------------------------------------------------
+        // Strings introduced for the Properties dialog redesign (cards +
+        // descriptions). All copy is mod-agnostic — no Wars of Liberty
+        // references — so the same dialog hosts any mod's settings.
+        // ----------------------------------------------------------------
+        ["ModPropSubtitle"] = new()
+        {
+            [LangEn] = "Manage mod settings, files, backups and language.",
+            [LangEs] = "Administra ajustes, archivos, copias y idioma del mod.",
+        },
+        ["ModPropAboutSection"] = new()
+        {
+            [LangEn] = "ABOUT",
+            [LangEs] = "ACERCA DE",
+        },
+        ["ModPropInstallSection"] = new()
+        {
+            [LangEn] = "INSTALL LOCATION",
+            [LangEs] = "UBICACIÓN DE INSTALACIÓN",
+        },
+        ["ModPropDangerZoneDesc"] = new()
+        {
+            [LangEn] = "Removing the mod is permanent. Create a backup first if you might want to come back.",
+            [LangEs] = "Eliminar el mod es permanente. Crea una copia antes si vas a querer volver.",
+        },
+        ["ModPropOpenUserDataDesc"] = new()
+        {
+            [LangEn] = "Browse where this mod stores saves and player profiles.",
+            [LangEs] = "Abre la carpeta donde el mod guarda partidas y perfiles.",
+        },
+        ["ModPropCreateBackupDesc"] = new()
+        {
+            [LangEn] = "Snapshot the user data so you can revert later.",
+            [LangEs] = "Crea una copia de seguridad de los datos del usuario.",
+        },
+        ["ModPropRestoreBackupDesc"] = new()
+        {
+            [LangEn] = "Replace current user data with a previous backup.",
+            [LangEs] = "Restaura los datos del usuario desde una copia anterior.",
+        },
+        ["ModPropLanguageSectionTitle"] = new()
+        {
+            [LangEn] = "INTERFACE LANGUAGE",
+            [LangEs] = "IDIOMA DE LA INTERFAZ",
+        },
+        ["ModPropLanguageDesc"] = new()
+        {
+            [LangEn] = "Choose the language used for this mod's in-game text.",
+            [LangEs] = "Elige el idioma de los textos del mod.",
+        },
+        ["ModPropOpenBtn"] = new()
+        {
+            [LangEn] = "Open",
+            [LangEs] = "Abrir",
+        },
+        ["ModPropBackupBtn"] = new()
+        {
+            [LangEn] = "Backup",
+            [LangEs] = "Copiar",
+        },
+        ["ModPropRestoreBtn"] = new()
+        {
+            [LangEn] = "Restore",
+            [LangEs] = "Restaurar",
+        },
+        // Sub-view crumbs — shown as "AJUSTES › RUTAS" etc when the
+        // user drills into Paths / User data / Game language from
+        // the top-level settings popup. Lowercase "›" separator is
+        // added by the popup builder, not stored in the strings.
+        ["SettingsCrumbPaths"] = new()
+        {
+            [LangEn] = "PATHS",
+            [LangEs] = "RUTAS",
+        },
+        ["SettingsCrumbUserData"] = new()
+        {
+            [LangEn] = "USER DATA",
+            [LangEs] = "DATOS DE USUARIO",
+        },
+        ["SettingsCrumbLanguage"] = new()
+        {
+            [LangEn] = "LANGUAGE",
+            [LangEs] = "IDIOMA",
+        },
+        // Top-level "Administrar" wrapper — see SETTINGS popup
+        // redesign. Opens a sub-popup with all the maintenance
+        // and configuration actions that used to live at the top
+        // level. Keeps the gear popup itself minimal (2 entries
+        // only: Administrar + Propiedades).
+        ["SettingsAdministrar"] = new()
+        {
+            [LangEn] = "Manage",
+            [LangEs] = "Administrar",
+        },
+        ["SettingsAdministrarSubtitle"] = new()
+        {
+            [LangEn] = "Paths, updates, repair, language…",
+            [LangEs] = "Rutas, actualizaciones, reparar, idioma…",
+        },
+        ["SettingsCrumbAdministrar"] = new()
+        {
+            [LangEn] = "MANAGE",
+            [LangEs] = "ADMINISTRAR",
+        },
+        ["SettingsProperties"] = new()
+        {
+            [LangEn] = "Properties…",
+            [LangEs] = "Propiedades…",
+        },
+        ["SettingsPropertiesSubtitle"] = new()
+        {
+            [LangEn] = "Detailed info, files, language",
+            [LangEs] = "Información detallada, archivos, idioma",
+        },
+        // Back-arrow row at the top of each sub-view.
+        ["SettingsBack"] = new()
+        {
+            [LangEn] = "Back",
+            [LangEs] = "Volver",
+        },
+        // Per-row subtitles — small cool-grey line below the main
+        // label so each settings entry feels self-explanatory instead
+        // of "what does this even open?" These get rendered by the
+        // popup row builder when the caller passes a non-empty value.
+        ["SettingsSubtitleManagePaths"] = new()
+        {
+            [LangEn] = "AoE3 folder, mod folder…",
+            [LangEs] = "Carpeta de AoE3, carpeta del mod…",
+        },
+        ["SettingsSubtitleUserData"] = new()
+        {
+            [LangEn] = "Backups and saves",
+            [LangEs] = "Respaldos y partidas",
+        },
+        ["SettingsSubtitleGameLanguage"] = new()
+        {
+            [LangEn] = "Change game text language",
+            [LangEs] = "Cambiar el idioma de los textos",
+        },
+        ["SettingsSubtitleCheckUpdates"] = new()
+        {
+            [LangEn] = "Look for a newer mod version",
+            [LangEs] = "Buscar una nueva versión del mod",
+        },
+        ["SettingsSubtitleRepair"] = new()
+        {
+            [LangEn] = "Fix corrupted files",
+            [LangEs] = "Arreglar archivos dañados",
+        },
+        ["SettingsSubtitleVerify"] = new()
+        {
+            [LangEn] = "Validate mod installation",
+            [LangEs] = "Validar la instalación del mod",
+        },
+        ["SettingsSubtitleViewLogs"] = new()
+        {
+            [LangEn] = "Launcher diagnostics",
+            [LangEs] = "Diagnóstico del launcher",
+        },
+        ["SettingsSubtitleUninstall"] = new()
+        {
+            [LangEn] = "Remove this mod from disk",
+            [LangEs] = "Eliminar este mod del disco",
+        },
+        // Paths sub-popup subtitles.
+        ["SettingsSubtitleOpenAoE3Folder"] = new()
+        {
+            [LangEn] = "Show in File Explorer",
+            [LangEs] = "Mostrar en el Explorador",
+        },
+        // "Open mod folder" — new entry under Paths that opens
+        // the active mod's install path in Explorer. Distinct from
+        // "Open AoE3 folder" (which opens the base game's folder).
+        ["MenuOpenModFolder"] = new()
+        {
+            [LangEn] = "Open mod folder",
+            [LangEs] = "Abrir carpeta del mod",
+        },
+        ["SettingsSubtitleOpenModFolder"] = new()
+        {
+            [LangEn] = "Show this mod's install folder",
+            [LangEs] = "Mostrar la carpeta de instalación del mod",
+        },
+        ["SettingsSubtitleChangeModFolder"] = new()
+        {
+            [LangEn] = "Pick where the mod is installed",
+            [LangEs] = "Elegir dónde está instalado el mod",
+        },
+        ["SettingsSubtitleChangeAoE3Folder"] = new()
+        {
+            [LangEn] = "Pick the AoE3 install path",
+            [LangEs] = "Elegir la ruta de AoE3",
+        },
+        // User-data sub-popup subtitles.
+        ["SettingsSubtitleOpenUserDataFolder"] = new()
+        {
+            [LangEn] = "Show in File Explorer",
+            [LangEs] = "Mostrar en el Explorador",
+        },
+        ["SettingsSubtitleCreateBackup"] = new()
+        {
+            [LangEn] = "Save current settings and games",
+            [LangEs] = "Guardar partidas y configuración",
+        },
+        ["SettingsSubtitleRestoreUserData"] = new()
+        {
+            [LangEn] = "Load from a previous backup",
+            [LangEs] = "Cargar desde un respaldo",
+        },
         // ====================================================================
         // Catalog redesign (post-v0.9): two-column layout strings.
         // ====================================================================
         ["ModsBrowserHeaderTitle"] = new()
         {
-            [LangEn] = "Mods",
-            [LangEs] = "Mods",
+            [LangEn] = "Workshop",
+            [LangEs] = "Workshop",
         },
         ["ModsBrowserHeaderSubtitle"] = new()
         {
-            [LangEn] = "Explore, install and manage mods for Age of Empires III.",
-            [LangEs] = "Explora, instala y administra mods para Age of Empires III.",
+            [LangEn] = "Discover mods and add them to your launcher. Manage them from the Dashboard.",
+            [LangEs] = "Descubre mods y agrégalos a tu launcher. Gestiónalos desde el Dashboard.",
+        },
+        // Workshop redesign: per-row action button is now Add / Remove
+        // from the user's personal collection. Install / Update /
+        // Repair / Uninstall happen on the Dashboard (via PLAY +
+        // gear menu) instead of in the Workshop itself.
+        ["ModsBrowserBtnAdd"] = new()
+        {
+            [LangEn] = "Add to my mods",
+            [LangEs] = "Agregar a mis mods",
+        },
+        ["ModsBrowserBtnRemove"] = new()
+        {
+            [LangEn] = "Remove from my mods",
+            [LangEs] = "Quitar de mis mods",
+        },
+        // Built-in profiles (WoL) are always in the user's collection
+        // and can't be removed — the per-row button is a small
+        // disabled "Built-in" pill instead of Add/Remove.
+        ["ModsBrowserBtnBuiltin"] = new()
+        {
+            [LangEn] = "Built-in",
+            [LangEs] = "Integrado",
         },
         ["ModsBrowserEmpty"] = new()
         {

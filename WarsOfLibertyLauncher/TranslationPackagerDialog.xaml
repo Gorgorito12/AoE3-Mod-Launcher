@@ -135,7 +135,7 @@
             <!-- Status / error -->
             <TextBlock x:Name="StatusText"
                        FontSize="12"
-                       Foreground="#e63950"
+                       Foreground="{DynamicResource ErrorBrush}"
                        TextWrapping="Wrap"
                        Margin="0,12,0,0"
                        Visibility="Collapsed"/>

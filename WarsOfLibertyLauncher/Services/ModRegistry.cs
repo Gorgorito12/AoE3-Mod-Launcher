@@ -92,6 +92,19 @@ public static class ModRegistry
     /// </summary>
     public static ModProfile Default => Find(WolId) ?? All[0];
 
+    /// <summary>
+    /// True when the given id matches one of the hard-coded built-in
+    /// profiles (currently only WoL). Built-ins are always treated as
+    /// part of the user's mod collection — they can't be removed via
+    /// the Workshop because the launcher would have nothing to show
+    /// otherwise on a fresh install.
+    /// </summary>
+    public static bool IsBuiltIn(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        return _builtIn.Any(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+    }
+
     // -- Catalog refresh -------------------------------------------------------
 
     /// <summary>
@@ -301,10 +314,11 @@ public static class ModRegistry
             ProductGuid = m.InstallProductGuid ?? "",
             UserDataFolder = m.UserDataFolder ?? "",
             // Built-in pack URI stays null for community mods — they use
-            // IconUrl/BannerUrl resolved against the catalog repo.
+            // IconUrl/BannerUrl/HeroImageUrl resolved against the catalog repo.
             BannerImage = null,
             IconUrl = entry.IconUrl,
             BannerUrl = entry.BannerUrl,
+            HeroImageUrl = entry.HeroImageUrl,
             InstallType = installType,
             DefaultInstallFolder = m.Install.DefaultFolder ?? "",
             InstallProbeFile = m.Install.ProbeFile ?? "",
@@ -419,6 +433,14 @@ public static class ModRegistry
             // pack-resource in the .csproj) so the WoL tile shows the real
             // logo instead of the "W" placeholder.
             BannerImage = "pack://application:,,,/WoL.ico",
+            // Dashboard hero image. Loaded lazily by EnsureModAssetsAsync
+            // and painted behind the title + PLAY button. Points at the
+            // catalog repo's raw URL so the WoL Team can update the hero
+            // by committing a new hero.jpg to /mods/wol/ in the catalog —
+            // no launcher recompile needed. Until that file lands the
+            // download silently 404s, EnsureModAssetsAsync logs it, and
+            // the dashboard falls through to the neutral dark gradient.
+            HeroImageUrl = "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/wol/hero.jpg",
             InstallType = ModInstallType.IsolatedFolder,
             // Empty on purpose: lets the install dialog fall through to the
             // "sibling of detected AoE3" default (parent of AoE3 + this mod's

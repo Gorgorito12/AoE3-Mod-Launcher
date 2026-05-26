@@ -1,6 +1,158 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!-- ================================================================
+         IMPLICIT BUTTON STYLE — global Aero replacement.
+
+         WPF's built-in Button template paints a sky-blue gradient on
+         hover that screams "Windows 7" against the launcher's dark
+         imperial chrome. Any Button defined without an explicit
+         Style="{StaticResource ...}" inherits that default, which is
+         why the Workshop CTAs, filter chips, and Multiplayer sub-
+         tabs kept "going white" in hover no matter how many
+         individual styles we patched.
+
+         Fix: this implicit Style (no x:Key) targets every Button
+         that doesn't pick an explicit named Style. It uses the
+         OVERLAY PATTERN — a low-alpha white scrim layered on top of
+         the button's own Background, instead of replacing the
+         background on hover. That way:
+
+           • A CatalogBlue CTA stays blue on hover (just brighter).
+           • A BgPanelAlt secondary stays its panel grey (just brighter).
+           • A transparent ghost still reads its parent surface.
+
+         Steam, Discord and Material Design all use this overlay
+         technique for exactly this reason — it sidesteps every
+         "wrong colour on hover" bug because the base colour never
+         changes.
+
+         Named styles that already define their own Template
+         (NavTabButton, MpSecondaryButton, PropertyActionButton, etc.)
+         are NOT affected by this — their Template setter wins
+         locally. The implicit only catches buttons that fall through
+         to the default. Named styles WITHOUT a Template (FilterChip
+         is the only remaining one) need BasedOn="{StaticResource
+         {x:Type Button}}" to opt back into this implicit.
+         ================================================================ -->
+    <Style TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              Margin="{TemplateBinding Padding}"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <!-- Overlay scrim. IsHitTestVisible=False so it
+                             never steals clicks. CornerRadius matches
+                             the base border so the brighten clips
+                             cleanly to the button's rounded edge. -->
+                        <Border x:Name="overlay"
+                                Background="White"
+                                Opacity="0"
+                                CornerRadius="4"
+                                IsHitTestVisible="False"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <!-- 8% white scrim. Looks subtle on a
+                                 transparent button (just brightens
+                                 the parent surface a touch) and
+                                 distinctly "lifted" on a coloured CTA. -->
+                            <Setter TargetName="overlay" Property="Opacity" Value="0.08"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <!-- 14% — the press should be clearly
+                                 stronger than the hover so the click
+                                 feedback is unambiguous. -->
+                            <Setter TargetName="overlay" Property="Opacity" Value="0.14"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="border" Property="Opacity" Value="0.45"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================
+         PropertyActionButton — SECONDARY GOLD recipe for the
+         per-mod Properties dialog. Every action button on that
+         dialog (Open folder, Open AoE3 folder, Verify files,
+         Repair install, View logs, Open user data folder,
+         Create backup, Restore backup, Change mod folder,
+         Change AoE3 folder) shares the imperial dorado identity
+         of the active mod chrome — pure gris-neutral DialogButton
+         hovers were too "system dialog" for a per-mod surface.
+
+         Visual contract:
+           Idle:    transparent bg + subtle BorderSecondary outline
+                    + TextPrimary text
+           Hover:   12% gold tile fill (TintGoldHover) + AccentBrush
+                    gold border + warm cream (FgHoverGold) text
+           Disabled: BgPanelAlt fill + #666 text
+
+         Uninstall sits outside this style — it stays DangerButton
+         (red) because destructive actions never share their hover
+         treatment with safe ones. -->
+    <Style x:Key="PropertyActionButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderSecondary}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Padding" Value="14,10"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TintGoldHover}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BgPanelAlt}"/>
+                            <Setter Property="Foreground" Value="#666"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Neutral dialog button. Base for Primary / Danger / Success. -->
     <Style x:Key="DialogButton" TargetType="Button">
         <Setter Property="Background" Value="{DynamicResource BgNeutral}"/>
@@ -75,14 +227,21 @@
         </Style.Triggers>
     </Style>
 
-    <!-- MainWindow sidebar: the big PLAY / INSTALL button. -->
+    <!-- MainWindow sidebar: the big PLAY / INSTALL button.
+         Fase 3 redesign: vertical gold gradient + warm drop shadow +
+         subtle inner highlight, matching the Stitch hero CTA. Uses
+         the display serif (DisplayFont) so the primary CTA reads as
+         premium / cinematic. Background is set inside the
+         ControlTemplate (a LinearGradientBrush) instead of via the
+         Background setter, so per-button overrides don't accidentally
+         flatten the gradient back to a solid colour. -->
     <Style x:Key="SidebarPrimaryButton" TargetType="Button">
-        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Foreground" Value="#261900"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Padding" Value="14,12"/>
+        <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Padding" Value="14,14"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -90,22 +249,136 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="4"
+                            CornerRadius="6"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource AccentBrushHover}"
                             Padding="{TemplateBinding Padding}">
+                        <Border.Background>
+                            <!-- Top → bottom: AccentBrushHover (lighter cream
+                                 gold) → AccentBrush (base) → AccentDeep
+                                 (richer ochre). Reads as a "lit metal" PLAY
+                                 button. All stops are tokens so retheming
+                                 the dorado in Colors.xaml propagates here. -->
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="{Binding Source={StaticResource AccentBrushHover}, Path=Color}" Offset="0.0"/>
+                                <GradientStop Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" Offset="0.5"/>
+                                <GradientStop Color="{Binding Source={StaticResource AccentDeep}, Path=Color}" Offset="1.0"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Border.Effect>
+                            <!-- Soft warm glow so the button feels lit
+                                 against the dark background. Glow colour
+                                 bound to AccentBrush so a future palette
+                                 swap re-tints the halo automatically. -->
+                            <DropShadowEffect BlurRadius="14"
+                                              ShadowDepth="2"
+                                              Color="{Binding Source={StaticResource AccentBrush}, Path=Color}"
+                                              Opacity="0.55"/>
+                        </Border.Effect>
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource AccentBrushHover}"/>
+                            <Setter TargetName="border" Property="Background">
+                                <Setter.Value>
+                                    <!-- Hover: shift every stop slightly
+                                         lighter so the gradient "rises"
+                                         under the cursor. Still bound to
+                                         the dorado tokens so retheming
+                                         hits both states. -->
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="{Binding Source={StaticResource FgHoverGold}, Path=Color}" Offset="0.0"/>
+                                        <GradientStop Color="{Binding Source={StaticResource AccentBrushHover}, Path=Color}" Offset="0.5"/>
+                                        <GradientStop Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" Offset="1.0"/>
+                                    </LinearGradientBrush>
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Effect">
+                                <Setter.Value>
+                                    <!-- Pressed: kill the outer glow so the
+                                         button reads as "depressed". -->
+                                    <DropShadowEffect BlurRadius="4"
+                                                      ShadowDepth="1"
+                                                      Color="Black"
+                                                      Opacity="0.4"/>
+                                </Setter.Value>
+                            </Setter>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BgNeutral}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+                            <Setter TargetName="border" Property="Effect" Value="{x:Null}"/>
                             <Setter Property="Foreground" Value="#888"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Dorado progress bar (Fase 3). Replaces the default WPF
+         ProgressBar's flat slab with a gold gradient fill on a dark
+         groove. Originally also had an animated shimmer overlay but
+         the EventTrigger / Storyboard inside a ControlTemplate threw
+         InvalidOperationException "name 'Shimmer' not found in scope"
+         at runtime (WPF's template namescope doesn't expose named
+         elements to Storyboard.TargetName the way it does to Trigger
+         setters). Static gradient now; if we want shimmer later it has
+         to be done via code-behind subscribing to Loaded and starting
+         a Storyboard programmatically.
+         Applied via Style="{StaticResource ShimmerProgressBar}" on
+         each ProgressBar that should have it. Dialog progress bars
+         (LauncherUpdateDialog, TranslationApplyDialog) keep the WPF
+         default by not setting Style — opt-in. -->
+    <Style x:Key="ShimmerProgressBar" TargetType="ProgressBar">
+        <!-- Foreground holds the indicator gradient; the template
+             binds the PART_Indicator's Background to it so callers
+             can swap per-operation tones (install / update / repair /
+             uninstall) just by reassigning Foreground. The default
+             is the dorado dorado gradient that matches the rest of
+             the imperial chrome. -->
+        <Setter Property="Foreground">
+            <Setter.Value>
+                <!-- Default progress gradient = dorado, same stops as
+                     ProgressGradientUpdate in Colors.xaml. Bound to
+                     the Modern Colonial dorado tokens so retheming
+                     the palette propagates here too. -->
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="{Binding Source={StaticResource AccentDeep}, Path=Color}" Offset="0.0"/>
+                    <GradientStop Color="{Binding Source={StaticResource AccentBrushHover}, Path=Color}" Offset="0.5"/>
+                    <GradientStop Color="{Binding Source={StaticResource AccentBrush}, Path=Color}" Offset="1.0"/>
+                </LinearGradientBrush>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Background" Value="{DynamicResource BgPanel}"/>
+        <Setter Property="Height" Value="6"/>
+        <Setter Property="MinHeight" Value="4"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <!-- BOTH children must be named with their PART_*
+                         identifiers. WPF's internal
+                         SetProgressBarIndicatorLength logic does
+                         `_indicator.Width = (Value/Max) * _track.ActualWidth`
+                         and bails out if either lookup returns null. A
+                         previous version of this template only named
+                         PART_Indicator, so _track was null, the width
+                         never got set, and the bar visually froze at
+                         0% across every operation. -->
+                    <Grid>
+                        <Border x:Name="PART_Track"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="3"/>
+                        <Border x:Name="PART_Indicator"
+                                HorizontalAlignment="Left"
+                                CornerRadius="3"
+                                Background="{TemplateBinding Foreground}"/>
+                    </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -187,15 +460,229 @@
         </Setter>
     </Style>
 
-    <!-- App-level top tabs (Play / Mods / Multiplayer / News / Settings).
-         The active tab is set programmatically by RefreshTopTabHighlight()
-         which paints the underline + brighter foreground using the active
-         mod's accent. -->
+    <!-- ============================================================
+         Sidebar navigation buttons (Fase 2 redesign). Vertical stack
+         in the left rail. Each item is icon + label. Active state
+         signalled via Tag="active" set programmatically by
+         RefreshSidebarHighlight() — keeps the visual contract in one
+         place instead of toggling Background per click.
+         ============================================================ -->
+    <Style x:Key="SidebarNavButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <!-- Inactive label/icon: cool blue-gray (OnSecondaryContainer
+             #a9bad0). Provides the cool secondary tone the HTML mock
+             uses for sleeping nav items so the dorado active state
+             reads warm by contrast. Active state is forced to
+             AccentBrush (gold) via the Tag="active" trigger. -->
+        <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <!-- Padding bumped 14→16 vertically so the bigger 15pt label
+             doesn't crowd the row edges. Horizontal stays 22 — the
+             dorado right-rail accent on the active state needs the
+             same left/right breathing room it had before. -->
+        <Setter Property="Padding" Value="22,16"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+        <!-- 13 → 15: noticeably bigger nav labels without making the
+             240px sidebar feel cramped. "MULTIJUGADOR" (longest
+             label in either language at 12 chars) still has ~50px
+             of headroom inside the panel. -->
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0,0,2,0"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <!-- No background fill — keep the rail
+                                 visually quiet. Text lifts to near-
+                                 white (#E6EEF8) so the hover whispers
+                                 a state change without painting a tile. -->
+                            <Setter Property="Foreground" Value="#E6EEF8"/>
+                        </Trigger>
+                        <Trigger Property="Tag" Value="active">
+                            <!-- Active: pure white text + bold + gold
+                                 right-rail underline. No background fill
+                                 (the AccentBrush stripe alone signals
+                                 "you are here", same contract as
+                                 NavTabButton's bottom underline). -->
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Cinema-dashboard secondary action button. Used for the gear
+         (mod actions menu) and the "Change mod" pill that sit next
+         to the gold hero PLAY button. Visual goal: present but
+         quiet — translucent dark surface, cool blue-gray border &
+         icon at rest, dorado warm-up on hover. The two-tone hover
+         transition (cool → gold) is what gives the hero row the
+         secondary↔primary visual hierarchy the HTML mock has. -->
+    <Style x:Key="DashboardSecondaryButton" TargetType="Button">
+        <Setter Property="Background" Value="#33000000"/>
+        <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderSecondary}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="14,10"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <!-- SECONDARY GOLD recipe: low-alpha gold
+                                 tile fill + gold border + warm cream
+                                 text. The tile fill makes the button
+                                 feel "lit" instead of flat — matches
+                                 the imperial paleta the dashboard
+                                 sits on. Cream (#FFF4E0) instead of
+                                 pure white reads warmer against the
+                                 gold tint. -->
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TintGoldHover}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="#5a6271"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="#2a323d"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================
+         Horizontal nav tabs (Steam-style redesign). Replaces the
+         vertical SidebarNavButton when the launcher chrome is laid
+         out as a horizontal strip below the title bar. Visual
+         contract:
+           - Inactive: cool secondary text/icon, transparent bg
+           - Hover:    8% dorado tint bg, dorado text/icon
+           - Active:   12% dorado tint bg, 3px bottom underline in
+                       dorado, dorado text/icon, bold weight
+         The active state is driven by Tag="active" — same pattern
+         RefreshTopTabHighlight uses for SidebarNavButton, so the
+         code-behind doesn't need to change.
+
+         Earlier revision used CatalogBlue for hover/active to align
+         with the slate panel; reverted to dorado per user request
+         because the gold interaction state matches the rest of the
+         imperial chrome (PLAY button, brand wordmark, hero title).
+         The panel BACKGROUND stays slate (BgSidebar #33414F) — only
+         the per-button hover/active are gold.
+         ============================================================ -->
+    <Style x:Key="NavTabButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <!-- 2px top padding compensates the 2px bottom underline so
+             the icon+label sit visually centered inside the cell.
+             Otherwise the content drifts slightly above centre. -->
+        <Setter Property="Padding" Value="22,2,22,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0,0,0,2"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <!-- Hover: no background fill, just lift the
+                                 text toward white. Keeps the nav bar
+                                 visually quiet so only the active tab's
+                                 underline reads as the "you are here"
+                                 marker. #E6EEF8 = near-white with a
+                                 cool tint that matches the slate panel. -->
+                            <Setter Property="Foreground" Value="#E6EEF8"/>
+                        </Trigger>
+                        <Trigger Property="Tag" Value="active">
+                            <!-- Active: pure white text + bold + gold
+                                 bottom underline. No background fill —
+                                 the underline alone signals "active",
+                                 matching Steam/Epic-style nav bars. -->
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- (NavBrandButton style removed — was only used for the
+         "AOE3 LAUNCHER ▼" dropdown in the horizontal nav strip,
+         which itself was removed once the title bar's
+         "AoE3 Mod Launcher" button took over the same job. The
+         in-title-bar button uses an inline ControlTemplate rather
+         than a reusable style.) -->
+
+    <!-- Secondary sidebar links (Support / Wiki at the bottom of the
+         rail). Lighter weight, smaller, no active state since they
+         open external links instead of switching the content view. -->
+    <Style x:Key="SidebarFooterButton" TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
+        <Setter Property="Padding" Value="22,8"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <!-- Slightly dimmer cool tone for Support/Wiki — they're not
+             primary navigation so they recede a step. Matches the
+             OnSecondaryFixedVariant tone (#38485a) lightened a touch
+             to stay legible against the BgSidebar surface. -->
+        <Setter Property="Foreground" Value="#788aa0"/>
+    </Style>
+
+    <!-- App-level top tabs (Play / Mods / Multiplayer / Settings).
+         Kept for backward compat — nothing references it after Fase 2
+         but harmless to leave. Will be deleted in a future cleanup
+         pass once the codebase is fully on the sidebar layout. -->
     <Style x:Key="TopTabButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="#888"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+        <Setter Property="FontSize" Value="15"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="0,16"/>
         <Setter Property="Margin" Value="0,0,28,0"/>
@@ -352,6 +839,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
+                            <!-- SECONDARY BLUE recipe: BgNeutral fill
+                                 + white text. Restored to the original
+                                 multiplayer-paleta hover after the
+                                 global "blank everywhere" pass over-
+                                 reached and washed the section out. -->
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BgNeutral}"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
@@ -391,6 +883,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
+                            <!-- SECONDARY BLUE outline recipe:
+                                 MpBlueSubtle fill (low-alpha blue) +
+                                 white text. The MpBlue outline stays
+                                 (it's the identity of this button). -->
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource MpBlueSubtle}"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
@@ -460,6 +956,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
+                            <!-- GHOST BLUE recipe: tint surface
+                                 (MpSurfaceAlt) so the glyph reads as
+                                 a hit-target square. Restored after
+                                 the global pass blanked the fill. -->
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource MpSurfaceAlt}"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>

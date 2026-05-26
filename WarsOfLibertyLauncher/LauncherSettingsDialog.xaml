@@ -102,25 +102,16 @@
                 </ComboBox>
             </Grid>
 
-            <Grid Margin="0,4,0,8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="180"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0"
-                           x:Name="ThemeLabel"
-                           Foreground="#ddd"
-                           FontSize="12"
-                           VerticalAlignment="Center"/>
-                <ComboBox Grid.Column="1"
-                          x:Name="ThemeCombo"
-                          Width="200"
-                          HorizontalAlignment="Left">
-                    <ComboBoxItem x:Name="ThemeDarkItem" Tag="dark"/>
-                    <ComboBoxItem x:Name="ThemeLightItem" Tag="light"/>
-                    <ComboBoxItem x:Name="ThemeSystemItem" Tag="system"/>
-                </ComboBox>
-            </Grid>
+            <!-- Theme picker removed: the launcher is dorado-imperial
+                 dark-only by design now. The old light theme dictionary
+                 (Styles/Colors.Light.xaml) was stale — it predated the
+                 secondary palette, Workshop badges, multiplayer brushes,
+                 progress-tone gradients, etc., so switching to it threw
+                 every DynamicResource consumer onto a null brush and
+                 crashed the app. Deleted the picker, the config field,
+                 the ThemeService, and the light dictionary together so
+                 the dark theme can't accidentally come back as an
+                 option that doesn't actually work. -->
 
             <CheckBox x:Name="StartWithWindowsCheck"/>
             <TextBlock x:Name="StartWithWindowsHint" Style="{StaticResource HintText}"/>
@@ -155,7 +146,7 @@
                      Width="320"
                      HorizontalAlignment="Left"/>
             <TextBlock x:Name="CatalogInvalidText"
-                       Foreground="#e63950"
+                       Foreground="{DynamicResource ErrorBrush}"
                        FontSize="11"
                        Margin="22,2,0,4"
                        Visibility="Collapsed"/>

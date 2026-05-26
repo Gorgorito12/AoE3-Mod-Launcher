@@ -103,6 +103,15 @@ public partial class MainWindow : Window
         ModsBrowserView.RepairRequested += ModsBrowserView_RepairRequested;
         ModsBrowserView.RefreshCatalogRequested += ModsBrowserView_RefreshCatalogRequested;
         ModsBrowserView.AddLocalModRequested += ModsBrowserView_AddLocalModRequested;
+        // Workshop redesign: per-row "Add to my mods" / "Remove from
+        // my mods" toggle. Replaces the old install/update/repair
+        // dispatch on the Workshop — those flows now live on the
+        // Dashboard (PLAY state machine + gear menu).
+        ModsBrowserView.AddToCollectionRequested += ModsBrowserView_AddToCollectionRequested;
+        ModsBrowserView.RemoveFromCollectionRequested += ModsBrowserView_RemoveFromCollectionRequested;
+        // (RightClicked subscription removed — right-click on Workshop
+        // rows no longer does anything. Per-mod admin actions live in
+        // the dashboard gear button now.)
         ActionPanelControl.PlayButton.Click += PlayButton_Click;
         ActionPanelControl.StopButton.Click += StopButton_Click;
         ActionPanelControl.UpdateButton.Click += UpdateButton_Click;
@@ -119,10 +128,49 @@ public partial class MainWindow : Window
         ActionPanelControl.MenuVerifyFiles.Click += MenuVerifyFiles_Click;
         ActionPanelControl.MenuViewLogs.Click += MenuViewLogs_Click;
         ActionPanelControl.UninstallMenuItem.Click += UninstallMenuItem_Click;
+
+        // Title-bar maximize/restore glyph stays in sync with the
+        // window state. Without this the button would always show
+        // "maximize" even after the user maximised the window.
+        StateChanged += (_, _) => SyncMaximizeGlyph();
+        Loaded += (_, _) => SyncMaximizeGlyph();
+
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
 
         _config = LauncherConfig.Load();
+
+        // Workshop migration — first launch with the new UserModIds
+        // field on an old config. Seed the personal collection from
+        // whatever the user already had installed, so the Dashboard's
+        // MODS popup doesn't suddenly lose their existing mods. After
+        // this seeding, the list only changes via the Workshop's
+        // Add/Remove buttons. Detection is "saved per-mod state has a
+        // non-empty install path", which is the same signal
+        // IsModInstalled / BuildModRowState use. Built-ins are
+        // skipped — they're always implicit via IsUserMod() so
+        // adding them explicitly would just bloat the JSON.
+        if (_config.UserModIds.Count == 0 && _config.Mods.Count > 0)
+        {
+            bool seeded = false;
+            foreach (var kvp in _config.Mods)
+            {
+                if (!string.IsNullOrEmpty(kvp.Value.InstallPath)
+                    && !ModRegistry.IsBuiltIn(kvp.Key))
+                {
+                    _config.UserModIds.Add(kvp.Key);
+                    seeded = true;
+                }
+            }
+            if (seeded)
+            {
+                DiagnosticLog.Write(
+                    $"Workshop migration: seeded UserModIds with {_config.UserModIds.Count} previously-installed mod(s).");
+                try { _config.Save(); }
+                catch (Exception ex) { DiagnosticLog.Write($"Workshop migration save failed: {ex.Message}"); }
+            }
+        }
+
         Strings.SetLanguage(_config.Language);
         Strings.LanguageChanged += ApplyLanguage;
         RestoreWindowState();
@@ -425,6 +473,12 @@ public partial class MainWindow : Window
             CurrentVersion = current,
             AvailableVersion = available,
             IsActive = isActive,
+            // Workshop redesign: per-row Add/Remove toggle is driven
+            // by the user's personal collection. Built-ins are always
+            // implicitly "in collection" and rendered as a disabled
+            // "Built-in" pill (handled by ModsBrowser.BuildRowAction).
+            IsInUserCollection = _config.IsUserMod(profile.Id),
+            IsBuiltIn = ModRegistry.IsBuiltIn(profile.Id),
         };
     }
 
@@ -884,20 +938,30 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Sync Application-level AccentBrush + AccentBrushHover with the active
-    /// mod's accent so DynamicResource consumers (dialog XAMLs) repaint on
-    /// mod switch. Called on startup and on every mod switch.
+    /// Publishes the active mod's accent colour into the App-level
+    /// <c>ModAccentBrush</c> / <c>ModAccentBrushHover</c> resources so
+    /// the few places that genuinely want per-mod identity (the legacy
+    /// HeroBanner gradient fallback, dialog confirm buttons that opt
+    /// into the mod-themed look) can pick it up via DynamicResource.
+    ///
+    /// IMPORTANT — Redesign 3 (dorado imperial):
+    /// This method used to OVERWRITE the global <c>AccentBrush</c> with
+    /// the per-mod colour. That turned the entire sidebar / brand title
+    /// / progress strip / dashboard hover states red whenever WoL was
+    /// the active mod (AccentColor = #c8102e), making the launcher look
+    /// like a permanent error banner. The visual brief from the Stitch
+    /// redesign is fixed dorado for chrome, per-mod red only where it
+    /// reads as decoration (banner image fallback gradient). So
+    /// <c>AccentBrush</c> now stays locked to the Stitch dorado defined
+    /// in Styles/Colors.xaml (#e9c176) and per-mod identity lives on a
+    /// separate brush key that the visible UI only consults in a few
+    /// targeted spots.
     /// </summary>
     private static void UpdateAccentResources(ModProfile profile)
     {
         var accent = ParseAccentColor(profile.AccentColor);
 
-        // Bail if the resource brush already matches. Both built-in profiles
-        // happen to use #c8102e, so every switch between them was rebuilding
-        // identical brushes and triggering DynamicResource invalidation in
-        // every consumer in the visual tree (tabs, dialog buttons, scrollbars,
-        // status card, …) for nothing. Comparing the Color value avoids that.
-        if (Application.Current?.Resources["AccentBrush"]
+        if (Application.Current?.Resources["ModAccentBrush"]
                 is System.Windows.Media.SolidColorBrush existing
             && existing.Color == accent)
         {
@@ -909,8 +973,8 @@ public partial class MainWindow : Window
         var hoverBrush = new System.Windows.Media.SolidColorBrush(hover);
         accentBrush.Freeze();
         hoverBrush.Freeze();
-        Application.Current!.Resources["AccentBrush"] = accentBrush;
-        Application.Current.Resources["AccentBrushHover"] = hoverBrush;
+        Application.Current!.Resources["ModAccentBrush"] = accentBrush;
+        Application.Current.Resources["ModAccentBrushHover"] = hoverBrush;
     }
 
     private static System.Windows.Media.Color ParseAccentColor(string hex)
@@ -1433,14 +1497,22 @@ public partial class MainWindow : Window
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
         MainTabsControl.NewsPlaceholderText.Text = Strings.Get("NewsPlaceholder");
-        NewsLargePlaceholderText.Text = Strings.Get("NewsPlaceholder");
 
-        // Top-level tab labels.
-        TopTabPlay.Content = Strings.Get("TopTabPlay");
-        TopTabMods.Content = Strings.Get("TopTabMods");
-        TopTabMultiplayer.Content = Strings.Get("TopTabMultiplayer");
-        TopTabNews.Content = Strings.Get("TopTabNews");
-        TopTabSettings.Content = Strings.Get("TopTabSettings");
+        // Sidebar nav labels (Redesign 2 — vertical sidebar). The Buttons
+        // keep their old TopTab* x:Names so SwitchTopTab() and
+        // RefreshTopTabHighlight() don't need to change, but the actual
+        // visible label now lives in an inner TextBlock (SidebarLabel*)
+        // because each button hosts an icon+label StackPanel as Content.
+        SidebarLabelDashboard.Text = Strings.Get("TopTabPlay");
+        SidebarLabelCatalog.Text = Strings.Get("TopTabMods");
+        SidebarLabelMultiplayer.Text = Strings.Get("TopTabMultiplayer");
+        // (SidebarLabelSettings / SidebarLabelSupport / SidebarLabelWiki
+        // no longer exist in MainWindow.xaml — Support+Wiki were
+        // collapsed into a single SETTINGS row, then SETTINGS itself
+        // got pulled out of the sidebar and into the brand menu
+        // (click "AOE3 LAUNCHER" wordmark). The orphan handlers and
+        // string keys live on as dead code in case we want to revive
+        // any of them.)
 
         // v1.0 multiplayer tab — propagate language changes into the
         // UserControl's own string cache. Layout strings (subtabs, sign-in
@@ -1507,6 +1579,10 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailViewWebsiteLabel = Strings.Get("ModsBrowserActionViewWebsite");
         ModsBrowserView.DetailSwitchActiveLabel = Strings.Get("ModsBrowserActionSwitchActive");
         ModsBrowserView.DetailUninstallLabel = Strings.Get("ModsBrowserActionUninstall");
+        // Workshop redesign: per-row Add/Remove + Built-in labels.
+        ModsBrowserView.BtnAddToCollectionLabel = Strings.Get("ModsBrowserBtnAdd");
+        ModsBrowserView.BtnRemoveFromCollectionLabel = Strings.Get("ModsBrowserBtnRemove");
+        ModsBrowserView.BtnBuiltinLabel = Strings.Get("ModsBrowserBtnBuiltin");
 
         // Header ⋯ menu: only the publish wizard for now. Kept in the
         // overflow instead of a dedicated header button — the catalog
@@ -1528,7 +1604,10 @@ public partial class MainWindow : Window
         ActionPanelControl.UpdateButtonText.Text = Strings.Get("BtnUpdate");
         ActionPanelControl.MoreButtonText.Text = Strings.Get("BtnConfig");
         ActionPanelControl.OpenFolderButtonText.Text = Strings.Get("BtnOpenFolder");
-        LauncherSettingsButtonText.Text = Strings.Get("BtnLauncherSettings");
+        // (LauncherSettingsButtonText label retranslation removed — the
+        // gear-cog button in the hero corner was retired; the brand-menu
+        // entry that replaces it pulls its label from Strings on every
+        // popup build, so no per-language UI pump is needed here.)
         // Tray labels follow the launcher language. Safe to call even
         // when the tray icon is hidden; ContextMenu lives on the XAML
         // element regardless of Visibility.
@@ -1608,13 +1687,11 @@ public partial class MainWindow : Window
         // / Check is gone; the unified primary button (PlayButton) covers
         // Install, and Check lives in the gear menu.
 
-        // Highlight the active language toggle
-        LangEnButton.Foreground = Strings.Language == Strings.LangEn
-            ? System.Windows.Media.Brushes.White
-            : System.Windows.Media.Brushes.Gray;
-        LangEsButton.Foreground = Strings.Language == Strings.LangEs
-            ? System.Windows.Media.Brushes.White
-            : System.Windows.Media.Brushes.Gray;
+        // (EN/ES toggle highlight removed — the inline language toggles
+        // were retired from the hero corner. Users now pick the
+        // launcher language from LauncherSettingsDialog's LanguageCombo,
+        // which doesn't need an external "active state" highlight
+        // because the combo itself shows the current selection.)
     }
 
     // ------------------------------------------------------------------------
@@ -1793,6 +1870,28 @@ public partial class MainWindow : Window
         StatusCardControl.CurrentVersion = _updateService.CurrentVersion?.Ver ?? "—";
         StatusCardControl.LatestVersion = _updateService.LatestVersion?.Ver ?? "—";
 
+        // Resync the cinema-dashboard version chip — the StatusCard
+        // re-paint flow is the canonical "we just learned a new
+        // version" point (called by RefreshStatusCard which runs after
+        // CheckAsync and after install/update/uninstall). Without this
+        // the chip would stay hidden until the user manually switches
+        // mods (which is when RefreshActiveModBanner gets called).
+        if (DashboardVersionChip != null)
+        {
+            var ver = _updateService.CurrentVersion?.Ver;
+            if (!string.IsNullOrWhiteSpace(ver))
+            {
+                DashboardVersionText.Text = ver.StartsWith("v", StringComparison.OrdinalIgnoreCase)
+                    ? ver
+                    : "v " + ver;
+                DashboardVersionChip.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                DashboardVersionChip.Visibility = Visibility.Collapsed;
+            }
+        }
+
         // ---- AoE3 missing row ----
         if (!aoe3Detected)
         {
@@ -1844,6 +1943,27 @@ public partial class MainWindow : Window
         ProgressPanelControl.ProgressStepText.Text = "";
         ProgressPanelControl.SpeedText.Text = "";
         ProgressPanelControl.EtaText.Text = "";
+
+        // Idle state: revert the dashboard bar to its style-default
+        // dorado gradient + reset the label/icon back to AccentBrush
+        // gold so the strip doesn't keep the previous operation's
+        // colour after it finishes. ClearValue drops the local
+        // Foreground brush and falls back to the style setter.
+        if (DashboardProgressBar != null)
+        {
+            DashboardProgressBar.ClearValue(System.Windows.Controls.ProgressBar.ForegroundProperty);
+        }
+        if (DashboardProgressIcon != null)
+        {
+            DashboardProgressIcon.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+        }
+        if (DashboardProgressLabel != null)
+        {
+            DashboardProgressLabel.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+        }
+
+        // Mirror into the visible cinema-dashboard progress strip.
+        SyncDashboardProgressFromLegacyPanel();
     }
 
     /// <summary>
@@ -1855,6 +1975,70 @@ public partial class MainWindow : Window
     {
         RefreshStatusCard();
         RefreshIdleProgressPanel();
+    }
+
+    /// <summary>
+    /// Copies the (hidden) legacy ProgressPanelControl state into the
+    /// visible cinema-dashboard progress strip. The legacy panel still
+    /// owns the source of truth for everything install/update related
+    /// — call this whenever its values change so the dashboard mirrors
+    /// it. Idle state shows "—" placeholders; running state shows live
+    /// speed/eta/percent so the user can read progress without leaving
+    /// the cinema view.
+    /// </summary>
+    private void SyncDashboardProgressFromLegacyPanel()
+    {
+        if (DashboardProgressLabel == null) return;
+
+        var idle = _progressState == ProgressState.Idle;
+        DashboardProgressLabel.Text = idle
+            ? Strings.Get("ProgressIdleTitle")
+            : ProgressPanelControl.ProgressTitleText.Text ?? string.Empty;
+        DashboardProgressSubtitle.Text = idle
+            ? string.Empty
+            : ProgressPanelControl.ProgressStepText.Text ?? string.Empty;
+        DashboardProgressSpeed.Text = string.IsNullOrEmpty(ProgressPanelControl.SpeedText.Text)
+            ? "—"
+            : ProgressPanelControl.SpeedText.Text;
+        DashboardProgressEta.Text = string.IsNullOrEmpty(ProgressPanelControl.EtaText.Text)
+            ? "—"
+            : ProgressPanelControl.EtaText.Text;
+        DashboardProgressPercent.Text = string.IsNullOrEmpty(ProgressPanelControl.OverallBytesText.Text)
+            ? "—"
+            : ProgressPanelControl.OverallBytesText.Text;
+
+        // ProgressBar mirrors the OverallProgress value (single-bar
+        // progress in the cinema view — the legacy panel has both
+        // patch + overall but the user-facing summary is "overall").
+        DashboardProgressBar.IsIndeterminate = ProgressPanelControl.OverallProgress.IsIndeterminate;
+        DashboardProgressBar.Value = ProgressPanelControl.OverallProgress.Value;
+
+        // Pause/Cancel actions follow the legacy
+        // ProgressRunningActions row exactly: visible whenever the
+        // legacy panel would show its inline pause/cancel buttons.
+        // Cancel is always enabled while visible; Pause inherits the
+        // legacy button's enablement (some operations like extracting
+        // or verifying can't be paused — only the download phase can).
+        if (DashboardProgressActions != null)
+        {
+            DashboardProgressActions.Visibility =
+                ProgressPanelControl.ProgressRunningActions.Visibility;
+            DashboardPauseButton.IsEnabled = ProgressPanelControl.PauseButton.IsEnabled;
+            DashboardCancelButton.IsEnabled = ProgressPanelControl.CancelButton.IsEnabled;
+
+            // Pause↔Resume icon flip. The legacy button stores the
+            // current state in its Content (BtnResume vs BtnPause
+            // string), but reading those localized strings back is
+            // fragile, so we infer from IsEnabled + the bar's
+            // indeterminate state. Simpler & more robust: when the
+            // legacy panel labelled itself "Reanudar", show the
+            // Play glyph; otherwise the Pause glyph.
+            DashboardPauseButtonIcon.Text = string.Equals(
+                ProgressPanelControl.PauseButton.Content?.ToString(),
+                Strings.Get("BtnResume"), StringComparison.Ordinal)
+                ? ""   // Play (we're currently paused)
+                : "";  // Pause (we're currently running)
+        }
     }
 
     /// <summary>
@@ -1896,11 +2080,117 @@ public partial class MainWindow : Window
             ActiveModBanner.HostBackground = gradient;
         }
 
-        // Lazy fetch: the active profile may be a community mod whose
-        // banner hasn't been cached yet. Kicking the download here means
+        // Mirror the active mod into the visible cinema dashboard. The
+        // legacy HeroBanner stays alive inside LegacyPlayContent (hidden
+        // — it owns a bunch of state references the rest of the code-
+        // behind still touches), but the user actually sees DashboardBgFill
+        // / DashboardTitleText / DashboardDescText. Title is upper-cased
+        // for the cinematic feel; description falls back to the profile
+        // subtitle when no description was supplied by the catalog.
+        //
+        // The cinema dashboard background fallback uses a NEUTRAL dark
+        // gradient (BgBase → BgPanelAlt) — NOT the per-mod accent — so
+        // a missing banner never paints the hero panel red when WoL is
+        // active. The hero stays imperial/dorado regardless of which
+        // mod is selected, matching the Stitch redesign brief. Per-mod
+        // colour only shows up via the actual hero/banner image.
+        //
+        // Hero resolution priority for the dashboard (highest first):
+        //   1. LocalHeroImagePath — 1920×1080 hero (the right tool for
+        //      a full-bleed dashboard panel)
+        //   2. LocalBannerPath    — 1200×300 banner (will look slightly
+        //      stretched on the dashboard but better than no image)
+        //   3. Neutral dark gradient — the fallback when the mod ships
+        //      neither hero nor banner
+        // BannerImage (the mod's .ico) is deliberately NOT used here
+        // because a 256×256 square icon stretched to a 1920-wide panel
+        // looks heavily distorted.
+        if (DashboardBgFill != null)
+        {
+            var cinemaBanner =
+                TryLoadTileImage(profile.LocalHeroImagePath)
+                ?? TryLoadTileImage(profile.LocalBannerPath);
+            if (cinemaBanner != null)
+            {
+                DashboardBgFill.Background = cinemaBanner;
+            }
+            else
+            {
+                var neutralGradient = new System.Windows.Media.LinearGradientBrush
+                {
+                    StartPoint = new System.Windows.Point(0, 0),
+                    EndPoint = new System.Windows.Point(1, 1),
+                };
+                neutralGradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+                    ((System.Windows.Media.SolidColorBrush)Brush("#131313")).Color, 0));
+                neutralGradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+                    ((System.Windows.Media.SolidColorBrush)Brush("#201f1f")).Color, 1));
+                neutralGradient.Freeze();
+                DashboardBgFill.Background = neutralGradient;
+            }
+        }
+        if (DashboardTitleText != null)
+        {
+            DashboardTitleText.Text = (profile.DisplayName ?? string.Empty).ToUpperInvariant();
+        }
+        if (DashboardDescText != null)
+        {
+            // Description is a Dictionary<lang, text> on the profile;
+            // resolve against the active UI language with an "en" fallback,
+            // then fall back to the short Subtitle ("Launcher", "AoE3:TAD
+            // overhaul", …) if no localized description was supplied.
+            var lang = _config.Language ?? "en";
+            string? localized = null;
+            if (profile.Description != null)
+            {
+                if (!profile.Description.TryGetValue(lang, out localized))
+                    profile.Description.TryGetValue("en", out localized);
+            }
+            DashboardDescText.Text = !string.IsNullOrWhiteSpace(localized)
+                ? localized!
+                : (profile.Subtitle ?? string.Empty);
+        }
+        if (DashboardChangeModButtonText != null)
+        {
+            // Locale-aware "CHANGE MOD" / "CAMBIAR MOD" label.
+            DashboardChangeModButtonText.Text = Strings.Get("DashboardChangeMod");
+        }
+        // Version chip — installed version (CurrentVersion) of the
+        // active mod. Hidden when no version is known yet (fresh
+        // machine before CheckAsync ran, or mod not installed). The
+        // "v " prefix is added defensively when the version string
+        // doesn't already start with one — some catalog manifests
+        // ship "1.0.0", others "v1.0.0".
+        if (DashboardVersionChip != null)
+        {
+            var ver = _updateService?.CurrentVersion?.Ver;
+            if (!string.IsNullOrWhiteSpace(ver))
+            {
+                DashboardVersionText.Text = ver.StartsWith("v", StringComparison.OrdinalIgnoreCase)
+                    ? ver
+                    : "v " + ver;
+                DashboardVersionChip.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                DashboardVersionChip.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        // Lazy fetch: the active profile may have a banner OR hero image
+        // that hasn't been cached yet. Kicking the download here means
         // the next switch back to this mod (or the next RefreshModCards
-        // call) will pick up the real banner.
-        if (string.IsNullOrEmpty(profile.LocalBannerPath) && !string.IsNullOrEmpty(profile.BannerUrl))
+        // call) will pick up the real asset.
+        //
+        // Either condition triggers — built-in WoL has HeroImageUrl
+        // (pointing at the catalog's raw URL) but no BannerUrl, so a
+        // banner-only gate would never fire for WoL and the hero would
+        // never download.
+        bool needBanner = string.IsNullOrEmpty(profile.LocalBannerPath)
+                          && !string.IsNullOrEmpty(profile.BannerUrl);
+        bool needHero = string.IsNullOrEmpty(profile.LocalHeroImagePath)
+                        && !string.IsNullOrEmpty(profile.HeroImageUrl);
+        if (needBanner || needHero)
             _ = EnsureModAssetsAsync(profile);
     }
 
@@ -1926,13 +2216,11 @@ public partial class MainWindow : Window
     private void RenderNews(NewsFeed? feed)
     {
         MainTabsControl.NewsCardsPanel.Children.Clear();
-        NewsLargeCardsPanel.Children.Clear();
 
         var items = feed?.Items;
         if (items == null || items.Count == 0)
         {
             MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Visible;
-            NewsLargePlaceholderText.Visibility = Visibility.Visible;
             return;
         }
 
@@ -1948,18 +2236,13 @@ public partial class MainWindow : Window
         if (filtered.Count == 0)
         {
             MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Visible;
-            NewsLargePlaceholderText.Visibility = Visibility.Visible;
             return;
         }
 
         MainTabsControl.NewsPlaceholderText.Visibility = Visibility.Collapsed;
-        NewsLargePlaceholderText.Visibility = Visibility.Collapsed;
         foreach (var item in filtered)
         {
-            // Each panel needs its own card instances — a FrameworkElement
-            // can only have one parent in WPF, so we build the card twice.
             MainTabsControl.NewsCardsPanel.Children.Add(BuildNewsCard(item));
-            NewsLargeCardsPanel.Children.Add(BuildNewsCard(item));
         }
     }
 
@@ -2166,6 +2449,21 @@ public partial class MainWindow : Window
                     changed = true;
                 }
             }
+
+            // Hero image — the large 1920×1080 dashboard background. Same
+            // lifecycle as the banner: lazily fetched, cached locally.
+            // When present, RefreshActiveModBanner prefers it over the
+            // (smaller, 1200×300) banner for the dashboard surface.
+            if (string.IsNullOrEmpty(profile.LocalHeroImagePath)
+                && !string.IsNullOrEmpty(profile.HeroImageUrl))
+            {
+                var path = await cache.GetHeroImagePathAsync(profile.Id, profile.HeroImageUrl);
+                if (!string.IsNullOrEmpty(path))
+                {
+                    profile.LocalHeroImagePath = path;
+                    changed = true;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -2226,13 +2524,12 @@ public partial class MainWindow : Window
     // so the existing flow is unchanged when the user lands there.
     // ------------------------------------------------------------------------
 
-    private enum TopTab { Play, Mods, Multiplayer, News, Settings }
+    private enum TopTab { Play, Mods, Multiplayer, Settings }
     private TopTab _activeTopTab = TopTab.Play;
 
     private void TopTabPlay_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Play);
     private void TopTabMods_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Mods);
     private void TopTabMultiplayer_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Multiplayer);
-    private void TopTabNews_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.News);
     private void TopTabSettings_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Settings);
 
     /// <summary>
@@ -2358,6 +2655,111 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Workshop "Add to my mods" click — adds the profile id to the
+    /// user's personal collection in <see cref="LauncherConfig.UserModIds"/>,
+    /// persists, and re-renders the browser so the row's button flips
+    /// to "Remove from my mods". The mod immediately becomes available
+    /// in the Dashboard's MODS popup; actual install still happens
+    /// from the Dashboard when the user picks it (PLAY → INSTALL).
+    /// </summary>
+    private void ModsBrowserView_AddToCollectionRequested(object? sender, ModProfile profile)
+    {
+        if (profile == null) return;
+        _config.AddUserMod(profile.Id);
+        PersistConfigInBackground();
+        RefreshModsBrowser();
+    }
+
+    /// <summary>
+    /// Workshop "Remove from my mods" click — drops the profile id
+    /// from <see cref="LauncherConfig.UserModIds"/>. The mod stops
+    /// appearing in the Dashboard's MODS popup. Built-in profiles
+    /// can't be removed (the Workshop renders them as a disabled
+    /// "Built-in" pill and never raises this event), but
+    /// LauncherConfig.RemoveUserMod no-ops on built-ins anyway as
+    /// a defensive backstop.
+    /// </summary>
+    private void ModsBrowserView_RemoveFromCollectionRequested(object? sender, ModProfile profile)
+    {
+        if (profile == null) return;
+        _config.RemoveUserMod(profile.Id);
+        PersistConfigInBackground();
+        RefreshModsBrowser();
+    }
+
+    /// <summary>
+    /// Fire-and-forget config save. Used by Workshop add/remove so
+    /// the UI thread doesn't block on disk I/O for what feels like
+    /// an instant button click. Worst case (process kill mid-write)
+    /// is a single lost add/remove on the next launch — acceptable,
+    /// matches the same trade-off LoadModProfile makes for the
+    /// active-mod-id write.
+    /// </summary>
+    private void PersistConfigInBackground()
+    {
+        _ = Task.Run(() =>
+        {
+            try { _config.Save(); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Async config save failed: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Opens the ModPropertiesDialog for a specific profile. For the
+    /// active mod we reuse <c>_updateService</c> directly; for non-
+    /// active mods we build a fresh UpdateService scoped to that
+    /// profile so the dialog's "installed version" / install path /
+    /// translation list resolve against the right mod's state.
+    /// </summary>
+    private void OpenModPropertiesDialog(ModProfile profile)
+    {
+        UpdateService service = string.Equals(
+                profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)
+            ? _updateService
+            : new UpdateService(_config, profile);
+
+        var dialog = new ModPropertiesDialog(
+            profile,
+            service,
+            _config,
+            _cachedTranslationIndex,
+            // Existing 4 callbacks
+            applyTranslation: e => ApplyTranslationAsync(e),
+            revertToEnglish: () => RevertToEnglish(),
+            openVerify: () => RaiseMenuClick(ActionPanelControl.MenuVerifyFiles),
+            openRepair: () => RaiseMenuClick(ActionPanelControl.MenuRepairInstall),
+            // 8 new callbacks — folded in from the old SETTINGS popup.
+            // Each one wraps a RaiseMenuClick on the legacy
+            // ActionPanelControl menu item so the actual flows
+            // (path picker dialog, backup dialog, uninstall
+            // confirmation, etc.) keep owning the logic.
+            checkForUpdates: () => RaiseMenuClick(ActionPanelControl.MenuCheckForUpdates),
+            openAoE3Folder: () => RaiseMenuClick(ActionPanelControl.MenuOpenAoE3Folder),
+            changeModFolder: () => RaiseMenuClick(ActionPanelControl.MenuSelectModFolder),
+            changeAoE3Folder: () => RaiseMenuClick(ActionPanelControl.MenuSelectAoE3Folder),
+            openUserDataFolder: () => RaiseMenuClick(ActionPanelControl.MenuOpenUserDataFolder),
+            createBackup: () => RaiseMenuClick(ActionPanelControl.MenuCreateBackupNow),
+            restoreBackup: () => RaiseMenuClick(ActionPanelControl.MenuRestoreUserData),
+            viewLogs: () => RaiseMenuClick(ActionPanelControl.MenuViewLogs),
+            uninstall: () => RaiseMenuClick(ActionPanelControl.UninstallMenuItem))
+        {
+            Owner = this,
+        };
+        dialog.ShowDialog();
+
+        // After dialog closes, repaint the dashboard chrome in case
+        // the language was changed inside Properties.
+        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            RefreshIdlePanel();
+            RefreshActiveModBanner();
+        }
+    }
+
+    /// <summary>
     /// Install a mod without switching the active one. We build a fresh
     /// UpdateService scoped to the requested profile and pass it into the
     /// existing InstallAsync pipeline (refactored in commit 1 to accept an
@@ -2393,6 +2795,20 @@ public partial class MainWindow : Window
         {
             InvalidateCheckCacheFor(profile.Id);
             RefreshModsBrowser();
+        }
+
+        // After install completes, if the mod actually landed on disk,
+        // promote it to active. Otherwise the Dashboard stays pointed
+        // at whatever was active before (typically WoL) and the user
+        // has to manually switch — surprising flow because they just
+        // explicitly chose to install this mod. Detection re-probes
+        // disk via IsModInstalled, so this is robust against a
+        // cancelled / partial install (no promotion when nothing
+        // actually wrote out).
+        if (IsModInstalled(profile)
+            && !string.Equals(_updateService.Profile.Id, profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            LoadModProfile(profile);
         }
     }
 
@@ -2590,35 +3006,1171 @@ public partial class MainWindow : Window
         PlayView.Visibility = tab == TopTab.Play ? Visibility.Visible : Visibility.Collapsed;
         ModsBrowserView.Visibility = tab == TopTab.Mods ? Visibility.Visible : Visibility.Collapsed;
         MultiplayerView.Visibility = tab == TopTab.Multiplayer ? Visibility.Visible : Visibility.Collapsed;
-        NewsLargeView.Visibility = tab == TopTab.News ? Visibility.Visible : Visibility.Collapsed;
         SettingsView.Visibility = tab == TopTab.Settings ? Visibility.Visible : Visibility.Collapsed;
         RefreshTopTabHighlight();
     }
 
     /// <summary>
-    /// Paints the underline + brighter foreground on the active top tab,
-    /// mirroring RefreshTabsHighlight's approach but using the active mod's
-    /// accent so the colour follows the theme/profile.
+    /// Marks the active sidebar nav button by toggling its Tag to
+    /// <c>"active"</c>. The SidebarNavButton style's ControlTemplate
+    /// triggers on Tag and paints the right rail accent + background +
+    /// bold foreground; this method just sets the flag.
+    /// (Pre-Fase 2: this used to manually paint Foreground + Border
+    /// because the old horizontal top-tab style had no Tag trigger.)
     /// </summary>
     private void RefreshTopTabHighlight()
     {
-        var accent = (System.Windows.Media.Brush)FindResource("AccentBrush");
-        var dim = Brush("#888");
-        var transparent = System.Windows.Media.Brushes.Transparent;
-
-        void Paint(System.Windows.Controls.Button btn, bool active)
+        static void Paint(System.Windows.Controls.Button btn, bool active)
         {
-            btn.Foreground = active ? Brush("#fff") : dim;
-            if (btn.Template?.FindName("border", btn) is System.Windows.Controls.Border b)
-                b.BorderBrush = active ? accent : transparent;
+            btn.Tag = active ? "active" : null;
         }
 
         Paint(TopTabPlay, _activeTopTab == TopTab.Play);
         Paint(TopTabMods, _activeTopTab == TopTab.Mods);
         Paint(TopTabMultiplayer, _activeTopTab == TopTab.Multiplayer);
-        Paint(TopTabNews, _activeTopTab == TopTab.News);
-        Paint(TopTabSettings, _activeTopTab == TopTab.Settings);
+        // TopTabSettings was removed from the sidebar (moved into
+        // the brand menu). The TopTab.Settings enum value and the
+        // SettingsView placeholder are still wired internally but
+        // there's no sidebar button to paint as active anymore.
     }
+
+    // ------------------------------------------------------------------
+    // Dashboard WebView2 (Fase 5). The Dashboard tab now hosts a
+    // Vite/Tailwind build of "Imperial Mod Manager" (Assets/Dashboard/).
+    // We map that folder to a virtual https:// host so the HTML's
+    // relative asset paths (./assets/index-xxx.css, .js) keep working
+    // and Vite's hash-based caching survives. Fase 5b will add the
+    // bidirectional JS ↔ C# bridge — for now the HTML just runs its
+    // mock data.
+    // ------------------------------------------------------------------
+
+    // ROLLBACK: InitializeDashboardWebViewAsync removed along with the
+    // DashboardWebView control and the Microsoft.Web.WebView2 package.
+    // Kept stub-free (no method) since nothing calls it after we
+    // dropped the constructor invocation too.
+
+    // ROLLBACK: the entire Dashboard WebView ↔ C# bridge from Fase 5b
+    // is gone (the WebView itself, and the JS bridge). What's below is
+    // a stub that keeps the rest of this file compiling if anything
+    // still references these names — but nothing should.
+#if FALSE
+    private void OnDashboardWebMessage(object? sender, object e)
+    {
+        string json;
+        try { json = e.WebMessageAsJson; }
+        catch { return; }
+
+        Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("action", out var actionProp)) return;
+                var action = actionProp.GetString() ?? "";
+
+                switch (action)
+                {
+                    case "ready":
+                        // JS finished loading and is ready to receive
+                        // the initial mod list + active mod snapshot.
+                        PushModListToWebView();
+                        PushActiveModToWebView();
+                        PushPrimaryActionToWebView();
+                        PushProgressIdleToWebView();
+                        PushActiveTabToWebView();
+                        break;
+
+                    case "nav":
+                        var tab = root.TryGetProperty("tab", out var t) ? t.GetString() : null;
+                        HandleNavFromWeb(tab);
+                        break;
+
+                    case "play":
+                        // Forward to the existing primary-action click flow.
+                        InvokeButtonClick(ActionPanelControl?.PlayButton);
+                        break;
+
+                    case "modSettings":
+                        // The hero gear opens the same per-mod More menu.
+                        if (ActionPanelControl?.MoreButton?.ContextMenu is { } menu)
+                        {
+                            menu.PlacementTarget = ActionPanelControl.MoreButton;
+                            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                            menu.IsOpen = true;
+                        }
+                        break;
+
+                    case "selectMod":
+                        var modId = root.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
+                        if (!string.IsNullOrEmpty(modId))
+                        {
+                            var profile = ModRegistry.Find(modId);
+                            if (profile != null) LoadModProfile(profile);
+                        }
+                        break;
+
+                    default:
+                        DiagnosticLog.Write($"Dashboard bridge: unknown action '{action}'");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"OnDashboardWebMessage failed: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Sidebar nav from the web → swap the visible XAML overlay. The
+    /// WebView itself never hides (otherwise the web sidebar would
+    /// disappear with it), so the Dashboard tab simply means "no XAML
+    /// overlay shown".
+    /// </summary>
+    private void HandleNavFromWeb(string? tab)
+    {
+        switch (tab)
+        {
+            case "dashboard":
+                ModsBrowserView.Visibility = Visibility.Collapsed;
+                MultiplayerView.Visibility = Visibility.Collapsed;
+                SettingsView.Visibility = Visibility.Collapsed;
+                _activeTopTab = TopTab.Play;
+                break;
+            case "catalog":
+                ModsBrowserView.Visibility = Visibility.Visible;
+                MultiplayerView.Visibility = Visibility.Collapsed;
+                SettingsView.Visibility = Visibility.Collapsed;
+                _activeTopTab = TopTab.Mods;
+                break;
+            case "multiplayer":
+                ModsBrowserView.Visibility = Visibility.Collapsed;
+                MultiplayerView.Visibility = Visibility.Visible;
+                SettingsView.Visibility = Visibility.Collapsed;
+                _activeTopTab = TopTab.Multiplayer;
+                break;
+            case "settings":
+                ModsBrowserView.Visibility = Visibility.Collapsed;
+                MultiplayerView.Visibility = Visibility.Collapsed;
+                SettingsView.Visibility = Visibility.Visible;
+                _activeTopTab = TopTab.Settings;
+                break;
+            case "support":
+                OpenExternalUrl(string.IsNullOrEmpty(_config?.OfficialWebsite)
+                    ? "https://aoe3wol.com/"
+                    : _config.OfficialWebsite);
+                break;
+            case "wiki":
+                OpenExternalUrl("https://aoe3wol.com/");
+                break;
+        }
+        PushActiveTabToWebView();
+    }
+
+    /// <summary>
+    /// Send a JSON message to the Dashboard JS. No-op if the WebView
+    /// isn't ready yet — JS posts a "ready" message on load so we
+    /// know when it's safe to push state.
+    /// </summary>
+    private async void SendToDashboard(object payload)
+    {
+        try
+        {
+            if (DashboardWebView?.CoreWebView2 == null) return;
+            var json = System.Text.Json.JsonSerializer.Serialize(payload);
+            await DashboardWebView.CoreWebView2.ExecuteScriptAsync(
+                $"window.dispatchEvent(new MessageEvent('message', {{ data: {json} }}));");
+            // Why dispatchEvent instead of PostWebMessageAsJsonAsync?
+            // PostWebMessage routes to window.chrome.webview's listener
+            // which we already use for JS→C#. To go C#→JS we synthesise
+            // a native MessageEvent on `window` so the JS listener
+            // (window.chrome.webview.addEventListener) receives it the
+            // same way it receives postMessage data — symmetric API.
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"SendToDashboard failed: {ex.Message}");
+        }
+    }
+
+    private void PushModListToWebView()
+    {
+        var lang = (_config?.Language ?? "en").ToLowerInvariant();
+        var mods = ModRegistry.All.Select(p => new
+        {
+            id = p.Id,
+            title = p.DisplayName,
+            version = "",
+            img = "",   // Fase 5c: bridge mod banner image as a data: URI
+            desc = ResolveDescription(p, lang),
+            updating = false,
+            progress = 100,
+        }).ToList();
+        SendToDashboard(new { type = "modList", mods });
+    }
+
+    private void PushActiveModToWebView()
+    {
+        var p = _updateService?.Profile;
+        if (p == null) return;
+        var lang = (_config?.Language ?? "en").ToLowerInvariant();
+        SendToDashboard(new
+        {
+            type = "modChanged",
+            mod = new
+            {
+                id = p.Id,
+                title = p.DisplayName,
+                desc = ResolveDescription(p, lang),
+                img = "",   // populated in Fase 5c
+            },
+        });
+    }
+
+    private void PushPrimaryActionToWebView()
+    {
+        var text = ActionPanelControl?.PlayButtonText?.Text ?? "PLAY";
+        var enabled = ActionPanelControl?.PlayButton?.IsEnabled ?? true;
+        SendToDashboard(new { type = "primaryAction", text, enabled });
+    }
+
+    private void PushProgressIdleToWebView()
+    {
+        SendToDashboard(new
+        {
+            type = "progress",
+            state = "idle",
+            pct = 0,
+            speed = (string?)null,
+            eta = (string?)null,
+            title = (string?)null,
+            subtitle = (string?)null,
+        });
+    }
+
+    private void PushActiveTabToWebView()
+    {
+        var tab = _activeTopTab switch
+        {
+            TopTab.Mods => "catalog",
+            TopTab.Multiplayer => "multiplayer",
+            TopTab.Settings => "settings",
+            _ => "dashboard",
+        };
+        SendToDashboard(new { type = "activeTab", tab });
+    }
+
+    private static string ResolveDescription(ModProfile p, string lang)
+    {
+        if (p.Description != null)
+        {
+            if (p.Description.TryGetValue(lang, out var d) && !string.IsNullOrWhiteSpace(d)) return d;
+            if (p.Description.TryGetValue("en", out var de) && !string.IsNullOrWhiteSpace(de)) return de;
+        }
+        return p.Subtitle ?? string.Empty;
+    }
+#endif // ROLLBACK: closes the #if FALSE wrap that hides all Fase 5b bridge code above
+
+    // REDESIGN-2: Sidebar (Support/Wiki) + Dashboard (PLAY/Settings/Change
+    // Mod) handlers that drive the cinema view in PlayView. They forward
+    // to the legacy ActionPanelControl / open external links / show a mod
+    // picker popup. Earlier the block was wrapped in #if FALSE during the
+    // rollback because the visible controls had been removed; the
+    // redesign 2 XAML re-introduces matching x:Names so these are live
+    // again.
+
+    /// <summary>
+    /// Hero PLAY button — synthesises a click on the (now-hidden)
+    /// ActionPanelControl.PlayButton so the existing "play vs install vs
+    /// update vs stop" state machine inside ActionPanel keeps owning
+    /// the decision.
+    /// </summary>
+    private void DashboardPlayButton_Click(object sender, RoutedEventArgs e)
+    {
+        InvokeButtonClick(ActionPanelControl?.PlayButton);
+    }
+
+    /// <summary>
+    /// Cinema-dashboard PAUSE button → forwards the click to the
+    /// legacy <c>ProgressPanelControl.PauseButton</c>. That button's
+    /// existing handler owns the pause/resume toggle for the active
+    /// download. The legacy button is hidden inside LegacyPlayContent
+    /// but its click logic still runs because handlers are attached
+    /// at MainWindow ctor time, not at first display.
+    /// </summary>
+    private void DashboardPauseButton_Click(object sender, RoutedEventArgs e)
+    {
+        InvokeButtonClick(ProgressPanelControl?.PauseButton);
+        // Repaint the icon immediately — the next 200ms pump tick
+        // would also sync it, but doing it here avoids the lag.
+        SyncDashboardProgressFromLegacyPanel();
+    }
+
+    /// <summary>
+    /// Cinema-dashboard CANCEL button → forwards the click to the
+    /// legacy <c>ProgressPanelControl.CancelButton</c>. Cancellation
+    /// then flows through CancelButton_Click → operation cancellation
+    /// token → ProgressState transitions back to Idle → the pump
+    /// hides the action buttons on its next tick.
+    /// </summary>
+    private void DashboardCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        InvokeButtonClick(ProgressPanelControl?.CancelButton);
+    }
+
+    /// <summary>
+    /// Hero gear button → opens the per-mod settings popup. Used to
+    /// surface the legacy <c>ActionPanelControl.MoreButton.ContextMenu</c>
+    /// directly, but that menu's WPF-default look (rainbow icons,
+    /// cramped padding, light-grey hover) clashed with the rest of
+    /// the dorado-imperial chrome. The new popup mirrors the MODS
+    /// popup styling (BgSidebar surface, BorderSecondary outline,
+    /// gold accents, 12% dorado hover) and uses a flat list with
+    /// sub-views for Paths / User data / Language so the top level
+    /// stays compact. Each leaf forwards its click to the
+    /// corresponding MenuItem so the existing handlers — and all
+    /// the dialog wiring they own — keep working untouched.
+    /// </summary>
+    private void DashboardSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Per user-redesign: gear opens the ModPropertiesDialog
+        // directly. The previous SETTINGS popup (flat list of
+        // maintenance/config actions) was folded into the dialog's
+        // tabs (GENERAL / LOCAL FILES / USER DATA / LANGUAGE), so
+        // the gear has a single destination for everything per-mod.
+        OpenModPropertiesDialog(_updateService.Profile);
+    }
+
+    /// <summary>
+    /// Brand-strip menu (the "AOE3 LAUNCHER" wordmark in the top-
+    /// left of the sidebar acts as a Steam-style dropdown). Opens
+    /// a popup with launcher-wide actions: Launcher settings,
+    /// About, Exit. Per-mod settings live in the dashboard gear
+    /// button, NOT here — the brand menu is launcher-level only.
+    /// </summary>
+    private void BrandMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        var btn = (System.Windows.Controls.Button)sender;
+        var popup = BuildBrandPopup(btn);
+        popup.IsOpen = true;
+    }
+
+    private System.Windows.Controls.Primitives.Popup BuildBrandPopup(System.Windows.Controls.Button anchor)
+    {
+        var popup = new System.Windows.Controls.Primitives.Popup
+        {
+            PlacementTarget = anchor,
+            // Opens BELOW the wordmark — drops down into the
+            // BgBase content area where the popup's BgPanelAlt
+            // surface + gold border contrast cleanly. With the
+            // sidebar gone (Steam-style horizontal nav), the
+            // popup no longer needs the 12px horizontal offset
+            // that used to push it out of the sidebar; the
+            // wordmark is already at the top-left of the nav row.
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            HorizontalOffset = 0,
+            VerticalOffset = 4,
+            StaysOpen = false,
+            AllowsTransparency = true,
+            PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
+        };
+
+        // BgPanelAlt (darker than BgSidebar) so the popup pops
+        // against the sidebar's lighter slate background. Brighter
+        // gold border + heavier drop shadow makes the popup feel
+        // like a clearly separated panel hovering above the chrome.
+        var border = new System.Windows.Controls.Border
+        {
+            Background = (System.Windows.Media.Brush)FindResource("BgPanelAlt"),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10),
+            MinWidth = 260,
+            MaxWidth = 360,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 28,
+                ShadowDepth = 6,
+                Color = System.Windows.Media.Colors.Black,
+                Opacity = 0.75,
+            },
+        };
+
+        var content = new System.Windows.Controls.StackPanel();
+        border.Child = content;
+        ApplyAntiBlur(border);
+        popup.Child = border;
+
+        // Header — same dorado caption treatment as the other
+        // popups (SETTINGS / MODS).
+        content.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = Strings.Get("BrandMenuTitle"),
+            FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            Margin = new Thickness(8, 4, 8, 8),
+        });
+
+        // Launcher settings — opens the existing LauncherSettingsDialog.
+        // Reuses the LauncherSettingsButton_Click handler so the
+        // dialog wiring (refresh-on-close, etc.) stays in one place.
+        content.Children.Add(BuildSettingsRow(
+            glyph: "",   // Settings (gear)
+            label: Strings.Get("BrandMenuLauncherSettings"),
+            subtitle: Strings.Get("BrandMenuLauncherSettingsSubtitle"),
+            click: () =>
+            {
+                popup.IsOpen = false;
+                LauncherSettingsButton_Click(this, new RoutedEventArgs());
+            }));
+
+        // About — small info MessageBox with version + credits.
+        content.Children.Add(BuildSettingsRow(
+            glyph: "",   // Info
+            label: Strings.Get("BrandMenuAbout"),
+            subtitle: Strings.Get("BrandMenuAboutSubtitle"),
+            click: () =>
+            {
+                popup.IsOpen = false;
+                ShowAboutDialog();
+            }));
+
+        content.Children.Add(BuildSettingsDivider());
+
+        // Exit — closes the launcher entirely.
+        content.Children.Add(BuildSettingsRow(
+            glyph: "",   // ChromeClose / Sign-out
+            label: Strings.Get("BrandMenuExit"),
+            subtitle: Strings.Get("BrandMenuExitSubtitle"),
+            click: () =>
+            {
+                popup.IsOpen = false;
+                System.Windows.Application.Current.Shutdown();
+            }));
+
+        return popup;
+    }
+
+    /// <summary>
+    /// Tiny "About" MessageBox — version string + credits. Used by
+    /// the brand menu's About entry. Could grow into a real dialog
+    /// with a links / system-info panel later; MessageBox is fine
+    /// for the first cut.
+    /// </summary>
+    private void ShowAboutDialog()
+    {
+        var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "?";
+        var body = Strings.Format("AboutDialogBody", version);
+        MessageBox.Show(this, body, Strings.Get("AboutDialogTitle"),
+            MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    // -- Custom title bar handlers ------------------------------------------
+    //
+    // WindowStyle=None removed the Windows-default chrome (the white
+    // strip with min/max/close). We replaced it with a custom 32px
+    // title bar in BgSidebar so the whole window reads as one
+    // cohesive dark surface. WindowChrome (set in XAML) keeps Aero
+    // snap, double-click-to-maximize, drag-to-snap, etc. — but the
+    // min/max/close buttons are ours and have to wire WindowState.
+
+    private void TitleBarMinimizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void TitleBarMaximizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+    }
+
+    private void TitleBarCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    /// <summary>
+    /// Flip the maximize-button glyph between "Maximize" (square)
+    /// and "Restore" (overlapping squares) when the window state
+    /// changes. Hooked once in the constructor — see StateChanged
+    /// subscription. Glyph codepoints:
+    ///    = ChromeMaximize
+    ///    = ChromeRestore
+    /// </summary>
+    private void SyncMaximizeGlyph()
+    {
+        if (TitleBarMaximizeGlyph == null) return;
+        TitleBarMaximizeGlyph.Text = WindowState == WindowState.Maximized
+            ? ""
+            : "";
+    }
+
+
+    // -- Maximize-bounds fix (WM_GETMINMAXINFO) -----------------------------
+    //
+    // WPF + WindowStyle=None + WindowChrome has a long-standing bug: when
+    // the window maximizes, Windows asks it how big it wants to be via
+    // WM_GETMINMAXINFO. The default reply is "the whole monitor" which
+    // means the maximized window COVERS the taskbar (and any other
+    // appbars docked to screen edges). Native WindowStyle windows get
+    // this for free because Windows clips them to the work area; styled
+    // chrome windows have to do it themselves.
+    //
+    // Fix: hook the window's wndproc, intercept WM_GETMINMAXINFO,
+    // and write back the MONITORINFO.rcWork rect — which is the
+    // monitor's drawable area minus the taskbar and any docked
+    // appbars. The launcher then maximizes correctly: full width,
+    // full height ABOVE the taskbar.
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct RECT { public int Left, Top, Right, Bottom; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+    private const int WM_GETMINMAXINFO = 0x0024;
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        var source = System.Windows.Interop.HwndSource.FromHwnd(hwnd);
+        source?.AddHook(WndProc);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_GETMINMAXINFO)
+        {
+            try
+            {
+                var mmi = System.Runtime.InteropServices.Marshal.PtrToStructure<MINMAXINFO>(lParam);
+                var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                if (monitor != IntPtr.Zero)
+                {
+                    var info = new MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>() };
+                    if (GetMonitorInfo(monitor, ref info))
+                    {
+                        // Position the maximized window at the work
+                        // area's top-left (relative to the monitor's
+                        // own origin) and size it to the work area's
+                        // dimensions — i.e. monitor minus taskbar /
+                        // docked appbars.
+                        mmi.ptMaxPosition.X = info.rcWork.Left - info.rcMonitor.Left;
+                        mmi.ptMaxPosition.Y = info.rcWork.Top - info.rcMonitor.Top;
+                        mmi.ptMaxSize.X = info.rcWork.Right - info.rcWork.Left;
+                        mmi.ptMaxSize.Y = info.rcWork.Bottom - info.rcWork.Top;
+                        mmi.ptMaxTrackSize.X = mmi.ptMaxSize.X;
+                        mmi.ptMaxTrackSize.Y = mmi.ptMaxSize.Y;
+                        System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, lParam, true);
+                        handled = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"WM_GETMINMAXINFO hook failed: {ex.Message}");
+            }
+        }
+        return IntPtr.Zero;
+    }
+
+    // -- Popup row primitive builders ---------------------------------------
+    //
+    // Shared by the brand popup in the title bar (BuildBrandPopup).
+    // Originally built for the per-mod SETTINGS popup that lived behind
+    // the gear button — that popup was folded into ModPropertiesDialog,
+    // but the row + divider widgets still earn their keep elsewhere.
+
+    /// <summary>Thin horizontal divider between popup sections.</summary>
+    private FrameworkElement BuildSettingsDivider() => new System.Windows.Controls.Border
+    {
+        Height = 1,
+        Background = (System.Windows.Media.Brush)FindResource("BorderSecondary"),
+        Margin = new Thickness(8, 6, 8, 6),
+        Opacity = 0.6,
+    };
+
+    /// <summary>
+    /// One leaf / sub-view-opener row in a popup menu. Visual language
+    /// mirrors the MODS popup: icon column, label, optional chevron,
+    /// hover flips to the 12% dorado tint + gold text/icon.
+    /// <paramref name="subtitle"/> renders as a small cool-grey
+    /// second line under the main label — gives each row a
+    /// "what does this do?" hint so the popup doesn't feel like a
+    /// bare list of one-word commands.
+    /// </summary>
+    private FrameworkElement BuildSettingsRow(string glyph, string label,
+                                              Action click,
+                                              string? subtitle = null,
+                                              bool hasChevron = false,
+                                              bool destructive = false,
+                                              bool enabled = true,
+                                              bool activeAccent = false)
+    {
+        var iconBrush = destructive
+            ? (System.Windows.Media.Brush)FindResource("ErrorBrush")
+            : (activeAccent
+                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"));
+        var labelBrush = destructive
+            ? (System.Windows.Media.Brush)FindResource("ErrorBrush")
+            : (activeAccent
+                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                : (System.Windows.Media.Brush)FindResource("SecondaryFixed"));
+
+        var row = new System.Windows.Controls.Grid();
+        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
+        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
+
+        var icon = new System.Windows.Controls.TextBlock
+        {
+            Text = glyph,
+            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+            FontSize = 13,
+            Width = 22,
+            Margin = new Thickness(2, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground = iconBrush,
+        };
+        System.Windows.Controls.Grid.SetColumn(icon, 0);
+        row.Children.Add(icon);
+
+        // Label + optional subtitle stacked vertically. The
+        // StackPanel sits in the * column so it gets the
+        // auto-width residue after icon + chevron are measured.
+        var labelStack = new System.Windows.Controls.StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        labelStack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = label ?? "",
+            FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
+            FontSize = 13,
+            FontWeight = activeAccent ? FontWeights.Bold : FontWeights.Medium,
+            Foreground = labelBrush,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        if (!string.IsNullOrEmpty(subtitle))
+        {
+            labelStack.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = subtitle,
+                FontSize = 10,
+                FontWeight = FontWeights.Normal,
+                // Slightly dimmed cool tone — present but recedes
+                // behind the main label.
+                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                Opacity = 0.85,
+                Margin = new Thickness(0, 1, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+        }
+        System.Windows.Controls.Grid.SetColumn(labelStack, 1);
+        row.Children.Add(labelStack);
+
+        if (hasChevron)
+        {
+            var chevron = new System.Windows.Controls.TextBlock
+            {
+                Text = "",   // ChevronRight
+                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                FontSize = 11,
+                Margin = new Thickness(8, 0, 2, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+            };
+            System.Windows.Controls.Grid.SetColumn(chevron, 2);
+            row.Children.Add(chevron);
+        }
+
+        // SidebarSecondaryButton already provides the BgNeutral hover
+        // we don't want here, so build the row as a plain Button with
+        // a Tag-driven hover handled in code (saves cloning the whole
+        // style just to flip the hover brush). Active rows skip the
+        // dorado hover so they don't double-emphasise.
+        var btn = new System.Windows.Controls.Button
+        {
+            Content = row,
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(10, 9, 10, 9),
+            Margin = new Thickness(0, 1, 0, 1),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Cursor = enabled ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
+            IsEnabled = enabled,
+            // Custom one-shot template so the row reads as a flat
+            // pill with a hover background — WPF's default Button
+            // template paints a Windows-grey raised border which
+            // would clash with the popup chrome.
+            Template = BuildSettingsRowTemplate(destructive),
+            Opacity = enabled ? 1.0 : 0.5,
+        };
+        btn.Click += (_, _) => click();
+        return btn;
+    }
+
+    /// <summary>
+    /// Helper to resolve a SolidColorBrush resource to a hex string
+    /// usable inside a XAML template literal. The settings popup
+    /// builds its row template from a string (XamlReader.Parse), so
+    /// we can't bind `{DynamicResource}` directly — instead we bake
+    /// the *current* token value into the string at construction
+    /// time. The popup is rebuilt every time it opens, so a theme
+    /// swap would still propagate to the next open.
+    ///
+    /// <paramref name="alpha"/> overrides the brush's own alpha when
+    /// you want a different opacity (e.g. derive a 20% danger tint
+    /// from a 100% DangerAlert brush). Pass null to use the brush's
+    /// own alpha.
+    /// </summary>
+    private string HexFromBrush(string resourceKey, byte? alpha = null)
+    {
+        try
+        {
+            if (FindResource(resourceKey) is System.Windows.Media.SolidColorBrush b)
+            {
+                var c = b.Color;
+                byte a = alpha ?? c.A;
+                return $"#{a:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"HexFromBrush({resourceKey}) failed: {ex.Message}");
+        }
+        // Defensive fallback — matches the historical hardcoded
+        // tint so the popup stays legible if resource lookup fails.
+        return "#1FD8B66A";
+    }
+
+    /// <summary>
+    /// One-shot ControlTemplate for settings-row buttons. Transparent
+    /// at rest, dorado 12% tint on hover (or destructive-red tint
+    /// for the Uninstall row). 6px corner radius matches the
+    /// MODS-popup row treatment exactly.
+    /// </summary>
+    private System.Windows.Controls.ControlTemplate BuildSettingsRowTemplate(bool destructive)
+    {
+        // Hover tint pulled from the centralized interaction tokens
+        // (TintGoldHover / a low-alpha derivative of DangerAlert) so a
+        // future palette swap in Colors.xaml propagates here too. We
+        // resolve to a hex string because this template is built from
+        // a XAML string literal — `{DynamicResource}` inside a parsed
+        // template string is brittle, but baking the *current* colour
+        // value at construction is fine since these popups are rebuilt
+        // every time they open. The dim red for destructive uses
+        // DangerAlert at 20% alpha so the row tints toward "danger"
+        // without flooding the popup.
+        var hoverHex = destructive
+            ? HexFromBrush("DangerAlert", alpha: 0x33)
+            : HexFromBrush("TintGoldHover");
+
+        var xaml = @"
+<ControlTemplate TargetType='Button'
+                 xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+                 xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>
+    <Border x:Name='border'
+            Background='{TemplateBinding Background}'
+            CornerRadius='6'
+            Padding='{TemplateBinding Padding}'>
+        <ContentPresenter HorizontalAlignment='Stretch'
+                          VerticalAlignment='Center'/>
+    </Border>
+    <ControlTemplate.Triggers>
+        <Trigger Property='IsMouseOver' Value='True'>
+            <Setter TargetName='border' Property='Background' Value='" + hoverHex + @"'/>
+        </Trigger>
+    </ControlTemplate.Triggers>
+</ControlTemplate>";
+
+        return (System.Windows.Controls.ControlTemplate)System.Windows.Markup.XamlReader.Parse(xaml);
+    }
+
+    /// <summary>
+    /// Forwards a click to a legacy WPF MenuItem. Used by the new
+    /// settings popup so each row delegates to the existing handler
+    /// (paths picker / user-data dialog / language switch / etc.)
+    /// rather than re-implementing the action.
+    /// </summary>
+    private static void RaiseMenuClick(System.Windows.Controls.MenuItem? item)
+    {
+        if (item == null) return;
+        item.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent, item));
+    }
+
+    /// <summary>
+    /// Pixel-snapped crisp text rendering for popup surfaces. WPF
+    /// popups live in their own HwndSource separate from the main
+    /// Window, so the TextOptions set on the Window root don't
+    /// propagate into them — every popup looks fuzzy out of the box.
+    /// Call this on each popup's root <see cref="UIElement"/> (Border,
+    /// Window, etc.) right after construction to force Display mode
+    /// + ClearType + Fixed hinting → glyphs align to pixel and look
+    /// crisp at the small popup font sizes (10–13pt).
+    /// </summary>
+    private static void ApplyAntiBlur(System.Windows.UIElement element)
+    {
+        if (element == null) return;
+        System.Windows.Media.TextOptions.SetTextFormattingMode(
+            element, System.Windows.Media.TextFormattingMode.Display);
+        System.Windows.Media.TextOptions.SetTextRenderingMode(
+            element, System.Windows.Media.TextRenderingMode.ClearType);
+        System.Windows.Media.TextOptions.SetTextHintingMode(
+            element, System.Windows.Media.TextHintingMode.Fixed);
+    }
+
+    /// <summary>
+    /// Hero CHANGE MOD button → opens a popup listing only the mods
+    /// the user has installed (active mod always shown, even when
+    /// missing on disk, so the picker never looks empty). Discovering
+    /// or installing new mods is a Catalog flow, not a Dashboard one
+    /// — Change Mod is purely "switch between things I can actually
+    /// play right now".
+    ///
+    /// Placement is Top: the popup expands UPWARD from the button so
+    /// it doesn't shoot off the bottom of the window. Centred
+    /// horizontally over the button so it reads as anchored to the
+    /// click target instead of floating off to one side.
+    /// </summary>
+    private void DashboardChangeModButton_Click(object sender, RoutedEventArgs e)
+    {
+        var btn = (System.Windows.Controls.Button)sender;
+
+        var popup = new System.Windows.Controls.Primitives.Popup
+        {
+            PlacementTarget = btn,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Top,
+            // Best-guess initial offset based on MinWidth — recomputed
+            // in the Opened handler below once the popup measures its
+            // actual width from its contents.
+            HorizontalOffset = (btn.ActualWidth - 240) / 2.0,
+            // Small breathing-room gap between popup and button.
+            VerticalOffset = -6,
+            StaysOpen = false,
+            AllowsTransparency = true,
+            PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
+        };
+
+        var panel = new System.Windows.Controls.Border
+        {
+            Background = (System.Windows.Media.Brush)FindResource("BgSidebar"),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("BorderSecondary"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10),
+            // Auto-sized to its content — same guardrails as the
+            // SETTINGS popup so the two read as a matched pair.
+            MinWidth = 240,
+            MaxWidth = 360,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 20,
+                ShadowDepth = 4,
+                Color = System.Windows.Media.Colors.Black,
+                Opacity = 0.6,
+            },
+        };
+
+        // Auto-width centring — same trick as the Settings popup.
+        popup.Opened += (_, _) =>
+        {
+            if (popup.Child is FrameworkElement fe && fe.ActualWidth > 0)
+            {
+                popup.HorizontalOffset = (btn.ActualWidth - fe.ActualWidth) / 2.0;
+            }
+        };
+
+        var stack = new System.Windows.Controls.StackPanel();
+        panel.Child = stack;
+        ApplyAntiBlur(panel);
+        popup.Child = panel;
+
+        // Header: small dorado caption so the popup feels like a
+        // titled menu instead of a bare list.
+        stack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = Strings.Get("DashboardChangeMod"),
+            FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            Margin = new Thickness(8, 4, 8, 8),
+        });
+
+        // Filter to mods in the user's personal collection (added via
+        // the Workshop) plus all built-ins (always implicit). The
+        // active mod is always included as a safety net so the popup
+        // is never empty — covers the edge case where the user
+        // removed their last added mod while it was active.
+        //
+        // Ordering: favorites first (in the order they were starred),
+        // then the rest alphabetically by display name. Mirrors
+        // Steam's library where favorites pin to the top.
+        var activeId = _updateService?.Profile?.Id;
+        var collection = ModRegistry.All
+            .Where(p => _config.IsUserMod(p.Id)
+                        || string.Equals(p.Id, activeId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(p => _config.IsFavoriteMod(p.Id))
+            .ThenBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        if (collection.Count == 0)
+        {
+            stack.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = Strings.Get("ModSelectorNotInstalled"),
+                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                FontSize = 12,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(8, 8, 8, 12),
+            });
+        }
+
+        foreach (var p in collection)
+        {
+            var isActive = string.Equals(p.Id, activeId, StringComparison.OrdinalIgnoreCase);
+            var item = new System.Windows.Controls.Button
+            {
+                Style = (Style)FindResource("SidebarSecondaryButton"),
+                Margin = new Thickness(0, 2, 0, 2),
+                Padding = new Thickness(12, 10, 12, 10),
+                // 12% dorado tint on the active row — pulls from the
+                // centralized TintGoldHover token so a palette swap in
+                // Colors.xaml automatically retints this row instead of
+                // leaving an orphan literal.
+                Background = isActive
+                    ? (System.Windows.Media.Brush)FindResource("TintGoldHover")
+                    : System.Windows.Media.Brushes.Transparent,
+                Content = new System.Windows.Controls.StackPanel
+                {
+                    Orientation = System.Windows.Controls.Orientation.Horizontal,
+                    Children =
+                    {
+                        new System.Windows.Controls.TextBlock
+                        {
+                            Text = isActive ? "" : "",   // CheckMark when active, GridView otherwise
+                            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                            FontSize = 12,
+                            Width = 18,
+                            Margin = new Thickness(0, 0, 10, 0),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Foreground = isActive
+                                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                        },
+                        // Label + subtitle stacked vertically so each
+                        // mod entry shows its display name plus the
+                        // short Subtitle from ModProfile ("Launcher",
+                        // "Asian Dynasties overhaul", etc.). Matches
+                        // the per-row "what is this?" affordance of
+                        // the SETTINGS popup so the two read as a
+                        // pair stylistically.
+                        new System.Windows.Controls.StackPanel
+                        {
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Children =
+                            {
+                                new System.Windows.Controls.TextBlock
+                                {
+                                    Text = p.DisplayName,
+                                    FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
+                                    FontSize = 13,
+                                    FontWeight = isActive ? FontWeights.Bold : FontWeights.Medium,
+                                    // Active row reads dorado; inactive
+                                    // rows use the cool secondary so
+                                    // the gold/cool tonal contrast
+                                    // matches the main UI.
+                                    Foreground = isActive
+                                        ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                                        : (System.Windows.Media.Brush)FindResource("SecondaryFixed"),
+                                    TextTrimming = TextTrimming.CharacterEllipsis,
+                                },
+                                new System.Windows.Controls.TextBlock
+                                {
+                                    Text = p.Subtitle ?? "",
+                                    FontSize = 10,
+                                    FontWeight = FontWeights.Normal,
+                                    Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                                    Opacity = 0.85,
+                                    Margin = new Thickness(0, 1, 0, 0),
+                                    TextTrimming = TextTrimming.CharacterEllipsis,
+                                    Visibility = string.IsNullOrWhiteSpace(p.Subtitle)
+                                        ? Visibility.Collapsed
+                                        : Visibility.Visible,
+                                },
+                            },
+                        },
+                        // Favorite star — small dorado pin to the
+                        // right of the label when the user has
+                        // starred this mod via the right-click
+                        // context menu. Collapsed (no horizontal
+                        // gap consumed) when not favourited.
+                        new System.Windows.Controls.TextBlock
+                        {
+                            Text = "",
+                            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                            FontSize = 12,
+                            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+                            Margin = new Thickness(8, 0, 2, 0),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Visibility = _config.IsFavoriteMod(p.Id)
+                                ? System.Windows.Visibility.Visible
+                                : System.Windows.Visibility.Collapsed,
+                        },
+                    },
+                },
+            };
+            var profile = p;
+            item.Click += (_, _) =>
+            {
+                popup.IsOpen = false;
+                if (!string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase))
+                    LoadModProfile(profile);
+            };
+            // (Steam-style right-click context menu removed — per
+            // user request the MODS popup is now a pure "switch
+            // active mod" list with nothing else. Per-mod admin
+            // actions live in the gear button's Administrar
+            // submenu / Properties dialog instead.)
+            stack.Children.Add(item);
+        }
+
+        popup.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Synchronous "is this mod installed right now?" probe used by
+    /// the Change Mod popup to filter the registry. Mirrors the
+    /// resolution order in <see cref="ProbeInstalledState"/> but
+    /// returns a bool so callers don't have to compare against a
+    /// localized status string. Never throws — a flaky filesystem
+    /// just returns false.
+    /// </summary>
+    private bool IsModInstalled(ModProfile profile)
+    {
+        try
+        {
+            // Active profile fast-path: UpdateService already cached
+            // the install path during construction, no I/O needed.
+            if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(_updateService.InstallPath))
+                return true;
+
+            // Saved per-mod state from a previous session, validated
+            // through SavedPathLooksValid so stale pointers at e.g.
+            // the vanilla AoE3 folder don't pass a bare Directory.Exists.
+            var saved = _config.GetState(profile.Id).InstallPath;
+            if (!string.IsNullOrEmpty(saved)
+                && Directory.Exists(saved)
+                && SavedPathLooksValid(saved, profile))
+                return true;
+
+            // Last resort: probe the obvious install locations on
+            // disk (same as ProbeInstalledState does for non-active
+            // profiles without saved state).
+            var probe = ResolveProbedInstallPath(profile);
+            return !string.IsNullOrEmpty(probe);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Tiny helper: synthesise a Button.Click without relying on the
+    /// button being attached to the visual tree of the current logical
+    /// focus. RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent))
+    /// runs whatever handlers were wired up at construction time (which
+    /// is what we want here — every ActionPanel button has its handler
+    /// attached during MainWindow's ctor).
+    /// </summary>
+    private static void InvokeButtonClick(System.Windows.Controls.Button? btn)
+    {
+        if (btn == null) return;
+        btn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, btn));
+    }
+
+    /// <summary>
+    /// Sidebar footer link → opens the official AoE3 WoL site (where the
+    /// community Discord invite + contact info live) in the user's
+    /// default browser. Doesn't switch the launcher's active tab.
+    /// </summary>
+    private void SidebarSupportButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenExternalUrl(string.IsNullOrEmpty(_config?.OfficialWebsite)
+            ? "https://aoe3wol.com/"
+            : _config.OfficialWebsite);
+    }
+
+    /// <summary>
+    /// Sidebar footer link → opens the community wiki in the user's
+    /// default browser. Hardcoded for now; promote to LauncherConfig
+    /// if a different mod team wants their own wiki URL.
+    /// </summary>
+    private void SidebarWikiButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenExternalUrl("https://aoe3wol.com/");
+    }
+
+    /// <summary>
+    /// Shell out to the OS default browser. Best-effort: a logged
+    /// failure beats a crash if the user's system has no default
+    /// browser registered (rare on Windows but possible on stripped
+    /// down installs).
+    /// </summary>
+    private static void OpenExternalUrl(string url)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"OpenExternalUrl({url}) failed: {ex.Message}");
+        }
+    }
+    // (end of REDESIGN-2 sidebar + dashboard handlers)
 
     /// <summary>
     /// "Open settings" button inside the Settings top-tab. Routes through
@@ -3464,6 +5016,89 @@ public partial class MainWindow : Window
         // so the row is already visible by the time we get here — undoing
         // it now would hide Pause/Cancel for the whole run. End states
         // (Completed/Error/Cancelled) hide the row in their own setters.
+
+        // Color-code the cinema dashboard progress strip per operation
+        // (install=blue, update=gold, repair=amber, verify=lilac,
+        // uninstall=red) so the user can read the operation type at
+        // a glance from the bar gradient + icon colour.
+        SetDashboardProgressTone(op);
+
+        // Start the polling pump that mirrors the legacy panel into the
+        // visible cinema-dashboard progress strip. The pump auto-stops
+        // itself when the panel goes back to Idle.
+        StartDashboardProgressPump();
+    }
+
+    /// <summary>
+    /// Paints the cinema-dashboard progress bar + icon in the colour
+    /// associated with a given operation. The bar gradient lives on
+    /// ProgressBar.Foreground (the template binds PART_Indicator's
+    /// Background to it), so swapping Foreground is the only thing
+    /// needed to retint the indicator. Icon foreground + glyph follow
+    /// the same operation so the eye reads "this is what's running"
+    /// from both signals at once.
+    /// </summary>
+    private void SetDashboardProgressTone(ProgressOperation op)
+    {
+        if (DashboardProgressBar == null) return;
+
+        var (gradientKey, toneKey, glyph) = op switch
+        {
+            ProgressOperation.Install   => ("ProgressGradientInstall",   "ToneInstall",   ""), // Download
+            ProgressOperation.Update    => ("ProgressGradientUpdate",    "ToneUpdate",    ""), // Sync
+            ProgressOperation.Repair    => ("ProgressGradientRepair",    "ToneRepair",    ""), // Repair
+            ProgressOperation.Verify    => ("ProgressGradientVerify",    "ToneVerify",    ""), // CheckMark
+            ProgressOperation.Uninstall => ("ProgressGradientUninstall", "ToneUninstall", ""), // Delete
+            _                           => ("ProgressGradientUpdate",    "ToneUpdate",    ""),
+        };
+
+        try
+        {
+            DashboardProgressBar.Foreground = (System.Windows.Media.Brush)FindResource(gradientKey);
+            var tone = (System.Windows.Media.Brush)FindResource(toneKey);
+            if (DashboardProgressIcon != null)
+            {
+                DashboardProgressIcon.Text = glyph;
+                DashboardProgressIcon.Foreground = tone;
+            }
+            if (DashboardProgressLabel != null) DashboardProgressLabel.Foreground = tone;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"SetDashboardProgressTone({op}) failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 200ms DispatcherTimer that copies legacy ProgressPanelControl state
+    /// into the visible cinema dashboard while an operation is running.
+    /// Polling beats threading a SyncDashboardProgress() call into every
+    /// one of the ~20 progress-update sites scattered across the file
+    /// (installs, downloads, extractions, uninstalls, repairs). The pump
+    /// is cheap (text + value writes) and stops itself when ProgressState
+    /// goes back to Idle, so it has zero cost outside of active ops.
+    /// </summary>
+    private System.Windows.Threading.DispatcherTimer? _dashboardProgressPump;
+    private void StartDashboardProgressPump()
+    {
+        _dashboardProgressPump?.Stop();
+        _dashboardProgressPump = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(200),
+        };
+        _dashboardProgressPump.Tick += (_, _) =>
+        {
+            SyncDashboardProgressFromLegacyPanel();
+            if (_progressState == ProgressState.Idle)
+            {
+                _dashboardProgressPump?.Stop();
+                _dashboardProgressPump = null;
+            }
+        };
+        _dashboardProgressPump.Start();
+        // Mirror immediately so the user doesn't see a 200ms lag at the
+        // very start of an op.
+        SyncDashboardProgressFromLegacyPanel();
     }
 
     /// <summary>
@@ -4948,6 +6583,21 @@ public partial class MainWindow : Window
             case PrimaryAction.Hidden:
                 ActionPanelControl.PlayButton.Visibility = Visibility.Collapsed;
                 break;
+        }
+
+        // Mirror the primary action into the visible cinema dashboard
+        // PLAY button. The Dashboard button has its own gold-gradient
+        // style (SidebarPrimaryButton) so we don't repaint Background;
+        // only the label text + IsEnabled need to follow the legacy
+        // ActionPanel button's state. Visibility is locked Visible
+        // because the cinema layout treats PLAY as the permanent
+        // hero CTA — Hidden actions become Disabled instead so the
+        // button still anchors the layout.
+        if (DashboardPlayButton != null && DashboardPlayButtonText != null)
+        {
+            DashboardPlayButtonText.Text = ActionPanelControl.PlayButtonText.Text;
+            DashboardPlayButton.IsEnabled = action != PrimaryAction.Hidden
+                && ActionPanelControl.PlayButton.IsEnabled;
         }
     }
 

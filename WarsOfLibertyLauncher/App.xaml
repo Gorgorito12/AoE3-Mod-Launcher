@@ -10,6 +10,36 @@
                 <ResourceDictionary Source="/Styles/Buttons.xaml"/>
                 <ResourceDictionary Source="/Styles/Chrome.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- ============================================================
+                 Typography. Stitch's design uses EB Garamond (display
+                 serif) + Inter (humanist sans). We approximate with
+                 Windows-built-in fonts that ship on every install since
+                 Vista — no external assets, no .ttf to bundle. Both
+                 chains end in generic family names so a stripped-down
+                 Windows install still renders sanely.
+
+                 To upgrade to the real fonts later: drop
+                 EBGaramond-{Regular,SemiBold}.ttf + Inter-{Regular,
+                 Medium,SemiBold}.ttf into Assets/Fonts/, mark them as
+                 Resource in the .csproj, and prepend the pack URIs
+                 here (e.g. "pack://application:,,,/Assets/Fonts/
+                 #EB Garamond, Cambria, Georgia, serif").
+                 ============================================================ -->
+
+            <!-- Cinematic serif for headings, mod titles, the big PLAY
+                 button, top-level tab labels. Cambria is Microsoft's
+                 closest analogue to EB Garamond. Georgia as fallback
+                 (also Windows-built-in). NO CSS generic family names
+                 here — WPF FontFamily doesn't understand "serif" /
+                 "sans-serif" and throws at construction, which silently
+                 nukes the whole ResourceDictionary load. -->
+            <FontFamily x:Key="DisplayFont">Cambria, Georgia</FontFamily>
+
+            <!-- Body text — explicit Segoe UI (also the WPF default)
+                 with Tahoma as a paranoid fallback. Single knob to
+                 swap in real Inter later. -->
+            <FontFamily x:Key="BodyFont">Segoe UI, Tahoma</FontFamily>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -55,6 +55,18 @@ public class ModCatalogManifest
     public string? Banner { get; set; }
 
     /// <summary>
+    /// Filename of the dashboard hero image (the large background painted
+    /// behind the title + PLAY button). Same resolution scheme as
+    /// <see cref="Icon"/> / <see cref="Banner"/> — bare filename, the
+    /// launcher splices it onto the raw GitHub URL. Specs: 1920x1080
+    /// PNG/JPG, ≤ 2 MB. Important subject should sit in the right half
+    /// of the image because the left half is covered by the title and
+    /// the PLAY button.
+    /// </summary>
+    [JsonPropertyName("heroImage")]
+    public string? HeroImage { get; set; }
+
+    /// <summary>
     /// Per-language descriptions (keyed by ISO 639-1: "en", "es", …).
     /// The launcher picks the user's UI language with a fallback to "en".
     /// </summary>

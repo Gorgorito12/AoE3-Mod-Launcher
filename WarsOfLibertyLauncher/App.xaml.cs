@@ -1,27 +1,12 @@
-using System.Windows;
-using WarsOfLibertyLauncher.Models;
-using WarsOfLibertyLauncher.Services;
-
 namespace WarsOfLibertyLauncher;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
-    protected override void OnStartup(StartupEventArgs e)
-    {
-        // Apply the saved theme before MainWindow's XAML materializes so the
-        // first frame already paints in the right palette. DynamicResource
-        // consumers in the shared styles see the swapped Colors dictionary
-        // when their template setters evaluate.
-        try
-        {
-            var config = LauncherConfig.Load();
-            ThemeService.Apply(config.Theme);
-        }
-        catch
-        {
-            // Config read failed — leave the default dark theme in place.
-        }
-
-        base.OnStartup(e);
-    }
+    // App-level startup was previously used to apply the saved theme
+    // (dark/light/system) before MainWindow's XAML materialised. The
+    // theme picker is gone (see LauncherSettingsDialog.xaml) — the
+    // launcher is dorado-imperial dark-only — so there's nothing for
+    // OnStartup to do that base.OnStartup doesn't already handle.
+    // App.xaml's own ResourceDictionary (Styles/Colors.xaml) is the
+    // single source of truth for the palette.
 }

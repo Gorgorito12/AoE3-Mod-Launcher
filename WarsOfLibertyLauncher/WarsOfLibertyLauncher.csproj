@@ -148,11 +148,8 @@
     <SignTimestampServer>http://timestamp.digicert.com</SignTimestampServer>
   </PropertyGroup>
 
-  <Target Name="SignBuiltFiles"
-          AfterTargets="Build"
-          Condition="'$(OS)' == 'Windows_NT'">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $cert = Get-Item 'Cert:\CurrentUser\My\$(SignCertThumbprint)' -ErrorAction SilentlyContinue; if (-not $cert) { Write-Host 'Cert $(SignCertThumbprint) not found — skipping signing.'; exit 0 }; @('$(OutDir)$(AssemblyName).exe','$(OutDir)$(AssemblyName).dll') | Where-Object { Test-Path $_ } | ForEach-Object { Set-AuthenticodeSignature -FilePath $_ -Certificate $cert -TimestampServer '$(SignTimestampServer)' -HashAlgorithm SHA256 | Out-Null; Write-Host ('Signed: ' + $_) }; Get-ChildItem -Path '$(OutDir).' -Recurse -File | Unblock-File&quot;"
-          IgnoreExitCode="true" />
+  <Target Name="SignBuiltFiles" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $cert = Get-Item 'Cert:\CurrentUser\My\$(SignCertThumbprint)' -ErrorAction SilentlyContinue; if (-not $cert) { Write-Host 'Cert $(SignCertThumbprint) not found — skipping signing.'; exit 0 }; @('$(OutDir)$(AssemblyName).exe','$(OutDir)$(AssemblyName).dll') | Where-Object { Test-Path $_ } | ForEach-Object { Set-AuthenticodeSignature -FilePath $_ -Certificate $cert -TimestampServer '$(SignTimestampServer)' -HashAlgorithm SHA256 | Out-Null; Write-Host ('Signed: ' + $_) }; Get-ChildItem -Path '$(OutDir).' -Recurse -File | Unblock-File&quot;" IgnoreExitCode="true" />
   </Target>
 
   <!--
@@ -169,11 +166,8 @@
     signatures (ntop / OpenVPN respectively) so we don't re-sign them
     — only the launcher .exe itself needs Authenticode here.
   -->
-  <Target Name="SignPublishedFiles"
-          AfterTargets="Publish"
-          Condition="'$(OS)' == 'Windows_NT'">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $cert = Get-Item 'Cert:\CurrentUser\My\$(SignCertThumbprint)' -ErrorAction SilentlyContinue; if (-not $cert) { Write-Host 'Cert $(SignCertThumbprint) not found — skipping signing.'; exit 0 }; Get-ChildItem -Path '$(PublishDir).' -File | Where-Object { $_.Name -match '^Aoe3ModLauncher' -and $_.Extension -in '.exe','.dll' } | ForEach-Object { Set-AuthenticodeSignature -FilePath $_.FullName -Certificate $cert -TimestampServer '$(SignTimestampServer)' -HashAlgorithm SHA256 | Out-Null; Write-Host ('Signed publish output: ' + $_.FullName) }&quot;"
-          IgnoreExitCode="true" />
+  <Target Name="SignPublishedFiles" AfterTargets="Publish" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $cert = Get-Item 'Cert:\CurrentUser\My\$(SignCertThumbprint)' -ErrorAction SilentlyContinue; if (-not $cert) { Write-Host 'Cert $(SignCertThumbprint) not found — skipping signing.'; exit 0 }; Get-ChildItem -Path '$(PublishDir).' -File | Where-Object { $_.Name -match '^Aoe3ModLauncher' -and $_.Extension -in '.exe','.dll' } | ForEach-Object { Set-AuthenticodeSignature -FilePath $_.FullName -Certificate $cert -TimestampServer '$(SignTimestampServer)' -HashAlgorithm SHA256 | Out-Null; Write-Host ('Signed publish output: ' + $_.FullName) }&quot;" IgnoreExitCode="true" />
   </Target>
 
 </Project>

@@ -88,13 +88,13 @@ public partial class GitHubLoginDialog : Window
             // `interval` between attempts, so we just await it here.
             var done = await _session.CompleteSignInAsync(_start, _cts.Token);
             CompletedSession = done;
-            DialogResult = true;
+            TrySetDialogResult(true);
             Close();
         }
         catch (OperationCanceledException)
         {
             DiagnosticLog.Write("DiscordLoginDialog: cancelled by user");
-            DialogResult = false;
+            TrySetDialogResult(false);
             Close();
         }
         catch (LobbyApiException ex)
@@ -159,5 +159,30 @@ public partial class GitHubLoginDialog : Window
     {
         if (!_cts.IsCancellationRequested) _cts.Cancel();
         _cts.Dispose();
+    }
+
+    /// <summary>
+    /// Sets <see cref="Window.DialogResult"/> defensively. Used by
+    /// the async OnLoaded sign-in flow because there's a window
+    /// where the user can click <c>CancelButton</c> (which calls
+    /// <c>_cts.Cancel()</c> + <c>Close()</c>) BEFORE the
+    /// <see cref="OperationCanceledException"/> has propagated back
+    /// to the catch block — at that point the dialog has already
+    /// closed itself, so writing to DialogResult throws the WPF
+    /// "DialogResult can only be set after the window has been shown
+    /// as a dialog" exception and crashes the launcher. We swallow
+    /// that specific exception because the user-visible state
+    /// (dialog closed, no JWT delivered) is already correct;
+    /// <c>ShowDialog()</c> just returns null instead of false, and
+    /// the caller's <c>if (ok == true)</c> check handles that the
+    /// same way it would handle an explicit false.
+    /// </summary>
+    private void TrySetDialogResult(bool? value)
+    {
+        try { DialogResult = value; }
+        catch (InvalidOperationException)
+        {
+            // Dialog already closed — nothing more to do.
+        }
     }
 }
