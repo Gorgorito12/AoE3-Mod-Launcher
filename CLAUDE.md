@@ -58,19 +58,24 @@ longer exists — don't go looking for it.)
   `using` is `WarsOfLibertyLauncher` (`<RootNamespace>`). This mismatch is
   intentional — do not "fix" it by renaming namespaces.
 
-- **The README's multiplayer architecture is outdated/aspirational.** The README
-  describes P2P UDP hole-punching, STUN, and a WinDivert-backed virtual LAN.
-  **None of that code exists.** The real implementation pivoted to **Radmin VPN**
-  for game-traffic transport (`Services/RadminVpnService.cs`,
-  `RadminAssistantService.cs`). The launcher is only the *meta layer* — lobby,
-  chat, match history, ELO — talking to a backend Cloudflare Worker. The
-  authoritative description is the class doc-comment in
-  `Services/Multiplayer/MultiplayerSession.cs`. Comments scattered across the
-  code name several abandoned transports (`WinDivert`, `PeerMesh`, `n2n`,
-  `ZeroTier`) because the design churned repeatedly — they are all historical
-  ("Pre-n2n…", "legacy … is gone"), not live functionality. **Trust the code
-  over the README and over stale comments** for multiplayer; Radmin VPN is the
-  current answer.
+- **The README's multiplayer story is aspirational, and the original CLAUDE.md
+  wording was itself stale — here is the verified reality.** The README describes
+  P2P UDP hole-punching, STUN, and a WinDivert virtual LAN; **none of that code
+  exists** (no `PeerMesh`/`VirtualLanService`/`WinDivertNative`). Game traffic
+  rides **user-managed Radmin VPN** (its 26.0.0.0/8 LAN; AoE3's stock LAN
+  discovery finds peers). The launcher only *assists* with Radmin — detect /
+  install / launch its GUI and copy the network name to the clipboard for manual
+  paste; it **cannot join a network programmatically**
+  (`Services/RadminVpnService.cs`, `RadminAssistantService.cs`). The launcher is
+  the *meta layer* (sign-in, lobbies, chat, mod-hash gating) over a **self-hosted
+  Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
+  Worker. Sign-in is **Discord OAuth** (a state flow shaped like device flow),
+  **not** GitHub, yielding a JWT cached in `launcher-config.json`. Match-history/
+  ELO (`ReportMatchAsync`) and replay upload (`UploadAsync`) are scaffolded but
+  have **no live caller**. Authoritative source: the `MultiplayerSession.cs`
+  class doc-comment + `LobbyApiClient.cs`. Scattered `WinDivert` / `PeerMesh` /
+  `n2n` / `ZeroTier` mentions are historical comments. **Trust the code over both
+  the README and stale comments here.**
 
 - **Single-file publish deliberately omits `IncludeAllContentForSelfExtract`.**
   Several code paths assume `AppContext.BaseDirectory` is the `.exe`'s own
@@ -87,6 +92,24 @@ longer exists — don't go looking for it.)
   `.csproj`. Those dirs don't currently exist; the excludes are defensive guards
   against duplicate-attribute build errors if vendored native code is re-added.
 
+- **Two installer stacks coexist.** `NativeInstallService` is the live path
+  (download multi-part ZIP → clone → flatten → overlay). `InstallerService` +
+  `InstallProgressMonitor` are a legacy Inno-Setup flow (run a setup `.exe`
+  silently). Confirm which one the UI actually calls before editing either.
+
+- **`NativeInstallService.RemoveStaleBuildArtifacts` (WoL only) deletes shipped
+  payload files** (`.xml.xmb`, `.bak`, stray `.rar`, …) after install *and* every
+  update. It's a deliberate multiplayer LAN-hash-parity step, not cleanup — those
+  deletions are load-bearing.
+
+- **`LauncherConfig` is per-mod.** Real state lives in a `mods` dictionary of
+  `ModState` keyed by mod id and selected by `activeModId`; the flat
+  `modInstallPath` / `gameExecutable` / `activeTranslationId` fields are LEGACY,
+  migrated into `mods[...]` on `Load()` (which also rewrites a retired
+  `multiplayer.lobbyBaseUrl` and clears the session token). The README's flat
+  config example is out of date. `Save()` is non-atomic and runs from background
+  threads.
+
 ## Architecture
 
 WPF MVVM-lite single project. UI is thin; the **`Services/` layer is the
@@ -95,16 +118,16 @@ engine** and the UI binds to it.
 - **`MainWindow` + `Controls/`** — the shell and tabs (`MainTabs`, `StatusCard`,
   `ProgressPanel`, `ActionPanel`, `ModsBrowser`, `MultiplayerTab`, `HeroBanner`).
   Top-level `*Dialog.xaml` files are the modals (install, uninstall, self-update,
-  user-data backup/restore, translations, GitHub login, create-lobby, etc.).
+  user-data backup/restore, translations, Discord sign-in, create-lobby, etc.).
 - **`Models/`** — plain schema/DTO types: `LauncherConfig` (`launcher-config.json`,
   lives next to the `.exe`), `UpdateInfo` (`UpdateInfo.xml` schema),
-  `InstallManifest` (`<mod>-manifest.json`, drives uninstall), `ModProfile` /
+  `InstallManifest` (`install-manifest.json`, drives uninstall), `ModProfile` /
   catalog types, and `Models/Multiplayer/` wire types.
 - **`Services/`** — install pipeline (`NativeInstallService`, `InstallerService`,
   `FolderCloneService`), update orchestration (`UpdateService`,
   `UpdateInfoService`, `ArchiveService`, `DownloadService`), detection
   (`AoE3Detector`, `Aoe3DetectorService`, `RegistryService`), hashing
-  (`HashService` = MD5 + CRC32), self-update (`LauncherUpdateService`),
+  (`HashService` = MD5 + CRC32 + SHA-256), self-update (`LauncherUpdateService`),
   uninstall, user data, translations, mod catalog, elevation, game launch.
   `Services/Multiplayer/` is the lobby client (`MultiplayerSession`,
   `LobbyApiClient`, `LobbyWebSocket`, `ModHashService`, `ReplayUploadService`).
@@ -114,15 +137,24 @@ engine** and the UI binds to it.
 ### Three core flows (detailed diagrams in README.md)
 
 1. **Install** — detect AoE3 → download multi-part payload ZIP → clone AoE3 into
-   a standalone mod folder → overlay mod files → shortcuts + uninstall registry
-   entries + manifest. Hard-coded protection prevents deleting AoE3 base-game
-   files during uninstall.
+   a standalone mod folder → flatten Steam-layout `bin\` into root → overlay mod
+   files → shortcuts + uninstall registry entries + `install-manifest.json`.
+   **Uninstall is a blanket recursive delete** of the install folder, gated only
+   by a probe/manifest check that it looks like a mod install — it ignores the
+   manifest's file list and has **no per-file base-game protection**. AoE3 base
+   files survive only because `IsolatedFolder` mods are a separate clone; an
+   `InPlaceOverlay` mod's underlying AoE3 files *would* be deleted. (The README's
+   "hard-coded base-game protection" claim is false.)
 2. **Update** — 100% compatible with the original Java updater: fetch
    `UpdateInfo.xml`, MD5 three key files (`data/protoy.xml`, `techtreey.xml`,
    `stringtabley.xml`) to identify the installed version, then download `.tar.xz`
    patches (resume + mirror fallback), CRC32-verify, back up, and extract.
-3. **Multiplayer** — GitHub Device-Flow sign-in → REST/WS to the Cloudflare
-   Worker for lobbies/chat/ELO → players use Radmin VPN for the actual LAN.
+3. **Multiplayer** — Discord sign-in (JWT cached in config) → REST/WebSocket to a
+   self-hosted Node/Fastify backend (`wol-lobby.duckdns.org`) for lobbies + chat,
+   gated by a mod fingerprint (`ModHashService`) → players join a shared **Radmin
+   VPN** network manually for the actual LAN; the host's game launch appends
+   `+OverrideAddress <radmin-ip>` plus skip-intro flags. Match-history/ELO and
+   replay upload are scaffolded but not wired.
 
 ### Multi-mod profile system
 
@@ -156,7 +188,9 @@ model enforced by the catalog repo's CI. The JSON schema lives at
 - **Logging:** call `DiagnosticLog.Write(...)` (or `WriteSection`). It's a
   non-blocking queued logger that resets at each launch and writes
   `launcher-debug.log`. Log messages are **always English** (they're for bug
-  reports), even though the UI is localized.
+  reports), even though the UI is localized. Separately, `MultiplayerTelemetry`
+  appends a plaintext `multiplayer-events.log` next to the `.exe` — its opt-out
+  isn't wired, so it always writes.
 - **Localization is mandatory for user-facing strings.** Add every UI string to
   the `Table` in `Localization/Strings.cs` with both `en` and `es` entries, and
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
