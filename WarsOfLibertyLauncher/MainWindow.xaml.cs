@@ -267,7 +267,11 @@ public partial class MainWindow : Window
                     DiagnosticLog.Write($"MultiplayerTab switchActiveMod hook: {ex.Message}");
                     return false;
                 }
-            });
+            },
+            // Pass the config through so the Radmin assistant overlay
+            // can honour the user's Mode preference + flip the
+            // "don't show again" flag from inside the overlay.
+            config: _config);
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -4862,11 +4866,19 @@ public partial class MainWindow : Window
                 "StatusUpdatesAvailable",
                 _pendingDownloads.Count,
                 FormatBytes(totalBytes)));
-            // Version is known and patches are pending → primary is Play
-            // (let the user launch the old version if they want); the
-            // separate Update button (already shown above) handles the
-            // "apply patches" path.
-            SetPrimaryAction(PrimaryAction.Play);
+            // Version is known and patches are pending → primary
+            // becomes UPDATE. Legacy design pointed primary at Play and
+            // surfaced UPDATE as a secondary button (so the user could
+            // still launch the old version), but that secondary button
+            // lives inside LegacyPlayContent which is Visibility=
+            // Collapsed in the cinema dashboard — it was effectively
+            // hidden, leaving the user with no way to apply patches.
+            // Mirroring Steam's behaviour: when patches are pending,
+            // the primary CTA IS update. PlayButton_Click's switch
+            // routes PrimaryAction.Update through
+            // ApplyUpdateWithElevationCheckAsync, so the wiring is
+            // already in place.
+            SetPrimaryAction(PrimaryAction.Update);
             ResetProgressUI();
         }
     }

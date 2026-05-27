@@ -365,16 +365,12 @@ public class NativeInstallService
 
         // 3) Named-file blacklist — observed only-in-launcher files
         //    that aren't part of the canonical install. Hard-coded
-        //    here because they have no common pattern (and we'd
-        //    rather be surgical than risk deleting legitimate game
-        //    assets via wildcard).
+        //    here because they have no common pattern. We also use
+        //    fuzzy detection below for the cases where the exact
+        //    filename has mojibake characters that don't survive a
+        //    source-file → .exe round-trip cleanly.
         string[] devLeftovers = new[]
         {
-            // Portuguese "cópia" mojibake from a WoL dev's machine.
-            @"data\tactics\musketcavalry - c¢pia.tactics",
-            @"data\tactics\musketcavalry - cã³pia.tactics",
-            // Tactics file with no extension — orphaned.
-            @"data\tactics\nativebolasmatrero",
             // Bayonet conscript tactics — typo in filename
             // ("consripto" vs "conscripto"); not referenced from
             // any techtree we checked.
@@ -394,6 +390,172 @@ public class NativeInstallService
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"  RemoveStaleBuildArtifacts: could not delete '{rel}': {ex.Message}");
+            }
+        }
+
+        // 4) Fuzzy detection inside data\tactics\ — catches the
+        //    Portuguese "cópia" duplicates (mojibake-encoded as
+        //    "C¢pia"/"CÃ³pia") and orphan files without any
+        //    extension. Using a pattern scan instead of hardcoded
+        //    paths because the non-ASCII characters in the filenames
+        //    don't survive cleanly through the source file → CLR
+        //    string → Win32 file-system roundtrip — File.Exists on a
+        //    hardcoded path matches the wrong bytes. Globbing the
+        //    folder reads the actual on-disk names so we don't care
+        //    about encoding.
+        var tacticsFolder = Path.Combine(destinationFolder, "data", "tactics");
+        if (Directory.Exists(tacticsFolder))
+        {
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(tacticsFolder, "*",
+                             SearchOption.TopDirectoryOnly))
+                {
+                    var name = Path.GetFileName(f);
+
+                    // Pattern A: " - C{something}pia.tactics" — the
+                    // Portuguese "cópia" duplicates regardless of how
+                    // the non-ASCII byte renders. Anchored to .tactics
+                    // so we don't accidentally match a legitimate
+                    // tactic that happens to contain "pia".
+                    bool isCopiaDuplicate =
+                        name.IndexOf(" - C", StringComparison.OrdinalIgnoreCase) >= 0
+                        && name.EndsWith("pia.tactics", StringComparison.OrdinalIgnoreCase);
+
+                    // Pattern B: any file in data\tactics\ with no
+                    // extension at all. Legitimate tactics always end
+                    // in .tactics — anything else is an orphan from a
+                    // dev machine's accidental save.
+                    bool hasNoExtension = string.IsNullOrEmpty(Path.GetExtension(f));
+
+                    if (!isCopiaDuplicate && !hasNoExtension) continue;
+
+                    try
+                    {
+                        var len = new FileInfo(f).Length;
+                        File.Delete(f);
+                        removedJunk++;
+                        bytesFreed += len;
+                    }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLog.Write(
+                            $"  RemoveStaleBuildArtifacts: could not delete '{name}': {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write(
+                    $"RemoveStaleBuildArtifacts: enumerating data\\tactics failed: {ex.Message}");
+            }
+        }
+
+        // 5) Heavier dev-leftover sweeps observed in the WoL payload
+        //    but absent from a setup+updater install. Each sweep is
+        //    surgical (specific subtree + specific file pattern) so
+        //    we don't risk deleting legitimate game assets via a
+        //    too-broad glob.
+        //
+        //    a) art\WoL\interns\* — internal dev scratch folder. The
+        //       canonical install has no such folder; the payload zip
+        //       included it from someone's working copy. ~hundreds of
+        //       .ddt files that AoE3 still ends up hashing, which
+        //       causes multiplayer desync vs peers without them.
+        //
+        //    b) art\**\*.rar — uncompressed archive files. A legit
+        //       WoL install never ships .rar inside art\ (assets are
+        //       loose .ddt / .tga / .xml). The payload happens to
+        //       contain an unextracted "DLC.rar" which is dead weight
+        //       at best, sync-breaker at worst.
+        //
+        //    c) Sound\WoL\**\*(enhanced)*.wav — "enhanced" variants
+        //       of base sounds. Duplicates the .wav of the same name
+        //       without the "(enhanced)" suffix. The canonical
+        //       install only keeps the non-suffixed version.
+        var artFolder = Path.Combine(destinationFolder, "art");
+        if (Directory.Exists(artFolder))
+        {
+            // a) Whole-subtree removal of art\WoL\interns\
+            var internsFolder = Path.Combine(artFolder, "WoL", "interns");
+            if (Directory.Exists(internsFolder))
+            {
+                try
+                {
+                    long internsBytes = 0;
+                    int internsFiles = 0;
+                    foreach (var f in Directory.EnumerateFiles(internsFolder, "*", SearchOption.AllDirectories))
+                    {
+                        try { internsBytes += new FileInfo(f).Length; internsFiles++; }
+                        catch { /* ignore size probe failures */ }
+                    }
+                    Directory.Delete(internsFolder, recursive: true);
+                    removedJunk += internsFiles;
+                    bytesFreed += internsBytes;
+                    DiagnosticLog.Write(
+                        $"  RemoveStaleBuildArtifacts: removed art\\WoL\\interns\\ ({internsFiles} files, {FormatBytes(internsBytes)})");
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write(
+                        $"  RemoveStaleBuildArtifacts: could not remove art\\WoL\\interns: {ex.Message}");
+                }
+            }
+
+            // b) Loose .rar inside art\ — never legitimate.
+            try
+            {
+                foreach (var rar in Directory.EnumerateFiles(artFolder, "*.rar", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        var len = new FileInfo(rar).Length;
+                        File.Delete(rar);
+                        removedJunk++;
+                        bytesFreed += len;
+                    }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLog.Write(
+                            $"  RemoveStaleBuildArtifacts: could not delete '{rar}': {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write(
+                    $"RemoveStaleBuildArtifacts: enumerating *.rar under art\\ failed: {ex.Message}");
+            }
+        }
+
+        // c) "(enhanced)" wav duplicates under Sound\WoL\
+        var soundWol = Path.Combine(destinationFolder, "Sound", "WoL");
+        if (Directory.Exists(soundWol))
+        {
+            try
+            {
+                foreach (var wav in Directory.EnumerateFiles(soundWol, "*.wav", SearchOption.AllDirectories))
+                {
+                    var name = Path.GetFileName(wav);
+                    if (name.IndexOf("(enhanced)", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    try
+                    {
+                        var len = new FileInfo(wav).Length;
+                        File.Delete(wav);
+                        removedJunk++;
+                        bytesFreed += len;
+                    }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLog.Write(
+                            $"  RemoveStaleBuildArtifacts: could not delete '{name}': {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write(
+                    $"RemoveStaleBuildArtifacts: enumerating Sound\\WoL\\ failed: {ex.Message}");
             }
         }
 

@@ -1681,6 +1681,199 @@ public static class Strings
         ["MpSignInOpenBrowser"] = new() { [LangEn] = "Open browser", [LangEs] = "Abrir navegador" },
         ["MpSignInCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
         ["MpSignInCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
+
+        // -------------------------------------------------------------
+        // Radmin assistant overlay (always-on-top guided checklist).
+        // Lives in RadminAssistantWindow.xaml. All copy is honest about
+        // what the launcher CAN observe (process running, 26.x IP up,
+        // future: seed-peer ping answer) and what the user has to
+        // verify themselves in Radmin (network membership until the
+        // ping ships). Never tells the user we did something we
+        // didn't — that's how confidence in the assistant survives.
+        // -------------------------------------------------------------
+        ["RadAsstWindowTitle"] = new()
+        {
+            [LangEn] = "Radmin Assistant",
+            [LangEs] = "Asistente Radmin",
+        },
+        ["RadAsstHeaderTitle"] = new()
+        {
+            [LangEn] = "Connect to the AoE3 network",
+            [LangEs] = "Conéctate a la red AoE3",
+        },
+        ["RadAsstHeaderSubtitle"] = new()
+        {
+            [LangEn] = "We'll walk you through it. Most steps auto-advance.",
+            [LangEs] = "Te guiamos. La mayoría de los pasos avanzan solos.",
+        },
+        // Step 1 — open Radmin
+        ["RadAsstStep1Title"] = new()
+        {
+            [LangEn] = "Open Radmin VPN",
+            [LangEs] = "Abrir Radmin VPN",
+        },
+        ["RadAsstStep1BodyNotInstalled"] = new()
+        {
+            [LangEn] = "Radmin VPN isn't installed. Download it from Famatech to continue.",
+            [LangEs] = "Radmin VPN no está instalado. Descárgalo de Famatech para continuar.",
+        },
+        ["RadAsstStep1BodyDone"] = new()
+        {
+            [LangEn] = "Opened for you. If the window didn't come to front, click reopen.",
+            [LangEs] = "Lo abrimos por ti. Si la ventana no se ve, haz clic en reabrir.",
+        },
+        ["RadAsstStep1BtnInstall"] = new()
+        {
+            [LangEn] = "Download Radmin VPN",
+            [LangEs] = "Descargar Radmin VPN",
+        },
+        ["RadAsstStep1BtnReopen"] = new()
+        {
+            [LangEn] = "Open Radmin",
+            [LangEs] = "Abrir Radmin",
+        },
+        // Step 2 — sign in
+        ["RadAsstStep2Title"] = new()
+        {
+            [LangEn] = "Sign in to Radmin",
+            [LangEs] = "Inicia sesión en Radmin",
+        },
+        ["RadAsstStep2BodyWaiting"] = new()
+        {
+            [LangEn] = "Create a free Radmin account if you don't have one — we're waiting for your 26.x.x.x address to appear…",
+            [LangEs] = "Crea una cuenta gratis de Radmin si no tienes — esperando tu dirección 26.x.x.x…",
+        },
+        ["RadAsstStep2BodyDone"] = new()
+        {
+            // {0} = the user's 26.x.x.x address.
+            [LangEn] = "Signed in. Your Radmin IP: {0}",
+            [LangEs] = "Sesión iniciada. Tu IP de Radmin: {0}",
+        },
+        // Step 3 — paste network name + Join
+        ["RadAsstStep3Title"] = new()
+        {
+            [LangEn] = "Join the network",
+            [LangEs] = "Únete a la red",
+        },
+        ["RadAsstStep3BodyPending"] = new()
+        {
+            [LangEn] = "First sign in above. Then we'll prepare the network name for you.",
+            [LangEs] = "Primero inicia sesión arriba. Luego preparamos el nombre de la red.",
+        },
+        ["RadAsstStep3BodyActive"] = new()
+        {
+            [LangEn] = "In Radmin: Join network → Gaming tab → paste (Ctrl+V) → Join.",
+            [LangEs] = "En Radmin: Unirse a la red → pestaña Gaming → pega (Ctrl+V) → Unirse.",
+        },
+        ["RadAsstStep3BodyDone"] = new()
+        {
+            [LangEn] = "Joined!",
+            [LangEs] = "¡Unido!",
+        },
+        ["RadAsstStep3Hint"] = new()
+        {
+            [LangEn] = "The network name is already in your clipboard.",
+            [LangEs] = "El nombre de la red ya está en tu portapapeles.",
+        },
+        ["RadAsstCopyNetwork"] = new()
+        {
+            [LangEn] = "Copy network name",
+            [LangEs] = "Copiar nombre de la red",
+        },
+        // Step 4 — confirmation (until seed-peer ping ships, this stays
+        // as "verify manually" — overpromising kills the assistant's
+        // credibility on first failure).
+        ["RadAsstStep4Title"] = new()
+        {
+            [LangEn] = "Connection confirmed",
+            [LangEs] = "Conexión confirmada",
+        },
+        ["RadAsstStep4BodyPending"] = new()
+        {
+            [LangEn] = "Will mark itself once you finish the steps above.",
+            [LangEs] = "Se marcará solo cuando termines los pasos de arriba.",
+        },
+        ["RadAsstStep4BodyManual"] = new()
+        {
+            [LangEn] = "Verify in Radmin that you appear in the 'Age of Empires III…' network. (Auto-detection is on its way.)",
+            [LangEs] = "Verifica en Radmin que apareces unido a la red 'Age of Empires III…'. (La detección automática está por llegar.)",
+        },
+        ["RadAsstStep4BodyDone"] = new()
+        {
+            [LangEn] = "You're in the AoE3 network. You can close this assistant.",
+            [LangEs] = "Estás en la red AoE3. Puedes cerrar este asistente.",
+        },
+        // Footer
+        ["RadAsstDontShowAgain"] = new()
+        {
+            [LangEn] = "Don't show this again",
+            [LangEs] = "No mostrar de nuevo",
+        },
+        ["RadAsstClose"] = new()
+        {
+            [LangEn] = "Close",
+            [LangEs] = "Cerrar",
+        },
+        // Compact banner — single-line replacement in MultiplayerTab.
+        // Mirrors the assistant's stage labels so the user sees the
+        // same vocabulary in the small banner and the full overlay.
+        ["RadAsstBannerNotInstalled"] = new()
+        {
+            [LangEn] = "Radmin: ● not installed",
+            [LangEs] = "Radmin: ● no instalado",
+        },
+        ["RadAsstBannerNotRunning"] = new()
+        {
+            [LangEn] = "Radmin: ● not running",
+            [LangEs] = "Radmin: ● no iniciado",
+        },
+        ["RadAsstBannerLoggedIn"] = new()
+        {
+            [LangEn] = "Radmin: ● signed in (verify network join)",
+            [LangEs] = "Radmin: ● sesión iniciada (verifica unión a la red)",
+        },
+        ["RadAsstBannerInNetwork"] = new()
+        {
+            [LangEn] = "Radmin: ✓ in AoE3 network",
+            [LangEs] = "Radmin: ✓ en red AoE3",
+        },
+        ["RadAsstBannerOpenAndCopy"] = new()
+        {
+            [LangEn] = "Open + copy",
+            [LangEs] = "Abrir + copiar",
+        },
+        ["RadAsstBannerShowSteps"] = new()
+        {
+            [LangEn] = "Show steps",
+            [LangEs] = "Ver pasos",
+        },
+        // Settings dialog combo for the assistant mode.
+        ["SettingsRadAsstLabel"] = new()
+        {
+            [LangEn] = "Radmin assistant",
+            [LangEs] = "Asistente Radmin",
+        },
+        ["SettingsRadAsstHint"] = new()
+        {
+            [LangEn] = "When to show the guided Radmin VPN connection overlay on the Multiplayer tab.",
+            [LangEs] = "Cuándo mostrar el asistente guiado de Radmin VPN en la pestaña Multijugador.",
+        },
+        ["SettingsRadAsstAuto"] = new()
+        {
+            [LangEn] = "Automatic (recommended)",
+            [LangEs] = "Automático (recomendado)",
+        },
+        ["SettingsRadAsstOnRequest"] = new()
+        {
+            [LangEn] = "Only when I ask",
+            [LangEs] = "Solo cuando lo pida",
+        },
+        ["SettingsRadAsstNever"] = new()
+        {
+            [LangEn] = "Never",
+            [LangEs] = "Nunca",
+        },
+
         ["DlgClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
         ["MpRoomsCreate"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
         ["MpRoomsRefresh"] = new() { [LangEn] = "Refresh", [LangEs] = "Actualizar" },

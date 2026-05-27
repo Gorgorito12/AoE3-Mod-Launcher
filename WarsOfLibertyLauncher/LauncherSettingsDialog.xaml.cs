@@ -73,6 +73,29 @@ public partial class LauncherSettingsDialog : Window
         ShowToastsCheck.Content = Strings.Get("DlgLauncherSettingsShowToasts");
         ShowToastsHint.Text = Strings.Get("DlgLauncherSettingsShowToastsHint");
 
+        // Radmin assistant mode picker. Combo items tagged with the
+        // raw enum strings ("Auto"/"OnRequest"/"Never") so saving is
+        // a one-line lookup. Built here (not in XAML) so the labels
+        // can pull from Strings.* and follow the locale switch.
+        RadAsstLabelText.Text = Strings.Get("SettingsRadAsstLabel");
+        RadAsstHintText.Text = Strings.Get("SettingsRadAsstHint");
+        RadAsstCombo.Items.Clear();
+        RadAsstCombo.Items.Add(new ComboBoxItem
+        {
+            Content = Strings.Get("SettingsRadAsstAuto"),
+            Tag = "Auto",
+        });
+        RadAsstCombo.Items.Add(new ComboBoxItem
+        {
+            Content = Strings.Get("SettingsRadAsstOnRequest"),
+            Tag = "OnRequest",
+        });
+        RadAsstCombo.Items.Add(new ComboBoxItem
+        {
+            Content = Strings.Get("SettingsRadAsstNever"),
+            Tag = "Never",
+        });
+
         AutoCheckCheck.Content = Strings.Get("DlgLauncherSettingsAutoCheck");
         AutoCheckHint.Text = Strings.Get("DlgLauncherSettingsAutoCheckHint");
         OpenPostUpdateCheck.Content = Strings.Get("DlgLauncherSettingsOpenPostUpdate");
@@ -126,6 +149,23 @@ public partial class LauncherSettingsDialog : Window
         AutoCheckCheck.IsChecked = _config.CheckUpdatesOnStartup;
         OpenPostUpdateCheck.IsChecked = _config.OpenPostUpdatePages;
 
+        // Radmin assistant mode — match by Tag against the persisted
+        // "Auto"/"OnRequest"/"Never" value. Unknown / missing values
+        // fall back to Auto (the default for new installs), so a
+        // legacy config without the field still ends up on Auto.
+        var modeTag = string.IsNullOrEmpty(_config.RadminAssistantMode)
+            ? "Auto" : _config.RadminAssistantMode;
+        foreach (ComboBoxItem item in RadAsstCombo.Items)
+        {
+            if (string.Equals(item.Tag as string, modeTag, StringComparison.OrdinalIgnoreCase))
+            {
+                RadAsstCombo.SelectedItem = item;
+                break;
+            }
+        }
+        if (RadAsstCombo.SelectedItem == null)
+            RadAsstCombo.SelectedIndex = 0;
+
         // Catalog source: map the three-way config ("" / "none" / repo)
         // back into the radio buttons + text box.
         var rawRepo = _config.ModsCatalogRepo ?? "";
@@ -144,6 +184,21 @@ public partial class LauncherSettingsDialog : Window
             CatalogCustomRadio.IsChecked = true;
             CatalogCustomBox.Text = rawRepo;
         }
+    }
+
+    /// <summary>
+    /// No-op handler — the actual save happens in
+    /// <see cref="SaveButton_Click"/>; we just need the
+    /// SelectionChanged hook so the combo isn't a dead control if
+    /// XAML wires up a Click somewhere accidentally. Kept as a
+    /// method (vs lambda) so the XAML reference resolves cleanly.
+    /// </summary>
+    private void RadAsstCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        // Live-preview would go here if we ever wanted to show
+        // a hint about what each mode does — intentionally empty
+        // right now because the hint text below the combo is
+        // mode-agnostic and the change only commits on Save.
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
@@ -200,6 +255,19 @@ public partial class LauncherSettingsDialog : Window
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.ModsCatalogRepo = newCatalogRepo;
         _config.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+
+        // Radmin assistant mode — keep "Auto" as the fallback if for
+        // some reason the combo had no selection (shouldn't happen
+        // because LoadFromConfig forces SelectedIndex=0).
+        var newMode = (RadAsstCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Auto";
+        // Switching off Skipped when the user changes mode away from
+        // OnRequest/Never — they're re-engaging with the assistant
+        // so we shouldn't continue to silently suppress it.
+        if (!string.Equals(_config.RadminAssistantMode, newMode, StringComparison.OrdinalIgnoreCase))
+        {
+            _config.RadminAssistantSkipped = false;
+        }
+        _config.RadminAssistantMode = newMode;
 
         // 4. Side effects beyond the config file:
         //    * Registry write for the autostart entry.

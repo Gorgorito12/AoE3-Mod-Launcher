@@ -274,6 +274,34 @@ public class LauncherConfig
         return paths;
     }
 
+    /// <summary>
+    /// When to show the Radmin VPN connection assistant overlay.
+    ///   "Auto"      — opens automatically when the Multiplayer tab
+    ///                 loads and the user isn't confirmed in the
+    ///                 AoE3 network. Default for new installs.
+    ///   "OnRequest" — never opens automatically; user has to click
+    ///                 "Show steps" in the compact banner.
+    ///   "Never"     — assistant disabled entirely. The compact
+    ///                 banner still shows but the "Show steps"
+    ///                 button is hidden.
+    /// String instead of enum so legacy configs that don't know the
+    /// field default cleanly to "Auto" via the property initializer
+    /// (an unknown enum value would have to be migrated explicitly).
+    /// </summary>
+    [JsonPropertyName("radminAssistantMode")]
+    public string RadminAssistantMode { get; set; } = "Auto";
+
+    /// <summary>
+    /// One-shot "don't show again" flag set when the user ticks the
+    /// checkbox at the bottom of the assistant overlay. Equivalent
+    /// to switching <see cref="RadminAssistantMode"/> to "OnRequest"
+    /// but cheaper for the user to set — and we keep them separate
+    /// so a power-user who flips Mode to Never doesn't have to also
+    /// flip this back to false to re-show on demand.
+    /// </summary>
+    [JsonPropertyName("radminAssistantSkipped")]
+    public bool RadminAssistantSkipped { get; set; }
+
     /// <summary>Primary URL of UpdateInfo.xml. Default: official aoe3wol.com server.</summary>
     [JsonPropertyName("updateInfoUrl")]
     public string UpdateInfoUrl { get; set; } = "http://aoe3wol.com/updates/UpdateInfo.xml";

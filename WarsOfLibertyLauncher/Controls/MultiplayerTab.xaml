@@ -258,18 +258,28 @@
                                        Margin="0,2,0,0"/>
                         </StackPanel>
 
-                        <!-- Primary action (Install / Open Radmin).
-                             Always visible — even in Connected state,
-                             the user may want to re-open Radmin to
-                             verify their network. -->
-                        <Button Grid.Row="0" Grid.Column="2"
-                                x:Name="RadminPrimaryButton"
-                                Click="RadminPrimaryButton_Click"
-                                Style="{StaticResource MpSecondaryButton}"
-                                Padding="12,6"
-                                Margin="12,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"/>
+                        <!-- Primary actions: [Show steps] opens the
+                             guided assistant overlay; [Install /
+                             Open Radmin] is the legacy one-click
+                             quick action. Stacked horizontally so a
+                             power user can hit "Open Radmin" without
+                             going through the tutorial. -->
+                        <StackPanel Grid.Row="0" Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="12,0,0,0">
+                            <Button x:Name="RadminShowStepsButton"
+                                    Click="RadminShowStepsButton_Click"
+                                    Style="{StaticResource MpSecondaryButton}"
+                                    Padding="12,6"
+                                    Margin="0,0,6,0"
+                                    FontSize="11"/>
+                            <Button x:Name="RadminPrimaryButton"
+                                    Click="RadminPrimaryButton_Click"
+                                    Style="{StaticResource MpSecondaryButton}"
+                                    Padding="12,6"
+                                    FontSize="11"/>
+                        </StackPanel>
 
                         <!-- Network-name copier. A read-only TextBox so
                              the name can be selected and inspected

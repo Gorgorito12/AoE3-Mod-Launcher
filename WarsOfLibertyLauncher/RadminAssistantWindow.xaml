@@ -1,0 +1,284 @@
+<Window x:Class="WarsOfLibertyLauncher.RadminAssistantWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="Radmin Assistant"
+        Height="540" Width="430"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Topmost="True"
+        ShowInTaskbar="False"
+        Background="{DynamicResource BgPanel}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed"
+        AllowsTransparency="False"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing">
+    <!--
+        Always-on-top guided overlay that walks the user through
+        joining the AoE3 TAD Radmin VPN network.
+
+        Design contract (no inputs into Radmin — pure side-by-side
+        guidance):
+          • The window is OUR process. It never injects clicks or
+            keystrokes into Radmin's window. Antivirus / TOS safe.
+          • Polls RadminAssistantService.ProbeAsync() every 3s and
+            auto-advances the checklist as the stage rises.
+          • The only manual gesture is: open Radmin (we do
+            Process.Start for them), paste network name (already
+            in clipboard), click Join inside Radmin.
+          • Bottom-right of screen by default — keeps the AoE3
+            launcher's main window unobstructed and sits where
+            Radmin's own window usually opens.
+
+        Layout: header strip + 4 step rows + footer (don't-show +
+        close). Each step row shows an icon (○ pending / ⏳ active /
+        ✓ done) and a description that flips per state.
+    -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40"
+                      ResizeBorderThickness="0"
+                      CornerRadius="0"
+                      GlassFrameThickness="0"
+                      UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- Step number badge — round bullet with the state glyph. -->
+        <Style x:Key="StepBadge" TargetType="Border">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,2,12,0"/>
+        </Style>
+        <Style x:Key="StepTitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+        <Style x:Key="StepBody" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="HeaderCloseButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerAlert}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border BorderBrush="{DynamicResource BorderSecondary}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>   <!-- Header -->
+                <RowDefinition Height="*"/>      <!-- Steps -->
+                <RowDefinition Height="Auto"/>   <!-- Footer -->
+            </Grid.RowDefinitions>
+
+            <!-- HEADER -->
+            <Border Grid.Row="0"
+                    Background="{DynamicResource BgSidebar}"
+                    BorderBrush="{DynamicResource BorderSecondary}"
+                    BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="16,8,8,8" VerticalAlignment="Center">
+                        <TextBlock x:Name="HeaderTitleText"
+                                   FontFamily="{DynamicResource DisplayFont}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentBrush}"/>
+                        <TextBlock x:Name="HeaderSubtitleText"
+                                   Foreground="{DynamicResource Secondary}"
+                                   FontSize="11"
+                                   Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            x:Name="HeaderCloseBtn"
+                            Style="{StaticResource HeaderCloseButton}"
+                            Content="&#xE8BB;"
+                            Click="HeaderCloseBtn_Click"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                </Grid>
+            </Border>
+
+            <!-- STEPS -->
+            <ScrollViewer Grid.Row="1"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="20,18,20,12">
+
+                    <!-- Step 1: open Radmin -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" x:Name="Step1Badge" Style="{StaticResource StepBadge}">
+                            <TextBlock x:Name="Step1Glyph"
+                                       Foreground="White"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="Step1Title" Style="{StaticResource StepTitle}"/>
+                            <TextBlock x:Name="Step1Body" Style="{StaticResource StepBody}"/>
+                            <Button x:Name="Step1OpenBtn"
+                                    Style="{StaticResource PropertyActionButton}"
+                                    HorizontalAlignment="Left"
+                                    MinWidth="160"
+                                    Margin="0,8,0,0"
+                                    Click="Step1OpenBtn_Click"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Step 2: sign in / wait for IP -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" x:Name="Step2Badge" Style="{StaticResource StepBadge}">
+                            <TextBlock x:Name="Step2Glyph"
+                                       Foreground="White"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="Step2Title" Style="{StaticResource StepTitle}"/>
+                            <TextBlock x:Name="Step2Body" Style="{StaticResource StepBody}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Step 3: join the network (paste + Join) -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" x:Name="Step3Badge" Style="{StaticResource StepBadge}">
+                            <TextBlock x:Name="Step3Glyph"
+                                       Foreground="White"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="Step3Title" Style="{StaticResource StepTitle}"/>
+                            <TextBlock x:Name="Step3Body" Style="{StaticResource StepBody}"/>
+                            <!-- Network name display + copy button -->
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Background="{DynamicResource BgBase}"
+                                        BorderBrush="{DynamicResource BorderSubtle}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="10,7"
+                                        Margin="0,0,6,0">
+                                    <TextBlock x:Name="NetworkNameBox"
+                                               Foreground="{DynamicResource SecondaryFixed}"
+                                               FontFamily="Consolas"
+                                               FontSize="11"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </Border>
+                                <Button Grid.Column="1"
+                                        x:Name="CopyNetworkBtn"
+                                        Style="{StaticResource PropertyActionButton}"
+                                        Width="44"
+                                        Click="CopyNetworkBtn_Click">
+                                    <TextBlock x:Name="CopyBtnGlyph"
+                                               Text="&#xE8C8;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="13"/>
+                                </Button>
+                            </Grid>
+                            <TextBlock x:Name="Step3Hint" Style="{StaticResource StepBody}" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Step 4: confirmation (stub for now — manual verify until seed peer ping ships) -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" x:Name="Step4Badge" Style="{StaticResource StepBadge}">
+                            <TextBlock x:Name="Step4Glyph"
+                                       Foreground="White"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="Step4Title" Style="{StaticResource StepTitle}"/>
+                            <TextBlock x:Name="Step4Body" Style="{StaticResource StepBody}"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- FOOTER -->
+            <Border Grid.Row="2"
+                    Background="{DynamicResource BgSidebar}"
+                    BorderBrush="{DynamicResource BorderSecondary}"
+                    BorderThickness="0,1,0,0"
+                    Padding="20,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <CheckBox Grid.Column="0"
+                              x:Name="DontShowAgainCheck"
+                              Foreground="{DynamicResource Secondary}"
+                              FontSize="11"
+                              VerticalAlignment="Center"/>
+                    <Button Grid.Column="1"
+                            x:Name="CloseBtn"
+                            Style="{StaticResource PrimaryButton}"
+                            MinWidth="100"
+                            Click="CloseBtn_Click"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

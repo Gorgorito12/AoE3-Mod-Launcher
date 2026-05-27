@@ -587,6 +587,25 @@ public class UpdateService
             DiagnosticLog.Write($"Post-update translation step failed (non-fatal): {ex.Message}");
         }
 
+        // Post-update cleanup of stale artifacts. NativeInstallService
+        // runs the same pass at the end of the initial install, but
+        // patch tarballs can ALSO re-introduce stale .xml.xmb files,
+        // dev-leftover tactics, art\WoL\interns scratch folders and
+        // assorted junk that the official setup+updater path never
+        // had. Running RemoveStaleBuildArtifacts here keeps the
+        // install canonically clean after every successful update —
+        // multiplayer hashes match peers regardless of which version
+        // you patched up from. Wrapped in try/catch so a cleanup
+        // hiccup doesn't roll back a successful patch chain.
+        try
+        {
+            NativeInstallService.RemoveStaleBuildArtifacts(_profile, InstallPath);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Post-update RemoveStaleBuildArtifacts failed (non-fatal): {ex.Message}");
+        }
+
         status?.Report(Strings.Get("StatusAllDone"));
     }
 

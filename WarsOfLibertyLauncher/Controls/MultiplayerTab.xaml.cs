@@ -155,6 +155,33 @@ public partial class MultiplayerTab : UserControl
     private long _countdownStartedAtTicks;
     private int _countdownDurationMs = 3000;
 
+    /// <summary>
+    /// Launcher config reference, injected via <see cref="Attach"/>.
+    /// Read by the Radmin assistant auto-open logic to honour the
+    /// user's mode preference (Auto / OnRequest / Never) and to
+    /// flip <c>RadminAssistantSkipped</c> when the user ticks the
+    /// "Don't show again" checkbox inside the overlay.
+    /// </summary>
+    private LauncherConfig? _config;
+
+    /// <summary>
+    /// Tracks whether we've already attempted to auto-open the
+    /// Radmin assistant during the current launcher session. Without
+    /// this guard the assistant would re-open every time the user
+    /// switched tabs back to Multiplayer (because StartRadminPolling
+    /// re-runs from the IsVisibleChanged hook). One auto-open per
+    /// session is enough — if they closed it they can reopen via the
+    /// banner's "Show steps" button.
+    /// </summary>
+    private bool _radminAssistantAutoOpenedThisSession;
+
+    /// <summary>
+    /// The currently-open assistant window, if any. Kept so a
+    /// second "Show steps" click brings the existing window to
+    /// front instead of opening a duplicate.
+    /// </summary>
+    private RadminAssistantWindow? _radminAssistantWindow;
+
     public MultiplayerTab()
     {
         InitializeComponent();
@@ -316,6 +343,18 @@ public partial class MultiplayerTab : UserControl
     /// what was on screen when the user clicked, so it's always the
     /// right action to perform even if the world changed mid-frame.
     /// </summary>
+    /// <summary>
+    /// "Show steps" button on the Radmin banner. Opens (or focuses)
+    /// the assistant overlay window — same window the auto-open path
+    /// uses. Independent of the assistant mode so a power user who
+    /// turned auto-open off can still summon the overlay when they
+    /// genuinely need the tutorial.
+    /// </summary>
+    private void RadminShowStepsButton_Click(object sender, RoutedEventArgs e)
+    {
+        ShowRadminAssistant();
+    }
+
     private async void RadminPrimaryButton_Click(object sender, RoutedEventArgs e)
     {
         var status = _lastRadminStatus ?? RadminVpnService.GetStatus();
@@ -413,7 +452,115 @@ public partial class MultiplayerTab : UserControl
         }
         RefreshRadminBanner();   // one-shot so the user sees fresh data immediately
         _radminTimer.Start();
+
+        // First-time visit to the Multiplayer tab in this session →
+        // maybe pop the Radmin assistant overlay. Gated by config so
+        // the user can opt out (Mode=Never), one-shot dismiss
+        // (RadminAssistantSkipped), or already-connected detection
+        // (we don't pop the overlay when they're past LoggedIn —
+        // that means everything is working).
+        MaybeAutoOpenAssistant();
     }
+
+    /// <summary>
+    /// Decide whether to auto-open the Radmin assistant overlay this
+    /// session. Three gates:
+    ///   1. Mode != "Never" — user explicitly disabled the assistant
+    ///   2. !RadminAssistantSkipped — user previously ticked "don't
+    ///      show again"
+    ///   3. Stage &lt; LoggedIn — already signed in to Radmin? skip
+    ///      auto-open since the user clearly knows what they're
+    ///      doing (the "Show steps" button stays available if they
+    ///      want it).
+    /// Also guarded by _radminAssistantAutoOpenedThisSession so
+    /// repeated tab switches don't keep re-opening the overlay —
+    /// once auto-opened (or once we decided to skip), we stay quiet
+    /// for the rest of the session.
+    /// </summary>
+    private async void MaybeAutoOpenAssistant()
+    {
+        if (_radminAssistantAutoOpenedThisSession) return;
+        _radminAssistantAutoOpenedThisSession = true;
+
+        if (_config == null) return;
+        if (string.Equals(_config.RadminAssistantMode, "Never", StringComparison.OrdinalIgnoreCase)) return;
+        if (string.Equals(_config.RadminAssistantMode, "OnRequest", StringComparison.OrdinalIgnoreCase)) return;
+        if (_config.RadminAssistantSkipped) return;
+
+        try
+        {
+            var snap = await RadminAssistantService.ProbeAsync();
+            // Skip auto-open if the user is already past LoggedIn —
+            // they don't need a tutorial for something that's working.
+            // Future: when seed-peer ping ships, this also catches
+            // InAoE3Network → nothing to teach.
+            if (snap.Stage >= RadminStage.LoggedIn) return;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.MaybeAutoOpenAssistant: probe failed: {ex.Message}");
+            // Probe failure → don't auto-open. Better to stay quiet
+            // than to flash a confused overlay.
+            return;
+        }
+
+        ShowRadminAssistant();
+    }
+
+    /// <summary>
+    /// Open (or focus) the Radmin assistant overlay. Single-instance:
+    /// a second click brings the existing window to front instead of
+    /// opening a duplicate that would race the first one on the 3s
+    /// poll timer.
+    /// </summary>
+    private void ShowRadminAssistant()
+    {
+        if (_config == null) return;
+        if (_radminAssistantWindow != null)
+        {
+            try
+            {
+                _radminAssistantWindow.Activate();
+                if (_radminAssistantWindow.WindowState == WindowState.Minimized)
+                    _radminAssistantWindow.WindowState = WindowState.Normal;
+                return;
+            }
+            catch
+            {
+                // Previous window was disposed without our Closed
+                // hook firing (rare — usually means the dispatcher
+                // queue ate the event). Fall through to recreate.
+                _radminAssistantWindow = null;
+            }
+        }
+
+        var win = new RadminAssistantWindow(_config);
+        win.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_radminAssistantWindow, win))
+                _radminAssistantWindow = null;
+        };
+        _radminAssistantWindow = win;
+        // Owner = the main window so the overlay sits above it but
+        // stops appearing in the taskbar (ShowInTaskbar=false in
+        // XAML), and so closing the main launcher also closes the
+        // overlay. Wrapped in try because Window.GetWindow returns
+        // null in some unit-test paths.
+        try
+        {
+            var owner = Window.GetWindow(this);
+            if (owner != null) win.Owner = owner;
+        }
+        catch { /* fall through to ownerless */ }
+        win.Show();
+    }
+
+    /// <summary>
+    /// Wired to the new "Show steps" button on the Radmin banner.
+    /// Exposed publicly so MainWindow could trigger it from a global
+    /// shortcut in the future without re-implementing the same logic.
+    /// </summary>
+    public void OpenRadminAssistantWindow() => ShowRadminAssistant();
 
     /// <summary>
     /// Wires the control to its dependencies. Called once from
@@ -429,7 +576,8 @@ public partial class MultiplayerTab : UserControl
         Func<ModProfile?> getActiveProfile,
         Func<ModProfile, Task<string>> computeModFingerprint,
         Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? launchGame = null,
-        Func<ModProfile, bool>? switchActiveMod = null)
+        Func<ModProfile, bool>? switchActiveMod = null,
+        LauncherConfig? config = null)
     {
         if (_session != null)
             _session.StateChanged -= OnSessionStateChanged;
@@ -439,6 +587,10 @@ public partial class MultiplayerTab : UserControl
         _computeModFingerprint = computeModFingerprint;
         _launchGame = launchGame;
         _switchActiveMod = switchActiveMod;
+        // Optional so old callers (and the parameterless ctor path
+        // used by XAML preview) still work — null _config just means
+        // the Radmin assistant features stay dormant.
+        _config = config;
         session.StateChanged += OnSessionStateChanged;
 
         RefreshFromSession();
@@ -524,6 +676,17 @@ public partial class MultiplayerTab : UserControl
         SubtabFriends.Content = Strings.Get("MpSubtabFriends");
         SubtabProfile.Content = Strings.Get("MpSubtabProfile");
         SubtabHistory.Content = Strings.Get("MpSubtabHistory");
+
+        // Radmin assistant "Show steps" button. Hidden when the
+        // user disabled the assistant entirely via Settings
+        // (Mode=Never) — the legacy Open Radmin / Install button
+        // (RadminPrimaryButton) stays for them.
+        RadminShowStepsButton.Content = Strings.Get("RadAsstBannerShowSteps");
+        var mode = _config?.RadminAssistantMode;
+        RadminShowStepsButton.Visibility =
+            string.Equals(mode, "Never", StringComparison.OrdinalIgnoreCase)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
 
         SignInTitleText.Text = Strings.Get("MpSignInTitle");
         SignInBodyText.Text = Strings.Get("MpSignInBody");

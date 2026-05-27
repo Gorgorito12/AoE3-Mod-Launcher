@@ -50,6 +50,43 @@ public class FolderCloneService
         "*.tmp",
     };
 
+    /// <summary>
+    /// Top-level directory names (immediate children of the AoE3 root)
+    /// to ALWAYS exclude when cloning, regardless of the auto-detection
+    /// heuristics below. These fall into two buckets:
+    ///
+    ///   • Other mods that may live inside the user's AoE3 vanilla
+    ///     install. Cloning them would drag thousands of files from
+    ///     another mod into the new install root — multiplayer hashes
+    ///     would mismatch against players who only have the target mod.
+    ///     Improvement Mod is the canonical case; future community mods
+    ///     would be added here as they become common.
+    ///
+    ///   • Side-loaded runtimes / installers that ship with AoE3 vanilla
+    ///     but aren't part of the playable game (`directx\`, `msxml\`,
+    ///     legacy `translations\` from previous launcher revisions).
+    ///     Copying them bloats the install and contributes to multi-
+    ///     player hash mismatches without adding anything useful.
+    ///
+    /// Auto-detection (the "*-manifest.json" probe a few lines down)
+    /// would catch most mod-clone subfolders, but Improvement Mod and
+    /// other non-launcher-installed mods don't ship that file — so we
+    /// pair the heuristic with this hard list for defense-in-depth.
+    /// Case-insensitive match on the directory's base name.
+    /// </summary>
+    private static readonly string[] AlwaysExcludeTopLevelDirs = new[]
+    {
+        // Other community mods
+        "Improvement Mod",
+        "Wars of Liberty",        // nested clone defensiveness
+        "wol",                    // lowercase variant of WoL
+        // Side-loaded runtimes / installers shipped with AoE3 vanilla
+        "directx",
+        "msxml",
+        // Legacy launcher artifacts that ended up in some installs
+        "translations",
+    };
+
     /// <summary>Pause flag — same pattern as DownloadService.</summary>
     public bool Pause { get; set; }
 
@@ -97,6 +134,21 @@ public class FolderCloneService
         {
             foreach (var sub in Directory.EnumerateDirectories(sourceFolder))
             {
+                var subName = Path.GetFileName(sub);
+                // Hard list — other mods + side-loaded runtimes that we
+                // refuse to clone into a fresh install root regardless
+                // of whether they look like a launcher-managed mod.
+                if (AlwaysExcludeTopLevelDirs.Any(d =>
+                        string.Equals(d, subName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    DiagnosticLog.Write($"Clone: excluding well-known top-level dir '{subName}'");
+                    excludedSubtrees.Add(sub);
+                    continue;
+                }
+                // Heuristic — any sub-folder of source that contains a
+                // "<something>-manifest.json" in its root is a launcher-
+                // managed mod clone. Skip those so AoE3 → ImprovementMod
+                // doesn't scoop up a previously-installed WoL etc.
                 bool looksLikeModClone = Directory.EnumerateFiles(sub, "*-manifest.json",
                     SearchOption.TopDirectoryOnly).Any();
                 if (looksLikeModClone)
