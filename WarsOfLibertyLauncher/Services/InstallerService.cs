@@ -127,7 +127,17 @@ public class InstallerService
                 // Skip directories
                 if (string.IsNullOrEmpty(entry.Name)) continue;
 
-                var destPath = Path.Combine(extractFolder, entry.FullName);
+                // Zip-slip defence: reject entries whose resolved path would
+                // escape extractFolder. Mirrors ArchiveService.ExtractZipWithBackupAsync.
+                var destPath = Path.GetFullPath(Path.Combine(extractFolder, entry.FullName));
+                var extractRoot = Path.GetFullPath(extractFolder)
+                    .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                if (!destPath.StartsWith(extractRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    DiagnosticLog.Write(
+                        $"Zip-slip: rejecting entry '{entry.FullName}' that would escape '{extractFolder}'.");
+                    continue;
+                }
                 var destDir = Path.GetDirectoryName(destPath);
                 if (!string.IsNullOrEmpty(destDir))
                     Directory.CreateDirectory(destDir);
