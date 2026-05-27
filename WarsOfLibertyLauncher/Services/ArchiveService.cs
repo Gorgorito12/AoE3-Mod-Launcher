@@ -314,7 +314,18 @@ public class ArchiveService
 
             try
             {
-                var fullPath = Path.Combine(installPath, relativePath);
+                // Path-traversal defence: the delete-list comes from a remote
+                // UpdateInfo and could contain "..\" segments; clamp each target
+                // to installPath so a crafted list can't delete files elsewhere.
+                var fullPath = Path.GetFullPath(Path.Combine(installPath, relativePath));
+                var installRoot = Path.GetFullPath(installPath)
+                    .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                if (!fullPath.StartsWith(installRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    DiagnosticLog.Write(
+                        $"Delete-list: rejecting '{relativePath}' that would escape '{installPath}'.");
+                    continue;
+                }
                 if (File.Exists(fullPath))
                     File.Delete(fullPath);
             }
