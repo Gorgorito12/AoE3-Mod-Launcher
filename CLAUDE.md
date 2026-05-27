@@ -38,6 +38,12 @@ All commands run from `WarsOfLibertyLauncher/`.
   `publish/` folder is git-ignored — release binaries go to GitHub Releases.
 - `--update-now` is a launch argument that auto-resumes the update flow elevated
   (used after a UAC relaunch).
+- Two publish scripts exist: `WarsOfLibertyLauncher/build-release.ps1` is the
+  canonical one (cleans, publishes, signs, prints SHA-256). The root
+  `publish.ps1` is an older alternative that also supports `-Tag` to create a
+  `vX.Y.Z` git tag; its header comment claims the output is
+  `WarsOfLibertyLauncher.exe`, but `<AssemblyName>` makes it
+  `Aoe3ModLauncher.exe` — the comment is stale.
 
 ### No automated tests
 
@@ -59,10 +65,12 @@ longer exists — don't go looking for it.)
   `RadminAssistantService.cs`). The launcher is only the *meta layer* — lobby,
   chat, match history, ELO — talking to a backend Cloudflare Worker. The
   authoritative description is the class doc-comment in
-  `Services/Multiplayer/MultiplayerSession.cs`. Any `WinDivert`/`PeerMesh`/`n2n`
-  mentions left in code are historical comments ("Pre-n2n…", "legacy … is
-  gone"), not live functionality. **Trust the code over the README** for
-  multiplayer.
+  `Services/Multiplayer/MultiplayerSession.cs`. Comments scattered across the
+  code name several abandoned transports (`WinDivert`, `PeerMesh`, `n2n`,
+  `ZeroTier`) because the design churned repeatedly — they are all historical
+  ("Pre-n2n…", "legacy … is gone"), not live functionality. **Trust the code
+  over the README and over stale comments** for multiplayer; Radmin VPN is the
+  current answer.
 
 - **Single-file publish deliberately omits `IncludeAllContentForSelfExtract`.**
   Several code paths assume `AppContext.BaseDirectory` is the `.exe`'s own
@@ -119,9 +127,44 @@ engine** and the UI binds to it.
 ### Multi-mod profile system
 
 Each mod is a `ModProfile` (branding, paths, payload URLs, update server).
-Built-in profiles live in `ModRegistry`; community mods come from a remote
-catalog repo. **Do not add community mods to `ModRegistry._builtIn`** — they go
-to the catalog repo (the in-app "Publish my mod" wizard opens a PR there).
+`ModRegistry` holds built-in profiles (`_builtIn`) and merges in community mods
+fetched from a remote catalog repo (`RefreshFromCatalogAsync`). **Do not add
+community mods to `ModRegistry._builtIn`** — they go to the catalog repo (the
+in-app "Publish my mod" wizard opens a PR there).
+
+Switching the active mod at runtime swaps `MainWindow._updateService` for a new
+instance bound to the chosen profile (no process restart). `CheckAsync` results
+and AoE3 detection are cached per session (`_checkResultCache`,
+`_aoe3DetectedCache`) and invalidated on install/uninstall/update, so a
+state-changing action forces a fresh check.
+
+**`docs/MODDING.md` is the authoritative `mod.json` spec** — read it before
+touching profile/catalog code. It defines install types (`IsolatedFolder` is
+the default, `InPlaceOverlay`), update mechanisms (`GitHubReleases` recommended,
+`WolPatcher` for the legacy `UpdateInfo.xml`+`.tar.xz` pipeline,
+`DelegatedExternal`, `Manual`), and the tier-based auto-merge + SHA-256 security
+model enforced by the catalog repo's CI. The JSON schema lives at
+`aoe3-mods-catalog-template/schema/mod.schema.json`.
+
+## Runtime conventions
+
+- **Files next to the `.exe`** resolve via `AppContext.BaseDirectory` (this is
+  why the single-file publish keeps content unextracted — see gotchas).
+  `LauncherConfig.Load()`/`Save()` is the only config accessor
+  (`launcher-config.json`); the debug log and XML snapshots land in the same
+  folder.
+- **Logging:** call `DiagnosticLog.Write(...)` (or `WriteSection`). It's a
+  non-blocking queued logger that resets at each launch and writes
+  `launcher-debug.log`. Log messages are **always English** (they're for bug
+  reports), even though the UI is localized.
+- **Localization is mandatory for user-facing strings.** Add every UI string to
+  the `Table` in `Localization/Strings.cs` with both `en` and `es` entries, and
+  read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
+  literal in XAML/code. A missing key renders as the key itself (a visible
+  signal). `Strings.SetLanguage` raises `LanguageChanged` for live refresh.
+- **WPF threading:** long-running work (download/install/check) is `async` and
+  reports progress via `IProgress`/events; marshal UI updates back to the
+  dispatcher. Periodic UI work uses `DispatcherTimer`.
 
 ## Conventions
 
