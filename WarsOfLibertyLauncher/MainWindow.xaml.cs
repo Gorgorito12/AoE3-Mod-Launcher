@@ -1090,12 +1090,42 @@ public partial class MainWindow : Window
     // handles mod-specific concerns.
     // ------------------------------------------------------------------------
 
+    // Single-instance reference for the non-modal Launcher Settings
+    // dialog. The dialog moved from ShowDialog() to Show() so the user
+    // can keep interacting with the main window while it's open — but
+    // that means we have to guard against opening a second copy on top
+    // of an existing one (each Show() creates a new Window with its own
+    // HWND; clicking the gear three times shouldn't yield three settings
+    // windows fighting for focus).
+    private LauncherSettingsDialog? _launcherSettingsDialog;
+
     private void LauncherSettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new LauncherSettingsDialog(_config) { Owner = this };
-        var ok = dialog.ShowDialog();
-        if (ok == true)
+        if (_launcherSettingsDialog != null)
         {
+            // Already open — focus + bring to front instead of opening
+            // a duplicate. Activate() handles the case where the user
+            // alt-tabbed away from it.
+            _launcherSettingsDialog.Activate();
+            return;
+        }
+
+        var dialog = new LauncherSettingsDialog(_config) { Owner = this };
+        _launcherSettingsDialog = dialog;
+
+        // Closed (fires for Save, Cancel, ✕, Esc, and Alt+F4) is the
+        // single rendezvous point for post-dialog refresh. ChangesSaved
+        // is the replacement for the old DialogResult — true only when
+        // the user clicked Save and the dialog persisted its changes.
+        dialog.Closed += (_, _) =>
+        {
+            // Race guard: if the user closed THIS dialog and a new one
+            // has since been opened, don't clobber the new reference.
+            if (ReferenceEquals(_launcherSettingsDialog, dialog))
+                _launcherSettingsDialog = null;
+
+            if (!dialog.ChangesSaved) return;
+
             // The dialog already applied the language change live (via
             // Strings.SetLanguage), persisted the config, and pushed the
             // autostart registration. Refresh anything that depends on
@@ -1112,7 +1142,9 @@ public partial class MainWindow : Window
             // dialog. Recompute so the icon appears/disappears from the
             // notification area without needing a restart.
             UpdateTrayIconVisibility();
-        }
+        };
+
+        dialog.Show();
     }
 
     // ------------------------------------------------------------------------
@@ -2711,6 +2743,15 @@ public partial class MainWindow : Window
         });
     }
 
+    // Single-instance reference for the non-modal Mod Properties
+    // dialog. Same rationale as _launcherSettingsDialog: Show() (vs
+    // ShowDialog()) lets the user interact with the main window while
+    // Properties is open, but we have to guard against duplicates. If
+    // the user clicks the gear on a different mod while one is open,
+    // we close the existing one first so they don't end up with stale
+    // Properties for a mod they've moved away from.
+    private ModPropertiesDialog? _modPropertiesDialog;
+
     /// <summary>
     /// Opens the ModPropertiesDialog for a specific profile. For the
     /// active mod we reuse <c>_updateService</c> directly; for non-
@@ -2720,6 +2761,17 @@ public partial class MainWindow : Window
     /// </summary>
     private void OpenModPropertiesDialog(ModProfile profile)
     {
+        // If a Properties dialog is already open, close it before
+        // opening the new one. We clear the field FIRST so the old
+        // dialog's Closed handler (race guard below) sees a non-match
+        // and skips clobbering the about-to-be-set new reference.
+        if (_modPropertiesDialog != null)
+        {
+            var stale = _modPropertiesDialog;
+            _modPropertiesDialog = null;
+            stale.Close();
+        }
+
         UpdateService service = string.Equals(
                 profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)
             ? _updateService
@@ -2752,15 +2804,31 @@ public partial class MainWindow : Window
         {
             Owner = this,
         };
-        dialog.ShowDialog();
+        _modPropertiesDialog = dialog;
 
-        // After dialog closes, repaint the dashboard chrome in case
-        // the language was changed inside Properties.
-        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        // Closed (fires for the ✕ button, Esc, and Alt+F4) is the
+        // single rendezvous point for post-dialog refresh. Captures
+        // `profile` and `dialog` so they survive the long-lived
+        // closure on the dialog reference.
+        dialog.Closed += (_, _) =>
         {
-            RefreshIdlePanel();
-            RefreshActiveModBanner();
-        }
+            // Race guard: if a new dialog was opened (e.g. user clicked
+            // a different mod's gear while this one was still closing),
+            // don't clobber that new reference.
+            if (ReferenceEquals(_modPropertiesDialog, dialog))
+                _modPropertiesDialog = null;
+
+            // Repaint the dashboard chrome in case the language was
+            // changed inside Properties — same condition as the old
+            // post-ShowDialog block.
+            if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                RefreshIdlePanel();
+                RefreshActiveModBanner();
+            }
+        };
+
+        dialog.Show();
     }
 
     /// <summary>

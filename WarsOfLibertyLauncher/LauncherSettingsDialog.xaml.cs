@@ -10,23 +10,40 @@ using WarsOfLibertyLauncher.Services;
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// Modal "Launcher Settings" dialog. Reads the current <see cref="LauncherConfig"/>
-/// state on open, lets the user tweak launcher-wide preferences (NOT
-/// per-mod state — that lives in the sidebar gear menu), and persists the
-/// changes back when the user hits Save.
+/// Non-modal "Launcher Settings" dialog. Reads the current
+/// <see cref="LauncherConfig"/> state on open, lets the user tweak
+/// launcher-wide preferences (NOT per-mod state — that lives in the
+/// sidebar gear menu), and persists the changes back when the user
+/// hits Save.
 ///
 /// The dialog is mostly value mapping: each control mirrors one field in
 /// LauncherConfig. The only side-effect not covered by a config write is
 /// the Windows registry mutation for "Start with Windows" — handled by
 /// <see cref="StartupRegistrationService.Apply"/>.
 ///
-/// On Save, sets <see cref="Window.DialogResult"/>=true so the caller can
-/// react (e.g. apply the new language live without re-rendering everything
-/// from scratch). Cancel/Close set false.
+/// Opened via <see cref="Window.Show()"/> from MainWindow (not
+/// <see cref="Window.ShowDialog()"/>) so the user can keep interacting
+/// with the main window while it's open. On Save, sets
+/// <see cref="ChangesSaved"/>=true; the caller reads that flag in its
+/// <see cref="Window.Closed"/> handler to decide whether to refresh
+/// dependent UI. Cancel / ✕ / Esc leave ChangesSaved=false.
 /// </summary>
 public partial class LauncherSettingsDialog : Window
 {
     private readonly LauncherConfig _config;
+
+    /// <summary>
+    /// True after the user clicked Save (changes were persisted). The
+    /// caller reads this in its <see cref="Window.Closed"/> handler to
+    /// decide whether to refresh dependent UI. We can't use
+    /// <see cref="Window.DialogResult"/> for this any more — the dialog
+    /// is shown non-modally via <see cref="Window.Show()"/> now, and
+    /// DialogResult is only settable when the window was opened with
+    /// <see cref="Window.ShowDialog()"/> (otherwise WPF throws
+    /// InvalidOperationException). Default false handles the Cancel /
+    /// ✕ / Esc paths in one branch.
+    /// </summary>
+    public bool ChangesSaved { get; private set; }
 
     /// <summary>
     /// Regex for a valid "owner/repo" GitHub identifier. Mirrors the
@@ -238,7 +255,8 @@ public partial class LauncherSettingsDialog : Window
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
+        // Non-modal: just Close(). ChangesSaved stays false by default,
+        // which the caller treats as "nothing to refresh".
         Close();
     }
 
@@ -329,7 +347,7 @@ public partial class LauncherSettingsDialog : Window
             // next manual save will flush.
         }
 
-        DialogResult = true;
+        ChangesSaved = true;
         Close();
     }
 

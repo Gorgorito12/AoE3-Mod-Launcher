@@ -305,13 +305,19 @@ public partial class ModPropertiesDialog : Window
 
     // -- Action handlers ----------------------------------------------------
     //
-    // Most handlers close the dialog before invoking the callback
-    // so the user lands directly on the dialog/flow the callback
-    // opens (e.g. the Verify progress strip on the dashboard, the
-    // path picker for Change folder, the uninstall confirmation,
-    // etc.). The website / language handlers don't close because
-    // they don't navigate elsewhere — the user might want to keep
-    // poking around.
+    // Most handlers close the dialog before invoking the callback so
+    // the user lands directly on the dialog/flow the callback opens
+    // (verify progress strip, uninstall confirmation, path picker,
+    // etc.) without the Properties window covering it. The website /
+    // language handlers don't close because they don't navigate
+    // elsewhere — the user might want to keep poking around.
+    //
+    // None of these set DialogResult: the dialog is shown non-modally
+    // via Show() from MainWindow, and setting DialogResult outside of
+    // ShowDialog() throws InvalidOperationException. The caller never
+    // read DialogResult here anyway — the post-close refresh
+    // (RefreshIdlePanel + RefreshActiveModBanner) runs on the Closed
+    // event regardless of how the dialog was dismissed.
 
     private void ValWebsite_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
@@ -329,7 +335,6 @@ public partial class ModPropertiesDialog : Window
 
     private void CheckUpdatesBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _checkForUpdates?.Invoke();
     }
@@ -350,70 +355,60 @@ public partial class ModPropertiesDialog : Window
 
     private void OpenAoE3FolderBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _openAoE3Folder?.Invoke();
     }
 
     private void ChangeModFolderBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _changeModFolder?.Invoke();
     }
 
     private void ChangeAoE3FolderBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _changeAoE3Folder?.Invoke();
     }
 
     private void VerifyBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _openVerify?.Invoke();
     }
 
     private void RepairBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _openRepair?.Invoke();
     }
 
     private void ViewLogsBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _viewLogs?.Invoke();
     }
 
     private void UninstallBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _uninstall?.Invoke();
     }
 
     private void OpenUserDataFolderBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _openUserDataFolder?.Invoke();
     }
 
     private void CreateBackupBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _createBackup?.Invoke();
     }
 
     private void RestoreBackupBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
         _restoreBackup?.Invoke();
     }
@@ -434,7 +429,6 @@ public partial class ModPropertiesDialog : Window
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
         Close();
     }
 }

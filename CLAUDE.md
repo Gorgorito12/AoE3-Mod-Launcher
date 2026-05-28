@@ -124,8 +124,12 @@ engine** and the UI binds to it.
 
 - **`MainWindow` + `Controls/`** — the shell and tabs (`MainTabs`, `StatusCard`,
   `ProgressPanel`, `ActionPanel`, `ModsBrowser`, `MultiplayerTab`, `HeroBanner`).
-  Top-level `*Dialog.xaml` files are the modals (install, uninstall, self-update,
-  user-data backup/restore, translations, Discord sign-in, create-lobby, etc.).
+  Most top-level `*Dialog.xaml` files are modals opened via `.ShowDialog()`
+  (install, uninstall, self-update, user-data backup/restore, translations,
+  Discord sign-in, create-lobby, etc.). The two exceptions are
+  `LauncherSettingsDialog` and `ModPropertiesDialog`, which are non-modal +
+  resizable + single-instance — see the dedicated bullet under Runtime
+  conventions for the contract.
 - **`Models/`** — plain schema/DTO types: `LauncherConfig` (`launcher-config.json`,
   lives next to the `.exe`), `UpdateInfo` (`UpdateInfo.xml` schema),
   `InstallManifest` (`install-manifest.json`, drives uninstall), `ModProfile` /
@@ -222,9 +226,10 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   `ModPropertiesDialog`) still carry redundant `TextOptions.*` XAML attributes
   from before this was centralised; harmless (the values match) but not the
   pattern to copy.
-- **Settings / Properties dialogs share a sidebar-tab pattern.**
-  `ModPropertiesDialog` and `LauncherSettingsDialog` both pair a custom dark
-  `WindowChrome` (`WindowStyle="None"` + ~40 px caption + single ✕ close,
+- **Settings / Properties dialogs share a sidebar-tab pattern and are
+  non-modal + resizable.** `ModPropertiesDialog` and `LauncherSettingsDialog`
+  both pair a custom dark `WindowChrome` (`WindowStyle="None"` + ~40 px
+  caption + 6 px `ResizeBorderThickness` for edge-drag, single ✕ close,
   recipe replicated as the `DialogCloseButton` local style), a 200-px left
   rail of `SidebarNavButton` buttons (from `Styles/Buttons.xaml`, shared
   across both dialogs), and a `SetActiveTab(button)` helper that toggles
@@ -233,11 +238,23 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   tab is driven entirely by the style's `Tag="active"` trigger — no per-
   dialog colour code. Tab labels reuse the same uppercase section strings
   (`GENERAL`, `UPDATES`, etc.) the in-content section headers used before
-  the refactor. When adding a new multi-section settings surface, copy
-  this pattern instead of rebuilding navigation, chrome and tab visuals
-  from scratch — the gear-menu modals (Aoe3Picker, CreateLobby, etc.)
-  still use the default white WPF chrome and are next in line for the
-  same treatment.
+  the refactor.
+  Both dialogs are opened from `MainWindow` via `.Show()` (not
+  `.ShowDialog()`) so the user can keep clicking the main window while
+  they're open. That has three implications: (1) **never set `DialogResult`
+  in these dialogs** — it throws `InvalidOperationException` when the
+  window wasn't shown modally; use a custom field (`ChangesSaved` on
+  LauncherSettings) or nothing at all. (2) Callers track each dialog in
+  a single-instance field (`_launcherSettingsDialog`, `_modPropertiesDialog`)
+  and either `Activate()` the existing window or `Close()` it before
+  opening a new one, so re-clicking the gear doesn't stack windows.
+  (3) The post-dialog refresh runs on `dialog.Closed += …` instead of
+  after the `ShowDialog()` call returns.
+  When adding a new multi-section settings surface, copy this pattern
+  instead of rebuilding navigation, chrome and tab visuals from scratch
+  — the gear-menu modals (Aoe3Picker, CreateLobby, etc.) still use the
+  default white WPF chrome and `.ShowDialog()` and are next in line for
+  the same treatment.
 
 ## Conventions
 

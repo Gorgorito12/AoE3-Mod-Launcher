@@ -4,9 +4,10 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Launcher Settings"
         Height="600" Width="820"
+        MinHeight="540" MinWidth="720"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
-        ResizeMode="NoResize"
+        ResizeMode="CanResize"
         AllowsTransparency="False"
         Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
@@ -36,9 +37,15 @@
         TabXxxBtn_Click handlers, copied verbatim from ModPropertiesDialog.
     -->
 
+    <!-- ResizeBorderThickness=6 enables edge-drag resize even though
+         WindowStyle=None hides the native chrome — paired with
+         ResizeMode=CanResize above, the user can stretch the dialog
+         from any edge or corner. CaptionHeight=40 still scopes the
+         drag area to the header row so the sidebar tabs stay
+         clickable instead of starting a drag on click. -->
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="40"
-                      ResizeBorderThickness="0"
+                      ResizeBorderThickness="6"
                       CornerRadius="0"
                       GlassFrameThickness="0"
                       UseAeroCaptionButtons="False"/>

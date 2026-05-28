@@ -4,9 +4,10 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Mod properties"
         Height="640" Width="900"
+        MinHeight="540" MinWidth="780"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
-        ResizeMode="NoResize"
+        ResizeMode="CanResize"
         AllowsTransparency="False"
         Background="{DynamicResource BgBase}"
         TextOptions.TextFormattingMode="Display"
@@ -40,12 +41,15 @@
          drag area without painting a Windows-native caption bar. The
          close button uses IsHitTestVisibleInChrome=True so clicks on
          it dismiss the popup instead of starting a drag.
-         (Was 56 before the header was compacted to one row — now the
-         drag area ends exactly where the row ends so the user can't
-         accidentally start a drag below the close button.) -->
+         (Caption was 56 before the header was compacted to one row —
+         now the drag area ends exactly where the row ends so the
+         user can't accidentally start a drag below the close button.
+         ResizeBorderThickness=6 enables edge-drag resize even with
+         WindowStyle=None — paired with ResizeMode=CanResize above,
+         the user can stretch the dialog from any edge or corner.) -->
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="40"
-                      ResizeBorderThickness="0"
+                      ResizeBorderThickness="6"
                       CornerRadius="0"
                       GlassFrameThickness="0"
                       UseAeroCaptionButtons="False"/>
