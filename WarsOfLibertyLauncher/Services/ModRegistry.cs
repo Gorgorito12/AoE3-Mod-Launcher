@@ -12,7 +12,8 @@ namespace WarsOfLibertyLauncher.Services;
 /// layers:
 ///
 ///   1. <see cref="_builtIn"/> — embedded at compile time. Wars of Liberty
-///      only. Always available, no network needed. The launcher boots from
+///      plus the stock Age of Empires III (detect-only) base-game entry.
+///      Always available, no network needed. The launcher boots from
 ///      this list so the UI is never empty even on a fresh install with no
 ///      internet. WoL stays hardcoded because it's the launcher's reason
 ///      for existing and we don't want a catalog outage to leave a fresh
@@ -37,6 +38,14 @@ public static class ModRegistry
 {
     /// <summary>Wars of Liberty — full updater pipeline + community translations.</summary>
     public const string WolId = "wol";
+
+    /// <summary>
+    /// Stock Age of Empires III: The Asian Dynasties — the unmodded base
+    /// game. Detect-only: the launcher locates an existing install and runs
+    /// it (single-player + Radmin multiplayer), but never installs, updates,
+    /// or uninstalls it. See <see cref="ModProfile.IsStockGame"/>.
+    /// </summary>
+    public const string StockAoe3Id = "aoe3-tad";
 
     /// <summary>
     /// The hard-coded set. Never mutated after construction — treat as
@@ -94,7 +103,7 @@ public static class ModRegistry
 
     /// <summary>
     /// True when the given id matches one of the hard-coded built-in
-    /// profiles (currently only WoL). Built-ins are always treated as
+    /// profiles (WoL and the stock Age of Empires III entry). Built-ins are always treated as
     /// part of the user's mod collection — they can't be removed via
     /// the Workshop because the launcher would have nothing to show
     /// otherwise on a fresh install.
@@ -478,6 +487,61 @@ public static class ModRegistry
                     @"data\unithelpstringsy.xml",
                 },
             },
+        },
+
+        // Stock Age of Empires III: The Asian Dynasties. Detect-only — the
+        // launcher never installs/updates/uninstalls the base game (legal:
+        // it's the user's own copy). It's modelled as an InPlaceOverlay with
+        // a Manual update mechanism purely so the existing detection +
+        // launch + "Ready to play" UI paths light up for free:
+        //   * InPlaceOverlay → ResolveInstallPath's disk scan probes the
+        //     detected AoE3 install's own folder (ModRoot) for the probe
+        //     file, which is exactly where the base game lives.
+        //   * Manual         → ApplyCheckResult takes the non-WolPatcher
+        //     branch and shows PLAY (no Install/Update buttons) when the
+        //     install is valid.
+        // IsStockGame=true is what actually guards the destructive paths
+        // (Install/Update/Repair/Uninstall) — see ModProfile.IsStockGame.
+        new ModProfile
+        {
+            Id = StockAoe3Id,
+            DisplayName = "Age of Empires III: The Asian Dynasties",
+            Subtitle = "Original base game",
+            // Gold/bronze to set it apart from WoL's red and read as
+            // "the classic game".
+            AccentColor = "#caa14a",
+            Author = "Ensemble Studios, Big Huge Games",
+            OfficialWebsite = "https://www.ageofempires.com/games/aoeiii/",
+            IsStockGame = true,
+            // Real description, mirrored in the catalog repo at
+            // mods/aoe3-tad/mod.json. Rendered under the dashboard hero title
+            // (DashboardDescText). EN/ES like every other profile.
+            Description = new Dictionary<string, string>
+            {
+                ["en"] = "The second expansion to Age of Empires III, by Ensemble Studios and Big Huge Games. The Asian Dynasties adds three Asian civilizations — Japanese, Chinese and Indians — that advance through the ages by raising Wonders, plus new campaigns, maps, the Consulate, and naval and trade additions. This is the unmodded base game: the launcher only detects and runs your own legally-owned copy, it never installs it.",
+                ["es"] = "La segunda expansión de Age of Empires III, de Ensemble Studios y Big Huge Games. The Asian Dynasties suma tres civilizaciones asiáticas —japoneses, chinos e indios— que avanzan de edad construyendo Maravillas, además de nuevas campañas, mapas, el Consulado y agregados navales y de comercio. Es el juego base sin mods: el launcher solo detecta y ejecuta tu propia copia legal, nunca lo instala.",
+            },
+            // Branding assets are hosted in the catalog repo, same pattern as
+            // WoL: drop a 1920x1080 hero.jpg / 256x256 icon.png into
+            // mods/aoe3-tad/ there and they appear automatically. Until then
+            // the dashboard uses the accent gradient + a monogram (the 404s
+            // are swallowed by EnsureModAssetsAsync).
+            HeroImageUrl = "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/aoe3-tad/hero.jpg",
+            IconUrl = "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/aoe3-tad/icon.png",
+            InstallType = ModInstallType.InPlaceOverlay,
+            // Empty: there is no install dialog for the stock game.
+            DefaultInstallFolder = "",
+            // A TAD data file that sits at the install ROOT in every store
+            // layout (Steam/GOG/retail all keep data\ at the root, with the
+            // exe under bin\ on Steam). It's also one of the three files the
+            // multiplayer fingerprint hashes, so "detected on disk" implies
+            // "fingerprintable for multiplayer".
+            InstallProbeFile = @"data\protoy.xml",
+            GameExecutable = "age3y.exe",
+            GameArguments = "",
+            UpdateMechanism = ModUpdateMechanism.Manual,
+            // No UserDataFolder on purpose: the launcher doesn't manage the
+            // base game's saves/replays (no backup/restore prompts for it).
         },
     };
 }

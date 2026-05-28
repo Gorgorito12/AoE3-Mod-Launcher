@@ -2354,7 +2354,16 @@ public partial class MultiplayerTab : UserControl
         // the default folder".
         var saved = WarsOfLibertyLauncher.Models.LauncherConfig
             .Load().GetState(profile.Id).InstallPath;
-        return string.IsNullOrEmpty(saved) ? null : saved;
+        if (!string.IsNullOrEmpty(saved)) return saved;
+
+        // The stock Age of Empires III profile is never "installed" through
+        // the launcher, so it has no saved path. Resolve it from the detected
+        // AoE3 install on disk so it still shows up as host-able / join-able
+        // and can be fingerprinted for the version-parity check.
+        if (profile.IsStockGame)
+            return AoE3Detector.FindInstallRoot();
+
+        return null;
     }
 
 
@@ -2693,7 +2702,16 @@ public partial class MultiplayerTab : UserControl
         {
             var cfg = WarsOfLibertyLauncher.Models.LauncherConfig.Load();
             var state = cfg.GetState(modId);
-            return !string.IsNullOrEmpty(state.InstallPath);
+            if (!string.IsNullOrEmpty(state.InstallPath)) return true;
+
+            // The stock Age of Empires III profile is never installed through
+            // the launcher, so it has no saved path. Detect the base game on
+            // disk instead so stock rooms aren't greyed out or blocked at join.
+            var profile = ModRegistry.Find(modId);
+            if (profile is { IsStockGame: true })
+                return !string.IsNullOrEmpty(AoE3Detector.FindInstallRoot());
+
+            return false;
         }
         catch
         {

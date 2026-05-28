@@ -381,11 +381,16 @@
              (set in WindowChrome above); buttons mark themselves
              hit-test-visible-in-chrome so they aren't blocked by
              the drag area.
-             ============================================================= -->
+
+             NO bottom border here on purpose: the nav-tab strip
+             below (Grid.Row=1) shares the exact same BgSidebar fill,
+             so a divider between them would draw a visible seam
+             through what should read as one continuous chrome
+             surface. The seam below the nav tabs is the nav strip's
+             OWN bottom border — that one stays, since it delimits
+             chrome from content. -->
         <Border Grid.Row="0"
-                Background="{DynamicResource BgSidebar}"
-                BorderBrush="{DynamicResource BorderSecondary}"
-                BorderThickness="0,0,0,1">
+                Background="{DynamicResource BgSidebar}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -398,41 +403,70 @@
                      menu (Launcher settings / About / Exit).
                      IsHitTestVisibleInChrome=True so WindowChrome's
                      drag handler doesn't swallow the click. -->
+                <!-- Title-bar brand button uses the SAME interaction recipe
+                     as NavTabButton (the LIBRARY/WORKSHOP/MULTIPLAYER tabs):
+                     the text illuminates instead of painting a background
+                     tile. Implemented as a Button.Style — NOT inline
+                     attributes — on purpose:
+                       • idle Foreground is a STYLE setter (precedence 7),
+                         so the template's hover/press/open Foreground
+                         triggers (precedence 4-6) can override it. A local
+                         Foreground ATTRIBUTE (precedence 3) beats the
+                         triggers and the colour never changes — that was
+                         the earlier bug.
+                       • the ContentPresenter is left DEFAULT (no explicit
+                         Foreground): a ContentControl's ContentPresenter
+                         auto-propagates the templated parent's Foreground to
+                         the content text, so when a trigger flips the
+                         Button's Foreground the icon-label TextBlocks follow.
+                         (Setting TextElement.Foreground directly on the
+                         ContentPresenter did NOT propagate — that's why the
+                         previous attempt looked dead.)
+                     States: idle = dim Secondary, hover = #E6EEF8 (near-white,
+                     the same token the nav tabs lift to), pressed/open =
+                     #FFFFFF pure white (open held while the brand popup lives
+                     via Tag="open", set in BrandMenuButton_Click). -->
                 <Button x:Name="TitleBarBrandButton"
                         Grid.Column="0"
                         HorizontalAlignment="Left"
                         Background="Transparent"
-                        Foreground="{DynamicResource Secondary}"
                         BorderThickness="0"
                         Padding="12,0"
                         Cursor="Hand"
                         Click="BrandMenuButton_Click"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                    <!-- GHOST GOLD recipe — same as NavTabButton /
-                         SidebarNavButton: idle Foreground sits at the
-                         dim Secondary tone, hover lifts it to the
-                         warm cream FgHoverGold token. No background
-                         fill, no overlay, no glow effects — the
-                         text colour change alone signals interaction.
-
-                         Foreground is set on the Button so the
-                         TextBlock children inherit it via
-                         TextElement.Foreground propagation. -->
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="border"
-                                    Background="{TemplateBinding Background}"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="Left"
-                                                  VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border"
+                                                Background="{TemplateBinding Background}"
+                                                Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Left"
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Foreground" Value="#E6EEF8"/>
+                                            </Trigger>
+                                            <!-- Pressed + Open after hover so
+                                                 they win when both match; pure
+                                                 white vs hover's near-white
+                                                 keeps press/open distinct. -->
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                            </Trigger>
+                                            <Trigger Property="Tag" Value="open">
+                                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Style>
                     <StackPanel Orientation="Horizontal"
                                 VerticalAlignment="Center">
                         <Image Source="pack://application:,,,/AppIcon.ico"
@@ -442,12 +476,16 @@
                                RenderOptions.BitmapScalingMode="HighQuality"/>
                         <TextBlock Text="AoE3 Mod Launcher"
                                    FontFamily="{DynamicResource DisplayFont}"
-                                   FontSize="12"
+                                   FontSize="13"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
-                        <TextBlock Text="&#xE70D;"
+                        <!-- Chevron flips ▾↔▴ in code-behind on open/close
+                             to signal the dropdown is expanded. Named so
+                             BrandMenuButton_Click can swap the glyph. -->
+                        <TextBlock x:Name="BrandChevron"
+                                   Text="&#xE70D;"
                                    FontFamily="Segoe MDL2 Assets"
-                                   FontSize="9"
+                                   FontSize="10"
                                    VerticalAlignment="Center"
                                    Margin="6,1,0,0"
                                    Opacity="0.7"/>
@@ -634,7 +672,8 @@
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource AccentBrush}"
                                    LineHeight="56"
-                                   LineStackingStrategy="BlockLineHeight">
+                                   LineStackingStrategy="BlockLineHeight"
+                                   TextWrapping="Wrap">
                             <TextBlock.Effect>
                                 <DropShadowEffect BlurRadius="14" ShadowDepth="2" Color="Black" Opacity="0.85"/>
                             </TextBlock.Effect>

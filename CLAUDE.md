@@ -130,6 +130,16 @@ longer exists — don't go looking for it.)
   does NOT yank the user off their current tab; "first opens" is a launch-time
   rule only).
 
+- **MainWindow's title bar + nav strip are deliberately ONE seamless surface.**
+  The custom title bar (`Grid.Row=0`) and the nav-tab strip (`Grid.Row=1`)
+  both fill with the **same** `BgSidebar` brush, and the title bar has **no
+  bottom border on purpose** — adding one draws a visible seam through what's
+  meant to read as a single continuous chrome block from the window top down
+  to the tabs. The only border in that region is the nav strip's own
+  `BorderThickness="0,0,0,1"`, which delimits chrome from content below. Don't
+  "fix" the title bar by giving it a divider — the missing border is the
+  feature.
+
 - **`LauncherConfig` is per-mod.** Real state lives in a `mods` dictionary of
   `ModState` keyed by mod id and selected by `activeModId`; the flat
   `modInstallPath` / `gameExecutable` / `activeTranslationId` fields are LEGACY,

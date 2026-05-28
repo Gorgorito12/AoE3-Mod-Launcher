@@ -198,6 +198,13 @@ public partial class MainWindow : Window
             async profile =>
             {
                 var installPath = _config.GetState(profile.Id).InstallPath;
+                // The stock Age of Empires III profile is detect-only — it has
+                // no saved install path because the launcher never installed
+                // it. Resolve it from the detected AoE3 install so it can still
+                // be fingerprinted for the version-parity check when hosting /
+                // joining a stock-game lobby.
+                if (string.IsNullOrEmpty(installPath) && profile.IsStockGame)
+                    installPath = Services.AoE3Detector.FindInstallRoot();
                 if (string.IsNullOrEmpty(installPath))
                     throw new InvalidOperationException(
                         "The active mod is not installed on this PC. Install it before joining or hosting.");
@@ -3490,6 +3497,25 @@ public partial class MainWindow : Window
     {
         var btn = (System.Windows.Controls.Button)sender;
         var popup = BuildBrandPopup(btn);
+
+        // Light up the button for as long as the menu is showing: Tag
+        // "open" drives the persistent highlight in the button template,
+        // and the chevron flips ▾ → ▴ to read as "expanded". Both revert
+        // on Closed (fires for click-away — StaysOpen=false — Esc, or an
+        // item picking that sets IsOpen=false). char-from-hex instead of
+        // "\uXXXX" literals so the source stays pure ASCII (some
+        // round-trips mangle non-ASCII bytes).
+        btn.Tag = "open";
+        if (BrandChevron != null)
+            BrandChevron.Text = ((char)0xE70E).ToString();   // ChevronUp
+
+        popup.Closed += (_, _) =>
+        {
+            btn.Tag = null;
+            if (BrandChevron != null)
+                BrandChevron.Text = ((char)0xE70D).ToString();   // ChevronDown
+        };
+
         popup.IsOpen = true;
     }
 
@@ -4893,7 +4919,19 @@ public partial class MainWindow : Window
             {
                 SetPrimaryAction(PrimaryAction.Play);
                 SetStatus(Strings.Format(
-                    "StatusReadyExternalUpdates", _updateService.Profile.DisplayName));
+                    _updateService.Profile.IsStockGame
+                        ? "StatusStockReady"
+                        : "StatusReadyExternalUpdates",
+                    _updateService.Profile.DisplayName));
+            }
+            else if (_updateService.Profile.IsStockGame)
+            {
+                // Detect-only base game we couldn't locate on disk. There's
+                // nothing for the launcher to install — point the user at
+                // their store/disc and leave PLAY disabled until it's found.
+                SetPrimaryAction(PrimaryAction.Play, enabled: false);
+                SetStatus(Strings.Format(
+                    "StatusStockNotDetected", _updateService.Profile.DisplayName));
             }
             else if (launcherCanInstall)
             {
@@ -5431,6 +5469,9 @@ public partial class MainWindow : Window
     private async void MenuRepairInstall_Click(object sender, RoutedEventArgs e)
     {
         if (_isBusy) return;
+        // Stock Age of Empires III is detect-only — there is no launcher-managed
+        // payload to repair. Never run a repair against the base game.
+        if (_updateService.Profile.IsStockGame) return;
         if (!_modIsInstalled || string.IsNullOrEmpty(_updateService.InstallPath))
         {
             SetStatus(Strings.Get("StatusNotInstalled"));
@@ -5440,7 +5481,11 @@ public partial class MainWindow : Window
     }
 
     private void MenuVerifyFiles_Click(object sender, RoutedEventArgs e)
-        => VerifyButton_Click(sender, e);
+    {
+        // No launcher-managed install to verify for the stock base game.
+        if (_updateService.Profile.IsStockGame) return;
+        VerifyButton_Click(sender, e);
+    }
 
     /// <summary>
     /// Opens the diagnostic log file in the system's default text editor —
@@ -7558,6 +7603,10 @@ public partial class MainWindow : Window
     private async void UninstallMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (_isBusy) return;
+        // Never uninstall the stock base game — it's the user's own AoE3
+        // install, and uninstall is a blanket recursive delete. The gear
+        // dialog hides this for stock; this is the defence-in-depth guard.
+        if (_updateService.Profile.IsStockGame) return;
         if (string.IsNullOrEmpty(_updateService.InstallPath))
         {
             SetStatus(Strings.Get("StatusNotInstalled"));

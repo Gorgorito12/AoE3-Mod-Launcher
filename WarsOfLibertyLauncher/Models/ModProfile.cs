@@ -304,4 +304,26 @@ public class ModProfile
     /// have a separate one (e.g. overlay mods like Improvement Mod by default).
     /// </summary>
     public string UserDataFolder { get; set; } = "";
+
+    /// <summary>
+    /// True for the launcher's built-in "stock Age of Empires III" profile.
+    /// The launcher only DETECTS this game on disk — it never downloads,
+    /// installs, updates, or uninstalls it. The base game is the user's own
+    /// legally-acquired copy (bought on Steam/GOG/retail); we just locate it
+    /// and run it. When this is true:
+    ///   * Install / Update / Repair / Uninstall are suppressed in the UI and
+    ///     refused by the services. This is load-bearing for safety: the
+    ///     uninstall path is a blanket recursive delete of the install folder,
+    ///     and a stock profile points at the user's real AoE3 install — so
+    ///     "uninstalling" it would wipe their base game.
+    ///   * "AoE3 detected on disk" is treated as "ready to play", and the
+    ///     install path is resolved by probing the detected AoE3 install
+    ///     (<see cref="WarsOfLibertyLauncher.Services.AoE3Detector"/>) instead
+    ///     of being read from saved install state — the launcher never wrote
+    ///     one, because it never ran an install.
+    /// Multiplayer still works: the stock install is fingerprinted exactly
+    /// like a mod (over the same TAD data files) so two stock players on the
+    /// same game version produce a matching hash and can share a lobby.
+    /// </summary>
+    public bool IsStockGame { get; set; } = false;
 }

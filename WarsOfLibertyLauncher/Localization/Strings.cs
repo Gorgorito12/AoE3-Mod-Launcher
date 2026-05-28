@@ -411,6 +411,16 @@ public static class Strings
             [LangEn] = "{0} isn't installed yet. Install it from its own site, then come back here to play.",
             [LangEs] = "{0} todavía no está instalado. Instalalo desde su sitio y volvé acá para jugar.",
         },
+        ["StatusStockReady"] = new()
+        {
+            [LangEn] = "{0} detected. Ready to play.",
+            [LangEs] = "{0} detectado. Listo para jugar.",
+        },
+        ["StatusStockNotDetected"] = new()
+        {
+            [LangEn] = "{0} wasn't found on this PC. Install it from Steam, GOG or your retail disc, then reopen the launcher.",
+            [LangEs] = "No se encontró {0} en esta PC. Instalalo desde Steam, GOG o tu disco original y volvé a abrir el launcher.",
+        },
         ["Subtitle"] = new()
         {
             [LangEn] = "Launcher",

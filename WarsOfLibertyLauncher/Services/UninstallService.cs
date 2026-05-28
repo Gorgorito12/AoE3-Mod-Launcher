@@ -64,6 +64,20 @@ public class UninstallService
         if (string.IsNullOrEmpty(installPath) || !Directory.Exists(installPath))
             return new UninstallPlan(UninstallMode.NothingToDo, installPath ?? "", 0, 0);
 
+        // Hard safety net: the stock Age of Empires III profile points at the
+        // user's real, legally-owned base-game install (it's detect-only — we
+        // never installed it). Uninstall is a blanket recursive delete of the
+        // install folder, so proceeding here would wipe their AoE3. Refuse
+        // outright. The UI also hides Uninstall for stock profiles; this guard
+        // guarantees safety even if some surface slips a button through.
+        if (profile.IsStockGame)
+        {
+            DiagnosticLog.Write(
+                $"Uninstall refused: '{profile.DisplayName}' is the stock game (detect-only) — " +
+                $"refusing to delete '{installPath}'.");
+            return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
+        }
+
         // Probe check: only delete folders that look like the mod we expect.
         // Rules out catastrophic accidents — user pointing at the AoE3 root,
         // an unrelated folder, or a drive root. An empty ProbeFile means the

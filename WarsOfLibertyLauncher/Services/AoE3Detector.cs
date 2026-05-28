@@ -150,6 +150,30 @@ public static class AoE3Detector
     }
 
     /// <summary>
+    /// Install ROOT (the folder that contains AoE3's <c>data\</c> directory)
+    /// of the first detected Age of Empires III install, or null if none is
+    /// found. <see cref="FindAll"/> returns every install with both its
+    /// <c>GameFolder</c> (where age3y.exe lives) and <c>ModRoot</c> (one
+    /// level up out of <c>bin\</c> on the Steam layout); this returns just
+    /// the best candidate's root.
+    ///
+    /// Used by the stock-game profile (<see cref="Models.ModProfile.IsStockGame"/>),
+    /// which has no saved install path because the launcher never installs
+    /// it: multiplayer host/join and the mod fingerprint resolve the path
+    /// through here instead of reading <c>ModState.InstallPath</c>.
+    /// </summary>
+    public static string? FindInstallRoot()
+    {
+        foreach (var install in FindAll())
+        {
+            if (!string.IsNullOrEmpty(install.ModRoot)
+                && Directory.Exists(Path.Combine(install.ModRoot, "data")))
+                return install.ModRoot;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Every fixed drive on the machine, with the three install-prefix
     /// suffixes we probe (Program Files (x86), Program Files, drive root).
     /// Replaces the old hardcoded C:/D:/E: list so external SSDs and any

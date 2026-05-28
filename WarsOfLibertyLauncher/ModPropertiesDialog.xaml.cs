@@ -215,6 +215,25 @@ public partial class ModPropertiesDialog : Window
         RepairBtn.IsEnabled = installed;
         ViewLogsBtn.IsEnabled = true;          // Logs are always available.
         UninstallBtn.IsEnabled = installed;
+
+        // Stock Age of Empires III is detect-only: the launcher never
+        // installed it, so there's no payload to verify/repair, and the
+        // "install path" IS the user's real AoE3 folder — uninstalling it
+        // (a blanket recursive delete) would wipe their base game. Hide the
+        // Maintenance and Danger Zone sections outright for it.
+        if (_profile.IsStockGame)
+        {
+            LblMaintenanceSection.Visibility = Visibility.Collapsed;
+            VerifyBtn.Visibility = Visibility.Collapsed;
+            RepairBtn.Visibility = Visibility.Collapsed;
+            VerifyBtn.IsEnabled = false;
+            RepairBtn.IsEnabled = false;
+
+            LblDangerZone.Visibility = Visibility.Collapsed;
+            LblDangerZoneDesc.Visibility = Visibility.Collapsed;
+            UninstallBtn.Visibility = Visibility.Collapsed;
+            UninstallBtn.IsEnabled = false;
+        }
     }
 
     private void LoadUserData()
