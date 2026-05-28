@@ -98,25 +98,30 @@ public partial class MultiplayerTab : UserControl
         public bool Ready { get; set; }
     }
 
-    // -------- Popup drag state --------------------------------------
+    // -------- Lobby window (replaces the old in-tab popup) ----------
     //
-    // Floating-card drag: the user grabs the header strip and moves
-    // the whole RoomPopupCard around within RoomPopupCanvas. Drag is
-    // disabled while the room is in the Starting / InGame phase to
-    // prevent accidental clicks during a live match.
-
-    private bool _isDraggingPopup;
-    private System.Windows.Point _dragStartCursorOnCanvas;
-    private double _dragStartCardLeft;
-    private double _dragStartCardTop;
-    private bool _popupPositionInitialised;
+    // The lobby UI used to be a Canvas overlay inside this tab
+    // (RoomPanel Grid + floating-card Border). We extracted it to a
+    // real top-level Window so the user can drag/resize/move it freely
+    // via OS chrome. Single-instance: opening a room with the window
+    // already open just .Activate()s it. Closing it (✕/Esc/Alt+F4)
+    // fires Closed which clears this field AND triggers leave-room on
+    // the session if we're still in one (see HandleLobbyWindowClosed).
+    //
+    // Render* and Apply* methods below guard on _lobbyWindow == null
+    // and return early — they're invoked from session events that may
+    // fire after the window was already closed (e.g. host disconnect
+    // race) and we shouldn't crash on a null reference. When non-null,
+    // they read/write the window's UI elements directly through the
+    // field-modifier-internal x:Name fields (same assembly).
+    private LobbyWindow? _lobbyWindow;
 
     // -------- Match lifecycle state ---------------------------------
     //
     // Three logical phases:
-    //   Lobby     — popup is fully interactive, drag enabled, X visible
-    //   Starting  — countdown overlay shown, popup locked, no X
-    //   InGame    — InGame overlay shown, popup locked, only Cancel/Leave
+    //   Lobby     — popup is fully interactive, X visible
+    //   Starting  — countdown overlay shown, no X
+    //   InGame    — InGame overlay shown, only Cancel/Leave
     //
     // We track the phase locally so the UI gates immediately without
     // waiting for a round-trip to the server. The Worker's
@@ -698,10 +703,17 @@ public partial class MultiplayerTab : UserControl
         RefreshButton.Content = "↻  " + Strings.Get("MpRoomsRefresh");
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
 
-        ReadyButton.Content = Strings.Get("MpRoomReady");
-        StartButton.Content = Strings.Get("MpRoomStart");
-        LeaveRoomButton.Content = Strings.Get("MpRoomLeave");
-        ChatInputBox.Tag = Strings.Get("MpRoomChatPlaceholder");
+        // Lobby window labels — only updated if it's currently open.
+        // When the user switches language between rooms, the next
+        // OpenLobbyWindow() will pick up the new labels from
+        // RenderRoomPanel.
+        if (_lobbyWindow != null)
+        {
+            _lobbyWindow.ReadyButton.Content = Strings.Get("MpRoomReady");
+            _lobbyWindow.StartButton.Content = Strings.Get("MpRoomStart");
+            _lobbyWindow.LeaveRoomButton.Content = Strings.Get("MpRoomLeave");
+            _lobbyWindow.ChatInputBox.Tag = Strings.Get("MpRoomChatPlaceholder");
+        }
 
         // Table column headers + empty-state copy. These have no
         // translation keys today; we use the wording from the
@@ -793,9 +805,10 @@ public partial class MultiplayerTab : UserControl
             }
             catch { /* best-effort cleanup */ }
             ExitInGamePhase();
-            // Re-center the popup on next show so the user always
-            // sees it at a sane position when they enter a new room.
-            _popupPositionInitialised = false;
+            // Lobby window position used to need re-centering here for
+            // the in-tab popup. The real Window we use now remembers
+            // its own position between opens via OS chrome, so there's
+            // nothing to reset.
         }
 
         // Reset per-room UI state whenever we change rooms.
@@ -804,8 +817,11 @@ public partial class MultiplayerTab : UserControl
             _roomMembers.Clear();
             _roomHostUserId = null;
             _isHostInCurrentRoom = false;
-            ChatLogPanel.Children.Clear();
-            RoomMembersPanel.Children.Clear();
+            if (_lobbyWindow != null)
+            {
+                _lobbyWindow.ChatLogPanel.Children.Clear();
+                _lobbyWindow.RoomMembersPanel.Children.Clear();
+            }
             // Fresh room → fresh chat replay cursor. Otherwise the
             // first room_state of the new room would skip lines whose
             // atMs happens to be smaller than the last one we saw in
@@ -1038,7 +1054,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void ReplayChatRing(System.Collections.Generic.IEnumerable<WsChatLine> ring)
     {
-        if (ChatLogPanel == null) return;
+        if (_lobbyWindow == null) return;
         foreach (var line in ring)
         {
             if (line == null) continue;
@@ -1126,14 +1142,15 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void RenderRoomMembers()
     {
-        RoomMembersPanel.Children.Clear();
+        if (_lobbyWindow == null) return;
+        _lobbyWindow!.RoomMembersPanel.Children.Clear();
 
         // The "PLAYERS" section header lives in the XAML grid
         // above the members container now — no need to render
         // it from code. We just emit one player row per member.
         foreach (var m in _roomMembers.Values)
         {
-            RoomMembersPanel.Children.Add(BuildMemberRow(m));
+            _lobbyWindow!.RoomMembersPanel.Children.Add(BuildMemberRow(m));
         }
     }
 
@@ -1381,7 +1398,7 @@ public partial class MultiplayerTab : UserControl
         string body,
         ChatSeverity severity)
     {
-        if (ChatLogPanel == null) return;
+        if (_lobbyWindow == null) return;
 
         var rowGrid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(68) });   // timestamp
@@ -1505,13 +1522,13 @@ public partial class MultiplayerTab : UserControl
             VerticalAlignment = VerticalAlignment.Center,
         }, 2));
 
-        ChatLogPanel.Children.Add(rowGrid);
+        _lobbyWindow!.ChatLogPanel.Children.Add(rowGrid);
 
         // Cap the in-memory log so a marathon session doesn't bloat
         // the visual tree. 500 rows ≈ 7 hours of moderate chat.
-        while (ChatLogPanel.Children.Count > 500)
-            ChatLogPanel.Children.RemoveAt(0);
-        ChatScroll?.ScrollToBottom();
+        while (_lobbyWindow!.ChatLogPanel.Children.Count > 500)
+            _lobbyWindow!.ChatLogPanel.Children.RemoveAt(0);
+        _lobbyWindow?.ChatScroll.ScrollToBottom();
     }
 
     /// <summary>
@@ -1521,7 +1538,8 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void AppendChatRaw(string text, Brush color)
     {
-        ChatLogPanel.Children.Add(new TextBlock
+        if (_lobbyWindow == null) return;
+        _lobbyWindow!.ChatLogPanel.Children.Add(new TextBlock
         {
             Text = text,
             Foreground = color,
@@ -1529,9 +1547,9 @@ public partial class MultiplayerTab : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 1, 0, 1),
         });
-        while (ChatLogPanel.Children.Count > 500)
-            ChatLogPanel.Children.RemoveAt(0);
-        ChatScroll?.ScrollToBottom();
+        while (_lobbyWindow!.ChatLogPanel.Children.Count > 500)
+            _lobbyWindow!.ChatLogPanel.Children.RemoveAt(0);
+        _lobbyWindow?.ChatScroll.ScrollToBottom();
     }
 
     /// <summary>
@@ -1565,7 +1583,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void ClearChatButton_Click(object sender, RoutedEventArgs e)
     {
-        ChatLogPanel?.Children.Clear();
+        _lobbyWindow?.ChatLogPanel.Children.Clear();
     }
 
     /// <summary>
@@ -1576,11 +1594,11 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void ChatEmojiButton_Click(object sender, RoutedEventArgs e)
     {
-        if (ChatInputBox == null) return;
-        var caret = ChatInputBox.CaretIndex;
-        ChatInputBox.Text = ChatInputBox.Text.Insert(caret, "🙂");
-        ChatInputBox.CaretIndex = caret + 2; // emoji is a surrogate pair (length 2)
-        ChatInputBox.Focus();
+        if (_lobbyWindow == null) return;
+        var caret = _lobbyWindow!.ChatInputBox.CaretIndex;
+        _lobbyWindow!.ChatInputBox.Text = _lobbyWindow!.ChatInputBox.Text.Insert(caret, "🙂");
+        _lobbyWindow!.ChatInputBox.CaretIndex = caret + 2; // emoji is a surrogate pair (length 2)
+        _lobbyWindow!.ChatInputBox.Focus();
     }
 
     /// <summary>
@@ -1592,8 +1610,8 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void ChatInputBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (ChatPlaceholderText == null || ChatInputBox == null) return;
-        ChatPlaceholderText.Visibility = string.IsNullOrEmpty(ChatInputBox.Text)
+        if (_lobbyWindow == null) return;
+        _lobbyWindow!.ChatPlaceholderText.Visibility = string.IsNullOrEmpty(_lobbyWindow!.ChatInputBox.Text)
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
@@ -1671,14 +1689,14 @@ public partial class MultiplayerTab : UserControl
             SignInPanel.Visibility = Visibility.Collapsed;
             BrowserPanel.Visibility = Visibility.Visible;
             RenderBrowser();
-            RoomPanel.Visibility = Visibility.Visible;
+            OpenLobbyWindow();
             RenderRoomPanel();
         }
         else
         {
             SignInPanel.Visibility = Visibility.Collapsed;
             BrowserPanel.Visibility = Visibility.Visible;
-            RoomPanel.Visibility = Visibility.Collapsed;
+            CloseLobbyWindow();
             RenderBrowser();
         }
     }
@@ -1687,7 +1705,7 @@ public partial class MultiplayerTab : UserControl
     {
         SignInPanel.Visibility = Visibility.Visible;
         BrowserPanel.Visibility = Visibility.Collapsed;
-        RoomPanel.Visibility = Visibility.Collapsed;
+        CloseLobbyWindow();
         SignInErrorText.Visibility = string.IsNullOrEmpty(errorMessage)
             ? Visibility.Collapsed
             : Visibility.Visible;
@@ -1736,8 +1754,13 @@ public partial class MultiplayerTab : UserControl
 
     private void RenderRoomPanel()
     {
+        // Lobby window closed → nothing to render. Fires from session
+        // events that may arrive after we've left the room and the
+        // window has already been disposed.
+        if (_lobbyWindow == null) return;
+
         var s = _session!;
-        RoomTitleText.Text = s.CurrentLobbyTitle ?? s.CurrentLobbyId ?? "";
+        _lobbyWindow!.RoomTitleText.Text = s.CurrentLobbyTitle ?? s.CurrentLobbyId ?? "";
 
         var status = s.Lobby switch
         {
@@ -1759,16 +1782,16 @@ public partial class MultiplayerTab : UserControl
         // wear its own (green) colour without having to maintain
         // two TextBlocks. Mirrors the reference: status in muted
         // text, P2P readiness highlighted.
-        RoomMetaText.Inlines.Clear();
-        RoomMetaText.Inlines.Add(new System.Windows.Documents.Run(status)
+        _lobbyWindow!.RoomMetaText.Inlines.Clear();
+        _lobbyWindow!.RoomMetaText.Inlines.Add(new System.Windows.Documents.Run(status)
         {
             Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
         });
-        RoomMetaText.Inlines.Add(new System.Windows.Documents.Run("  ·  ")
+        _lobbyWindow!.RoomMetaText.Inlines.Add(new System.Windows.Documents.Run("  ·  ")
         {
             Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
         });
-        RoomMetaText.Inlines.Add(new System.Windows.Documents.Run(p2pStatus)
+        _lobbyWindow!.RoomMetaText.Inlines.Add(new System.Windows.Documents.Run(p2pStatus)
         {
             Foreground = (Brush)Application.Current.FindResource(
                 p2pReady ? "MpStatusOnline" : "MpStatusReconnect"),
@@ -1791,7 +1814,7 @@ public partial class MultiplayerTab : UserControl
         {
             hostLabel = _roomHostUserId;
         }
-        RoomHostText.Text = hostLabel;
+        _lobbyWindow!.RoomHostText.Text = hostLabel;
 
         // Players: live count from the roster vs. configured max.
         // We don't have MaxPlayers in the local snapshot today —
@@ -1800,20 +1823,20 @@ public partial class MultiplayerTab : UserControl
         // CreateLobbyResponse server-side, wire it through here.
         var playerCount = _roomMembers.Count;
         var maxPlayers = TryGetCurrentLobbyMaxPlayers(out var maxP) ? maxP.ToString() : "?";
-        RoomPlayersText.Text = $"{playerCount} / {maxPlayers} players";
+        _lobbyWindow!.RoomPlayersText.Text = $"{playerCount} / {maxPlayers} players";
 
         // ROOM ID: short uppercase code if the worker assigns
         // one, otherwise the raw lobby id (truncated for sanity).
         var rid = s.CurrentLobbyId ?? "";
         if (rid.Length > 12) rid = rid.Substring(0, 12);
-        RoomIdText.Text = rid.ToUpperInvariant();
+        _lobbyWindow!.RoomIdText.Text = rid.ToUpperInvariant();
 
         // ---------- Network info card ----------
-        RoomConnectionText.Text = p2pReady ? "P2P LAN" : "P2P starting";
-        RoomModText.Text = TryGetCurrentLobbyModName(out var modName) ? modName : "—";
-        RoomMaxPlayersText.Text = maxPlayers;
+        _lobbyWindow!.RoomConnectionText.Text = p2pReady ? "P2P LAN" : "P2P starting";
+        _lobbyWindow!.RoomModText.Text = TryGetCurrentLobbyModName(out var modName) ? modName : "—";
+        _lobbyWindow!.RoomMaxPlayersText.Text = maxPlayers;
         var hasPwd = TryGetCurrentLobbyHasPassword(out var hp) && hp;
-        RoomPasswordText.Text = hasPwd ? "Required" : "None";
+        _lobbyWindow!.RoomPasswordText.Text = hasPwd ? "Required" : "None";
 
         // ---------- Action buttons ----------
         // Ready toggle visual: render with a check glyph + label
@@ -1824,18 +1847,18 @@ public partial class MultiplayerTab : UserControl
         var iAmReady = me != null
             && _roomMembers.TryGetValue(me.Id, out var meEntry)
             && meEntry.Ready;
-        ReadyButton.Content = iAmReady ? "✓  Ready" : "○  Mark as ready";
-        ReadyButton.Tag = iAmReady ? "ready" : "";
+        _lobbyWindow!.ReadyButton.Content = iAmReady ? "✓  Ready" : "○  Mark as ready";
+        _lobbyWindow!.ReadyButton.Tag = iAmReady ? "ready" : "";
 
         // The Start button only appears for the host; enabled once
         // the P2P bridge is ready so AoE3 launches into a working
         // hook-bridged network rather than discovering nothing.
-        StartButton.Visibility = _isHostInCurrentRoom
+        _lobbyWindow!.StartButton.Visibility = _isHostInCurrentRoom
             ? Visibility.Visible
             : Visibility.Collapsed;
-        StartButton.IsEnabled = _isHostInCurrentRoom && s.IsInLobby;
-        StartButton.Content = "▶  " + Strings.Get("MpRoomStart");
-        LeaveRoomButton.Content = "↩  " + Strings.Get("MpRoomLeave");
+        _lobbyWindow!.StartButton.IsEnabled = _isHostInCurrentRoom && s.IsInLobby;
+        _lobbyWindow!.StartButton.Content = "▶  " + Strings.Get("MpRoomStart");
+        _lobbyWindow!.LeaveRoomButton.Content = "↩  " + Strings.Get("MpRoomLeave");
     }
 
     /// <summary>
@@ -2934,9 +2957,10 @@ public partial class MultiplayerTab : UserControl
     private async Task SendChatAsync()
     {
         if (_session?.CurrentUser == null) return;
-        var text = ChatInputBox.Text.Trim();
+        if (_lobbyWindow == null) return;
+        var text = _lobbyWindow!.ChatInputBox.Text.Trim();
         if (string.IsNullOrEmpty(text)) return;
-        ChatInputBox.Text = "";
+        _lobbyWindow!.ChatInputBox.Text = "";
 
         var login = string.IsNullOrEmpty(_session.CurrentUser.DiscordUsername)
             ? _session.CurrentUser.DisplayName
@@ -3194,103 +3218,111 @@ public partial class MultiplayerTab : UserControl
     }
 
     // ==================================================================
-    // Floating popup: drag handlers + position management
+    // Lobby window lifecycle (single-instance open/close)
     // ==================================================================
+    //
+    // The whole "floating popup drag + resize + Canvas position" block
+    // that used to live here is gone — the lobby is now a real
+    // top-level Window (LobbyWindow.xaml) with native OS chrome that
+    // handles drag, resize and edge clamping for free. What's left is
+    // just the open/close lifecycle:
+    //
+    //   • OpenLobbyWindow() is idempotent. If a window already exists,
+    //     Activate()s it (so a duplicate Create/Join click brings the
+    //     existing one to front instead of spawning a second). The
+    //     callbacks point each click handler back to the methods that
+    //     used to be wired via XAML Click="…" — the logic itself
+    //     stayed in this class for now (close coupling with
+    //     MultiplayerSession state, telemetry, etc.); the Window is
+    //     a thin forwarder.
+    //   • CloseLobbyWindow() is idempotent. The Closed event handler
+    //     fires HandleLobbyWindowClosed which nulls the field and (if
+    //     we're still in a session-tracked room) triggers the
+    //     leave-room flow — same single rendezvous point regardless
+    //     of how the user dismissed (✕ / Esc / Alt+F4 / our own Close).
 
-    /// <summary>
-    /// First time the popup canvas gets a real size, center the card
-    /// inside it. Subsequent size changes (launcher window resize)
-    /// re-clamp the popup so it never sits half-off-screen.
-    /// </summary>
-    private void RoomPopupCanvas_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
+    private void OpenLobbyWindow()
     {
-        if (RoomPopupCard == null || RoomPopupCanvas == null) return;
-
-        if (!_popupPositionInitialised)
+        if (_lobbyWindow != null)
         {
-            CenterPopup();
-            _popupPositionInitialised = true;
+            _lobbyWindow.Activate();
             return;
         }
-        // Re-clamp to keep the popup inside the visible area when
-        // the launcher window shrinks. We don't re-center — the
-        // user-dragged position is preserved as long as it fits.
-        ClampPopupPosition();
+        if (_session == null) return;
+
+        var w = new LobbyWindow(_session)
+        {
+            Owner = Window.GetWindow(this),
+
+            // Click forwarders. The handler bodies stayed in this
+            // class (where the Multiplayer state lives); LobbyWindow's
+            // XAML buttons fire Action callbacks instead of using
+            // XAML Click="…" wires.
+            OnLeaveRoom = () => LeaveRoomButton_Click(this, new RoutedEventArgs()),
+            OnReady = () => ReadyButton_Click(this, new RoutedEventArgs()),
+            OnStart = () => StartButton_Click(this, new RoutedEventArgs()),
+            OnInGameCancel = () => InGameCancelButton_Click(this, new RoutedEventArgs()),
+            OnClearChat = () => ClearChatButton_Click(this, new RoutedEventArgs()),
+            OnSendChat = () => ChatSendButton_Click(this, new RoutedEventArgs()),
+            OnEmoji = () => ChatEmojiButton_Click(this, new RoutedEventArgs()),
+            // The existing TextChanged / KeyDown handlers take WPF
+            // routed event args we don't construct here — call them
+            // through with a synthetic args object (the args aren't
+            // read by the handler bodies, only Key on KeyDown).
+            OnChatTextChanged = () => ChatInputBox_TextChanged(this, null!),
+            OnChatKeyDown = e => ChatInputBox_KeyDown(this, e),
+        };
+
+        _lobbyWindow = w;
+
+        // Race-safe field clear in Closed: a follow-up OpenLobbyWindow
+        // call between Close() and Closed firing must not clobber the
+        // new instance, so we only null the field if it still points
+        // at THIS window.
+        w.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_lobbyWindow, w))
+                _lobbyWindow = null;
+            HandleLobbyWindowClosed();
+        };
+
+        w.Show();
     }
 
-    private void CenterPopup()
+    private void CloseLobbyWindow()
     {
-        if (RoomPopupCard == null || RoomPopupCanvas == null) return;
-        var canvasW = RoomPopupCanvas.ActualWidth;
-        var canvasH = RoomPopupCanvas.ActualHeight;
-        if (canvasW <= 0 || canvasH <= 0) return;
-        var x = Math.Max(0, (canvasW - RoomPopupCard.Width) / 2.0);
-        var y = Math.Max(0, (canvasH - RoomPopupCard.Height) / 2.0);
-        System.Windows.Controls.Canvas.SetLeft(RoomPopupCard, x);
-        System.Windows.Controls.Canvas.SetTop(RoomPopupCard, y);
+        if (_lobbyWindow == null) return;
+        var stale = _lobbyWindow;
+        // Null the field FIRST so any in-flight render that races
+        // with Close() sees "no window" instead of a half-disposed
+        // one. The Closed handler's ReferenceEquals guard makes the
+        // null-then-Close ordering safe.
+        _lobbyWindow = null;
+        stale.Close();
     }
 
-    private void ClampPopupPosition()
+    /// <summary>
+    /// Single rendezvous point for "lobby window dismissed". Runs on
+    /// the Closed event for the ✕, Esc, Alt+F4, OS chrome close, AND
+    /// our own <see cref="CloseLobbyWindow"/> path. If we still appear
+    /// to be in a room (session state hasn't already moved past
+    /// InLobby/InGame), trigger the leave-room flow so the server
+    /// doesn't keep us as a ghost member.
+    /// </summary>
+    private void HandleLobbyWindowClosed()
     {
-        if (RoomPopupCard == null || RoomPopupCanvas == null) return;
-        var canvasW = RoomPopupCanvas.ActualWidth;
-        var canvasH = RoomPopupCanvas.ActualHeight;
-        var left = System.Windows.Controls.Canvas.GetLeft(RoomPopupCard);
-        var top = System.Windows.Controls.Canvas.GetTop(RoomPopupCard);
-        // Always keep at least 80 px of the header visible on the
-        // right edge / 40 px on the others so the user can always
-        // grab the popup back even if they dragged it weird.
-        var minLeft = -(RoomPopupCard.Width - 200);
-        var maxLeft = canvasW - 80;
-        var minTop = 0.0;
-        var maxTop = canvasH - 60;
-        left = Math.Max(minLeft, Math.Min(maxLeft, left));
-        top = Math.Max(minTop, Math.Min(maxTop, top));
-        System.Windows.Controls.Canvas.SetLeft(RoomPopupCard, left);
-        System.Windows.Controls.Canvas.SetTop(RoomPopupCard, top);
-    }
+        var s = _session;
+        if (s == null) return;
 
-    private void RoomHeaderStrip_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        // Drag is forbidden while the game is starting or in
-        // progress — the popup is "locked" so the user can't
-        // accidentally drag it around mid-match. Clicks still go
-        // through to the X button when in Lobby phase.
-        if (_matchPhase != MatchPhase.Lobby) return;
+        // If we're already past lobby (RoomLeft drove the close) the
+        // leave-room call is a no-op / errors; skip.
+        if (s.Lobby != MultiplayerSession.LobbyStatus.InLobby
+            && s.Lobby != MultiplayerSession.LobbyStatus.InGame)
+            return;
 
-        // Don't start drag if the user clicked on a child button
-        // (close X). The original source is the actual hit element;
-        // if it's a Button we let WPF handle it normally.
-        if (e.OriginalSource is System.Windows.Controls.Button) return;
-
-        if (RoomPopupCard == null || RoomPopupCanvas == null) return;
-        _isDraggingPopup = true;
-        _dragStartCursorOnCanvas = e.GetPosition(RoomPopupCanvas);
-        _dragStartCardLeft = System.Windows.Controls.Canvas.GetLeft(RoomPopupCard);
-        _dragStartCardTop = System.Windows.Controls.Canvas.GetTop(RoomPopupCard);
-        if (double.IsNaN(_dragStartCardLeft)) _dragStartCardLeft = 0;
-        if (double.IsNaN(_dragStartCardTop)) _dragStartCardTop = 0;
-        ((System.Windows.UIElement)sender).CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void RoomHeaderStrip_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (!_isDraggingPopup || RoomPopupCard == null || RoomPopupCanvas == null) return;
-        var current = e.GetPosition(RoomPopupCanvas);
-        var dx = current.X - _dragStartCursorOnCanvas.X;
-        var dy = current.Y - _dragStartCursorOnCanvas.Y;
-        System.Windows.Controls.Canvas.SetLeft(RoomPopupCard, _dragStartCardLeft + dx);
-        System.Windows.Controls.Canvas.SetTop(RoomPopupCard, _dragStartCardTop + dy);
-        ClampPopupPosition();
-    }
-
-    private void RoomHeaderStrip_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (!_isDraggingPopup) return;
-        _isDraggingPopup = false;
-        ((System.Windows.UIElement)sender).ReleaseMouseCapture();
-        e.Handled = true;
+        // Fire-and-forget the leave; failures are user-visible via
+        // the standard error banner path inside MultiplayerSession.
+        _ = s.LeaveCurrentLobbyAsync();
     }
 
     // ==================================================================
@@ -3299,45 +3331,33 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// Apply visual state for the current <see cref="_matchPhase"/>:
-    /// shows / hides the X button, drag cursor, overlays, and the
-    /// Ready / Start / Leave buttons. Idempotent — safe to call on
-    /// every state change.
+    /// shows / hides the overlays and updates the Cancel/Leave button
+    /// caption. Idempotent — safe to call on every state change.
+    ///
+    /// Pre-Window refactor, this method also locked the popup's
+    /// header-drag cursor and hid a custom close-X / resize-thumb
+    /// during Starting / InGame. Those concerns are gone because the
+    /// OS chrome handles drag/resize natively and the title bar's
+    /// close X is independent of the lobby — match-phase locking now
+    /// only needs to flip the two overlays and the cancel button.
     /// </summary>
     private void ApplyMatchPhaseUi()
     {
-        // Header drag handle: only "SizeAll" cursor when draggable.
-        if (RoomHeaderStrip != null)
-        {
-            RoomHeaderStrip.Cursor = _matchPhase == MatchPhase.Lobby
-                ? System.Windows.Input.Cursors.SizeAll
-                : System.Windows.Input.Cursors.Arrow;
-        }
+        // No window open → nothing to render. Fires when phase changes
+        // arrive from session events after we've already left the room.
+        if (_lobbyWindow == null) return;
 
-        // Close X: hidden during Starting / InGame so a stray click
-        // can't accidentally abort the match. The same behaviour is
-        // enforced on the OnClosing path of the main window.
-        if (RoomCloseXButton != null)
-        {
-            RoomCloseXButton.Visibility = _matchPhase == MatchPhase.Lobby
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        }
+        // Overlays — Visibility set via the prefixed accessors (the
+        // null-forgiving '!' is safe because of the guard above).
+        _lobbyWindow!.CountdownOverlay.Visibility = _matchPhase == MatchPhase.Starting
+            ? Visibility.Visible : Visibility.Collapsed;
+        _lobbyWindow!.InGameOverlay.Visibility = _matchPhase == MatchPhase.InGame
+            ? Visibility.Visible : Visibility.Collapsed;
 
-        // Overlays.
-        if (CountdownOverlay != null)
-            CountdownOverlay.Visibility = _matchPhase == MatchPhase.Starting
-                ? Visibility.Visible : Visibility.Collapsed;
-        if (InGameOverlay != null)
-            InGameOverlay.Visibility = _matchPhase == MatchPhase.InGame
-                ? Visibility.Visible : Visibility.Collapsed;
-
-        // Cancel button caption + style differ for host vs joiner.
-        if (InGameCancelButton != null)
-        {
-            InGameCancelButton.Content = _isHostInCurrentRoom
-                ? "⚠  Cancel game (host)"
-                : "↩  Leave game";
-        }
+        // Cancel button caption differs for host vs joiner.
+        _lobbyWindow!.InGameCancelButton.Content = _isHostInCurrentRoom
+            ? "⚠  Cancel game (host)"
+            : "↩  Leave game";
     }
 
     /// <summary>
@@ -3370,7 +3390,7 @@ public partial class MultiplayerTab : UserControl
 
     private void UpdateCountdownTick()
     {
-        if (CountdownNumber == null) return;
+        if (_lobbyWindow == null) return;
         // Pure local timer — no server timestamp involved, so clock
         // skew between client and server can't shortcut the wait.
         var elapsedMs = Environment.TickCount64 - _countdownStartedAtTicks;
@@ -3378,7 +3398,7 @@ public partial class MultiplayerTab : UserControl
         if (remainingMs <= 0)
         {
             _countdownTickTimer?.Stop();
-            CountdownNumber.Text = "Go";
+            _lobbyWindow!.CountdownNumber.Text = "Go";
             DiagnosticLog.Write("MultiplayerTab.UpdateCountdownTick: countdown expired, launching AoE3");
             // This is the *only* path that launches AoE3 in the
             // happy case. If for any reason we're already in InGame
@@ -3391,7 +3411,7 @@ public partial class MultiplayerTab : UserControl
             return;
         }
         var seconds = Math.Max(1, (int)Math.Ceiling(remainingMs / 1000.0));
-        CountdownNumber.Text = seconds.ToString();
+        _lobbyWindow!.CountdownNumber.Text = seconds.ToString();
     }
 
     private void CancelLocalCountdownIfRunning()
@@ -3412,8 +3432,8 @@ public partial class MultiplayerTab : UserControl
         _matchStartedAtUtc = DateTime.UtcNow;
         _matchTimerStartTicks = Environment.TickCount64;
 
-        if (InGameRoomText != null)
-            InGameRoomText.Text = _session?.CurrentLobbyTitle ?? _session?.CurrentLobbyId ?? "";
+        if (_lobbyWindow != null)
+            _lobbyWindow!.InGameRoomText.Text = _session?.CurrentLobbyTitle ?? _session?.CurrentLobbyId ?? "";
 
         CancelLocalCountdownIfRunning();
         ApplyMatchPhaseUi();
@@ -3451,88 +3471,78 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void RefreshInGamePanel()
     {
+        // Lobby window closed → nothing to refresh. The 1-s timer that
+        // drives this method might still tick once after the window
+        // closed (Closed/RoomLeft race); the guard makes that harmless.
+        if (_lobbyWindow == null) return;
+
         // Match timer.
-        if (InGameMatchTimer != null)
-        {
-            var elapsedMs = Environment.TickCount64 - _matchTimerStartTicks;
-            var elapsed = TimeSpan.FromMilliseconds(Math.Max(0, elapsedMs));
-            InGameMatchTimer.Text = elapsed.TotalHours >= 1
-                ? elapsed.ToString(@"h\:mm\:ss")
-                : elapsed.ToString(@"mm\:ss");
-        }
+        var elapsedMs = Environment.TickCount64 - _matchTimerStartTicks;
+        var elapsed = TimeSpan.FromMilliseconds(Math.Max(0, elapsedMs));
+        _lobbyWindow!.InGameMatchTimer.Text = elapsed.TotalHours >= 1
+            ? elapsed.ToString(@"h\:mm\:ss")
+            : elapsed.ToString(@"mm\:ss");
 
         var bridgeReady = _session?.IsInLobby ?? false;
 
         // Global traffic counter — n2n doesn't surface byte totals to
         // the launcher (the edge process keeps them internally). Show
         // a dash so the field doesn't look broken.
-        if (InGameTrafficText != null)
-        {
-            InGameTrafficText.Text = "—";
-        }
+        _lobbyWindow!.InGameTrafficText.Text = "—";
 
         // Mode badge.
-        if (InGameModeText != null)
-        {
-            InGameModeText.Text = bridgeReady
-                ? " — In lobby (Radmin VPN expected)"
-                : " — Waiting for lobby…";
-            InGameModeText.Foreground = (Brush)Application.Current.FindResource(
-                bridgeReady ? "MpStatusOnline" : "MpStatusReconnect");
-        }
+        _lobbyWindow!.InGameModeText.Text = bridgeReady
+            ? " — In lobby (Radmin VPN expected)"
+            : " — Waiting for lobby…";
+        _lobbyWindow!.InGameModeText.Foreground = (Brush)Application.Current.FindResource(
+            bridgeReady ? "MpStatusOnline" : "MpStatusReconnect");
 
         // Peer list. We just enumerate room members minus ourselves
         // — every member that's in the lobby IS reachable on the
         // virtual LAN as long as their edge is connected.
-        if (InGamePeersPanel != null)
+        _lobbyWindow!.InGamePeersPanel.Children.Clear();
+        var me = _session?.CurrentUser;
+        if (me != null)
         {
-            InGamePeersPanel.Children.Clear();
-            var me = _session?.CurrentUser;
-            if (me != null)
-            {
-                InGamePeersPanel.Children.Add(BuildInGamePeerRow(
-                    login: string.IsNullOrEmpty(me.DiscordUsername) ? me.DisplayName : me.DiscordUsername,
-                    state: "you",
-                    rttMs: 0,
-                    bytesIn: 0,
-                    bytesOut: 0,
-                    isSelf: true));
-            }
-            int peerCount = 0;
-            foreach (var member in _roomMembers.Values)
-            {
-                if (me != null && string.Equals(member.UserId, me.Id, StringComparison.Ordinal))
-                    continue;
-                peerCount++;
-                InGamePeersPanel.Children.Add(BuildInGamePeerRow(
-                    login: member.Login,
-                    state: bridgeReady ? "Virtual LAN" : "Connecting…",
-                    rttMs: 0,
-                    bytesIn: 0,
-                    bytesOut: 0,
-                    isSelf: false));
-            }
+            _lobbyWindow!.InGamePeersPanel.Children.Add(BuildInGamePeerRow(
+                login: string.IsNullOrEmpty(me.DiscordUsername) ? me.DisplayName : me.DiscordUsername,
+                state: "you",
+                rttMs: 0,
+                bytesIn: 0,
+                bytesOut: 0,
+                isSelf: true));
+        }
+        int peerCount = 0;
+        foreach (var member in _roomMembers.Values)
+        {
+            if (me != null && string.Equals(member.UserId, me.Id, StringComparison.Ordinal))
+                continue;
+            peerCount++;
+            _lobbyWindow!.InGamePeersPanel.Children.Add(BuildInGamePeerRow(
+                login: member.Login,
+                state: bridgeReady ? "Virtual LAN" : "Connecting…",
+                rttMs: 0,
+                bytesIn: 0,
+                bytesOut: 0,
+                isSelf: false));
+        }
 
-            if (peerCount == 0)
+        if (peerCount == 0)
+        {
+            _lobbyWindow!.InGamePeersPanel.Children.Add(new TextBlock
             {
-                InGamePeersPanel.Children.Add(new TextBlock
-                {
-                    Text = "Waiting for peers — you're the only player in the room right now.\n" +
-                           "P2P stack ready; another launcher needs to Join this room for game traffic to flow.",
-                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                    FontSize = 11,
-                    FontStyle = FontStyles.Italic,
-                    TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 12, 0, 0),
-                });
-            }
+                Text = "Waiting for peers — you're the only player in the room right now.\n" +
+                       "P2P stack ready; another launcher needs to Join this room for game traffic to flow.",
+                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                FontSize = 11,
+                FontStyle = FontStyles.Italic,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 12, 0, 0),
+            });
         }
 
         // "Pulsing" dot — toggle opacity for a breathing effect.
-        if (InGameLiveDot != null)
-        {
-            InGameLiveDot.Opacity = InGameLiveDot.Opacity > 0.6 ? 0.4 : 1.0;
-        }
+        _lobbyWindow!.InGameLiveDot.Opacity = _lobbyWindow!.InGameLiveDot.Opacity > 0.6 ? 0.4 : 1.0;
     }
 
     private FrameworkElement BuildInGamePeerRow(

@@ -126,10 +126,10 @@ engine** and the UI binds to it.
   `ProgressPanel`, `ActionPanel`, `ModsBrowser`, `MultiplayerTab`, `HeroBanner`).
   Most top-level `*Dialog.xaml` files are modals opened via `.ShowDialog()`
   (install, uninstall, self-update, user-data backup/restore, translations,
-  Discord sign-in, create-lobby, etc.). The two exceptions are
-  `LauncherSettingsDialog` and `ModPropertiesDialog`, which are non-modal +
-  resizable + single-instance — see the dedicated bullet under Runtime
-  conventions for the contract.
+  Discord sign-in, create-lobby, etc.). The three exceptions are
+  `LauncherSettingsDialog`, `ModPropertiesDialog` and `LobbyWindow`, which
+  are non-modal + resizable + single-instance — see the dedicated bullet
+  under Runtime conventions for the contract.
 - **`Models/`** — plain schema/DTO types: `LauncherConfig` (`launcher-config.json`,
   lives next to the `.exe`), `UpdateInfo` (`UpdateInfo.xml` schema),
   `InstallManifest` (`install-manifest.json`, drives uninstall), `ModProfile` /
@@ -226,30 +226,51 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   `ModPropertiesDialog`) still carry redundant `TextOptions.*` XAML attributes
   from before this was centralised; harmless (the values match) but not the
   pattern to copy.
-- **Settings / Properties dialogs share a sidebar-tab pattern and are
-  non-modal + resizable.** `ModPropertiesDialog` and `LauncherSettingsDialog`
-  both pair a custom dark `WindowChrome` (`WindowStyle="None"` + ~40 px
-  caption + 6 px `ResizeBorderThickness` for edge-drag, single ✕ close,
-  recipe replicated as the `DialogCloseButton` local style), a 200-px left
-  rail of `SidebarNavButton` buttons (from `Styles/Buttons.xaml`, shared
-  across both dialogs), and a `SetActiveTab(button)` helper that toggles
-  `Tag="active"` on the chosen button while flipping `Visibility` on the
-  matching content `StackPanel`. The gold right-rail accent on the active
-  tab is driven entirely by the style's `Tag="active"` trigger — no per-
-  dialog colour code. Tab labels reuse the same uppercase section strings
-  (`GENERAL`, `UPDATES`, etc.) the in-content section headers used before
-  the refactor.
-  Both dialogs are opened from `MainWindow` via `.Show()` (not
+- **Settings / Properties / Lobby dialogs share a non-modal + resizable
+  + single-instance pattern.** `ModPropertiesDialog`, `LauncherSettingsDialog`
+  and `LobbyWindow` all pair a custom dark `WindowChrome`
+  (`WindowStyle="None"` + ~40 px caption + 6 px `ResizeBorderThickness` for
+  edge-drag, single ✕ close, recipe replicated as the `DialogCloseButton`
+  local style). The two settings dialogs add a 200-px left rail of
+  `SidebarNavButton` buttons (from `Styles/Buttons.xaml`) and a
+  `SetActiveTab(button)` helper that toggles `Tag="active"` on the chosen
+  button while flipping `Visibility` on the matching content `StackPanel`;
+  the gold right-rail accent is driven entirely by the style's
+  `Tag="active"` trigger — no per-dialog colour code. Tab labels reuse the
+  same uppercase section strings (`GENERAL`, `UPDATES`, etc.) the in-content
+  section headers used before the refactor.
+  `LobbyWindow` doesn't have sidebar tabs (single content view) but follows
+  the same chrome and lifecycle. Its body XAML used to live as a Canvas
+  overlay (`RoomPanel`) inside `Controls/MultiplayerTab.xaml`; the popup is
+  gone and the entire lobby UI moved to `LobbyWindow.xaml`. The window
+  exposes `Action` callback properties (`OnLeaveRoom`, `OnReady`,
+  `OnSendChat`, etc.) that `MultiplayerTab` populates on construction; the
+  XAML `Click="…"` handlers in the window are tiny forwarders, while the
+  lobby business logic (rendering, chat send, match-phase transitions)
+  stays in `MultiplayerTab.xaml.cs` and accesses the window's UI elements
+  directly through `_lobbyWindow!.X` (the field-modifier-internal x:Name
+  fields auto-generated for the Window are reachable across the same
+  assembly). Every Render*/Apply* method guards on `if (_lobbyWindow == null)
+  return;` because session events can fire after the window has already
+  closed (host disconnect race, RoomLeft frame on the wire, etc.).
+  All three dialogs are opened from their parents via `.Show()` (not
   `.ShowDialog()`) so the user can keep clicking the main window while
   they're open. That has three implications: (1) **never set `DialogResult`
   in these dialogs** — it throws `InvalidOperationException` when the
   window wasn't shown modally; use a custom field (`ChangesSaved` on
   LauncherSettings) or nothing at all. (2) Callers track each dialog in
-  a single-instance field (`_launcherSettingsDialog`, `_modPropertiesDialog`)
-  and either `Activate()` the existing window or `Close()` it before
-  opening a new one, so re-clicking the gear doesn't stack windows.
-  (3) The post-dialog refresh runs on `dialog.Closed += …` instead of
-  after the `ShowDialog()` call returns.
+  a single-instance field (`_launcherSettingsDialog`, `_modPropertiesDialog`,
+  `_lobbyWindow`) and either `Activate()` the existing window or `Close()`
+  it before opening a new one, so re-clicking the gear / re-entering a
+  room doesn't stack windows. The race-safety pattern is the same in all
+  three: clear the field FIRST, then `Close()`; the `Closed` handler uses
+  `ReferenceEquals` before nulling so a freshly-opened replacement doesn't
+  get clobbered. (3) The post-dialog refresh runs on `dialog.Closed += …`
+  instead of after the `ShowDialog()` call returns. For `LobbyWindow`,
+  the `Closed` handler also triggers `_session.LeaveCurrentLobbyAsync()`
+  if we're still session-tracked as InLobby/InGame, so closing the
+  window is equivalent to "leave the room" regardless of dismiss path
+  (✕, Esc, Alt+F4, our own `CloseLobbyWindow()`).
   When adding a new multi-section settings surface, copy this pattern
   instead of rebuilding navigation, chrome and tab visuals from scratch
   — the gear-menu modals (Aoe3Picker, CreateLobby, etc.) still use the
