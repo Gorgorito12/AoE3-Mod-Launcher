@@ -66,14 +66,20 @@ longer exists — don't go looking for it.)
   discovery finds peers). The launcher only *assists* with Radmin — detect /
   install / launch its GUI and copy the network name to the clipboard for manual
   paste; it **cannot join a network programmatically**. It DOES detect current
-  network membership by tailing Radmin's own
-  `%PROGRAMDATA%\Famatech\Radmin VPN\service.log` (English, tab-delimited,
-  stable across Radmin VPN 2.x) for the `UPDATE\tYou joined/left network 'X'`
+  network membership by parsing Radmin's own
+  `%PROGRAMDATA%\Famatech\Radmin VPN\service.log` **plus every rotated
+  backup** `service (N).log` in that directory (English, tab-delimited,
+  stable across Radmin VPN 2.x) for `UPDATE\tYou joined/left network 'X'`
   events — that's how `RadminAssistantService.ProbeAsync` promotes its overlay
-  checklist from `LoggedIn` → `InAoE3Network`. An ICMP ping to a known seed
-  peer is the fallback signal when the log isn't readable (deleted, ACL'd,
-  sandboxed account) (`Services/RadminVpnService.cs`,
-  `RadminAssistantService.cs`, `RadminLogService.cs`). The launcher is
+  checklist from `LoggedIn` → `InAoE3Network`. Reading only `service.log`
+  silently fails the morning Radmin rotates the file at ~1 MB (the live log
+  starts empty even though the user is still session-tracked in a network);
+  `RadminLogService` enumerates `service*.log` in the directory, sorts by
+  `LastWriteTimeUtc` ascending so newer events overwrite older ones in the
+  same dict, and combines the result. An ICMP ping to a known seed peer is
+  the fallback signal when no log file is readable (deleted, ACL'd, sandboxed
+  account) (`Services/RadminVpnService.cs`, `RadminAssistantService.cs`,
+  `RadminLogService.cs`). The launcher is
   the *meta layer* (sign-in, lobbies, chat, mod-hash gating) over a **self-hosted
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
   Worker. Sign-in is **Discord OAuth** (a state flow shaped like device flow),
@@ -226,6 +232,25 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   `ModPropertiesDialog`) still carry redundant `TextOptions.*` XAML attributes
   from before this was centralised; harmless (the values match) but not the
   pattern to copy.
+- **Maximize-respects-taskbar is set globally — don't roll your own per-Window.**
+  The same `App.OnStartup` class handler that wires HiDPI crispness also
+  installs a `WM_GETMINMAXINFO` WndProc hook on every Window whose
+  `WindowStyle="None"`. Currently that's six Windows: `MainWindow`,
+  `LauncherSettingsDialog`, `ModPropertiesDialog`, `RadminAssistantWindow`,
+  `LobbyWindow` (all `ResizeMode="CanResize"`, so they actually use the
+  fix when the user maximises), plus `CreateLobbyDialog` (`ResizeMode="NoResize"`,
+  so the hook attaches but never fires — listed for completeness so
+  future contributors know the inventory). Without the hook, maximising
+  the resizable ones would expand them over the **entire monitor rect
+  including the Windows taskbar** — a classic side-effect of opting out
+  of OS chrome via `WindowStyle="None"` + `WindowChrome`. The hook
+  responds with the current monitor's *work area* (monitor minus taskbar),
+  so maximise stops at the taskbar's edge and the system tray / clock stay
+  visible. Works correctly on multi-monitor setups and side-mounted
+  taskbars because `MonitorFromWindow` + `GetMonitorInfo` resolve per-HWND.
+  The hook is no-op for Windows with native chrome (`WindowStyle=SingleBorderWindow`
+  / `ThreeDBorderWindow`) — Windows already maximises those correctly on
+  its own. Don't replicate the interop boilerplate in individual Windows.
 - **Settings / Properties / Lobby dialogs share a non-modal + resizable
   + single-instance pattern.** `ModPropertiesDialog`, `LauncherSettingsDialog`
   and `LobbyWindow` all pair a custom dark `WindowChrome`
