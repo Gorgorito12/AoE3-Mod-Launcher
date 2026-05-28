@@ -209,6 +209,19 @@ model enforced by the catalog repo's CI. The JSON schema lives at
 - **WPF threading:** long-running work (download/install/check) is `async` and
   reports progress via `IProgress`/events; marshal UI updates back to the
   dispatcher. Periodic UI work uses `DispatcherTimer`.
+- **HiDPI text crispness is set globally — don't add it per-XAML.**
+  `App.OnStartup` registers a class handler for `Window.Loaded` that sets
+  `UseLayoutRounding = true` plus the `TextOptions` trio
+  (`TextFormattingMode.Display`, `TextRenderingMode.ClearType`,
+  `TextHintingMode.Fixed`) on every `Window` instance. Without these, text on
+  125% / 150% DPI displays (the modern default) renders visibly blurry because
+  WPF positions elements at sub-pixel coordinates that ClearType smudges. The
+  class handler catches every `Window` subclass uniformly, current and future,
+  so **don't add these as XAML attributes on new Windows** — they're applied
+  globally. Three legacy Windows (`MainWindow`, `RadminAssistantWindow`,
+  `ModPropertiesDialog`) still carry redundant `TextOptions.*` XAML attributes
+  from before this was centralised; harmless (the values match) but not the
+  pattern to copy.
 
 ## Conventions
 
