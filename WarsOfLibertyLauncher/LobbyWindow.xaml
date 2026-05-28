@@ -59,8 +59,13 @@
             body underneath.
     -->
 
+    <!-- CaptionHeight 40 → 30: matches the new compact title-bar Padding
+         below so the drag area covers the whole visible chrome row but
+         nothing below. Previously the caption claimed 40 px and the
+         visible bar was ~52 px (10 + 32 button + 10) → wasted vertical
+         space at the top of the window. -->
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="40"
+        <WindowChrome CaptionHeight="30"
                       ResizeBorderThickness="6"
                       CornerRadius="0"
                       GlassFrameThickness="0"
@@ -68,16 +73,60 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <!-- Minimize / Maximize / Restore button recipe. Inline template
+             instead of a shared style because none of the existing
+             shared button styles target chrome glyphs. Same dimensions
+             as DialogCloseButton (below) so all three sit on the same
+             horizontal axis in the title bar. Neutral white-alpha hover
+             tile because reserving the red "danger" hover for the close
+             ✕ is what tells the user which button is destructive at a
+             glance — Windows itself uses the same convention. -->
+        <Style x:Key="TitleBarChromeButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <!-- #22ffffff = white at ~13% alpha;
+                                     just a soft tile to show the hit
+                                     zone without painting a hard
+                                     button on every hover. -->
+                                <Setter TargetName="border" Property="Background" Value="#22ffffff"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Title-bar close ✕. Inline template instead of {StaticResource
              DialogCloseButton} because that style is local to the
              ModPropertiesDialog Window scope (same rationale as the
-             duplicated copy in LauncherSettingsDialog). -->
+             duplicated copy in LauncherSettingsDialog).
+             Height shrunk 32 → 26 to match the compact title-bar
+             padding — keeps the X centred in the chrome row without
+             towering above the title text. -->
         <Style x:Key="DialogCloseButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Width" Value="46"/>
-            <Setter Property="Height" Value="32"/>
+            <Setter Property="Height" Value="26"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
             <Setter Property="FontSize" Value="11"/>
@@ -110,16 +159,19 @@
 
         <!-- =========================================================
              TITLE BAR — compact, dark, just title + close. Acts as
-             the Window's drag area via WindowChrome.CaptionHeight=40.
+             the Window's drag area via WindowChrome.CaptionHeight=30.
              The rich room info (host/players/room id stats) lives
              below in RoomHeaderStrip — keeps the title bar honest as
              "this is a window" without duplicating data.
+             Padding shrunk 22,10,8,10 → 22,4,8,4 (~12 px less tall)
+             so the chrome row sits closer to a typical OS title-bar
+             height instead of looking like a fat banner.
              ========================================================= -->
         <Border Grid.Row="0"
                 Background="{DynamicResource BgSidebar}"
                 BorderBrush="{DynamicResource BorderSecondary}"
                 BorderThickness="0,0,0,1"
-                Padding="22,10,8,10">
+                Padding="22,4,8,4">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -133,13 +185,36 @@
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource AccentBrush}"
                            VerticalAlignment="Center"/>
-                <Button x:Name="CloseHeaderBtn"
-                        Grid.Column="1"
-                        Style="{StaticResource DialogCloseButton}"
-                        Content="&#xE8BB;"
-                        VerticalAlignment="Center"
-                        Click="CloseHeaderBtn_Click"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                <!-- Chrome buttons: minimise / maximise-restore / close.
+                     Order matches Windows convention (left→right). All
+                     three carry IsHitTestVisibleInChrome=True so clicks
+                     get routed to the Button instead of starting a
+                     window drag on the CaptionHeight=30 strip behind
+                     them. The maximise glyph swaps to "restore" via
+                     OnStateChanged in code-behind when the window is
+                     already maximised. -->
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button x:Name="MinimizeBtn"
+                            Style="{StaticResource TitleBarChromeButton}"
+                            Content="&#xE921;"
+                            ToolTip="Minimize"
+                            Click="MinimizeBtn_Click"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                    <Button x:Name="MaximizeBtn"
+                            Style="{StaticResource TitleBarChromeButton}"
+                            Content="&#xE922;"
+                            ToolTip="Maximize"
+                            Click="MaximizeBtn_Click"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                    <Button x:Name="CloseHeaderBtn"
+                            Style="{StaticResource DialogCloseButton}"
+                            Content="&#xE8BB;"
+                            ToolTip="Close"
+                            Click="CloseHeaderBtn_Click"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                </StackPanel>
             </Grid>
         </Border>
 

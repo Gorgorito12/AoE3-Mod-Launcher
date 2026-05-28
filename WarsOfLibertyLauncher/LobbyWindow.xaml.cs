@@ -17,7 +17,7 @@ namespace WarsOfLibertyLauncher;
 ///   • Tracked in a single-instance field on MultiplayerTab; re-entering
 ///     a room with the window already open just <see cref="Window.Activate"/>s
 ///     it instead of stacking a duplicate.
-///   • Closed (✕ / Esc / Alt+F4 / external Close) fires
+///   • Closed (X / Esc / Alt+F4 / external Close) fires
 ///     <see cref="Window.Closed"/>; MultiplayerTab clears its single-instance
 ///     field and triggers a leave-room flow on the session if the user
 ///     dismissed mid-lobby.
@@ -68,7 +68,7 @@ public partial class LobbyWindow : Window
     // (e.g. designer preview) doesn't NRE on every click.
     // ------------------------------------------------------------------
 
-    /// <summary>"Leave room" button + title-bar ✕ — same flow.</summary>
+    /// <summary>"Leave room" button + title-bar close — same flow.</summary>
     public Action? OnLeaveRoom { get; set; }
 
     /// <summary>"Mark as ready" / "Ready" toggle button.</summary>
@@ -110,7 +110,7 @@ public partial class LobbyWindow : Window
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Title bar ✕. Closing the window through <see cref="Window.Close"/>
+    /// Title bar close. Closing the window through <see cref="Window.Close"/>
     /// lets the caller's <see cref="Window.Closed"/> handler run the
     /// leave-room flow — same exit path as Esc / Alt+F4. We deliberately
     /// do NOT invoke <see cref="OnLeaveRoom"/> here; the Closed event
@@ -118,6 +118,49 @@ public partial class LobbyWindow : Window
     /// stays identical regardless of which dismiss path the user took.
     /// </summary>
     private void CloseHeaderBtn_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>Title-bar minimise. Standard Windows behaviour.</summary>
+    private void MinimizeBtn_Click(object sender, RoutedEventArgs e)
+        => WindowState = WindowState.Minimized;
+
+    /// <summary>
+    /// Title-bar maximise/restore. Toggles between
+    /// <see cref="WindowState.Maximized"/> and <see cref="WindowState.Normal"/>;
+    /// the App.OnStartup WM_GETMINMAXINFO hook (see CLAUDE.md → Runtime
+    /// conventions → "Maximize-respects-taskbar") keeps the maximised
+    /// rect from spilling over the Windows taskbar. The glyph + tooltip
+    /// swap is wired in <see cref="OnStateChanged"/>.
+    /// </summary>
+    private void MaximizeBtn_Click(object sender, RoutedEventArgs e)
+        => WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+
+    /// <summary>
+    /// Update the maximise-button glyph + tooltip when the window flips
+    /// between Normal and Maximized. WPF fires this on every state
+    /// transition (Normal ↔ Maximized ↔ Minimized) so we can keep the
+    /// chrome reflecting the live state without polling. Guarded on
+    /// <c>MaximizeBtn != null</c> because the base class can fire this
+    /// during InitializeComponent before the named field is wired up.
+    /// </summary>
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+
+        if (MaximizeBtn == null) return;
+
+        bool isMax = WindowState == WindowState.Maximized;
+        // 0xE923 = ChromeRestore, 0xE922 = ChromeMaximize. The two
+        // glyphs are visually paired in Segoe MDL2 specifically for
+        // this use; the FontFamily on the button is set to Segoe MDL2
+        // Assets via the TitleBarChromeButton style, so the raw
+        // codepoints render as the chrome icons. Using char-from-hex
+        // instead of "\uXXXX" string literals because some source-file
+        // round-trips mangle non-ASCII bytes.
+        MaximizeBtn.Content = ((char)(isMax ? 0xE923 : 0xE922)).ToString();
+        MaximizeBtn.ToolTip = isMax ? "Restore" : "Maximize";
+    }
 
     private void LeaveRoomButton_Click(object sender, RoutedEventArgs e) => OnLeaveRoom?.Invoke();
     private void ReadyButton_Click(object sender, RoutedEventArgs e) => OnReady?.Invoke();

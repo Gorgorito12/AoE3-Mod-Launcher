@@ -254,9 +254,22 @@ model enforced by the catalog repo's CI. The JSON schema lives at
 - **Settings / Properties / Lobby dialogs share a non-modal + resizable
   + single-instance pattern.** `ModPropertiesDialog`, `LauncherSettingsDialog`
   and `LobbyWindow` all pair a custom dark `WindowChrome`
-  (`WindowStyle="None"` + ~40 px caption + 6 px `ResizeBorderThickness` for
-  edge-drag, single ✕ close, recipe replicated as the `DialogCloseButton`
-  local style). The two settings dialogs add a 200-px left rail of
+  (`WindowStyle="None"` + 30–40 px caption + 6 px `ResizeBorderThickness` for
+  edge-drag, recipe replicated as the `DialogCloseButton` local style).
+  Title-bar buttons diverge: `LauncherSettingsDialog` and
+  `ModPropertiesDialog` show only the close ✕ (they're settings sheets —
+  minimise/maximise would be unusual there), while `LobbyWindow` adds the
+  full minimise / maximise / close trio via the `TitleBarChromeButton`
+  style (neutral hover) + `DialogCloseButton` (red hover) — matching what
+  a user expects from a regular OS window since the lobby is a
+  long-running interactive surface that warrants alt-tab + maximise. The
+  maximise glyph swaps via `OnStateChanged` in code-behind (Segoe MDL2
+  `0xE922` ↔ `0xE923`); the App.OnStartup WM_GETMINMAXINFO hook handles
+  the maximise-respects-taskbar bound. `LobbyWindow` also uses a smaller
+  30 px caption + tighter padding because the rich room info (room code,
+  HOST / PLAYERS / ROOM ID stats) lives in its own sub-header strip below
+  the chrome; the two settings dialogs keep the taller 40 px caption since
+  their title is the only thing in the chrome row. The two settings dialogs add a 200-px left rail of
   `SidebarNavButton` buttons (from `Styles/Buttons.xaml`) and a
   `SetActiveTab(button)` helper that toggles `Tag="active"` on the chosen
   button while flipping `Visibility` on the matching content `StackPanel`;
