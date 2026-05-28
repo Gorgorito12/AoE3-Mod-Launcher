@@ -19,8 +19,10 @@
     <Version>0.6.0</Version>
     <!-- Icon embedded in the .exe — shows in Explorer, taskbar, Alt+Tab,
          the launcher's own window header, and Windows shortcuts pointing
-         at this binary. -->
-    <ApplicationIcon>WoL.ico</ApplicationIcon>
+         at this binary. Separate from WoL.ico (which keeps the Wars of
+         Liberty mod's branding for its tile in the mod browser) so the
+         launcher can rebrand without affecting the WoL profile. -->
+    <ApplicationIcon>AppIcon.ico</ApplicationIcon>
     <!-- Manifest declares requireAdministrator so Windows always prompts
          for UAC before launching. Avoids permission edge cases when the
          install lives in Program Files or the registry needs HKLM access. -->
@@ -100,10 +102,19 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
-    <!-- WoL.ico is also referenced as ApplicationIcon (above) so it ends up
-         as the .exe's Windows icon. Including it again as a Resource lets
-         WPF UI code load it at runtime via pack://application:,,,/WoL.ico
-         — used as the WoL profile's tile in the mod selector. -->
+    <!-- AppIcon.ico = the launcher's own brand. Also referenced as
+         ApplicationIcon (above) so it ends up as the .exe's Windows icon.
+         Including it again as a Resource lets WPF UI code load it at
+         runtime via pack://application:,,,/AppIcon.ico — used by the
+         MainWindow chrome (small icon next to "AoE3 Mod Launcher") and
+         the system tray icon.
+         WoL.ico stays as a separate Resource for the Wars of Liberty
+         mod profile's tile/banner in the mod browser — see
+         ModRegistry.cs where the WoL profile sets BannerImage to the
+         WoL.ico pack URI. Keeping the two icons separate means
+         rebranding the launcher (changing AppIcon.ico) doesn't change
+         WoL's tile, and vice versa. -->
+    <Resource Include="AppIcon.ico" />
     <Resource Include="WoL.ico" />
 
     <!--

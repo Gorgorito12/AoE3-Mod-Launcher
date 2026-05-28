@@ -435,7 +435,7 @@
                     </Button.Template>
                     <StackPanel Orientation="Horizontal"
                                 VerticalAlignment="Center">
-                        <Image Source="pack://application:,,,/WoL.ico"
+                        <Image Source="pack://application:,,,/AppIcon.ico"
                                Width="16" Height="16"
                                Margin="0,0,10,0"
                                VerticalAlignment="Center"
@@ -507,10 +507,15 @@
                 Background="{DynamicResource BgSidebar}"
                 BorderBrush="{DynamicResource BorderSecondary}"
                 BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch">
+            <StackPanel x:Name="TopTabBar"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Stretch">
                 <!-- Content tabs — icon + label inline. Active state
                      is driven by Tag="active" via RefreshTopTabHighlight
-                     in code-behind. -->
+                     in code-behind. The left-to-right child order is
+                     re-applied at startup from LauncherConfig.TopTabOrder
+                     by ApplyTopTabOrder() — the XAML order here is just
+                     the default for a fresh config. -->
                 <Button x:Name="TopTabPlay"
                         Style="{StaticResource NavTabButton}"
                         Click="TopTabPlay_Click">
@@ -934,7 +939,7 @@
              icon resource is pack://-loaded so it survives single-file
              publish. -->
         <tb:TaskbarIcon x:Name="TrayIcon"
-                        IconSource="pack://application:,,,/WoL.ico"
+                        IconSource="pack://application:,,,/AppIcon.ico"
                         Visibility="Collapsed"
                         TrayMouseDoubleClick="TrayIcon_DoubleClick">
             <tb:TaskbarIcon.ContextMenu>

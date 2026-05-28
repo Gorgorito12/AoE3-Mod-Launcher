@@ -623,6 +623,28 @@ public static class Strings
             [LangEn] = "MODS CATALOG",
             [LangEs] = "CATÁLOGO DE MODS",
         },
+        ["DlgLauncherSettingsSectionInterface"] = new()
+        {
+            [LangEn] = "INTERFACE",
+            [LangEs] = "INTERFAZ",
+        },
+        ["DlgLauncherSettingsTabOrderLabel"] = new()
+        {
+            [LangEn] = "Tab order",
+            [LangEs] = "Orden de pestañas",
+        },
+        ["DlgLauncherSettingsTabOrderHint"] = new()
+        {
+            [LangEn] = "The first tab is the one that opens when you start the launcher. Use the arrows to reorder.",
+            [LangEs] = "La primera pestaña es la que se abre al iniciar el launcher. Usa las flechas para reordenar.",
+        },
+        // Small accent badge next to whichever tab sits first in the
+        // reorder list. Uppercase to read as a tag, not a sentence.
+        ["DlgLauncherSettingsTabOrderOpensFirst"] = new()
+        {
+            [LangEn] = "OPENS ON LAUNCH",
+            [LangEs] = "ABRE AL INICIAR",
+        },
         ["DlgLauncherSettingsLanguageLabel"] = new()
         {
             [LangEn] = "Launcher language",

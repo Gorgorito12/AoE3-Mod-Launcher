@@ -115,6 +115,21 @@ longer exists — don't go looking for it.)
   update. It's a deliberate multiplayer LAN-hash-parity step, not cleanup — those
   deletions are load-bearing.
 
+- **The top nav tab ORDER is runtime-driven, not the XAML order.** The three
+  tabs (LIBRARY / WORKSHOP / MULTIPLAYER) are declared in a fixed left-to-right
+  order in `MainWindow.xaml` (`TopTabBar` StackPanel), but that's just the
+  default-config order. On startup `ApplyTopTabOrder(switchToFirst: true)`
+  re-parents the button children to match `LauncherConfig.TopTabOrder` (stable
+  ids `"library"/"workshop"/"multiplayer"`) and opens the **first** tab in that
+  order — the user's "opens on launch" choice. Users reorder via Launcher
+  Settings → Interface (↑/↓ buttons). **Never read `TopTabOrder` raw** — go
+  through `LauncherConfig.GetTopTabOrder()`, which sanitises a stale/corrupt/
+  hand-edited value (drops unknown ids, de-dupes, appends any missing canonical
+  tab) so a bad config can't permanently hide a tab. After a Settings save the
+  bar re-orders via `ApplyTopTabOrder(switchToFirst: false)` (reorder only — it
+  does NOT yank the user off their current tab; "first opens" is a launch-time
+  rule only).
+
 - **`LauncherConfig` is per-mod.** Real state lives in a `mods` dictionary of
   `ModState` keyed by mod id and selected by `activeModId`; the flat
   `modInstallPath` / `gameExecutable` / `activeTranslationId` fields are LEGACY,

@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -55,6 +56,15 @@ public partial class LauncherSettingsDialog : Window
 
     private const string DefaultCatalogRepo = "Gorgorito12/aoe3-mods-catalog";
 
+    /// <summary>
+    /// In-memory working copy of the top-tab order (tab ids). Seeded
+    /// from <see cref="LauncherConfig.GetTopTabOrder"/> in
+    /// <see cref="LoadFromConfig"/>, mutated by the ↑/↓ buttons, and
+    /// written back to <see cref="LauncherConfig.TopTabOrder"/> only on
+    /// Save — so Cancel discards the reorder like every other edit.
+    /// </summary>
+    private readonly System.Collections.Generic.List<string> _tabOrder = new();
+
     public LauncherSettingsDialog(LauncherConfig config)
     {
         InitializeComponent();
@@ -84,9 +94,13 @@ public partial class LauncherSettingsDialog : Window
         // match the visual style ModPropertiesDialog uses for its own
         // sidebar tabs — no need to duplicate them under "Tab*" keys.
         TabGeneralLabel.Text = Strings.Get("DlgLauncherSettingsSectionGeneral");
+        TabInterfaceLabel.Text = Strings.Get("DlgLauncherSettingsSectionInterface");
         TabUpdatesLabel.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
         TabCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
         TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
+
+        TabOrderLabel.Text = Strings.Get("DlgLauncherSettingsTabOrderLabel");
+        TabOrderHint.Text = Strings.Get("DlgLauncherSettingsTabOrderHint");
 
         LanguageLabel.Text = Strings.Get("DlgLauncherSettingsLanguageLabel");
         // Theme picker removed — see LauncherSettingsDialog.xaml comment.
@@ -192,6 +206,12 @@ public partial class LauncherSettingsDialog : Window
         if (RadAsstCombo.SelectedItem == null)
             RadAsstCombo.SelectedIndex = 0;
 
+        // Top-tab order: seed the working copy from the sanitised config
+        // value and render the reorderable rows.
+        _tabOrder.Clear();
+        _tabOrder.AddRange(_config.GetTopTabOrder());
+        RenderTabOrderList();
+
         // Catalog source: map the three-way config ("" / "none" / repo)
         // back into the radio buttons + text box.
         var rawRepo = _config.ModsCatalogRepo ?? "";
@@ -238,20 +258,161 @@ public partial class LauncherSettingsDialog : Window
     private void SetActiveTab(System.Windows.Controls.Button activeBtn)
     {
         TabGeneralBtn.Tag = ReferenceEquals(activeBtn, TabGeneralBtn) ? "active" : null;
+        TabInterfaceBtn.Tag = ReferenceEquals(activeBtn, TabInterfaceBtn) ? "active" : null;
         TabUpdatesBtn.Tag = ReferenceEquals(activeBtn, TabUpdatesBtn) ? "active" : null;
         TabCatalogBtn.Tag = ReferenceEquals(activeBtn, TabCatalogBtn) ? "active" : null;
         TabMaintenanceBtn.Tag = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? "active" : null;
 
         GeneralPanel.Visibility = ReferenceEquals(activeBtn, TabGeneralBtn) ? Visibility.Visible : Visibility.Collapsed;
+        InterfacePanel.Visibility = ReferenceEquals(activeBtn, TabInterfaceBtn) ? Visibility.Visible : Visibility.Collapsed;
         UpdatesPanel.Visibility = ReferenceEquals(activeBtn, TabUpdatesBtn) ? Visibility.Visible : Visibility.Collapsed;
         CatalogPanel.Visibility = ReferenceEquals(activeBtn, TabCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
         MaintenancePanel.Visibility = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void TabGeneralBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabGeneralBtn);
+    private void TabInterfaceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabInterfaceBtn);
     private void TabUpdatesBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUpdatesBtn);
     private void TabCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabCatalogBtn);
     private void TabMaintenanceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabMaintenanceBtn);
+
+    // -- Top-tab reorder (Interface section) --------------------------------
+
+    /// <summary>
+    /// Rebuild the reorderable tab rows from <see cref="_tabOrder"/>.
+    /// Each row: a position number, the tab's display name, and ↑/↓
+    /// buttons (the first row's ↑ and last row's ↓ are disabled). The
+    /// first row carries a small "opens on launch" badge so the
+    /// order→startup link is obvious. Called on load and after every
+    /// move; cheap (3 rows) so a full re-render beats fiddly in-place
+    /// swaps.
+    /// </summary>
+    private void RenderTabOrderList()
+    {
+        TabOrderList.Children.Clear();
+
+        for (int i = 0; i < _tabOrder.Count; i++)
+        {
+            string id = _tabOrder[i];
+            bool isFirst = i == 0;
+            bool isLast = i == _tabOrder.Count - 1;
+
+            var row = new Border
+            {
+                Background = (Brush)FindResource("MpSurface"),
+                BorderBrush = (Brush)FindResource("BorderSubtle"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(12, 8, 8, 8),
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // position
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // name
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // up
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // down
+
+            var pos = new TextBlock
+            {
+                Text = (i + 1).ToString() + ".",
+                Foreground = (Brush)FindResource("TextSecondary"),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+            };
+            Grid.SetColumn(pos, 0);
+            grid.Children.Add(pos);
+
+            var nameStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            nameStack.Children.Add(new TextBlock
+            {
+                Text = TabDisplayName(id),
+                Foreground = (Brush)FindResource("TextPrimary"),
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            if (isFirst)
+            {
+                // "opens on launch" badge on whatever sits first.
+                nameStack.Children.Add(new TextBlock
+                {
+                    Text = "  " + Strings.Get("DlgLauncherSettingsTabOrderOpensFirst"),
+                    Foreground = (Brush)FindResource("AccentBrush"),
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+            }
+            Grid.SetColumn(nameStack, 1);
+            grid.Children.Add(nameStack);
+
+            var upBtn = new Button
+            {
+                Style = (Style)FindResource("PropertyActionButton"),
+                Content = "↑",
+                MinWidth = 40,
+                Margin = new Thickness(6, 0, 0, 0),
+                IsEnabled = !isFirst,
+                Tag = i,
+            };
+            upBtn.Click += MoveTabUp_Click;
+            Grid.SetColumn(upBtn, 2);
+            grid.Children.Add(upBtn);
+
+            var downBtn = new Button
+            {
+                Style = (Style)FindResource("PropertyActionButton"),
+                Content = "↓",
+                MinWidth = 40,
+                Margin = new Thickness(6, 0, 0, 0),
+                IsEnabled = !isLast,
+                Tag = i,
+            };
+            downBtn.Click += MoveTabDown_Click;
+            Grid.SetColumn(downBtn, 3);
+            grid.Children.Add(downBtn);
+
+            row.Child = grid;
+            TabOrderList.Children.Add(row);
+        }
+    }
+
+    private void MoveTabUp_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: int i } && i > 0)
+        {
+            (_tabOrder[i - 1], _tabOrder[i]) = (_tabOrder[i], _tabOrder[i - 1]);
+            RenderTabOrderList();
+        }
+    }
+
+    private void MoveTabDown_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: int i } && i < _tabOrder.Count - 1)
+        {
+            (_tabOrder[i + 1], _tabOrder[i]) = (_tabOrder[i], _tabOrder[i + 1]);
+            RenderTabOrderList();
+        }
+    }
+
+    /// <summary>
+    /// Localised display name for a top-tab id. Reuses the same strings
+    /// the nav bar paints (TopTabPlay/Mods/Multiplayer) so the reorder
+    /// list reads identically to the bar it controls.
+    /// </summary>
+    private static string TabDisplayName(string id) => id switch
+    {
+        "workshop" => Strings.Get("TopTabMods"),
+        "multiplayer" => Strings.Get("TopTabMultiplayer"),
+        _ => Strings.Get("TopTabPlay"),
+    };
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
@@ -314,6 +475,12 @@ public partial class LauncherSettingsDialog : Window
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.ModsCatalogRepo = newCatalogRepo;
         _config.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+
+        // Top-tab order (Interface section). Persist the working copy;
+        // MainWindow re-applies it to the nav bar on the post-save
+        // refresh (ApplyTopTabOrder), and the FIRST entry becomes the
+        // tab that opens on the next launch.
+        _config.TopTabOrder = _tabOrder.ToArray();
 
         // Radmin assistant mode — keep "Auto" as the fallback if for
         // some reason the combo had no selection (shouldn't happen

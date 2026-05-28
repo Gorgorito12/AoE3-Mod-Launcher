@@ -275,6 +275,16 @@ public partial class MainWindow : Window
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
+
+        // Apply the user's saved tab order to the nav bar and open the
+        // first tab in that order (their "opens on launch" choice). Runs
+        // here — after MultiplayerView.Attach() + ApplyLanguage() — so
+        // that if the user put Multiplayer first, the view is already
+        // wired to the session and its labels are localised before we
+        // make it visible. Before the window shows, so there's no
+        // visible flash of the default Library tab.
+        ApplyTopTabOrder(switchToFirst: true);
+
         RefreshModCards();
         ResetProgressUI();
         // Sync the right-content tab visibility with the saved _activeTab
@@ -1133,6 +1143,11 @@ public partial class MainWindow : Window
             // events yet.
             RefreshIdlePanel();
             UpdateGameUI();
+            // Re-order the nav bar if the user changed the tab order in
+            // the Interface section. switchToFirst:false so we don't
+            // yank them off their current tab just for saving settings —
+            // the "first tab opens" rule only applies at launch.
+            ApplyTopTabOrder(switchToFirst: false);
             // The tray tooltip + menu labels follow the launcher language;
             // re-localise them so the user sees their new choice if they
             // right-click the tray icon.
@@ -3071,6 +3086,56 @@ public partial class MainWindow : Window
             RefreshModsBrowser();
         }
     }
+
+    /// <summary>
+    /// Re-order the top nav bar's tab buttons left-to-right to match the
+    /// user's saved <see cref="LauncherConfig.TopTabOrder"/>. Called once
+    /// at startup (with <paramref name="switchToFirst"/>=true so the first
+    /// tab in the order is the one that opens) and again after the user
+    /// reorders from Launcher Settings (with false, so the bar re-orders
+    /// but we DON'T yank them away from whatever tab they're on).
+    ///
+    /// Settings is NOT part of this set — it lives behind the gear menu,
+    /// not in the nav bar — so it never appears in TopTabOrder.
+    /// </summary>
+    private void ApplyTopTabOrder(bool switchToFirst)
+    {
+        var order = _config.GetTopTabOrder();
+
+        // id -> the button declared in XAML. The buttons stay alive via
+        // their x:Name fields, so Clear()+re-Add just re-parents them in
+        // the new order (no rebuild, no lost event wiring).
+        var byId = new System.Collections.Generic.Dictionary<string, UIElement>(System.StringComparer.Ordinal)
+        {
+            ["library"] = TopTabPlay,
+            ["workshop"] = TopTabMods,
+            ["multiplayer"] = TopTabMultiplayer,
+        };
+
+        TopTabBar.Children.Clear();
+        foreach (var id in order)
+            if (byId.TryGetValue(id, out var btn))
+                TopTabBar.Children.Add(btn);
+
+        if (switchToFirst)
+        {
+            // First tab in the order = the one that opens on launch.
+            SwitchTopTab(TabIdToTopTab(order.Length > 0 ? order[0] : "library"));
+        }
+        else
+        {
+            // Re-parenting cleared nothing about the active view; just
+            // repaint the highlight so it still marks the current tab.
+            RefreshTopTabHighlight();
+        }
+    }
+
+    private static TopTab TabIdToTopTab(string id) => id switch
+    {
+        "workshop" => TopTab.Mods,
+        "multiplayer" => TopTab.Multiplayer,
+        _ => TopTab.Play, // "library" and any unexpected fallback
+    };
 
     private void SwitchTopTab(TopTab tab)
     {

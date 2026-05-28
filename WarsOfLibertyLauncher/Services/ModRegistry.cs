@@ -429,9 +429,12 @@ public static class ModRegistry
             // Enabling this turns on the pre-install user-data backup alert
             // and the gear menu's "User data" submenu for this profile.
             UserDataFolder = "Wars of Liberty",
-            // Reuse the launcher's app icon (WoL.ico, registered as a
-            // pack-resource in the .csproj) so the WoL tile shows the real
-            // logo instead of the "W" placeholder.
+            // WoL.ico ships as a pack-resource specifically for this
+            // tile so the WoL profile shows the real Wars of Liberty
+            // logo instead of the "W" placeholder. Used to double as
+            // the launcher's app icon too, but the launcher rebranded
+            // to AppIcon.ico — WoL.ico stayed because it IS the WoL
+            // mod's identity.
             BannerImage = "pack://application:,,,/WoL.ico",
             // Dashboard hero image. Loaded lazily by EnsureModAssetsAsync
             // and painted behind the title + PLAY button. Points at the

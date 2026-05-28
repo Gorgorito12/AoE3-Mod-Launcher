@@ -451,6 +451,52 @@ public class LauncherConfig
     public string LastActiveTab { get; set; } = "Noticias";
 
     /// <summary>
+    /// Left-to-right order of the three top navigation tabs, as stable
+    /// tab ids: "library", "workshop", "multiplayer". User-reorderable
+    /// from Launcher Settings → Interface. The FIRST entry is also the
+    /// tab that opens on launch — the user's mental model is "put the
+    /// tab I want first, and it opens first", so order + startup are one
+    /// setting, not two.
+    ///
+    /// Never read this raw — go through <see cref="GetTopTabOrder"/>,
+    /// which sanitises a hand-edited / stale / corrupt value (drops
+    /// unknown ids, de-dupes, and appends any canonical tab the saved
+    /// list is missing) so a bad config can never permanently hide a
+    /// tab.
+    /// </summary>
+    [JsonPropertyName("topTabOrder")]
+    public string[] TopTabOrder { get; set; } = { "library", "workshop", "multiplayer" };
+
+    /// <summary>The canonical set of top-tab ids, in their default order.</summary>
+    public static readonly string[] CanonicalTopTabs = { "library", "workshop", "multiplayer" };
+
+    /// <summary>
+    /// Returns <see cref="TopTabOrder"/> sanitised against
+    /// <see cref="CanonicalTopTabs"/>: keeps the saved order for ids we
+    /// recognise (case-insensitive, de-duplicated), then appends any
+    /// canonical tab the saved list omitted. Guarantees the result is
+    /// exactly the canonical set, permuted — so the nav bar always shows
+    /// all three tabs regardless of what's on disk.
+    /// </summary>
+    public string[] GetTopTabOrder()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>(CanonicalTopTabs.Length);
+        foreach (var id in TopTabOrder ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(id)) continue;
+            var norm = id.Trim().ToLowerInvariant();
+            if (Array.IndexOf(CanonicalTopTabs, norm) < 0) continue; // unknown id
+            if (seen.Add(norm)) result.Add(norm);
+        }
+        // Append any canonical tab the saved order forgot (e.g. config
+        // written before a new tab existed, or a hand-deleted entry).
+        foreach (var id in CanonicalTopTabs)
+            if (seen.Add(id)) result.Add(id);
+        return result.ToArray();
+    }
+
+    /// <summary>
     /// URLs of the Wars of Liberty payload ZIP parts. The ZIP is split into
     /// multiple files (.zip.001, .zip.002, ...) to work around GitHub's file
     /// size limits. The launcher downloads all parts, concatenates them into
