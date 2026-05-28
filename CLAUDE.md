@@ -65,8 +65,15 @@ longer exists — don't go looking for it.)
   rides **user-managed Radmin VPN** (its 26.0.0.0/8 LAN; AoE3's stock LAN
   discovery finds peers). The launcher only *assists* with Radmin — detect /
   install / launch its GUI and copy the network name to the clipboard for manual
-  paste; it **cannot join a network programmatically**
-  (`Services/RadminVpnService.cs`, `RadminAssistantService.cs`). The launcher is
+  paste; it **cannot join a network programmatically**. It DOES detect current
+  network membership by tailing Radmin's own
+  `%PROGRAMDATA%\Famatech\Radmin VPN\service.log` (English, tab-delimited,
+  stable across Radmin VPN 2.x) for the `UPDATE\tYou joined/left network 'X'`
+  events — that's how `RadminAssistantService.ProbeAsync` promotes its overlay
+  checklist from `LoggedIn` → `InAoE3Network`. An ICMP ping to a known seed
+  peer is the fallback signal when the log isn't readable (deleted, ACL'd,
+  sandboxed account) (`Services/RadminVpnService.cs`,
+  `RadminAssistantService.cs`, `RadminLogService.cs`). The launcher is
   the *meta layer* (sign-in, lobbies, chat, mod-hash gating) over a **self-hosted
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
   Worker. Sign-in is **Discord OAuth** (a state flow shaped like device flow),
@@ -128,6 +135,9 @@ engine** and the UI binds to it.
   `UpdateInfoService`, `ArchiveService`, `DownloadService`), detection
   (`AoE3Detector`, `Aoe3DetectorService`, `RegistryService`), hashing
   (`HashService` = MD5 + CRC32 + SHA-256), self-update (`LauncherUpdateService`),
+  Radmin VPN assist (`RadminVpnService` = registry + NIC probe,
+  `RadminLogService` = `service.log` parser for network membership,
+  `RadminAssistantService` = stage classifier the overlay binds to),
   uninstall, user data, translations, mod catalog, elevation, game launch.
   `Services/Multiplayer/` is the lobby client (`MultiplayerSession`,
   `LobbyApiClient`, `LobbyWebSocket`, `ModHashService`, `ReplayUploadService`).

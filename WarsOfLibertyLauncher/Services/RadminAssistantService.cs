@@ -40,14 +40,15 @@ public enum RadminStage
     LoggedIn = 2,
 
     /// <summary>
-    /// Confirmed in the AoE3 TAD network — a ping to a seed peer
-    /// inside that network answered. The overlay marks the final
-    /// checkbox green and can auto-close.
-    ///
-    /// Currently un-reachable from <see cref="RadminAssistantService.ProbeAsync"/>
-    /// because seed peer probing is stubbed out (no IPs configured
-    /// yet). Wired through end-to-end so adding the actual ping
-    /// later is a one-line change.
+    /// Confirmed in the AoE3 TAD network. Promoted from
+    /// <see cref="LoggedIn"/> by <see cref="RadminAssistantService.ProbeAsync"/>
+    /// when either:
+    ///   • <see cref="RadminLogService.GetActiveNetworkMemberships"/>
+    ///     reports the canonical AoE3 TAD network name as currently
+    ///     joined (preferred — direct evidence from Radmin's own log);
+    ///   • or, as a fallback when the log can't be read, a ping to a
+    ///     known seed peer inside that network answered.
+    /// The overlay marks the final checkbox green and auto-closes.
     /// </summary>
     InAoE3Network = 3,
 }
@@ -60,30 +61,37 @@ public enum RadminStage
 ///     of the simpler boolean-pair RadminStatus exposes — the
 ///     overlay's checklist needs ordinal stages to know which step
 ///     to highlight as "in progress" vs "complete".
-///   • An async <see cref="ProbeAsync"/> API that can include an
-///     ICMP probe to a known seed peer in the AoE3 TAD Radmin
-///     network — used to promote stage LoggedIn → InAoE3Network.
+///   • An async <see cref="ProbeAsync"/> API that resolves network
+///     membership by parsing Radmin's <c>service.log</c> via
+///     <see cref="RadminLogService"/>, with a seed-peer ping as a
+///     fallback when the log isn't accessible. The log is the
+///     authoritative signal: it records the user's actual join/
+///     leave events verbatim.
 ///   • One place to extend later with backend-supplied peer lists,
 ///     other network-membership probes, etc.
 ///
-/// Stateless — every call hits the registry + NIC list fresh + (if
-/// LoggedIn) pings the seed list. Safe to call from a 3-second
-/// timer; total cost per call when LoggedIn is bounded by the seed
-/// ping timeout (~600 ms worst case, &lt; 50 ms typical).
+/// Stateless — every call hits the registry + NIC list + (if
+/// LoggedIn) the log tail and/or seed-ping. Safe to call from a
+/// 3-second timer; per-call cost when LoggedIn is ~5-10 ms for the
+/// log read (or up to ~600 ms when it falls back to ping).
 /// </summary>
 public static class RadminAssistantService
 {
     /// <summary>
-    /// Known-good peers in the AoE3 TAD Radmin network. We try to
-    /// ping each one in parallel — if ANY responds, the user is
-    /// confirmed inside the network (stage = InAoE3Network). Using
-    /// multiple peers (when we have them) means a single peer
-    /// going offline doesn't make the assistant lie to everyone
-    /// else.
+    /// Fallback seed peers in the AoE3 TAD Radmin network. Only used
+    /// when <see cref="RadminLogService.GetActiveNetworkMemberships"/>
+    /// returns null — i.e. the service log is missing, locked
+    /// exclusively, or otherwise unreadable. When the log IS readable
+    /// it's strictly more accurate (direct membership evidence vs.
+    /// "some peer answered") so the ping never runs.
+    ///
+    /// Probed in parallel; if ANY peer responds, the user is treated
+    /// as confirmed inside the network. Multi-peer lists tolerate any
+    /// one regular going offline without flipping the assistant for
+    /// everyone else.
     ///
     /// Add new IPs here as you collect them from regulars who are
-    /// almost always online. The whole list is probed in parallel
-    /// so adding a 5th peer doesn't slow anything down.
+    /// almost always online.
     /// </summary>
     private static readonly string[] SeedPeerIps = new[]
     {
@@ -118,13 +126,18 @@ public static class RadminAssistantService
     ///   NotInstalled        → registry has no Radmin uninstall entry
     ///   InstalledNotRunning → installed but no 26.x.x.x adapter
     ///   LoggedIn            → 26.x.x.x adapter is up
-    ///   InAoE3Network       → seed-peer ping answered
+    ///   InAoE3Network       → service.log says we joined the canonical
+    ///                         AoE3 TAD network (or, fallback, a seed-
+    ///                         peer ping answered when the log isn't
+    ///                         readable)
     ///
-    /// The seed-peer ping only runs when we're already at LoggedIn —
-    /// no point pinging if we don't even have a Radmin IP. When
-    /// <see cref="SeedPeerIps"/> is empty (e.g. all peers retired
-    /// without replacement), the ping step is skipped and the
-    /// stage stays at LoggedIn so the user knows to verify manually.
+    /// Membership detection only runs when we're already at LoggedIn —
+    /// no point reading the log or pinging if we don't even have a
+    /// Radmin identity. The log read is preferred because it's exact
+    /// (it sees the user's actual join/leave events) and tolerant of
+    /// firewall or peer-offline failure modes; the ping is the safety
+    /// net for the rare case where ProgramData isn't readable.
+    ///
     /// Cancellation aborts the ping but never throws — callers
     /// should treat OperationCanceledException-during-ping as
     /// "stay on the previous stage" (the snapshot from
@@ -135,17 +148,43 @@ public static class RadminAssistantService
         var status = RadminVpnService.GetStatus();
         var baseStage = MapToStage(status);
 
-        // Only attempt the seed ping when there's a chance it
-        // could succeed — i.e. we have an active 26.x adapter to
-        // route the ICMP through. Skipping otherwise avoids ~600 ms
-        // of "ping into the void" on every poll for users who don't
-        // even have Radmin running.
-        if (baseStage != RadminStage.LoggedIn || SeedPeerIps.Length == 0)
+        // Don't bother with membership detection unless the user has
+        // a 26.x identity — without one, no Radmin network can be
+        // joined anyway, and reading the log would just confirm
+        // historical events that are no longer current.
+        if (baseStage != RadminStage.LoggedIn)
+            return new AssistantSnapshot(baseStage, status);
+
+        // Preferred signal: Radmin's service.log records the user's
+        // actual "You joined gaming network 'X'" / "You left network
+        // 'X'" events verbatim. No dependence on seed peers, no ICMP,
+        // no false negatives from a peer going offline.
+        var joined = RadminLogService.GetActiveNetworkMemberships();
+        if (joined != null)
+        {
+            bool inAoE3 = false;
+            foreach (var name in joined)
+            {
+                if (string.Equals(name, RadminVpnService.AoE3TadNetworkName, StringComparison.Ordinal))
+                {
+                    inAoE3 = true;
+                    break;
+                }
+            }
+            var stage = inAoE3 ? RadminStage.InAoE3Network : RadminStage.LoggedIn;
+            return new AssistantSnapshot(stage, status);
+        }
+
+        // Fallback: log unreadable (deleted, ACL'd, sandboxed account).
+        // Ping a known seed peer — less precise, but the only signal
+        // available when we can't see the log. Behaves identically to
+        // the pre-log probe.
+        if (SeedPeerIps.Length == 0)
             return new AssistantSnapshot(baseStage, status);
 
         bool seedAnswered = await PingAnySeedAsync(ct).ConfigureAwait(false);
-        var stage = seedAnswered ? RadminStage.InAoE3Network : RadminStage.LoggedIn;
-        return new AssistantSnapshot(stage, status);
+        var fallbackStage = seedAnswered ? RadminStage.InAoE3Network : RadminStage.LoggedIn;
+        return new AssistantSnapshot(fallbackStage, status);
     }
 
     /// <summary>

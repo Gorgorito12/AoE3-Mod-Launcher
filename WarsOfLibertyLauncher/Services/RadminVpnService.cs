@@ -207,6 +207,15 @@ public static class RadminVpnService
     // Radmin window. Reading the Radmin GUI via UI Automation would
     // give us the real peer list but breaks on every Radmin update
     // (and runs afoul of Famatech's TOS).
+    //
+    // NOTE: "are you in network X" (membership) is a different question
+    // from "how many peers are visible" (peer count) and has a much
+    // more reliable answer. RadminLogService tails Radmin's own
+    // service.log for "You joined gaming network 'X'" / "You left
+    // network 'X'" events, which is what RadminAssistantService.ProbeAsync
+    // now uses to promote LoggedIn → InAoE3Network. The seed-peer ping
+    // sits behind it as a fallback for the rare machine where
+    // ProgramData isn't readable.
 
     /// <summary>
     /// Launch the Radmin GUI. Process.Start with UseShellExecute lets

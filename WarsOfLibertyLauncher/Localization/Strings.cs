@@ -1624,6 +1624,15 @@ public static class Strings
             [LangEn] = "Your IP: {0}. To play AoE3 online, make sure you're in this Radmin network:",
             [LangEs] = "Tu IP: {0}. Para jugar AoE3 online, asegúrate de estar en esta red de Radmin:",
         },
+        // Compact one-line variant used by MultiplayerTab once Radmin is
+        // running: the network-name copier and numbered steps are hidden
+        // (the RadminAssistantWindow already covers that flow), so the
+        // banner shrinks to a single status line. {0} = own IP.
+        ["MpRadminConnectedTitleCompact"] = new()
+        {
+            [LangEn] = "Radmin VPN is running · IP: {0}",
+            [LangEs] = "Radmin VPN está corriendo · IP: {0}",
+        },
 
         // Button next to the network-name TextBox. Briefly flashes to
         // "Copied!" after the click so the user sees the action worked.

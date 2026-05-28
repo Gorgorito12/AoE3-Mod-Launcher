@@ -246,6 +246,7 @@ public partial class MultiplayerTab : UserControl
             RadminStatusGlyph.Text = "!";
             RadminBannerTitle.Text = Strings.Get("MpRadminNotInstalledTitle");
             RadminBannerBody.Text = Strings.Get("MpRadminNotInstalledBody");
+            RadminBannerBody.Visibility = Visibility.Visible;
             RadminPrimaryButton.Content = Strings.Get("MpRadminInstallButton");
             RadminPrimaryButton.Visibility = Visibility.Visible;
             RadminPrimaryButton.IsEnabled = true;
@@ -261,6 +262,7 @@ public partial class MultiplayerTab : UserControl
             RadminStatusGlyph.Text = "i";
             RadminBannerTitle.Text = Strings.Get("MpRadminNotConnectedTitle");
             RadminBannerBody.Text = Strings.Get("MpRadminNotConnectedBody");
+            RadminBannerBody.Visibility = Visibility.Visible;
             RadminPrimaryButton.Content = Strings.Get("MpRadminOpenButton");
             RadminPrimaryButton.Visibility = Visibility.Visible;
             RadminPrimaryButton.IsEnabled = true;
@@ -273,25 +275,21 @@ public partial class MultiplayerTab : UserControl
             RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#3a8c5a")!;
             RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#3a8c5a")!;
             RadminStatusGlyph.Text = "✓";
-            RadminBannerTitle.Text = Strings.Get("MpRadminConnectedTitle");
-            RadminBannerBody.Text = string.Format(
-                Strings.Get("MpRadminConnectedBody"),
+            // Compact one-line layout for the running state: the title
+            // carries both the status and the IP, body/copier/steps are
+            // hidden because the RadminAssistantWindow (reachable via
+            // "Show steps") is now the place where the user verifies
+            // the network membership and copies the join name.
+            RadminBannerTitle.Text = Strings.Format(
+                "MpRadminConnectedTitleCompact",
                 status.AdapterIp ?? "26.x.x.x");
+            RadminBannerBody.Text = string.Empty;
+            RadminBannerBody.Visibility = Visibility.Collapsed;
             RadminPrimaryButton.Content = Strings.Get("MpRadminOpenButton");
             RadminPrimaryButton.Visibility = Visibility.Visible;
             RadminPrimaryButton.IsEnabled = true;
-
-            // Show the network-name copier + numbered steps. The
-            // TextBox is read-only and pre-filled with the canonical
-            // network name so the user can verify visually that we're
-            // pointing them at the right thing (no hidden clipboard
-            // surprises) AND can select-and-copy with their own
-            // keyboard shortcuts if they prefer that flow.
-            RadminNetworkNameBox.Text = RadminVpnService.AoE3TadNetworkName;
-            RadminCopyNameButton.Content = Strings.Get("MpRadminCopyNameButton");
-            RadminInstructionsText.Text = Strings.Get("MpRadminInstructions");
-            RadminNetworkNamePanel.Visibility = Visibility.Visible;
-            RadminInstructionsText.Visibility = Visibility.Visible;
+            RadminNetworkNamePanel.Visibility = Visibility.Collapsed;
+            RadminInstructionsText.Visibility = Visibility.Collapsed;
         }
     }
 
