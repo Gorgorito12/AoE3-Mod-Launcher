@@ -44,6 +44,11 @@ public partial class LauncherSettingsDialog : Window
         _config = config;
         ApplyLanguage();
         LoadFromConfig();
+        // Land on GENERAL by default. The visibility of every panel is
+        // also set to Collapsed except GeneralPanel in the XAML, so
+        // this call is mainly to paint TabGeneralBtn's Tag="active"
+        // accent stripe (the SidebarNavButton style reads Tag).
+        SetActiveTab(TabGeneralBtn);
     }
 
     /// <summary>
@@ -57,9 +62,14 @@ public partial class LauncherSettingsDialog : Window
         Title = Strings.Get("DlgLauncherSettingsTitle");
         TitleText.Text = Strings.Get("DlgLauncherSettingsTitle");
 
-        SectionGeneralText.Text = Strings.Get("DlgLauncherSettingsSectionGeneral");
-        SectionUpdatesText.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
-        SectionCatalogText.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
+        // Sidebar tab labels. We reuse the original "Section*" strings
+        // (uppercase: "GENERAL", "UPDATES", etc.) because they already
+        // match the visual style ModPropertiesDialog uses for its own
+        // sidebar tabs — no need to duplicate them under "Tab*" keys.
+        TabGeneralLabel.Text = Strings.Get("DlgLauncherSettingsSectionGeneral");
+        TabUpdatesLabel.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
+        TabCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
+        TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
 
         LanguageLabel.Text = Strings.Get("DlgLauncherSettingsLanguageLabel");
         // Theme picker removed — see LauncherSettingsDialog.xaml comment.
@@ -109,7 +119,6 @@ public partial class LauncherSettingsDialog : Window
         ClearCacheButton.Content = Strings.Get("DlgLauncherSettingsClearCache");
         ClearCacheHint.Text = Strings.Get("DlgLauncherSettingsClearCacheHint");
 
-        SectionMaintenanceText.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
         ClearAssetsButton.Content = Strings.Get("DlgLauncherSettingsClearAssets");
         ClearAssetsHint.Text = Strings.Get("DlgLauncherSettingsClearAssetsHint");
         ClearTempButton.Content = Strings.Get("DlgLauncherSettingsClearTemp");
@@ -201,6 +210,32 @@ public partial class LauncherSettingsDialog : Window
         // mode-agnostic and the change only commits on Save.
     }
 
+    // -- Tab switching ------------------------------------------------------
+    //
+    // Copy of the ModPropertiesDialog pattern: each tab button toggles
+    // Tag="active" on itself (the SidebarNavButton style draws the gold
+    // right-rail accent off that), and the panels' Visibility is set to
+    // Visible only on the matching one. Same predictable contract, same
+    // SidebarNavButton style, so the two dialogs read as siblings.
+
+    private void SetActiveTab(System.Windows.Controls.Button activeBtn)
+    {
+        TabGeneralBtn.Tag = ReferenceEquals(activeBtn, TabGeneralBtn) ? "active" : null;
+        TabUpdatesBtn.Tag = ReferenceEquals(activeBtn, TabUpdatesBtn) ? "active" : null;
+        TabCatalogBtn.Tag = ReferenceEquals(activeBtn, TabCatalogBtn) ? "active" : null;
+        TabMaintenanceBtn.Tag = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? "active" : null;
+
+        GeneralPanel.Visibility = ReferenceEquals(activeBtn, TabGeneralBtn) ? Visibility.Visible : Visibility.Collapsed;
+        UpdatesPanel.Visibility = ReferenceEquals(activeBtn, TabUpdatesBtn) ? Visibility.Visible : Visibility.Collapsed;
+        CatalogPanel.Visibility = ReferenceEquals(activeBtn, TabCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
+        MaintenancePanel.Visibility = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void TabGeneralBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabGeneralBtn);
+    private void TabUpdatesBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUpdatesBtn);
+    private void TabCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabCatalogBtn);
+    private void TabMaintenanceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabMaintenanceBtn);
+
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         DialogResult = false;
@@ -229,6 +264,12 @@ public partial class LauncherSettingsDialog : Window
             {
                 CatalogInvalidText.Text = Strings.Get("DlgLauncherSettingsInvalidRepo");
                 CatalogInvalidText.Visibility = Visibility.Visible;
+                // Switch to the Catalog tab so the user actually sees
+                // the inline error + the textbox they need to fix. The
+                // tab redesign means the user could be on Updates or
+                // Maintenance when they hit Save, and a silent failure
+                // there is a UX dead end.
+                SetActiveTab(TabCatalogBtn);
                 CatalogCustomBox.Focus();
                 return;
             }

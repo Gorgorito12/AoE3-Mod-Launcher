@@ -222,6 +222,22 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   `ModPropertiesDialog`) still carry redundant `TextOptions.*` XAML attributes
   from before this was centralised; harmless (the values match) but not the
   pattern to copy.
+- **Settings / Properties dialogs share a sidebar-tab pattern.**
+  `ModPropertiesDialog` and `LauncherSettingsDialog` both pair a custom dark
+  `WindowChrome` (`WindowStyle="None"` + ~40 px caption + single ✕ close,
+  recipe replicated as the `DialogCloseButton` local style), a 200-px left
+  rail of `SidebarNavButton` buttons (from `Styles/Buttons.xaml`, shared
+  across both dialogs), and a `SetActiveTab(button)` helper that toggles
+  `Tag="active"` on the chosen button while flipping `Visibility` on the
+  matching content `StackPanel`. The gold right-rail accent on the active
+  tab is driven entirely by the style's `Tag="active"` trigger — no per-
+  dialog colour code. Tab labels reuse the same uppercase section strings
+  (`GENERAL`, `UPDATES`, etc.) the in-content section headers used before
+  the refactor. When adding a new multi-section settings surface, copy
+  this pattern instead of rebuilding navigation, chrome and tab visuals
+  from scratch — the gear-menu modals (Aoe3Picker, CreateLobby, etc.)
+  still use the default white WPF chrome and are next in line for the
+  same treatment.
 
 ## Conventions
 

@@ -107,10 +107,11 @@ public partial class ModPropertiesDialog : Window
     {
         Title = Strings.Format("ModPropTitle", _profile.DisplayName ?? "");
         HeaderTitleText.Text = _profile.DisplayName ?? "";
-        // Neutral subtitle introduced in the card redesign — no
-        // mod-specific text so the dialog header reads the same
-        // for any mod that opens it.
-        HeaderSubtitleText.Text = Strings.Get("ModPropSubtitle");
+        // (The neutral subtitle that used to sit under HeaderTitleText
+        // was removed when the header was compacted to a single row —
+        // the sidebar tabs already communicate "this is where you
+        // manage settings/files/data/language", so the subtitle was
+        // pure vertical filler.)
 
         TabGeneralLabel.Text = Strings.Get("ModPropTabGeneral");
         TabLocalFilesLabel.Text = Strings.Get("ModPropTabLocalFiles");

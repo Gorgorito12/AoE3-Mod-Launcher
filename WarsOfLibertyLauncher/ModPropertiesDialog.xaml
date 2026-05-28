@@ -36,12 +36,15 @@
           LANGUAGE    — Language combo with description
     -->
 
-    <!-- WindowChrome turns the top 56px of the window into a custom
+    <!-- WindowChrome turns the top 40px of the window into a custom
          drag area without painting a Windows-native caption bar. The
          close button uses IsHitTestVisibleInChrome=True so clicks on
-         it dismiss the popup instead of starting a drag. -->
+         it dismiss the popup instead of starting a drag.
+         (Was 56 before the header was compacted to one row — now the
+         drag area ends exactly where the row ends so the user can't
+         accidentally start a drag below the close button.) -->
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="56"
+        <WindowChrome CaptionHeight="40"
                       ResizeBorderThickness="0"
                       CornerRadius="0"
                       GlassFrameThickness="0"
@@ -161,16 +164,18 @@
         </Grid.RowDefinitions>
 
         <!-- =========================================================
-             HEADER — mod name + neutral subtitle + version badge +
-             custom close button. WindowChrome.CaptionHeight makes the
-             title area draggable; the close button is hit-test-
-             visible-in-chrome so clicks on it dismiss the window.
+             HEADER — single compact row with mod name, version badge
+             and close button. Subtitle was removed (it said only
+             "Manage mod settings, files, backups and language" — pure
+             filler since the sidebar tabs already convey that). The
+             mod name shrank 22→15 px and the padding shrank 28,16 →
+             22,10 to give the content area ~55 px more vertical room.
              ========================================================= -->
         <Border Grid.Row="0"
                 Background="{DynamicResource BgSidebar}"
                 BorderBrush="{DynamicResource BorderSecondary}"
                 BorderThickness="0,0,0,1"
-                Padding="28,16,8,16">
+                Padding="22,10,8,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -178,17 +183,13 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock x:Name="HeaderTitleText"
-                               FontFamily="{DynamicResource DisplayFont}"
-                               FontSize="22"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource AccentBrush}"/>
-                    <TextBlock x:Name="HeaderSubtitleText"
-                               Foreground="{DynamicResource Secondary}"
-                               FontSize="12"
-                               Margin="0,4,0,0"/>
-                </StackPanel>
+                <TextBlock Grid.Column="0"
+                           x:Name="HeaderTitleText"
+                           FontFamily="{DynamicResource DisplayFont}"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource AccentBrush}"
+                           VerticalAlignment="Center"/>
 
                 <Border x:Name="HeaderVersionBadge"
                         Grid.Column="1"
@@ -205,7 +206,7 @@
                         Grid.Column="2"
                         Style="{StaticResource DialogCloseButton}"
                         Content="&#xE8BB;"
-                        VerticalAlignment="Top"
+                        VerticalAlignment="Center"
                         Click="CloseBtn_Click"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
             </Grid>
@@ -291,7 +292,7 @@
             <ScrollViewer Grid.Column="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <Grid Margin="32,28,32,24">
+                <Grid Margin="32,18,32,18">
 
                     <!-- ===================================================
                          GENERAL TAB

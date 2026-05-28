@@ -934,12 +934,10 @@ public static class Strings
         // Strings introduced for the Properties dialog redesign (cards +
         // descriptions). All copy is mod-agnostic — no Wars of Liberty
         // references — so the same dialog hosts any mod's settings.
+        // (ModPropSubtitle removed when the header was compacted to a
+        //  single row; the sidebar tabs already convey the dialog's
+        //  purpose, so the subtitle was pure vertical filler.)
         // ----------------------------------------------------------------
-        ["ModPropSubtitle"] = new()
-        {
-            [LangEn] = "Manage mod settings, files, backups and language.",
-            [LangEs] = "Administra ajustes, archivos, copias y idioma del mod.",
-        },
         ["ModPropAboutSection"] = new()
         {
             [LangEn] = "ABOUT",
