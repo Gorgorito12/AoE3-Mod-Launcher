@@ -299,6 +299,38 @@ longer exists — don't go looking for it.)
   (`launcher-debug.log` shows "Translation releases scanned: N valid entries") —
   the index was just being discarded without re-fetching.
 
+- **The translator-facing packager lives in Settings → Translations, NOT the
+  Game-language gear submenu, and it's globalised across mods.** The packaging
+  dialog (`TranslationPackagerDialog`) used to be a `MenuItem` ("📦 Empaquetar
+  mi traducción…") in the ActionPanel's `MenuGameLanguage` gear submenu and was
+  hard-coded to the launcher's *active* mod — so packaging a Spanish pack for
+  Improvement Mod while WoL was active forced a mod-switch first. The entry
+  point moved to **LauncherSettings → TRADUCCIONES** tab, a thin sidebar tab
+  (icon `\xF2B7`) holding a header + description + "📦 Abrir empaquetador de
+  traducciones" button that opens the dialog modally. The dialog's first form
+  field is now a **"Mod a traducir" combo** populated from `ModRegistry.All`
+  minus `IsStockGame` (translating the base game isn't in scope). Switching
+  the combo: (a) re-instantiates `_translationService = new
+  TranslationService(state.InstallPath)` for that mod (`_translationService` is
+  a field, not a constructor arg), so `HasOriginalsSnapshot` / `OriginalsFolder`
+  point at the picked mod's `<install>\translations\_originals\`; (b) refreshes
+  the "current version" compatibility checkbox label from
+  `config.GetState(profile.Id).LastKnownVersion` (or "?" when unknown, in which
+  case the checkbox auto-disables); (c) updates the default output filename
+  prefix from `wol-…` to `<modid>-…` (so a multi-mod translator's desktop
+  doesn't get `wol-es.zip` clobbered by a later Improvement Mod export). The
+  auto-suggest is opt-out: once the user types into `OutputBox` themselves the
+  `_outputIsAutoSuggested` flag flips false and we stop overwriting their path
+  — the `TextChanged` handler detects manual edits by comparing against
+  `BuildSuggestedOutput()`. The dialog's chrome was also redone (it used to
+  open with the white default WPF chrome) to match the rest of the launcher:
+  `WindowStyle="None"` + custom `WindowChrome`, sticky footer, custom ✕ close,
+  sectioned body (`SectionHeader` style: TARGET MOD / PACK IDENTITY / SOURCE
+  FILES / COMPATIBILITY / OUTPUT). Constructor is `(LauncherConfig config)` —
+  not `(TranslationService, string?)` like before; if you see a call passing
+  the old args, it's a stale reference. Don't reintroduce the gear-menu entry:
+  the global Settings location is now the canonical place.
+
 - **The stock base game is a detect-only built-in profile
   (`ModProfile.IsStockGame`).** `ModRegistry._builtIn` now has TWO entries: WoL
   and `aoe3-tad` ("Age of Empires III: The Asian Dynasties"). The stock entry is

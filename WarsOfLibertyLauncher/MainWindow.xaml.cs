@@ -7372,42 +7372,11 @@ public partial class MainWindow : Window
         };
         ActionPanelControl.MenuGameLanguage.Items.Add(refresh);
 
-        // Translator tool — turns a folder of translated XMLs into a ready-
-        // to-publish .zip + JSON snippet. Only useful for translators, but
-        // harmless for regular users (they just won't have anything to package).
-        var packager = new System.Windows.Controls.MenuItem
-        {
-            Header = $"📦  {Strings.Get("MenuLangPackager")}",
-        };
-        packager.Click += (_, _) => OpenTranslationPackager();
-        ActionPanelControl.MenuGameLanguage.Items.Add(packager);
-    }
-
-    /// <summary>
-    /// Opens the translator-facing dialog that builds a .zip pack from a
-    /// folder of translated XML files. The dialog handles all hash/manifest/
-    /// zip logic so the translator only fills in a small form. Works even
-    /// when the launcher's own _originals snapshot doesn't exist — the
-    /// translator can point at their own backup of the English files in
-    /// that case.
-    /// </summary>
-    private void OpenTranslationPackager()
-    {
-        if (string.IsNullOrEmpty(_updateService.InstallPath))
-        {
-            MessageBox.Show(this,
-                Strings.Get("StatusNotInstalled"),
-                Strings.Get("DlgPackagerTitle"),
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var translations = new TranslationService(_updateService.InstallPath);
-        var dialog = new TranslationPackagerDialog(translations, _updateService.CurrentVersion?.Ver)
-        {
-            Owner = this,
-        };
-        dialog.ShowDialog();
+        // (The translator-facing "Package my translation" tool moved out of
+        // this gear submenu — it now lives in Launcher Settings → Translations,
+        // globalised across mods. The packager dialog used to be hard-coded
+        // to the launcher's active mod, which forced translators to switch
+        // mods before packaging for a different one.)
     }
 
     private System.Windows.Controls.MenuItem BuildLanguageMenuItem(

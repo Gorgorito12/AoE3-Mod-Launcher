@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
 
 namespace WarsOfLibertyLauncher;
@@ -14,12 +15,45 @@ namespace WarsOfLibertyLauncher;
 /// Translator-facing dialog that turns a folder of translated XMLs into a
 /// ready-to-publish .zip pack + a JSON snippet for translations-index.json.
 /// Hides every technical step (hash computation, manifest authoring, zip
-/// layout) behind a simple form.
+/// layout) behind a sectioned form.
+///
+/// Globalised across mods: the top "Mod a traducir" combo picks the target
+/// profile. Switching it re-derives the originals snapshot path, the
+/// compatibility version label, and the default output filename prefix —
+/// so the same dialog works for WoL, Improvement Mod, and any catalog mod
+/// the user has installed. The previous design hard-coded the launcher's
+/// active mod, which forced the user to switch the active mod before
+/// packaging a translation for a different one.
 /// </summary>
 public partial class TranslationPackagerDialog : Window
 {
-    private readonly TranslationService _translationService;
-    private readonly string _currentModVersion;
+    private readonly LauncherConfig _config;
+
+    /// <summary>
+    /// Mods offered in the picker. Excludes <see cref="ModProfile.IsStockGame"/>
+    /// because the stock detect-only TAD entry has no <c>data\</c> files
+    /// the launcher manages — translating the base game isn't in scope.
+    /// </summary>
+    private readonly List<ModProfile> _profiles;
+
+    /// <summary>The profile the combo currently has selected.</summary>
+    private ModProfile? _selectedProfile;
+
+    /// <summary>
+    /// Service bound to the selected profile's install path. Re-created on
+    /// every <see cref="ModCombo_SelectionChanged"/> so <see cref="OriginalsFolder"/>
+    /// auto-fill and <see cref="HasOriginalsSnapshot"/> point at the right
+    /// mod's snapshot.
+    /// </summary>
+    private TranslationService? _translationService;
+
+    /// <summary>
+    /// Installed version of the selected mod, for the "current version"
+    /// compatibility checkbox label. "?" when the launcher hasn't detected
+    /// one yet (fresh install, no startup check has run).
+    /// </summary>
+    private string _currentModVersion = "?";
+
     private string? _generatedZipPath;
 
     /// <summary>
@@ -30,49 +64,179 @@ public partial class TranslationPackagerDialog : Window
     /// </summary>
     private bool _userAcknowledgedModVersionWarning;
 
-    public TranslationPackagerDialog(TranslationService translationService, string? currentModVersion)
+    /// <summary>
+    /// Tracks whether the user has manually edited the output path. When
+    /// false, we keep the default in sync with the mod id + language id so
+    /// switching mods or typing a new language auto-updates the suggested
+    /// filename. As soon as the user types into OutputBox themselves, we
+    /// stop overwriting it.
+    /// </summary>
+    private bool _outputIsAutoSuggested = true;
+
+    private readonly string _desktopFolder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+
+    public TranslationPackagerDialog(LauncherConfig config)
     {
+        _config = config;
+        _profiles = ModRegistry.All
+            .Where(p => !p.IsStockGame)
+            .ToList();
+
         InitializeComponent();
-        _translationService = translationService;
-        _currentModVersion = currentModVersion ?? "?";
-
         ApplyLanguage();
+        PopulateModCombo();
 
-        // If the launcher already has a snapshot of the original English
-        // files (created during install/update), pre-fill it. Otherwise
-        // leave empty — the translator will point at their own backup.
-        if (_translationService.HasOriginalsSnapshot())
+        // Pick a sensible default: the launcher's currently active mod if
+        // it's in the list, otherwise the first installed mod, otherwise
+        // the first item. Falling through to "first item" matters when no
+        // mod is installed yet — the translator can still draft a pack
+        // pointing at their own backup of the originals.
+        ModProfile? defaultPick =
+            _profiles.FirstOrDefault(p =>
+                string.Equals(p.Id, _config.ActiveModId, StringComparison.OrdinalIgnoreCase))
+            ?? _profiles.FirstOrDefault(p =>
+                !string.IsNullOrEmpty(_config.GetState(p.Id).InstallPath))
+            ?? _profiles.FirstOrDefault();
+
+        if (defaultPick != null)
+        {
+            foreach (ComboBoxItem item in ModCombo.Items)
+            {
+                if (ReferenceEquals(item.Tag, defaultPick))
+                {
+                    ModCombo.SelectedItem = item;
+                    break;
+                }
+            }
+        }
+
+        // Reset the "looks like a mod version" warning whenever the user
+        // re-edits the version field, so the soft warning re-arms for any
+        // further surprising value.
+        VersionBox.TextChanged += (_, _) => _userAcknowledgedModVersionWarning = false;
+
+        // Once the user types into the output box themselves, stop the
+        // auto-suggest. The autosuggest writes the default on mod-switch
+        // and id-change but never clobbers a hand-typed path.
+        OutputBox.TextChanged += OutputBox_TextChanged;
+
+        // Re-suggest the output filename when the language id changes
+        // (still respects the user-edited flag — won't overwrite).
+        IdBox.TextChanged += (_, _) => RefreshAutoSuggestedOutput();
+    }
+
+    private void OutputBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        // The auto-suggest path sets OutputBox.Text programmatically — we
+        // suppress the dirty flag during those writes by tracking the
+        // expected suggestion. If the current text matches what we would
+        // have suggested, the user hasn't edited, and we keep tracking.
+        if (BuildSuggestedOutput() != OutputBox.Text)
+        {
+            _outputIsAutoSuggested = false;
+        }
+    }
+
+    private string BuildSuggestedOutput()
+    {
+        var prefix = (_selectedProfile?.Id ?? "mod").ToLowerInvariant();
+        var id = string.IsNullOrWhiteSpace(IdBox.Text) ? "lang" : IdBox.Text.Trim();
+        return Path.Combine(_desktopFolder, $"{prefix}-{id}.zip");
+    }
+
+    private void RefreshAutoSuggestedOutput()
+    {
+        if (!_outputIsAutoSuggested) return;
+        var suggestion = BuildSuggestedOutput();
+        if (OutputBox.Text != suggestion)
+        {
+            // Suppress the dirty flag while we rewrite, otherwise the
+            // TextChanged handler would flip _outputIsAutoSuggested back
+            // to false in mid-update.
+            OutputBox.TextChanged -= OutputBox_TextChanged;
+            OutputBox.Text = suggestion;
+            OutputBox.TextChanged += OutputBox_TextChanged;
+        }
+    }
+
+    private void PopulateModCombo()
+    {
+        ModCombo.Items.Clear();
+        foreach (var profile in _profiles)
+        {
+            var state = _config.GetState(profile.Id);
+            bool installed = !string.IsNullOrEmpty(state.InstallPath)
+                && Directory.Exists(state.InstallPath);
+
+            var item = new ComboBoxItem
+            {
+                Tag = profile,
+                Content = installed
+                    ? profile.DisplayName
+                    : $"{profile.DisplayName}  ·  {Strings.Get("DlgPackagerModNotInstalled")}",
+            };
+            ModCombo.Items.Add(item);
+        }
+    }
+
+    private void ModCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var profile = (ModCombo.SelectedItem as ComboBoxItem)?.Tag as ModProfile;
+        if (profile == null) return;
+
+        _selectedProfile = profile;
+
+        // Resolve install path (empty = not installed; ExportPackageAsync
+        // still works as long as the translator provides an explicit
+        // OriginalsFolder).
+        var installPath = _config.GetState(profile.Id).InstallPath ?? "";
+        _translationService = new TranslationService(installPath);
+
+        // Compatibility version: prefer the LastKnownVersion the launcher
+        // detected on its last check. "?" is the sentinel the existing
+        // export logic understands ("don't auto-include").
+        var lastKnown = _config.GetState(profile.Id).LastKnownVersion;
+        _currentModVersion = string.IsNullOrWhiteSpace(lastKnown) ? "?" : lastKnown;
+
+        // If the picked mod has a usable snapshot, pre-fill it; otherwise
+        // clear so the translator visibly knows they need to point at a
+        // backup of the English files.
+        if (!string.IsNullOrEmpty(installPath) && _translationService.HasOriginalsSnapshot())
         {
             OriginalsBox.Text = _translationService.OriginalsFolder;
         }
-
-        // Reset the mod-version-looks-suspicious warning whenever the
-        // user types in the version field — so editing re-arms the
-        // warning for any further surprising values.
-        VersionBox.TextChanged += (_, _) => _userAcknowledgedModVersionWarning = false;
-
-        // Default output: user's Desktop, named after the current id field.
-        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-        OutputBox.Text = Path.Combine(desktop, $"wol-{IdBox.Text}.zip");
-        IdBox.TextChanged += (_, _) =>
+        else
         {
-            // Keep the default output filename in sync with the id field
-            // unless the user manually edited it elsewhere.
-            var current = OutputBox.Text;
-            if (string.IsNullOrEmpty(current) ||
-                Path.GetDirectoryName(current) == desktop &&
-                Path.GetFileName(current).StartsWith("wol-", StringComparison.OrdinalIgnoreCase))
-            {
-                OutputBox.Text = Path.Combine(desktop, $"wol-{IdBox.Text}.zip");
-            }
-        };
+            OriginalsBox.Text = "";
+        }
+
+        // Refresh the compat-checkbox label so it reflects the new
+        // mod's version (or "?" if unknown).
+        CompatCurrentCheck.Content = Strings.Format("DlgPackagerCompatCurrent", _currentModVersion);
+        CompatCurrentCheck.IsEnabled = _currentModVersion != "?";
+        if (_currentModVersion == "?") CompatCurrentCheck.IsChecked = false;
+
+        // Refresh the output filename suggestion (e.g. wol-es.zip → imp-es.zip
+        // when switching from Wars of Liberty to Improvement Mod). Respects
+        // the user-edited flag so a manually-typed path stays put.
+        RefreshAutoSuggestedOutput();
     }
 
     private void ApplyLanguage()
     {
         Title = Strings.Get("DlgPackagerTitle");
+        TitleText.Text = Strings.Get("DlgPackagerTitle");
         HeaderText.Text = Strings.Get("DlgPackagerHeader");
         DescriptionText.Text = Strings.Get("DlgPackagerDescription");
+
+        SectionModHeader.Text = Strings.Get("DlgPackagerSectionMod");
+        SectionIdentityHeader.Text = Strings.Get("DlgPackagerSectionIdentity");
+        SectionSourceHeader.Text = Strings.Get("DlgPackagerSectionSource");
+        SectionCompatHeader.Text = Strings.Get("DlgPackagerSectionCompat");
+        SectionOutputHeader.Text = Strings.Get("DlgPackagerSectionOutput");
+
+        LblMod.Text = Strings.Get("DlgPackagerFieldMod");
+        HintMod.Text = Strings.Get("DlgPackagerHintMod");
 
         LblId.Text = Strings.Get("DlgPackagerFieldId");
         HintId.Text = Strings.Get("DlgPackagerHintId");
@@ -86,7 +250,6 @@ public partial class TranslationPackagerDialog : Window
         HintOriginals.Text = Strings.Get("DlgPackagerHintOriginals");
         BrowseOriginalsButton.Content = Strings.Get("ChangePathButton");
         LblCompat.Text = Strings.Get("DlgPackagerFieldCompat");
-        CompatCurrentCheck.Content = Strings.Format("DlgPackagerCompatCurrent", _currentModVersion);
         HintCompatExtra.Text = Strings.Get("DlgPackagerHintCompatExtra");
         LblOutput.Text = Strings.Get("DlgPackagerFieldOutput");
         BrowseFolderButton.Content = Strings.Get("ChangePathButton");
@@ -131,7 +294,7 @@ public partial class TranslationPackagerDialog : Window
             Title = Strings.Get("DlgPackagerFieldOutput"),
             Filter = "ZIP archive (*.zip)|*.zip",
             FileName = string.IsNullOrWhiteSpace(OutputBox.Text)
-                ? $"wol-{IdBox.Text}.zip"
+                ? Path.GetFileName(BuildSuggestedOutput())
                 : Path.GetFileName(OutputBox.Text),
         };
         try
@@ -148,6 +311,12 @@ public partial class TranslationPackagerDialog : Window
     private async void GenerateButton_Click(object sender, RoutedEventArgs e)
     {
         StatusText.Visibility = Visibility.Collapsed;
+
+        if (_translationService == null || _selectedProfile == null)
+        {
+            ShowError(Strings.Get("DlgPackagerErrorNoMod"));
+            return;
+        }
 
         // ---- Validate fields ----
         if (string.IsNullOrWhiteSpace(IdBox.Text))
@@ -172,7 +341,6 @@ public partial class TranslationPackagerDialog : Window
         {
             ShowError(Strings.Format("DlgPackagerVersionLooksLikeMod", VersionBox.Text.Trim()));
             _userAcknowledgedModVersionWarning = true;
-            // Re-enable the button so a second click proceeds despite the warning.
             return;
         }
         if (!Directory.Exists(FolderBox.Text))
@@ -255,6 +423,8 @@ public partial class TranslationPackagerDialog : Window
 
             FormPanel.Visibility = Visibility.Collapsed;
             ResultPanel.Visibility = Visibility.Visible;
+            FormFooter.Visibility = Visibility.Collapsed;
+            ResultFooter.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {
@@ -267,8 +437,8 @@ public partial class TranslationPackagerDialog : Window
         }
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
-    private void DoneButton_Click(object sender, RoutedEventArgs e) => DialogResult = true;
+    private void CancelButton_Click(object sender, RoutedEventArgs e) => Close();
+    private void DoneButton_Click(object sender, RoutedEventArgs e) => Close();
 
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {

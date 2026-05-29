@@ -2286,6 +2286,38 @@ public static class Strings
             [LangEn] = "Cache cleared.",
             [LangEs] = "Caché eliminada.",
         },
+        ["DlgLauncherSettingsSectionTranslations"] = new()
+        {
+            [LangEn] = "TRANSLATIONS",
+            [LangEs] = "TRADUCCIONES",
+        },
+        ["DlgLauncherSettingsTranslationsHeader"] = new()
+        {
+            [LangEn] = "Translator tools",
+            [LangEs] = "Herramientas para traductores",
+        },
+        ["DlgLauncherSettingsTranslationsDescription"] = new()
+        {
+            [LangEn] = "Build a ready-to-publish translation pack from a folder of translated " +
+                       "XML files. Works for any installed mod — pick the target mod in the " +
+                       "packaging dialog. The launcher computes file hashes, writes the manifest " +
+                       "and zips everything for upload to a GitHub release.",
+            [LangEs] = "Crea un paquete de traducción listo para publicar a partir de una carpeta " +
+                       "con archivos XML traducidos. Funciona para cualquier mod instalado — " +
+                       "elige el mod de destino dentro del diálogo. El launcher calcula los " +
+                       "hashes, escribe el manifiesto y empaqueta todo en un .zip listo para " +
+                       "subir a una release de GitHub.",
+        },
+        ["DlgLauncherSettingsOpenPackager"] = new()
+        {
+            [LangEn] = "Open translation packager",
+            [LangEs] = "Abrir empaquetador de traducciones",
+        },
+        ["DlgLauncherSettingsTranslationsHint"] = new()
+        {
+            [LangEn] = "Casual users can ignore this tab — it's only useful when authoring a new translation.",
+            [LangEs] = "Los usuarios normales pueden ignorar esta sección — solo es útil al crear una traducción nueva.",
+        },
         ["DlgLauncherSettingsSectionMaintenance"] = new()
         {
             [LangEn] = "MAINTENANCE",
@@ -3661,17 +3693,60 @@ public static class Strings
             [LangEn] = "(mod {0})",
             [LangEs] = "(mod {0})",
         },
-        ["MenuLangPackager"] = new()
-        {
-            [LangEn] = "Package my translation...",
-            [LangEs] = "Empaquetar mi traducción...",
-        },
-
         // -------- Translator packaging dialog --------
+        // (The "Package my translation..." Game-language menu entry was
+        // retired — the packager lives in Launcher Settings → Translations
+        // now, where it's globalised across mods. Strings.MenuLangPackager
+        // was deleted with it.)
         ["DlgPackagerTitle"] = new()
         {
             [LangEn] = "Package translation",
             [LangEs] = "Empaquetar traducción",
+        },
+        ["DlgPackagerSectionMod"] = new()
+        {
+            [LangEn] = "TARGET MOD",
+            [LangEs] = "MOD DE DESTINO",
+        },
+        ["DlgPackagerSectionIdentity"] = new()
+        {
+            [LangEn] = "PACK IDENTITY",
+            [LangEs] = "IDENTIDAD DEL PAQUETE",
+        },
+        ["DlgPackagerSectionSource"] = new()
+        {
+            [LangEn] = "SOURCE FILES",
+            [LangEs] = "ARCHIVOS DE ORIGEN",
+        },
+        ["DlgPackagerSectionCompat"] = new()
+        {
+            [LangEn] = "COMPATIBILITY",
+            [LangEs] = "COMPATIBILIDAD",
+        },
+        ["DlgPackagerSectionOutput"] = new()
+        {
+            [LangEn] = "OUTPUT",
+            [LangEs] = "SALIDA",
+        },
+        ["DlgPackagerFieldMod"] = new()
+        {
+            [LangEn] = "MOD TO TRANSLATE",
+            [LangEs] = "MOD A TRADUCIR",
+        },
+        ["DlgPackagerHintMod"] = new()
+        {
+            [LangEn] = "Drives the originals snapshot, compatibility version and default output filename.",
+            [LangEs] = "Define el snapshot de originales, la versión compatible y el nombre por defecto del archivo de salida.",
+        },
+        ["DlgPackagerModNotInstalled"] = new()
+        {
+            [LangEn] = "not installed",
+            [LangEs] = "sin instalar",
+        },
+        ["DlgPackagerErrorNoMod"] = new()
+        {
+            [LangEn] = "Pick a mod from the list before packaging.",
+            [LangEs] = "Elige un mod en la lista antes de empaquetar.",
         },
         ["DlgPackagerHeader"] = new()
         {

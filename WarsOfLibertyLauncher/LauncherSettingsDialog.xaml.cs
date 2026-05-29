@@ -97,6 +97,7 @@ public partial class LauncherSettingsDialog : Window
         TabInterfaceLabel.Text = Strings.Get("DlgLauncherSettingsSectionInterface");
         TabUpdatesLabel.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
         TabCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
+        TabTranslationsLabel.Text = Strings.Get("DlgLauncherSettingsSectionTranslations");
         TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
 
         TabOrderLabel.Text = Strings.Get("DlgLauncherSettingsTabOrderLabel");
@@ -149,6 +150,11 @@ public partial class LauncherSettingsDialog : Window
 
         ClearCacheButton.Content = Strings.Get("DlgLauncherSettingsClearCache");
         ClearCacheHint.Text = Strings.Get("DlgLauncherSettingsClearCacheHint");
+
+        TranslationsHeader.Text = Strings.Get("DlgLauncherSettingsTranslationsHeader");
+        TranslationsDescription.Text = Strings.Get("DlgLauncherSettingsTranslationsDescription");
+        OpenPackagerButton.Content = "📦  " + Strings.Get("DlgLauncherSettingsOpenPackager");
+        TranslationsHint.Text = Strings.Get("DlgLauncherSettingsTranslationsHint");
 
         ClearAssetsButton.Content = Strings.Get("DlgLauncherSettingsClearAssets");
         ClearAssetsHint.Text = Strings.Get("DlgLauncherSettingsClearAssetsHint");
@@ -261,12 +267,14 @@ public partial class LauncherSettingsDialog : Window
         TabInterfaceBtn.Tag = ReferenceEquals(activeBtn, TabInterfaceBtn) ? "active" : null;
         TabUpdatesBtn.Tag = ReferenceEquals(activeBtn, TabUpdatesBtn) ? "active" : null;
         TabCatalogBtn.Tag = ReferenceEquals(activeBtn, TabCatalogBtn) ? "active" : null;
+        TabTranslationsBtn.Tag = ReferenceEquals(activeBtn, TabTranslationsBtn) ? "active" : null;
         TabMaintenanceBtn.Tag = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? "active" : null;
 
         GeneralPanel.Visibility = ReferenceEquals(activeBtn, TabGeneralBtn) ? Visibility.Visible : Visibility.Collapsed;
         InterfacePanel.Visibility = ReferenceEquals(activeBtn, TabInterfaceBtn) ? Visibility.Visible : Visibility.Collapsed;
         UpdatesPanel.Visibility = ReferenceEquals(activeBtn, TabUpdatesBtn) ? Visibility.Visible : Visibility.Collapsed;
         CatalogPanel.Visibility = ReferenceEquals(activeBtn, TabCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
+        TranslationsPanel.Visibility = ReferenceEquals(activeBtn, TabTranslationsBtn) ? Visibility.Visible : Visibility.Collapsed;
         MaintenancePanel.Visibility = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -274,7 +282,23 @@ public partial class LauncherSettingsDialog : Window
     private void TabInterfaceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabInterfaceBtn);
     private void TabUpdatesBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUpdatesBtn);
     private void TabCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabCatalogBtn);
+    private void TabTranslationsBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabTranslationsBtn);
     private void TabMaintenanceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabMaintenanceBtn);
+
+    /// <summary>
+    /// Launches the translator-facing packaging dialog modally over this
+    /// settings window. The dialog is globalised across mods (its own
+    /// mod picker decides which install path to bind to), so no profile
+    /// argument is needed from here.
+    /// </summary>
+    private void OpenPackagerButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new TranslationPackagerDialog(_config)
+        {
+            Owner = this,
+        };
+        dialog.ShowDialog();
+    }
 
     // -- Top-tab reorder (Interface section) --------------------------------
 
