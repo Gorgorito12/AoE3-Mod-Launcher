@@ -317,11 +317,13 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Border Grid.Column="0"
+                                x:Name="ModIconHost"
                                 Width="24" Height="24"
                                 Background="{DynamicResource MpBlueSubtle}"
                                 CornerRadius="12"
                                 Margin="0,0,10,0">
-                            <TextBlock Text="🎮"
+                            <TextBlock x:Name="ModIconEmoji"
+                                       Text="🎮"
                                        FontSize="13"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"/>

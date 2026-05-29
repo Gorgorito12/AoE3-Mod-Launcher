@@ -187,13 +187,24 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0"
-                           x:Name="HeaderTitleText"
-                           FontFamily="{DynamicResource DisplayFont}"
-                           FontSize="15"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource AccentBrush}"
-                           VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <!-- Mod/game icon (cached catalog icon or built-in packed
+                         icon); collapsed in code-behind when there's none. -->
+                    <Border x:Name="HeaderIconHost"
+                            Width="24" Height="24"
+                            CornerRadius="5"
+                            Margin="0,0,10,0"
+                            VerticalAlignment="Center"
+                            Visibility="Collapsed"/>
+                    <TextBlock x:Name="HeaderTitleText"
+                               FontFamily="{DynamicResource DisplayFont}"
+                               FontSize="15"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentBrush}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
 
                 <Border x:Name="HeaderVersionBadge"
                         Grid.Column="1"

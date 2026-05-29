@@ -10,6 +10,12 @@ replaces the legacy Java updater + Inno Setup installer with a single
 self-contained `.exe` that installs, updates, verifies, and launches the mods,
 plus a multiplayer matchmaking tab.
 
+It also exposes the **stock, unmodded Age of Empires III: The Asian Dynasties**
+as a built-in *detect-only* entry (`aoe3-tad`): the launcher locates an existing
+install and runs it — single-player plus the same Radmin multiplayer the mods
+use — but **never installs, updates, or uninstalls the base game** (that's the
+user's own legally-owned copy). See the `IsStockGame` gotcha below.
+
 The repo also contains `aoe3-mods-catalog-template/` (a template for the
 separate community mod-catalog GitHub repo, with `mod.schema.json` and PR
 auto-merge Actions) and `docs/MODDING.md` (mod-authoring guide).
@@ -140,6 +146,65 @@ longer exists — don't go looking for it.)
   "fix" the title bar by giving it a divider — the missing border is the
   feature.
 
+- **The title-bar brand button's hover illumination has a WPF-precedence
+  trap — we hit it as a bug twice.** `TitleBarBrandButton` ("AoE3 Mod
+  Launcher ▾") brightens on hover/press/open like the nav tabs: text idle
+  = `Secondary`, hover = `#E6EEF8`, pressed/open = `#FFFFFF` white. For that
+  to work, the idle `Foreground` **must be a `Style` setter (or template
+  default), never a local `Foreground="…"` attribute on the `<Button>`** —
+  a local value (precedence 3) beats `ControlTemplate.Triggers` (4-6), so a
+  local Foreground silently kills the hover/press/open colour. Equally, the
+  `ContentPresenter` in the template must stay **default** (no explicit
+  `TextElement.Foreground`): a `ContentControl`'s ContentPresenter
+  auto-propagates the templated parent's `Foreground` to the content text,
+  so flipping the Button's `Foreground` in a trigger flows to the wordmark;
+  setting `TextElement.Foreground` directly on the ContentPresenter does
+  **not** propagate (that looked dead). The icon next to it is a *bitmap*,
+  not a glyph, so it can't follow `Foreground` — it illuminates via
+  `Opacity` (0.7 → 1.0) on an `Image.Style` whose `DataTrigger`s bind to the
+  ancestor button's `IsMouseOver`/`Tag` (the Image lives in the button
+  CONTENT, out of reach of template triggers). The chevron flips ▾↔▴ and
+  the button holds `Tag="open"` while the brand popup lives, both set in
+  `BrandMenuButton_Click` + `popup.Closed`. Same precedence rule governs
+  `NavTabButton` — copy that recipe for any new chrome button, don't
+  reach for a local `Foreground`.
+
+- **The cinema dashboard hero scales with the window — via one transform, not
+  per-element font sizes.** The PlayView "Layer 4" Grid (title + description +
+  version chip + action row + progress strip) is wrapped in a `ScaleTransform`
+  named `HeroScaleTransform` and driven by `UpdateHeroScale()` in code-behind.
+  The whole block scales as a unit so proportions stay fixed: **1:1 ("current
+  size") when the window is maximized, shrinking down to a floor of
+  `HeroMinScale` (0.65)** as the window gets smaller. The scale is
+  *(PlayView content footprint) ÷ (maximized footprint)*, where the maximized
+  footprint is `SystemParameters.WorkArea` **minus 96 px** of chrome — that 96
+  is the title bar (`Grid.Row=0`, 40) + nav strip (`Grid.Row=1`, 56); **if you
+  change those RowDefinition heights, update the `- 96` in `UpdateHeroScale`
+  too** (they're coupled by hand, not computed). Three deliberate, non-obvious
+  choices: (1) it's a **`RenderTransform` (not `LayoutTransform`) with
+  `RenderTransformOrigin="0,1"`** so the block shrinks in place pinned to its
+  bottom-left corner without reflowing or nudging the gradient/background layers
+  behind it; (2) it's hooked to **`PlayView.SizeChanged`, not the window's** —
+  switching tabs collapses PlayView to a 0-size (guarded no-op) and switching
+  back grows it from 0 to its real size, a size change that recomputes the scale
+  even though the window never resized (the window's own `SizeChanged` would
+  miss that); (3) it caps at 1.0 so it never grows *past* the maximized look on
+  huge monitors. Don't add per-XAML `FontSize` scaling, a `Viewbox`, or DPI
+  tweaks to make the hero responsive — route everything through
+  `HeroScaleTransform`. **Text crispness is coupled to the global HiDPI setup:**
+  `App.OnStartup` renders all text in `TextFormattingMode=Display` (pixel-
+  snapped) + `Fixed` hinting + `ClearType` — razor-sharp at 1:1 but **blurry
+  once the scale transform shrinks the glyphs** (they're rasterised for the
+  pre-transform pixel grid, then squashed). So `UpdateHeroScale` flips the named
+  `HeroContentGrid` subtree to `Ideal` formatting + `Animated` hinting +
+  `Grayscale` rendering whenever scale < 1.0 (WPF's mode for text under a
+  transform), and restores the `Display`/`ClearType`/`Fixed` trio at exactly 1.0
+  so the maximized hero stays pixel-crisp. Don't hard-set static `TextOptions`
+  on the hero subtree — the toggle owns them. (Reference is the **primary**
+  monitor's work area, so on a multi-monitor setup with mismatched resolutions a
+  window maximized on a *secondary* monitor won't land exactly at 1.0 — a known,
+  minor cosmetic edge case.)
+
 - **`LauncherConfig` is per-mod.** Real state lives in a `mods` dictionary of
   `ModState` keyed by mod id and selected by `activeModId`; the flat
   `modInstallPath` / `gameExecutable` / `activeTranslationId` fields are LEGACY,
@@ -147,6 +212,52 @@ longer exists — don't go looking for it.)
   `multiplayer.lobbyBaseUrl` and clears the session token). The README's flat
   config example is out of date. `Save()` is non-atomic and runs from background
   threads.
+
+- **The stock base game is a detect-only built-in profile
+  (`ModProfile.IsStockGame`).** `ModRegistry._builtIn` now has TWO entries: WoL
+  and `aoe3-tad` ("Age of Empires III: The Asian Dynasties"). The stock entry is
+  modelled as `InstallType=InPlaceOverlay` + `UpdateMechanism=Manual` purely to
+  reuse the existing detection + "Ready to play" UI paths, but `IsStockGame=true`
+  is what makes it special: the launcher only *detects* the base game on disk —
+  it never downloads / installs / updates / uninstalls it (it's the user's own
+  legally-owned copy). **Safety-critical:** uninstall is a blanket recursive
+  delete of the install folder, and a stock profile's "install folder" IS the
+  user's real AoE3 directory, so a stray uninstall would wipe their game.
+  `UninstallService.Plan` hard-refuses any `IsStockGame` profile (returns
+  `NotAValidInstall`); the gear-menu handlers (`UninstallMenuItem_Click` /
+  `MenuRepairInstall_Click` / `MenuVerifyFiles_Click`) early-return; and
+  `ModPropertiesDialog` hides the Maintenance + Danger Zone sections.
+  **Don't remove these guards.** Detection: because the launcher never wrote a
+  saved `InstallPath` for it, multiplayer host/join (`MultiplayerTab.GetInstallPath`
+  / `IsModInstalledLocally`) and the mod-fingerprint compute fall back to
+  `AoE3Detector.FindInstallRoot()` (first detected AoE3 root containing `data\`);
+  `ModHashService` then fingerprints the same TAD data files
+  (`protoy/techtreey/stringtabley.xml`), so two stock players on the same game
+  version match and can share a lobby. The host launch appends
+  `+OverrideAddress` exactly like the mods. Like WoL, the entry is mirrored in
+  the catalog repo (`mods/aoe3-tad/mod.json`) for the public listing, but the
+  built-in **shadows** it at runtime (built-in wins on id collision).
+
+- **Mod icons come from two different places — don't assume the catalog.**
+  Community mods and the stock game (`aoe3-tad`) get their icon from the
+  catalog repo (`mods/<id>/icon.png` → `ModProfile.IconUrl` →
+  `ModAssetCacheService` caches it under
+  `%LocalAppData%\AoE3ModLauncher\mod-assets\` → `LocalIconPath`). The
+  first-party **WoL built-in is different**: it ships `WoL.ico` **embedded in
+  the `.exe`** (a `<Resource>` in the `.csproj`) and references it via
+  `BannerImage` (a `pack://` URI), NOT `IconUrl`. So WoL needs no catalog
+  upload, and dropping an `icon.png` into the catalog's `mods/wol/` is
+  **ignored** — the built-in shadows the catalog entry (same id-collision rule
+  as above) and sets `BannerImage` in code. Resolution order is
+  `LocalIconPath` (if the cached file exists) → `BannerImage` (packed) → null =
+  letter monogram, via `ResolveModIcon` (MainWindow) and `ResolveIconUri`
+  (ModsBrowser); `TryLoadBitmap` / `TryLoadTileImage` accept **both** on-disk
+  paths and `pack://` URIs. The resolved icon is painted on the dashboard hero
+  (`DashboardIconHost`), the Workshop tiles / rows / detail header, the Mod
+  Properties header (`HeaderIconHost`), the Create-room mod card, and the
+  install shortcut. To move WoL's icon to the catalog like the others, set
+  `IconUrl` on the WoL built-in in `ModRegistry` — editing only the catalog
+  `mod.json` won't do it.
 
 ## Architecture
 
@@ -177,7 +288,21 @@ engine** and the UI binds to it.
   `Services/Multiplayer/` is the lobby client (`MultiplayerSession`,
   `LobbyApiClient`, `LobbyWebSocket`, `ModHashService`, `ReplayUploadService`).
 - **`Styles/`** + `Localization/Strings.cs` — dark-only "dorado imperial" theme;
-  all UI strings are EN/ES (diagnostic logs stay English on purpose).
+  all UI strings are EN/ES (diagnostic logs stay English on purpose). The
+  dictionaries are merged app-wide in `App.xaml`: `Colors.xaml` (palette),
+  `Buttons.xaml` (incl. the implicit global `Button` style — every bare button
+  is themed by it, so there are no "white" buttons to chase), `Chrome.xaml`, and
+  `Inputs.xaml` (implicit global `ComboBox`/`TextBox`/`CheckBox`/`RadioButton`
+  styles). **Input theming is global — don't recolour inputs per-dialog.** A
+  ComboBox in particular MUST be *retemplated*, not just recoloured: WPF's
+  default ComboBox template paints its toggle + dropdown popup with the OS light
+  theme and ignores `Background`, so colour-only styles leave a white dropdown
+  (that was the original "language dropdown looks white" bug). The Multiplayer
+  dialogs intentionally keep their own keyed *blue* input styles (CreateLobby's
+  `MpFormCombo`/`MpFormTextBox`/`MpCheckBox`, applied explicitly — see
+  `Colors.xaml`). To extend the global look in one dialog (e.g. add row spacing),
+  use `BasedOn="{StaticResource {x:Type ComboBox}}"` instead of redefining the
+  template.
 
 ### Three core flows (detailed diagrams in README.md)
 
@@ -189,7 +314,10 @@ engine** and the UI binds to it.
    manifest's file list and has **no per-file base-game protection**. AoE3 base
    files survive only because `IsolatedFolder` mods are a separate clone; an
    `InPlaceOverlay` mod's underlying AoE3 files *would* be deleted. (The README's
-   "hard-coded base-game protection" claim is false.)
+   "hard-coded base-game protection" claim is false.) The lone hard-coded
+   exception is the stock-game profile: `UninstallService.Plan` refuses any
+   `IsStockGame` profile outright (its "install folder" is the user's real AoE3
+   install — see the `IsStockGame` gotcha).
 2. **Update** — 100% compatible with the original Java updater: fetch
    `UpdateInfo.xml`, MD5 three key files (`data/protoy.xml`, `techtreey.xml`,
    `stringtabley.xml`) to identify the installed version, then download `.tar.xz`
@@ -204,10 +332,14 @@ engine** and the UI binds to it.
 ### Multi-mod profile system
 
 Each mod is a `ModProfile` (branding, paths, payload URLs, update server).
-`ModRegistry` holds built-in profiles (`_builtIn`) and merges in community mods
-fetched from a remote catalog repo (`RefreshFromCatalogAsync`). **Do not add
-community mods to `ModRegistry._builtIn`** — they go to the catalog repo (the
-in-app "Publish my mod" wizard opens a PR there).
+`ModRegistry` holds built-in profiles (`_builtIn` — the two first-party entries:
+WoL and the detect-only stock `aoe3-tad`) and merges in community mods fetched
+from a remote catalog repo (`RefreshFromCatalogAsync`). **Do not add community
+mods to `ModRegistry._builtIn`** — they go to the catalog repo (the in-app
+"Publish my mod" wizard opens a PR there). The two first-party built-ins are the
+deliberate exception; both are *also* mirrored in the catalog (`mods/wol/`,
+`mods/aoe3-tad/`) for the public listing, and the built-in shadows the catalog
+entry on id collision so a community PR can't redirect them.
 
 Switching the active mod at runtime swaps `MainWindow._updateService` for a new
 instance bound to the chosen profile (no process restart). `CheckAsync` results
@@ -241,6 +373,14 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
   literal in XAML/code. A missing key renders as the key itself (a visible
   signal). `Strings.SetLanguage` raises `LanguageChanged` for live refresh.
+- **The dashboard hero title stacks `"Game: Subtitle"` names onto two lines.**
+  Where `DashboardTitleText.Text` is set, the name renders as
+  `DisplayName.ToUpperInvariant().Replace(": ", ":\n")` — so "Age of Empires III:
+  The Asian Dynasties" shows as two lines (the colon stays on the first). Names
+  without a "colon + space" (WoL, Improvement Mod) stay one line, and the hero
+  copy column is capped at `MaxWidth=640` (down from 900) so text reads
+  vertically instead of sprawling / clipping. Render-only — the canonical
+  `DisplayName` is untouched.
 - **WPF threading:** long-running work (download/install/check) is `async` and
   reports progress via `IProgress`/events; marshal UI updates back to the
   dispatcher. Periodic UI work uses `DispatcherTimer`.

@@ -56,6 +56,7 @@ public partial class TranslationApplyDialog : Window
     private void ApplyLanguage()
     {
         Title = Strings.Get("DlgLangApplyTitle");
+        TitleBarText.Text = Strings.Get("DlgLangApplyTitle");
         LblModVersions.Text = Strings.Get("DlgLangApplyModVersionsLabel");
         LblSize.Text = Strings.Get("DlgLangApplySizeLabel");
         ProgressLabelText.Text = Strings.Get("DlgLangApplyDownloading");
@@ -65,7 +66,7 @@ public partial class TranslationApplyDialog : Window
 
     private void PopulateForm()
     {
-        FlagText.Text = LanguageFlag(_entry.Id);
+        FlagText.Text = LanguageCode(_entry.Id);
         var displayName = _entry.Name;
         if (!string.IsNullOrEmpty(_entry.Version))
             displayName += $"  v{_entry.Version}";
@@ -95,10 +96,15 @@ public partial class TranslationApplyDialog : Window
 
         if (declaredCompatible)
         {
+            // When we don't know the user's installed mod version, show a
+            // version-less message instead of an empty "(...)" — the metadata
+            // grid below still lists the pack's compatible versions.
             SetCompatBadge(
                 BadgeKind.Ok,
                 "✓",
-                Strings.Format("DlgLangApplyCompatOk", _currentModVersion ?? ""));
+                string.IsNullOrEmpty(_currentModVersion)
+                    ? Strings.Get("DlgLangApplyCompatOkNoVer")
+                    : Strings.Format("DlgLangApplyCompatOk", _currentModVersion));
         }
         else
         {
@@ -290,22 +296,22 @@ public partial class TranslationApplyDialog : Window
         switch (kind)
         {
             case BadgeKind.Ok:
-                CompatBadge.Background = Brush("#1f3a1f");
-                CompatBadge.BorderBrush = Brush("#3a8c3a");
-                CompatIcon.Foreground = Brush("#9bd99b");
-                CompatText.Foreground = Brush("#9bd99b");
+                CompatBadge.Background = Res("StatusInstalledBg");
+                CompatBadge.BorderBrush = Res("StatusInstalledFg");
+                CompatIcon.Foreground = Res("StatusInstalledFg");
+                CompatText.Foreground = Res("StatusInstalledFg");
                 break;
             case BadgeKind.Warn:
-                CompatBadge.Background = Brush("#3a2a1a");
-                CompatBadge.BorderBrush = Brush("#8c6c3a");
-                CompatIcon.Foreground = Brush("#d4a04a");
-                CompatText.Foreground = Brush("#d4a04a");
+                CompatBadge.Background = Res("StatusUpdateBg");
+                CompatBadge.BorderBrush = Res("StatusUpdateFg");
+                CompatIcon.Foreground = Res("StatusUpdateFg");
+                CompatText.Foreground = Res("StatusUpdateFg");
                 break;
             case BadgeKind.Bad:
-                CompatBadge.Background = Brush("#3a1a1a");
-                CompatBadge.BorderBrush = Brush("#8c3a3a");
-                CompatIcon.Foreground = Brush("#e63950");
-                CompatText.Foreground = Brush("#e63950");
+                CompatBadge.Background = Res("StatusErrorBg");
+                CompatBadge.BorderBrush = Res("StatusErrorFg");
+                CompatIcon.Foreground = Res("StatusErrorFg");
+                CompatText.Foreground = Res("StatusErrorFg");
                 break;
         }
         CompatBadge.BorderThickness = new Thickness(1);
@@ -317,19 +323,19 @@ public partial class TranslationApplyDialog : Window
         switch (kind)
         {
             case MessageKind.Info:
-                MessagePanel.Background = Brush("#1f2a3a");
-                MessagePanel.BorderBrush = Brush("#3a5c8c");
-                MessageText.Foreground = Brush("#9bb8d9");
+                MessagePanel.Background = Res("CatalogBlueSubtle");
+                MessagePanel.BorderBrush = Res("InfoBrush");
+                MessageText.Foreground = Res("InfoBrush");
                 break;
             case MessageKind.Warn:
-                MessagePanel.Background = Brush("#3a2a1a");
-                MessagePanel.BorderBrush = Brush("#8c6c3a");
-                MessageText.Foreground = Brush("#d4a04a");
+                MessagePanel.Background = Res("StatusUpdateBg");
+                MessagePanel.BorderBrush = Res("StatusUpdateFg");
+                MessageText.Foreground = Res("StatusUpdateFg");
                 break;
             case MessageKind.Error:
-                MessagePanel.Background = Brush("#3a1a1a");
-                MessagePanel.BorderBrush = Brush("#8c3a3a");
-                MessageText.Foreground = Brush("#e63950");
+                MessagePanel.Background = Res("StatusErrorBg");
+                MessagePanel.BorderBrush = Res("StatusErrorFg");
+                MessageText.Foreground = Res("StatusErrorFg");
                 break;
         }
         MessagePanel.BorderThickness = new Thickness(1);
@@ -346,25 +352,35 @@ public partial class TranslationApplyDialog : Window
     // Static helpers
     // ------------------------------------------------------------------------
 
-    private static System.Windows.Media.Brush Brush(string color) =>
-        (System.Windows.Media.Brush)
-            new System.Windows.Media.BrushConverter().ConvertFromString(color)!;
+    /// <summary>Resolve a theme brush from the merged resource dictionaries.</summary>
+    private System.Windows.Media.Brush Res(string key) =>
+        (System.Windows.Media.Brush)FindResource(key);
 
-    private static string LanguageFlag(string id) => id.ToLowerInvariant() switch
+    /// <summary>Drag the window by its custom title bar (we removed the OS chrome).</summary>
+    private void HeaderDrag_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        "es" or "es-es" or "es-mx" or "es-ar" => "🇪🇸",
-        "fr" or "fr-fr" => "🇫🇷",
-        "de" or "de-de" => "🇩🇪",
-        "it" or "it-it" => "🇮🇹",
-        "pt" or "pt-pt" => "🇵🇹",
-        "pt-br" => "🇧🇷",
-        "ru" or "ru-ru" => "🇷🇺",
-        "zh" or "zh-cn" or "zh-tw" => "🇨🇳",
-        "ja" or "ja-jp" => "🇯🇵",
-        "ko" or "ko-kr" => "🇰🇷",
-        "pl" or "pl-pl" => "🇵🇱",
-        _ => "🌐",
-    };
+        if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
+            DragMove();
+    }
+
+    /// <summary>
+    /// Two-letter language badge for the monogram chip ("es" → "ES",
+    /// "pt-br" → "PT"). Windows can't render flag emojis (it falls back to
+    /// the bare regional-indicator letters anyway), so a coloured letter
+    /// chip is both more legible and on-theme.
+    /// </summary>
+    private static string LanguageCode(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return "??";
+        var sb = new System.Text.StringBuilder(2);
+        foreach (var ch in id)
+        {
+            if (!char.IsLetter(ch)) continue;
+            sb.Append(char.ToUpperInvariant(ch));
+            if (sb.Length == 2) break;
+        }
+        return sb.Length > 0 ? sb.ToString() : "??";
+    }
 
     private static string FormatBytes(long bytes)
     {

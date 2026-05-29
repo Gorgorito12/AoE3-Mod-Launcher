@@ -4,136 +4,192 @@
         Title="Aplicar traducción"
         Width="540" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        AllowsTransparency="True"
         ResizeMode="NoResize"
-        Background="{DynamicResource BgBase}"
+        Background="Transparent"
         ShowInTaskbar="False">
 
     <Window.Resources>
         <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">
             <Setter Property="Height" Value="6"/>
         </Style>
+
+        <!-- Title-bar close ✕ — neutral, reddens on hover. Built on the
+             global implicit Button (transparent + overlay-hover template). -->
+        <Style x:Key="DialogCloseX" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Content" Value="✕"/>
+            <Setter Property="ToolTip" Value="Close"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
-    <StackPanel Margin="24">
-        <!-- Header: flag emoji + name + version -->
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-            <TextBlock x:Name="FlagText"
-                       FontSize="32"
-                       VerticalAlignment="Center"
-                       Margin="0,0,12,0"/>
-            <StackPanel VerticalAlignment="Center">
-                <TextBlock x:Name="NameText"
-                           FontSize="20"
+    <!-- Rounded dark surface (the Window itself is transparent so the
+         corners clip cleanly — same chrome recipe as CreateLobbyDialog). -->
+    <Border CornerRadius="8"
+            Background="{DynamicResource BgBase}"
+            BorderBrush="{DynamicResource BorderSubtle}"
+            BorderThickness="1">
+        <StackPanel>
+            <!-- Custom title bar: drag anywhere on the strip + close ✕. -->
+            <Grid Margin="20,12,10,0" MouseLeftButtonDown="HeaderDrag_MouseDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="TitleBarText"
+                           Grid.Column="0"
+                           Foreground="{DynamicResource TextSecondary}"
+                           FontSize="12"
                            FontWeight="SemiBold"
-                           Foreground="White"/>
-                <TextBlock x:Name="AuthorText"
-                           FontSize="12"
-                           Foreground="#aaa"
-                           Margin="0,2,0,0"/>
-            </StackPanel>
-        </StackPanel>
-
-        <!-- Compatibility badge (color-coded) -->
-        <Border x:Name="CompatBadge"
-                CornerRadius="4"
-                Padding="12,8"
-                Margin="0,12,0,12">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock x:Name="CompatIcon"
-                           FontSize="14"
-                           VerticalAlignment="Center"
-                           Margin="0,0,8,0"/>
-                <TextBlock x:Name="CompatText"
-                           FontSize="12"
-                           VerticalAlignment="Center"
-                           TextWrapping="Wrap"
-                           MaxWidth="430"/>
-            </StackPanel>
-        </Border>
-
-        <!-- Metadata grid: size + compatible mod versions -->
-        <Grid Margin="0,0,0,12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <TextBlock Grid.Row="0" Grid.Column="0"
-                       x:Name="LblModVersions"
-                       Foreground="#888"
-                       FontSize="11"
-                       Margin="0,0,12,4"/>
-            <TextBlock Grid.Row="0" Grid.Column="1"
-                       x:Name="ModVersionsText"
-                       Foreground="#ddd"
-                       FontSize="12"
-                       FontFamily="Consolas"
-                       Margin="0,0,0,4"/>
-
-            <TextBlock Grid.Row="1" Grid.Column="0"
-                       x:Name="LblSize"
-                       Foreground="#888"
-                       FontSize="11"
-                       Margin="0,0,12,0"/>
-            <TextBlock Grid.Row="1" Grid.Column="1"
-                       x:Name="SizeText"
-                       Foreground="#ddd"
-                       FontSize="12"/>
-        </Grid>
-
-        <!-- Optional description -->
-        <TextBlock x:Name="DescriptionText"
-                   FontSize="12"
-                   Foreground="#aaa"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,12"
-                   Visibility="Collapsed"/>
-
-        <!-- Download progress block (visible only during download) -->
-        <StackPanel x:Name="ProgressPanel" Visibility="Collapsed" Margin="0,0,0,12">
-            <Grid Margin="0,0,0,4">
-                <TextBlock x:Name="ProgressLabelText"
-                           Foreground="#aaa"
-                           FontSize="11"/>
-                <TextBlock x:Name="ProgressPercentText"
-                           HorizontalAlignment="Right"
-                           Foreground="#aaa"
-                           FontSize="11"/>
+                           VerticalAlignment="Center"/>
+                <Button x:Name="CloseXButton"
+                        Grid.Column="1"
+                        Style="{StaticResource DialogCloseX}"
+                        Click="CancelButton_Click"/>
             </Grid>
-            <ProgressBar x:Name="DownloadProgress"/>
-            <TextBlock x:Name="ProgressBytesText"
-                       Foreground="#888"
-                       FontSize="10"
-                       Margin="0,4,0,0"/>
-        </StackPanel>
 
-        <!-- Inline message (error or info — color set in code-behind) -->
-        <Border x:Name="MessagePanel"
-                CornerRadius="4"
-                Padding="12,8"
-                Margin="0,0,0,12"
-                Visibility="Collapsed">
-            <TextBlock x:Name="MessageText"
-                       FontSize="12"
-                       TextWrapping="Wrap"/>
-        </Border>
+            <StackPanel Margin="24,8,24,24">
+                <!-- Header: language monogram chip + name + version -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <Border Width="46" Height="46"
+                            CornerRadius="8"
+                            Background="{DynamicResource BgPanelAlt}"
+                            BorderBrush="{DynamicResource BorderAccentBadge}"
+                            BorderThickness="1"
+                            Margin="0,0,14,0"
+                            VerticalAlignment="Center">
+                        <TextBlock x:Name="FlagText"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   FontFamily="{DynamicResource DisplayFont}"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock x:Name="NameText"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock x:Name="AuthorText"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
 
-        <!-- Buttons -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CancelButton"
-                    Style="{StaticResource DialogButton}"
-                    MinWidth="100"
-                    Margin="0,0,8,0"
-                    Click="CancelButton_Click"/>
-            <Button x:Name="ApplyButton"
-                    Style="{StaticResource PrimaryButton}"
-                    MinWidth="120"
-                    IsDefault="True"
-                    Click="ApplyButton_Click"/>
+                <!-- Compatibility badge (color-coded in code-behind) -->
+                <Border x:Name="CompatBadge"
+                        CornerRadius="4"
+                        Padding="12,8"
+                        Margin="0,12,0,12">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="CompatIcon"
+                                   FontSize="14"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"/>
+                        <TextBlock x:Name="CompatText"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="430"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Metadata grid: compatible mod versions + size -->
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               x:Name="LblModVersions"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="11"
+                               Margin="0,0,12,4"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1"
+                               x:Name="ModVersionsText"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="12"
+                               FontFamily="Consolas"
+                               Margin="0,0,0,4"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0"
+                               x:Name="LblSize"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="11"
+                               Margin="0,0,12,0"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1"
+                               x:Name="SizeText"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="12"/>
+                </Grid>
+
+                <!-- Optional description -->
+                <TextBlock x:Name="DescriptionText"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextSecondary}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,12"
+                           Visibility="Collapsed"/>
+
+                <!-- Download progress block (visible only during download) -->
+                <StackPanel x:Name="ProgressPanel" Visibility="Collapsed" Margin="0,0,0,12">
+                    <Grid Margin="0,0,0,4">
+                        <TextBlock x:Name="ProgressLabelText"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontSize="11"/>
+                        <TextBlock x:Name="ProgressPercentText"
+                                   HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontSize="11"/>
+                    </Grid>
+                    <ProgressBar x:Name="DownloadProgress"/>
+                    <TextBlock x:Name="ProgressBytesText"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="10"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <!-- Inline message (error or info — color set in code-behind) -->
+                <Border x:Name="MessagePanel"
+                        CornerRadius="4"
+                        Padding="12,8"
+                        Margin="0,0,0,12"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="MessageText"
+                               FontSize="12"
+                               TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- Buttons -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="CancelButton"
+                            Style="{StaticResource DialogButton}"
+                            MinWidth="100"
+                            Margin="0,0,8,0"
+                            Click="CancelButton_Click"/>
+                    <Button x:Name="ApplyButton"
+                            Style="{StaticResource PrimaryButton}"
+                            MinWidth="120"
+                            IsDefault="True"
+                            Click="ApplyButton_Click"/>
+                </StackPanel>
+            </StackPanel>
         </StackPanel>
-    </StackPanel>
+    </Border>
 </Window>

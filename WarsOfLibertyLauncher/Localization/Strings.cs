@@ -765,8 +765,8 @@ public static class Strings
         },
         ["AboutDialogBody"] = new()
         {
-            [LangEn] = "AoE3 Mod Launcher\nVersion {0}\n\nA dorado-imperial mod manager for Age of Empires III.\n\n© Wars of Liberty Team",
-            [LangEs] = "AoE3 Mod Launcher\nVersión {0}\n\nGestor de mods dorado-imperial para Age of Empires III.\n\n© Wars of Liberty Team",
+            [LangEn] = "AoE3 Mod Launcher\nVersion {0}\n\nA mod manager for Age of Empires III.\n\nMade by Gorgorito",
+            [LangEs] = "AoE3 Mod Launcher\nVersión {0}\n\nGestor de mods para Age of Empires III.\n\nHecho por Gorgorito",
         },
         // Right-click context menu (Steam-style) on mod rows in the
         // MODS popup and Workshop. Each row's right-click opens a
@@ -3718,8 +3718,13 @@ public static class Strings
         },
         ["DlgLangApplyCompatOk"] = new()
         {
-            [LangEn] = "Compatible with your installed mod ({0})",
-            [LangEs] = "Compatible con tu instalación del mod ({0})",
+            [LangEn] = "Compatible with your installed mod (v{0})",
+            [LangEs] = "Compatible con tu instalación del mod (v{0})",
+        },
+        ["DlgLangApplyCompatOkNoVer"] = new()
+        {
+            [LangEn] = "Compatible with your mod",
+            [LangEs] = "Compatible con tu mod",
         },
         ["DlgLangApplyCompatWarn"] = new()
         {

@@ -135,6 +135,15 @@ public partial class MainWindow : Window
         StateChanged += (_, _) => SyncMaximizeGlyph();
         Loaded += (_, _) => SyncMaximizeGlyph();
 
+        // Hero block scales with the window — see UpdateHeroScale. Hooked to
+        // PlayView.SizeChanged (not the window's) so it also re-fires when the
+        // dashboard tab is re-shown: switching away collapses PlayView to a
+        // 0-size (guarded no-op), and switching back grows it from 0 to its
+        // real size — a size change that recomputes the scale even though the
+        // window itself never resized. The Loaded pass sizes the first paint.
+        PlayView.SizeChanged += (_, _) => UpdateHeroScale();
+        Loaded += (_, _) => UpdateHeroScale();
+
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
 
@@ -2189,7 +2198,28 @@ public partial class MainWindow : Window
         }
         if (DashboardTitleText != null)
         {
-            DashboardTitleText.Text = (profile.DisplayName ?? string.Empty).ToUpperInvariant();
+            // Stack a "Game: Subtitle"-style name onto two lines in the hero
+            // so it reads vertically instead of sprawling across (and
+            // clipping) the panel width — e.g. "Age of Empires III: The Asian
+            // Dynasties" renders as "AGE OF EMPIRES III:" / "THE ASIAN
+            // DYNASTIES". The colon stays on the first line (we break right
+            // after it). Names without a "colon + space" (Wars of Liberty,
+            // Improvement Mod) stay on a single line. The canonical
+            // DisplayName is untouched; this only affects the hero render.
+            DashboardTitleText.Text = (profile.DisplayName ?? string.Empty)
+                .ToUpperInvariant()
+                .Replace(": ", ":\n");
+        }
+        if (DashboardIconHost != null)
+        {
+            // Mod/game icon above the title. Same resolution as the Workshop
+            // tiles (cached catalog icon.png, else built-in packed icon);
+            // collapses to nothing when the mod ships no icon.
+            var iconBrush = TryLoadTileImage(ResolveModIcon(profile));
+            DashboardIconHost.Background = iconBrush;
+            DashboardIconHost.Visibility = iconBrush != null
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
         if (DashboardDescText != null)
         {
@@ -2248,7 +2278,11 @@ public partial class MainWindow : Window
                           && !string.IsNullOrEmpty(profile.BannerUrl);
         bool needHero = string.IsNullOrEmpty(profile.LocalHeroImagePath)
                         && !string.IsNullOrEmpty(profile.HeroImageUrl);
-        if (needBanner || needHero)
+        // Also fetch the icon here so the dashboard icon appears even for a
+        // mod that ships an icon but no banner/hero (e.g. the stock game).
+        bool needIcon = string.IsNullOrEmpty(profile.LocalIconPath)
+                        && !string.IsNullOrEmpty(profile.IconUrl);
+        if (needBanner || needHero || needIcon)
             _ = EnsureModAssetsAsync(profile);
     }
 
@@ -3672,6 +3706,73 @@ public partial class MainWindow : Window
         TitleBarMaximizeGlyph.Text = WindowState == WindowState.Maximized
             ? ""
             : "";
+    }
+
+
+    /// <summary>
+    /// Scale the cinema dashboard's hero block (title / description / action
+    /// row / progress strip — one bottom-left-anchored Grid wrapped in
+    /// <c>HeroScaleTransform</c>) proportionally with the window size.
+    ///
+    /// The block sits at 1:1 ("current size") when the window fills the
+    /// monitor work area (i.e. maximized) and shrinks as the window gets
+    /// smaller. We express the scale as the window's content footprint over
+    /// the maximized footprint: at maximized the content area equals the work
+    /// area (minus the title bar + nav strip), so the ratio is ~1.0; restore
+    /// the window and the ratio — and the hero — scale down with it.
+    ///
+    /// Capped at 1.0 so it never grows past the maximized look, and floored at
+    /// <see cref="HeroMinScale"/> so the smallest allowed window still renders
+    /// legible text. SystemParameters.WorkArea is in WPF device-independent
+    /// units, the same as ActualWidth/Height, so the ratio stays correct under
+    /// display scaling (125% / 150% DPI).
+    /// </summary>
+    private const double HeroMinScale = 0.65;
+
+    private void UpdateHeroScale()
+    {
+        if (HeroScaleTransform == null || PlayView == null) return;
+
+        double availW = PlayView.ActualWidth;
+        double availH = PlayView.ActualHeight;
+        if (availW <= 0 || availH <= 0) return;
+
+        // Reference = the maximized content footprint. The title bar (40 px,
+        // Grid.Row=0) + nav strip (56 px, Grid.Row=1) sit above PlayView, so
+        // the maximized content height is the work area minus that 96 px of
+        // chrome. Keep this in sync with MainWindow.xaml's RowDefinitions.
+        var work = SystemParameters.WorkArea;
+        double refW = work.Width;
+        double refH = work.Height - 96;
+        if (refW <= 0 || refH <= 0) return;
+
+        double scale = Math.Min(availW / refW, availH / refH);
+        scale = Math.Min(scale, 1.0);
+        scale = Math.Max(scale, HeroMinScale);
+
+        HeroScaleTransform.ScaleX = scale;
+        HeroScaleTransform.ScaleY = scale;
+
+        // Keep the scaled text crisp. The app-wide HiDPI setup renders text in
+        // TextFormattingMode=Display (pixel-snapped) + Fixed hinting, which is
+        // razor-sharp at 1:1 but turns blurry once the ScaleTransform shrinks
+        // the glyphs (they're rasterised for the pre-transform pixel grid, then
+        // squashed). When we're actually scaling, flip this subtree to Ideal
+        // formatting + Animated hinting — WPF's mode for text under a transform,
+        // which re-renders smoothly at the effective size — and drop ClearType
+        // (its sub-pixel fringes misalign under a non-integer scale). At exactly
+        // 1.0 (maximized) restore the Display/ClearType/Fixed trio so the full-
+        // size hero matches the rest of the launcher's pixel-crisp text.
+        bool scaled = scale < 0.999;
+        System.Windows.Media.TextOptions.SetTextFormattingMode(HeroContentGrid,
+            scaled ? System.Windows.Media.TextFormattingMode.Ideal
+                   : System.Windows.Media.TextFormattingMode.Display);
+        System.Windows.Media.TextOptions.SetTextRenderingMode(HeroContentGrid,
+            scaled ? System.Windows.Media.TextRenderingMode.Grayscale
+                   : System.Windows.Media.TextRenderingMode.ClearType);
+        System.Windows.Media.TextOptions.SetTextHintingMode(HeroContentGrid,
+            scaled ? System.Windows.Media.TextHintingMode.Animated
+                   : System.Windows.Media.TextHintingMode.Fixed);
     }
 
 

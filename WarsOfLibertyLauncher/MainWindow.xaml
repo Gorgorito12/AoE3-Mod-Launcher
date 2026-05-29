@@ -470,10 +470,35 @@
                     <StackPanel Orientation="Horizontal"
                                 VerticalAlignment="Center">
                         <Image Source="pack://application:,,,/AppIcon.ico"
-                               Width="16" Height="16"
+                               Width="20" Height="20"
                                Margin="0,0,10,0"
                                VerticalAlignment="Center"
-                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                               RenderOptions.BitmapScalingMode="HighQuality">
+                            <!-- Illuminate with the text. The icon is a
+                                 bitmap, not a glyph, so it can't follow
+                                 Foreground like the wordmark does — it
+                                 brightens via Opacity instead: 0.7 dimmed
+                                 at rest (same rest tone as the chevron),
+                                 1.0 full on hover or while the brand menu
+                                 is open. Bound to the ancestor brand
+                                 button's IsMouseOver / Tag because the
+                                 Image lives in the button CONTENT, not its
+                                 template, so the template's Foreground
+                                 triggers can't reach it. -->
+                            <Image.Style>
+                                <Style TargetType="Image">
+                                    <Setter Property="Opacity" Value="0.7"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                            <Setter Property="Opacity" Value="1"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" Value="open">
+                                            <Setter Property="Opacity" Value="1"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Image.Style>
+                        </Image>
                         <TextBlock Text="AoE3 Mod Launcher"
                                    FontFamily="{DynamicResource DisplayFont}"
                                    FontSize="13"
@@ -656,16 +681,55 @@
 
                 <!-- Layer 4: hero content — title, description, action
                      row, and the progress strip. Anchored bottom-left
-                     so it sits over the dimmest part of the overlay. -->
-                <Grid Margin="48,0,48,32" VerticalAlignment="Bottom">
+                     so it sits over the dimmest part of the overlay.
+
+                     The whole block is wrapped in HeroScaleTransform so it
+                     scales with the window: 1:1 ("current size") when the
+                     window is maximized, shrinking proportionally as the
+                     window gets smaller. UpdateHeroScale() in code-behind
+                     drives ScaleX/ScaleY off SizeChanged. RenderTransform
+                     (not LayoutTransform) with RenderTransformOrigin="0,1"
+                     pins the bottom-left corner so the block shrinks in
+                     place over the dim corner of the hero image without
+                     reflowing or nudging the layers behind it.
+
+                     Text crispness: the global HiDPI setup renders all text
+                     in TextFormattingMode=Display (pixel-snapped), which looks
+                     crisp at 1:1 but BLURRY once a ScaleTransform shrinks it.
+                     UpdateHeroScale() flips this subtree to Ideal + Animated
+                     hinting whenever scale < 1.0 (smooth under transform) and
+                     back to Display at exactly 1.0 (maximized) so the full-
+                     size hero keeps its pixel-crisp look. -->
+                <Grid x:Name="HeroContentGrid"
+                      Margin="48,0,48,32" VerticalAlignment="Bottom"
+                      RenderTransformOrigin="0,1">
+                    <Grid.RenderTransform>
+                        <ScaleTransform x:Name="HeroScaleTransform"/>
+                    </Grid.RenderTransform>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Title + description block. -->
-                    <StackPanel Grid.Row="0" MaxWidth="900" HorizontalAlignment="Left">
+                    <!-- Title + description block. Narrow column (was 900):
+                         keeps the hero copy reading vertically instead of
+                         sprawling across the panel, and lets multi-line
+                         "Game: Subtitle" titles stack cleanly. -->
+                    <StackPanel Grid.Row="0" MaxWidth="640" HorizontalAlignment="Left">
+                        <!-- Mod/game icon (catalog icon.png or built-in packed
+                             icon). Filled + shown by RefreshActiveModBanner;
+                             collapsed when the active mod has no icon. -->
+                        <Border x:Name="DashboardIconHost"
+                                Width="64" Height="64"
+                                CornerRadius="10"
+                                HorizontalAlignment="Left"
+                                Margin="0,0,0,14"
+                                Visibility="Collapsed">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12" ShadowDepth="2" Color="Black" Opacity="0.6"/>
+                            </Border.Effect>
+                        </Border>
                         <TextBlock x:Name="DashboardTitleText"
                                    FontFamily="{DynamicResource DisplayFont}"
                                    FontSize="48"

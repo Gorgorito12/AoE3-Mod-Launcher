@@ -436,7 +436,9 @@ public partial class ModsBrowser : UserControl
 
         // 48x48 icon disc (smaller than the v0.9 cards) — leaves more
         // horizontal room for description + actions in the compact row.
-        var iconBg = TryLoadImageBrush(profile.LocalIconPath);
+        // ResolveIconUri also covers built-ins' packed icon so WoL etc. show
+        // their real icon here instead of a letter monogram.
+        var iconBg = TryLoadImageBrush(ResolveIconUri(profile));
         UIElement iconChild;
         Brush iconBack;
         if (iconBg != null)
@@ -730,10 +732,22 @@ public partial class ModsBrowser : UserControl
             DetailBannerImage.Visibility = Visibility.Collapsed;
             DetailBanner.Background = BuildBannerGradient(accent);
             DetailMonogramHero.Visibility = Visibility.Visible;
-            DetailMonogramHero.Background = accent;
-            DetailMonogram.Text = string.IsNullOrEmpty(profile.DisplayName)
-                ? "?"
-                : profile.DisplayName[..1].ToUpperInvariant();
+
+            // No banner: prefer the mod icon over the letter monogram.
+            var iconBrush = TryLoadImageBrush(ResolveIconUri(profile));
+            if (iconBrush != null)
+            {
+                DetailMonogramHero.Background = iconBrush;
+                DetailMonogram.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                DetailMonogramHero.Background = accent;
+                DetailMonogram.Visibility = Visibility.Visible;
+                DetailMonogram.Text = string.IsNullOrEmpty(profile.DisplayName)
+                    ? "?"
+                    : profile.DisplayName[..1].ToUpperInvariant();
+            }
         }
 
         DetailTitle.Text = profile.DisplayName;
@@ -966,6 +980,20 @@ public partial class ModsBrowser : UserControl
         return accent;
     }
 
+    /// <summary>
+    /// Icon URI for a profile: the cached catalog icon if it's on disk, else
+    /// the built-in packed icon (a <c>pack://</c> URI, e.g. WoL.ico), else
+    /// null → caller renders the letter monogram.
+    /// </summary>
+    private static string? ResolveIconUri(ModProfile profile)
+    {
+        if (!string.IsNullOrEmpty(profile.LocalIconPath) && File.Exists(profile.LocalIconPath))
+            return profile.LocalIconPath;
+        if (!string.IsNullOrEmpty(profile.BannerImage))
+            return profile.BannerImage;
+        return null;
+    }
+
     private static ImageBrush? TryLoadImageBrush(string? path)
     {
         var bmp = TryLoadBitmap(path);
@@ -977,7 +1005,12 @@ public partial class ModsBrowser : UserControl
 
     private static BitmapImage? TryLoadBitmap(string? path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        // Accept both on-disk cache files (catalog icon.png) and pack:// URIs
+        // (built-in packed resources like WoL.ico). Only a file path needs an
+        // existence check; a pack URI resolves against the assembly.
+        bool isPack = path.StartsWith("pack:", StringComparison.OrdinalIgnoreCase);
+        if (!isPack && !File.Exists(path)) return null;
         try
         {
             var bmp = new BitmapImage();

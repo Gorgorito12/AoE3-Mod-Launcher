@@ -172,6 +172,20 @@ public partial class ModPropertiesDialog : Window
 
     private void LoadGeneral()
     {
+        // Header mod/game icon (cached catalog icon.png or built-in packed
+        // icon). Collapsed when the mod ships no icon — the title alone reads
+        // fine then.
+        var headerIcon = LoadIconBrush(_profile);
+        if (headerIcon != null)
+        {
+            HeaderIconHost.Background = headerIcon;
+            HeaderIconHost.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            HeaderIconHost.Visibility = Visibility.Collapsed;
+        }
+
         ValName.Text = _profile.DisplayName ?? "";
         ValAuthor.Text = string.IsNullOrWhiteSpace(_profile.Author) ? "—" : _profile.Author;
         var ver = _service.CurrentVersion?.Ver;
@@ -193,6 +207,40 @@ public partial class ModPropertiesDialog : Window
         {
             HeaderVersionText.Text = string.Empty;
             HeaderVersionBadge.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Loads the profile's icon as an ImageBrush — the cached catalog icon
+    /// (icon.png) if it's on disk, else the built-in packed icon (a
+    /// <c>pack://</c> URI). Returns null when neither is available, so the
+    /// caller hides the header icon host.
+    /// </summary>
+    private static System.Windows.Media.ImageBrush? LoadIconBrush(ModProfile profile)
+    {
+        string? uri =
+            (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
+                ? profile.LocalIconPath
+                : (!string.IsNullOrEmpty(profile.BannerImage) ? profile.BannerImage : null);
+        if (string.IsNullOrEmpty(uri)) return null;
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.UriSource = new System.Uri(uri, System.UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+            var br = new System.Windows.Media.ImageBrush(bmp)
+            {
+                Stretch = System.Windows.Media.Stretch.UniformToFill,
+            };
+            br.Freeze();
+            return br;
+        }
+        catch
+        {
+            return null;
         }
     }
 

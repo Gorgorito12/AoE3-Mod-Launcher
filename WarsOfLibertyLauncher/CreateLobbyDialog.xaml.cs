@@ -130,6 +130,7 @@ public partial class CreateLobbyDialog : Window
             return;
 
         _selectedProfile = profile;
+        UpdateModIcon(profile);
         ModNameDefaultTitle(profile);
         HashText.Text = "Loading…";
         CreateButton.IsEnabled = false;
@@ -160,6 +161,54 @@ public partial class CreateLobbyDialog : Window
         var looksAuto = _profiles.Any(p => current == $"{p.DisplayName} room");
         if (string.IsNullOrEmpty(current) || looksAuto)
             RoomTitleBox.Text = $"{profile.DisplayName} room";
+    }
+
+    /// <summary>
+    /// Swap the room mod-card's placeholder 🎮 for the picked mod's real
+    /// icon (cached catalog icon.png or built-in packed icon) when one is
+    /// available; otherwise keep the emoji on the blue disc.
+    /// </summary>
+    private void UpdateModIcon(ModProfile profile)
+    {
+        var brush = LoadIconBrush(profile);
+        if (brush != null)
+        {
+            ModIconHost.Background = brush;
+            ModIconEmoji.Visibility = System.Windows.Visibility.Collapsed;
+        }
+        else
+        {
+            ModIconHost.Background = (System.Windows.Media.Brush)FindResource("MpBlueSubtle");
+            ModIconEmoji.Visibility = System.Windows.Visibility.Visible;
+        }
+    }
+
+    private static System.Windows.Media.ImageBrush? LoadIconBrush(ModProfile profile)
+    {
+        string? uri =
+            (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
+                ? profile.LocalIconPath
+                : (!string.IsNullOrEmpty(profile.BannerImage) ? profile.BannerImage : null);
+        if (string.IsNullOrEmpty(uri)) return null;
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.UriSource = new System.Uri(uri, System.UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+            var br = new System.Windows.Media.ImageBrush(bmp)
+            {
+                Stretch = System.Windows.Media.Stretch.UniformToFill,
+            };
+            br.Freeze();
+            return br;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
