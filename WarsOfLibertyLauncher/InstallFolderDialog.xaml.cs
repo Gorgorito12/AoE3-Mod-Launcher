@@ -94,15 +94,50 @@ public partial class InstallFolderDialog : Window
             Aoe3StatusText.Foreground = (System.Windows.Media.Brush)
                 new System.Windows.Media.BrushConverter().ConvertFromString("#d4a04a")!;
         }
+
+        // Setting / clearing AoE3 flips whether the install can proceed,
+        // so re-run validation to enable/disable the OK button.
+        ValidateInputs();
     }
 
     private void FolderTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
-        ValidateFolder();
+        // Picking a destination INSIDE an AoE3 folder is a valid way to
+        // resolve the source — infer it live so the button can enable
+        // without a separate Browse-for-AoE3 step.
+        TryInferAoe3FromDestination();
+        ValidateInputs();
         UpdateDiskSpace();
     }
 
-    private void ValidateFolder()
+    /// <summary>
+    /// If no AoE3 source is set yet and the chosen destination's parent
+    /// folder looks like an AoE3 install, adopt it as the clone source.
+    /// Only fills when null — never overrides a path the user explicitly
+    /// picked via the Browse button.
+    /// </summary>
+    private void TryInferAoe3FromDestination()
+    {
+        if (!string.IsNullOrEmpty(Aoe3SourcePath)) return;
+
+        var chosen = FolderTextBox.Text.Trim().TrimEnd('\\', '/');
+        var parentDir = Path.GetDirectoryName(chosen);
+        if (!string.IsNullOrEmpty(parentDir) && Services.AoE3Detector.LooksLikeAoE3(parentDir))
+        {
+            Aoe3SourcePath = parentDir;
+            _aoe3SourceLabel = null; // inferred, no named source
+            UpdateAoE3Display();     // re-renders the field + re-validates
+        }
+    }
+
+    /// <summary>
+    /// Validates the destination folder AND that an AoE3 source is set.
+    /// AoE3 is mandatory: the mod is installed on top of a full AoE3 clone,
+    /// so with no source there's nothing to copy and the result would be an
+    /// unplayable mod-only folder. The OK button stays disabled until both
+    /// the folder is valid and an AoE3 source exists.
+    /// </summary>
+    private void ValidateInputs()
     {
         var path = FolderTextBox.Text.Trim();
         string? warning = null;
@@ -127,6 +162,13 @@ public partial class InstallFolderDialog : Window
             {
                 warning = Strings.Get("WarnPathInvalid");
             }
+        }
+
+        // AoE3 source is mandatory — checked after the folder so a bad
+        // folder warning takes priority (the user fixes one thing at a time).
+        if (warning == null && string.IsNullOrEmpty(Aoe3SourcePath))
+        {
+            warning = Strings.Get("DlgInstallAoe3Required");
         }
 
         if (warning != null)
@@ -256,12 +298,14 @@ public partial class InstallFolderDialog : Window
     {
         var chosen = FolderTextBox.Text.Trim().TrimEnd('\\', '/');
 
-        // If no AoE3 detected, try to infer from the parent folder
-        if (Aoe3SourcePath == null)
+        // AoE3 source is mandatory — the live inference + Browse button
+        // normally fill it before the button enables, but guard here so
+        // the install can never start mod-only (an unplayable folder with
+        // no base-game files).
+        if (string.IsNullOrEmpty(Aoe3SourcePath))
         {
-            var parentDir = Path.GetDirectoryName(chosen);
-            if (!string.IsNullOrEmpty(parentDir) && Services.AoE3Detector.LooksLikeAoE3(parentDir))
-                Aoe3SourcePath = parentDir;
+            ValidateInputs();
+            return;
         }
 
         SelectedFolder = chosen;

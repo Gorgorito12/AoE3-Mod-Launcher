@@ -469,11 +469,30 @@
                     </Button.Style>
                     <StackPanel Orientation="Horizontal"
                                 VerticalAlignment="Center">
-                        <Image Source="pack://application:,,,/AppIcon.ico"
-                               Width="20" Height="20"
+                        <!-- Source is the 256x256 PNG (sibling to AppIcon.ico,
+                             see csproj) NOT the .ico, because WPF's ICO codec
+                             picks the smallest frame >= the requested logical
+                             size and downscales it: at 20-logical-pixels it
+                             selects the 24x24 frame and stretches, which is
+                             visibly soft. The PNG decoder skips that frame
+                             selection — HighQuality bicubic downscales the
+                             native 256x256 directly to the physical pixel
+                             size, which lands crisp at every DPI (the global
+                             UseLayoutRounding + Display formatting from
+                             App.OnStartup pin it to integer device pixels).
+                             DecodePixelWidth=64 caps the in-memory copy
+                             (~16 KB vs ~256 KB for the full 256) while still
+                             leaving comfortable headroom over 100/125/150/200%
+                             DPI render sizes (20/25/30/40 physical px). -->
+                        <Image Width="20" Height="20"
                                Margin="0,0,10,0"
                                VerticalAlignment="Center"
                                RenderOptions.BitmapScalingMode="HighQuality">
+                            <Image.Source>
+                                <BitmapImage UriSource="pack://application:,,,/AppIcon.png"
+                                             DecodePixelWidth="64"
+                                             CacheOption="OnLoad"/>
+                            </Image.Source>
                             <!-- Illuminate with the text. The icon is a
                                  bitmap, not a glyph, so it can't follow
                                  Foreground like the wordmark does — it

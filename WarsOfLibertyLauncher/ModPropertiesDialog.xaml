@@ -377,6 +377,11 @@
                                 HorizontalAlignment="Left"
                                 MinWidth="220"
                                 Click="CheckUpdatesBtn_Click"/>
+                        <TextBlock x:Name="CheckUpdatesResult"
+                                   Margin="0,10,0,0"
+                                   FontSize="13"
+                                   TextWrapping="Wrap"
+                                   Visibility="Collapsed"/>
                     </StackPanel>
 
                     <!-- ===================================================

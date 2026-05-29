@@ -902,6 +902,31 @@ public static class Strings
             [LangEn] = "Check for updates",
             [LangEs] = "Buscar actualizaciones",
         },
+        ["ModPropChecking"] = new()
+        {
+            [LangEn] = "Checking for updates…",
+            [LangEs] = "Buscando actualizaciones…",
+        },
+        ["ModPropUpToDate"] = new()
+        {
+            [LangEn] = "You're up to date.",
+            [LangEs] = "Estás al día.",
+        },
+        ["ModPropUpdateAvailable"] = new()
+        {
+            [LangEn] = "An update is available — open the launcher to install it.",
+            [LangEs] = "Hay una actualización disponible — vuelve al launcher para instalarla.",
+        },
+        ["ModPropCheckNotInstalled"] = new()
+        {
+            [LangEn] = "This mod isn't installed yet.",
+            [LangEs] = "Este mod aún no está instalado.",
+        },
+        ["ModPropCheckFailed"] = new()
+        {
+            [LangEn] = "Couldn't check for updates. See the logs for details.",
+            [LangEs] = "No se pudo buscar actualizaciones. Revisa los registros para más detalles.",
+        },
         ["ModPropOpenAoE3Folder"] = new()
         {
             [LangEn] = "Open AoE3 folder",
@@ -2832,11 +2857,21 @@ public static class Strings
         ["InstallAoe3NotDetected"] = new()
         {
             [LangEn] = "⚠ Age of Empires III was not detected automatically.\n" +
-                       "Use the button below to select your AoE3 installation folder, " +
-                       "or the mod will be installed without copying AoE3 files.",
+                       "It's required — the mod is installed on top of a copy of AoE3, so " +
+                       "without the base game there's nothing to install. Use the button " +
+                       "above to select your Age of Empires III folder to continue.",
             [LangEs] = "⚠ No se detectó Age of Empires III automáticamente.\n" +
-                       "Usa el botón de abajo para seleccionar la carpeta de AoE3, " +
-                       "o el mod se instalará sin copiar los archivos de AoE3.",
+                       "Es obligatorio: el mod se instala sobre una copia de AoE3, así que " +
+                       "sin el juego base no hay nada que instalar. Usa el botón de arriba " +
+                       "para seleccionar tu carpeta de Age of Empires III y poder continuar.",
+        },
+        // Blocking warning shown above the buttons while the install is
+        // gated on a missing AoE3 source. Kept short — the orange status
+        // line under the AoE3 field carries the full explanation.
+        ["DlgInstallAoe3Required"] = new()
+        {
+            [LangEn] = "Select your Age of Empires III folder above to enable installation.",
+            [LangEs] = "Selecciona tu carpeta de Age of Empires III arriba para poder instalar.",
         },
         ["InstallFolderLabel"] = new()
         {
@@ -2888,11 +2923,13 @@ public static class Strings
         ["DlgPickInstallFolderDescription"] = new()
         {
             [LangEn] = "{0} will be installed in its own \"{0}\" folder " +
-                       "(separate from the original Age of Empires III install). The launcher will copy " +
-                       "AoE3 there as a base and apply the mod on top. About 12 GB of free space recommended.",
+                       "(separate from the original Age of Empires III install). The launcher copies " +
+                       "AoE3 there as a base and applies the mod on top, so a working Age of Empires III " +
+                       "install is required. About 12 GB of free space recommended.",
             [LangEs] = "{0} se instalará en su propia carpeta \"{0}\" " +
-                       "(separada de la instalación original de Age of Empires III). El launcher copiará " +
-                       "AoE3 ahí como base y aplicará el mod encima. Se recomiendan unos 12 GB libres.",
+                       "(separada de la instalación original de Age of Empires III). El launcher copia " +
+                       "AoE3 ahí como base y aplica el mod encima, por lo que es necesario tener Age of " +
+                       "Empires III instalado. Se recomiendan unos 12 GB libres.",
         },
         ["DlgAoe3DetectedTitle"] = new()
         {

@@ -2887,7 +2887,16 @@ public partial class MainWindow : Window
             // ActionPanelControl menu item so the actual flows
             // (path picker dialog, backup dialog, uninstall
             // confirmation, etc.) keep owning the logic.
-            checkForUpdates: () => RaiseMenuClick(ActionPanelControl.MenuCheckForUpdates),
+            checkForUpdates: async () =>
+            {
+                // Real check (not a cache replay) — refreshes the main
+                // window's PLAY/UPDATE button + cache, then hands the
+                // cached result back so the dialog can show the outcome
+                // inline instead of closing.
+                InvalidateActiveModCheckCache();
+                await CheckAsync();
+                return _checkResultCache.TryGetValue(_updateService.Profile.Id, out var r) ? r : null;
+            },
             openAoE3Folder: () => RaiseMenuClick(ActionPanelControl.MenuOpenAoE3Folder),
             changeModFolder: () => RaiseMenuClick(ActionPanelControl.MenuSelectModFolder),
             changeAoE3Folder: () => RaiseMenuClick(ActionPanelControl.MenuSelectAoE3Folder),

@@ -196,7 +196,25 @@ longer exists — don't go looking for it.)
   the button holds `Tag="open"` while the brand popup lives, both set in
   `BrandMenuButton_Click` + `popup.Closed`. Same precedence rule governs
   `NavTabButton` — copy that recipe for any new chrome button, don't
-  reach for a local `Foreground`.
+  reach for a local `Foreground`. **The icon's source is `AppIcon.png`,
+  NOT `AppIcon.ico`, and both are intentionally shipped as `<Resource>`
+  in the .csproj — don't "consolidate" them.** WPF's ICO codec picks the
+  smallest frame `>=` the requested logical size and downscales it: a
+  20-logical-pixel Image painted from the .ico selects the 24×24 frame
+  and stretches, which is visibly soft at every DPI. The PNG (the
+  256×256 frame extracted from the .ico) routes through the PNG codec
+  instead, which lets `BitmapScalingMode="HighQuality"` bicubic-downscale
+  from 256 straight to the physical pixel size — crisp at 100/125/150%.
+  The `.ico` stays because (a) the .exe's Windows icon
+  (`<ApplicationIcon>`) needs it, and (b) the `TaskbarIcon` (system
+  tray, `MainWindow.xaml` line ~1063) genuinely needs an `.ico` because
+  the Windows tray uses HICON natively — switching the tray to the
+  PNG would either fail or render worse. The brand-button Image is the
+  only in-app surface that uses the PNG; everywhere else still uses
+  the .ico. The PNG Image also sets `DecodePixelWidth=64` to cap the
+  in-memory copy at ~16 KB (vs ~256 KB for the full 256) — still
+  comfortable headroom over 100/125/150/200% DPI render sizes
+  (20/25/30/40 physical px).
 
 - **Popup menus use a TWO-TONE "punched-out" rim — don't reduce it back to a
   single border.** The gear ContextMenu + its cascading submenu
@@ -621,6 +639,18 @@ engine** and the UI binds to it.
 1. **Install** — detect AoE3 → download multi-part payload ZIP → clone AoE3 into
    a standalone mod folder → flatten Steam-layout `bin\` into root → overlay mod
    files → shortcuts + uninstall registry entries + `install-manifest.json`.
+   **`InstallFolderDialog` hard-requires an AoE3 source: the OK/"Install" button
+   stays disabled until `Aoe3SourcePath` is set** (auto-detected, picked via the
+   in-dialog AoE3 Browse button, or *inferred live* when the chosen destination
+   sits inside a folder that `AoE3Detector.LooksLikeAoE3`). The mod overlays a
+   full AoE3 clone, so installing with no source would produce an unplayable
+   mod-only folder — `NativeInstallService` still has a mod-only branch
+   (`aoe3SourcePath == null`, the `InstallModOnlyAsync` path / the inline
+   `isModOnly` weights in MainWindow), but it's now **unreachable from the
+   dialog** and kept only as defensive plumbing. Don't re-enable a path that
+   lets the dialog confirm without AoE3 (the old `InstallAoe3NotDetected` copy
+   used to say "or the mod will install without copying AoE3 files" — that was
+   misleading and was rewritten to "AoE3 is required").
    **Uninstall is a blanket recursive delete** of the install folder, gated only
    by a probe/manifest check that it looks like a mod install — it ignores the
    manifest's file list and has **no per-file base-game protection**. AoE3 base

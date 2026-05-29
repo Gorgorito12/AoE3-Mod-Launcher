@@ -106,8 +106,19 @@
          ApplicationIcon (above) so it ends up as the .exe's Windows icon.
          Including it again as a Resource lets WPF UI code load it at
          runtime via pack://application:,,,/AppIcon.ico — used by the
-         MainWindow chrome (small icon next to "AoE3 Mod Launcher") and
-         the system tray icon.
+         system tray icon (needs .ico because the Windows tray uses
+         HICON natively; PNG wouldn't render).
+         AppIcon.png = the same 256x256 frame extracted from AppIcon.ico
+         to a standalone PNG. Used by the MainWindow title-bar Image at
+         the small "AoE3 Mod Launcher ▾" brand chip. WPF's ICO codec
+         picks the smallest frame >= requested size and downscales it,
+         so a 20-logical-pixel Image painted from the .ico picks the
+         24x24 frame and stretches it — visibly soft at any DPI. The
+         PNG bypasses that frame-selection step: HighQuality bicubic
+         downscales the 256x256 PNG to the actual physical pixel size
+         and the result is crisp at 100/125/150% DPI. Don't switch the
+         TaskbarIcon to the PNG (line 1063 of MainWindow.xaml) — the
+         system tray genuinely needs an .ico, not a PNG.
          WoL.ico stays as a separate Resource for the Wars of Liberty
          mod profile's tile/banner in the mod browser — see
          ModRegistry.cs where the WoL profile sets BannerImage to the
@@ -115,6 +126,7 @@
          rebranding the launcher (changing AppIcon.ico) doesn't change
          WoL's tile, and vice versa. -->
     <Resource Include="AppIcon.ico" />
+    <Resource Include="AppIcon.png" />
     <Resource Include="WoL.ico" />
 
     <!--

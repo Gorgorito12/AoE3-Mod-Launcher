@@ -45,7 +45,7 @@ public partial class ModPropertiesDialog : Window
     // wraps a RaiseMenuClick on the legacy ActionPanelControl menu
     // item so all the original handlers + dialogs keep owning the
     // actual logic.
-    private readonly Action _checkForUpdates;
+    private readonly Func<Task<UpdateService.CheckResult?>> _checkForUpdates;
     private readonly Action _openAoE3Folder;
     private readonly Action _changeModFolder;
     private readonly Action _changeAoE3Folder;
@@ -66,7 +66,7 @@ public partial class ModPropertiesDialog : Window
         Action revertToEnglish,
         Action openVerify,
         Action openRepair,
-        Action checkForUpdates,
+        Func<Task<UpdateService.CheckResult?>> checkForUpdates,
         Action openAoE3Folder,
         Action changeModFolder,
         Action changeAoE3Folder,
@@ -372,12 +372,15 @@ public partial class ModPropertiesDialog : Window
 
     // -- Action handlers ----------------------------------------------------
     //
-    // Most handlers close the dialog before invoking the callback so
-    // the user lands directly on the dialog/flow the callback opens
-    // (verify progress strip, uninstall confirmation, path picker,
-    // etc.) without the Properties window covering it. The website /
-    // language handlers don't close because they don't navigate
-    // elsewhere — the user might want to keep poking around.
+    // Handlers that open ANOTHER surface (verify/repair progress strip on
+    // the main window, uninstall confirmation, path picker, backup/restore
+    // dialogs) close this dialog first so the Properties window doesn't
+    // cover the flow they launch. Handlers that only open Explorer/Notepad
+    // (Open folder, Open AoE3 folder, Open user-data folder, View logs),
+    // the website/language handlers, and "Check for updates" do NOT close —
+    // there's nothing for them to land on, so closing just left the user
+    // confused about whether anything happened. Check-for-updates shows its
+    // result inline instead.
     //
     // None of these set DialogResult: the dialog is shown non-modally
     // via Show() from MainWindow, and setting DialogResult outside of
@@ -400,10 +403,65 @@ public partial class ModPropertiesDialog : Window
         }
     }
 
-    private void CheckUpdatesBtn_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// "Check for updates" runs in-place: it does NOT close the dialog
+    /// (the check has no separate window to land on — the result is just
+    /// a yes/no), so closing left the user staring at the main window
+    /// with no idea whether anything happened. Instead we disable the
+    /// button, show a "checking…" line, run the real check on the main
+    /// window (which also refreshes its PLAY/UPDATE button + cache), and
+    /// render the outcome right here.
+    /// </summary>
+    private async void CheckUpdatesBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
-        _checkForUpdates?.Invoke();
+        if (_checkForUpdates == null) return;
+
+        CheckUpdatesBtn.IsEnabled = false;
+        SetCheckResult(Strings.Get("ModPropChecking"), "TextSecondary");
+        try
+        {
+            var result = await _checkForUpdates();
+
+            // Refresh the version labels in case the check discovered a
+            // newly-detected install / version.
+            LoadGeneral();
+
+            if (result == null || !result.IsValidInstall)
+            {
+                SetCheckResult(Strings.Get("ModPropCheckNotInstalled"), "TextSecondary");
+            }
+            else if (result.PendingDownloads.Count > 0)
+            {
+                SetCheckResult(Strings.Get("ModPropUpdateAvailable"), "AccentBrush");
+            }
+            else
+            {
+                SetCheckResult(Strings.Get("ModPropUpToDate"), "SuccessBrush");
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModPropertiesDialog.CheckUpdates failed: {ex.Message}");
+            SetCheckResult(Strings.Get("ModPropCheckFailed"), "ErrorBrush");
+        }
+        finally
+        {
+            CheckUpdatesBtn.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// Paints the inline check-for-updates result line with one of the
+    /// theme brushes (resolved by key, with a graceful fallback so a
+    /// missing brush can't crash the handler).
+    /// </summary>
+    private void SetCheckResult(string text, string brushKey)
+    {
+        CheckUpdatesResult.Text = text;
+        CheckUpdatesResult.Foreground =
+            TryFindResource(brushKey) as System.Windows.Media.Brush
+            ?? System.Windows.Media.Brushes.White;
+        CheckUpdatesResult.Visibility = Visibility.Visible;
     }
 
     private void OpenFolderBtn_Click(object sender, RoutedEventArgs e)
@@ -422,7 +480,7 @@ public partial class ModPropertiesDialog : Window
 
     private void OpenAoE3FolderBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        // Just opens Explorer — no covering window, so keep the dialog open.
         _openAoE3Folder?.Invoke();
     }
 
@@ -452,7 +510,7 @@ public partial class ModPropertiesDialog : Window
 
     private void ViewLogsBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        // Opens the log in the external viewer — no covering window, keep open.
         _viewLogs?.Invoke();
     }
 
@@ -464,7 +522,7 @@ public partial class ModPropertiesDialog : Window
 
     private void OpenUserDataFolderBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        // Just opens Explorer — no covering window, so keep the dialog open.
         _openUserDataFolder?.Invoke();
     }
 
