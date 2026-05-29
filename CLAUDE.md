@@ -154,20 +154,27 @@ longer exists — don't go looking for it.)
   over the title bar / nav strip; it's defensive (clips content only, never the
   chrome, so the one-surface look is intact) and on its own a near-no-op,
   because the image is a `Border` background and is already clipped to its
-  bounds. (2) The dashboard hero (`DashboardBgFill`) is a **single full-bleed
-  `UniformToFill` (cover) layer** — it fills the whole panel edge-to-edge with
-  no letterbox bars. This is a **settled aesthetic decision after several
-  rejected alternatives**, so don't re-litigate it: a window wider than the 16:9
-  hero crops a little top+bottom, which is the accepted trade for "no margins."
-  We tried (a) `AlignmentY=Top` to keep the top clean — rejected, the bottom
-  crop showed; (b) a two-layer blur fill (`UniformToFill` + `BlurEffect` +
-  scrim behind a `Stretch=Uniform` sharp image) to show the whole image with
-  the margins filled by blurred art instead of bars — rejected as reading like
-  dark borders. The maintainer's hard requirement is **edge-to-edge, no margins
-  of any kind**; full-bleed with a minor crop wins. The bottom crop is largely
-  hidden by the hero text + bottom gradient. Don't add a `Viewbox`, a second
-  image layer, blur margins, or `Stretch=Uniform` to "show the whole image" —
-  that brings back the margins the maintainer rejected.
+  bounds. (2) The dashboard hero is a **two-layer composition** that shows the
+  WHOLE hero (it must "fit" — nothing cropped) with **non-black** margins. This
+  shape was reached after a long back-and-forth, so know the rejected paths
+  before changing it: single `UniformToFill` (cover) crops top/bottom on a
+  window wider than the 16:9 hero (rejected — "the image crosses the bar /
+  bottom"); `AlignmentY=Top` only moved the crop to the bottom (rejected); a
+  blur fill **with a dark scrim** read as "black borders" (rejected). The
+  maintainer's two hard requirements are **(i) the whole image fits, and
+  (ii) no black/dark margins** — which forces the current design:
+  `DashboardBgFill` paints the same image `UniformToFill` (cover) with a
+  `BlurEffect` and **NO scrim**, so the margins are a soft, colour-keeping
+  blurred extension of the art; a `1.12` `ScaleTransform` on it pushes the
+  blur's faded edges off-screen (clipped by the content-host `ClipToBounds`) so
+  the window edges don't pick up a dark vignette. `DashboardHeroImage` paints
+  the **same** bitmap `Stretch=Uniform` (contain), centred, on top → the
+  complete scene, never cropped. Both are fed the one cached brush / its
+  `ImageSource` in `RefreshActiveMod` (no second decode; `DashboardHeroImage.Source`
+  is cleared to null for a hero-less profile so it doesn't linger). Don't add a
+  dark scrim back (→ "black borders"), and don't collapse to a single
+  `UniformToFill` layer (→ crop). If the blurred margins ever read too dark, the
+  lever is brightening the fill, not a scrim.
 
 - **The title-bar brand button's hover illumination has a WPF-precedence
   trap — we hit it as a bug twice.** `TitleBarBrandButton` ("AoE3 Mod

@@ -2206,13 +2206,18 @@ public partial class MainWindow : Window
                 ?? TryLoadTileImage(profile.LocalBannerPath);
             if (cinemaBanner != null)
             {
-                // Full-bleed background: the cached UniformToFill (cover) brush
-                // fills the whole panel edge-to-edge with no letterbox bars. A
-                // window wider than the 16:9 hero crops a little top+bottom —
-                // the accepted trade for a borderless look (blurred and black
-                // margins were both tried and rejected). The bottom crop is
-                // largely hidden by the hero text + gradient.
+                // Show the WHOLE hero (it must "fit", per the user) with
+                // non-black margins:
+                //  • DashboardBgFill = the same image UniformToFill (cover),
+                //    blurred in XAML (NO dark scrim), so the margins of a window
+                //    wider than the 16:9 hero are a soft blurred extension of
+                //    the art, not flat black bars / dark overlay.
+                //  • DashboardHeroImage = the same bitmap, Stretch=Uniform
+                //    (contain) + centred, so the complete scene always fits
+                //    on top of the blur. Same BitmapSource, no extra decode.
                 DashboardBgFill.Background = cinemaBanner;
+                if (DashboardHeroImage != null)
+                    DashboardHeroImage.Source = cinemaBanner.ImageSource;
             }
             else
             {
@@ -2227,6 +2232,10 @@ public partial class MainWindow : Window
                     ((System.Windows.Media.SolidColorBrush)Brush("#201f1f")).Color, 1));
                 neutralGradient.Freeze();
                 DashboardBgFill.Background = neutralGradient;
+                // No hero art — clear any stale sharp image so it doesn't
+                // linger from the previously-active mod.
+                if (DashboardHeroImage != null)
+                    DashboardHeroImage.Source = null;
             }
         }
         if (DashboardTitleText != null)
