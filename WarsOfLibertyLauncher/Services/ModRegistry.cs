@@ -434,6 +434,14 @@ public static class ModRegistry
             // Templated into error / status messages that tell the user
             // where to re-download the mod from when an update fails.
             OfficialWebsite = "http://aoe3wol.com/",
+            // Shown on the dashboard hero + Workshop detail, and mirrored in
+            // the catalog's mods/wol/mod.json. Without it the dashboard would
+            // fall back to the bare "Launcher" subtitle as its description.
+            Description = new Dictionary<string, string>
+            {
+                ["en"] = "A free, community-made total conversion for Age of Empires III: The Asian Dynasties, set in the turbulent 19th century — wars of independence and colonial struggles across the Americas and beyond. Adds a huge roster of new civilizations (the United States, Mexico, Argentina, Brazil and many more), each with their own units, home cities, maps and mechanics.",
+                ["es"] = "Conversión total gratuita hecha por la comunidad para Age of Empires III: The Asian Dynasties, ambientada en el convulso siglo XIX — guerras de independencia y luchas coloniales en América y más allá. Agrega un enorme elenco de civilizaciones nuevas (Estados Unidos, México, Argentina, Brasil y muchas más), cada una con sus propias unidades, metrópolis, mapas y mecánicas.",
+            },
             // WoL keeps its own save / metropolis folder under Documents.
             // Enabling this turns on the pre-install user-data backup alert
             // and the gear menu's "User data" submenu for this profile.
@@ -445,6 +453,13 @@ public static class ModRegistry
             // to AppIcon.ico — WoL.ico stayed because it IS the WoL
             // mod's identity.
             BannerImage = "pack://application:,,,/WoL.ico",
+            // Catalog-hosted icon override. The WoL Team can swap the icon by
+            // committing mods/wol/icon.png to the catalog — no recompile.
+            // Resolution is LocalIconPath (this, once fetched/cached) →
+            // BannerImage (the embedded WoL.ico above), so if the catalog file
+            // 404s or there's no internet, the packed icon still shows.
+            // Best of both: editable from the catalog, offline-safe fallback.
+            IconUrl = "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/wol/icon.png",
             // Dashboard hero image. Loaded lazily by EnsureModAssetsAsync
             // and painted behind the title + PLAY button. Points at the
             // catalog repo's raw URL so the WoL Team can update the hero

@@ -173,6 +173,7 @@ public sealed class MultiplayerSession : IAsyncDisposable
         string lobbyId,
         string modCombinedHash,
         string? password,
+        string? title = null,
         CancellationToken ct = default)
     {
         if (Status != SessionStatus.SignedIn) throw new InvalidOperationException("Sign in first.");
@@ -192,6 +193,7 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
             await OpenRoomSocketAsync(lobbyId, join.JoinToken, LobbyWebSocket.HelloMode.JoinToken);
             CurrentLobbyId = lobbyId;
+            CurrentLobbyTitle = string.IsNullOrWhiteSpace(title) ? null : title;
             Lobby = LobbyStatus.InLobby;
             MultiplayerTelemetry.Bump(MultiplayerTelemetry.LobbyJoined);
             Raise();
@@ -213,6 +215,7 @@ public sealed class MultiplayerSession : IAsyncDisposable
     /// </summary>
     public async Task EnterHostedLobbyAsync(
         CreateLobbyResponse created,
+        string? title = null,
         CancellationToken ct = default)
     {
         if (Status != SessionStatus.SignedIn) throw new InvalidOperationException("Sign in first.");
@@ -230,6 +233,7 @@ public sealed class MultiplayerSession : IAsyncDisposable
             DiagnosticLog.Write($"EnterHostedLobbyAsync: opening WS for {created.Id}");
             await OpenRoomSocketAsync(created.Id, token, LobbyWebSocket.HelloMode.SessionToken);
             CurrentLobbyId = created.Id;
+            CurrentLobbyTitle = string.IsNullOrWhiteSpace(title) ? null : title;
             Lobby = LobbyStatus.InLobby;
             MultiplayerTelemetry.Bump(MultiplayerTelemetry.LobbyCreated);
             Raise();

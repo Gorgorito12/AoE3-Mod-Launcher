@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 
 namespace WarsOfLibertyLauncher;
@@ -79,6 +80,9 @@ public partial class LobbyWindow : Window
 
     /// <summary>"Cancel game" / "Leave game" while a match is running.</summary>
     public Action? OnInGameCancel { get; set; }
+
+    /// <summary>"Cancel" during the pre-launch countdown (Starting phase).</summary>
+    public Action? OnCountdownCancel { get; set; }
 
     /// <summary>"Clear chat" — wipes the local chat log only.</summary>
     public Action? OnClearChat { get; set; }
@@ -166,9 +170,33 @@ public partial class LobbyWindow : Window
     private void ReadyButton_Click(object sender, RoutedEventArgs e) => OnReady?.Invoke();
     private void StartButton_Click(object sender, RoutedEventArgs e) => OnStart?.Invoke();
     private void InGameCancelButton_Click(object sender, RoutedEventArgs e) => OnInGameCancel?.Invoke();
+    private void CountdownCancelButton_Click(object sender, RoutedEventArgs e) => OnCountdownCancel?.Invoke();
     private void ClearChatButton_Click(object sender, RoutedEventArgs e) => OnClearChat?.Invoke();
     private void ChatSendButton_Click(object sender, RoutedEventArgs e) => OnSendChat?.Invoke();
     private void ChatEmojiButton_Click(object sender, RoutedEventArgs e) => OnEmoji?.Invoke();
     private void ChatInputBox_TextChanged(object sender, TextChangedEventArgs e) => OnChatTextChanged?.Invoke();
     private void ChatInputBox_KeyDown(object sender, KeyEventArgs e) => OnChatKeyDown?.Invoke(e);
+
+    /// <summary>
+    /// Copy the room code to the clipboard, flashing a ✓ on the button
+    /// for a moment as confirmation. Pure UI with no session coupling,
+    /// so unlike the other handlers it does the work here directly
+    /// instead of forwarding to a MultiplayerTab callback.
+    /// </summary>
+    private void CopyRoomIdButton_Click(object sender, RoutedEventArgs e)
+    {
+        var code = RoomIdText.Text;
+        if (string.IsNullOrWhiteSpace(code)) return;
+        try { Clipboard.SetText(code); }
+        catch { return; } // clipboard can be momentarily locked by another app
+
+        CopyRoomIdButton.Content = "✓";
+        var revert = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.4) };
+        revert.Tick += (_, _) =>
+        {
+            CopyRoomIdButton.Content = "📋";
+            revert.Stop();
+        };
+        revert.Start();
+    }
 }

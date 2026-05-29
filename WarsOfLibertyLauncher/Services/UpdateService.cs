@@ -195,10 +195,26 @@ public class UpdateService
     /// translations of the active mod. Returns empty when the active mod
     /// doesn't participate in the translation system.
     /// </summary>
-    public string EffectiveTranslationsRepo() =>
-        !string.IsNullOrWhiteSpace(_config.TranslationsRepo)
-            ? _config.TranslationsRepo
-            : _profile.Translations?.Repo ?? "";
+    /// <remarks>
+    /// The PROFILE decides participation: a mod only has community
+    /// translations if its <see cref="ModProfile.Translations"/> block
+    /// declares a repo. The stock base game (and any mod without a
+    /// Translations block) returns "" so it shows no packs — we must NOT
+    /// fall back to the global, WoL-centric <c>config.TranslationsRepo</c>
+    /// for those, or every mod would inherit WoL's Spanish pack and could
+    /// overwrite its own data files with WoL strings. For a participating
+    /// mod, the global override still wins (lets a power user point WoL at
+    /// a fork/mirror); otherwise the profile's own repo is used.
+    /// </remarks>
+    public string EffectiveTranslationsRepo()
+    {
+        var profileRepo = _profile.Translations?.Repo;
+        if (string.IsNullOrWhiteSpace(profileRepo))
+            return "";
+        return !string.IsNullOrWhiteSpace(_config.TranslationsRepo)
+            ? _config.TranslationsRepo!
+            : profileRepo!;
+    }
 
     /// <summary>True while a download is paused.</summary>
     public bool IsPaused

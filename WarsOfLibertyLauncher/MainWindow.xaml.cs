@@ -879,6 +879,15 @@ public partial class MainWindow : Window
         // comes up on the previous mod on next launch, which is fine —
         // not a data-loss scenario.
         _config.ActiveModId = target.Id;
+        // GameLauncher caches the last-launched exe path in the GLOBAL
+        // _config.GameExecutable, validated on a filename-only match. WoL and
+        // the stock Asian Dynasties profile both declare
+        // GameExecutable="age3y.exe", so a cached base-game path satisfies that
+        // match for WoL too and the wrong game launches after a switch (play
+        // AoE3, switch to WoL, PLAY -> AoE3 opened). Clear the global cache on
+        // every switch so exe resolution falls back to the new mod's per-mod
+        // install folder. Mirrors the clear-on-uninstall step above.
+        _config.GameExecutable = "";
         _ = Task.Run(() =>
         {
             try { _config.Save(); }
@@ -946,8 +955,26 @@ public partial class MainWindow : Window
         // freshly-detected reality of the active profile.
         RefreshModCards();
 
-        // The gear menu's translation list is per-mod — repopulate from
-        // the new profile's config before the user opens it.
+        // The translation index was reset above, so re-fetch it for the new
+        // profile the same way startup does (gated on CheckUpdatesOnStartup so
+        // metered/offline users make no surprise network calls). Without this,
+        // switching mods left _cachedTranslationIndex null with no re-fetch on
+        // this path, so the gear menu / Mod Properties lost every remote
+        // translation — that's why WoL's community Spanish pack vanished after
+        // a mod switch. EffectiveTranslationsRepo now returns "" for mods that
+        // don't participate (e.g. the stock base game), so this correctly
+        // fetches WoL's packs for WoL and nothing for the stock game.
+        if (_config.CheckUpdatesOnStartup)
+        {
+            try { await RefreshTranslationIndexAsync(); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Translation index refresh after switch failed: {ex.Message}");
+            }
+        }
+
+        // Repopulate the gear menu's translation list from the new profile
+        // (active-translation indicator + locally-installed packs are per-mod).
         try { PopulateGameLanguageMenu(); }
         catch (Exception ex)
         {

@@ -704,15 +704,21 @@ public partial class MultiplayerTab : UserControl
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
 
         // Lobby window labels — only updated if it's currently open.
-        // When the user switches language between rooms, the next
-        // OpenLobbyWindow() will pick up the new labels from
-        // RenderRoomPanel.
+        // Static labels go through ApplyLobbyStaticLabels(); the dynamic,
+        // state-driven ones (status line, player count, ready toggle, …)
+        // are refreshed by re-running RenderRoomPanel, so a mid-room
+        // language switch re-localises the whole window at once.
         if (_lobbyWindow != null)
         {
-            _lobbyWindow.ReadyButton.Content = Strings.Get("MpRoomReady");
-            _lobbyWindow.StartButton.Content = Strings.Get("MpRoomStart");
-            _lobbyWindow.LeaveRoomButton.Content = Strings.Get("MpRoomLeave");
-            _lobbyWindow.ChatInputBox.Tag = Strings.Get("MpRoomChatPlaceholder");
+            ApplyLobbyStaticLabels();
+            RenderRoomPanel();
+            // Re-localise the match-phase overlays too, so switching
+            // language mid-countdown / mid-match refreshes the
+            // cancel/leave button and in-game mode badge — not just
+            // the lobby body.
+            ApplyMatchPhaseUi();
+            if (_matchPhase == MatchPhase.InGame)
+                RefreshInGamePanel();
         }
 
         // Table column headers + empty-state copy. These have no
@@ -792,7 +798,11 @@ public partial class MultiplayerTab : UserControl
             // the room-mod cache so a stale value doesn't drive a
             // future LaunchActiveModGame.
             _isReconnecting = false;
-            if (nextSocket == null) _currentLobbyModId = null;
+            if (nextSocket == null)
+            {
+                _currentLobbyModId = null;
+                _currentLobbyMaxPlayers = 0;
+            }
             UpdateConnectionStatus();
             // Also reset the match-phase machinery. If we somehow
             // exit a room with an active game (forced disconnect,
@@ -821,6 +831,7 @@ public partial class MultiplayerTab : UserControl
             {
                 _lobbyWindow.ChatLogPanel.Children.Clear();
                 _lobbyWindow.RoomMembersPanel.Children.Clear();
+                UpdateChatEmptyState();
             }
             // Fresh room → fresh chat replay cursor. Otherwise the
             // first room_state of the new room would skip lines whose
@@ -919,8 +930,11 @@ public partial class MultiplayerTab : UserControl
                             && dm.ValueKind == System.Text.Json.JsonValueKind.Number
                                 ? dm.GetInt32()
                                 : 3000;
+                        // Floor at 5 s so the countdown is always long enough
+                        // to read and to cancel, whatever the server sends.
+                        durationMs = Math.Max(5000, durationMs);
                         StartCountdown(durationMs);
-                        AppendChatSystem($"Game starting in {durationMs / 1000} seconds…");
+                        AppendChatSystem(Strings.Format("MpChatGameStartingIn", durationMs / 1000));
                         break;
                     }
                     case "game_started":
@@ -938,7 +952,7 @@ public partial class MultiplayerTab : UserControl
                         // the launch, or we're already running).
                         if (_matchPhase == MatchPhase.Lobby)
                         {
-                            AppendChatSystem("The game has started.");
+                            AppendChatSystem(Strings.Get("MpChatGameStarted"));
                             var process = LaunchActiveModGame();
                             EnterInGamePhase(process);
                         }
@@ -950,8 +964,8 @@ public partial class MultiplayerTab : UserControl
                             ? (r.GetString() ?? "host_cancelled")
                             : "host_cancelled";
                         AppendChatSystem(reason == "host_cancelled"
-                            ? "Host cancelled the game. Returning to lobby."
-                            : $"Game cancelled: {reason}.");
+                            ? Strings.Get("MpChatHostCancelled")
+                            : Strings.Format("MpChatGameCancelledReason", reason));
                         // Kill local AoE3 if running and exit the
                         // InGame phase. We don't send a follow-up
                         // frame back — the server already cleared
@@ -1104,7 +1118,7 @@ public partial class MultiplayerTab : UserControl
         {
             _roomMembers[userId] = new RoomMemberEntry { UserId = userId, Login = login };
         }
-        AppendChatSystem($"{login} joined.");
+        AppendChatSystem(Strings.Format("MpChatMemberJoined", login));
         RenderRoomMembers();
 
         // n2n discovery is supernode-mediated: edges find each other
@@ -1120,7 +1134,7 @@ public partial class MultiplayerTab : UserControl
         var userId = u.GetString();
         if (string.IsNullOrEmpty(userId)) return;
         if (_roomMembers.Remove(userId, out var entry))
-            AppendChatSystem($"{entry.Login} left.");
+            AppendChatSystem(Strings.Format("MpChatMemberLeft", entry.Login));
         RenderRoomMembers();
     }
 
@@ -1145,13 +1159,68 @@ public partial class MultiplayerTab : UserControl
         if (_lobbyWindow == null) return;
         _lobbyWindow!.RoomMembersPanel.Children.Clear();
 
-        // The "PLAYERS" section header lives in the XAML grid
-        // above the members container now — no need to render
-        // it from code. We just emit one player row per member.
-        foreach (var m in _roomMembers.Values)
+        // Host first. The doc-comment always promised this, but raw
+        // dictionary order only happens to put the host first in the
+        // host's OWN room — a joiner sees room_state replay order.
+        // OrderByDescending is stable, so non-host members keep their
+        // join order.
+        var ordered = _roomMembers.Values
+            .OrderByDescending(m => string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal));
+        foreach (var m in ordered)
         {
             _lobbyWindow!.RoomMembersPanel.Children.Add(BuildMemberRow(m));
         }
+
+        // Open-slot placeholders up to the room capacity, so the list
+        // shows at a glance how many players can still join. Only when
+        // the max is known (see TryGetCurrentLobbyMaxPlayers).
+        if (TryGetCurrentLobbyMaxPlayers(out var max) && max > _roomMembers.Count)
+        {
+            for (var i = _roomMembers.Count; i < max; i++)
+                _lobbyWindow!.RoomMembersPanel.Children.Add(BuildOpenSlotRow());
+        }
+    }
+
+    /// <summary>
+    /// A dimmed "open slot" row, one per unfilled player slot up to the
+    /// room capacity. Mirrors <see cref="BuildMemberRow"/>'s left metrics
+    /// (an avatar-sized disc + a label) so the rows line up, but muted and
+    /// with an empty outlined circle instead of an avatar.
+    /// </summary>
+    private FrameworkElement BuildOpenSlotRow()
+    {
+        var row = new Border
+        {
+            Background = Brushes.Transparent,
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 7, 8, 7),
+            Margin = new Thickness(0, 2, 0, 2),
+            Opacity = 0.5,
+        };
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        const double avatarSize = 28.0;
+        // 16 px left margin lines the disc up with the member rows'
+        // avatar (8 px online dot + 8 px gap precede it there).
+        panel.Children.Add(new Border
+        {
+            Width = avatarSize, Height = avatarSize,
+            CornerRadius = new CornerRadius(avatarSize / 2),
+            Background = Brushes.Transparent,
+            BorderBrush = (Brush)Application.Current.FindResource("MpDivider"),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(16, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("MpRoomSlotOpen"),
+            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+            FontSize = 12,
+            FontStyle = FontStyles.Italic,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        row.Child = panel;
+        return row;
     }
 
     /// <summary>
@@ -1166,7 +1235,11 @@ public partial class MultiplayerTab : UserControl
     {
         var row = new Border
         {
-            Background = Brushes.Transparent,
+            // Subtle green wash on rows whose player has readied up, so
+            // ready state reads at a glance beyond the small pill.
+            Background = m.Ready
+                ? new SolidColorBrush(Color.FromArgb(0x22, 0x3F, 0xB9, 0x50))
+                : Brushes.Transparent,
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8, 7, 8, 7),
             Margin = new Thickness(0, 2, 0, 2),
@@ -1278,13 +1351,13 @@ public partial class MultiplayerTab : UserControl
         var isHost = string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal);
         if (isHost)
         {
-            badges.Children.Add(BuildBadge("Host  👑",
+            badges.Children.Add(BuildBadge(Strings.Get("MpRoomBadgeHost") + "  👑",
                 (Brush)Application.Current.FindResource("MpBlueSubtle"),
                 (Brush)Application.Current.FindResource("MpBlue")));
         }
         if (m.Ready)
         {
-            badges.Children.Add(BuildBadge("Ready",
+            badges.Children.Add(BuildBadge(Strings.Get("MpRoomReady"),
                 Brushes.Transparent,
                 (Brush)Application.Current.FindResource("MpPingGood")));
         }
@@ -1402,7 +1475,11 @@ public partial class MultiplayerTab : UserControl
 
         var rowGrid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(68) });   // timestamp
-        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });  // tag/avatar+name
+        // Auto (was a fixed 140 px) so the name column hugs the login and
+        // the message sits right after it instead of across a wide gap.
+        // The name TextBlock carries a MaxWidth so a very long login still
+        // truncates rather than shoving the body off-screen.
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });       // tag/avatar+name
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // body
 
         // Timestamp (column 0).
@@ -1500,6 +1577,7 @@ public partial class MultiplayerTab : UserControl
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 150,
             });
             rowGrid.Children.Add(WithColumn(stack, 1));
         }
@@ -1520,6 +1598,7 @@ public partial class MultiplayerTab : UserControl
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(14, 0, 0, 0),   // small gap after the name
         }, 2));
 
         _lobbyWindow!.ChatLogPanel.Children.Add(rowGrid);
@@ -1528,6 +1607,7 @@ public partial class MultiplayerTab : UserControl
         // the visual tree. 500 rows ≈ 7 hours of moderate chat.
         while (_lobbyWindow!.ChatLogPanel.Children.Count > 500)
             _lobbyWindow!.ChatLogPanel.Children.RemoveAt(0);
+        UpdateChatEmptyState();
         _lobbyWindow?.ChatScroll.ScrollToBottom();
     }
 
@@ -1549,7 +1629,22 @@ public partial class MultiplayerTab : UserControl
         });
         while (_lobbyWindow!.ChatLogPanel.Children.Count > 500)
             _lobbyWindow!.ChatLogPanel.Children.RemoveAt(0);
+        UpdateChatEmptyState();
         _lobbyWindow?.ChatScroll.ScrollToBottom();
+    }
+
+    /// <summary>
+    /// Show or hide the "no messages yet" hint based on whether the
+    /// chat log has any rows. Called after every append and every
+    /// clear so the hint tracks the live state.
+    /// </summary>
+    private void UpdateChatEmptyState()
+    {
+        if (_lobbyWindow == null) return;
+        _lobbyWindow.ChatEmptyHint.Visibility =
+            _lobbyWindow.ChatLogPanel.Children.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -1584,6 +1679,7 @@ public partial class MultiplayerTab : UserControl
     private void ClearChatButton_Click(object sender, RoutedEventArgs e)
     {
         _lobbyWindow?.ChatLogPanel.Children.Clear();
+        UpdateChatEmptyState();
     }
 
     /// <summary>
@@ -1752,6 +1848,44 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
+    /// <summary>
+    /// Push the lobby window's STATIC labels (section headers, field
+    /// labels, button captions, placeholder, copy tooltip) through the
+    /// localisation table. Called when the window opens and again on a
+    /// mid-room language switch. The dynamic, state-driven text (status
+    /// line, player count, ready toggle, …) is owned by
+    /// <see cref="RenderRoomPanel"/> instead.
+    /// </summary>
+    private void ApplyLobbyStaticLabels()
+    {
+        if (_lobbyWindow == null) return;
+        _lobbyWindow.PlayersStatHeader.Text = Strings.Get("MpRoomPlayersHeader");
+        _lobbyWindow.RoomIdStatHeader.Text = Strings.Get("MpRoomIdHeader");
+        _lobbyWindow.CopyRoomIdButton.ToolTip = Strings.Get("MpRoomCopyCode");
+        _lobbyWindow.PlayersListHeader.Text = Strings.Get("MpRoomPlayersHeader");
+        _lobbyWindow.RoomInfoHeaderText.Text = Strings.Get("MpRoomInfoHeader");
+        _lobbyWindow.RoomModLabel.Text = Strings.Get("MpRoomFieldMod");
+        _lobbyWindow.RoomPasswordLabel.Text = Strings.Get("MpRoomFieldPassword");
+        _lobbyWindow.ChatHeaderText.Text = Strings.Get("MpRoomChatHeader");
+        _lobbyWindow.ClearChatButton.Content = "🗑  " + Strings.Get("MpRoomChatClear");
+        _lobbyWindow.ChatSendButton.Content = Strings.Get("MpRoomChatSend");
+        _lobbyWindow.ChatPlaceholderText.Text = Strings.Get("MpRoomChatPlaceholder");
+        _lobbyWindow.ChatEmptyHint.Text = Strings.Get("MpRoomChatEmpty");
+
+        // Match-phase overlay static labels (CountdownOverlay /
+        // InGameOverlay). The dynamic captions — countdown "Go", the
+        // in-game mode badge, and the cancel/leave button — are owned
+        // by UpdateCountdownTick / RefreshInGamePanel / ApplyMatchPhaseUi.
+        _lobbyWindow.CountdownLabel.Text = Strings.Get("MpCountdownLabel");
+        _lobbyWindow.CountdownHint.Text = Strings.Get("MpCountdownHint");
+        _lobbyWindow.CountdownCancelButton.Content = Strings.Get("MpCountdownCancel");
+        _lobbyWindow.InGameTitleText.Text = Strings.Get("MpInGameTitle");
+        _lobbyWindow.InGameMatchTimeHeader.Text = Strings.Get("MpInGameMatchTimeHeader");
+        _lobbyWindow.InGameTrafficHeader.Text = Strings.Get("MpInGameTrafficHeader");
+        _lobbyWindow.InGameRoomHeader.Text = Strings.Get("MpInGameRoomHeader");
+        _lobbyWindow.InGameModeText.Text = Strings.Get("MpInGameModeConnected");
+    }
+
     private void RenderRoomPanel()
     {
         // Lobby window closed → nothing to render. Fires from session
@@ -1760,14 +1894,13 @@ public partial class MultiplayerTab : UserControl
         if (_lobbyWindow == null) return;
 
         var s = _session!;
-        _lobbyWindow!.RoomTitleText.Text = s.CurrentLobbyTitle ?? s.CurrentLobbyId ?? "";
 
         var status = s.Lobby switch
         {
-            MultiplayerSession.LobbyStatus.Joining => "Joining…",
-            MultiplayerSession.LobbyStatus.Leaving => "Leaving…",
-            MultiplayerSession.LobbyStatus.InGame => "In game",
-            _ => "In lobby",
+            MultiplayerSession.LobbyStatus.Joining => Strings.Get("MpRoomStatusJoining"),
+            MultiplayerSession.LobbyStatus.Leaving => Strings.Get("MpRoomStatusLeaving"),
+            MultiplayerSession.LobbyStatus.InGame => Strings.Get("MpRoomStatusInGame"),
+            _ => Strings.Get("MpRoomStatusInLobby"),
         };
 
         // P2P readiness: with the hook-injector bridge, "ready to
@@ -1776,12 +1909,13 @@ public partial class MultiplayerTab : UserControl
         // anymore. For solo rooms (host alone) we still show
         // "P2P ready"; peers will join later.
         var p2pReady = s.IsInLobby;
-        var p2pStatus = p2pReady ? "P2P LAN ready" : "P2P starting…";
+        var p2pStatus = p2pReady ? Strings.Get("MpRoomP2pReady") : Strings.Get("MpRoomP2pStarting");
 
-        // Build the meta line as inline runs so the P2P state can
-        // wear its own (green) colour without having to maintain
-        // two TextBlocks. Mirrors the reference: status in muted
-        // text, P2P readiness highlighted.
+        // Build the meta line as inline runs so the P2P state can wear
+        // its own (green) colour without two TextBlocks: status in muted
+        // text, P2P readiness highlighted. This line is now the single
+        // home for the P2P status — the old "Connection" info-card cell
+        // repeated it and was removed.
         _lobbyWindow!.RoomMetaText.Inlines.Clear();
         _lobbyWindow!.RoomMetaText.Inlines.Add(new System.Windows.Documents.Run(status)
         {
@@ -1798,13 +1932,11 @@ public partial class MultiplayerTab : UserControl
             FontWeight = FontWeights.SemiBold,
         });
 
-        // ---------- Stat blocks (HOST / PLAYERS / ROOM ID) ----------
-
-        // Host display: pick the member entry that matches
-        // _roomHostUserId, fall back to the user-id itself when
-        // we haven't received the room_state yet (e.g. right
-        // after EnterHostedLobbyAsync, before WS catches up).
-        string hostLabel = "—";
+        // ---------- Host (drives the title fallback only) ----------
+        // The roster below marks the host with a badge, so there's no
+        // separate HOST stat to fill anymore; we still resolve the name
+        // to build a friendly title when the room is unnamed.
+        string hostLabel = "";
         if (!string.IsNullOrEmpty(_roomHostUserId)
             && _roomMembers.TryGetValue(_roomHostUserId, out var hostEntry))
         {
@@ -1814,45 +1946,69 @@ public partial class MultiplayerTab : UserControl
         {
             hostLabel = _roomHostUserId;
         }
-        _lobbyWindow!.RoomHostText.Text = hostLabel;
 
-        // Players: live count from the roster vs. configured max.
-        // We don't have MaxPlayers in the local snapshot today —
-        // it's only on the lobby summary the browser fetches; for
-        // v1 the count vs "?" is honest. If we later cache the
-        // CreateLobbyResponse server-side, wire it through here.
+        // ---------- Title ----------
+        // Prefer the room's own name. When unnamed, the title used to
+        // fall back to the raw lobby id — exactly what the ROOM ID stat
+        // already shows, so it read as a duplicate. Use "<host>'s room"
+        // instead (or a generic label until the host is known).
+        var title = s.CurrentLobbyTitle;
+        if (string.IsNullOrWhiteSpace(title)
+            || string.Equals(title, s.CurrentLobbyId, StringComparison.Ordinal))
+        {
+            title = !string.IsNullOrEmpty(hostLabel)
+                ? Strings.Format("MpRoomTitleFallback", hostLabel)
+                : Strings.Get("MpRoomTitleGeneric");
+        }
+        _lobbyWindow!.RoomTitleText.Text = title;
+
+        // ---------- Players ----------
+        // Live count vs configured max. The trailing "players" word is
+        // gone (the PLAYERS header says it) and we drop the "/ ?" when
+        // the max is unknown rather than printing a question mark.
+        // (MaxPlayers only arrives on the browser's lobby summary; see
+        // TryGetCurrentLobbyMaxPlayers.)
         var playerCount = _roomMembers.Count;
-        var maxPlayers = TryGetCurrentLobbyMaxPlayers(out var maxP) ? maxP.ToString() : "?";
-        _lobbyWindow!.RoomPlayersText.Text = $"{playerCount} / {maxPlayers} players";
+        _lobbyWindow!.RoomPlayersText.Text = TryGetCurrentLobbyMaxPlayers(out var maxP)
+            ? $"{playerCount} / {maxP}"
+            : playerCount.ToString();
 
-        // ROOM ID: short uppercase code if the worker assigns
-        // one, otherwise the raw lobby id (truncated for sanity).
+        // ---------- ROOM ID ----------
+        // Short uppercase code if the worker assigns one, otherwise the
+        // raw lobby id (truncated for sanity).
         var rid = s.CurrentLobbyId ?? "";
         if (rid.Length > 12) rid = rid.Substring(0, 12);
         _lobbyWindow!.RoomIdText.Text = rid.ToUpperInvariant();
 
-        // ---------- Network info card ----------
-        _lobbyWindow!.RoomConnectionText.Text = p2pReady ? "P2P LAN" : "P2P starting";
-        _lobbyWindow!.RoomModText.Text = TryGetCurrentLobbyModName(out var modName) ? modName : "—";
-        _lobbyWindow!.RoomMaxPlayersText.Text = maxPlayers;
+        // ---------- Room info card (Mod + Password) ----------
+        // Slimmed from four cells to two: "Connection" duplicated the
+        // P2P meta line and "Max players" duplicated the PLAYERS stat.
+        // The whole card collapses when neither remaining field has data.
+        var modKnown = TryGetCurrentLobbyModName(out var modName);
+        _lobbyWindow!.RoomModText.Text = modKnown ? modName : "—";
         var hasPwd = TryGetCurrentLobbyHasPassword(out var hp) && hp;
-        _lobbyWindow!.RoomPasswordText.Text = hasPwd ? "Required" : "None";
+        _lobbyWindow!.RoomPasswordText.Text = hasPwd
+            ? Strings.Get("MpRoomPasswordYes")
+            : Strings.Get("MpRoomPasswordNo");
+        _lobbyWindow!.RoomInfoCard.Visibility = (modKnown || hasPwd)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // ---------- Action buttons ----------
-        // Ready toggle visual: render with a check glyph + label
-        // so the state ("Ready" / "Not ready") is obvious. The
-        // actual roster-side ready flag lives in the room state
-        // frame; the local user is found via session.CurrentUser.
+        // Ready toggle visual: glyph + label so the state is obvious.
+        // The roster-side ready flag lives in the room-state frame; the
+        // local user is found via session.CurrentUser.
         var me = s.CurrentUser;
         var iAmReady = me != null
             && _roomMembers.TryGetValue(me.Id, out var meEntry)
             && meEntry.Ready;
-        _lobbyWindow!.ReadyButton.Content = iAmReady ? "✓  Ready" : "○  Mark as ready";
+        _lobbyWindow!.ReadyButton.Content = iAmReady
+            ? "✓  " + Strings.Get("MpRoomReady")
+            : "○  " + Strings.Get("MpRoomReadyMark");
         _lobbyWindow!.ReadyButton.Tag = iAmReady ? "ready" : "";
 
-        // The Start button only appears for the host; enabled once
-        // the P2P bridge is ready so AoE3 launches into a working
-        // hook-bridged network rather than discovering nothing.
+        // The Start button only appears for the host; enabled once the
+        // P2P bridge is ready so AoE3 launches into a working network.
         _lobbyWindow!.StartButton.Visibility = _isHostInCurrentRoom
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -1871,14 +2027,23 @@ public partial class MultiplayerTab : UserControl
     {
         maxPlayers = 0;
         var lobbyId = _session?.CurrentLobbyId;
-        if (string.IsNullOrEmpty(lobbyId) || _lastBrowserList == null) return false;
-        foreach (var l in _lastBrowserList)
+        if (!string.IsNullOrEmpty(lobbyId) && _lastBrowserList != null)
         {
-            if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
+            foreach (var l in _lastBrowserList)
             {
-                maxPlayers = l.MaxPlayers;
-                return true;
+                if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
+                {
+                    maxPlayers = l.MaxPlayers;
+                    return true;
+                }
             }
+        }
+        // Fallback for the host (absent from the browser snapshot of
+        // joinable rooms): capacity is stashed on create/join.
+        if (_currentLobbyMaxPlayers > 0)
+        {
+            maxPlayers = _currentLobbyMaxPlayers;
+            return true;
         }
         return false;
     }
@@ -1893,24 +2058,43 @@ public partial class MultiplayerTab : UserControl
     {
         modName = "";
         var lobbyId = _session?.CurrentLobbyId;
-        if (string.IsNullOrEmpty(lobbyId) || _lastBrowserList == null) return false;
-        foreach (var l in _lastBrowserList)
+        if (!string.IsNullOrEmpty(lobbyId) && _lastBrowserList != null)
         {
-            if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
+            foreach (var l in _lastBrowserList)
             {
-                // Look the id up in the registry for the friendly
-                // name; fall back to the raw id if not registered.
-                foreach (var p in ModRegistry.All)
+                if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
                 {
-                    if (string.Equals(p.Id, l.ModId, StringComparison.OrdinalIgnoreCase))
+                    // Look the id up in the registry for the friendly
+                    // name; fall back to the raw id if not registered.
+                    foreach (var p in ModRegistry.All)
                     {
-                        modName = p.DisplayName;
-                        return true;
+                        if (string.Equals(p.Id, l.ModId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            modName = p.DisplayName;
+                            return true;
+                        }
                     }
+                    modName = l.ModId;
+                    return true;
                 }
-                modName = l.ModId;
-                return true;
             }
+        }
+        // Fallback: the host (and anyone whose browser snapshot is stale
+        // or was never fetched) isn't in _lastBrowserList, but the
+        // current room's mod id is cached on create/join. Resolve that
+        // so the info card shows the mod name instead of an em-dash.
+        if (!string.IsNullOrEmpty(_currentLobbyModId))
+        {
+            foreach (var p in ModRegistry.All)
+            {
+                if (string.Equals(p.Id, _currentLobbyModId, StringComparison.OrdinalIgnoreCase))
+                {
+                    modName = p.DisplayName;
+                    return true;
+                }
+            }
+            modName = _currentLobbyModId;
+            return true;
         }
         return false;
     }
@@ -1948,6 +2132,14 @@ public partial class MultiplayerTab : UserControl
     /// when the user was browsing other mods between sessions).
     /// </summary>
     private string? _currentLobbyModId;
+
+    /// <summary>
+    /// Max players for the CURRENT room — set on create/join, cleared on
+    /// leave. The host isn't in the browser snapshot (`_lastBrowserList`)
+    /// so this is the only reliable source of room capacity for the
+    /// PLAYERS stat and the players-list open-slot rows. 0 = unknown.
+    /// </summary>
+    private int _currentLobbyMaxPlayers;
 
     private void RenderProfileTab()
     {
@@ -2317,7 +2509,8 @@ public partial class MultiplayerTab : UserControl
             // the mod id back (it only has id + status), so we read
             // it from the dialog's selected profile.
             _currentLobbyModId = createdModId;
-            await _session.EnterHostedLobbyAsync(dlg.CreatedLobby);
+            _currentLobbyMaxPlayers = dlg.CreatedLobbyMaxPlayers;
+            await _session.EnterHostedLobbyAsync(dlg.CreatedLobby, dlg.CreatedLobbyTitle);
             // Optimistic host flag — we created the room, so we ARE the
             // host. The WS room_state frame will reaffirm this when it
             // arrives. Setting it here means the Start button shows up
@@ -2838,13 +3031,13 @@ public partial class MultiplayerTab : UserControl
             // the right profile when the host starts the game — see
             // the same step in the create-room path above.
             _currentLobbyModId = lobby.ModId;
+            _currentLobbyMaxPlayers = lobby.MaxPlayers;
             // Host vs joiner is decided by the WS room_state frame that
             // arrives once we connect — clearing it here is just for the
             // brief window before that frame lands.
-            await _session.JoinLobbyAsync(lobby.Id, fingerprint, password);
-            // Set the lobby title eagerly so the in-room header reads
-            // something better than the short id until room_state lands.
-            _session.GetType(); // appease the compiler
+            // Pass the title from the browser summary so the in-room
+            // header reads the real room name immediately, not the id.
+            await _session.JoinLobbyAsync(lobby.Id, fingerprint, password, lobby.Title);
         }
         catch (LobbyApiException ex) when (ex.Code == "mod_mismatch")
         {
@@ -2883,7 +3076,7 @@ public partial class MultiplayerTab : UserControl
 
         if (_session.RoomSocket == null)
         {
-            AppendChatSystem("Ready saved locally — will sync when the room reconnects.");
+            AppendChatSystem(Strings.Get("MpChatReadySavedLocally"));
             return;
         }
 
@@ -2911,7 +3104,7 @@ public partial class MultiplayerTab : UserControl
         // signal peers" path, which made the host bypass the
         // 3-second countdown entirely (countdown overlay never
         // showed, AoE3 spawned on Start press instantly).
-        AppendChatSystem("Starting game…");
+        AppendChatSystem(Strings.Get("MpChatStartingGame"));
 
         if (_session.RoomSocket != null)
         {
@@ -2932,7 +3125,7 @@ public partial class MultiplayerTab : UserControl
                     {
                         DiagnosticLog.Write("MultiplayerTab.Start: server didn't echo countdown in 2s, " +
                             "starting local fallback countdown");
-                        StartCountdown(3000);
+                        StartCountdown(5000);
                     }
                 });
                 return;
@@ -2950,7 +3143,7 @@ public partial class MultiplayerTab : UserControl
         // WS unavailable / SendStart threw: still kick off the
         // local countdown so the host can launch solo. Peers won't
         // hear about it but a single-player test session works.
-        StartCountdown(3000);
+        StartCountdown(5000);
     }
 
     private async void LeaveRoomButton_Click(object sender, RoutedEventArgs e)
@@ -3091,7 +3284,7 @@ public partial class MultiplayerTab : UserControl
         }
         if (profile == null)
         {
-            AppendChatSystem("Cannot launch — no active mod profile.");
+            AppendChatSystem(Strings.Get("MpChatCannotLaunchNoProfile"));
             return null;
         }
         DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: launching profile '{profile.Id}' ({profile.DisplayName}) for lobby '{lobbyId}'");
@@ -3128,7 +3321,7 @@ public partial class MultiplayerTab : UserControl
 
             if (process == null)
             {
-                AppendChatSystem("Could not spawn the game process.");
+                AppendChatSystem(Strings.Get("MpChatCouldNotSpawn"));
                 return null;
             }
 
@@ -3136,13 +3329,13 @@ public partial class MultiplayerTab : UserControl
             // room as a real LAN segment on 10.99.0.0/24, so both host
             // and joiner just walk through AoE3's stock LAN UI — no
             // virtual IPs to copy, no Direct IP textbox to paste into.
-            AppendChatSystem("Partida lanzada. En AoE3: Multiplayer → LAN.");
+            AppendChatSystem(Strings.Get("MpChatGameLaunched"));
             return process;
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"MultiplayerTab.LaunchActiveModGame: {ex.Message}");
-            AppendChatSystem($"Launch failed: {ex.Message}");
+            AppendChatSystem(Strings.Format("MpChatLaunchFailed", ex.Message));
         }
         return null;
     }
@@ -3213,7 +3406,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async Task OnGameExitedAsync(ModProfile profile, DateTime gameStartedAtUtc)
     {
-        AppendChatSystem("Game closed.");
+        AppendChatSystem(Strings.Get("MpChatGameClosed"));
         try
         {
             // The mod's user-data folder usually lives under Documents/My Games/<userDataFolder>.
@@ -3226,7 +3419,7 @@ public partial class MultiplayerTab : UserControl
 
             var replay = ReplayUploadService.FindLatestReplay(modUserData, gameStartedAtUtc);
             if (replay != null)
-                AppendChatSystem($"Replay saved: {replay.Name} ({replay.Length / 1024} KB). Upload from History.");
+                AppendChatSystem(Strings.Format("MpChatReplaySaved", replay.Name, replay.Length / 1024));
         }
         catch (Exception ex)
         {
@@ -3280,6 +3473,7 @@ public partial class MultiplayerTab : UserControl
             OnReady = () => ReadyButton_Click(this, new RoutedEventArgs()),
             OnStart = () => StartButton_Click(this, new RoutedEventArgs()),
             OnInGameCancel = () => InGameCancelButton_Click(this, new RoutedEventArgs()),
+            OnCountdownCancel = CancelCountdownByUser,
             OnClearChat = () => ClearChatButton_Click(this, new RoutedEventArgs()),
             OnSendChat = () => ChatSendButton_Click(this, new RoutedEventArgs()),
             OnEmoji = () => ChatEmojiButton_Click(this, new RoutedEventArgs()),
@@ -3292,6 +3486,12 @@ public partial class MultiplayerTab : UserControl
         };
 
         _lobbyWindow = w;
+
+        // Localise the static labels and paint the current room state
+        // before Show() so there's no English/empty flash on open.
+        ApplyLobbyStaticLabels();
+        RenderRoomPanel();
+        UpdateChatEmptyState();
 
         // Race-safe field clear in Closed: a follow-up OpenLobbyWindow
         // call between Close() and Closed firing must not clobber the
@@ -3374,8 +3574,8 @@ public partial class MultiplayerTab : UserControl
 
         // Cancel button caption differs for host vs joiner.
         _lobbyWindow!.InGameCancelButton.Content = _isHostInCurrentRoom
-            ? "⚠  Cancel game (host)"
-            : "↩  Leave game";
+            ? Strings.Get("MpInGameCancelHost")
+            : Strings.Get("MpInGameLeave");
     }
 
     /// <summary>
@@ -3416,7 +3616,7 @@ public partial class MultiplayerTab : UserControl
         if (remainingMs <= 0)
         {
             _countdownTickTimer?.Stop();
-            _lobbyWindow!.CountdownNumber.Text = "Go";
+            _lobbyWindow!.CountdownNumber.Text = Strings.Get("MpCountdownGo");
             DiagnosticLog.Write("MultiplayerTab.UpdateCountdownTick: countdown expired, launching AoE3");
             // This is the *only* path that launches AoE3 in the
             // happy case. If for any reason we're already in InGame
@@ -3436,6 +3636,19 @@ public partial class MultiplayerTab : UserControl
     {
         _countdownTickTimer?.Stop();
         _countdownTickTimer = null;
+    }
+
+    /// <summary>
+    /// User pressed Cancel on the pre-launch countdown overlay. No AoE3
+    /// process exists yet during the countdown, so this routes through
+    /// <see cref="EndMatchAsync"/> only to stop the local timer + return
+    /// to the lobby (via ExitInGamePhase) and — for the host — broadcast
+    /// game_cancelled so every peer's countdown stops too.
+    /// </summary>
+    private async void CancelCountdownByUser()
+    {
+        if (_matchPhase != MatchPhase.Starting) return;
+        await EndMatchAsync(_isHostInCurrentRoom ? "host_cancelled" : "joiner_left");
     }
 
     /// <summary>
@@ -3509,9 +3722,9 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow!.InGameTrafficText.Text = "—";
 
         // Mode badge.
-        _lobbyWindow!.InGameModeText.Text = bridgeReady
-            ? " — In lobby (Radmin VPN expected)"
-            : " — Waiting for lobby…";
+        _lobbyWindow!.InGameModeText.Text = Strings.Get(bridgeReady
+            ? "MpInGameModeInLobby"
+            : "MpInGameModeWaitingLobby");
         _lobbyWindow!.InGameModeText.Foreground = (Brush)Application.Current.FindResource(
             bridgeReady ? "MpStatusOnline" : "MpStatusReconnect");
 
@@ -3549,8 +3762,7 @@ public partial class MultiplayerTab : UserControl
         {
             _lobbyWindow!.InGamePeersPanel.Children.Add(new TextBlock
             {
-                Text = "Waiting for peers — you're the only player in the room right now.\n" +
-                       "P2P stack ready; another launcher needs to Join this room for game traffic to flow.",
+                Text = Strings.Get("MpInGameWaitingPeers"),
                 Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
                 FontSize = 11,
                 FontStyle = FontStyles.Italic,
@@ -3698,8 +3910,8 @@ public partial class MultiplayerTab : UserControl
             }
         }
         AppendChatSystem(_isHostInCurrentRoom
-            ? "You cancelled the game. Room returned to lobby."
-            : "You left the game. Other players continue.");
+            ? Strings.Get("MpChatYouCancelled")
+            : Strings.Get("MpChatYouLeftGame"));
     }
 
     /// <summary>

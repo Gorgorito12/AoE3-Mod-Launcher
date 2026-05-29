@@ -213,6 +213,41 @@ longer exists — don't go looking for it.)
   config example is out of date. `Save()` is non-atomic and runs from background
   threads.
 
+- **`config.GameExecutable` is a GLOBAL exe cache that two profiles share — it
+  MUST be cleared on mod switch.** Despite the per-mod `Mods` dictionary, the
+  resolved game-exe path is cached in the flat, launcher-wide
+  `config.GameExecutable` (legacy field), and `GameLauncher.EnumerateCandidates`
+  trusts it as candidate #1 on a **filename-only** match. Both the WoL built-in
+  and the stock `aoe3-tad` profile declare `GameExecutable="age3y.exe"`, so a
+  path cached while one was active satisfies the match for the other and the
+  **wrong game launches after a switch** (play AoE3 → switch to WoL → PLAY
+  opened AoE3). The blessed fix is to clear `config.GameExecutable = ""` whenever
+  the active mod changes — `LoadModProfile` does this right after setting
+  `ActiveModId`, mirroring the existing clear-on-uninstall step
+  (`UninstallMenuItem_Click` / browser uninstall). After the clear, resolution
+  falls through to the new mod's per-mod install-folder walk + disk scan, which
+  is mod-correct. Don't reintroduce a code path that swaps the active profile
+  without clearing this cache.
+
+- **Community translations are PROFILE-scoped, and the index is re-fetched on
+  mod switch.** Two coupled rules: (1) `UpdateService.EffectiveTranslationsRepo()`
+  returns the repo from the active `ModProfile.Translations` block, or `""` when
+  the profile has none (the stock `aoe3-tad` game, any mod without a Translations
+  block). It must NOT blanket-fall-back to the global, WoL-centric
+  `config.TranslationsRepo` for those — doing so made every mod inherit WoL's
+  `papillo12/translations` packs, so the stock game offered WoL's Spanish pack
+  and applying it would overwrite the base game's `data\stringtabley.xml` /
+  `unithelpstringsy.xml` with WoL strings. The global field stays as an override
+  only for a profile that already participates. (2) `_cachedTranslationIndex` is
+  a single launcher-wide field, reset to null on every mod switch in
+  `LoadModProfile`; the switch path must therefore **re-fetch it**
+  (`RefreshTranslationIndexAsync`, gated on `CheckUpdatesOnStartup` like the boot
+  pre-fetch) before `PopulateGameLanguageMenu`, or the gear-menu / Mod Properties
+  language list comes up empty and previously-visible community translations
+  vanish until the user hits Refresh. The fetch itself was never the problem
+  (`launcher-debug.log` shows "Translation releases scanned: N valid entries") —
+  the index was just being discarded without re-fetching.
+
 - **The stock base game is a detect-only built-in profile
   (`ModProfile.IsStockGame`).** `ModRegistry._builtIn` now has TWO entries: WoL
   and `aoe3-tad` ("Age of Empires III: The Asian Dynasties"). The stock entry is
@@ -243,21 +278,65 @@ longer exists — don't go looking for it.)
   catalog repo (`mods/<id>/icon.png` → `ModProfile.IconUrl` →
   `ModAssetCacheService` caches it under
   `%LocalAppData%\AoE3ModLauncher\mod-assets\` → `LocalIconPath`). The
-  first-party **WoL built-in is different**: it ships `WoL.ico` **embedded in
-  the `.exe`** (a `<Resource>` in the `.csproj`) and references it via
-  `BannerImage` (a `pack://` URI), NOT `IconUrl`. So WoL needs no catalog
-  upload, and dropping an `icon.png` into the catalog's `mods/wol/` is
-  **ignored** — the built-in shadows the catalog entry (same id-collision rule
-  as above) and sets `BannerImage` in code. Resolution order is
-  `LocalIconPath` (if the cached file exists) → `BannerImage` (packed) → null =
-  letter monogram, via `ResolveModIcon` (MainWindow) and `ResolveIconUri`
+  first-party **WoL built-in sets BOTH**: an `IconUrl` pointing at the catalog
+  (`mods/wol/icon.png`) AND `BannerImage` = the `WoL.ico` **embedded in the
+  `.exe`** (a `<Resource>` in the `.csproj`). Resolution is `LocalIconPath`
+  (the catalog icon, once fetched/cached) → `BannerImage` (packed) → null =
+  letter monogram, so the catalog icon wins when present and the embedded
+  `WoL.ico` is the offline / 404 fallback — WoL's icon is editable from the
+  catalog (commit `mods/wol/icon.png`, no recompile) yet always renders even
+  with no network. That `IconUrl` is hardcoded on the built-in in `ModRegistry`;
+  the catalog `mods/wol/mod.json` is shadowed at runtime (id-collision rule
+  above), so a community PR editing that manifest can't redirect WoL's branding
+  — the override is the raw `icon.png` the hardcoded URL points at. Resolution
+  + loading go through `ResolveModIcon` (MainWindow) / `ResolveIconUri`
   (ModsBrowser); `TryLoadBitmap` / `TryLoadTileImage` accept **both** on-disk
   paths and `pack://` URIs. The resolved icon is painted on the dashboard hero
   (`DashboardIconHost`), the Workshop tiles / rows / detail header, the Mod
   Properties header (`HeaderIconHost`), the Create-room mod card, and the
-  install shortcut. To move WoL's icon to the catalog like the others, set
-  `IconUrl` on the WoL built-in in `ModRegistry` — editing only the catalog
-  `mod.json` won't do it.
+  install shortcut.
+
+- **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
+  don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
+  (`MultiplayerTab.xaml.cs`) fills it, and four duplications were stripped on
+  purpose: (1) the title shows the room's **real name** — `CurrentLobbyTitle` is
+  populated on create (from the dialog's `CreatedLobbyTitle`) and on join (from
+  `LobbySummary.Title`), both threaded through new `title` params on
+  `EnterHostedLobbyAsync` / `JoinLobbyAsync`. **That field was previously dead
+  (only ever nulled), so the header always fell back** — if you see it reverting
+  to a generic name, check those call sites still pass the title. A genuinely
+  unnamed room falls back to `"{host}'s room"` (`Strings` key
+  `MpRoomTitleFallback`; `MpRoomTitleGeneric` until the host is known) — **not**
+  the raw lobby id, which already shows under the ROOM ID stat (that stat carries
+  a 📋 `CopyRoomIdButton`, handled locally in `LobbyWindow.xaml.cs` — pure
+  clipboard, no session round-trip); (2) there is **no HOST stat** — the roster's
+  per-row badge is the canonical host marker; (3) the info card (`RoomInfoCard`)
+  is **Mod + Password only** (the old "Connection" cell duplicated the P2P status
+  in the meta subtitle and "Max players" duplicated the PLAYERS stat), collapsing
+  entirely when neither field has data; (4) the PLAYERS stat reads `"1 / 8"` — or
+  just `"1"` when the max is unknown — with no trailing "players" word. Capacity
+  comes from a `_currentLobbyMaxPlayers` stash that **mirrors `_currentLobbyModId`**
+  (set on create/join, cleared on leave) and is read as a fallback by
+  `TryGetCurrentLobbyMaxPlayers`, because the HOST is absent from the browser
+  snapshot (`_lastBrowserList`) it checks first; the Mod name resolves the same
+  way (`_lastBrowserList` → `_currentLobbyModId` fallback) so the host sees the
+  mod, not an em-dash. The two-method label refresh this view relies on is in the
+  Localization bullet under Runtime conventions.
+
+- **The players roster (`RenderRoomMembers` / `BuildMemberRow`) is host-first
+  with open-slot placeholders — keep both, they're load-bearing UX.** Members
+  sort host-first via a *stable* `OrderByDescending` (non-host members keep their
+  join order); below them, one dimmed "`Esperando jugador…`" row
+  (`BuildOpenSlotRow`, `Strings` key `MpRoomSlotOpen`) is emitted per unfilled
+  slot up to the room capacity, so the list shows at a glance how many can still
+  join (needs the `_currentLobbyMaxPlayers` capacity above — no max, no
+  placeholders). Per row: the Host/Ready badges are localised
+  (`MpRoomBadgeHost` → "Anfitrión", reused `MpRoomReady` → "Listo"), and a player
+  who has readied up gets a subtle green row tint (`#223FB950`) on top of the
+  small Ready pill. Relatedly, `MpDivider` was raised `#2C313A → #3A434F` in
+  `Colors.xaml` so the lobby / MP cards stop blending into the near-black
+  `BgBase` — a **global** brush change across every multiplayer surface (rooms
+  table included), not a per-dialog recolour.
 
 ## Architecture
 
@@ -373,6 +452,17 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
   literal in XAML/code. A missing key renders as the key itself (a visible
   signal). `Strings.SetLanguage` raises `LanguageChanged` for live refresh.
+  The lobby window (`LobbyWindow`) splits its localisation across **two**
+  methods in `MultiplayerTab.xaml.cs`: `ApplyLobbyStaticLabels()` for static
+  labels (section/field headers, button captions, chat placeholder, copy
+  tooltip, empty-chat hint) and `RenderRoomPanel()` for the dynamic,
+  state-driven text (status line, player count, ready toggle, password value,
+  title). Both run from `OpenLobbyWindow()` **before** `Show()` (so there's no
+  English/empty flash on open) and again from `ApplyStrings()` on a mid-room
+  `LanguageChanged`. **Known gap:** the two match-phase overlays
+  (`CountdownOverlay` / `InGameOverlay`) and the `AppendChatSystem(...)` chat
+  messages are still hardcoded English — that's the next localisation pass, not
+  a finished surface. (Diagnostic logs stay English on purpose, as everywhere.)
 - **The dashboard hero title stacks `"Game: Subtitle"` names onto two lines.**
   Where `DashboardTitleText.Text` is set, the name renders as
   `DisplayName.ToUpperInvariant().Replace(": ", ":\n")` — so "Age of Empires III:
@@ -431,9 +521,18 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   maximise glyph swaps via `OnStateChanged` in code-behind (Segoe MDL2
   `0xE922` ↔ `0xE923`); the App.OnStartup WM_GETMINMAXINFO hook handles
   the maximise-respects-taskbar bound. `LobbyWindow` also uses a smaller
-  30 px caption + tighter padding because the rich room info (room code,
-  HOST / PLAYERS / ROOM ID stats) lives in its own sub-header strip below
-  the chrome; the two settings dialogs keep the taller 40 px caption since
+  30 px caption + tighter padding because the rich room info lives in its own
+  sub-header strip below the chrome: a `RoomTitleText` + `RoomMetaText`
+  status/P2P meta line, then `PLAYERS` and `ROOM ID` stat blocks where the
+  `ROOM ID` carries a `CopyRoomIdButton` (📋, flashes ✓ for ~1.4 s on copy —
+  that handler is the lone bit of lobby UI logic that lives in
+  `LobbyWindow.xaml.cs` directly rather than forwarding to a `MultiplayerTab`
+  callback, since it's pure clipboard with no session coupling). The old
+  `HOST` stat was dropped (the roster already badges the host), and the room
+  info card was renamed `ROOM & NETWORK INFO` → `ROOM INFO` and trimmed from
+  four cells to `RoomInfoCard` = Mod + Password only (Connection duplicated the
+  header's P2P status, Max players duplicated the PLAYERS stat); the card
+  collapses when neither field has data. The two settings dialogs keep the taller 40 px caption since
   their title is the only thing in the chrome row. The two settings dialogs add a 200-px left rail of
   `SidebarNavButton` buttons (from `Styles/Buttons.xaml`) and a
   `SetActiveTab(button)` helper that toggles `Tag="active"` on the chosen

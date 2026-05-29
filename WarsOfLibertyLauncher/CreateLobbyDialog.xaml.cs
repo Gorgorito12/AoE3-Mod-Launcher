@@ -49,6 +49,15 @@ public partial class CreateLobbyDialog : Window
     public ModProfile? CreatedLobbyProfile { get; private set; }
 
     /// <summary>
+    /// The room title + max-players the user chose, exposed because
+    /// <see cref="CreateLobbyResponse"/> only echoes id + status — the
+    /// caller needs these to populate the live room header (title) and
+    /// the players-list capacity / open-slot rows (max players).
+    /// </summary>
+    public string? CreatedLobbyTitle { get; private set; }
+    public int CreatedLobbyMaxPlayers { get; private set; }
+
+    /// <summary>
     /// Build the dialog. <paramref name="profiles"/> populates the mod
     /// dropdown; <paramref name="initiallySelected"/> is the entry that
     /// starts highlighted (typically the active profile from the Play
@@ -252,6 +261,8 @@ public partial class CreateLobbyDialog : Window
                 ? PasswordBox.Password
                 : null;
             CreatedLobbyProfile = _selectedProfile;
+            CreatedLobbyTitle = title;
+            CreatedLobbyMaxPlayers = maxPlayers;
             CreatedLobby = await _session.Api.CreateLobbyAsync(new CreateLobbyRequest
             {
                 Title = title,

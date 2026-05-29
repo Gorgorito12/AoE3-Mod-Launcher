@@ -262,7 +262,13 @@
          shared BgPanel so the room table / chat bar feel "raised". -->
     <SolidColorBrush x:Key="MpSurface" Color="#1B2025"/>
     <SolidColorBrush x:Key="MpSurfaceAlt" Color="#232830"/>
-    <SolidColorBrush x:Key="MpDivider" Color="#2C313A"/>
+    <!-- Card/panel border + hairline divider for all multiplayer
+         surfaces. Raised from #2C313A → #3A434F: at the old value it was
+         barely lighter than MpSurface (#1B2025), so the lobby's player
+         list / info card / chat panel borders washed out against the
+         near-black BgBase. This tone reads as a clear edge without the
+         harshness of the app's brighter BorderSubtle (#3C4650). -->
+    <SolidColorBrush x:Key="MpDivider" Color="#3A434F"/>
     <SolidColorBrush x:Key="MpTableHeader" Color="#A8B0B8"/>
 
     <!-- Connection status dots. Online matches SuccessBrush;

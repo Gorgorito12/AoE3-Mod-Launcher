@@ -1926,6 +1926,178 @@ public static class Strings
             [LangEn] = "Type a message…",
             [LangEs] = "Escribe un mensaje…",
         },
+        ["MpRoomChatHeader"] = new() { [LangEn] = "CHAT & ACTIVITY", [LangEs] = "CHAT Y ACTIVIDAD" },
+        ["MpRoomChatClear"] = new() { [LangEn] = "Clear chat", [LangEs] = "Limpiar chat" },
+        ["MpRoomChatSend"] = new() { [LangEn] = "Send", [LangEs] = "Enviar" },
+        ["MpRoomChatEmpty"] = new()
+        {
+            [LangEn] = "No messages yet — say hi!",
+            [LangEs] = "Aún no hay mensajes — ¡saluda!",
+        },
+        ["MpRoomPlayersHeader"] = new() { [LangEn] = "PLAYERS", [LangEs] = "JUGADORES" },
+        ["MpRoomIdHeader"] = new() { [LangEn] = "ROOM ID", [LangEs] = "ID DE SALA" },
+        ["MpRoomCopyCode"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
+        ["MpRoomInfoHeader"] = new() { [LangEn] = "ROOM INFO", [LangEs] = "INFO DE LA SALA" },
+        ["MpRoomFieldMod"] = new() { [LangEn] = "Mod", [LangEs] = "Mod" },
+        ["MpRoomFieldPassword"] = new() { [LangEn] = "Password", [LangEs] = "Contraseña" },
+        ["MpRoomPasswordYes"] = new() { [LangEn] = "Required", [LangEs] = "Requerida" },
+        ["MpRoomPasswordNo"] = new() { [LangEn] = "None", [LangEs] = "Ninguna" },
+        ["MpRoomReadyMark"] = new() { [LangEn] = "Mark as ready", [LangEs] = "Marcar como listo" },
+        ["MpRoomStatusInLobby"] = new() { [LangEn] = "In lobby", [LangEs] = "En la sala" },
+        ["MpRoomStatusJoining"] = new() { [LangEn] = "Joining…", [LangEs] = "Entrando…" },
+        ["MpRoomStatusLeaving"] = new() { [LangEn] = "Leaving…", [LangEs] = "Saliendo…" },
+        ["MpRoomStatusInGame"] = new() { [LangEn] = "In game", [LangEs] = "En partida" },
+        ["MpRoomP2pReady"] = new() { [LangEn] = "P2P LAN ready", [LangEs] = "P2P LAN listo" },
+        ["MpRoomP2pStarting"] = new() { [LangEn] = "P2P starting…", [LangEs] = "Iniciando P2P…" },
+        ["MpRoomTitleFallback"] = new() { [LangEn] = "{0}'s room", [LangEs] = "Sala de {0}" },
+        ["MpRoomTitleGeneric"] = new() { [LangEn] = "Multiplayer room", [LangEs] = "Sala multijugador" },
+        ["MpRoomBadgeHost"] = new() { [LangEn] = "Host", [LangEs] = "Anfitrión" },
+        ["MpRoomSlotOpen"] = new()
+        {
+            [LangEn] = "Waiting for player…",
+            [LangEs] = "Esperando jugador…",
+        },
+
+        // -------- Lobby match-phase overlays (LobbyWindow.xaml) --------
+        // CountdownOverlay + InGameOverlay covers shown during the
+        // Starting / InGame phases. Static labels are pushed by
+        // ApplyLobbyStaticLabels(); the state-driven ones (countdown
+        // "Go", in-game mode badge, cancel/leave button) are set from
+        // their own code-behind paths and re-applied on language switch.
+        ["MpCountdownLabel"] = new() { [LangEn] = "Starting in", [LangEs] = "Comienza en" },
+        ["MpCountdownGo"] = new() { [LangEn] = "Go", [LangEs] = "¡Ya!" },
+        ["MpCountdownHint"] = new()
+        {
+            [LangEn] = "AoE3 will open automatically — keep the launcher running.",
+            [LangEs] = "AoE3 se abrirá automáticamente — mantén el launcher abierto.",
+        },
+        ["MpCountdownCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
+        ["MpInGameTitle"] = new() { [LangEn] = "GAME IN PROGRESS", [LangEs] = "PARTIDA EN CURSO" },
+        ["MpInGameMatchTimeHeader"] = new() { [LangEn] = "MATCH TIME", [LangEs] = "TIEMPO DE PARTIDA" },
+        ["MpInGameTrafficHeader"] = new() { [LangEn] = "TRAFFIC", [LangEs] = "TRÁFICO" },
+        ["MpInGameRoomHeader"] = new() { [LangEn] = "ROOM", [LangEs] = "SALA" },
+        // InGameModeText — the leading " — " separator is kept inside the
+        // value so the badge reads "GAME IN PROGRESS — <mode>" without
+        // any code-side concatenation. Connected is the XAML/static
+        // default; the other two are set live by RefreshInGamePanel.
+        ["MpInGameModeConnected"] = new()
+        {
+            [LangEn] = " — Connected via P2P LAN",
+            [LangEs] = " — Conectado vía LAN P2P",
+        },
+        ["MpInGameModeInLobby"] = new()
+        {
+            [LangEn] = " — In lobby (Radmin VPN expected)",
+            [LangEs] = " — En la sala (se espera Radmin VPN)",
+        },
+        ["MpInGameModeWaitingLobby"] = new()
+        {
+            [LangEn] = " — Waiting for lobby…",
+            [LangEs] = " — Esperando la sala…",
+        },
+        ["MpInGameWaitingPeers"] = new()
+        {
+            [LangEn] = "Waiting for peers — you're the only player in the room right now.\n" +
+                       "P2P stack ready; another launcher needs to Join this room for game traffic to flow.",
+            [LangEs] = "Esperando jugadores — por ahora eres el único en la sala.\n" +
+                       "La pila P2P está lista; otro launcher tiene que unirse a esta sala para que fluya el tráfico de la partida.",
+        },
+        // Cancel / Leave button in the in-game overlay — caption differs
+        // for host vs joiner (set in ApplyMatchPhaseUi).
+        ["MpInGameCancelHost"] = new()
+        {
+            [LangEn] = "⚠  Cancel game (host)",
+            [LangEs] = "⚠  Cancelar partida (anfitrión)",
+        },
+        ["MpInGameLeave"] = new()
+        {
+            [LangEn] = "↩  Leave game",
+            [LangEs] = "↩  Salir de la partida",
+        },
+
+        // -------- Lobby chat-system lines (AppendChatSystem) --------
+        // Status/activity messages injected into the lobby chat log.
+        // The {0}/{1} placeholders are filled via Strings.Format.
+        ["MpChatGameStartingIn"] = new()
+        {
+            [LangEn] = "Game starting in {0} seconds…",
+            [LangEs] = "La partida empieza en {0} segundos…",
+        },
+        ["MpChatGameStarted"] = new()
+        {
+            [LangEn] = "The game has started.",
+            [LangEs] = "La partida empezó.",
+        },
+        ["MpChatHostCancelled"] = new()
+        {
+            [LangEn] = "Host cancelled the game. Returning to lobby.",
+            [LangEs] = "El anfitrión canceló la partida. Volviendo a la sala.",
+        },
+        ["MpChatGameCancelledReason"] = new()
+        {
+            [LangEn] = "Game cancelled: {0}.",
+            [LangEs] = "Partida cancelada: {0}.",
+        },
+        ["MpChatMemberJoined"] = new()
+        {
+            [LangEn] = "{0} joined.",
+            [LangEs] = "{0} entró.",
+        },
+        ["MpChatMemberLeft"] = new()
+        {
+            [LangEn] = "{0} left.",
+            [LangEs] = "{0} salió.",
+        },
+        ["MpChatReadySavedLocally"] = new()
+        {
+            [LangEn] = "Ready saved locally — will sync when the room reconnects.",
+            [LangEs] = "Estado «listo» guardado localmente — se sincronizará cuando la sala se reconecte.",
+        },
+        ["MpChatStartingGame"] = new()
+        {
+            [LangEn] = "Starting game…",
+            [LangEs] = "Iniciando partida…",
+        },
+        ["MpChatCannotLaunchNoProfile"] = new()
+        {
+            [LangEn] = "Cannot launch — no active mod profile.",
+            [LangEs] = "No se puede iniciar — no hay un mod activo.",
+        },
+        ["MpChatCouldNotSpawn"] = new()
+        {
+            [LangEn] = "Could not spawn the game process.",
+            [LangEs] = "No se pudo iniciar el proceso del juego.",
+        },
+        ["MpChatGameLaunched"] = new()
+        {
+            [LangEn] = "Game launched. In AoE3: Multiplayer → LAN.",
+            [LangEs] = "Partida lanzada. En AoE3: Multijugador → LAN.",
+        },
+        ["MpChatLaunchFailed"] = new()
+        {
+            [LangEn] = "Launch failed: {0}",
+            [LangEs] = "Falló el inicio: {0}",
+        },
+        ["MpChatGameClosed"] = new()
+        {
+            [LangEn] = "Game closed.",
+            [LangEs] = "La partida se cerró.",
+        },
+        ["MpChatReplaySaved"] = new()
+        {
+            [LangEn] = "Replay saved: {0} ({1} KB). Upload from History.",
+            [LangEs] = "Repetición guardada: {0} ({1} KB). Súbela desde Historial.",
+        },
+        ["MpChatYouCancelled"] = new()
+        {
+            [LangEn] = "You cancelled the game. Room returned to lobby.",
+            [LangEs] = "Cancelaste la partida. La sala volvió a la espera.",
+        },
+        ["MpChatYouLeftGame"] = new()
+        {
+            [LangEn] = "You left the game. Other players continue.",
+            [LangEs] = "Saliste de la partida. Los demás jugadores siguen.",
+        },
         ["MpCreateDialogTitle"] = new() { [LangEn] = "Create a room", [LangEs] = "Crear una sala" },
         ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "Room title", [LangEs] = "Título de la sala" },
         ["MpCreateDialogMaxPlayers"] = new() { [LangEn] = "Max players", [LangEs] = "Jugadores máx." },
