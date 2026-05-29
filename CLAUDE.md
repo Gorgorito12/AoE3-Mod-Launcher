@@ -338,6 +338,31 @@ longer exists — don't go looking for it.)
   `BgBase` — a **global** brush change across every multiplayer surface (rooms
   table included), not a per-dialog recolour.
 
+- **The TRAFFIC + CONNECTION metrics are the only REAL connection numbers, and
+  both are OVERALL, not per-peer.** TRAFFIC (in-game overlay, `RefreshInGamePanel`)
+  = the Radmin VPN adapter's `BytesSent + BytesReceived` *delta since match start*
+  (`RadminVpnService.GetAdapterBytes`, baselined in `EnterInGamePhase` as
+  `_matchBaselineBytes`) — it's the whole adapter, not this game or one peer, but
+  during a match that's effectively the game; shows "—" when no 26.x Radmin
+  adapter is up. CONNECTION is your general **INTERNET** latency — an ICMP
+  round-trip to a public anycast resolver (`PingInternetRttMsAsync`: Cloudflare
+  1.1.1.1, then Google 8.8.8.8), cached in `_connectionPingMs` and refreshed by a
+  fire-and-forget `KickConnectionPing` (guarded by `_connectionPingInFlight`),
+  colour-coded (<80 ms green / <200 amber / else red). That ONE value drives every
+  "ping" in the multiplayer UI: the in-game CONNECTION stat, the lobby header
+  CONNECTION stat (`RoomConnText` via `UpdateLobbyPing` on a `_lobbyPingTimer`),
+  and the rooms-browser PING column (`RefreshRoomPingCells` on a `_roomsPingTimer`,
+  updated **in place** so rows — and their Join buttons — aren't rebuilt). It is
+  **your** internet latency, **not** a per-rival ping, so it's identical across all
+  browser rows. (We deliberately dropped the earlier Radmin seed-peer ping: it
+  needed a specific peer online AND you already on the VPN, so it usually showed
+  "—".) The per-peer rows' RTT/bytes columns stay placeholders (`…` / `↑0 B`) **on
+  purpose** — the launcher can't map a room member (Discord login) to a Radmin IP
+  (see the multiplayer-reality bullet: Radmin holds the peer list internally and
+  never surfaces it), so true per-player ping/bytes needs the **backend** to put
+  each peer's Radmin IP in `room_state`. Don't wire fake per-peer numbers to fill
+  that gap.
+
 ## Architecture
 
 WPF MVVM-lite single project. UI is thin; the **`Services/` layer is the
@@ -459,10 +484,13 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   state-driven text (status line, player count, ready toggle, password value,
   title). Both run from `OpenLobbyWindow()` **before** `Show()` (so there's no
   English/empty flash on open) and again from `ApplyStrings()` on a mid-room
-  `LanguageChanged`. **Known gap:** the two match-phase overlays
-  (`CountdownOverlay` / `InGameOverlay`) and the `AppendChatSystem(...)` chat
-  messages are still hardcoded English — that's the next localisation pass, not
-  a finished surface. (Diagnostic logs stay English on purpose, as everywhere.)
+  `LanguageChanged`. The two match-phase overlays (`CountdownOverlay` /
+  `InGameOverlay`) are localised the same way — their static labels (countdown
+  label/hint/cancel, in-game title + the MATCH TIME / TRAFFIC / CONNECTION / ROOM
+  stat headers) through `ApplyLobbyStaticLabels()`, and their state-driven text
+  plus every `AppendChatSystem(...)` message through `Strings.Get` /
+  `Strings.Format` — so the whole multiplayer surface is localised now.
+  (Diagnostic logs stay English on purpose, as everywhere.)
 - **The dashboard hero title stacks `"Game: Subtitle"` names onto two lines.**
   Where `DashboardTitleText.Text` is set, the name renders as
   `DisplayName.ToUpperInvariant().Replace(": ", ":\n")` — so "Age of Empires III:

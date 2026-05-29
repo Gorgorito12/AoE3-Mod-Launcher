@@ -188,6 +188,45 @@ public static class RadminVpnService
         return (false, null);
     }
 
+    /// <summary>
+    /// Total bytes (sent, received) on the Radmin VPN adapter since it
+    /// came up, or null when there's no "up" Radmin 26.x adapter. The
+    /// counters are OS-level — the whole adapter, not just one game — so
+    /// callers wanting match-only traffic should snapshot a baseline when
+    /// the match starts and display the delta.
+    /// </summary>
+    public static (long sent, long received)? GetAdapterBytes()
+    {
+        try
+        {
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (!nic.Name.Contains("Radmin", StringComparison.OrdinalIgnoreCase)) continue;
+                if (nic.OperationalStatus != OperationalStatus.Up) continue;
+                // Same 26.x gate as DetectServiceRunning so we don't read
+                // counters off some unrelated "Radmin"-named adapter.
+                bool has26 = false;
+                foreach (var uni in nic.GetIPProperties().UnicastAddresses)
+                {
+                    if (uni.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                        && uni.Address.ToString().StartsWith("26.", StringComparison.Ordinal))
+                    {
+                        has26 = true;
+                        break;
+                    }
+                }
+                if (!has26) continue;
+                var stats = nic.GetIPv4Statistics();
+                return (stats.BytesSent, stats.BytesReceived);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RadminVpnService.GetAdapterBytes: {ex.Message}");
+        }
+        return null;
+    }
+
     // NOTE: peer-count detection was removed. We tried to infer "is the
     // user in an active Radmin network with N other people" by counting
     // 26.x.x.x peers visible via arp -a / Get-NetNeighbor. The reality:

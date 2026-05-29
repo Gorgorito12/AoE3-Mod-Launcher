@@ -322,6 +322,22 @@
                                            FontSize="14"
                                            FontWeight="SemiBold"/>
                             </StackPanel>
+                            <!-- Connection latency = your internet RTT. Not a
+                                 per-rival ping — per-player ping needs peer IPs
+                                 the launcher can't see (see CLAUDE.md). -->
+                            <StackPanel Margin="0,0,40,0">
+                                <TextBlock x:Name="RoomConnHeader"
+                                           Text="CONNECTION"
+                                           Foreground="{DynamicResource MpTableHeader}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,4"/>
+                                <TextBlock x:Name="RoomConnText"
+                                           Text="…"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"/>
+                            </StackPanel>
                             <StackPanel>
                                 <TextBlock x:Name="RoomIdStatHeader"
                                            Text="ROOM ID"
@@ -677,9 +693,10 @@
                                    Margin="6,0,0,0"/>
                     </StackPanel>
 
-                    <!-- Match timer + total traffic counter. -->
+                    <!-- Match timer + traffic + connection latency. -->
                     <Grid Grid.Row="1" Margin="0,16,0,18">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
@@ -725,6 +742,23 @@
                                        FontSize="14"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                        <!-- Connection latency = your internet RTT. Not a
+                             per-rival ping — per-player ping needs peer IPs
+                             the launcher can't see (see RadminVpnService note). -->
+                        <StackPanel Grid.Column="3">
+                            <TextBlock x:Name="InGameConnectionHeader"
+                                       Text="CONNECTION"
+                                       Foreground="{DynamicResource MpTableHeader}"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock x:Name="InGameConnectionText"
+                                       Text="—"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontSize="20"
+                                       FontFamily="Consolas, Courier New, monospace"
+                                       FontWeight="SemiBold"/>
                         </StackPanel>
                     </Grid>
 

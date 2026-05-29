@@ -1957,6 +1957,11 @@ public static class Strings
             [LangEn] = "Waiting for player…",
             [LangEs] = "Esperando jugador…",
         },
+        ["MpRoomPingTooltip"] = new()
+        {
+            [LangEn] = "Your internet latency — the same for every room. A per-host ping isn't available.",
+            [LangEs] = "Tu latencia de internet — igual para todas las salas. El ping por host no está disponible.",
+        },
 
         // -------- Lobby match-phase overlays (LobbyWindow.xaml) --------
         // CountdownOverlay + InGameOverlay covers shown during the
@@ -1976,6 +1981,7 @@ public static class Strings
         ["MpInGameMatchTimeHeader"] = new() { [LangEn] = "MATCH TIME", [LangEs] = "TIEMPO DE PARTIDA" },
         ["MpInGameTrafficHeader"] = new() { [LangEn] = "TRAFFIC", [LangEs] = "TRÁFICO" },
         ["MpInGameRoomHeader"] = new() { [LangEn] = "ROOM", [LangEs] = "SALA" },
+        ["MpInGameConnectionHeader"] = new() { [LangEn] = "CONNECTION", [LangEs] = "CONEXIÓN" },
         // InGameModeText — the leading " — " separator is kept inside the
         // value so the badge reads "GAME IN PROGRESS — <mode>" without
         // any code-side concatenation. Connected is the XAML/static

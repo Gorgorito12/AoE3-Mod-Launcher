@@ -64,6 +64,20 @@ public partial class MultiplayerTab : UserControl
 
     private System.Windows.Threading.DispatcherTimer? _quotaTimer;
 
+    /// <summary>
+    /// Polls the overall connection ping and refreshes the rooms-browser
+    /// PING cells in place while the Multiplayer tab is visible. Tied to the
+    /// same visibility gate as <see cref="_quotaTimer"/>.
+    /// </summary>
+    private System.Windows.Threading.DispatcherTimer? _roomsPingTimer;
+
+    /// <summary>
+    /// The PING cells of the currently-rendered rooms rows, so the ping can
+    /// be refreshed in place (no row rebuild — that would disrupt the Join
+    /// buttons). Rebuilt each time the rooms list re-renders.
+    /// </summary>
+    private readonly System.Collections.Generic.List<StackPanel> _roomPingCells = new();
+
     // Radmin banner state. The timer polls the install/connection
     // status every 3 s while the tab is visible so the user gets
     // immediate feedback when they finish installing or starting
@@ -141,11 +155,35 @@ public partial class MultiplayerTab : UserControl
     private DateTime _matchStartedAtUtc;
     private long _matchTimerStartTicks;
 
+    /// <summary>
+    /// Radmin-adapter total-byte counter captured when the match started,
+    /// so the InGame TRAFFIC stat can show bytes moved during THIS match
+    /// (the OS counter is cumulative since the adapter came up). -1 = the
+    /// adapter wasn't found at match start, so we show "—".
+    /// </summary>
+    private long _matchBaselineBytes = -1;
+
+    /// <summary>
+    /// Last measured internet latency (ICMP RTT to a public host — see
+    /// <see cref="PingInternetRttMsAsync"/>), in ms; -1 = unknown/no answer.
+    /// Refreshed by a fire-and-forget probe, guarded by
+    /// <see cref="_connectionPingInFlight"/>.
+    /// </summary>
+    private int _connectionPingMs = -1;
+    private bool _connectionPingInFlight;
+
     /// <summary>Drives the breathing animation of the InGame "live" dot + match timer.</summary>
     private System.Windows.Threading.DispatcherTimer? _inGameTickTimer;
 
     /// <summary>Drives the per-frame countdown number 3 → 2 → 1.</summary>
     private System.Windows.Threading.DispatcherTimer? _countdownTickTimer;
+
+    /// <summary>
+    /// Polls the overall connection ping (seed-peer RTT) while the lobby
+    /// window is open, so the room header's CONNECTION stat stays live
+    /// even before a match starts. Stopped when the window closes.
+    /// </summary>
+    private System.Windows.Threading.DispatcherTimer? _lobbyPingTimer;
 
     /// <summary>
     /// Local tick count when the countdown started + the total
@@ -657,6 +695,7 @@ public partial class MultiplayerTab : UserControl
         {
             _quotaTimer?.Stop();
             _radminTimer?.Stop();
+            _roomsPingTimer?.Stop();
         }
     }
 
@@ -669,6 +708,17 @@ public partial class MultiplayerTab : UserControl
         if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
             _ = RefreshRoomsListAsync();
         _quotaTimer?.Start();
+
+        // Keep the rooms-browser PING (your connection latency) fresh every
+        // ~3 s while the tab is visible, updating the cells in place.
+        _roomsPingTimer?.Stop();
+        _roomsPingTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(3),
+        };
+        _roomsPingTimer.Tick += (_, _) => { KickConnectionPing(); RefreshRoomPingCells(); };
+        _roomsPingTimer.Start();
+        KickConnectionPing();
     }
 
     public void RefreshStrings() => ApplyStrings();
@@ -1861,6 +1911,7 @@ public partial class MultiplayerTab : UserControl
         if (_lobbyWindow == null) return;
         _lobbyWindow.PlayersStatHeader.Text = Strings.Get("MpRoomPlayersHeader");
         _lobbyWindow.RoomIdStatHeader.Text = Strings.Get("MpRoomIdHeader");
+        _lobbyWindow.RoomConnHeader.Text = Strings.Get("MpInGameConnectionHeader");
         _lobbyWindow.CopyRoomIdButton.ToolTip = Strings.Get("MpRoomCopyCode");
         _lobbyWindow.PlayersListHeader.Text = Strings.Get("MpRoomPlayersHeader");
         _lobbyWindow.RoomInfoHeaderText.Text = Strings.Get("MpRoomInfoHeader");
@@ -1882,6 +1933,7 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.InGameTitleText.Text = Strings.Get("MpInGameTitle");
         _lobbyWindow.InGameMatchTimeHeader.Text = Strings.Get("MpInGameMatchTimeHeader");
         _lobbyWindow.InGameTrafficHeader.Text = Strings.Get("MpInGameTrafficHeader");
+        _lobbyWindow.InGameConnectionHeader.Text = Strings.Get("MpInGameConnectionHeader");
         _lobbyWindow.InGameRoomHeader.Text = Strings.Get("MpInGameRoomHeader");
         _lobbyWindow.InGameModeText.Text = Strings.Get("MpInGameModeConnected");
     }
@@ -2590,6 +2642,7 @@ public partial class MultiplayerTab : UserControl
             // round-trip.
             _lastBrowserList = list.Lobbies as List<LobbySummary> ?? new List<LobbySummary>(list.Lobbies);
             RoomsListPanel.Children.Clear();
+            _roomPingCells.Clear();
 
             if (list.Lobbies.Count == 0)
             {
@@ -2745,10 +2798,28 @@ public partial class MultiplayerTab : UserControl
         Grid.SetColumn(roomCell, 1);
         grid.Children.Add(roomCell);
 
-        // -- Col 2: Host display name.
+        // -- Col 2: Host. Prefer what /lobbies sends (display name, then
+        // Discord username); for our OWN room — which the backend doesn't
+        // always echo a host identity for — fall back to the signed-in
+        // user, then an em-dash so the cell is never just blank.
+        var hostName = lobby.Host.DisplayName;
+        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
+            hostName = lobby.Host.DiscordUsername;
+        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
+        {
+            var me = _session?.CurrentUser;
+            var isOwnRoom = me != null
+                && _isHostInCurrentRoom
+                && string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
+            if (isOwnRoom)
+                hostName = string.IsNullOrEmpty(me!.DiscordUsername) ? me.DisplayName : me.DiscordUsername;
+        }
+        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
+            hostName = "—";
+
         var hostText = new TextBlock
         {
-            Text = lobby.Host.DisplayName,
+            Text = hostName,
             Foreground = textSecondary,
             FontSize = 12,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -2768,12 +2839,15 @@ public partial class MultiplayerTab : UserControl
         Grid.SetColumn(playersText, 3);
         grid.Children.Add(playersText);
 
-        // -- Col 4: Ping. The Worker's /lobbies payload doesn't
-        // include a per-lobby ping; we don't have one to show
-        // until the user joins. Render an em-dash with a muted
-        // colour so the column doesn't look empty — the reference
-        // does the same for unknown values.
-        var pingCell = BuildPingCell(null);
+        // -- Col 4: Ping. The /lobbies payload has no per-host IP, so we
+        // can't ping each room individually (see CLAUDE.md). Instead we
+        // show YOUR internet latency — the same for every row — refreshed
+        // in place by _roomsPingTimer. The cell is registered so
+        // RefreshRoomPingCells() can update it without rebuilding the row
+        // (which would disrupt the Join button).
+        var pingCell = BuildPingCell(_connectionPingMs >= 0 ? _connectionPingMs : (double?)null);
+        pingCell.ToolTip = Strings.Get("MpRoomPingTooltip");
+        _roomPingCells.Add(pingCell);
         Grid.SetColumn(pingCell, 4);
         grid.Children.Add(pingCell);
 
@@ -2809,13 +2883,26 @@ public partial class MultiplayerTab : UserControl
     /// null = no value yet (em-dash + muted); otherwise a small
     /// "signal bars" glyph coloured by RTT bucket plus the number.
     /// </summary>
-    private FrameworkElement BuildPingCell(double? rttMs)
+    private StackPanel BuildPingCell(double? rttMs)
     {
         var panel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        FillPingCell(panel, rttMs);
+        return panel;
+    }
+
+    /// <summary>
+    /// (Re)populate a ping cell. Split out from <see cref="BuildPingCell"/>
+    /// so <see cref="RefreshRoomPingCells"/> can refresh the rooms-browser
+    /// cells in place without rebuilding rows (a rebuild would disrupt the
+    /// Join button mid-hover/click).
+    /// </summary>
+    private void FillPingCell(StackPanel panel, double? rttMs)
+    {
+        panel.Children.Clear();
         if (rttMs is null)
         {
             panel.Children.Add(new TextBlock
@@ -2825,7 +2912,7 @@ public partial class MultiplayerTab : UserControl
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
             });
-            return panel;
+            return;
         }
 
         var rtt = rttMs.Value;
@@ -2849,7 +2936,19 @@ public partial class MultiplayerTab : UserControl
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
         });
-        return panel;
+    }
+
+    /// <summary>
+    /// Refresh the rooms-browser PING cells in place from the cached
+    /// <see cref="_connectionPingMs"/> — your internet latency, the same
+    /// value for every row because the launcher can't ping each host
+    /// individually (no per-host Radmin IP).
+    /// </summary>
+    private void RefreshRoomPingCells()
+    {
+        double? p = _connectionPingMs >= 0 ? _connectionPingMs : (double?)null;
+        foreach (var cell in _roomPingCells)
+            FillPingCell(cell, p);
     }
 
     /// <summary>
@@ -3493,6 +3592,19 @@ public partial class MultiplayerTab : UserControl
         RenderRoomPanel();
         UpdateChatEmptyState();
 
+        // Poll the connection ping while the lobby is open so the header's
+        // CONNECTION stat stays live even before a match starts. ~2.5 s
+        // cadence; KickConnectionPing guards against overlapping probes.
+        _lobbyPingTimer?.Stop();
+        _lobbyPingTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(2500),
+        };
+        _lobbyPingTimer.Tick += (_, _) => { KickConnectionPing(); UpdateLobbyPing(); };
+        _lobbyPingTimer.Start();
+        KickConnectionPing();
+        UpdateLobbyPing();
+
         // Race-safe field clear in Closed: a follow-up OpenLobbyWindow
         // call between Close() and Closed firing must not clobber the
         // new instance, so we only null the field if it still points
@@ -3529,6 +3641,9 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void HandleLobbyWindowClosed()
     {
+        _lobbyPingTimer?.Stop();
+        _lobbyPingTimer = null;
+
         var s = _session;
         if (s == null) return;
 
@@ -3663,6 +3778,13 @@ public partial class MultiplayerTab : UserControl
         _matchStartedAtUtc = DateTime.UtcNow;
         _matchTimerStartTicks = Environment.TickCount64;
 
+        // Snapshot the Radmin adapter's byte counter so the TRAFFIC stat
+        // can show bytes moved during THIS match (delta), and reset the
+        // connection-ping readout for the new match.
+        var baseline = RadminVpnService.GetAdapterBytes();
+        _matchBaselineBytes = baseline.HasValue ? baseline.Value.sent + baseline.Value.received : -1;
+        _connectionPingMs = -1;
+
         if (_lobbyWindow != null)
             _lobbyWindow!.InGameRoomText.Text = _session?.CurrentLobbyTitle ?? _session?.CurrentLobbyId ?? "";
 
@@ -3716,10 +3838,30 @@ public partial class MultiplayerTab : UserControl
 
         var bridgeReady = _session?.IsInLobby ?? false;
 
-        // Global traffic counter — n2n doesn't surface byte totals to
-        // the launcher (the edge process keeps them internally). Show
-        // a dash so the field doesn't look broken.
-        _lobbyWindow!.InGameTrafficText.Text = "—";
+        // Traffic: delta of the Radmin adapter's byte counters since the
+        // match started (the OS counter is cumulative + whole-adapter, so
+        // we show the per-match delta). "—" when the adapter wasn't found.
+        var bytesNow = RadminVpnService.GetAdapterBytes();
+        if (bytesNow.HasValue && _matchBaselineBytes >= 0)
+        {
+            var moved = Math.Max(0, (bytesNow.Value.sent + bytesNow.Value.received) - _matchBaselineBytes);
+            _lobbyWindow!.InGameTrafficText.Text = FormatBytes(moved);
+        }
+        else
+        {
+            _lobbyWindow!.InGameTrafficText.Text = "—";
+        }
+
+        // Connection latency: show the cached internet RTT (your link
+        // quality — NOT a per-rival ping) colour-coded by health, and kick
+        // a fresh probe for the next tick.
+        _lobbyWindow!.InGameConnectionText.Text = _connectionPingMs >= 0 ? $"{_connectionPingMs} ms" : "…";
+        _lobbyWindow!.InGameConnectionText.Foreground = (Brush)Application.Current.FindResource(
+            _connectionPingMs < 0 ? "TextSecondary"
+            : _connectionPingMs < 80 ? "MpStatusOnline"
+            : _connectionPingMs < 200 ? "MpPingMedium"
+            : "MpStatusOffline");
+        KickConnectionPing();
 
         // Mode badge.
         _lobbyWindow!.InGameModeText.Text = Strings.Get(bridgeReady
@@ -3773,6 +3915,71 @@ public partial class MultiplayerTab : UserControl
 
         // "Pulsing" dot — toggle opacity for a breathing effect.
         _lobbyWindow!.InGameLiveDot.Opacity = _lobbyWindow!.InGameLiveDot.Opacity > 0.6 ? 0.4 : 1.0;
+    }
+
+    /// <summary>
+    /// Fire-and-forget refresh of <see cref="_connectionPingMs"/> via an
+    /// internet ICMP probe (see <see cref="PingInternetRttMsAsync"/>).
+    /// Guarded so a fast tick can call it repeatedly without stacking
+    /// overlapping pings (each probe can take up to its timeout to fail).
+    /// </summary>
+    private async void KickConnectionPing()
+    {
+        if (_connectionPingInFlight) return;
+        _connectionPingInFlight = true;
+        try
+        {
+            _connectionPingMs = await PingInternetRttMsAsync();
+        }
+        finally
+        {
+            _connectionPingInFlight = false;
+        }
+    }
+
+    /// <summary>
+    /// Ping a reliable public anycast resolver (Cloudflare 1.1.1.1, then
+    /// Google 8.8.8.8 as fallback) and return the round-trip time in ms, or
+    /// -1 if neither answered. This is the user's general INTERNET latency,
+    /// shown everywhere a "ping" appears (in-game overlay, lobby header,
+    /// rooms browser). Chosen over a Radmin seed-peer ping because it always
+    /// resolves to a number — the seed depended on one peer being online AND
+    /// you already being on the VPN, so it usually showed "—".
+    /// </summary>
+    private static async Task<int> PingInternetRttMsAsync()
+    {
+        foreach (var host in new[] { "1.1.1.1", "8.8.8.8" })
+        {
+            try
+            {
+                using var ping = new System.Net.NetworkInformation.Ping();
+                var reply = await ping.SendPingAsync(host, 1000).ConfigureAwait(false);
+                if (reply.Status == System.Net.NetworkInformation.IPStatus.Success)
+                    return (int)reply.RoundtripTime;
+            }
+            catch
+            {
+                // Try the next host; return -1 if all fail.
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Repaint the lobby header's CONNECTION stat from the cached
+    /// <see cref="_connectionPingMs"/> (your internet latency, not a
+    /// per-rival ping). Same colour thresholds as the in-game CONNECTION
+    /// stat. No-op when the lobby window is gone.
+    /// </summary>
+    private void UpdateLobbyPing()
+    {
+        if (_lobbyWindow == null) return;
+        _lobbyWindow.RoomConnText.Text = _connectionPingMs >= 0 ? $"{_connectionPingMs} ms" : "…";
+        _lobbyWindow.RoomConnText.Foreground = (Brush)Application.Current.FindResource(
+            _connectionPingMs < 0 ? "TextSecondary"
+            : _connectionPingMs < 80 ? "MpStatusOnline"
+            : _connectionPingMs < 200 ? "MpPingMedium"
+            : "MpStatusOffline");
     }
 
     private FrameworkElement BuildInGamePeerRow(
