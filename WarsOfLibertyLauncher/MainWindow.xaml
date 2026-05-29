@@ -650,36 +650,17 @@
                  ============================================================ -->
             <Grid x:Name="PlayView">
 
-                <!-- Layer 1a: blurred FILL of the same hero (UniformToFill
-                     cover), so it always covers the whole panel. When the
-                     window is wider than the 16:9 hero, the margins show a soft
-                     blurred extension of the ART — NOT flat black bars and NOT
-                     a dark scrim (both were tried and rejected as "black
-                     borders"). NO scrim on purpose. The 1.12 ScaleTransform
-                     pushes the BlurEffect's faded edges off-screen (clipped by
-                     the content host's ClipToBounds) so the window edges don't
-                     pick up a dark vignette from the blur sampling past the
-                     bitmap. -->
+                <!-- Layer 1: the hero painted Stretch=Fill (the brush is
+                     built in code in RefreshActiveMod) so it fills the whole
+                     panel edge-to-edge with NO side bands and NO crop — at the
+                     cost of distorting the hero's aspect ratio in a non-16:9
+                     window. The maintainer picked stretch-to-fill over both
+                     the old two-layer blurred-margin design (read as side
+                     bands, "franjas") and a UniformToFill cover (disliked the
+                     top/bottom crop). Fallback when no hero is a neutral dark
+                     gradient, also set in RefreshActiveMod. -->
                 <Border x:Name="DashboardBgFill"
-                        Background="{DynamicResource BgPanelAlt}"
-                        RenderTransformOrigin="0.5,0.5">
-                    <Border.RenderTransform>
-                        <ScaleTransform ScaleX="1.12" ScaleY="1.12"/>
-                    </Border.RenderTransform>
-                    <Border.Effect>
-                        <BlurEffect Radius="45" KernelType="Gaussian"/>
-                    </Border.Effect>
-                </Border>
-                <!-- Layer 1b: the COMPLETE hero — Stretch=Uniform (contain) +
-                     centered — so the whole scene always fits with nothing
-                     cropped; the blurred fill shows through the margins. Source
-                     set in RefreshActiveMod (same BitmapSource as the fill). -->
-                <Image x:Name="DashboardHeroImage"
-                       Stretch="Uniform"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       IsHitTestVisible="False"
-                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                        Background="{DynamicResource BgPanelAlt}"/>
 
                 <!-- Layer 2: vertical gradient — transparent at top,
                      opaque at bottom — so the title/desc/buttons at the

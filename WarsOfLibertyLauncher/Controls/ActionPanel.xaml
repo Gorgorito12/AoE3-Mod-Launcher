@@ -98,8 +98,8 @@
                 <Button.ContextMenu>
                     <ContextMenu x:Name="MoreMenu"
                                  Background="{DynamicResource BgPanel}"
-                                 BorderBrush="{DynamicResource BorderSubtle}"
-                                 BorderThickness="1"
+                                 BorderBrush="{DynamicResource MenuBorder}"
+                                 BorderThickness="2"
                                  Padding="6"
                                  MinWidth="280">
                         <ContextMenu.Resources>
@@ -114,11 +114,17 @@
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ContextMenu">
-                                            <Border Background="{TemplateBinding Background}"
-                                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                                    CornerRadius="6"
-                                                    Padding="{TemplateBinding Padding}"
+                                            <!-- Outer near-black rim (1px) painted via
+                                                 the Background + Padding of an outer Border
+                                                 so the inner panel sits inset by 1px. Inner
+                                                 panel keeps the existing MenuBorder bright
+                                                 line (2px) for visibility against the dark
+                                                 menu interior. Together this is the
+                                                 two-tone "punched out" boundary documented
+                                                 by MenuBorder/MenuBorderOuter in Colors.xaml. -->
+                                            <Border Background="{DynamicResource MenuBorderOuter}"
+                                                    CornerRadius="7"
+                                                    Padding="1"
                                                     SnapsToDevicePixels="True">
                                                 <Border.Effect>
                                                     <DropShadowEffect BlurRadius="16"
@@ -126,7 +132,14 @@
                                                                       Color="Black"
                                                                       Opacity="0.55"/>
                                                 </Border.Effect>
-                                                <ItemsPresenter/>
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="6"
+                                                        Padding="{TemplateBinding Padding}"
+                                                        SnapsToDevicePixels="True">
+                                                    <ItemsPresenter/>
+                                                </Border>
                                             </Border>
                                         </ControlTemplate>
                                     </Setter.Value>
@@ -197,11 +210,15 @@
                                                            AllowsTransparency="True"
                                                            PopupAnimation="Fade"
                                                            Focusable="False">
-                                                        <Border Background="{DynamicResource BgPanel}"
-                                                                BorderBrush="{DynamicResource BorderSubtle}"
-                                                                BorderThickness="1"
-                                                                CornerRadius="4"
-                                                                Padding="4"
+                                                        <!-- Submenu uses the same two-tone
+                                                             "punched-out" rim as the parent
+                                                             ContextMenu — 1px near-black
+                                                             outer band + 2px bright inner
+                                                             border — so cascaded submenus
+                                                             share the same crisp boundary. -->
+                                                        <Border Background="{DynamicResource MenuBorderOuter}"
+                                                                CornerRadius="5"
+                                                                Padding="1"
                                                                 Margin="4">
                                                             <Border.Effect>
                                                                 <DropShadowEffect BlurRadius="12"
@@ -209,7 +226,13 @@
                                                                                   Color="Black"
                                                                                   Opacity="0.5"/>
                                                             </Border.Effect>
-                                                            <StackPanel IsItemsHost="True"/>
+                                                            <Border Background="{DynamicResource BgPanel}"
+                                                                    BorderBrush="{DynamicResource MenuBorder}"
+                                                                    BorderThickness="2"
+                                                                    CornerRadius="4"
+                                                                    Padding="4">
+                                                                <StackPanel IsItemsHost="True"/>
+                                                            </Border>
                                                         </Border>
                                                     </Popup>
                                                 </Grid>

@@ -35,6 +35,27 @@ public partial class App : System.Windows.Application
     // settings programmatically. This catches every Window subclass
     // uniformly, current and future, without per-XAML maintenance.
     //
+    // -- Rounded corners on Windows 11 -------------------------------
+    //
+    // The problem: WPF Windows with WindowStyle="None" + custom
+    // WindowChrome paint hard 90-degree corners. Modern Windows 11
+    // apps (Discord, VS Code, Settings) all have softly rounded
+    // corners — a regular OS window gets them automatically, but
+    // chrome-less windows opt out and look dated next to them.
+    //
+    // Fix: call DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE,
+    // DWMWCP_ROUND) on the HWND. This is the OS-level API Windows 11
+    // exposes for exactly this case — DWM clips the window surface to
+    // a rounded rectangle (and rounds the drop shadow to match) at
+    // the compositor, no WPF transparency tricks, no extra paint
+    // cost, no loss of Aero Snap. The OS desktop shows through the
+    // corner cut-outs, exactly like any native Windows 11 window.
+    //
+    // Graceful degradation: the attribute id (33) is unknown on
+    // Windows 10 and earlier, where DwmSetWindowAttribute simply
+    // returns an error HRESULT and the call is a silent no-op.
+    // We ignore the return value — corners just stay square.
+    //
     // -- Maximize respects the taskbar -------------------------------
     //
     // The problem: WPF Windows with WindowStyle="None" + custom
@@ -120,7 +141,39 @@ public partial class App : System.Windows.Application
         if (w.WindowStyle == WindowStyle.None)
         {
             InstallMaximizeFix(w);
+            InstallRoundedCorners(w);
         }
+    }
+
+    // ==================================================================
+    // Rounded corners on Windows 11 (DWMWA_WINDOW_CORNER_PREFERENCE)
+    // ==================================================================
+
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+
+    private enum DWM_WINDOW_CORNER_PREFERENCE : uint
+    {
+        DWMWCP_DEFAULT = 0,
+        DWMWCP_DONOTROUND = 1,
+        DWMWCP_ROUND = 2,
+        DWMWCP_ROUNDSMALL = 3,
+    }
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    /// <summary>
+    /// Ask DWM to clip this Window to a rounded rectangle on
+    /// Windows 11+. No-op on older Windows (the attribute id is
+    /// unrecognised there and the call returns an error HRESULT we
+    /// deliberately ignore).
+    /// </summary>
+    private static void InstallRoundedCorners(Window w)
+    {
+        var helper = new WindowInteropHelper(w);
+        if (helper.Handle == IntPtr.Zero) return;
+        int pref = (int)DWM_WINDOW_CORNER_PREFERENCE.DWMWCP_ROUND;
+        _ = DwmSetWindowAttribute(helper.Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int));
     }
 
     // ==================================================================

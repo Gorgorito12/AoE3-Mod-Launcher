@@ -51,6 +51,26 @@
     <SolidColorBrush x:Key="BorderSubtle" Color="#3C4650"/>
     <SolidColorBrush x:Key="BorderSecondary" Color="#3C4650"/>
 
+    <!-- Two-tone edge tokens used by popup menus (gear ContextMenu +
+         its submenu, mod-switch popup) to read as a clearly "punched
+         out" card over ANY backdrop. The first attempt was a single
+         brighter brush at 2px (MpDivider-style lift) — invisible to
+         the user. The two-tone approach gives a definitive crispness:
+           MenuBorderOuter  = near-black outer rim, visible against
+                              bright backgrounds (hero image, light
+                              chrome) where a bright rim would wash
+                              out.
+           MenuBorder       = bright inner line, visible against dark
+                              backgrounds (BgPanel / BgBase) where a
+                              dark rim would vanish.
+         Together (1px outer + 2px inner = 3px effective boundary)
+         the menu reads as a discrete card no matter what's behind it
+         — the literal "línea negra que lo distinga" the user asked
+         for. Same composition recipe is reused in both ActionPanel's
+         ContextMenu template and the code-behind mod-switch popup. -->
+    <SolidColorBrush x:Key="MenuBorder" Color="#7C8794"/>
+    <SolidColorBrush x:Key="MenuBorderOuter" Color="#000000"/>
+
     <!-- =========================================================
          TYPOGRAPHY — warm off-white primary, cool muted secondary.
          The warm primary keeps the launcher from feeling clinical;

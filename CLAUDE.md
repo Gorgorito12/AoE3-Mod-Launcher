@@ -154,27 +154,26 @@ longer exists — don't go looking for it.)
   over the title bar / nav strip; it's defensive (clips content only, never the
   chrome, so the one-surface look is intact) and on its own a near-no-op,
   because the image is a `Border` background and is already clipped to its
-  bounds. (2) The dashboard hero is a **two-layer composition** that shows the
-  WHOLE hero (it must "fit" — nothing cropped) with **non-black** margins. This
-  shape was reached after a long back-and-forth, so know the rejected paths
-  before changing it: single `UniformToFill` (cover) crops top/bottom on a
-  window wider than the 16:9 hero (rejected — "the image crosses the bar /
-  bottom"); `AlignmentY=Top` only moved the crop to the bottom (rejected); a
-  blur fill **with a dark scrim** read as "black borders" (rejected). The
-  maintainer's two hard requirements are **(i) the whole image fits, and
-  (ii) no black/dark margins** — which forces the current design:
-  `DashboardBgFill` paints the same image `UniformToFill` (cover) with a
-  `BlurEffect` and **NO scrim**, so the margins are a soft, colour-keeping
-  blurred extension of the art; a `1.12` `ScaleTransform` on it pushes the
-  blur's faded edges off-screen (clipped by the content-host `ClipToBounds`) so
-  the window edges don't pick up a dark vignette. `DashboardHeroImage` paints
-  the **same** bitmap `Stretch=Uniform` (contain), centred, on top → the
-  complete scene, never cropped. Both are fed the one cached brush / its
-  `ImageSource` in `RefreshActiveMod` (no second decode; `DashboardHeroImage.Source`
-  is cleared to null for a hero-less profile so it doesn't linger). Don't add a
-  dark scrim back (→ "black borders"), and don't collapse to a single
-  `UniformToFill` layer (→ crop). If the blurred margins ever read too dark, the
-  lever is brightening the fill, not a scrim.
+  bounds. (2) The dashboard hero is a **single-layer brush stretched
+  `Stretch.Fill`** by `DashboardBgFill`'s background — no blur, no scale, no
+  overlay, **no aspect-ratio preservation**. It fills the whole panel
+  edge-to-edge with no side bands and no crop, at the cost of **distorting the
+  hero's aspect ratio** in a non-16:9 window (squished/stretched horizontally).
+  The maintainer reached this by elimination, rejecting in order: (a) the
+  two-layer "image fits + blurred margins" design — perceived as visible side
+  bands ("franjas"); (b) a single-layer `UniformToFill` cover that crops a
+  slice off top/bottom — disliked the crop. Stretch-to-fill (accept the
+  distortion) was the explicit ask. Other historical rejects: a blur fill
+  **with a dark scrim** read as "black borders"; `AlignmentY=Top` only moved
+  the crop to the bottom. **Implementation gotcha:** the cached brush from
+  `TryLoadTileImage` is `UniformToFill` and **SHARED** with the icon/tile
+  paths, so the dashboard builds its OWN `ImageBrush` with `Stretch.Fill` from
+  the same already-decoded `ImageSource` (no second decode) in
+  `RefreshActiveMod` — **don't change `TryLoadTileImage`'s stretch globally**
+  or every mod icon distorts. Fallback when a profile ships no hero is a
+  neutral dark gradient, same method. There is **no `DashboardHeroImage`
+  overlay** — don't reintroduce one, and don't add a dark scrim back
+  (→ "black borders" again).
 
 - **The title-bar brand button's hover illumination has a WPF-precedence
   trap — we hit it as a bug twice.** `TitleBarBrandButton` ("AoE3 Mod
@@ -198,6 +197,28 @@ longer exists — don't go looking for it.)
   `BrandMenuButton_Click` + `popup.Closed`. Same precedence rule governs
   `NavTabButton` — copy that recipe for any new chrome button, don't
   reach for a local `Foreground`.
+
+- **Popup menus use a TWO-TONE "punched-out" rim — don't reduce it back to a
+  single border.** The gear ContextMenu + its cascading submenu
+  (`ActionPanel.xaml`'s `MoreMenu` template) and the dashboard mod-switch
+  popup (`MainWindow.xaml.cs` `DashboardChangeModButton_Click`) all wrap a
+  bright 2px inner border (`MenuBorder` = `#7C8794`) in a 1px near-black
+  outer band (`MenuBorderOuter` = `#000000`), painted via the outer
+  `Border`'s `Background` + `Padding="1"`. Together that's a 3px effective
+  boundary that reads as a discrete card over **any** backdrop: the dark
+  outer rim pops against bright surfaces (hero image, the lighter
+  `BgSidebar` chrome), and the bright inner line pops against dark
+  surfaces (`BgPanel` interior, `BgBase` content). The first attempt was a
+  single brighter brush at 2px (the `MpDivider` lift recipe `#2C313A →
+  #3A434F` reapplied) — the maintainer reported "yo lo veo igual", so the
+  recipe escalated to two-tone. The drop shadow lives on the OUTER band so
+  it skirts the whole composite rim; don't move it to the inner Border or
+  the shadow gets clipped behind the black band. **Don't apply this rim to
+  the brand popup** (`BuildBrandPopup`) — that one uses an `AccentBrush`
+  (gold) border on purpose, which is already visually distinctive and
+  marks it as the launcher's primary menu. Standard sibling popups
+  (settings, mod switch, gear) get the two-tone rim; the gold brand popup
+  is the deliberate exception.
 
 - **The cinema dashboard hero scales with the window — via one transform, not
   per-element font sizes.** The PlayView "Layer 4" Grid (title + description +
@@ -673,12 +694,13 @@ model enforced by the catalog repo's CI. The JSON schema lives at
 - **Maximize-respects-taskbar is set globally — don't roll your own per-Window.**
   The same `App.OnStartup` class handler that wires HiDPI crispness also
   installs a `WM_GETMINMAXINFO` WndProc hook on every Window whose
-  `WindowStyle="None"`. Currently that's six Windows: `MainWindow`,
+  `WindowStyle="None"`. Currently that's seven Windows: `MainWindow`,
   `LauncherSettingsDialog`, `ModPropertiesDialog`, `RadminAssistantWindow`,
   `LobbyWindow` (all `ResizeMode="CanResize"`, so they actually use the
-  fix when the user maximises), plus `CreateLobbyDialog` (`ResizeMode="NoResize"`,
-  so the hook attaches but never fires — listed for completeness so
-  future contributors know the inventory). Without the hook, maximising
+  fix when the user maximises), plus `CreateLobbyDialog` and
+  `TranslationApplyDialog` (both `ResizeMode="NoResize"`, so the hook
+  attaches but never fires — listed for completeness so future contributors
+  know the inventory). Without the hook, maximising
   the resizable ones would expand them over the **entire monitor rect
   including the Windows taskbar** — a classic side-effect of opting out
   of OS chrome via `WindowStyle="None"` + `WindowChrome`. The hook
@@ -689,6 +711,26 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   The hook is no-op for Windows with native chrome (`WindowStyle=SingleBorderWindow`
   / `ThreeDBorderWindow`) — Windows already maximises those correctly on
   its own. Don't replicate the interop boilerplate in individual Windows.
+- **Rounded window corners are set globally — don't roll your own per-Window.**
+  The same `App.OnStartup` class handler also calls
+  `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND)` on
+  every Window whose `WindowStyle="None"` — the same seven-window inventory
+  as the maximize fix above. Chromeless WPF Windows paint hard 90-degree
+  corners that look dated next to every native Windows 11 window (which the
+  OS rounds automatically), so this call asks DWM to clip the window surface
+  — and its drop shadow — to a rounded rectangle at the compositor. No
+  `AllowsTransparency="True"` (which would kill hardware-accelerated
+  rendering and Aero Peek), no XAML changes, no extra paint cost; the OS
+  desktop shows through the corner cut-outs exactly like any native Win11
+  window. **Graceful degradation:** the attribute id (33) is unknown on
+  Windows 10 and earlier, so `DwmSetWindowAttribute` returns an error
+  HRESULT and the call is a silent no-op (we ignore the return) — corners
+  just stay square on legacy OSes. The `WindowChrome.CornerRadius` on
+  `MainWindow` stays `0` on purpose: the DWM rounding clips at the OS layer
+  *outside* the WPF render surface, so the chrome's own hit-test rectangle
+  should remain square — setting both creates a ~1-2 px hit-test mismatch
+  at the corners. Don't add per-XAML `CornerRadius` to the outer Border of
+  any Window to fake this — DWM owns the outer shape now.
 - **Settings / Properties / Lobby dialogs share a non-modal + resizable
   + single-instance pattern.** `ModPropertiesDialog`, `LauncherSettingsDialog`
   and `LobbyWindow` all pair a custom dark `WindowChrome`

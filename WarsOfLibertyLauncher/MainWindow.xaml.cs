@@ -2206,18 +2206,19 @@ public partial class MainWindow : Window
                 ?? TryLoadTileImage(profile.LocalBannerPath);
             if (cinemaBanner != null)
             {
-                // Show the WHOLE hero (it must "fit", per the user) with
-                // non-black margins:
-                //  • DashboardBgFill = the same image UniformToFill (cover),
-                //    blurred in XAML (NO dark scrim), so the margins of a window
-                //    wider than the 16:9 hero are a soft blurred extension of
-                //    the art, not flat black bars / dark overlay.
-                //  • DashboardHeroImage = the same bitmap, Stretch=Uniform
-                //    (contain) + centred, so the complete scene always fits
-                //    on top of the blur. Same BitmapSource, no extra decode.
-                DashboardBgFill.Background = cinemaBanner;
-                if (DashboardHeroImage != null)
-                    DashboardHeroImage.Source = cinemaBanner.ImageSource;
+                // Single-layer hero stretched Stretch.Fill so it covers the
+                // whole panel edge-to-edge with NO side bands AND NO crop —
+                // the maintainer accepts the aspect-ratio distortion in a
+                // non-16:9 window as the lesser evil. A fresh ImageBrush is
+                // required because the cached brush from TryLoadTileImage is
+                // UniformToFill and SHARED with the icon/tile paths; reuse its
+                // already-decoded ImageSource so there's no second decode.
+                var heroFill = new System.Windows.Media.ImageBrush(cinemaBanner.ImageSource)
+                {
+                    Stretch = System.Windows.Media.Stretch.Fill,
+                };
+                if (heroFill.CanFreeze) heroFill.Freeze();
+                DashboardBgFill.Background = heroFill;
             }
             else
             {
@@ -2232,10 +2233,6 @@ public partial class MainWindow : Window
                     ((System.Windows.Media.SolidColorBrush)Brush("#201f1f")).Color, 1));
                 neutralGradient.Freeze();
                 DashboardBgFill.Background = neutralGradient;
-                // No hero art — clear any stale sharp image so it doesn't
-                // linger from the previously-active mod.
-                if (DashboardHeroImage != null)
-                    DashboardHeroImage.Source = null;
             }
         }
         if (DashboardTitleText != null)
@@ -4193,17 +4190,33 @@ public partial class MainWindow : Window
             PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
         };
 
+        // Two-tone "punched out" rim — same recipe as the gear
+        // ContextMenu's template in ActionPanel.xaml: outer 1px
+        // near-black band (visible against bright backdrops like
+        // the title bar / hero image) + inner 2px MenuBorder
+        // bright line (visible against the dark popup interior).
+        // Together they form a crisp 3px boundary that reads as a
+        // discrete card no matter what's behind it. The drop
+        // shadow lives on the OUTER band so it skirts the whole
+        // composite rim instead of being clipped by the inner one.
         var panel = new System.Windows.Controls.Border
         {
             Background = (System.Windows.Media.Brush)FindResource("BgSidebar"),
-            BorderBrush = (System.Windows.Media.Brush)FindResource("BorderSecondary"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
+            BorderThickness = new Thickness(2),
+            CornerRadius = new CornerRadius(7),
             Padding = new Thickness(10),
             // Auto-sized to its content — same guardrails as the
             // SETTINGS popup so the two read as a matched pair.
             MinWidth = 240,
             MaxWidth = 360,
+        };
+        var rim = new System.Windows.Controls.Border
+        {
+            Background = (System.Windows.Media.Brush)FindResource("MenuBorderOuter"),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(1),
+            Child = panel,
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
                 BlurRadius = 20,
@@ -4224,8 +4237,8 @@ public partial class MainWindow : Window
 
         var stack = new System.Windows.Controls.StackPanel();
         panel.Child = stack;
-        ApplyAntiBlur(panel);
-        popup.Child = panel;
+        ApplyAntiBlur(rim);
+        popup.Child = rim;
 
         // Header: small dorado caption so the popup feels like a
         // titled menu instead of a bare list.
