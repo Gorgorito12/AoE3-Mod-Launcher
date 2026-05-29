@@ -860,6 +860,33 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   if we're still session-tracked as InLobby/InGame, so closing the
   window is equivalent to "leave the room" regardless of dismiss path
   (✕, Esc, Alt+F4, our own `CloseLobbyWindow()`).
+  **`ModPropertiesDialog`'s action buttons close the dialog SELECTIVELY,
+  by design — don't make them uniform.** A handler closes the Properties
+  window *only* when its callback opens **another surface** the dialog
+  would otherwise cover: Verify / Repair (main-window progress strip),
+  Change mod folder / Change AoE3 folder (path picker), Create / Restore
+  backup, and Uninstall (confirmation). Handlers that merely shell out to
+  Explorer/Notepad with **no covering window** — Open folder, Open AoE3
+  folder, Open user-data folder, View logs — **stay open**, because
+  closing left the user staring at the main window unsure anything
+  happened. **"Buscar actualizaciones" (`CheckUpdatesBtn_Click`) is the
+  special case:** it is `async`, does NOT close, disables itself, shows a
+  "Comprobando…" line, awaits the real check on the main window (the
+  callback is a `Func<Task<UpdateService.CheckResult?>>`, not a fire-and-
+  forget `Action`), then paints the outcome **inline** via `SetCheckResult`
+  — accent "update available" / green "up to date" / red "failed" / neutral
+  "not installed" (`ModPropChecking` / `ModPropUpdateAvailable` /
+  `ModPropUpToDate` / `ModPropCheckFailed` / `ModPropCheckNotInstalled`
+  strings) and re-runs `LoadGeneral()` to refresh the version labels. The
+  earlier version closed the dialog and fired an `Action`, which is exactly
+  the "I clicked Actualizar and nothing seems to happen, and the menu just
+  closed" report — the close + lack of feedback were the bug, fixed in
+  commit `21c0062`. `LauncherSettingsDialog` has **no** close-on-action
+  controls at all (its "Limpiar caché/iconos/temporales" buttons report
+  via an inline coloured hint and stay open; only Cancel / Guardar close)
+  — so if a build still closes Launcher Settings on a checkbox/clear click,
+  it predates this fix and needs a rebuild. None of these selective closes
+  set `DialogResult` (same non-modal rule as above).
   When adding a new multi-section settings surface, copy this pattern
   instead of rebuilding navigation, chrome and tab visuals from scratch
   — the gear-menu modals (Aoe3Picker, CreateLobby, etc.) still use the

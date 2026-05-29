@@ -57,6 +57,7 @@ public partial class PublishModDialog : Window
         _stepHints  = new[] { Step1Hint,  Step2Hint,  Step3Hint,  Step4Hint,  Step5Hint,  Step6Hint  };
 
         CancelButton.Click += (_, _) => { DialogResult = false; Close(); };
+        CloseHeaderButton.Click += (_, _) => { DialogResult = false; Close(); };
         BackButton.Click += (_, _) => GoTo(_currentStep - 1);
         NextButton.Click += OnNextClicked;
 
@@ -112,6 +113,29 @@ public partial class PublishModDialog : Window
     public string LblWebsiteText { get => LblWebsite.Text; set => LblWebsite.Text = value; }
     public string CopyJsonLabel { get => (string)(CopyJsonButton.Content ?? ""); set => CopyJsonButton.Content = value; }
     public string OpenPrLabel { get => (string)(OpenPrButton.Content ?? ""); set => OpenPrButton.Content = value; }
+
+    // Per-field example hints added in the guidance pass. Each one sits
+    // under its field and shows a concrete example value so the modder
+    // never has to guess the expected format.
+    public string HintDisplayNameText { get => HintDisplayName.Text; set => HintDisplayName.Text = value; }
+    public string HintAuthorText { get => HintAuthor.Text; set => HintAuthor.Text = value; }
+    public string HintSubtitleText { get => HintSubtitle.Text; set => HintSubtitle.Text = value; }
+    public string HintDefaultFolderText { get => HintDefaultFolder.Text; set => HintDefaultFolder.Text = value; }
+    public string HintProbeFileText { get => HintProbeFile.Text; set => HintProbeFile.Text = value; }
+    public string HintExecutableText { get => HintExecutable.Text; set => HintExecutable.Text = value; }
+    public string HintArgumentsText { get => HintArguments.Text; set => HintArguments.Text = value; }
+    public string HintMechanismText { get => HintMechanism.Text; set => HintMechanism.Text = value; }
+    public string HintWolUpdateInfoUrlText { get => HintWolUpdateInfoUrl.Text; set => HintWolUpdateInfoUrl.Text = value; }
+    public string HintApprovedTagText { get => HintApprovedTag.Text; set => HintApprovedTag.Text = value; }
+    public string HintDescriptionText { get => HintDescription.Text; set => HintDescription.Text = value; }
+    public string HintWebsiteText { get => HintWebsite.Text; set => HintWebsite.Text = value; }
+
+    // Guidance copy — the wizard intro, the "filenames aren't files" reminder
+    // on the look & feel step, and the post-publish flow on the review step.
+    public string IntroBodyText { get => IntroText.Text; set => IntroText.Text = value; }
+    public string ImagesUploadNoteText { get => ImagesUploadNote.Text; set => ImagesUploadNote.Text = value; }
+    public string NextStepsTitleText { get => NextStepsTitle.Text; set => NextStepsTitle.Text = value; }
+    public string NextStepsBodyText { get => NextStepsBody.Text; set => NextStepsBody.Text = value; }
 
     /// <summary>Localised error strings — overridable per language.</summary>
     public string ErrorIdInvalid { get; set; } = "Invalid id. Use lowercase letters, digits and dashes (max 31 chars, starts with a letter).";
@@ -452,25 +476,45 @@ public partial class PublishModDialog : Window
         SetStepTitle(6, "Review & publish");
         SetStepHint(6, "Inspect the generated mod.json, copy it to the clipboard, and open the catalog PR template on GitHub.");
 
-        LblId.Text = "Id"; HintId.Text = "Lowercase letters, digits, dashes. Used as the folder name under /mods/.";
-        LblDisplayName.Text = "Display name";
-        LblAuthor.Text = "Author (optional)";
-        LblSubtitle.Text = "Subtitle (optional)";
-        LblAccent.Text = "Accent colour (optional)"; HintAccent.Text = "Hex format, e.g. #c8102e.";
+        LblId.Text = "Id"; HintId.Text = "Lowercase letters, digits, dashes. Used as the folder name under /mods/. Example: napoleonic-era";
+        LblDisplayName.Text = "Display name"; HintDisplayName.Text = "The name shown in the catalog. Example: Napoleonic Era";
+        LblAuthor.Text = "Author (optional)"; HintAuthor.Text = "Your name or your team's. Example: Napoleonic Team";
+        LblSubtitle.Text = "Subtitle (optional)"; HintSubtitle.Text = "Short tagline under the title. Example: Napoleonic Wars, 1789–1815";
+        LblAccent.Text = "Accent colour (optional)"; HintAccent.Text = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher.";
         LblIcon.Text = "Icon filename (optional)"; HintIcon.Text = "icon.png — 256x256, PNG with alpha, ≤100 KB.";
         LblBanner.Text = "Banner filename (optional)"; HintBanner.Text = "banner.png/.jpg — 1200x300, ≤500 KB.";
-        LblInstallType.Text = "Install type"; HintInstallType.Text = "IsolatedFolder = own folder. InPlaceOverlay = on top of AoE3.";
-        LblDefaultFolder.Text = "Default install folder";
-        LblProbeFile.Text = "Probe file";
-        LblExecutable.Text = "Executable"; LblArguments.Text = "Arguments (optional)";
-        LblMechanism.Text = "Update mechanism";
-        LblWolUpdateInfoUrl.Text = "UpdateInfo.xml URL";
+        LblInstallType.Text = "Install type"; HintInstallType.Text = "IsolatedFolder = own folder (recommended for most mods). InPlaceOverlay = on top of AoE3.";
+        LblDefaultFolder.Text = "Default install folder"; HintDefaultFolder.Text = "Folder name suggested when installing. Example: Napoleonic Era";
+        LblProbeFile.Text = "Probe file"; HintProbeFile.Text = "A file that confirms the mod is installed. Example: data\\napoleonic.xml";
+        LblExecutable.Text = "Executable"; HintExecutable.Text = "The .exe that launches the game. Example: age3y.exe";
+        LblArguments.Text = "Arguments (optional)"; HintArguments.Text = "Command-line flags on launch. Example: +nointromovie";
+        LblMechanism.Text = "Update mechanism"; HintMechanism.Text = "GitHubReleases is recommended for new mods. WolPatcher is the legacy UpdateInfo.xml flow; Manual = no auto-updates.";
+        LblWolUpdateInfoUrl.Text = "UpdateInfo.xml URL"; HintWolUpdateInfoUrl.Text = "URL to a WoL-style UpdateInfo.xml. Example: https://yoursite.com/UpdateInfo.xml";
         LblSourceRepo.Text = "Source repo (owner/repo)"; HintSourceRepo.Text = "Your mod's GitHub repository, e.g. yourname/your-mod.";
-        LblApprovedTag.Text = "Approved release tag";
-        LblDescriptionEn.Text = "Description (English)";
+        LblApprovedTag.Text = "Approved release tag"; HintApprovedTag.Text = "The release tag the launcher downloads. Example: v1.0.0";
+        LblDescriptionEn.Text = "Description (English)"; HintDescription.Text = "1–2 sentences on what your mod does. Example: A total conversion set during the Napoleonic Wars.";
         LblDescriptionEs.Text = "Descripción (Español)";
-        LblWebsite.Text = "Official website (optional)";
+        LblWebsite.Text = "Official website (optional)"; HintWebsite.Text = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod";
         CopyJsonButton.Content = "Copy JSON";
         OpenPrButton.Content = "Open PR on GitHub";
+
+        IntroText.Text =
+            "This wizard builds a mod.json for the public catalog. Fill in each step, then on the " +
+            "last step copy the file or open a ready-made GitHub pull request. You don't install " +
+            "anything here — your mod is added by a PR to the catalog repo (Gorgorito12/aoe3-mods-catalog), " +
+            "which the launcher reads to list every mod.";
+        ImagesUploadNote.Text =
+            "These are just filenames. After you open the pull request, drop the real image files " +
+            "(icon.png, banner.png) into the same mods/<id>/ folder of the PR — otherwise the catalog " +
+            "has nothing to show.";
+        NextStepsTitle.Text = "What happens after you publish";
+        NextStepsBody.Text =
+            "1. Click \"Open PR on GitHub\" — it opens the catalog's new-file editor with this mod.json " +
+            "pre-filled at mods/<id>/mod.json.\n" +
+            "2. Commit it and create the pull request (GitHub forks the repo for you).\n" +
+            "3. Add your icon.png / banner.png to the same folder in the PR.\n" +
+            "4. Automated checks validate the schema and images. Cosmetic edits and version bumps merge " +
+            "automatically; first-time mods and changes to install/update fields get a manual review.\n" +
+            "5. Once merged, your mod appears in the Catalog after pressing \"Refresh catalog\".";
     }
 }

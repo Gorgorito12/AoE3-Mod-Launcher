@@ -103,6 +103,7 @@ public partial class MainWindow : Window
         ModsBrowserView.RepairRequested += ModsBrowserView_RepairRequested;
         ModsBrowserView.RefreshCatalogRequested += ModsBrowserView_RefreshCatalogRequested;
         ModsBrowserView.AddLocalModRequested += ModsBrowserView_AddLocalModRequested;
+        ModsBrowserView.PublishRequested += ModsBrowserView_PublishRequested;
         // Workshop redesign: per-row "Add to my mods" / "Remove from
         // my mods" toggle. Replaces the old install/update/repair
         // dispatch on the Workshop — those flows now live on the
@@ -1633,6 +1634,7 @@ public partial class MainWindow : Window
         // Header action buttons.
         ModsBrowserView.RefreshCatalogLabel = Strings.Get("ModsBrowserRefreshCatalog");
         ModsBrowserView.AddLocalModLabel = Strings.Get("ModsBrowserAddLocal");
+        ModsBrowserView.PublishModLabel = Strings.Get("ModsBrowserMenuPublish");
         ModsBrowserView.SubTabMyModsLabel = Strings.Get("ModsBrowserSubTabMyMods");
         ModsBrowserView.SubTabCatalogLabel = Strings.Get("ModsBrowserSubTabCatalog");
 
@@ -1678,12 +1680,11 @@ public partial class MainWindow : Window
         ModsBrowserView.BtnRemoveFromCollectionLabel = Strings.Get("ModsBrowserBtnRemove");
         ModsBrowserView.BtnBuiltinLabel = Strings.Get("ModsBrowserBtnBuiltin");
 
-        // Header ⋯ menu: only the publish wizard for now. Kept in the
-        // overflow instead of a dedicated header button — the catalog
-        // redesign prioritises Refresh + Add local + search in the
-        // primary band, with publish a secondary discoverability.
-        ModsBrowserView.SetMoreMenuItems(
-            (Strings.Get("ModsBrowserMenuPublish"), () => ModsBrowserView_PublishRequested(this, EventArgs.Empty)));
+        // Header ⋯ menu is empty now — publish was promoted to its own
+        // accent-outlined header button (PublishModButton), so the overflow
+        // hides itself. SetMoreMenuItems stays wired for future secondary
+        // actions; passing no items collapses the ⋮ button.
+        ModsBrowserView.SetMoreMenuItems();
 
         RefreshModsBrowser();
 
@@ -3034,8 +3035,11 @@ public partial class MainWindow : Window
         dlg.LblIdText = Strings.Get("PublishFieldId");
         dlg.HintIdText = Strings.Get("PublishFieldIdHint");
         dlg.LblDisplayNameText = Strings.Get("PublishFieldDisplayName");
+        dlg.HintDisplayNameText = Strings.Get("PublishFieldDisplayNameHint");
         dlg.LblAuthorText = Strings.Get("PublishFieldAuthor");
+        dlg.HintAuthorText = Strings.Get("PublishFieldAuthorHint");
         dlg.LblSubtitleText = Strings.Get("PublishFieldSubtitle");
+        dlg.HintSubtitleText = Strings.Get("PublishFieldSubtitleHint");
         dlg.LblAccentText = Strings.Get("PublishFieldAccent");
         dlg.HintAccentText = Strings.Get("PublishFieldAccentHint");
         dlg.LblIconText = Strings.Get("PublishFieldIcon");
@@ -3045,19 +3049,32 @@ public partial class MainWindow : Window
         dlg.LblInstallTypeText = Strings.Get("PublishFieldInstallType");
         dlg.HintInstallTypeText = Strings.Get("PublishFieldInstallTypeHint");
         dlg.LblDefaultFolderText = Strings.Get("PublishFieldDefaultFolder");
+        dlg.HintDefaultFolderText = Strings.Get("PublishFieldDefaultFolderHint");
         dlg.LblProbeFileText = Strings.Get("PublishFieldProbeFile");
+        dlg.HintProbeFileText = Strings.Get("PublishFieldProbeFileHint");
         dlg.LblExecutableText = Strings.Get("PublishFieldExecutable");
+        dlg.HintExecutableText = Strings.Get("PublishFieldExecutableHint");
         dlg.LblArgumentsText = Strings.Get("PublishFieldArguments");
+        dlg.HintArgumentsText = Strings.Get("PublishFieldArgumentsHint");
         dlg.LblMechanismText = Strings.Get("PublishFieldMechanism");
+        dlg.HintMechanismText = Strings.Get("PublishFieldMechanismHint");
         dlg.LblWolUpdateInfoUrlText = Strings.Get("PublishFieldWolUpdateInfoUrl");
+        dlg.HintWolUpdateInfoUrlText = Strings.Get("PublishFieldWolUpdateInfoUrlHint");
         dlg.LblSourceRepoText = Strings.Get("PublishFieldSourceRepo");
         dlg.HintSourceRepoText = Strings.Get("PublishFieldSourceRepoHint");
         dlg.LblApprovedTagText = Strings.Get("PublishFieldApprovedTag");
+        dlg.HintApprovedTagText = Strings.Get("PublishFieldApprovedTagHint");
         dlg.LblDescriptionEnText = Strings.Get("PublishFieldDescriptionEn");
+        dlg.HintDescriptionText = Strings.Get("PublishFieldDescriptionHint");
         dlg.LblDescriptionEsText = Strings.Get("PublishFieldDescriptionEs");
         dlg.LblWebsiteText = Strings.Get("PublishFieldWebsite");
+        dlg.HintWebsiteText = Strings.Get("PublishFieldWebsiteHint");
         dlg.CopyJsonLabel = Strings.Get("PublishCopyJson");
         dlg.OpenPrLabel = Strings.Get("PublishOpenPr");
+        dlg.IntroBodyText = Strings.Get("PublishWizardIntro");
+        dlg.ImagesUploadNoteText = Strings.Get("PublishImagesUploadNote");
+        dlg.NextStepsTitleText = Strings.Get("PublishNextStepsTitle");
+        dlg.NextStepsBodyText = Strings.Get("PublishNextStepsBody");
         dlg.ErrorIdInvalid = Strings.Get("PublishErrorId");
         dlg.ErrorDisplayNameRequired = Strings.Get("PublishErrorDisplayName");
         dlg.ErrorAccentInvalid = Strings.Get("PublishErrorAccent");

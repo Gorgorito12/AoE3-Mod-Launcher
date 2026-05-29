@@ -161,6 +161,7 @@ public partial class ModsBrowser : UserControl
         // Header buttons.
         RefreshCatalogButton.Click += (_, _) => RefreshCatalogRequested?.Invoke(this, EventArgs.Empty);
         AddLocalModButton.Click += (_, _) => AddLocalModRequested?.Invoke(this, EventArgs.Empty);
+        PublishModButton.Click += (_, _) => PublishRequested?.Invoke(this, EventArgs.Empty);
         MoreMenuButton.Click += (_, _) =>
         {
             // Manual open — Button's default Click doesn't pop the menu.
@@ -187,6 +188,7 @@ public partial class ModsBrowser : UserControl
 
     public string RefreshCatalogLabel { get => (string)(RefreshCatalogButton.Content ?? ""); set => RefreshCatalogButton.Content = value; }
     public string AddLocalModLabel { get => (string)(AddLocalModButton.Content ?? ""); set => AddLocalModButton.Content = value; }
+    public string PublishModLabel { get => (string)(PublishModButton.Content ?? ""); set => PublishModButton.Content = value; }
     public string SubTabMyModsLabel { get => (string)(SubTabMyMods.Content ?? ""); set => SubTabMyMods.Content = value; }
     public string SubTabCatalogLabel { get => (string)(SubTabCatalog.Content ?? ""); set => SubTabCatalog.Content = value; }
     public string FiltersLabelText { get => FiltersLabel.Text; set => FiltersLabel.Text = value; }
@@ -226,6 +228,13 @@ public partial class ModsBrowser : UserControl
             mi.Click += (_, _) => onClick?.Invoke();
             MoreMenu.Items.Add(mi);
         }
+
+        // An empty ⋮ would just open a blank popup, so hide the button
+        // entirely when there's nothing in it (publish moved to its own
+        // header button — the overflow is empty by default now).
+        MoreMenuButton.Visibility = MoreMenu.Items.Count == 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     /// <summary>Detail panel action button labels — set per launcher language.</summary>

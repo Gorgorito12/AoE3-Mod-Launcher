@@ -1471,8 +1471,8 @@ public static class Strings
         },
         ["PublishWizardStep1Hint"] = new()
         {
-            [LangEn] = "Pick a stable id and a display name. These two fields anchor the catalog entry.",
-            [LangEs] = "Elige un id estable y un nombre visible. Estos dos campos anclan la entrada del catálogo.",
+            [LangEn] = "Pick a stable id and a display name. These two fields anchor the catalog entry — the id can't be changed later (it's the folder name), but the display name can.",
+            [LangEs] = "Elige un id estable y un nombre visible. Estos dos campos anclan la entrada del catálogo: el id no se puede cambiar después (es el nombre de carpeta), pero el nombre visible sí.",
         },
         ["PublishWizardStep2Title"] = new()
         {
@@ -1501,8 +1501,8 @@ public static class Strings
         },
         ["PublishWizardStep4Hint"] = new()
         {
-            [LangEn] = "How the launcher pulls new versions: WoL patcher, GitHub Releases, external updater, or manual.",
-            [LangEs] = "Cómo el launcher obtiene nuevas versiones: parcheador WoL, GitHub Releases, actualizador externo o manual.",
+            [LangEn] = "How the launcher pulls new versions. For a brand-new mod, GitHubReleases is the easiest: point it at your repo and tag a release. Extra fields appear below once you pick a mechanism.",
+            [LangEs] = "Cómo el launcher obtiene nuevas versiones. Para un mod nuevo, GitHubReleases es lo más fácil: apúntalo a tu repo y etiqueta un release. Aparecerán campos extra abajo al elegir un mecanismo.",
         },
         ["PublishWizardStep5Title"] = new()
         {
@@ -1527,17 +1527,32 @@ public static class Strings
         ["PublishFieldId"] = new() { [LangEn] = "Id", [LangEs] = "Id" },
         ["PublishFieldIdHint"] = new()
         {
-            [LangEn] = "Lowercase letters, digits, dashes. Used as the folder name under /mods/.",
-            [LangEs] = "Minúsculas, dígitos y guiones. Se usa como nombre de carpeta dentro de /mods/.",
+            [LangEn] = "Lowercase letters, digits, dashes. Used as the folder name under /mods/. Example: napoleonic-era",
+            [LangEs] = "Minúsculas, dígitos y guiones. Se usa como nombre de carpeta dentro de /mods/. Ejemplo: napoleonic-era",
         },
         ["PublishFieldDisplayName"] = new() { [LangEn] = "Display name", [LangEs] = "Nombre visible" },
+        ["PublishFieldDisplayNameHint"] = new()
+        {
+            [LangEn] = "The name shown in the catalog. Example: Napoleonic Era",
+            [LangEs] = "El nombre que se muestra en el catálogo. Ejemplo: Napoleonic Era",
+        },
         ["PublishFieldAuthor"] = new() { [LangEn] = "Author (optional)", [LangEs] = "Autor (opcional)" },
+        ["PublishFieldAuthorHint"] = new()
+        {
+            [LangEn] = "Your name or your team's. Example: Napoleonic Team",
+            [LangEs] = "Tu nombre o el de tu equipo. Ejemplo: Napoleonic Team",
+        },
         ["PublishFieldSubtitle"] = new() { [LangEn] = "Subtitle (optional)", [LangEs] = "Subtítulo (opcional)" },
+        ["PublishFieldSubtitleHint"] = new()
+        {
+            [LangEn] = "Short tagline under the title. Example: Napoleonic Wars, 1789–1815",
+            [LangEs] = "Frase corta bajo el título. Ejemplo: Guerras napoleónicas, 1789–1815",
+        },
         ["PublishFieldAccent"] = new() { [LangEn] = "Accent colour (optional)", [LangEs] = "Color de acento (opcional)" },
         ["PublishFieldAccentHint"] = new()
         {
-            [LangEn] = "Hex format, e.g. #c8102e.",
-            [LangEs] = "Formato hex, ej. #c8102e.",
+            [LangEn] = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher.",
+            [LangEs] = "Formato hex, ej. #c8102e. Es el color de marca del mod en el launcher.",
         },
         ["PublishFieldIcon"] = new() { [LangEn] = "Icon filename (optional)", [LangEs] = "Nombre del icono (opcional)" },
         ["PublishFieldIconHint"] = new()
@@ -1554,15 +1569,45 @@ public static class Strings
         ["PublishFieldInstallType"] = new() { [LangEn] = "Install type", [LangEs] = "Tipo de instalación" },
         ["PublishFieldInstallTypeHint"] = new()
         {
-            [LangEn] = "IsolatedFolder = own folder. InPlaceOverlay = on top of AoE3.",
-            [LangEs] = "IsolatedFolder = carpeta propia. InPlaceOverlay = encima de AoE3.",
+            [LangEn] = "IsolatedFolder = own folder (recommended for most mods). InPlaceOverlay = on top of AoE3.",
+            [LangEs] = "IsolatedFolder = carpeta propia (recomendado para la mayoría). InPlaceOverlay = encima de AoE3.",
         },
         ["PublishFieldDefaultFolder"] = new() { [LangEn] = "Default install folder", [LangEs] = "Carpeta de instalación por defecto" },
+        ["PublishFieldDefaultFolderHint"] = new()
+        {
+            [LangEn] = "Folder name suggested when installing. Example: Napoleonic Era",
+            [LangEs] = "Nombre de carpeta sugerido al instalar. Ejemplo: Napoleonic Era",
+        },
         ["PublishFieldProbeFile"] = new() { [LangEn] = "Probe file", [LangEs] = "Archivo de detección" },
+        ["PublishFieldProbeFileHint"] = new()
+        {
+            [LangEn] = "A file that confirms the mod is installed. Example: data\\napoleonic.xml",
+            [LangEs] = "Un archivo que confirma que el mod está instalado. Ejemplo: data\\napoleonic.xml",
+        },
         ["PublishFieldExecutable"] = new() { [LangEn] = "Executable", [LangEs] = "Ejecutable" },
+        ["PublishFieldExecutableHint"] = new()
+        {
+            [LangEn] = "The .exe that launches the game. Example: age3y.exe",
+            [LangEs] = "El .exe que lanza el juego. Ejemplo: age3y.exe",
+        },
         ["PublishFieldArguments"] = new() { [LangEn] = "Arguments (optional)", [LangEs] = "Argumentos (opcional)" },
+        ["PublishFieldArgumentsHint"] = new()
+        {
+            [LangEn] = "Command-line flags on launch. Example: +nointromovie",
+            [LangEs] = "Parámetros de línea de comandos al lanzar. Ejemplo: +nointromovie",
+        },
         ["PublishFieldMechanism"] = new() { [LangEn] = "Update mechanism", [LangEs] = "Mecanismo de actualización" },
+        ["PublishFieldMechanismHint"] = new()
+        {
+            [LangEn] = "GitHubReleases is recommended for new mods. WolPatcher is the legacy UpdateInfo.xml flow; Manual = no auto-updates.",
+            [LangEs] = "GitHubReleases es lo recomendado para mods nuevos. WolPatcher es el flujo antiguo de UpdateInfo.xml; Manual = sin auto-actualización.",
+        },
         ["PublishFieldWolUpdateInfoUrl"] = new() { [LangEn] = "UpdateInfo.xml URL", [LangEs] = "URL de UpdateInfo.xml" },
+        ["PublishFieldWolUpdateInfoUrlHint"] = new()
+        {
+            [LangEn] = "URL to a WoL-style UpdateInfo.xml. Example: https://yoursite.com/UpdateInfo.xml",
+            [LangEs] = "URL a un UpdateInfo.xml estilo WoL. Ejemplo: https://tusitio.com/UpdateInfo.xml",
+        },
         ["PublishFieldSourceRepo"] = new() { [LangEn] = "Source repo (owner/repo)", [LangEs] = "Repo fuente (owner/repo)" },
         ["PublishFieldSourceRepoHint"] = new()
         {
@@ -1570,11 +1615,46 @@ public static class Strings
             [LangEs] = "El repositorio de GitHub de tu mod, ej. tunombre/tu-mod.",
         },
         ["PublishFieldApprovedTag"] = new() { [LangEn] = "Approved release tag", [LangEs] = "Tag de release aprobado" },
+        ["PublishFieldApprovedTagHint"] = new()
+        {
+            [LangEn] = "The release tag the launcher downloads. Example: v1.0.0",
+            [LangEs] = "El tag de release que el launcher descarga. Ejemplo: v1.0.0",
+        },
         ["PublishFieldDescriptionEn"] = new() { [LangEn] = "Description (English)", [LangEs] = "Descripción (Inglés)" },
+        ["PublishFieldDescriptionHint"] = new()
+        {
+            [LangEn] = "1–2 sentences on what your mod does. Example: A total conversion set during the Napoleonic Wars.",
+            [LangEs] = "1–2 frases sobre qué hace tu mod. Ejemplo: Una conversión total ambientada en las guerras napoleónicas.",
+        },
         ["PublishFieldDescriptionEs"] = new() { [LangEn] = "Description (Spanish)", [LangEs] = "Descripción (Español)" },
         ["PublishFieldWebsite"] = new() { [LangEn] = "Official website (optional)", [LangEs] = "Sitio web oficial (opcional)" },
+        ["PublishFieldWebsiteHint"] = new()
+        {
+            [LangEn] = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod",
+            [LangEs] = "La página de tu mod, Discord o ModDB. Ejemplo: https://discord.gg/tu-mod",
+        },
         ["PublishCopyJson"] = new() { [LangEn] = "Copy JSON", [LangEs] = "Copiar JSON" },
         ["PublishOpenPr"] = new() { [LangEn] = "Open PR on GitHub", [LangEs] = "Abrir PR en GitHub" },
+        ["PublishWizardIntro"] = new()
+        {
+            [LangEn] = "This wizard builds a mod.json for the public catalog. Fill in each step, then on the last step copy the file or open a ready-made GitHub pull request. You don't install anything here — your mod is added by a PR to the catalog repo (Gorgorito12/aoe3-mods-catalog), which the launcher reads to list every mod.",
+            [LangEs] = "Este asistente crea un mod.json para el catálogo público. Completa cada paso y, en el último, copia el archivo o abre una pull request de GitHub ya preparada. Aquí no instalas nada: tu mod se agrega con una PR al repositorio del catálogo (Gorgorito12/aoe3-mods-catalog), que el launcher lee para listar todos los mods.",
+        },
+        ["PublishImagesUploadNote"] = new()
+        {
+            [LangEn] = "These are just filenames. After you open the pull request, drop the real image files (icon.png, banner.png) into the same mods/<id>/ folder of the PR — otherwise the catalog has nothing to show.",
+            [LangEs] = "Esto son solo nombres de archivo. Tras abrir la pull request, coloca los archivos de imagen reales (icon.png, banner.png) en la misma carpeta mods/<id>/ de la PR; de lo contrario el catálogo no tiene nada que mostrar.",
+        },
+        ["PublishNextStepsTitle"] = new()
+        {
+            [LangEn] = "What happens after you publish",
+            [LangEs] = "Qué pasa después de publicar",
+        },
+        ["PublishNextStepsBody"] = new()
+        {
+            [LangEn] = "1. Click \"Open PR on GitHub\" — it opens the catalog's new-file editor with this mod.json pre-filled at mods/<id>/mod.json.\n2. Commit it and create the pull request (GitHub forks the repo for you).\n3. Add your icon.png / banner.png to the same folder in the PR.\n4. Automated checks validate the schema and images. Cosmetic edits and version bumps merge automatically; first-time mods and changes to install/update fields get a manual review.\n5. Once merged, your mod appears in the Catalog after pressing \"Refresh catalog\".",
+            [LangEs] = "1. Pulsa \"Abrir PR en GitHub\": abre el editor de archivo nuevo del catálogo con este mod.json ya rellenado en mods/<id>/mod.json.\n2. Confírmalo y crea la pull request (GitHub bifurca el repo por ti).\n3. Agrega tu icon.png / banner.png a la misma carpeta de la PR.\n4. Comprobaciones automáticas validan el esquema y las imágenes. Los cambios cosméticos y de versión se fusionan solos; los mods nuevos y los cambios en campos de instalación/actualización pasan por revisión manual.\n5. Una vez fusionado, tu mod aparece en el Catálogo tras pulsar \"Actualizar catálogo\".",
+        },
         ["PublishErrorId"] = new()
         {
             [LangEn] = "Invalid id. Use lowercase letters, digits and dashes (max 31 chars, starts with a letter).",
