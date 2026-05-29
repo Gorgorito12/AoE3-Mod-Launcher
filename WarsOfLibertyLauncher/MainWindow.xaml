@@ -623,8 +623,17 @@
              240px). PlayView is the "cinema" dashboard. Other tabs
              (Workshop, Multiplayer, Settings) overlay on top when
              active.
+
+             ClipToBounds guards the seamless title-bar + nav chrome above
+             (Rows 0/1): everything in this row — the full-bleed dashboard
+             background image, the hero gradients, the scaled hero block —
+             is clipped to the row so none of it can render up over the
+             chrome. This is the safety net for the maximized full-bleed
+             image reading as if it bleeds into the nav strip; it does NOT
+             touch the chrome itself, so the one-surface look (no title-bar
+             divider) is preserved.
              ============================================================= -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="2" ClipToBounds="True">
 
             <!-- ============================================================
                  PLAY VIEW — cinema dashboard.
@@ -641,7 +650,14 @@
                  ============================================================ -->
             <Grid x:Name="PlayView">
 
-                <!-- Layer 1: full-bleed background image of active mod. -->
+                <!-- Layer 1: full-bleed background image of the active mod.
+                     The brush (set in RefreshActiveMod) is UniformToFill
+                     (cover), so it fills the whole panel edge-to-edge with NO
+                     letterbox bars. A window wider than the 16:9 hero crops a
+                     little top+bottom — the accepted trade for a borderless
+                     look: blurred margins and flat black bars were both tried
+                     and rejected (the user wants edge-to-edge, no margins). The
+                     bottom crop is largely hidden by the hero text + gradient. -->
                 <Border x:Name="DashboardBgFill" Background="{DynamicResource BgPanelAlt}"/>
 
                 <!-- Layer 2: vertical gradient — transparent at top,

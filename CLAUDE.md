@@ -23,11 +23,14 @@ auto-merge Actions) and `docs/MODDING.md` (mod-authoring guide).
 ## Platform constraint (read first)
 
 This is a **Windows-only** project: `net8.0-windows` + `UseWPF`. It **cannot be
-built or run on Linux/macOS** — `dotnet build` fails off-Windows. The cloud
-execution environment for this session is Linux, so you generally **cannot
-compile, run, or smoke-test here**; reason about the code statically and rely
-on the user to build/run on Windows. Say so explicitly rather than claiming a
-change is verified.
+built or run on Linux/macOS** — `dotnet build` fails off-Windows. **Where you can
+verify depends on where this session runs:** in a Linux cloud session you
+**cannot** compile/run/smoke-test — reason about the code statically, rely on the
+user to build on Windows, and say so rather than claiming a change is verified.
+**On a local Windows checkout (the maintainer's setup, where this repo is usually
+worked on) `dotnet build -c Release` works and you SHOULD run it to verify before
+declaring done** — that's how the multiplayer global-chat client was checked
+(0 errors). Never claim a verification you didn't actually run.
 
 ## Build & run
 
@@ -144,7 +147,27 @@ longer exists — don't go looking for it.)
   to the tabs. The only border in that region is the nav strip's own
   `BorderThickness="0,0,0,1"`, which delimits chrome from content below. Don't
   "fix" the title bar by giving it a divider — the missing border is the
-  feature.
+  feature. Two related guards keep the **content below** from reading as if it
+  invades this chrome: (1) the content host (`Grid.Row=2`) is
+  `ClipToBounds="True"` so nothing in any tab — the PlayView full-bleed
+  background image, the hero gradients, the scaled hero block — can render *up*
+  over the title bar / nav strip; it's defensive (clips content only, never the
+  chrome, so the one-surface look is intact) and on its own a near-no-op,
+  because the image is a `Border` background and is already clipped to its
+  bounds. (2) The dashboard hero (`DashboardBgFill`) is a **single full-bleed
+  `UniformToFill` (cover) layer** — it fills the whole panel edge-to-edge with
+  no letterbox bars. This is a **settled aesthetic decision after several
+  rejected alternatives**, so don't re-litigate it: a window wider than the 16:9
+  hero crops a little top+bottom, which is the accepted trade for "no margins."
+  We tried (a) `AlignmentY=Top` to keep the top clean — rejected, the bottom
+  crop showed; (b) a two-layer blur fill (`UniformToFill` + `BlurEffect` +
+  scrim behind a `Stretch=Uniform` sharp image) to show the whole image with
+  the margins filled by blurred art instead of bars — rejected as reading like
+  dark borders. The maintainer's hard requirement is **edge-to-edge, no margins
+  of any kind**; full-bleed with a minor crop wins. The bottom crop is largely
+  hidden by the hero text + bottom gradient. Don't add a `Viewbox`, a second
+  image layer, blur margins, or `Stretch=Uniform` to "show the whole image" —
+  that brings back the margins the maintainer rejected.
 
 - **The title-bar brand button's hover illumination has a WPF-precedence
   trap — we hit it as a bug twice.** `TitleBarBrandButton` ("AoE3 Mod
@@ -362,6 +385,131 @@ longer exists — don't go looking for it.)
   never surfaces it), so true per-player ping/bytes needs the **backend** to put
   each peer's Radmin IP in `room_state`. Don't wire fake per-peer numbers to fill
   that gap.
+
+- **The rooms browser auto-refreshes its LIST on a quiet diff — separate from the
+  PING timer above.** New / closed rooms now appear without pressing *Actualizar*:
+  a dedicated `_roomsListTimer` (10 s, created in `StartQuotaPolling`, stopped in
+  `OnVisibleChangedTabGate`'s not-visible branch alongside the other timers) calls
+  `RefreshRoomsListAsync(quiet: true)`, gated to **MP-tab-visible + signed-in +
+  `_activeSubtab == Subtab.Rooms`** so it never polls while the list is hidden
+  (don't drop that subtab gate — it's the whole point of the resource budget). The
+  `quiet` flag is load-bearing and does three things a full refresh doesn't: (1)
+  skips the "Cargando…" skeleton; (2) compares a `BuildRoomsSignature` of the
+  payload — id / status / players / private / title / mod / host per row, **in
+  order, NOT ping** (ping is owned in place by `_roomsPingTimer`) — against
+  `_lastRenderedRoomsSignature` and **returns without touching the visual tree when
+  nothing changed**, so Join buttons, hover and scroll position survive; (3) on a
+  network blip it keeps the last good list (logs only) instead of wiping it to the
+  red error banner. The manual *Actualizar* button, sign-in, tab activation and
+  leave-room still call `RefreshRoomsListAsync()` **non-quiet** (skeleton + error
+  banner + always re-render); `SubtabRooms_Click` fires one *quiet* kick so
+  returning to the subtab freshens at once. Cost is one `GET /lobbies` (a single
+  small SQLite SELECT, ≤8 active lobbies) every 10 s **while actively browsing** —
+  well under the backend's `llist` cap (60/min · 2000/day per IP, `rateLimit.ts`)
+  and the 100k/day global budget. **The rooms list itself is REST-poll** — the
+  lobby WebSocket (`/lobbies/:id/ws`) is per-room and only joined once you're
+  *inside* a room, so a viewer sitting on the list has no per-room socket. A
+  process-wide global WS channel DOES now exist (`/global/ws`, added for the
+  global chat — see its bullet below), so the infra for real-time room push is
+  in place; actually emitting `lobby_created/closed/updated` onto it is still
+  deferred (the 10 s poll is enough at current scale).
+
+- **The rooms-browser action button (col 6) is state-driven — don't reduce it
+  back to a plain always-"Join".** `BuildRoomRow` picks the caption + enabled-ness
+  per room in this **priority order** (first match wins):
+  1. **room we're currently in** (`iAmInThisRoom` = `lobby.Id ==
+     _session.CurrentLobbyId`) → **"Re-enter"** (`MpRoomReenter`) wired to
+     `OpenLobbyWindow()` (re-opens / Activates the lobby window) — never a Join for
+     a room we're already inside;
+  2. **our own room we're NOT session-tracked in** (`iAmHost`) → **disabled "Your
+     room"** (`MpRoomYours`). This is matched by **host identity** — `lobby.Host.Id
+     == me.Id` OR `lobby.Host.DiscordUsername == me.DiscordUsername` (case-
+     insensitive) — **not** `CurrentLobbyId`, so it still holds after we closed the
+     lobby window but the backend kept the room alive; re-joining your own room
+     errors server-side, hence disabled;
+  3. **in-game** (`status == "in_game"`) → **disabled "In game"**
+     (`MpRoomStatusInGame`) — the room is locked;
+  4. **full** (`CurrentPlayers >= MaxPlayers`) → **disabled "Full"** (`MpRoomFull`);
+  5. **mod not installed locally** → **disabled "Join"** (`IsEnabled =
+     modInstalled`); else → **enabled "Join"** → `JoinRoomButton_Click`.
+
+  The STATUS cell value (col 5) is localised too (`MpRoomStatusWaiting` /
+  `MpRoomStatusInGame`), not the old hardcoded "Waiting" / "In game". `BuildStatusCell`
+  also makes an in-game room read as **locked**: for `inGame` it swaps the status
+  dot for a 🔒 glyph and renders "En partida" in the in-game colour + SemiBold, so a
+  browsing player sees at a glance the room is in progress (the disabled "In game"
+  action button is the actual join block). All of this keys off the backend
+  reporting `status == "in_game"` once the host starts — the rooms browser has no
+  other signal that a room you're *not* in has begun (the room WS is per-room, joined
+  only from inside), so if in-game rooms never lock, check the backend is flipping
+  the lobby status, not the launcher. How these
+  captions refresh: `BuildRoomsSignature` (the quiet-diff key) includes status +
+  player count + host, so In-game / Full / host changes repaint within ≤10 s while
+  browsing. The **viewer-relative** bits (`iAmInThisRoom` / `iAmHost`) are
+  deliberately **NOT** in the signature — they don't need to be, because they're
+  recomputed on every render and the events that flip them also change the payload
+  (create adds your row; join/leave moves a player count; **leave-room additionally
+  forces a non-quiet `RefreshRoomsListAsync()`**), so a render happens regardless.
+  Don't try to encode "is this my room" into the signature.
+
+- **Global chat is a process-wide WebSocket room — separate from the per-lobby
+  chat, and the launcher's first real server-push channel.** The Multiplayer
+  tab's Rooms view is now TWO columns: active rooms (left card) + a persistent
+  **"Chat global"** panel (right card; `GlobalChat*` x:Names in
+  `MultiplayerTab.xaml` — header, `Canal general` + presence count, message
+  list, composer). Server side it's a single `GlobalChatRoom` **singleton** on
+  the Node backend (`src/global/GlobalChatRoom.ts`, mounted at `/global/ws` in
+  `index.ts`, held on `AppContext.globalChat`) — modelled on `LobbyRoom`'s
+  broadcast / idle-kick / throttle but with **almost no DB**: membership IS
+  "holds a valid JWT" (auth on the first `hello`), the **only** DB touch is one
+  indexed `users.avatar_url` read per *connection* (cached on the
+  `AttachedSocket`, not per message) so chat lines can carry the real Discord
+  avatar, and history is a **capped in-memory ring** (lost on restart, by
+  design). Wire protocol: client → `hello {token}` / `chat {body}` / `ping`;
+  server → `global_state {history, online}` / `chat {line}` / `presence
+  {online}` / `pong` / `error` — each `line` is
+  `{id, userId, login, avatarUrl, body, at}`, and the client renders `avatarUrl`
+  as a circular photo with the login **monogram as the fallback** when it's null
+  or fails to load (panel width is a fixed 380 px column). Client side it
+  **reuses the generic `LobbyWebSocket`** (SessionToken hello,
+  `BuildWsUri(Api.BaseUri, "global/ws")`), but the socket is **owned by
+  `MultiplayerTab`, NOT `MultiplayerSession`** (unlike `RoomSocket`) because its
+  lifetime is gated on *tab-visible + signed-in*, not on being in a lobby — see
+  `SyncGlobalChat` / `OpenGlobalChat` / `CloseGlobalChat` (open from
+  `StartQuotaPolling` + `OnSessionStateChanged`; close from the
+  `OnVisibleChangedTabGate` hide branch + the session swap in `Attach`). A user
+  can be in the global chat AND a lobby at once (two sockets). The new
+  `MultiplayerSession.SessionToken` getter exposes the JWT for the hello.
+  **Why it's cheap on the 1 GB VM (the feasibility question that gated this
+  build):** WS frames bypass the per-request daily budget (only the upgrade
+  counts, once), and everything is bounded — `globalChatMaxConnections` (default
+  = `maxConcurrentUsers` = 60), **one socket per user** (a second `hello` closes
+  the first), in-memory `globalChatHistory` (100), per-user `globalChatMsgsPerMin`
+  (20) + 500-char cap (all in `env.ts` / `.env.example`). Added RAM is
+  single-digit MB; the binding limit stays the 60-user budget, not chat. **Don't
+  switch the global chat to REST polling** — 60 users polling would blow the
+  100k/day budget many times over, which is the whole reason it's WS.
+
+- **Global chat anti-spam: slow-mode + auto-timeout (server-side, in
+  `GlobalChatRoom.handleChat`).** On top of the 20/min cap, two more layers throttle
+  abuse, all config-knobbed: (1) **slow mode** — a minimum gap between messages
+  (`globalChatMinIntervalMs`, 1500 ms); a too-fast message is dropped, not the
+  connection. (2) **auto-timeout** — slow-mode / rate trips are counted as
+  *strikes* in a rolling minute (`registerViolation`); cross
+  `globalChatTimeoutStrikes` (5) and the user is auto-muted for
+  `globalChatTimeoutMs` (30 s), during which every message is dropped with the
+  remaining seconds. The mute lives in a room-level `mutedUntilByUser` map keyed
+  by **user id** (not socket), so reconnecting can't shed an active timeout
+  (strikes stay per-socket — fine, the mute is the sticky part). No human moderator and no admin/role concept exists — these
+  are purely automatic (manual mute/ban would need a new admin layer the backend
+  doesn't have). The server emits distinct `error` codes (`chat_slow_mode` /
+  `chat_rate_limited` / `chat_muted` / `chat_timeout` / `chat_too_long`); the
+  launcher maps each to a localized hint shown above the composer
+  (`GlobalChatNotice`, `ShowGlobalChatNoticeFor`, cleared on the next keystroke) —
+  server error *messages* stay English, the client localizes by code. The check
+  order in `handleChat` is **muted → length → slow-mode → per-minute**, and a
+  slow-mode drop bails *before* incrementing the per-minute counter so it isn't
+  double-penalized.
 
 ## Architecture
 

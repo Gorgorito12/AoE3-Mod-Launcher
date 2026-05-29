@@ -2206,6 +2206,12 @@ public partial class MainWindow : Window
                 ?? TryLoadTileImage(profile.LocalBannerPath);
             if (cinemaBanner != null)
             {
+                // Full-bleed background: the cached UniformToFill (cover) brush
+                // fills the whole panel edge-to-edge with no letterbox bars. A
+                // window wider than the 16:9 hero crops a little top+bottom —
+                // the accepted trade for a borderless look (blurred and black
+                // margins were both tried and rejected). The bottom crop is
+                // largely hidden by the hero text + gradient.
                 DashboardBgFill.Background = cinemaBanner;
             }
             else

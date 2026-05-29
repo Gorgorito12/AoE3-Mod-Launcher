@@ -70,6 +70,14 @@ public sealed class MultiplayerSession : IAsyncDisposable
     public string? LastError { get; private set; }
 
     /// <summary>
+    /// The cached session JWT, or null when signed out. Exposed so the
+    /// global-chat WebSocket (lifecycle owned by <c>MultiplayerTab</c>,
+    /// since it's gated on tab visibility) can authenticate its <c>hello</c>
+    /// frame with the same token the room socket uses.
+    /// </summary>
+    public string? SessionToken => _config.Multiplayer.SessionToken.NullIfEmpty();
+
+    /// <summary>
     /// True once the user has both signed in AND entered a lobby. The
     /// launcher's "Start Game" button is gated by this so we never
     /// spawn AoE3 from outside a lobby context (the match-report POST

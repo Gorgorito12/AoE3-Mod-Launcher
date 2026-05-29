@@ -72,6 +72,25 @@ public partial class MultiplayerTab : UserControl
     private System.Windows.Threading.DispatcherTimer? _roomsPingTimer;
 
     /// <summary>
+    /// Auto-refreshes the rooms-browser LIST (a quiet, diff-based render
+    /// that only repaints when the set of rooms actually changed) while the
+    /// Multiplayer tab is visible AND the Rooms subtab is active, so newly
+    /// created rooms appear without the user pressing Actualizar. Separate
+    /// from <see cref="_roomsPingTimer"/> (which owns the PING column) and
+    /// tied to the same visibility gate as <see cref="_quotaTimer"/>.
+    /// </summary>
+    private System.Windows.Threading.DispatcherTimer? _roomsListTimer;
+
+    /// <summary>
+    /// Signature of the rooms list as last rendered, used by the quiet
+    /// auto-refresh to skip a full re-render (and the Join-button rebuild it
+    /// would cause) when nothing visible changed. Built by
+    /// <see cref="BuildRoomsSignature"/> from the payload fields only — ping
+    /// is excluded because <see cref="_roomsPingTimer"/> refreshes it in place.
+    /// </summary>
+    private string _lastRenderedRoomsSignature = "\0uninitialized";
+
+    /// <summary>
     /// The PING cells of the currently-rendered rooms rows, so the ping can
     /// be refreshed in place (no row rebuild — that would disrupt the Join
     /// buttons). Rebuilt each time the rooms list re-renders.
@@ -93,6 +112,22 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>Currently-subscribed WS, so we can unsubscribe cleanly on room change.</summary>
     private LobbyWebSocket? _attachedSocket;
+
+    /// <summary>
+    /// The persistent GLOBAL chat socket (the /global/ws room), owned here
+    /// because its lifetime is gated on this tab's visibility + sign-in, not
+    /// on being in a lobby. Reuses the generic <see cref="LobbyWebSocket"/>
+    /// (SessionToken hello). Opened by <see cref="SyncGlobalChat"/> and torn
+    /// down when the tab hides / the user signs out. Separate from
+    /// <see cref="MultiplayerSession.RoomSocket"/> — a user can be in the
+    /// global chat and a lobby at the same time.
+    /// </summary>
+    private LobbyWebSocket? _globalChatSocket;
+
+    /// <summary>True once a <c>global_state</c> frame has populated the panel,
+    /// so the empty-hint can say "connecting…" before then and "no messages"
+    /// after.</summary>
+    private bool _globalChatRendered;
 
     // (Pre-n2n: a per-room PeerMesh lived here so the tab could repaint
     //  when peer RTT/state changed. With n2n the local edge is owned by
@@ -621,7 +656,11 @@ public partial class MultiplayerTab : UserControl
         LauncherConfig? config = null)
     {
         if (_session != null)
+        {
             _session.StateChanged -= OnSessionStateChanged;
+            // Drop the old session's global chat socket before rebinding.
+            CloseGlobalChat();
+        }
 
         _session = session;
         _getActiveProfile = getActiveProfile;
@@ -696,6 +735,8 @@ public partial class MultiplayerTab : UserControl
             _quotaTimer?.Stop();
             _radminTimer?.Stop();
             _roomsPingTimer?.Stop();
+            _roomsListTimer?.Stop();
+            CloseGlobalChat();
         }
     }
 
@@ -719,6 +760,29 @@ public partial class MultiplayerTab : UserControl
         _roomsPingTimer.Tick += (_, _) => { KickConnectionPing(); RefreshRoomPingCells(); };
         _roomsPingTimer.Start();
         KickConnectionPing();
+
+        // Auto-refresh the rooms LIST every ~10 s so newly-created rooms
+        // appear without the user pressing Actualizar. The fetch is a quiet,
+        // diff-based render (no "loading" skeleton, no row/Join-button
+        // rebuild when nothing changed — see RefreshRoomsListAsync(quiet:true))
+        // and only fires while signed in AND on the Rooms subtab, so it costs
+        // at most one cheap GET /lobbies every 10 s while the user is actually
+        // browsing — well under the backend's 60/min · 2000/day per-IP cap.
+        _roomsListTimer?.Stop();
+        _roomsListTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(10),
+        };
+        _roomsListTimer.Tick += (_, _) =>
+        {
+            if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn
+                && _activeSubtab == Subtab.Rooms)
+                _ = RefreshRoomsListAsync(quiet: true);
+        };
+        _roomsListTimer.Start();
+
+        // Connect the persistent global chat while the tab is up + signed in.
+        SyncGlobalChat();
     }
 
     public void RefreshStrings() => ApplyStrings();
@@ -752,6 +816,14 @@ public partial class MultiplayerTab : UserControl
         // pulling icon fonts.
         RefreshButton.Content = "↻  " + Strings.Get("MpRoomsRefresh");
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
+
+        // Active-rooms section title + global chat panel labels.
+        RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
+        GlobalChatHeaderText.Text = Strings.Get("MpGlobalChatTitle");
+        GlobalChatChannelText.Text = Strings.Get("MpGlobalChatChannel");
+        GlobalChatPlaceholder.Text = Strings.Get("MpGlobalChatPlaceholder");
+        GlobalChatSendButton.Content = Strings.Get("MpGlobalChatSend");
+        UpdateGlobalChatEmptyHint();
 
         // Lobby window labels — only updated if it's currently open.
         // Static labels go through ApplyLobbyStaticLabels(); the dynamic,
@@ -817,6 +889,9 @@ public partial class MultiplayerTab : UserControl
         {
             SyncRoomSocketSubscription();
             RefreshFromSession();
+            // Sign-in / sign-out flips whether the global chat should be
+            // connected; entering/leaving a room is harmless (idempotent).
+            SyncGlobalChat();
         });
 
     /// <summary>
@@ -2282,6 +2357,12 @@ public partial class MultiplayerTab : UserControl
     {
         _activeSubtab = Subtab.Rooms;
         RefreshFromSession();
+        // Coming (back) to the Rooms subtab: quietly freshen the list so
+        // rooms created while the user was on another subtab show up at
+        // once, without the skeleton flash a full refresh would cause. The
+        // 10 s _roomsListTimer keeps it current from here on.
+        if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+            _ = RefreshRoomsListAsync(quiet: true);
     }
     private void SubtabFriends_Click(object sender, RoutedEventArgs e)
     {
@@ -2614,7 +2695,21 @@ public partial class MultiplayerTab : UserControl
 
     // ---------- Rooms list polling + rendering ----------
 
-    private async Task RefreshRoomsListAsync()
+    /// <summary>
+    /// Fetch <c>GET /lobbies</c> and render the rooms browser. Called both
+    /// as an explicit refresh and as a 10 s background auto-refresh — the
+    /// <paramref name="quiet"/> flag is what separates the two.
+    /// </summary>
+    /// <param name="quiet">
+    /// When true this is a background auto-refresh (the 10 s
+    /// <see cref="_roomsListTimer"/> tick): skip the "loading" skeleton,
+    /// don't repaint when the result matches what's already rendered, and
+    /// swallow transient errors instead of wiping the list. A false
+    /// (default) call is an explicit refresh — manual Actualizar button,
+    /// sign-in, tab activation, leave-room — and always re-renders with the
+    /// skeleton + error banner.
+    /// </param>
+    private async Task RefreshRoomsListAsync(bool quiet = false)
     {
         if (_session == null || _isRefreshingList) return;
         _isRefreshingList = true;
@@ -2624,16 +2719,22 @@ public partial class MultiplayerTab : UserControl
             // a fetch is in flight. The empty-state card and error
             // box are siblings (not children of RoomsListPanel) so
             // we hide both while loading and re-decide afterwards.
-            RoomsListPanel.Children.Clear();
-            RoomsEmptyState.Visibility = Visibility.Collapsed;
-            RoomsErrorBox.Visibility = Visibility.Collapsed;
-            RoomsListPanel.Children.Add(new TextBlock
+            // Skipped on a quiet auto-refresh — flashing "loading…"
+            // every 10 s would be worse than swapping the (usually
+            // unchanged) rows once the result lands.
+            if (!quiet)
             {
-                Text = Strings.Get("MpRoomsLoading"),
-                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                FontStyle = FontStyles.Italic,
-                Margin = new Thickness(24, 12, 24, 0),
-            });
+                RoomsListPanel.Children.Clear();
+                RoomsEmptyState.Visibility = Visibility.Collapsed;
+                RoomsErrorBox.Visibility = Visibility.Collapsed;
+                RoomsListPanel.Children.Add(new TextBlock
+                {
+                    Text = Strings.Get("MpRoomsLoading"),
+                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                    FontStyle = FontStyles.Italic,
+                    Margin = new Thickness(24, 12, 24, 0),
+                });
+            }
 
             var list = await _session.Api.ListLobbiesAsync();
             // Cache the snapshot so the room view (and any other
@@ -2641,7 +2742,19 @@ public partial class MultiplayerTab : UserControl
             // for the current lobby) can read it without an extra
             // round-trip.
             _lastBrowserList = list.Lobbies as List<LobbySummary> ?? new List<LobbySummary>(list.Lobbies);
+
+            // Quiet auto-refresh: bail out without touching the visual
+            // tree when the rooms are exactly what we already rendered.
+            // That keeps Join buttons, hover and scroll position intact
+            // (a rebuild would reset them) and leaves the PING column to
+            // _roomsPingTimer, which updates it in place. A full/manual
+            // refresh always re-renders.
+            var signature = BuildRoomsSignature(list.Lobbies);
+            if (quiet && signature == _lastRenderedRoomsSignature)
+                return;
+
             RoomsListPanel.Children.Clear();
+            RoomsErrorBox.Visibility = Visibility.Collapsed;
             _roomPingCells.Clear();
 
             if (list.Lobbies.Count == 0)
@@ -2652,8 +2765,10 @@ public partial class MultiplayerTab : UserControl
                 // italic line in the table because the table header
                 // strip stays visible above for context.
                 RoomsEmptyState.Visibility = Visibility.Visible;
+                _lastRenderedRoomsSignature = signature;
                 return;
             }
+            RoomsEmptyState.Visibility = Visibility.Collapsed;
 
             // Render alternating row backgrounds so the table reads
             // as a table, not a stack of cards. The header strip
@@ -2662,20 +2777,344 @@ public partial class MultiplayerTab : UserControl
             int idx = 0;
             foreach (var lobby in list.Lobbies)
                 RoomsListPanel.Children.Add(BuildRoomRow(lobby, idx++));
+            _lastRenderedRoomsSignature = signature;
         }
         catch (Exception ex)
         {
-            // Network / API errors land in a dedicated banner so
-            // they don't look like a row that "happens to be red".
-            RoomsListPanel.Children.Clear();
-            RoomsErrorText.Text = ex.Message;
-            RoomsErrorBox.Visibility = Visibility.Visible;
+            // A quiet background poll must not wipe the list the user
+            // is looking at over a transient network blip — keep the
+            // last good render and just log. Manual / activation
+            // refreshes still surface the error banner.
+            if (quiet)
+            {
+                DiagnosticLog.Write($"RefreshRoomsList (quiet) failed: {ex.Message}");
+            }
+            else
+            {
+                RoomsListPanel.Children.Clear();
+                RoomsErrorText.Text = ex.Message;
+                RoomsErrorBox.Visibility = Visibility.Visible;
+            }
         }
         finally
         {
             _isRefreshingList = false;
         }
     }
+
+    /// <summary>
+    /// Compact signature of the rooms list as the server returned it,
+    /// covering every field <see cref="BuildRoomRow"/> renders (in order)
+    /// so the quiet auto-refresh can tell "nothing changed" from "repaint
+    /// needed" with a single string compare. Ping is deliberately excluded
+    /// — it's your own latency, identical across rows, and owned by
+    /// <see cref="RefreshRoomPingCells"/>.
+    /// </summary>
+    private static string BuildRoomsSignature(IReadOnlyList<LobbySummary> lobbies)
+    {
+        var sb = new System.Text.StringBuilder(lobbies.Count * 48);
+        foreach (var l in lobbies)
+        {
+            sb.Append(l.Id).Append('|')
+              .Append(l.Status).Append('|')
+              .Append(l.CurrentPlayers).Append('/').Append(l.MaxPlayers).Append('|')
+              .Append(l.IsPrivate ? '1' : '0').Append('|')
+              .Append(l.Title).Append('|')
+              .Append(l.ModId).Append('|')
+              .Append(l.Host.DisplayName).Append('|')
+              .Append(l.Host.DiscordUsername).Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    // ---------- Global chat ----------
+
+    /// <summary>
+    /// Open the global chat socket when it should be live (tab visible +
+    /// signed in) and close it otherwise. Idempotent — safe to call from
+    /// the visibility gate, session-state changes and tab activation.
+    /// </summary>
+    private void SyncGlobalChat()
+    {
+        var shouldConnect = IsVisible
+            && _session?.Status == MultiplayerSession.SessionStatus.SignedIn;
+        if (shouldConnect) OpenGlobalChat();
+        else CloseGlobalChat();
+    }
+
+    private void OpenGlobalChat()
+    {
+        if (_globalChatSocket != null) return;             // already connected
+        var token = _session?.SessionToken;
+        if (_session == null || string.IsNullOrEmpty(token)) return;
+        try
+        {
+            var uri = LobbyWebSocket.BuildWsUri(_session.Api.BaseUri, "global/ws");
+            var sock = new LobbyWebSocket(uri, LobbyWebSocket.HelloMode.SessionToken, token);
+            sock.FrameReceived += OnGlobalChatFrame;
+            _globalChatSocket = sock;
+            _globalChatRendered = false;
+            sock.Start();
+            UpdateGlobalChatEmptyHint();   // shows "connecting…" until global_state lands
+            DiagnosticLog.Write($"Global chat: connecting to {uri}");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Global chat: open failed: {ex.Message}");
+        }
+    }
+
+    private void CloseGlobalChat()
+    {
+        var sock = _globalChatSocket;
+        if (sock == null) return;
+        _globalChatSocket = null;
+        sock.FrameReceived -= OnGlobalChatFrame;
+        // DisposeAsync aborts the socket synchronously (no polite close
+        // frame) so the fire-and-forget never actually blocks.
+        _ = sock.DisposeAsync();
+        _globalChatRendered = false;
+        GlobalChatPanel.Children.Clear();
+        GlobalChatPresenceText.Text = "";
+        GlobalChatNotice.Visibility = Visibility.Collapsed;
+        UpdateGlobalChatEmptyHint();
+    }
+
+    /// <summary>
+    /// WS frame handler for the global room. Fires on a background thread;
+    /// we marshal to the dispatcher and ignore frames from a socket we've
+    /// since replaced/closed (a close can race the last receive).
+    /// </summary>
+    private void OnGlobalChatFrame(object? sender, LobbyWebSocket.FrameReceivedEventArgs e) =>
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (!ReferenceEquals(sender, _globalChatSocket)) return;
+            try
+            {
+                switch (e.Type)
+                {
+                    case "global_state":
+                        RenderGlobalChatState(e.Json);
+                        break;
+                    case "chat":
+                        if (e.Json.TryGetProperty("line", out var line))
+                            AppendGlobalChatLine(line, scroll: true);
+                        break;
+                    case "presence":
+                        if (e.Json.TryGetProperty("online", out var on) && on.TryGetInt32(out var n))
+                            UpdateGlobalPresence(n);
+                        break;
+                    case "error":
+                        var code = e.Json.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
+                        DiagnosticLog.Write($"Global chat error frame: {code}");
+                        ShowGlobalChatNoticeFor(code);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Global chat frame handling failed: {ex.Message}");
+            }
+        });
+
+    private void RenderGlobalChatState(JsonElement json)
+    {
+        GlobalChatPanel.Children.Clear();
+        _globalChatRendered = true;
+        if (json.TryGetProperty("history", out var hist) && hist.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var line in hist.EnumerateArray())
+                AppendGlobalChatLine(line, scroll: false);
+        }
+        if (json.TryGetProperty("online", out var on) && on.TryGetInt32(out var n))
+            UpdateGlobalPresence(n);
+        UpdateGlobalChatEmptyHint();
+        ScrollGlobalChatToEnd();
+    }
+
+    private void AppendGlobalChatLine(JsonElement line, bool scroll)
+    {
+        var login = line.TryGetProperty("login", out var l) ? (l.GetString() ?? "") : "";
+        var body = line.TryGetProperty("body", out var b) ? (b.GetString() ?? "") : "";
+        long at = line.TryGetProperty("at", out var a) && a.TryGetInt64(out var ms) ? ms : 0;
+        var avatarUrl = line.TryGetProperty("avatarUrl", out var av) ? av.GetString() : null;
+        if (string.IsNullOrEmpty(body)) return;
+        AppendGlobalChatRow(login, body, at, avatarUrl);
+        UpdateGlobalChatEmptyHint();
+        if (scroll) ScrollGlobalChatToEnd();
+    }
+
+    /// <summary>
+    /// Build one chat row: avatar (real Discord photo, monogram fallback) + a
+    /// name/time header line + the wrapped message body. Mirrors the mockup's
+    /// left-aligned bubbles.
+    /// </summary>
+    private void AppendGlobalChatRow(string login, string body, long atMs, string? avatarUrl)
+    {
+        var textPrimary = (Brush)Application.Current.FindResource("TextPrimary");
+        var textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
+
+        var grid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // Avatar: monogram fallback with the real Discord photo painted on
+        // top when we have a URL (if the image fails to load, the monogram
+        // underneath stays visible).
+        var avatarInner = new Grid();
+        avatarInner.Children.Add(new TextBlock
+        {
+            Text = Monogram(login),
+            Foreground = textSecondary,
+            FontWeight = FontWeights.Bold,
+            FontSize = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        if (!string.IsNullOrEmpty(avatarUrl))
+        {
+            var photo = new System.Windows.Shapes.Ellipse { Width = 30, Height = 30 };
+            try
+            {
+                photo.Fill = new ImageBrush(
+                    new System.Windows.Media.Imaging.BitmapImage(new Uri(avatarUrl, UriKind.Absolute)))
+                {
+                    Stretch = Stretch.UniformToFill,
+                };
+            }
+            catch { /* malformed URL → leave the monogram visible */ }
+            avatarInner.Children.Add(photo);
+        }
+        var avatar = new Border
+        {
+            Width = 30,
+            Height = 30,
+            CornerRadius = new CornerRadius(15),
+            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 0, 10, 0),
+            Child = avatarInner,
+        };
+        Grid.SetColumn(avatar, 0);
+        grid.Children.Add(avatar);
+
+        var stack = new StackPanel();
+        Grid.SetColumn(stack, 1);
+
+        var header = new StackPanel { Orientation = Orientation.Horizontal };
+        header.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(login) ? "—" : login,
+            Foreground = textPrimary,
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 12.5,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        if (atMs > 0)
+        {
+            header.Children.Add(new TextBlock
+            {
+                Text = FormatChatTime(atMs),
+                Foreground = textSecondary,
+                FontSize = 11,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+        stack.Children.Add(header);
+        stack.Children.Add(new TextBlock
+        {
+            Text = body,
+            Foreground = textSecondary,
+            FontSize = 12.5,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 1, 0, 0),
+        });
+        grid.Children.Add(stack);
+
+        GlobalChatPanel.Children.Add(grid);
+    }
+
+    private void UpdateGlobalPresence(int online) =>
+        GlobalChatPresenceText.Text = "👥  " + Strings.Format("MpGlobalChatPresence", online);
+
+    /// <summary>
+    /// Toggle the centered hint shown when the message list is empty:
+    /// "connecting…" before the first <c>global_state</c>, "no messages yet"
+    /// after.
+    /// </summary>
+    private void UpdateGlobalChatEmptyHint()
+    {
+        if (GlobalChatPanel.Children.Count > 0)
+        {
+            GlobalChatEmptyHint.Visibility = Visibility.Collapsed;
+            return;
+        }
+        GlobalChatEmptyHint.Text = _globalChatRendered
+            ? Strings.Get("MpGlobalChatEmpty")
+            : Strings.Get("MpGlobalChatConnecting");
+        GlobalChatEmptyHint.Visibility = Visibility.Visible;
+    }
+
+    private void ScrollGlobalChatToEnd() => GlobalChatScroll.ScrollToEnd();
+
+    /// <summary>
+    /// Surface a localized hint above the composer when the server drops a
+    /// message (slow-mode / rate-limit / auto-timeout / too-long). Unknown or
+    /// transport-level error codes aren't user-facing — they only get logged.
+    /// </summary>
+    private void ShowGlobalChatNoticeFor(string code)
+    {
+        var key = code switch
+        {
+            "chat_slow_mode" => "MpGlobalChatSlowMode",
+            "chat_rate_limited" => "MpGlobalChatRateLimited",
+            "chat_muted" => "MpGlobalChatMuted",
+            "chat_timeout" => "MpGlobalChatTimedOut",
+            "chat_too_long" => "MpGlobalChatTooLong",
+            _ => null,
+        };
+        if (key == null) return;
+        GlobalChatNotice.Text = Strings.Get(key);
+        GlobalChatNotice.Visibility = Visibility.Visible;
+    }
+
+    private void SendGlobalChat()
+    {
+        var sock = _globalChatSocket;
+        var body = GlobalChatInput.Text?.Trim() ?? "";
+        if (sock == null || string.IsNullOrEmpty(body)) return;
+        GlobalChatInput.Clear();   // the server echoes the message back to us
+        _ = sock.SendChatAsync(body);
+    }
+
+    private void GlobalChatSendButton_Click(object sender, RoutedEventArgs e) => SendGlobalChat();
+
+    private void GlobalChatInput_KeyDown(object sender, KeyEventArgs e)
+    {
+        // Enter sends; Shift+Enter is reserved for a future multiline box.
+        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
+        {
+            e.Handled = true;
+            SendGlobalChat();
+        }
+    }
+
+    private void GlobalChatInput_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        GlobalChatPlaceholder.Visibility = string.IsNullOrEmpty(GlobalChatInput.Text)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        // Typing again dismisses any throttle hint.
+        if (GlobalChatNotice.Visibility == Visibility.Visible)
+            GlobalChatNotice.Visibility = Visibility.Collapsed;
+    }
+
+    private static string Monogram(string login) =>
+        string.IsNullOrWhiteSpace(login) ? "?" : login.Substring(0, 1).ToUpperInvariant();
+
+    private static string FormatChatTime(long atMs) =>
+        DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime.ToString("HH:mm");
 
     private async Task RefreshQuotaAsync()
     {
@@ -2713,6 +3152,7 @@ public partial class MultiplayerTab : UserControl
         // note so it's obvious why Join is disabled.
         var modInstalled = IsModInstalledLocally(lobby.ModId);
         var inGame = lobby.Status == "in_game";
+        var me = _session?.CurrentUser;
         var textPrimary = (Brush)Application.Current.FindResource("TextPrimary");
         var textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
         var divider = (Brush)Application.Current.FindResource("MpDivider");
@@ -2807,11 +3247,10 @@ public partial class MultiplayerTab : UserControl
             hostName = lobby.Host.DiscordUsername;
         if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
         {
-            var me = _session?.CurrentUser;
-            var isOwnRoom = me != null
+            var hostIsMe = me != null
                 && _isHostInCurrentRoom
                 && string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
-            if (isOwnRoom)
+            if (hostIsMe)
                 hostName = string.IsNullOrEmpty(me!.DiscordUsername) ? me.DisplayName : me.DiscordUsername;
         }
         if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
@@ -2852,27 +3291,67 @@ public partial class MultiplayerTab : UserControl
         grid.Children.Add(pingCell);
 
         // -- Col 5: Status dot + label.
-        var statusCell = BuildStatusCell(inGame ? "In game" : "Waiting", inGame);
+        var statusCell = BuildStatusCell(
+            inGame ? Strings.Get("MpRoomStatusInGame") : Strings.Get("MpRoomStatusWaiting"),
+            inGame);
         Grid.SetColumn(statusCell, 5);
         grid.Children.Add(statusCell);
 
-        // -- Col 6: Join button. Hover state turns blue (matches
-        // the MpRowJoinButton template). Disabled if mod isn't
-        // installed, room is full, or game is in progress.
-        var joinBtn = new Button
+        // -- Col 6: action. The room's state decides the caption + whether
+        // it's clickable:
+        //   • room we're CURRENTLY in → "Re-enter" (re-opens/activates the
+        //     lobby window) — never a Join for a room we're already inside;
+        //   • OUR OWN room we're not session-tracked in (we closed the lobby
+        //     window but the backend kept the room) → disabled "Your room",
+        //     because re-joining your own room errors server-side. Detected
+        //     by HOST identity, not CurrentLobbyId, so it holds even after we
+        //     left the window;
+        //   • game in progress → "In game", disabled (the room is locked);
+        //   • full → "Full", disabled;
+        //   • mod not installed → "Join", disabled (can't pass the hash gate);
+        //   • otherwise → "Join", enabled.
+        var iAmInThisRoom = string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
+        var iAmHost = me != null && (
+            (!string.IsNullOrEmpty(lobby.Host.Id)
+                && string.Equals(lobby.Host.Id, me.Id, StringComparison.Ordinal))
+            || (!string.IsNullOrEmpty(lobby.Host.DiscordUsername)
+                && string.Equals(lobby.Host.DiscordUsername, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
+        var isFull = lobby.CurrentPlayers >= lobby.MaxPlayers;
+        var actionBtn = new Button
         {
-            Content = Strings.Get("MpRoomJoin"),
             Style = (Style)Application.Current.FindResource("MpRowJoinButton"),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
-            IsEnabled = modInstalled
-                && !inGame
-                && lobby.CurrentPlayers < lobby.MaxPlayers,
             Tag = lobby,
         };
-        joinBtn.Click += JoinRoomButton_Click;
-        Grid.SetColumn(joinBtn, 6);
-        grid.Children.Add(joinBtn);
+        if (iAmInThisRoom)
+        {
+            actionBtn.Content = Strings.Get("MpRoomReenter");
+            actionBtn.Click += (_, _) => OpenLobbyWindow();
+        }
+        else if (iAmHost)
+        {
+            actionBtn.Content = Strings.Get("MpRoomYours");
+            actionBtn.IsEnabled = false;
+        }
+        else if (inGame)
+        {
+            actionBtn.Content = Strings.Get("MpRoomStatusInGame");
+            actionBtn.IsEnabled = false;
+        }
+        else if (isFull)
+        {
+            actionBtn.Content = Strings.Get("MpRoomFull");
+            actionBtn.IsEnabled = false;
+        }
+        else
+        {
+            actionBtn.Content = Strings.Get("MpRoomJoin");
+            actionBtn.IsEnabled = modInstalled;
+            actionBtn.Click += JoinRoomButton_Click;
+        }
+        Grid.SetColumn(actionBtn, 6);
+        grid.Children.Add(actionBtn);
 
         row.Child = grid;
         return row;
@@ -2963,19 +3442,37 @@ public partial class MultiplayerTab : UserControl
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        panel.Children.Add(new System.Windows.Shapes.Ellipse
+        if (inGame)
         {
-            Width = 8, Height = 8,
-            Fill = (Brush)Application.Current.FindResource(
-                inGame ? "MpStatusInGame" : "MpStatusWaiting"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 7, 0),
-        });
+            // A lock glyph (instead of the status dot) so an in-progress room
+            // reads as "locked — can't join" at a glance, clearly distinct
+            // from a waiting room. Pairs with the disabled "En partida" action.
+            panel.Children.Add(new TextBlock
+            {
+                Text = "🔒",
+                Foreground = (Brush)Application.Current.FindResource("MpStatusInGame"),
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0),
+            });
+        }
+        else
+        {
+            panel.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 8, Height = 8,
+                Fill = (Brush)Application.Current.FindResource("MpStatusWaiting"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 7, 0),
+            });
+        }
         panel.Children.Add(new TextBlock
         {
             Text = label,
-            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            Foreground = (Brush)Application.Current.FindResource(
+                inGame ? "MpStatusInGame" : "TextPrimary"),
             FontSize = 12,
+            FontWeight = inGame ? FontWeights.SemiBold : FontWeights.Normal,
             VerticalAlignment = VerticalAlignment.Center,
         });
         return panel;
