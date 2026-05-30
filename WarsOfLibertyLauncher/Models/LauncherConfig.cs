@@ -553,6 +553,15 @@ public class LauncherConfig
     public string SkippedLauncherTag { get; set; } = "";
 
     /// <summary>
+    /// ETag from the last successful self-update check against the GitHub
+    /// Releases API. Sent back as If-None-Match so GitHub can answer 304 Not
+    /// Modified when the latest release is unchanged, sparing the unauthenticated
+    /// rate-limit (60 req/h per IP). Opaque value — never parsed, just echoed.
+    /// </summary>
+    [JsonPropertyName("launcherUpdateETag")]
+    public string LauncherUpdateETag { get; set; } = "";
+
+    /// <summary>
     /// GitHub repository where community translations live (format
     /// "owner/repo"). The launcher discovers translations by listing
     /// the releases of this repo and reading the <c>translation.json</c>

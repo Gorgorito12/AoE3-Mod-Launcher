@@ -4968,7 +4968,19 @@ public partial class MainWindow : Window
     {
         var result = await LauncherUpdateService.CheckAsync(
             lastInstalledTag: _config.LastInstalledLauncherTag,
-            skippedTag: _config.SkippedLauncherTag);
+            skippedTag: _config.SkippedLauncherTag,
+            cachedETag: _config.LauncherUpdateETag);
+
+        // Persist the ETag from this check (changed or not) so the next check can
+        // go conditional and short-circuit on 304. Only write when we actually
+        // got one back, to avoid clobbering a good cached value on a failure.
+        if (!string.IsNullOrEmpty(result.ResponseETag) &&
+            !string.Equals(result.ResponseETag, _config.LauncherUpdateETag, StringComparison.Ordinal))
+        {
+            _config.LauncherUpdateETag = result.ResponseETag;
+            _config.Save();
+        }
+
         if (!result.UpdateAvailable) return;
 
         // Pass the config to the dialog so it can persist the new tag right

@@ -1,14 +1,27 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace WarsOfLibertyLauncher.Services;
+
+/// <summary>
+/// Thrown when a downloaded launcher update fails integrity (SHA-256) or
+/// authenticity (Authenticode) verification. The caller surfaces this to the
+/// user and the suspect binary is deleted rather than swapped in.
+/// </summary>
+public class UpdateVerificationException : Exception
+{
+    public UpdateVerificationException(string message) : base(message) { }
+}
 
 /// <summary>
 /// Checks GitHub Releases for a newer version of the launcher and applies
@@ -30,7 +43,10 @@ public class LauncherUpdateService
         string LatestVersion,
         string? DownloadUrl,
         long DownloadSize,
-        string RemoteTag);
+        string RemoteTag,
+        string? ExpectedSha256 = null,
+        string? ReleaseNotes = null,
+        string? ResponseETag = null);
 
     /// <summary>
     /// The AssemblyVersion baked into this binary. Kept for diagnostics only —
@@ -57,9 +73,17 @@ public class LauncherUpdateService
     /// <param name="skippedTag">
     /// A tag the user previously dismissed. We won't re-prompt for it.
     /// </param>
+    /// <param name="cachedETag">
+    /// The ETag returned by the previous successful check (persisted in config).
+    /// Sent as If-None-Match so GitHub can answer 304 Not Modified when the
+    /// latest release is unchanged — avoids burning the unauthenticated API
+    /// rate-limit (60 req/h per IP, a real concern behind shared NAT). The
+    /// caller persists <see cref="UpdateCheckResult.ResponseETag"/> for next time.
+    /// </param>
     public static async Task<UpdateCheckResult> CheckAsync(
         string? lastInstalledTag = null,
         string? skippedTag = null,
+        string? cachedETag = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write(
@@ -68,9 +92,28 @@ public class LauncherUpdateService
 
         try
         {
-            var release = await Http.GetFromJsonAsync<GitHubRelease>(GitHubApiUrl, ct);
+            using var request = new HttpRequestMessage(HttpMethod.Get, GitHubApiUrl);
+            if (!string.IsNullOrEmpty(cachedETag))
+                request.Headers.TryAddWithoutValidation("If-None-Match", cachedETag);
+
+            using var response = await Http.SendAsync(request, ct);
+
+            // Latest release unchanged since last check — nothing to do, and we
+            // keep the same ETag cached. Safe because any update the user hasn't
+            // already installed would have been saved as the skipped tag on the
+            // prior prompt, so the full path would also return NoUpdate here.
+            if (response.StatusCode == HttpStatusCode.NotModified)
+            {
+                DiagnosticLog.Write("GitHub returned 304 Not Modified; release unchanged.");
+                return NoUpdate(lastInstalledTag) with { ResponseETag = cachedETag };
+            }
+
+            response.EnsureSuccessStatusCode();
+            var newETag = response.Headers.ETag?.ToString();
+
+            var release = await response.Content.ReadFromJsonAsync<GitHubRelease>(cancellationToken: ct);
             if (release == null || string.IsNullOrEmpty(release.TagName))
-                return NoUpdate(lastInstalledTag);
+                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
 
             var remoteTag = release.TagName;
 
@@ -78,7 +121,7 @@ public class LauncherUpdateService
             if (string.Equals(remoteTag, lastInstalledTag, StringComparison.OrdinalIgnoreCase))
             {
                 DiagnosticLog.Write($"Already on latest tag ({remoteTag}); no update.");
-                return NoUpdate(lastInstalledTag);
+                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
             }
 
             // The user dismissed this exact tag before.
@@ -86,19 +129,38 @@ public class LauncherUpdateService
             {
                 DiagnosticLog.Write(
                     $"User previously dismissed tag {remoteTag}; skipping prompt.");
-                return NoUpdate(lastInstalledTag);
+                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
+            }
+
+            // Semantic-version guard: only offer an update when the remote tag is
+            // strictly NEWER than what's installed. Tag-difference alone isn't
+            // enough — a re-published or rolled-back "latest" could carry an older
+            // version, and without this we'd happily "update" the user backwards.
+            // We only apply the guard when BOTH tags parse as SemVer; a fresh
+            // install (empty installed tag) or a non-SemVer tag keeps the original
+            // prompt-on-difference behaviour so we never silently miss an update.
+            if (TryParseSemVer(lastInstalledTag, out var installedVer) &&
+                TryParseSemVer(remoteTag, out var remoteVer) &&
+                remoteVer <= installedVer)
+            {
+                DiagnosticLog.Write(
+                    $"Remote tag {remoteTag} (v{remoteVer}) is not newer than installed " +
+                    $"{lastInstalledTag} (v{installedVer}); no update.");
+                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
             }
 
             var asset = FindExeAsset(release);
             if (asset == null)
             {
                 DiagnosticLog.Write("Remote release has no .exe asset.");
-                return NoUpdate(lastInstalledTag);
+                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
             }
+
+            var expectedSha = ExtractExpectedSha256(asset.Digest, release.Body);
 
             DiagnosticLog.Write(
                 $"Launcher update available: {lastInstalledTag ?? "(unknown)"} -> {remoteTag} " +
-                $"({asset.Name}, {asset.Size} bytes)");
+                $"({asset.Name}, {asset.Size} bytes, sha256={expectedSha ?? "(none published)"})");
 
             return new UpdateCheckResult(
                 UpdateAvailable: true,
@@ -106,22 +168,36 @@ public class LauncherUpdateService
                 LatestVersion: remoteTag,
                 DownloadUrl: asset.BrowserDownloadUrl,
                 DownloadSize: asset.Size,
-                RemoteTag: remoteTag);
+                RemoteTag: remoteTag,
+                ExpectedSha256: expectedSha,
+                ReleaseNotes: string.IsNullOrWhiteSpace(release.Body) ? null : release.Body.Trim(),
+                ResponseETag: newETag);
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Launcher update check failed: {ex.Message}");
-            return NoUpdate(lastInstalledTag);
+            // Preserve the cached ETag so a transient failure doesn't force a
+            // full (non-conditional) fetch on the next check.
+            return NoUpdate(lastInstalledTag) with { ResponseETag = cachedETag };
         }
     }
 
     /// <summary>
-    /// Downloads the new launcher .exe to a sibling temp file. Doesn't replace
-    /// the running binary yet — call <see cref="RelaunchUpdated"/> after the
-    /// user confirms.
+    /// Downloads the new launcher .exe to a sibling temp file, then verifies its
+    /// integrity (SHA-256) and authenticity (Authenticode) before declaring the
+    /// download usable. Doesn't replace the running binary yet — call
+    /// <see cref="RelaunchUpdated"/> after the user confirms.
     /// </summary>
+    /// <param name="expectedSha256">
+    /// Lowercase hex SHA-256 the downloaded .exe must match, as published by the
+    /// release (GitHub asset digest or a "SHA256:" line in the release notes).
+    /// When null/empty no hash was published — we log a warning and proceed (so
+    /// older releases that predate published hashes still self-update), relying
+    /// on the Authenticode check below as the remaining signal.
+    /// </param>
     public static async Task DownloadUpdateAsync(
         string downloadUrl,
+        string? expectedSha256 = null,
         IProgress<DownloadProgress>? progress = null,
         CancellationToken ct = default)
     {
@@ -140,7 +216,105 @@ public class LauncherUpdateService
         var downloader = new DownloadService();
         await downloader.DownloadFileAsync(downloadUrl, newExe, progress, ct);
 
-        DiagnosticLog.Write("Launcher update download complete.");
+        DiagnosticLog.Write("Launcher update download complete; verifying.");
+
+        try
+        {
+            await VerifyDownloadAsync(newExe, currentExe, expectedSha256, ct);
+        }
+        catch
+        {
+            // Never leave an unverified binary sitting next to the .exe where a
+            // later RelaunchUpdated could swap it in.
+            try { if (File.Exists(newExe)) File.Delete(newExe); } catch { }
+            throw;
+        }
+
+        DiagnosticLog.Write("Launcher update verified.");
+    }
+
+    /// <summary>
+    /// Verifies the freshly-downloaded launcher binary before it can replace the
+    /// running one. Two independent checks:
+    ///   * SHA-256 — when a hash was published, the bytes on disk must match it
+    ///     exactly (rejects truncated/corrupted/MITM'd downloads). No published
+    ///     hash → warn and skip (back-compat with pre-hash releases).
+    ///   * Authenticode — the downloaded .exe must carry a code signature whose
+    ///     signer matches the CURRENTLY-RUNNING binary's signer. We read the
+    ///     current signer at runtime instead of hard-coding "CN=Gorgorito" so a
+    ///     future cert rotation needs no code change. If the running binary
+    ///     itself is unsigned (signing is "automatic but optional" per the build
+    ///     setup) we can't establish an expected signer, so we only warn.
+    /// Either failed check throws <see cref="UpdateVerificationException"/>.
+    /// </summary>
+    private static async Task VerifyDownloadAsync(
+        string newExe, string currentExe, string? expectedSha256, CancellationToken ct)
+    {
+        // 1. Integrity: SHA-256.
+        if (!string.IsNullOrWhiteSpace(expectedSha256))
+        {
+            var actual = await HashService.ComputeSha256Async(newExe, ct);
+            if (!string.Equals(actual, expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                DiagnosticLog.Write(
+                    $"Update SHA-256 mismatch. expected={expectedSha256} actual={actual}");
+                throw new UpdateVerificationException(
+                    "The downloaded update failed its SHA-256 integrity check.");
+            }
+            DiagnosticLog.Write("Update SHA-256 matches published hash.");
+        }
+        else
+        {
+            DiagnosticLog.Write(
+                "No SHA-256 published for this release; skipping integrity check.");
+        }
+
+        // 2. Authenticity: Authenticode signer must match the running binary's.
+        var expectedSigner = TryGetAuthenticodeSubject(currentExe);
+        var actualSigner = TryGetAuthenticodeSubject(newExe);
+
+        if (expectedSigner == null)
+        {
+            DiagnosticLog.Write(
+                "Running launcher is unsigned; cannot enforce signer match (skipping).");
+            return;
+        }
+
+        if (actualSigner == null)
+        {
+            throw new UpdateVerificationException(
+                "The downloaded update is not Authenticode-signed.");
+        }
+
+        if (!string.Equals(actualSigner, expectedSigner, StringComparison.OrdinalIgnoreCase))
+        {
+            DiagnosticLog.Write(
+                $"Update signer mismatch. expected='{expectedSigner}' actual='{actualSigner}'");
+            throw new UpdateVerificationException(
+                "The downloaded update is signed by an unexpected publisher.");
+        }
+
+        DiagnosticLog.Write($"Update signer matches running binary ({actualSigner}).");
+    }
+
+    /// <summary>
+    /// Returns the subject of the Authenticode certificate embedded in the given
+    /// file, or null if the file carries no usable signature. Note this reads
+    /// the embedded cert subject only — it does not validate the trust chain
+    /// (that's the OS's job at load time); the meaningful guarantee here is
+    /// "same signer as the binary the user already trusts and is running".
+    /// </summary>
+    private static string? TryGetAuthenticodeSubject(string filePath)
+    {
+        try
+        {
+            using var cert = new X509Certificate2(X509Certificate.CreateFromSignedFile(filePath));
+            return cert.Subject;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -163,8 +337,26 @@ public class LauncherUpdateService
         try { if (File.Exists(oldExe)) File.Delete(oldExe); } catch { }
 
         DiagnosticLog.Write("Replacing launcher executable...");
+
+        // Step 1: move the running binary aside. On Windows a running .exe can be
+        // renamed (the open handle keeps pointing at the moved file).
         File.Move(currentExe, oldExe);
-        File.Move(newExe, currentExe);
+
+        // Step 2: swap in the new binary. If this fails (AV lock, partial write,
+        // disk full) we must NOT leave the launcher with no executable at its own
+        // path — roll the original back so the user still has a working launcher.
+        try
+        {
+            File.Move(newExe, currentExe);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(
+                $"Swap-in of new launcher failed ({ex.Message}); rolling back original.");
+            try { File.Move(oldExe, currentExe); } catch { /* original already at oldExe */ }
+            throw new InvalidOperationException(
+                "Could not replace the launcher executable; the original was restored.", ex);
+        }
 
         DiagnosticLog.Write("Starting updated launcher...");
         Process.Start(new ProcessStartInfo
@@ -181,49 +373,112 @@ public class LauncherUpdateService
     }
 
     /// <summary>
-    /// Removes leftover .old files from a previous self-update.
-    /// Call this early on startup.
+    /// Removes leftover files from a previous self-update: the renamed-aside
+    /// <c>.old</c> binary, and any <c>_new.exe</c> orphaned by a download that
+    /// was aborted before the swap. Call this early on startup.
     /// </summary>
     public static void CleanupOldVersion()
     {
         var currentExe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(currentExe)) return;
 
-        var oldExe = currentExe + ".old";
-        try
+        foreach (var stale in new[] { currentExe + ".old", GetPendingUpdatePath(currentExe) })
         {
-            if (File.Exists(oldExe))
+            try
             {
-                File.Delete(oldExe);
-                DiagnosticLog.Write("Cleaned up old launcher version.");
+                if (File.Exists(stale))
+                {
+                    File.Delete(stale);
+                    DiagnosticLog.Write($"Cleaned up stale self-update file: {Path.GetFileName(stale)}");
+                }
             }
-        }
-        catch
-        {
-            // File may still be locked briefly after startup; ignore.
+            catch
+            {
+                // File may still be locked briefly after startup; ignore.
+            }
         }
     }
 
     private static UpdateCheckResult NoUpdate(string? currentTag)
     {
         var label = string.IsNullOrEmpty(currentTag) ? "—" : currentTag!;
-        return new(false, label, label, null, 0, currentTag ?? "");
+        return new(false, label, label, null, 0, currentTag ?? "", null, null);
+    }
+
+    /// <summary>
+    /// Parses a release tag into a comparable <see cref="Version"/>. Tolerates a
+    /// leading "v"/"V" and a trailing pre-release/build suffix ("-rc1", "+commit"),
+    /// comparing on the numeric "major.minor.patch[.build]" core only. Returns
+    /// false for empty or non-numeric tags so callers can fall back to
+    /// tag-difference behaviour rather than mis-ordering them.
+    /// </summary>
+    private static bool TryParseSemVer(string? tag, out Version version)
+    {
+        version = new Version(0, 0);
+        if (string.IsNullOrWhiteSpace(tag)) return false;
+
+        var core = tag.Trim().TrimStart('v', 'V');
+        // Drop any pre-release ("-rc1") or build ("+sha") metadata.
+        var cut = core.IndexOfAny(new[] { '-', '+' });
+        if (cut >= 0) core = core[..cut];
+
+        return Version.TryParse(core, out version!);
     }
 
     private static GitHubAsset? FindExeAsset(GitHubRelease release)
     {
         if (release.Assets == null) return null;
+
+        // Prefer the canonical launcher binary by exact name so a release that
+        // also ships, say, a helper or installer .exe doesn't get picked by
+        // accident. Fall back to the first .exe only when there's no exact match.
+        GitHubAsset? firstExe = null;
         foreach (var asset in release.Assets)
         {
-            if (asset.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            if (!asset.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (string.Equals(asset.Name, "Aoe3ModLauncher.exe", StringComparison.OrdinalIgnoreCase))
                 return asset;
+            firstExe ??= asset;
         }
+        return firstExe;
+    }
+
+    /// <summary>
+    /// Resolves the expected SHA-256 (lowercase hex, 64 chars) of the update
+    /// asset from, in order of preference: (1) GitHub's per-asset <c>digest</c>
+    /// field ("sha256:…", populated for newer releases); (2) a "SHA256:" /
+    /// "SHA-256:" line in the release notes body — which is exactly what
+    /// build-release.ps1 prints for the maintainer to paste. Returns null when
+    /// neither is present.
+    /// </summary>
+    private static string? ExtractExpectedSha256(string? assetDigest, string? releaseBody)
+    {
+        if (!string.IsNullOrWhiteSpace(assetDigest))
+        {
+            var m = Regex.Match(assetDigest, @"sha256:([0-9a-fA-F]{64})", RegexOptions.IgnoreCase);
+            if (m.Success) return m.Groups[1].Value.ToLowerInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(releaseBody))
+        {
+            var m = Regex.Match(releaseBody, @"sha-?256\s*[:=]\s*([0-9a-fA-F]{64})",
+                RegexOptions.IgnoreCase);
+            if (m.Success) return m.Groups[1].Value.ToLowerInvariant();
+        }
+
         return null;
     }
 
     private static HttpClient CreateHttpClient()
     {
-        var client = new HttpClient();
+        var client = new HttpClient
+        {
+            // Cap the wait so a slow/unreachable GitHub doesn't stall the startup
+            // WhenAll for the default 100 s. The self-update is non-critical at
+            // boot; if the check times out we just proceed from cached state.
+            Timeout = TimeSpan.FromSeconds(15),
+        };
         client.DefaultRequestHeaders.Add("User-Agent", "WarsOfLibertyLauncher");
         client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
         return client;
@@ -234,6 +489,9 @@ public class LauncherUpdateService
     {
         [JsonPropertyName("tag_name")]
         public string TagName { get; set; } = "";
+
+        [JsonPropertyName("body")]
+        public string? Body { get; set; }
 
         [JsonPropertyName("assets")]
         public GitHubAsset[]? Assets { get; set; }
@@ -249,5 +507,13 @@ public class LauncherUpdateService
 
         [JsonPropertyName("size")]
         public long Size { get; set; }
+
+        /// <summary>
+        /// Content digest GitHub computes for the asset, e.g. "sha256:abc…".
+        /// Present on newer releases; null on older ones (we fall back to the
+        /// release body — see <see cref="ExtractExpectedSha256"/>).
+        /// </summary>
+        [JsonPropertyName("digest")]
+        public string? Digest { get; set; }
     }
 }

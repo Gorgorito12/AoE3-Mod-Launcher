@@ -41,6 +41,15 @@ public partial class LauncherUpdateDialog : Window
         ProgressLabelText.Text = Strings.Get("DlgLauncherUpdateReadyToDownload");
         StatusText.Text = Strings.Get("DlgLauncherUpdateConfirmPrompt");
 
+        // Show the release notes ("What's new") only when the release carries a
+        // body — otherwise keep the section collapsed so the dialog stays compact.
+        if (!string.IsNullOrWhiteSpace(update.ReleaseNotes))
+        {
+            ReleaseNotesHeader.Text = Strings.Get("DlgLauncherUpdateWhatsNew");
+            ReleaseNotesText.Text = update.ReleaseNotes!.Trim();
+            ReleaseNotesSection.Visibility = Visibility.Visible;
+        }
+
         ActionButton.Content = Strings.Get("DlgLauncherUpdateBtnDownload");
         CancelButton.Content = Strings.Get("BtnCancel");
     }
@@ -125,7 +134,8 @@ public partial class LauncherUpdateDialog : Window
 
         try
         {
-            await LauncherUpdateService.DownloadUpdateAsync(_update.DownloadUrl!, progress, _cts.Token);
+            await LauncherUpdateService.DownloadUpdateAsync(
+                _update.DownloadUrl!, _update.ExpectedSha256, progress, _cts.Token);
 
             _phase = Phase.ReadyToRestart;
             ActionButton.IsEnabled = true;
@@ -140,6 +150,20 @@ public partial class LauncherUpdateDialog : Window
         catch (OperationCanceledException)
         {
             DialogResult = false;
+        }
+        catch (UpdateVerificationException ex)
+        {
+            // Integrity/authenticity failure — the suspect binary was already
+            // deleted by the service. Tell the user plainly rather than showing
+            // a raw exception string.
+            _phase = Phase.Failed;
+            ActionButton.IsEnabled = true;
+            ActionButton.Content = Strings.Get("BtnClose");
+            ProgressLabelText.Text = Strings.Get("DlgLauncherUpdateVerifyFailed");
+            StatusText.Text = Strings.Get("DlgLauncherUpdateVerifyFailedBody");
+            SpeedText.Text = "";
+            EtaText.Text = "";
+            DiagnosticLog.Write($"Launcher self-update verification failed: {ex.Message}");
         }
         catch (Exception ex)
         {
