@@ -589,6 +589,61 @@ longer exists — don't go looking for it.)
   slow-mode drop bails *before* incrementing the per-minute counter so it isn't
   double-penalized.
 
+- **The launcher self-update (`LauncherUpdateService`) verifies before it
+  swaps, and the swap is reversible — don't loosen either.** Detection is
+  still **tag-based** (compare GitHub's `releases/latest` `tag_name` to
+  `config.LastInstalledLauncherTag`, decoupled from AssemblyVersion), but the
+  flow is now hardened in four load-bearing ways: (1) **SemVer guard** —
+  `CheckAsync` only offers an update when the remote tag parses as a *strictly
+  newer* SemVer than the installed one (`TryParseSemVer` strips a leading `v`
+  and any `-rc`/`+commit` suffix). The guard applies **only when BOTH tags
+  parse**; an empty installed tag (fresh install) or a non-SemVer tag falls
+  back to the old prompt-on-any-difference behaviour, so a weird tag scheme
+  can't silently hide an update — but it also means **releases must use SemVer
+  tags** (`v0.9.8`) for the "don't update backwards" protection to engage.
+  (2) **Integrity + authenticity verification** runs inside
+  `DownloadUpdateAsync` *before* the binary is usable, and on failure deletes
+  the downloaded `_new.exe` and throws `UpdateVerificationException` (the dialog
+  shows a localized `DlgLauncherUpdateVerifyFailed*` message). **SHA-256**: the
+  expected hash comes from GitHub's per-asset `digest` field, falling back to a
+  `SHA256:`/`SHA-256:` line parsed out of the release **body**
+  (`ExtractExpectedSha256`) — which is exactly the paste-ready line
+  `build-release.ps1` now prints. The check is **deliberately tolerant**: a
+  missing published hash logs a warning and *proceeds* (so pre-hash releases
+  still self-update) rather than hard-blocking. **Authenticode**: the
+  downloaded `.exe` must be signed by the **same `Subject` as the
+  currently-running binary** (read at runtime via
+  `X509Certificate.CreateFromSignedFile`, NOT hard-coded `CN=Gorgorito`, so a
+  cert rotation needs no code change); if the running binary is itself unsigned
+  it can't establish an expected signer and only warns. **Note this is a
+  same-signer check, not a trust-chain validation** — the self-signed cert
+  isn't in a CA chain; the guarantee is "same publisher as the binary the user
+  already trusts and is running", which is the meaningful one for a
+  self-updater. (3) **Atomic swap with rollback** — `RelaunchUpdated` renames
+  `current → .old` then `new → current`; if the second move fails (AV lock,
+  partial write) it **restores `.old → current`** and throws, so the user is
+  never left with no executable at the launcher's own path. `CleanupOldVersion`
+  (called early on startup) now also deletes an orphaned `_new.exe` from an
+  aborted download, not just `.old`. (4) **Conditional fetch (ETag/304)** —
+  `CheckAsync` sends `If-None-Match` with `config.LauncherUpdateETag` and
+  returns `NoUpdate` on `304 Not Modified`, sparing the unauthenticated GitHub
+  rate-limit (60 req/h per IP — a real concern behind shared NAT / Radmin). The
+  ETag is threaded through **every** return path (including the `catch`, which
+  preserves the cached value so a transient failure doesn't force a full fetch)
+  and persisted by the caller in `MainWindow.CheckForLauncherUpdateInnerAsync`
+  only when it changed. Returning `NoUpdate` on 304 is **correct, not a missed
+  prompt**: after the first prompt the tag is always either installed or saved
+  as `SkippedLauncherTag` (any dialog dismissal saves it), so the full path
+  would also return `NoUpdate`; a genuinely new release changes GitHub's ETag →
+  `200` → re-evaluated. Asset selection (`FindExeAsset`) prefers the exact name
+  `Aoe3ModLauncher.exe`, falling back to the first `.exe` only when there's no
+  exact match, and the `HttpClient` has a 15 s timeout so a slow GitHub doesn't
+  stall the startup `WhenAll`. The dialog also surfaces the release `body` as a
+  **"Novedades"/"What's new"** section (`ReleaseNotesSection`, collapsed when
+  empty). **Publishing contract:** ship a SemVer-tagged release with the signed
+  `Aoe3ModLauncher.exe` asset and paste the `SHA256:` line from
+  `build-release.ps1` into the release notes (or rely on GitHub's `digest`).
+
 ## Architecture
 
 WPF MVVM-lite single project. UI is thin; the **`Services/` layer is the

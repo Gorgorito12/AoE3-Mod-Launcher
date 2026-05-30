@@ -24,6 +24,26 @@
                    Foreground="#aaa"
                    Margin="0,0,0,16"/>
 
+        <!-- "What's new" — the release notes (release.body), shown only when the
+             release has any. Scrolls so a long changelog doesn't blow up the
+             dialog height (the Window is SizeToContent="Height"). -->
+        <StackPanel x:Name="ReleaseNotesSection" Visibility="Collapsed" Margin="0,0,0,16">
+            <TextBlock x:Name="ReleaseNotesHeader"
+                       FontSize="11" FontWeight="SemiBold"
+                       Foreground="#888"
+                       Margin="0,0,0,4"/>
+            <Border Background="{DynamicResource BgPanel}"
+                    BorderBrush="#3A434F" BorderThickness="1"
+                    CornerRadius="4" Padding="10">
+                <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="ReleaseNotesText"
+                               FontSize="12"
+                               Foreground="#ccc"
+                               TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </Border>
+        </StackPanel>
+
         <Grid Margin="0,0,0,4">
             <TextBlock x:Name="ProgressLabelText"
                        FontSize="11" Foreground="#888"/>

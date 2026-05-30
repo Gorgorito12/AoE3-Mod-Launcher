@@ -3466,6 +3466,27 @@ public static class Strings
                        "Haz click en REINICIAR AHORA para aplicarla, o MÁS TARDE para seguir usando esta " +
                        "versión (la actualización se aplicará la próxima vez que abras el launcher).",
         },
+        ["DlgLauncherUpdateWhatsNew"] = new()
+        {
+            [LangEn] = "WHAT'S NEW",
+            [LangEs] = "NOVEDADES",
+        },
+        ["DlgLauncherUpdateVerifyFailed"] = new()
+        {
+            [LangEn] = "Verification failed",
+            [LangEs] = "Verificación fallida",
+        },
+        ["DlgLauncherUpdateVerifyFailedBody"] = new()
+        {
+            [LangEn] = "The downloaded update could not be verified (its checksum or " +
+                       "signature didn't match what the release published). The file was " +
+                       "discarded and your current launcher was left untouched. Please try " +
+                       "again later or download the update manually from GitHub.",
+            [LangEs] = "No se pudo verificar la actualización descargada (su checksum o firma " +
+                       "no coincide con lo publicado en la release). El archivo se descartó y tu " +
+                       "launcher actual quedó intacto. Inténtalo de nuevo más tarde o descarga la " +
+                       "actualización manualmente desde GitHub.",
+        },
         ["DlgLauncherUpdateBtnDownload"] = new()
         {
             [LangEn] = "DOWNLOAD",

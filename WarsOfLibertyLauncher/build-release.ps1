@@ -194,3 +194,10 @@ if ($sig.Status -ne 'Valid') {
 
 Write-Host 'Ready to upload to GitHub Releases. Include the SHA-256 above in the release notes so users can verify the download.' -ForegroundColor Cyan
 Write-Host ''
+# Paste-ready line for the GitHub release notes. The launcher's self-update
+# (LauncherUpdateService.ExtractExpectedSha256) parses a "SHA256:" line out of
+# the release body as its integrity-check fallback when GitHub's asset digest
+# field isn't available, so copy this verbatim into the release description.
+Write-Host 'Copy this line into the GitHub release notes (used by the launcher to verify the download):' -ForegroundColor Cyan
+Write-Host "SHA256: $hash"
+Write-Host ''
