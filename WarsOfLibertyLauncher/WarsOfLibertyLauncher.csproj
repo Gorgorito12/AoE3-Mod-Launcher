@@ -16,7 +16,9 @@
     -->
     <AssemblyName>Aoe3ModLauncher</AssemblyName>
     <RootNamespace>WarsOfLibertyLauncher</RootNamespace>
-    <Version>0.6.0</Version>
+    <Version>0.9.8</Version>
+    <Authors>Gorgorito</Authors>
+    <Company>Gorgorito</Company>
     <!-- Icon embedded in the .exe — shows in Explorer, taskbar, Alt+Tab,
          the launcher's own window header, and Windows shortcuts pointing
          at this binary. Separate from WoL.ico (which keeps the Wars of
@@ -167,7 +169,7 @@
     Windows-only; skipped on other OSes via the Condition.
   -->
   <PropertyGroup>
-    <SignCertThumbprint>9ED7550914A663A1B8AB52B5893FF61CD6C89C90</SignCertThumbprint>
+    <SignCertThumbprint>6C46C6DEAB2BE94374EFD5925CE9A819946E00E9</SignCertThumbprint>
     <SignTimestampServer>http://timestamp.digicert.com</SignTimestampServer>
   </PropertyGroup>
 
