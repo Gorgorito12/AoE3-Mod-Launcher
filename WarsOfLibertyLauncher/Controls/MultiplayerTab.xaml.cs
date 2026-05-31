@@ -757,7 +757,7 @@ public partial class MultiplayerTab : UserControl
         {
             Interval = TimeSpan.FromSeconds(3),
         };
-        _roomsPingTimer.Tick += (_, _) => { KickConnectionPing(); RefreshRoomPingCells(); };
+        _roomsPingTimer.Tick += (_, _) => { KickConnectionPing(); RefreshRoomPingCells(); UpdateRoomsUpdatedLabel(); };
         _roomsPingTimer.Start();
         KickConnectionPing();
 
@@ -820,9 +820,9 @@ public partial class MultiplayerTab : UserControl
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
         GlobalChatHeaderText.Text = Strings.Get("MpGlobalChatTitle");
-        GlobalChatChannelText.Text = Strings.Get("MpGlobalChatChannel");
         GlobalChatPlaceholder.Text = Strings.Get("MpGlobalChatPlaceholder");
-        GlobalChatSendButton.Content = Strings.Get("MpGlobalChatSend");
+        // Send is an icon button now — the localized caption lives on its ToolTip.
+        GlobalChatSendButton.ToolTip = Strings.Get("MpGlobalChatSend");
         UpdateGlobalChatEmptyHint();
 
         // Lobby window labels — only updated if it's currently open.
@@ -843,19 +843,12 @@ public partial class MultiplayerTab : UserControl
                 RefreshInGamePanel();
         }
 
-        // Table column headers + empty-state copy. These have no
-        // translation keys today; we use the wording from the
-        // redesign brief directly. When localisation lands, route
-        // them through Strings.Get like everything else.
-        ColHeaderRoom.Text = "ROOM";
-        ColHeaderHost.Text = "HOST";
-        ColHeaderPlayers.Text = "PLAYERS";
-        ColHeaderPing.Text = "PING";
-        ColHeaderStatus.Text = "STATUS";
-        ColHeaderAction.Text = "ACTION";
-        EmptyTitleText.Text = "No rooms available right now";
-        EmptyBodyText.Text = "Be the first to create one and start a game!";
+        // Empty-state copy — now localized (the old table column headers
+        // were removed with the switch to room cards).
+        EmptyTitleText.Text = Strings.Get("MpRoomsEmptyTitle");
+        EmptyBodyText.Text = Strings.Get("MpRoomsEmptyBody");
         EmptyCreateButton.Content = "+  " + Strings.Get("MpRoomsCreate");
+        UpdateRoomsUpdatedLabel();
 
         UpdateSubtabHighlights();
         RenderNatBadge();
@@ -2743,6 +2736,12 @@ public partial class MultiplayerTab : UserControl
             // round-trip.
             _lastBrowserList = list.Lobbies as List<LobbySummary> ?? new List<LobbySummary>(list.Lobbies);
 
+            // Stamp the "last updated" label on every successful fetch — even a
+            // quiet poll that skips the re-render still confirmed the list is
+            // current, so the header should reflect it.
+            _lastRoomsRenderedAt = DateTime.Now;
+            UpdateRoomsUpdatedLabel();
+
             // Quiet auto-refresh: bail out without touching the visual
             // tree when the rooms are exactly what we already rendered.
             // That keeps Join buttons, hover and scroll position intact
@@ -2770,13 +2769,10 @@ public partial class MultiplayerTab : UserControl
             }
             RoomsEmptyState.Visibility = Visibility.Collapsed;
 
-            // Render alternating row backgrounds so the table reads
-            // as a table, not a stack of cards. The header strip
-            // above defines the column widths; BuildRoomRow mirrors
-            // them so the columns line up.
+            // Render each room as a card tiled across the WrapPanel.
             int idx = 0;
             foreach (var lobby in list.Lobbies)
-                RoomsListPanel.Children.Add(BuildRoomRow(lobby, idx++));
+                RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
             _lastRenderedRoomsSignature = signature;
         }
         catch (Exception ex)
@@ -2804,7 +2800,7 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// Compact signature of the rooms list as the server returned it,
-    /// covering every field <see cref="BuildRoomRow"/> renders (in order)
+    /// covering every field <see cref="BuildRoomCard"/> renders (in order)
     /// so the quiet auto-refresh can tell "nothing changed" from "repaint
     /// needed" with a single string compare. Ping is deliberately excluded
     /// — it's your own latency, identical across rows, and owned by
@@ -2875,6 +2871,7 @@ public partial class MultiplayerTab : UserControl
         _ = sock.DisposeAsync();
         _globalChatRendered = false;
         GlobalChatPanel.Children.Clear();
+        _lastGlobalChatAuthor = null;
         GlobalChatPresenceText.Text = "";
         GlobalChatNotice.Visibility = Visibility.Collapsed;
         UpdateGlobalChatEmptyHint();
@@ -2920,6 +2917,7 @@ public partial class MultiplayerTab : UserControl
     private void RenderGlobalChatState(JsonElement json)
     {
         GlobalChatPanel.Children.Clear();
+        _lastGlobalChatAuthor = null;
         _globalChatRendered = true;
         if (json.TryGetProperty("history", out var hist) && hist.ValueKind == JsonValueKind.Array)
         {
@@ -2944,99 +2942,134 @@ public partial class MultiplayerTab : UserControl
         if (scroll) ScrollGlobalChatToEnd();
     }
 
+    /// <summary>Author of the last appended global-chat row, so consecutive
+    /// messages from the same person render as continuations (no repeated
+    /// avatar/name). Reset to null whenever the panel is cleared.</summary>
+    private string? _lastGlobalChatAuthor;
+
     /// <summary>
-    /// Build one chat row: avatar (real Discord photo, monogram fallback) + a
-    /// name/time header line + the wrapped message body. Mirrors the mockup's
-    /// left-aligned bubbles.
+    /// Build one chat row as a subtle left-aligned bubble: avatar (real Discord
+    /// photo, monogram fallback) + a name/time header line + the message body in
+    /// a rounded bubble. Consecutive messages from the SAME author render as
+    /// continuations — no repeated avatar/name, just the bubble aligned under
+    /// the first one — to cut the visual repetition.
     /// </summary>
     private void AppendGlobalChatRow(string login, string body, long atMs, string? avatarUrl)
     {
         var textPrimary = (Brush)Application.Current.FindResource("TextPrimary");
         var textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
+        var bubbleBg = (Brush)Application.Current.FindResource("MpSurfaceAlt");
 
-        var grid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bool sameAuthor = !string.IsNullOrEmpty(login)
+            && string.Equals(login, _lastGlobalChatAuthor, StringComparison.Ordinal);
+
+        // The message body, rendered as a rounded bubble.
+        var bubble = new Border
+        {
+            Background = bubbleBg,
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10, 6, 10, 7),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, sameAuthor ? 0 : 3, 0, 0),
+            Child = new TextBlock
+            {
+                Text = body,
+                Foreground = textPrimary,
+                FontSize = 12.5,
+                TextWrapping = TextWrapping.Wrap,
+            },
+        };
+
+        var grid = new Grid
+        {
+            // Tight gap for a continuation, a clearer gap when the author changes.
+            Margin = new Thickness(0, sameAuthor ? 2 : 12, 0, 0),
+        };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        // Avatar: monogram fallback with the real Discord photo painted on
-        // top when we have a URL (if the image fails to load, the monogram
-        // underneath stays visible).
-        var avatarInner = new Grid();
-        avatarInner.Children.Add(new TextBlock
+        if (sameAuthor)
         {
-            Text = Monogram(login),
-            Foreground = textSecondary,
-            FontWeight = FontWeights.Bold,
-            FontSize = 12,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        if (!string.IsNullOrEmpty(avatarUrl))
-        {
-            var photo = new System.Windows.Shapes.Ellipse { Width = 30, Height = 30 };
-            try
-            {
-                photo.Fill = new ImageBrush(
-                    new System.Windows.Media.Imaging.BitmapImage(new Uri(avatarUrl, UriKind.Absolute)))
-                {
-                    Stretch = Stretch.UniformToFill,
-                };
-            }
-            catch { /* malformed URL → leave the monogram visible */ }
-            avatarInner.Children.Add(photo);
+            // Continuation: just the bubble, aligned under the first message.
+            Grid.SetColumn(bubble, 1);
+            grid.Children.Add(bubble);
         }
-        var avatar = new Border
+        else
         {
-            Width = 30,
-            Height = 30,
-            CornerRadius = new CornerRadius(15),
-            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 0, 10, 0),
-            Child = avatarInner,
-        };
-        Grid.SetColumn(avatar, 0);
-        grid.Children.Add(avatar);
-
-        var stack = new StackPanel();
-        Grid.SetColumn(stack, 1);
-
-        var header = new StackPanel { Orientation = Orientation.Horizontal };
-        header.Children.Add(new TextBlock
-        {
-            Text = string.IsNullOrWhiteSpace(login) ? "—" : login,
-            Foreground = textPrimary,
-            FontWeight = FontWeights.SemiBold,
-            FontSize = 12.5,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        if (atMs > 0)
-        {
-            header.Children.Add(new TextBlock
+            // Avatar: monogram fallback with the real Discord photo painted on
+            // top when we have a URL (if the image fails to load, the monogram
+            // underneath stays visible).
+            var avatarInner = new Grid();
+            avatarInner.Children.Add(new TextBlock
             {
-                Text = FormatChatTime(atMs),
+                Text = Monogram(login),
                 Foreground = textSecondary,
-                FontSize = 11,
-                Margin = new Thickness(8, 0, 0, 0),
+                FontWeight = FontWeights.Bold,
+                FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             });
+            if (!string.IsNullOrEmpty(avatarUrl))
+            {
+                var photo = new System.Windows.Shapes.Ellipse { Width = 30, Height = 30 };
+                try
+                {
+                    photo.Fill = new ImageBrush(
+                        new System.Windows.Media.Imaging.BitmapImage(new Uri(avatarUrl, UriKind.Absolute)))
+                    {
+                        Stretch = Stretch.UniformToFill,
+                    };
+                }
+                catch { /* malformed URL → leave the monogram visible */ }
+                avatarInner.Children.Add(photo);
+            }
+            var avatar = new Border
+            {
+                Width = 30,
+                Height = 30,
+                CornerRadius = new CornerRadius(15),
+                Background = bubbleBg,
+                VerticalAlignment = VerticalAlignment.Top,
+                Child = avatarInner,
+            };
+            Grid.SetColumn(avatar, 0);
+            grid.Children.Add(avatar);
+
+            var stack = new StackPanel();
+            Grid.SetColumn(stack, 1);
+
+            var header = new StackPanel { Orientation = Orientation.Horizontal };
+            header.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(login) ? "—" : login,
+                Foreground = textPrimary,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 12.5,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            if (atMs > 0)
+            {
+                header.Children.Add(new TextBlock
+                {
+                    Text = FormatChatTime(atMs),
+                    Foreground = textSecondary,
+                    FontSize = 10.5,
+                    Margin = new Thickness(8, 1, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+            }
+            stack.Children.Add(header);
+            stack.Children.Add(bubble);
+            grid.Children.Add(stack);
         }
-        stack.Children.Add(header);
-        stack.Children.Add(new TextBlock
-        {
-            Text = body,
-            Foreground = textSecondary,
-            FontSize = 12.5,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 1, 0, 0),
-        });
-        grid.Children.Add(stack);
 
         GlobalChatPanel.Children.Add(grid);
+        _lastGlobalChatAuthor = login;
     }
 
     private void UpdateGlobalPresence(int online) =>
-        GlobalChatPresenceText.Text = "👥  " + Strings.Format("MpGlobalChatPresence", online);
+        // The presence dot lives in the merged header now, so just the count text.
+        GlobalChatPresenceText.Text = Strings.Format("MpGlobalChatPresence", online);
 
     /// <summary>
     /// Toggle the centered hint shown when the message list is empty:
@@ -3144,79 +3177,49 @@ public partial class MultiplayerTab : UserControl
     /// driven by <paramref name="rowIndex"/> so a long list stays
     /// scannable.
     /// </summary>
-    private Border BuildRoomRow(LobbySummary lobby, int rowIndex)
+    private Border BuildRoomCard(LobbySummary lobby, int rowIndex)
     {
-        // Is the lobby's mod actually installed on this PC? If not,
-        // the user can't join (they wouldn't pass the fingerprint
-        // check). Show the row dimmed with a "mod not installed"
-        // note so it's obvious why Join is disabled.
+        // Is the lobby's mod actually installed on this PC? If not, the user
+        // can't join (they wouldn't pass the fingerprint check). The card is
+        // dimmed with a "mod not installed" note so it's obvious why Join is off.
         var modInstalled = IsModInstalledLocally(lobby.ModId);
         var inGame = lobby.Status == "in_game";
+        var isFull = lobby.CurrentPlayers >= lobby.MaxPlayers;
         var me = _session?.CurrentUser;
         var textPrimary = (Brush)Application.Current.FindResource("TextPrimary");
         var textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
-        var divider = (Brush)Application.Current.FindResource("MpDivider");
 
-        // Zebra stripes — base = MpSurface, alt = transparent.
-        // Even-index rows get the subtle tint so the first row
-        // doesn't bleed into the header strip above.
-        Brush rowBg = (rowIndex % 2 == 0)
-            ? Brushes.Transparent
-            : (Brush)Application.Current.FindResource("MpSurface");
-
-        var row = new Border
+        var card = new Border
         {
-            Background = rowBg,
-            BorderBrush = divider,
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(24, 10, 24, 10),
-            Opacity = modInstalled ? 1.0 : 0.55,
-        };
-
-        var grid = new Grid();
-        // Mirror the header column widths exactly.
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.4, GridUnitType.Star), MinWidth = 160 });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.6, GridUnitType.Star), MinWidth = 110 });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
-
-        // -- Col 0: favorite star. Local-only flag (not persisted
-        // for v1) — purely cosmetic, but keeps the row width
-        // matching the reference and gives users a click target
-        // for the future "starred lobbies" feature.
-        var starBtn = new Button
-        {
-            Content = "☆",
-            Style = (Style)Application.Current.FindResource("MpIconButton"),
-            FontSize = 16,
-            VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "Star this room (local)",
+            // MpRoomCard is a LOCAL UserControl resource (not app-global like
+            // the brushes), so resolve it via this control's FindResource, not
+            // Application.Current.FindResource (which only sees merged app dicts).
+            Style = (Style)FindResource("MpRoomCard"),
+            Width = 326,
+            Margin = new Thickness(0, 0, 12, 12),
+            Opacity = modInstalled ? 1.0 : 0.6,
             Tag = lobby,
         };
-        Grid.SetColumn(starBtn, 0);
-        grid.Children.Add(starBtn);
+        var root = new StackPanel();
 
-        // -- Col 1: Room (title + optional 🔒 / private chip).
-        var roomCell = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        roomCell.Children.Add(new TextBlock
+        // -- Header: title (+ 🔒) left, status badge right.
+        var headerGrid = new Grid();
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var titleStack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        titleStack.Children.Add(new TextBlock
         {
             Text = lobby.Title,
             Foreground = textPrimary,
-            FontSize = 13,
+            FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         });
         if (lobby.IsPrivate)
         {
-            roomCell.Children.Add(new TextBlock
+            titleStack.Children.Add(new TextBlock
             {
                 Text = "  🔒",
                 Foreground = textSecondary,
@@ -3224,24 +3227,42 @@ public partial class MultiplayerTab : UserControl
                 VerticalAlignment = VerticalAlignment.Center,
             });
         }
+        Grid.SetColumn(titleStack, 0);
+        headerGrid.Children.Add(titleStack);
+
+        var badge = BuildRoomBadge(inGame, isFull);
+        badge.VerticalAlignment = VerticalAlignment.Center;
+        badge.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(badge, 1);
+        headerGrid.Children.Add(badge);
+        root.Children.Add(headerGrid);
+
+        // -- Mod name (secondary line under the title).
+        var modName = ModRegistry.Find(lobby.ModId)?.DisplayName;
+        if (string.IsNullOrWhiteSpace(modName)) modName = lobby.ModId;
+        root.Children.Add(new TextBlock
+        {
+            Text = modName,
+            Foreground = textSecondary,
+            FontSize = 11.5,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 3, 0, 0),
+        });
         if (!modInstalled)
         {
-            roomCell.Children.Add(new TextBlock
+            root.Children.Add(new TextBlock
             {
-                Text = "  · mod not installed",
+                Text = Strings.Get("MpRoomModNotInstalled"),
                 Foreground = textSecondary,
                 FontSize = 11,
                 FontStyle = FontStyles.Italic,
-                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 0),
             });
         }
-        Grid.SetColumn(roomCell, 1);
-        grid.Children.Add(roomCell);
 
-        // -- Col 2: Host. Prefer what /lobbies sends (display name, then
-        // Discord username); for our OWN room — which the backend doesn't
-        // always echo a host identity for — fall back to the signed-in
-        // user, then an em-dash so the cell is never just blank.
+        // -- Host row: initial circle + "Host: name". Same host-name
+        // resolution as the old table row (display name → Discord username →
+        // signed-in user for our own room → em-dash).
         var hostName = lobby.Host.DisplayName;
         if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
             hostName = lobby.Host.DiscordUsername;
@@ -3256,105 +3277,173 @@ public partial class MultiplayerTab : UserControl
         if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
             hostName = "—";
 
-        var hostText = new TextBlock
+        var hostRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        hostRow.Children.Add(new Border
         {
-            Text = hostName,
+            Width = 22, Height = 22,
+            CornerRadius = new CornerRadius(11),
+            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+            Margin = new Thickness(0, 0, 8, 0),
+            Child = new TextBlock
+            {
+                Text = Monogram(hostName),
+                Foreground = textSecondary,
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        });
+        hostRow.Children.Add(new TextBlock
+        {
+            Text = Strings.Format("MpRoomCardHost", hostName),
             Foreground = textSecondary,
             FontSize = 12,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(hostText, 2);
-        grid.Children.Add(hostText);
+        });
+        root.Children.Add(hostRow);
 
-        // -- Col 3: Players "X/Y".
-        var playersText = new TextBlock
+        // -- Stats row: players + ping. The /lobbies payload has no per-host
+        // IP, so the ping is YOUR internet latency (same for every card),
+        // refreshed in place by _roomsPingTimer via the registered cell (a
+        // rebuild would disrupt the action button mid-hover/click).
+        var statsRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        statsRow.Children.Add(new TextBlock
         {
-            Text = $"{lobby.CurrentPlayers} / {lobby.MaxPlayers}",
+            Text = $"👥 {lobby.CurrentPlayers}/{lobby.MaxPlayers}",
             Foreground = textPrimary,
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(playersText, 3);
-        grid.Children.Add(playersText);
-
-        // -- Col 4: Ping. The /lobbies payload has no per-host IP, so we
-        // can't ping each room individually (see CLAUDE.md). Instead we
-        // show YOUR internet latency — the same for every row — refreshed
-        // in place by _roomsPingTimer. The cell is registered so
-        // RefreshRoomPingCells() can update it without rebuilding the row
-        // (which would disrupt the Join button).
+            Margin = new Thickness(0, 0, 14, 0),
+        });
         var pingCell = BuildPingCell(_connectionPingMs >= 0 ? _connectionPingMs : (double?)null);
         pingCell.ToolTip = Strings.Get("MpRoomPingTooltip");
         _roomPingCells.Add(pingCell);
-        Grid.SetColumn(pingCell, 4);
-        grid.Children.Add(pingCell);
+        statsRow.Children.Add(pingCell);
+        root.Children.Add(statsRow);
 
-        // -- Col 5: Status dot + label.
-        var statusCell = BuildStatusCell(
-            inGame ? Strings.Get("MpRoomStatusInGame") : Strings.Get("MpRoomStatusWaiting"),
-            inGame);
-        Grid.SetColumn(statusCell, 5);
-        grid.Children.Add(statusCell);
-
-        // -- Col 6: action. The room's state decides the caption + whether
-        // it's clickable:
-        //   • room we're CURRENTLY in → "Re-enter" (re-opens/activates the
-        //     lobby window) — never a Join for a room we're already inside;
-        //   • OUR OWN room we're not session-tracked in (we closed the lobby
-        //     window but the backend kept the room) → disabled "Your room",
-        //     because re-joining your own room errors server-side. Detected
-        //     by HOST identity, not CurrentLobbyId, so it holds even after we
-        //     left the window;
-        //   • game in progress → "In game", disabled (the room is locked);
-        //   • full → "Full", disabled;
-        //   • mod not installed → "Join", disabled (can't pass the hash gate);
-        //   • otherwise → "Join", enabled.
+        // -- Action button (full-width). SAME priority logic as the old row:
+        //   in this room → Re-enter; our own room → "Your room" (disabled);
+        //   in game → disabled; full → disabled; mod not installed → disabled
+        //   Join; else → enabled Join. Enabled Join / Re-enter are primary
+        //   (blue); the disabled states are neutral.
         var iAmInThisRoom = string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
         var iAmHost = me != null && (
             (!string.IsNullOrEmpty(lobby.Host.Id)
                 && string.Equals(lobby.Host.Id, me.Id, StringComparison.Ordinal))
             || (!string.IsNullOrEmpty(lobby.Host.DiscordUsername)
                 && string.Equals(lobby.Host.DiscordUsername, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
-        var isFull = lobby.CurrentPlayers >= lobby.MaxPlayers;
+
         var actionBtn = new Button
         {
-            Style = (Style)Application.Current.FindResource("MpRowJoinButton"),
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 14, 0, 0),
+            Padding = new Thickness(0, 8, 0, 8),
             Tag = lobby,
         };
+        var primary = (Style)Application.Current.FindResource("MpPrimaryButton");
+        var secondary = (Style)Application.Current.FindResource("MpSecondaryButton");
         if (iAmInThisRoom)
         {
+            actionBtn.Style = primary;
             actionBtn.Content = Strings.Get("MpRoomReenter");
             actionBtn.Click += (_, _) => OpenLobbyWindow();
         }
         else if (iAmHost)
         {
+            actionBtn.Style = secondary;
             actionBtn.Content = Strings.Get("MpRoomYours");
             actionBtn.IsEnabled = false;
         }
         else if (inGame)
         {
+            actionBtn.Style = secondary;
             actionBtn.Content = Strings.Get("MpRoomStatusInGame");
             actionBtn.IsEnabled = false;
         }
         else if (isFull)
         {
+            actionBtn.Style = secondary;
             actionBtn.Content = Strings.Get("MpRoomFull");
             actionBtn.IsEnabled = false;
         }
         else
         {
+            actionBtn.Style = primary;
             actionBtn.Content = Strings.Get("MpRoomJoin");
             actionBtn.IsEnabled = modInstalled;
             actionBtn.Click += JoinRoomButton_Click;
         }
-        Grid.SetColumn(actionBtn, 6);
-        grid.Children.Add(actionBtn);
+        root.Children.Add(actionBtn);
 
-        row.Child = grid;
-        return row;
+        card.Child = root;
+        return card;
+    }
+
+    /// <summary>
+    /// Small rounded status badge for a room card: the single most-relevant
+    /// state — "In game" (locked), "Full", or "Waiting" — coloured to match.
+    /// </summary>
+    private Border BuildRoomBadge(bool inGame, bool isFull)
+    {
+        string label;
+        Brush fg;
+        if (inGame)
+        {
+            label = Strings.Get("MpRoomStatusInGame");
+            fg = (Brush)Application.Current.FindResource("MpStatusInGame");
+        }
+        else if (isFull)
+        {
+            label = Strings.Get("MpRoomFull");
+            fg = (Brush)Application.Current.FindResource("MpPingMedium");
+        }
+        else
+        {
+            label = Strings.Get("MpRoomStatusWaiting");
+            fg = (Brush)Application.Current.FindResource("MpStatusWaiting");
+        }
+        return new Border
+        {
+            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+            BorderBrush = fg,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(8, 2, 8, 2),
+            Child = new TextBlock
+            {
+                Text = label,
+                Foreground = fg,
+                FontSize = 10.5,
+                FontWeight = FontWeights.SemiBold,
+            },
+        };
+    }
+
+    /// <summary>
+    /// Refresh the "last updated" label in the rooms header from
+    /// <see cref="_lastRoomsRenderedAt"/>. Called after each successful
+    /// /lobbies fetch and ticked by the rooms ping timer so the relative
+    /// time stays current ("hace 10 s").
+    /// </summary>
+    private DateTime _lastRoomsRenderedAt = DateTime.MinValue;
+
+    private void UpdateRoomsUpdatedLabel()
+    {
+        if (RoomsUpdatedText == null) return;
+        if (_lastRoomsRenderedAt == DateTime.MinValue)
+        {
+            RoomsUpdatedText.Text = "";
+            return;
+        }
+        var secs = (int)(DateTime.Now - _lastRoomsRenderedAt).TotalSeconds;
+        RoomsUpdatedText.Text = secs < 5
+            ? Strings.Get("MpRoomsUpdatedNow")
+            : secs < 60
+                ? Strings.Format("MpRoomsUpdatedSecs", secs)
+                : Strings.Format("MpRoomsUpdatedMins", secs / 60);
     }
 
     /// <summary>

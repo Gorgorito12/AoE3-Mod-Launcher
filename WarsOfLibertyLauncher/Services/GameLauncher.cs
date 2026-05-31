@@ -30,7 +30,8 @@ public static class GameLauncher
     /// Find the active mod's executable by checking known locations in
     /// priority order. Returns null if no candidate is found anywhere.
     /// </summary>
-    public static string? Find(LauncherConfig config, string? modInstallPath, ModProfile profile)
+    public static string? Find(LauncherConfig config, string? modInstallPath, ModProfile profile,
+        bool trustConfigCache = true)
     {
         var exeName = string.IsNullOrEmpty(profile.GameExecutable)
             ? "age3y.exe"
@@ -38,7 +39,7 @@ public static class GameLauncher
 
         var checkedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var candidate in EnumerateCandidates(config, modInstallPath, exeName))
+        foreach (var candidate in EnumerateCandidates(config, modInstallPath, exeName, trustConfigCache))
         {
             if (string.IsNullOrEmpty(candidate)) continue;
             if (!checkedPaths.Add(candidate)) continue;       // skip duplicates
@@ -136,12 +137,20 @@ public static class GameLauncher
     private static IEnumerable<string> EnumerateCandidates(
         LauncherConfig config,
         string? modInstallPath,
-        string exeName)
+        string exeName,
+        bool trustConfigCache = true)
     {
         // 1. Cached path from config (set after a successful previous launch).
         //    Only used when its filename matches the active profile's exe — a
         //    cached age3y.exe is no good for IM, and vice versa.
-        if (!string.IsNullOrWhiteSpace(config.GameExecutable)
+        //    The multiplayer launch passes trustConfigCache=false and SKIPS
+        //    this: a room can use a DIFFERENT mod than whatever's active on the
+        //    dashboard, and since both AoE3 (aoe3-tad) and WoL ship age3y.exe,
+        //    the active mod's cached path would satisfy the filename match and
+        //    open the WRONG game (host a WoL room while AoE3 is active → it
+        //    launched AoE3). MP resolves purely from the room mod's folder.
+        if (trustConfigCache
+            && !string.IsNullOrWhiteSpace(config.GameExecutable)
             && string.Equals(
                 Path.GetFileName(config.GameExecutable),
                 exeName,
@@ -263,9 +272,10 @@ public static class GameLauncher
         string? modInstallPath,
         ModProfile profile,
         EventHandler onExited,
-        string? extraArgs = null)
+        string? extraArgs = null,
+        bool trustConfigCache = true)
     {
-        var exePath = Find(config, modInstallPath, profile);
+        var exePath = Find(config, modInstallPath, profile, trustConfigCache);
         if (exePath == null)
         {
             throw new FileNotFoundException(
@@ -273,7 +283,12 @@ public static class GameLauncher
                     "ErrGameExeNotFound", profile.DisplayName));
         }
 
-        if (config.GameExecutable != exePath)
+        // Only persist the resolved path to the SHARED cache when we trust it.
+        // The multiplayer launch (trustConfigCache=false) resolves a room mod
+        // that may differ from the active dashboard mod; writing its exe back
+        // would make the dashboard's PLAY open the wrong game next time (the
+        // reverse of the bug this flag fixes).
+        if (trustConfigCache && config.GameExecutable != exePath)
         {
             config.GameExecutable = exePath;
             config.Save();

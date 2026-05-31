@@ -57,6 +57,26 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="18,0,0,0"/>
         </Style>
+
+        <!-- Room CARD (replaces the old table row). A rounded surface
+             tile that brightens + gains a blue rim on hover. The card
+             body (title, mod, host, players/ping, status badge, action
+             button) is built in code-behind by BuildRoomCard so all the
+             load-bearing state logic (action caption, in-place ping,
+             mod-installed gating) is preserved. -->
+        <Style x:Key="MpRoomCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource MpSurface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="14"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpSurfaceAlt}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <Grid Background="{DynamicResource BgBase}">
@@ -429,89 +449,43 @@
                                 <RowDefinition Height="*"/>      <!-- rows / empty / error -->
                             </Grid.RowDefinitions>
 
-                            <!-- Section title: people glyph + "Salas activas" -->
-                            <StackPanel Grid.Row="0"
-                                        Orientation="Horizontal"
-                                        Margin="20,16,20,12">
-                                <TextBlock Text="👥"
-                                           FontSize="15"
+                            <!-- Section title: people glyph + "Salas activas"
+                                 on the left, "last updated" timestamp on the
+                                 right (set by UpdateRoomsUpdatedLabel). -->
+                            <Grid Grid.Row="0" Margin="20,16,20,12">
+                                <StackPanel Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="👥"
+                                               FontSize="15"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,9,0"/>
+                                    <TextBlock x:Name="RoomsSectionTitle"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="15"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="RoomsUpdatedText"
+                                           HorizontalAlignment="Right"
                                            VerticalAlignment="Center"
-                                           Margin="0,0,9,0"/>
-                                <TextBlock x:Name="RoomsSectionTitle"
-                                           Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="15"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           FontSize="11"/>
+                            </Grid>
 
-                            <!-- Table header row. Column widths defined here so
-                                 code-behind can mirror them when it builds each
-                                 data row (BuildRoomRow). -->
-                            <Border Grid.Row="1"
-                        Background="{DynamicResource MpSurface}"
-                        BorderBrush="{DynamicResource MpDivider}"
-                        BorderThickness="0,1,0,1"
-                        Padding="24,8,24,8">
-                    <Grid x:Name="RoomsHeaderGrid">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="34"/>
-                            <ColumnDefinition Width="2.4*" MinWidth="160"/>
-                            <ColumnDefinition Width="1.6*" MinWidth="110"/>
-                            <ColumnDefinition Width="80"/>
-                            <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="120"/>
-                            <ColumnDefinition Width="100"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="1"
-                                   x:Name="ColHeaderRoom"
-                                   Foreground="{DynamicResource MpTableHeader}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2"
-                                   x:Name="ColHeaderHost"
-                                   Foreground="{DynamicResource MpTableHeader}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="3"
-                                   x:Name="ColHeaderPlayers"
-                                   Foreground="{DynamicResource MpTableHeader}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="4"
-                                   x:Name="ColHeaderPing"
-                                   Foreground="{DynamicResource MpTableHeader}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="5"
-                                   x:Name="ColHeaderStatus"
-                                   Foreground="{DynamicResource MpTableHeader}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="6"
-                                   x:Name="ColHeaderAction"
-                                   Foreground="{DynamicResource MpTableHeader}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                    </Grid>
-                </Border>
+                            <!-- (Table header row removed — the room list is now
+                                 a WrapPanel of cards built by BuildRoomCard, so
+                                 there are no columns to label. Row 1 collapses
+                                 to 0 height.) -->
 
-                <!-- Rows OR empty-state. ScrollViewer keeps it
-                     scannable when many rooms exist; the inner
-                     RoomsListPanel is the same x:Name the old
-                     code-behind already populates, just with the
-                     row builder updated to a Grid layout. -->
+                <!-- Cards OR empty-state. ScrollViewer keeps it scannable
+                     when many rooms exist; RoomsListPanel is a WrapPanel so
+                     the cards tile across the available width. -->
                 <Grid Grid.Row="2">
                     <ScrollViewer x:Name="RoomsListScroll"
                                   VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel x:Name="RoomsListPanel" Margin="0,0,0,12"/>
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="16,10,16,10">
+                        <WrapPanel x:Name="RoomsListPanel" Orientation="Horizontal"/>
                     </ScrollViewer>
 
                     <!-- Empty-state card. Visibility is toggled by
@@ -620,10 +594,15 @@
                                 <RowDefinition Height="Auto"/>   <!-- input -->
                             </Grid.RowDefinitions>
 
-                            <!-- Title: chat glyph + "Chat global" -->
+                            <!-- Title + presence merged onto one line:
+                                 "💬 Chat global · ● N conectado". The old
+                                 separate "Canal general" label + right-aligned
+                                 presence count were consolidated here so the
+                                 header reads as a single status line. -->
                             <StackPanel Grid.Row="0"
                                         Orientation="Horizontal"
-                                        Margin="18,16,18,0">
+                                        Margin="18,16,18,12"
+                                        VerticalAlignment="Center">
                                 <TextBlock Text="💬"
                                            FontSize="15"
                                            VerticalAlignment="Center"
@@ -633,28 +612,26 @@
                                            FontSize="15"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"/>
+                                <TextBlock Text="·"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           FontSize="15"
+                                           Margin="8,0,8,0"
+                                           VerticalAlignment="Center"/>
+                                <Ellipse Width="8" Height="8"
+                                         Fill="{DynamicResource MpStatusOnline}"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,6,0"/>
+                                <TextBlock x:Name="GlobalChatPresenceText"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           FontSize="12.5"
+                                           VerticalAlignment="Center"/>
                             </StackPanel>
 
-                            <!-- Channel label (left) + presence count (right) -->
-                            <Grid Grid.Row="1" Margin="18,10,18,12">
-                                <StackPanel Orientation="Horizontal"
-                                            HorizontalAlignment="Left"
-                                            VerticalAlignment="Center">
-                                    <Ellipse Width="8" Height="8"
-                                             Fill="{DynamicResource MpStatusOnline}"
-                                             VerticalAlignment="Center"
-                                             Margin="0,0,7,0"/>
-                                    <TextBlock x:Name="GlobalChatChannelText"
-                                               Foreground="{DynamicResource TextSecondary}"
-                                               FontSize="12"
-                                               VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock x:Name="GlobalChatPresenceText"
-                                           HorizontalAlignment="Right"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12"/>
-                            </Grid>
+                            <!-- Thin divider under the merged header. -->
+                            <Border Grid.Row="1"
+                                    Height="1"
+                                    Background="{DynamicResource MpDivider}"
+                                    Margin="18,0,18,0"/>
 
                             <!-- Messages list + empty/placeholder hint -->
                             <Grid Grid.Row="2">
@@ -697,21 +674,34 @@
                                     <Grid Grid.Column="0" Margin="0,0,8,0">
                                         <TextBox x:Name="GlobalChatInput"
                                                  MaxLength="500"
+                                                 MinHeight="40"
+                                                 Padding="10,0,0,0"
                                                  VerticalContentAlignment="Center"
                                                  TextChanged="GlobalChatInput_TextChanged"
                                                  KeyDown="GlobalChatInput_KeyDown"/>
                                         <TextBlock x:Name="GlobalChatPlaceholder"
                                                    Foreground="{DynamicResource TextSecondary}"
                                                    FontSize="12"
-                                                   Margin="10,0,0,0"
+                                                   Margin="12,0,0,0"
                                                    VerticalAlignment="Center"
                                                    IsHitTestVisible="False"/>
                                     </Grid>
+                                    <!-- Send: compact icon button (paper-plane
+                                         glyph). Localized caption lives on the
+                                         ToolTip now (set in ApplyStrings). -->
                                     <Button x:Name="GlobalChatSendButton"
                                             Grid.Column="1"
                                             Click="GlobalChatSendButton_Click"
                                             Style="{StaticResource MpPrimaryButton}"
-                                            Padding="16,8"/>
+                                            Width="44"
+                                            Height="40"
+                                            Padding="0">
+                                        <TextBlock Text="&#xE724;"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="16"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Button>
                                     </Grid>
                                 </StackPanel>
                             </Border>

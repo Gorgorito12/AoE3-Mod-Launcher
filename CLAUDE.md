@@ -297,6 +297,23 @@ longer exists — don't go looking for it.)
   falls through to the new mod's per-mod install-folder walk + disk scan, which
   is mod-correct. Don't reintroduce a code path that swaps the active profile
   without clearing this cache.
+  **Multiplayer is a SECOND, switch-less variant of the same trap.** The MP game
+  launch runs the **room's** mod (`LaunchActiveModGame` resolves it from
+  `_currentLobbyModId`, not the Play tab), which can differ from the active
+  dashboard mod *without any mod switch* — host/join a WoL room while AoE3 is
+  active and `config.GameExecutable` still legitimately holds AoE3's
+  `age3y.exe`, so trusting it opens AoE3 for a WoL room (reported bug: "changed
+  to a WoL room, still opened Asian Dynasties"). The clear-on-switch fix can't
+  help here (there's no switch). The fix is a `trustConfigCache` parameter
+  threaded through `GameLauncher.Find` / `EnumerateCandidates` / `LaunchAndWatch`:
+  the MP launch callback (in `MainWindow`'s `MultiplayerView.Attach`) passes
+  **`trustConfigCache: false`**, which (a) skips the cache as candidate #1 so the
+  exe resolves purely from the **room mod's** install folder, and (b) skips
+  writing the resolved exe back to `config.GameExecutable` — otherwise a WoL MP
+  launch would poison the cache and the dashboard's next AoE3 PLAY would open WoL
+  (the reverse bug). The dashboard `GameLauncher.Launch` keeps `trustConfigCache`
+  at its default `true` (it launches the active mod, so the cache is correct and
+  worth persisting). Don't drop the `false` on the MP path.
 
 - **Community translations are PROFILE-scoped, and the index is re-fetched on
   mod switch.** Two coupled rules: (1) `UpdateService.EffectiveTranslationsRepo()`
@@ -492,13 +509,18 @@ longer exists — don't go looking for it.)
   in place; actually emitting `lobby_created/closed/updated` onto it is still
   deferred (the 10 s poll is enough at current scale).
 
-- **The rooms-browser action button (col 6) is state-driven — don't reduce it
-  back to a plain always-"Join".** `BuildRoomRow` picks the caption + enabled-ness
-  per room in this **priority order** (first match wins):
+- **Room cards are state-driven — the action button isn't a plain always-"Join".**
+  The rooms browser renders each room as a **card** (`BuildRoomCard`, tiled in a
+  `WrapPanel`; the old table + column-header strip + zebra rows are gone). The
+  card shows: title (+ 🔒 if private), a status badge, the mod name, the host with
+  an initial circle (`Anfitrión: <name>`), players + ping, and a **full-width
+  action button** whose caption + enabled-ness pick per room in this **priority
+  order** (first match wins) — enabled Join / Re-enter use `MpPrimaryButton`
+  (blue), the disabled states use `MpSecondaryButton` (neutral):
   1. **room we're currently in** (`iAmInThisRoom` = `lobby.Id ==
-     _session.CurrentLobbyId`) → **"Re-enter"** (`MpRoomReenter`) wired to
-     `OpenLobbyWindow()` (re-opens / Activates the lobby window) — never a Join for
-     a room we're already inside;
+     _session.CurrentLobbyId`) → **"Re-enter"** (`MpRoomReenter`, ES "Reingresar")
+     wired to `OpenLobbyWindow()` (re-opens / Activates the lobby window) — never a
+     Join for a room we're already inside;
   2. **our own room we're NOT session-tracked in** (`iAmHost`) → **disabled "Your
      room"** (`MpRoomYours`). This is matched by **host identity** — `lobby.Host.Id
      == me.Id` OR `lobby.Host.DiscordUsername == me.DiscordUsername` (case-
@@ -511,12 +533,16 @@ longer exists — don't go looking for it.)
   5. **mod not installed locally** → **disabled "Join"** (`IsEnabled =
      modInstalled`); else → **enabled "Join"** → `JoinRoomButton_Click`.
 
-  The STATUS cell value (col 5) is localised too (`MpRoomStatusWaiting` /
-  `MpRoomStatusInGame`), not the old hardcoded "Waiting" / "In game". `BuildStatusCell`
-  also makes an in-game room read as **locked**: for `inGame` it swaps the status
-  dot for a 🔒 glyph and renders "En partida" in the in-game colour + SemiBold, so a
-  browsing player sees at a glance the room is in progress (the disabled "In game"
-  action button is the actual join block). All of this keys off the backend
+  Status shows as a coloured **badge** in the card header (`BuildRoomBadge`): the
+  single most-relevant state — `Esperando` (waiting), `Llena` (full) or `En partida`
+  (in game) — each in its own colour, localised via `MpRoomStatusWaiting` /
+  `MpRoomFull` / `MpRoomStatusInGame`. (The old table's `BuildStatusCell` + the
+  per-column STATUS cell are gone — `BuildStatusCell` lingers unused; the disabled
+  "In game" button is the actual join block.) The header also carries an
+  `Actualizado hace X` timestamp (`RoomsUpdatedText` / `UpdateRoomsUpdatedLabel`,
+  ticked by `_roomsPingTimer`), and the empty state is now localized
+  (`MpRoomsEmptyTitle` / `MpRoomsEmptyBody` — they used to be hardcoded English).
+  All of this keys off the backend
   reporting `status == "in_game"` once the host starts — the rooms browser has no
   other signal that a room you're *not* in has begun (the room WS is per-room, joined
   only from inside), so if in-game rooms never lock, check the backend is flipping
@@ -534,8 +560,13 @@ longer exists — don't go looking for it.)
   chat, and the launcher's first real server-push channel.** The Multiplayer
   tab's Rooms view is now TWO columns: active rooms (left card) + a persistent
   **"Chat global"** panel (right card; `GlobalChat*` x:Names in
-  `MultiplayerTab.xaml` — header, `Canal general` + presence count, message
-  list, composer). Server side it's a single `GlobalChatRoom` **singleton** on
+  `MultiplayerTab.xaml` — a merged header `Chat global · ● N conectado`
+  (`UpdateGlobalPresence`; the old separate `Canal general` label is gone),
+  message list, composer). The client renders each message as a subtle rounded
+  **bubble** and **dedupes the avatar/name for consecutive messages from the same
+  author** (`_lastGlobalChatAuthor`, reset whenever the panel clears); Send is a
+  compact paper-plane icon button (caption on its ToolTip). That's all cosmetic —
+  the WS protocol + anti-spam below are untouched. Server side it's a single `GlobalChatRoom` **singleton** on
   the Node backend (`src/global/GlobalChatRoom.ts`, mounted at `/global/ws` in
   `index.ts`, held on `AppContext.globalChat`) — modelled on `LobbyRoom`'s
   broadcast / idle-kick / throttle but with **almost no DB**: membership IS

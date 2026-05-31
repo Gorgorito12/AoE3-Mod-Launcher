@@ -246,9 +246,20 @@ public partial class MainWindow : Window
                 try
                 {
                     var installPath = _config.GetState(profile.Id).InstallPath;
+                    // Stock AoE3 is detect-only (no saved path) — resolve it from
+                    // the detected install so the launch points at the real game,
+                    // mirroring the fingerprint callback above.
+                    if (string.IsNullOrEmpty(installPath) && profile.IsStockGame)
+                        installPath = Services.AoE3Detector.FindInstallRoot();
+                    // trustConfigCache:false — the room's mod may differ from the
+                    // active dashboard mod, and both AoE3 and WoL ship age3y.exe,
+                    // so the global GameExecutable cache (the active mod's) would
+                    // launch the WRONG game (hosted a WoL room while AoE3 active →
+                    // it opened AoE3). Resolve purely from this room mod's folder
+                    // and don't write the result back to the shared cache.
                     return GameLauncher.LaunchAndWatch(
                         _config, installPath, profile, onExited,
-                        extraArgs: extraArgs);
+                        extraArgs: extraArgs, trustConfigCache: false);
                 }
                 catch (Exception ex)
                 {
