@@ -54,9 +54,13 @@
           • Body — 2-column grid: left = players list + room/network
             info card + Ready/Start/Leave actions; right = chat panel
             with header, scrollable log, and input bar.
-          • CountdownOverlay + InGameOverlay — full-Grid covers shown
-            during Starting / InGame match phases, hiding the lobby
-            body underneath.
+          • CountdownOverlay — despite the name, a THIN BAR that is its
+            own layout row above the body (not an overlay), shown during
+            the Starting phase. It pushes the body down so the players
+            list AND the chat both stay visible/interactive — players can
+            ask to abort and the host can Cancel from the bar. InGameOverlay
+            — full-content cover during the InGame phase (AoE3 is foreground
+            then). See the inline comments.
     -->
 
     <!-- CaptionHeight 40 → 30: matches the new compact title-bar Padding
@@ -156,10 +160,16 @@
          line can't separate two dark surfaces; this uses the app's standard
          border tone. AllowsTransparency=False rules out a drop shadow, so a
          hard edge is the tool available. -->
-    <Border BorderBrush="{DynamicResource BorderSecondary}"
+    <Border x:Name="LobbyOuterFrame"
+            BorderBrush="{DynamicResource BorderSecondary}"
             BorderThickness="1"
             Background="{DynamicResource BgBase}">
-    <Grid>
+    <!-- x:Name="LobbyRootGrid" — host for MpAlertOverlay confirm cards
+         (the in-lobby themed replacement for MessageBox). The overlay is
+         injected as the last child BEFORE the MinimizedPill so the pill,
+         when shown, still covers everything; in practice the two never
+         overlap (you can't pill while a confirm is up). -->
+    <Grid x:Name="LobbyRootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>   <!-- Title bar (chrome) -->
             <RowDefinition Height="*"/>      <!-- Lobby content -->
@@ -500,6 +510,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>   <!-- header -->
                                 <RowDefinition Height="*"/>      <!-- chat log -->
+                                <RowDefinition Height="Auto"/>   <!-- countdown line (0 px when collapsed) -->
                                 <RowDefinition Height="Auto"/>   <!-- input -->
                             </Grid.RowDefinitions>
 
@@ -548,10 +559,59 @@
                                        IsHitTestVisible="False"
                                        Visibility="Collapsed"/>
 
+                            <!-- ===== Countdown line (lives INSIDE the chat) =====
+                                 The pre-launch countdown shows here as a single
+                                 live line in the chat panel — it used to be a
+                                 thin glowing bar above the whole body. Collapsed
+                                 → 0 px (Row is Auto); StartCountdown flips it
+                                 Visible via ApplyMatchPhaseUi and
+                                 UpdateCountdownTick rewrites CountdownNumber in
+                                 place (5→4→3…). x:Name stays "CountdownOverlay"
+                                 (despite no longer being an overlay) so the
+                                 code-behind visibility toggle + CountdownLabel /
+                                 CountdownNumber wiring need no change. The chat
+                                 stays fully usable during the countdown so
+                                 players can still ask to abort. -->
+                            <Border Grid.Row="2"
+                                    x:Name="CountdownOverlay"
+                                    Background="{DynamicResource MpBlueSubtle}"
+                                    BorderBrush="{DynamicResource MpBlue}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Margin="20,0,14,10"
+                                    Padding="14,9"
+                                    Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="⏱"
+                                               Foreground="{DynamicResource MpBlue}"
+                                               FontSize="16"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock x:Name="CountdownLabel"
+                                               Text="Starting in"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                    <!-- Default "5" (not "3") so even the
+                                         first paint before UpdateCountdownTick
+                                         runs shows the right starting number. -->
+                                    <TextBlock x:Name="CountdownNumber"
+                                               Text="10"
+                                               Foreground="{DynamicResource MpBlue}"
+                                               FontSize="22"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"
+                                               Margin="10,0,0,0"/>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Input bar. Emoji icon (decorative
                                  placeholder for now, future emoji
                                  picker) + textbox + Send. -->
-                            <Border Grid.Row="2"
+                            <Border Grid.Row="3"
                                     BorderBrush="{DynamicResource MpDivider}"
                                     BorderThickness="0,1,0,0"
                                     Padding="14,12">
@@ -605,190 +665,247 @@
                             </Border>
                         </Grid>
                     </Border>
-                </Grid>
-            </Grid>
 
-            <!-- =====================================================
-                 COUNTDOWN OVERLAY — shown over the lobby body during
-                 the 3-s "Starting…" window before AoE3 launches.
-                 Hidden by default; toggled by StartCountdown() in
-                 code-behind.
-                 ===================================================== -->
-            <Border x:Name="CountdownOverlay"
-                    Background="#E61a1d24"
-                    Visibility="Collapsed">
-                <StackPanel HorizontalAlignment="Center"
-                            VerticalAlignment="Center">
-                    <TextBlock x:Name="CountdownLabel"
-                               Text="Starting in"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="14"
-                               HorizontalAlignment="Center"
-                               Margin="0,0,0,8"/>
-                    <TextBlock x:Name="CountdownNumber"
-                               Text="3"
-                               Foreground="{DynamicResource MpBlue}"
-                               FontSize="96"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Center"/>
-                    <TextBlock x:Name="CountdownHint"
-                               Text="AoE3 will open automatically — keep the launcher running."
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12"
-                               HorizontalAlignment="Center"
-                               Margin="0,12,0,0"/>
-                    <!-- Abort the launch during the countdown. For the host
-                         this broadcasts game_cancelled so peers stop too; for
-                         a joiner it just bails them out of their own launch. -->
-                    <Button x:Name="CountdownCancelButton"
-                            Click="CountdownCancelButton_Click"
-                            Style="{StaticResource MpSecondaryButton}"
-                            Content="Cancel"
-                            Padding="22,9"
-                            Margin="0,28,0,0"
-                            HorizontalAlignment="Center"/>
-                </StackPanel>
-            </Border>
-
-            <!-- =====================================================
-                 IN-GAME P2P STATUS OVERLAY — replaces the lobby body
-                 while the match is running. Pulsing "live" dot, a
-                 match timer, per-peer connection quality + RTT +
-                 bytes transferred, and a single big "Cancel game" /
-                 "Leave game" button. Code-behind refreshes it every
-                 ~1 s.
-                 ===================================================== -->
-            <Border x:Name="InGameOverlay"
-                    Background="{DynamicResource BgBase}"
-                    Visibility="Collapsed">
-                <Grid Margin="32,28">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>     <!-- live header -->
-                        <RowDefinition Height="Auto"/>     <!-- match meta line -->
-                        <RowDefinition Height="*"/>        <!-- peers list -->
-                        <RowDefinition Height="Auto"/>     <!-- action -->
-                    </Grid.RowDefinitions>
-
-                    <!-- Pulsing dot + headline. -->
-                    <StackPanel Grid.Row="0"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center">
-                        <Ellipse x:Name="InGameLiveDot"
-                                 Width="14" Height="14"
-                                 Fill="{DynamicResource MpStatusOnline}"
-                                 VerticalAlignment="Center"
-                                 Margin="0,0,12,0"/>
-                        <TextBlock x:Name="InGameTitleText"
-                                   Text="GAME IN PROGRESS"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="20"
-                                   FontWeight="Bold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock x:Name="InGameModeText"
-                                   Text=" — Connected via P2P LAN"
-                                   Foreground="{DynamicResource MpStatusOnline}"
-                                   FontSize="13"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Margin="6,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- Match timer + traffic + connection latency. -->
-                    <Grid Grid.Row="1" Margin="0,16,0,18">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock x:Name="InGameMatchTimeHeader"
-                                       Text="MATCH TIME"
-                                       Foreground="{DynamicResource MpTableHeader}"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,4"/>
-                            <TextBlock x:Name="InGameMatchTimer"
-                                       Text="00:00"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="20"
-                                       FontFamily="Consolas, Courier New, monospace"
-                                       FontWeight="SemiBold"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock x:Name="InGameTrafficHeader"
-                                       Text="TRAFFIC"
-                                       Foreground="{DynamicResource MpTableHeader}"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,4"/>
-                            <TextBlock x:Name="InGameTrafficText"
-                                       Text="0 KB"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="20"
-                                       FontFamily="Consolas, Courier New, monospace"
-                                       FontWeight="SemiBold"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock x:Name="InGameRoomHeader"
-                                       Text="ROOM"
-                                       Foreground="{DynamicResource MpTableHeader}"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,4"/>
-                            <TextBlock x:Name="InGameRoomText"
-                                       Text=""
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="14"
-                                       FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-                        <!-- Connection latency = your internet RTT. Not a
-                             per-rival ping — per-player ping needs peer IPs
-                             the launcher can't see (see RadminVpnService note). -->
-                        <StackPanel Grid.Column="3">
-                            <TextBlock x:Name="InGameConnectionHeader"
-                                       Text="CONNECTION"
-                                       Foreground="{DynamicResource MpTableHeader}"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,4"/>
-                            <TextBlock x:Name="InGameConnectionText"
-                                       Text="—"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="20"
-                                       FontFamily="Consolas, Courier New, monospace"
-                                       FontWeight="SemiBold"/>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- Per-peer connection rows. -->
-                    <Border Grid.Row="2"
-                            Background="{DynamicResource MpSurface}"
+                    <!-- =====================================================
+                         IN-GAME PANEL — shown while the match is running.
+                         CONFINED to the LEFT column (Grid.Column="0": it
+                         covers the roster + Ready/Start/Leave actions) ON
+                         PURPOSE, so the chat panel (Column 2) stays VISIBLE
+                         and usable during the game. That's the "chat is
+                         always accessible" rule: once AoE3 launches (the
+                         countdown hits 0) the room controls are blocked —
+                         this opaque panel sits over them — but players can
+                         still talk. It used to be a full-content cover that
+                         hid the chat too; it was moved INTO the body grid +
+                         relaid out vertically (stats in a 2×2 grid instead
+                         of a 4-wide row) to fit the 340 px column. Pulsing
+                         "live" dot, match timer / traffic / connection /
+                         room stats, a peer list, and one big Cancel/Leave
+                         button. RefreshInGamePanel() (1 Hz) repaints it; all
+                         the InGame* x:Names are preserved so the code-behind
+                         needs no change. -->
+                    <Border x:Name="InGameOverlay"
+                            Grid.Column="0"
+                            Background="{DynamicResource BgBase}"
                             BorderBrush="{DynamicResource MpDivider}"
                             BorderThickness="1"
                             CornerRadius="6"
-                            Padding="14,10">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel x:Name="InGamePeersPanel"/>
-                        </ScrollViewer>
-                    </Border>
+                            Visibility="Collapsed">
+                        <Grid Margin="16,16">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>   <!-- live header -->
+                                <RowDefinition Height="Auto"/>   <!-- stats 2×2 -->
+                                <RowDefinition Height="*"/>      <!-- peers list -->
+                                <RowDefinition Height="Auto"/>   <!-- action -->
+                            </Grid.RowDefinitions>
 
-                    <!-- Cancel / Leave action. Caption + colour
-                         change is driven from code-behind depending
-                         on whether the current user is the host. -->
-                    <Button Grid.Row="3"
-                            x:Name="InGameCancelButton"
-                            Click="InGameCancelButton_Click"
-                            Style="{StaticResource MpDangerButton}"
-                            Padding="18,12"
-                            Margin="0,18,0,0"
-                            HorizontalContentAlignment="Center"
-                            FontSize="13"
-                            Content="⚠  Cancel game"/>
+                            <!-- Pulsing dot + headline (stacked so it fits
+                                 the narrow column). -->
+                            <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                                <StackPanel Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <Ellipse x:Name="InGameLiveDot"
+                                             Width="12" Height="12"
+                                             Fill="{DynamicResource MpStatusOnline}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,10,0"/>
+                                    <TextBlock x:Name="InGameTitleText"
+                                               Text="GAME IN PROGRESS"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="16"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="InGameModeText"
+                                           Text="— Connected via P2P LAN"
+                                           Foreground="{DynamicResource MpStatusOnline}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+
+                            <!-- Match timer / traffic / connection / room,
+                                 laid out 2×2 to fit the 340 px column. -->
+                            <Grid Grid.Row="1" Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,12">
+                                    <TextBlock x:Name="InGameMatchTimeHeader"
+                                               Text="MATCH TIME"
+                                               Foreground="{DynamicResource MpTableHeader}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="InGameMatchTimer"
+                                               Text="00:00"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="17"
+                                               FontFamily="Consolas, Courier New, monospace"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,12">
+                                    <TextBlock x:Name="InGameTrafficHeader"
+                                               Text="TRAFFIC"
+                                               Foreground="{DynamicResource MpTableHeader}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="InGameTrafficText"
+                                               Text="0 KB"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="17"
+                                               FontFamily="Consolas, Courier New, monospace"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <!-- Connection latency = your internet RTT. Not a
+                                     per-rival ping — per-player ping needs peer IPs
+                                     the launcher can't see (see RadminVpnService note). -->
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,0">
+                                    <TextBlock x:Name="InGameConnectionHeader"
+                                               Text="CONNECTION"
+                                               Foreground="{DynamicResource MpTableHeader}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="InGameConnectionText"
+                                               Text="—"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="17"
+                                               FontFamily="Consolas, Courier New, monospace"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock x:Name="InGameRoomHeader"
+                                               Text="ROOM"
+                                               Foreground="{DynamicResource MpTableHeader}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="InGameRoomText"
+                                               Text=""
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Per-peer connection rows. -->
+                            <Border Grid.Row="2"
+                                    Background="{DynamicResource MpSurface}"
+                                    BorderBrush="{DynamicResource MpDivider}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="12,8">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="InGamePeersPanel"/>
+                                </ScrollViewer>
+                            </Border>
+
+                            <!-- Cancel / Leave action. Caption + colour
+                                 change is driven from code-behind depending
+                                 on whether the current user is the host. -->
+                            <Button Grid.Row="3"
+                                    x:Name="InGameCancelButton"
+                                    Click="InGameCancelButton_Click"
+                                    Style="{StaticResource MpDangerButton}"
+                                    Padding="14,11"
+                                    Margin="0,14,0,0"
+                                    HorizontalContentAlignment="Center"
+                                    FontSize="13"
+                                    Content="⚠  Cancel game"/>
+                        </Grid>
+                    </Border>
                 </Grid>
-            </Border>
+            </Grid>
         </Grid>
+
+        <!-- =====================================================
+             MINIMIZED PILL — replaces the chromeless OS minimize
+             "stub". Because this Window is WindowStyle=None +
+             ShowInTaskbar=False, a real WindowState.Minimized drops
+             it to the legacy desktop stub at the bottom-left: we
+             can't style it, and clicking it pops the Windows SYSTEM
+             menu (Restore/Move/Size/…) instead of restoring. So we
+             never truly minimize — MinimizeBtn_Click / OnStateChanged
+             shrink the window to this pill (EnterPill in code-behind)
+             and a single click restores it (RestoreFromPill).
+
+             RowSpan=2 + opaque BgSidebar fills the WHOLE window (chrome
+             row + content) so the lobby underneath is hidden AND the pill
+             reads as one solid surface edge-to-edge — no dark "leftover"
+             frame around it (the earlier BgBase inset looked like a black
+             border; the user asked for the button to cover everything).
+             IsHitTestVisibleInChrome=True routes the click to us even
+             over the WindowChrome caption strip, so MouseLeftButtonUp
+             fires reliably — no system menu, no separate Button (the
+             implicit Button style would fight the custom look).
+
+             The blue neon border + halo "breathe" via animations started
+             in StartPillGlow(): a pulsing DropShadowEffect + an animated
+             BorderBrush colour. AllowsTransparency=False means the halo
+             can't spill OUTSIDE the window, so the trick is: PillGlowBorder
+             sits at Margin=0 (border flush with the window edge → covers
+             everything) with a TRANSPARENT fill, so the DropShadowEffect
+             glows INWARD over the BgSidebar fill (a transparent border
+             glows both sides of its stroke; an opaque fill would hide the
+             inward half). EnterPill also drops LobbyOuterFrame's 1 px grey
+             edge so the blue stroke is the outermost line. Label + tooltip
+             localised from MultiplayerTab.ApplyLobbyStaticLabels(). -->
+        <Border x:Name="MinimizedPill"
+                Grid.RowSpan="2"
+                Visibility="Collapsed"
+                Background="{DynamicResource BgSidebar}"
+                Cursor="Hand"
+                MouseLeftButtonUp="MinimizedPill_MouseLeftButtonUp"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Grid>
+                <!-- Neon stroke + inward halo. Transparent fill so the
+                     glow shows over the MinimizedPill's BgSidebar; flush
+                     to the edge (Margin=0) so it covers the whole window. -->
+                <Border x:Name="PillGlowBorder"
+                        Background="Transparent"
+                        CornerRadius="8"
+                        BorderThickness="2">
+                    <Border.BorderBrush>
+                        <!-- Local (mutable, unfrozen) brush so StartPillGlow
+                             can animate its Color. A DynamicResource brush is
+                             shared/frozen and can't be animated per-window.
+                             Idle = mid blue; the glow pulses toward cyan. -->
+                        <SolidColorBrush Color="#4F8FD8"/>
+                    </Border.BorderBrush>
+                    <Border.Effect>
+                        <DropShadowEffect Color="#6FB8FF"
+                                          ShadowDepth="0"
+                                          BlurRadius="14"
+                                          Opacity="0.7"/>
+                    </Border.Effect>
+                </Border>
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="⚔"
+                               Foreground="#CFE7FF"
+                               FontSize="15"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <TextBlock x:Name="MinimizedPillText"
+                               Text="Lobby"
+                               FontFamily="{DynamicResource DisplayFont}"
+                               FontSize="15"
+                               FontWeight="SemiBold"
+                               Foreground="#CFE7FF"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
     </Border>
 </Window>

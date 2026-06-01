@@ -2,7 +2,11 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
+using WarsOfLibertyLauncher.Services;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 
 namespace WarsOfLibertyLauncher;
@@ -63,6 +67,27 @@ public partial class LobbyWindow : Window
 #pragma warning restore IDE0052
 
     // ------------------------------------------------------------------
+    // Minimized-pill state. We never use the real WindowState.Minimized
+    // (it drops a WindowStyle=None + ShowInTaskbar=False window to the
+    // unstylable OS desktop stub whose click pops the system menu).
+    // Instead EnterPill() shrinks the window to a small glowing pill and
+    // RestoreFromPill() brings it back to the saved geometry/state.
+    // ------------------------------------------------------------------
+    private const double PillWidth = 188;
+    private const double PillHeight = 52;
+    private const double PillMargin = 16;   // gap from the work-area corner
+
+    private bool _isPilled;
+    private bool _suppressStateChange;      // re-entrancy guard for OnStateChanged
+    private bool _hiddenByOwner;            // we hid WITH the launcher (owner) minimizing
+    private Window? _launcherWindow;        // the launcher whose minimize we follow
+    private bool _hasPillSavedBounds;
+    private WindowState _restoreState;
+    private double _restoreLeft, _restoreTop, _restoreWidth, _restoreHeight;
+    private double _restoreMinWidth, _restoreMinHeight;
+    private ResizeMode _restoreResizeMode;
+
+    // ------------------------------------------------------------------
     // Click forwarder callbacks. MultiplayerTab populates these on
     // construction; the XAML click handlers below invoke whichever is
     // non-null. Defaulted nullable so a window opened without callbacks
@@ -80,9 +105,6 @@ public partial class LobbyWindow : Window
 
     /// <summary>"Cancel game" / "Leave game" while a match is running.</summary>
     public Action? OnInGameCancel { get; set; }
-
-    /// <summary>"Cancel" during the pre-launch countdown (Starting phase).</summary>
-    public Action? OnCountdownCancel { get; set; }
 
     /// <summary>"Clear chat" — wipes the local chat log only.</summary>
     public Action? OnClearChat { get; set; }
@@ -123,9 +145,11 @@ public partial class LobbyWindow : Window
     /// </summary>
     private void CloseHeaderBtn_Click(object sender, RoutedEventArgs e) => Close();
 
-    /// <summary>Title-bar minimise. Standard Windows behaviour.</summary>
-    private void MinimizeBtn_Click(object sender, RoutedEventArgs e)
-        => WindowState = WindowState.Minimized;
+    /// <summary>
+    /// Title-bar minimise. Shrinks to the in-window glowing pill instead
+    /// of the OS minimize stub (see <see cref="EnterPill"/> for why).
+    /// </summary>
+    private void MinimizeBtn_Click(object sender, RoutedEventArgs e) => EnterPill();
 
     /// <summary>
     /// Title-bar maximise/restore. Toggles between
@@ -152,6 +176,32 @@ public partial class LobbyWindow : Window
     {
         base.OnStateChanged(e);
 
+        // Anything that minimises us through the real WindowState (Win+D,
+        // "Show desktop", a programmatic minimise) would otherwise land on
+        // the unstylable OS stub. Intercept it and convert to our pill.
+        // The _suppressStateChange guard skips the WindowState writes we
+        // make ourselves inside EnterPill/RestoreFromPill so this doesn't
+        // recurse.
+        if (!_suppressStateChange && WindowState == WindowState.Minimized && !_isPilled)
+        {
+            DiagnosticLog.Write($"LobbyWindow: real minimize hit; launcher={_launcherWindow?.WindowState.ToString() ?? "null"}, hiddenByOwner={_hiddenByOwner}");
+
+            // We never allow a real OS-minimize (it shows the unstylable stub).
+            // Snap back to Normal immediately so we don't get stuck minimized,
+            // then DEFER the pill-vs-hide decision one dispatcher tick: if this
+            // minimize was propagated from the launcher (owner) minimizing, the
+            // launcher won't be flagged Minimized *yet* at this instant (event
+            // ordering), so checking it now races. By the next Background tick
+            // the launcher's own minimize has settled and we can tell which case
+            // we're in — hide WITH the launcher, or (we alone) show the pill.
+            _suppressStateChange = true;
+            WindowState = WindowState.Normal;
+            _suppressStateChange = false;
+
+            Dispatcher.BeginInvoke(new Action(DecidePillOrHideWithOwner), DispatcherPriority.Background);
+            return;
+        }
+
         if (MaximizeBtn == null) return;
 
         bool isMax = WindowState == WindowState.Maximized;
@@ -166,11 +216,301 @@ public partial class LobbyWindow : Window
         MaximizeBtn.ToolTip = isMax ? "Restore" : "Maximize";
     }
 
+    /// <summary>
+    /// Once the HWND exists, latch onto the launcher window and follow its
+    /// minimize/restore so the lobby (or its pill) hides WITH the launcher
+    /// instead of being left floating alone on the desktop (the reported
+    /// "se quedó afuera" bug). We resolve the launcher as <see cref="Window.Owner"/>
+    /// (set by OpenLobbyWindow) and fall back to
+    /// <see cref="Application.MainWindow"/> in case the owner link didn't take.
+    /// </summary>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        _launcherWindow = Owner ?? Application.Current?.MainWindow;
+        if (_launcherWindow != null && !ReferenceEquals(_launcherWindow, this))
+            _launcherWindow.StateChanged += LauncherWindow_StateChanged;
+        DiagnosticLog.Write($"LobbyWindow: tracking launcher = {(_launcherWindow == null ? "null" : _launcherWindow.GetType().Name)} (Owner={(Owner == null ? "null" : "set")})");
+    }
+
+    /// <summary>
+    /// Launcher minimized → hide along with it (remembering we did, so the
+    /// OnStateChanged pill logic stands down). Launcher restored → come back
+    /// and re-focus. Hide()/Show() leave WindowState, size and position
+    /// untouched, so a pilled lobby returns pilled and a full lobby returns
+    /// full — no state is lost across the launcher minimise.
+    /// </summary>
+    private void LauncherWindow_StateChanged(object? sender, EventArgs e)
+    {
+        var launcher = _launcherWindow;
+        if (launcher == null) return;
+        DiagnosticLog.Write($"LobbyWindow: launcher StateChanged = {launcher.WindowState}, hiddenByOwner={_hiddenByOwner}, isPilled={_isPilled}, visible={IsVisible}");
+
+        if (launcher.WindowState == WindowState.Minimized)
+        {
+            if (IsVisible)
+            {
+                _hiddenByOwner = true;
+                Hide();
+            }
+        }
+        else if (_hiddenByOwner)
+        {
+            _hiddenByOwner = false;
+            Show();
+            Activate();
+        }
+    }
+
+    /// <summary>
+    /// Deferred (one tick after a real minimize hit) so the launcher's own
+    /// minimize has settled: if the launcher is now minimized this was a
+    /// propagated minimize → hide with it; otherwise we alone were minimized
+    /// → show the pill. Guards against double-handling when
+    /// <see cref="LauncherWindow_StateChanged"/> already hid us.
+    /// </summary>
+    private void DecidePillOrHideWithOwner()
+    {
+        if (_isPilled || _hiddenByOwner) return;
+
+        bool launcherMinimized = _launcherWindow is { WindowState: WindowState.Minimized };
+        DiagnosticLog.Write($"LobbyWindow: deferred decide; launcherMinimized={launcherMinimized}");
+
+        if (launcherMinimized)
+        {
+            if (IsVisible)
+            {
+                _hiddenByOwner = true;
+                Hide();
+            }
+        }
+        else
+        {
+            EnterPill();
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (_launcherWindow != null)
+            _launcherWindow.StateChanged -= LauncherWindow_StateChanged;
+        base.OnClosed(e);
+    }
+
+    // ------------------------------------------------------------------
+    // Minimized pill: enter / restore + the blue neon glow.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Collapse the lobby into the small glowing pill docked at the
+    /// bottom-left of the work area, in place of the OS minimize stub.
+    /// We stay in <see cref="WindowState.Normal"/> the whole time (the
+    /// opaque pill overlay covers the chrome + content), so Windows never
+    /// draws its stub and a click can't summon the system menu. Idempotent.
+    /// </summary>
+    private void EnterPill()
+    {
+        if (_isPilled) return;
+        _isPilled = true;
+        DiagnosticLog.Write("LobbyWindow: EnterPill (showing floating pill)");
+
+        // Remember where to come back to. Use RestoreBounds for the
+        // non-Normal cases so restore returns to the pre-maximise rect (and
+        // so a restore never lands on Minimized).
+        _restoreState = WindowState == WindowState.Minimized ? WindowState.Normal : WindowState;
+        var rb = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, Width, Height)
+            : RestoreBounds;
+        _restoreLeft = rb.Left; _restoreTop = rb.Top;
+        _restoreWidth = rb.Width; _restoreHeight = rb.Height;
+        _restoreMinWidth = MinWidth; _restoreMinHeight = MinHeight;
+        _restoreResizeMode = ResizeMode;
+        _hasPillSavedBounds = true;
+
+        // Force Normal (undo any in-flight minimise) without re-triggering
+        // the OnStateChanged → EnterPill path.
+        _suppressStateChange = true;
+        WindowState = WindowState.Normal;
+        _suppressStateChange = false;
+
+        // Lower the size floor before shrinking (MinWidth/Height are 600/420)
+        // and lock resize so the pill edges can't drag-resize it.
+        ResizeMode = ResizeMode.NoResize;
+        MinWidth = PillWidth; MinHeight = PillHeight;
+        Width = PillWidth; Height = PillHeight;
+
+        // Dock bottom-left of the primary work area (where the old OS stub
+        // lived). Multi-monitor lands on the primary monitor — the same
+        // documented primary-monitor assumption as the hero-scale code.
+        var wa = SystemParameters.WorkArea;
+        Left = wa.Left + PillMargin;
+        Top = wa.Bottom - PillHeight - PillMargin;
+
+        // Drop the window's 1 px grey edge so the blue neon stroke is the
+        // outermost line (restored on un-pill).
+        LobbyOuterFrame.BorderThickness = new Thickness(0);
+
+        MinimizedPill.Visibility = Visibility.Visible;
+        StartPillGlow();
+    }
+
+    /// <summary>
+    /// Restore the lobby from the pill back to its saved geometry/state.
+    /// Idempotent — a no-op if not currently pilled.
+    /// </summary>
+    private void RestoreFromPill()
+    {
+        if (!_isPilled) return;
+        _isPilled = false;
+
+        StopPillGlow();
+        MinimizedPill.Visibility = Visibility.Collapsed;
+        LobbyOuterFrame.BorderThickness = new Thickness(1);   // restore the 1 px edge
+
+        if (_hasPillSavedBounds)
+        {
+            MinWidth = _restoreMinWidth;
+            MinHeight = _restoreMinHeight;
+            ResizeMode = _restoreResizeMode;
+            // Set the Normal-state geometry before flipping state, so a
+            // restore-to-Maximized still has a sane rect to un-maximise to.
+            Left = _restoreLeft; Top = _restoreTop;
+            Width = _restoreWidth; Height = _restoreHeight;
+
+            _suppressStateChange = true;
+            WindowState = _restoreState;
+            _suppressStateChange = false;
+        }
+
+        Activate();
+    }
+
+    /// <summary>
+    /// Bring the window back if it's sitting as the minimized pill; no-op
+    /// otherwise. Called from MultiplayerTab when the user re-opens an
+    /// already-open lobby — a bare Activate() wouldn't un-pill it.
+    /// </summary>
+    public void RestoreFromMinimized() => RestoreFromPill();
+
+    /// <summary>Single click on the pill restores the lobby.</summary>
+    private void MinimizedPill_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        => RestoreFromPill();
+
+    /// <summary>
+    /// Start the blue "neon" glow — the pill's border + inward halo
+    /// breathe via looping, auto-reversing animations: the
+    /// DropShadowEffect's blur + opacity pulse, and the (local, mutable)
+    /// BorderBrush colour shifts between a mid blue and a bright cyan.
+    /// </summary>
+    private void StartPillGlow()
+    {
+        var ease = new SineEase { EasingMode = EasingMode.EaseInOut };
+        var period = new Duration(TimeSpan.FromSeconds(1.3));
+
+        if (PillGlowBorder.Effect is DropShadowEffect fx)
+        {
+            fx.BeginAnimation(DropShadowEffect.BlurRadiusProperty, new DoubleAnimation(8, 18, period)
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = ease,
+            });
+            fx.BeginAnimation(DropShadowEffect.OpacityProperty, new DoubleAnimation(0.5, 0.95, period)
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = ease,
+            });
+        }
+
+        if (PillGlowBorder.BorderBrush is SolidColorBrush brush)
+        {
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(
+                Color.FromRgb(0x4F, 0x8F, 0xD8),   // mid blue (idle)
+                Color.FromRgb(0xA6, 0xDB, 0xFF),   // bright cyan highlight
+                period)
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = ease,
+            });
+        }
+    }
+
+    /// <summary>Stop the glow animations; passing null reverts each
+    /// property to its XAML base value (idle blue #4F8FD8, blur 14, opacity 0.7).</summary>
+    private void StopPillGlow()
+    {
+        if (PillGlowBorder.Effect is DropShadowEffect fx)
+        {
+            fx.BeginAnimation(DropShadowEffect.BlurRadiusProperty, null);
+            fx.BeginAnimation(DropShadowEffect.OpacityProperty, null);
+        }
+        if (PillGlowBorder.BorderBrush is SolidColorBrush brush)
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+    }
+
+    /// <summary>
+    /// Pulse the countdown bar's border + halo so an active timer is
+    /// unmistakable. Same recipe as the pill glow: animate the (local,
+    /// unfrozen) BorderBrush colour between mid-blue and bright cyan and
+    /// the DropShadowEffect's blur + opacity, looping + auto-reversing.
+    /// Public so <c>MultiplayerTab.ApplyMatchPhaseUi</c> can drive it
+    /// alongside the bar's visibility. Idempotent — restarting just
+    /// replaces the running clocks.
+    /// </summary>
+    public void StartCountdownGlow()
+    {
+        var ease = new SineEase { EasingMode = EasingMode.EaseInOut };
+        var period = new Duration(TimeSpan.FromSeconds(1.1));
+
+        if (CountdownOverlay.Effect is DropShadowEffect fx)
+        {
+            fx.BeginAnimation(DropShadowEffect.BlurRadiusProperty, new DoubleAnimation(8, 22, period)
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = ease,
+            });
+            fx.BeginAnimation(DropShadowEffect.OpacityProperty, new DoubleAnimation(0.35, 0.9, period)
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = ease,
+            });
+        }
+
+        if (CountdownOverlay.BorderBrush is SolidColorBrush brush)
+        {
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(
+                Color.FromRgb(0x4F, 0x8F, 0xD8),   // mid blue (idle)
+                Color.FromRgb(0xA6, 0xDB, 0xFF),   // bright cyan highlight
+                period)
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = ease,
+            });
+        }
+    }
+
+    /// <summary>Stop the countdown-bar glow; null reverts each property to
+    /// its XAML base value. Safe to call when no glow is running.</summary>
+    public void StopCountdownGlow()
+    {
+        if (CountdownOverlay.Effect is DropShadowEffect fx)
+        {
+            fx.BeginAnimation(DropShadowEffect.BlurRadiusProperty, null);
+            fx.BeginAnimation(DropShadowEffect.OpacityProperty, null);
+        }
+        if (CountdownOverlay.BorderBrush is SolidColorBrush brush)
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+    }
+
     private void LeaveRoomButton_Click(object sender, RoutedEventArgs e) => OnLeaveRoom?.Invoke();
     private void ReadyButton_Click(object sender, RoutedEventArgs e) => OnReady?.Invoke();
     private void StartButton_Click(object sender, RoutedEventArgs e) => OnStart?.Invoke();
     private void InGameCancelButton_Click(object sender, RoutedEventArgs e) => OnInGameCancel?.Invoke();
-    private void CountdownCancelButton_Click(object sender, RoutedEventArgs e) => OnCountdownCancel?.Invoke();
     private void ClearChatButton_Click(object sender, RoutedEventArgs e) => OnClearChat?.Invoke();
     private void ChatSendButton_Click(object sender, RoutedEventArgs e) => OnSendChat?.Invoke();
     private void ChatEmojiButton_Click(object sender, RoutedEventArgs e) => OnEmoji?.Invoke();

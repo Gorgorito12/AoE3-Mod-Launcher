@@ -455,11 +455,11 @@ public partial class MultiplayerTab : UserControl
                 var launched = RadminVpnService.LaunchGui(status.ExePath);
                 if (!launched)
                 {
-                    MessageBox.Show(
+                    await MpAlertOverlay.NoticeAsync(
+                        TabRootGrid,
+                        Strings.Get("MpNoticeRadminLaunchTitle"),
                         Strings.Get("MpRadminLaunchFailed"),
-                        "Wars of Liberty Launcher",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                        Strings.Get("MpAlertOk"));
                 }
             }
             // Immediate refresh — the new connection state will only
@@ -843,8 +843,13 @@ public partial class MultiplayerTab : UserControl
                 RefreshInGamePanel();
         }
 
-        // Empty-state copy — now localized (the old table column headers
-        // were removed with the switch to room cards).
+        // Room-list column headers (localized) + empty-state copy.
+        ColHeaderRoom.Text = Strings.Get("MpColRoom");
+        ColHeaderHost.Text = Strings.Get("MpColHost");
+        ColHeaderPlayers.Text = Strings.Get("MpColPlayers");
+        ColHeaderPing.Text = Strings.Get("MpColPing");
+        ColHeaderStatus.Text = Strings.Get("MpColStatus");
+        ColHeaderAction.Text = Strings.Get("MpColAction");
         EmptyTitleText.Text = Strings.Get("MpRoomsEmptyTitle");
         EmptyBodyText.Text = Strings.Get("MpRoomsEmptyBody");
         EmptyCreateButton.Content = "+  " + Strings.Get("MpRoomsCreate");
@@ -1048,9 +1053,9 @@ public partial class MultiplayerTab : UserControl
                             && dm.ValueKind == System.Text.Json.JsonValueKind.Number
                                 ? dm.GetInt32()
                                 : 3000;
-                        // Floor at 5 s so the countdown is always long enough
+                        // Floor at 10 s so the countdown is always long enough
                         // to read and to cancel, whatever the server sends.
-                        durationMs = Math.Max(5000, durationMs);
+                        durationMs = Math.Max(10000, durationMs);
                         StartCountdown(durationMs);
                         AppendChatSystem(Strings.Format("MpChatGameStartingIn", durationMs / 1000));
                         break;
@@ -1990,14 +1995,19 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.ChatSendButton.Content = Strings.Get("MpRoomChatSend");
         _lobbyWindow.ChatPlaceholderText.Text = Strings.Get("MpRoomChatPlaceholder");
         _lobbyWindow.ChatEmptyHint.Text = Strings.Get("MpRoomChatEmpty");
+        _lobbyWindow.MinimizedPillText.Text = Strings.Get("MpMinimizedPillLabel");
+        _lobbyWindow.MinimizedPill.ToolTip = Strings.Get("MpMinimizedPillTooltip");
 
-        // Match-phase overlay static labels (CountdownOverlay /
-        // InGameOverlay). The dynamic captions — countdown "Go", the
-        // in-game mode badge, and the cancel/leave button — are owned
-        // by UpdateCountdownTick / RefreshInGamePanel / ApplyMatchPhaseUi.
+        // Match-phase static labels (countdown chat-line / InGameOverlay).
+        // The dynamic captions — countdown "Go", the in-game mode badge, the
+        // in-game cancel/leave button, AND the Start-button-as-Cancel during
+        // the countdown — are owned by UpdateCountdownTick /
+        // RefreshInGamePanel / ApplyMatchPhaseUi. The countdown now lives as
+        // a single live line INSIDE the chat (⏱ label + number, no hint and
+        // no button of its own — the left-column Start button doubles as
+        // Cancel), so there's no CountdownHint / CountdownCancelButton
+        // caption to set here.
         _lobbyWindow.CountdownLabel.Text = Strings.Get("MpCountdownLabel");
-        _lobbyWindow.CountdownHint.Text = Strings.Get("MpCountdownHint");
-        _lobbyWindow.CountdownCancelButton.Content = Strings.Get("MpCountdownCancel");
         _lobbyWindow.InGameTitleText.Text = Strings.Get("MpInGameTitle");
         _lobbyWindow.InGameMatchTimeHeader.Text = Strings.Get("MpInGameMatchTimeHeader");
         _lobbyWindow.InGameTrafficHeader.Text = Strings.Get("MpInGameTrafficHeader");
@@ -2129,11 +2139,18 @@ public partial class MultiplayerTab : UserControl
 
         // The Start button only appears for the host; enabled once the
         // P2P bridge is ready so AoE3 launches into a working network.
-        _lobbyWindow!.StartButton.Visibility = _isHostInCurrentRoom
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        _lobbyWindow!.StartButton.IsEnabled = _isHostInCurrentRoom && s.IsInLobby;
-        _lobbyWindow!.StartButton.Content = "▶  " + Strings.Get("MpRoomStart");
+        // GUARD: only own the Start button while we're in the Lobby phase.
+        // During the countdown (Starting) ApplyMatchPhaseUi repurposes this
+        // same button as the red "Cancel" for everyone, so a room_state
+        // refresh mid-countdown must NOT stomp it back to "Start game".
+        if (_matchPhase == MatchPhase.Lobby)
+        {
+            _lobbyWindow!.StartButton.Visibility = _isHostInCurrentRoom
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            _lobbyWindow!.StartButton.IsEnabled = _isHostInCurrentRoom && s.IsInLobby;
+            _lobbyWindow!.StartButton.Content = "▶  " + Strings.Get("MpRoomStart");
+        }
         _lobbyWindow!.LeaveRoomButton.Content = "↩  " + Strings.Get("MpRoomLeave");
     }
 
@@ -2601,11 +2618,11 @@ public partial class MultiplayerTab : UserControl
 
         if (installedProfiles.Count == 0)
         {
-            MessageBox.Show(
-                Strings.Get("MpModNotInstalled"),
-                "Multiplayer",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpNoticeModNotInstalledTitle"),
+                Strings.Get("MpNoticeModNotInstalledBody"),
+                Strings.Get("MpAlertOk"));
             return;
         }
 
@@ -2649,11 +2666,11 @@ public partial class MultiplayerTab : UserControl
         catch (Exception ex)
         {
             DiagnosticLog.Write($"CreateRoom: EnterHostedLobbyAsync THREW: {ex.GetType().Name}: {ex.Message}");
-            MessageBox.Show(
-                $"Could not enter the lobby:\n\n{ex.Message}",
-                "Multiplayer error",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpNoticeCreateFailedTitle"),
+                ex.Message,
+                Strings.Get("MpAlertOk"));
             SignInErrorText.Text = ex.Message;
             SignInErrorText.Visibility = Visibility.Visible;
         }
@@ -3171,11 +3188,11 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Build one row of the rooms table. Column widths match the
-    /// header Grid declared in MultiplayerTab.xaml so the columns
-    /// line up. The row uses alternating zebra-stripe backgrounds
-    /// driven by <paramref name="rowIndex"/> so a long list stays
-    /// scannable.
+    /// Build one room as a full-width CARD styled like a table row: SALA
+    /// (★ + title + mod/private chips), ANFITRIÓN, JUGADORES, PING, ESTADO,
+    /// ACCIÓN. The six column widths mirror the header Grid in
+    /// MultiplayerTab.xaml (and its 31px side margin) so the columns line up
+    /// under the labels. Hover lift comes from the MpRoomCard style.
     /// </summary>
     private Border BuildRoomCard(LobbySummary lobby, int rowIndex)
     {
@@ -3195,74 +3212,74 @@ public partial class MultiplayerTab : UserControl
             // the brushes), so resolve it via this control's FindResource, not
             // Application.Current.FindResource (which only sees merged app dicts).
             Style = (Style)FindResource("MpRoomCard"),
-            Width = 326,
-            Margin = new Thickness(0, 0, 12, 12),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 10),
             Opacity = modInstalled ? 1.0 : 0.6,
             Tag = lobby,
         };
-        var root = new StackPanel();
 
-        // -- Header: title (+ 🔒) left, status badge right.
-        var headerGrid = new Grid();
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // (The card's illumination — a STATIC, subtle BLUE rim + faint blue
+        // glow — lives in the MpRoomCard style now; no per-card animation.)
 
-        var titleStack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        titleStack.Children.Add(new TextBlock
+        // Six columns mirroring the header Grid (MultiplayerTab.xaml): SALA*,
+        // ANFITRIÓN 150, JUGADORES 90, PING 100, ESTADO 120, ACCIÓN 150. Keep
+        // these in sync with the header so the columns line up.
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 200 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+
+        // === Col 0: SALA — gold ★ + (title over mod/private chips). ===
+        var salaCell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        salaCell.Children.Add(new TextBlock
+        {
+            Text = "★",
+            Foreground = (Brush)Application.Current.FindResource("AccentBrush"),
+            FontSize = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
+        });
+        var salaText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        salaText.Children.Add(new TextBlock
         {
             Text = lobby.Title,
             Foreground = textPrimary,
             FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
         });
-        if (lobby.IsPrivate)
-        {
-            titleStack.Children.Add(new TextBlock
-            {
-                Text = "  🔒",
-                Foreground = textSecondary,
-                FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-        }
-        Grid.SetColumn(titleStack, 0);
-        headerGrid.Children.Add(titleStack);
-
-        var badge = BuildRoomBadge(inGame, isFull);
-        badge.VerticalAlignment = VerticalAlignment.Center;
-        badge.Margin = new Thickness(8, 0, 0, 0);
-        Grid.SetColumn(badge, 1);
-        headerGrid.Children.Add(badge);
-        root.Children.Add(headerGrid);
-
-        // -- Mod name (secondary line under the title).
+        // Chips: the mod (real data, blue) + 🔒 Private (when password-gated).
+        var chips = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 0) };
         var modName = ModRegistry.Find(lobby.ModId)?.DisplayName;
         if (string.IsNullOrWhiteSpace(modName)) modName = lobby.ModId;
-        root.Children.Add(new TextBlock
+        chips.Children.Add(BuildRoomChip(
+            modName!,
+            (Brush)Application.Current.FindResource("MpBlueSubtle"),
+            (Brush)Application.Current.FindResource("FgHoverBlue")));
+        if (lobby.IsPrivate)
         {
-            Text = modName,
-            Foreground = textSecondary,
-            FontSize = 11.5,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 3, 0, 0),
-        });
+            chips.Children.Add(BuildRoomChip(
+                "🔒 " + Strings.Get("MpRoomPrivate"),
+                (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+                textSecondary));
+        }
         if (!modInstalled)
         {
-            root.Children.Add(new TextBlock
-            {
-                Text = Strings.Get("MpRoomModNotInstalled"),
-                Foreground = textSecondary,
-                FontSize = 11,
-                FontStyle = FontStyles.Italic,
-                Margin = new Thickness(0, 2, 0, 0),
-            });
+            chips.Children.Add(BuildRoomChip(
+                Strings.Get("MpRoomModNotInstalled"),
+                (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+                textSecondary));
         }
+        salaText.Children.Add(chips);
+        salaCell.Children.Add(salaText);
+        Grid.SetColumn(salaCell, 0);
+        grid.Children.Add(salaCell);
 
-        // -- Host row: initial circle + "Host: name". Same host-name
-        // resolution as the old table row (display name → Discord username →
-        // signed-in user for our own room → em-dash).
+        // === Col 1: ANFITRIÓN — initial circle + name. Same host-name
+        // resolution as the table (display → Discord username → me → em-dash). ===
         var hostName = lobby.Host.DisplayName;
         if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
             hostName = lobby.Host.DiscordUsername;
@@ -3277,11 +3294,11 @@ public partial class MultiplayerTab : UserControl
         if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
             hostName = "—";
 
-        var hostRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        hostRow.Children.Add(new Border
+        var hostCell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        hostCell.Children.Add(new Border
         {
-            Width = 22, Height = 22,
-            CornerRadius = new CornerRadius(11),
+            Width = 24, Height = 24,
+            CornerRadius = new CornerRadius(12),
             Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
             Margin = new Thickness(0, 0, 8, 0),
             Child = new TextBlock
@@ -3294,40 +3311,49 @@ public partial class MultiplayerTab : UserControl
                 VerticalAlignment = VerticalAlignment.Center,
             },
         });
-        hostRow.Children.Add(new TextBlock
+        hostCell.Children.Add(new TextBlock
         {
-            Text = Strings.Format("MpRoomCardHost", hostName),
-            Foreground = textSecondary,
+            Text = hostName,
+            Foreground = textPrimary,
             FontSize = 12,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         });
-        root.Children.Add(hostRow);
+        Grid.SetColumn(hostCell, 1);
+        grid.Children.Add(hostCell);
 
-        // -- Stats row: players + ping. The /lobbies payload has no per-host
-        // IP, so the ping is YOUR internet latency (same for every card),
-        // refreshed in place by _roomsPingTimer via the registered cell (a
-        // rebuild would disrupt the action button mid-hover/click).
-        var statsRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        statsRow.Children.Add(new TextBlock
+        // === Col 2: JUGADORES — icon + X/Y. ===
+        var playersCell = new TextBlock
         {
-            Text = $"👥 {lobby.CurrentPlayers}/{lobby.MaxPlayers}",
+            Text = $"👤 {lobby.CurrentPlayers} / {lobby.MaxPlayers}",
             Foreground = textPrimary,
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 14, 0),
-        });
+        };
+        Grid.SetColumn(playersCell, 2);
+        grid.Children.Add(playersCell);
+
+        // === Col 3: PING — registered so RefreshRoomPingCells() updates it in
+        // place (no rebuild). It's YOUR internet latency (same for every row;
+        // /lobbies has no per-host IP). ===
         var pingCell = BuildPingCell(_connectionPingMs >= 0 ? _connectionPingMs : (double?)null);
         pingCell.ToolTip = Strings.Get("MpRoomPingTooltip");
         _roomPingCells.Add(pingCell);
-        statsRow.Children.Add(pingCell);
-        root.Children.Add(statsRow);
+        Grid.SetColumn(pingCell, 3);
+        grid.Children.Add(pingCell);
 
-        // -- Action button (full-width). SAME priority logic as the old row:
-        //   in this room → Re-enter; our own room → "Your room" (disabled);
-        //   in game → disabled; full → disabled; mod not installed → disabled
-        //   Join; else → enabled Join. Enabled Join / Re-enter are primary
-        //   (blue); the disabled states are neutral.
+        // === Col 4: ESTADO — dot + label (🔒 + "En partida" for in-game). ===
+        var statusCell = BuildStatusCell(
+            inGame ? Strings.Get("MpRoomStatusInGame") : Strings.Get("MpRoomStatusWaiting"),
+            inGame);
+        Grid.SetColumn(statusCell, 4);
+        grid.Children.Add(statusCell);
+
+        // === Col 5: ACCIÓN — gold-outline button. SAME priority logic: in this
+        // room → Re-enter; our own room → "Your room" (disabled); in game →
+        // disabled; full → disabled; mod not installed → disabled Join; else →
+        // enabled Join. Enabled Join / Re-enter are the gold outline; disabled
+        // states fall back to the neutral secondary style. ===
         var iAmInThisRoom = string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
         var iAmHost = me != null && (
             (!string.IsNullOrEmpty(lobby.Host.Id)
@@ -3339,15 +3365,15 @@ public partial class MultiplayerTab : UserControl
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 14, 0, 0),
-            Padding = new Thickness(0, 8, 0, 8),
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(8, 7, 8, 7),
             Tag = lobby,
         };
-        var primary = (Style)Application.Current.FindResource("MpPrimaryButton");
+        var outline = (Style)Application.Current.FindResource("MpOutlineBlueButton");
         var secondary = (Style)Application.Current.FindResource("MpSecondaryButton");
         if (iAmInThisRoom)
         {
-            actionBtn.Style = primary;
+            actionBtn.Style = outline;
             actionBtn.Content = Strings.Get("MpRoomReenter");
             actionBtn.Click += (_, _) => OpenLobbyWindow();
         }
@@ -3371,16 +3397,34 @@ public partial class MultiplayerTab : UserControl
         }
         else
         {
-            actionBtn.Style = primary;
+            actionBtn.Style = outline;
             actionBtn.Content = Strings.Get("MpRoomJoin");
             actionBtn.IsEnabled = modInstalled;
             actionBtn.Click += JoinRoomButton_Click;
         }
-        root.Children.Add(actionBtn);
+        Grid.SetColumn(actionBtn, 5);
+        grid.Children.Add(actionBtn);
 
-        card.Child = root;
+        card.Child = grid;
         return card;
     }
+
+    /// <summary>Small rounded chip for a room card (mod / private / etc.).</summary>
+    private Border BuildRoomChip(string text, Brush bg, Brush fg) => new Border
+    {
+        Background = bg,
+        CornerRadius = new CornerRadius(4),
+        Padding = new Thickness(8, 2, 8, 2),
+        Margin = new Thickness(0, 0, 6, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock
+        {
+            Text = text,
+            Foreground = fg,
+            FontSize = 10.5,
+            FontWeight = FontWeights.SemiBold,
+        },
+    };
 
     /// <summary>
     /// Small rounded status badge for a room card: the single most-relevant
@@ -3637,12 +3681,11 @@ public partial class MultiplayerTab : UserControl
                         break;
                     }
                 }
-                MessageBox.Show(
-                    $"This room is for {displayName}, but you don't have that mod installed yet.\n\n" +
-                    "Install it from the Mods tab and try again.",
-                    "Mod not installed",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("MpNoticeRoomModMissingTitle"),
+                    Strings.Format("MpNoticeRoomModMissingBody", displayName),
+                    Strings.Get("MpAlertOk"));
                 return;
             }
 
@@ -3658,11 +3701,11 @@ public partial class MultiplayerTab : UserControl
             }
             if (target == null)
             {
-                MessageBox.Show(
-                    $"This room uses an unknown mod ('{lobby.ModId}'). The launcher can't switch to it.",
-                    "Unknown mod",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("MpNoticeUnknownModTitle"),
+                    Strings.Format("MpNoticeUnknownModBody", lobby.ModId),
+                    Strings.Get("MpAlertOk"));
                 return;
             }
 
@@ -3672,12 +3715,11 @@ public partial class MultiplayerTab : UserControl
             // install / game running blocks the switch).
             if (_switchActiveMod == null || !_switchActiveMod(target))
             {
-                MessageBox.Show(
-                    $"Could not switch to {target.DisplayName}. Make sure no install / update is " +
-                    "in progress, then try again.",
-                    "Mod switch failed",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("MpNoticeSwitchFailedTitle"),
+                    Strings.Format("MpNoticeSwitchFailedBody", target.DisplayName),
+                    Strings.Get("MpAlertOk"));
                 return;
             }
             // Use the new profile from here on. The active-profile
@@ -3694,7 +3736,11 @@ public partial class MultiplayerTab : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Cannot fingerprint mod", MessageBoxButton.OK, MessageBoxImage.Error);
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpNoticeFingerprintTitle"),
+                ex.Message,
+                Strings.Get("MpAlertOk"));
             return;
         }
 
@@ -3726,15 +3772,19 @@ public partial class MultiplayerTab : UserControl
         }
         catch (LobbyApiException ex) when (ex.Code == "mod_mismatch")
         {
-            MessageBox.Show(
-                "Your local mod files don't match the host. Verify or update the mod before trying again.",
-                "Mod version mismatch",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpNoticeMismatchTitle"),
+                Strings.Get("MpNoticeMismatchBody"),
+                Strings.Get("MpAlertOk"));
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Could not join", MessageBoxButton.OK, MessageBoxImage.Error);
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpNoticeJoinFailedTitle"),
+                ex.Message,
+                Strings.Get("MpAlertOk"));
         }
         finally
         {
@@ -3773,6 +3823,15 @@ public partial class MultiplayerTab : UserControl
     {
         if (_session == null) return;
 
+        // The same button is the red "Cancel" during the countdown (for
+        // host AND joiner — see ApplyMatchPhaseUi). Route the click to the
+        // abort path instead of (re)starting a game.
+        if (_matchPhase == MatchPhase.Starting)
+        {
+            CancelCountdownByUser();
+            return;
+        }
+
         // Host-side semantics:
         //   1. Tell the Worker to start the game. The Worker will
         //      broadcast `game_countdown` back to every member,
@@ -3810,7 +3869,7 @@ public partial class MultiplayerTab : UserControl
                     {
                         DiagnosticLog.Write("MultiplayerTab.Start: server didn't echo countdown in 2s, " +
                             "starting local fallback countdown");
-                        StartCountdown(5000);
+                        StartCountdown(10000);
                     }
                 });
                 return;
@@ -3828,7 +3887,7 @@ public partial class MultiplayerTab : UserControl
         // WS unavailable / SendStart threw: still kick off the
         // local countdown so the host can launch solo. Peers won't
         // hear about it but a single-player test session works.
-        StartCountdown(5000);
+        StartCountdown(10000);
     }
 
     private async void LeaveRoomButton_Click(object sender, RoutedEventArgs e)
@@ -4141,6 +4200,10 @@ public partial class MultiplayerTab : UserControl
     {
         if (_lobbyWindow != null)
         {
+            // If it's sitting as the minimized pill (e.g. the user clicked
+            // "Re-enter" on the rooms browser while minimized), un-pill it
+            // first — a bare Activate() would just focus the pill.
+            _lobbyWindow.RestoreFromMinimized();
             _lobbyWindow.Activate();
             return;
         }
@@ -4158,7 +4221,6 @@ public partial class MultiplayerTab : UserControl
             OnReady = () => ReadyButton_Click(this, new RoutedEventArgs()),
             OnStart = () => StartButton_Click(this, new RoutedEventArgs()),
             OnInGameCancel = () => InGameCancelButton_Click(this, new RoutedEventArgs()),
-            OnCountdownCancel = CancelCountdownByUser,
             OnClearChat = () => ClearChatButton_Click(this, new RoutedEventArgs()),
             OnSendChat = () => ChatSendButton_Click(this, new RoutedEventArgs()),
             OnEmoji = () => ChatEmojiButton_Click(this, new RoutedEventArgs()),
@@ -4266,14 +4328,53 @@ public partial class MultiplayerTab : UserControl
         // arrive from session events after we've already left the room.
         if (_lobbyWindow == null) return;
 
+        var starting = _matchPhase == MatchPhase.Starting;
+
         // Overlays — Visibility set via the prefixed accessors (the
         // null-forgiving '!' is safe because of the guard above).
-        _lobbyWindow!.CountdownOverlay.Visibility = _matchPhase == MatchPhase.Starting
+        _lobbyWindow!.CountdownOverlay.Visibility = starting
             ? Visibility.Visible : Visibility.Collapsed;
         _lobbyWindow!.InGameOverlay.Visibility = _matchPhase == MatchPhase.InGame
             ? Visibility.Visible : Visibility.Collapsed;
 
-        // Cancel button caption differs for host vs joiner.
+        // NO glow call here — load-bearing. The countdown is now a live
+        // line INSIDE the chat, whose CountdownOverlay Border uses a shared,
+        // frozen DynamicResource (MpBlue) BorderBrush and has no Effect.
+        // Calling StartCountdownGlow() on it threw InvalidOperationException
+        // (a frozen Freezable can't be animated), and because that throw
+        // happened RIGHT AFTER the Visibility line above but BEFORE the
+        // button-swap below — and before StartCountdown reached
+        // UpdateCountdownTick — the symptom was: the bar appeared but froze
+        // at the XAML-default number, the Start button never became Cancel,
+        // and the "starting in N" chat line never posted. Don't re-add a
+        // glow call unless the chat-line Border is given a LOCAL unfrozen
+        // SolidColorBrush + a DropShadowEffect first (see CLAUDE.md).
+
+        // The big left-column Start button DOUBLES as the countdown's
+        // Cancel. During Starting it turns red, reads "Cancel", and is
+        // shown + enabled for EVERYONE (host and joiner) so anyone can
+        // abort the launch; StartButton_Click routes to CancelCountdownByUser
+        // while in this phase. Outside the countdown, ownership of the
+        // button returns to RenderRoomPanel (blue "Start game", host-only)
+        // — we mirror that block here so the restore is immediate even
+        // before the next room_state refresh lands.
+        if (starting)
+        {
+            _lobbyWindow!.StartButton.Style = (Style)Application.Current.FindResource("MpDangerButton");
+            _lobbyWindow!.StartButton.Visibility = Visibility.Visible;
+            _lobbyWindow!.StartButton.IsEnabled = true;
+            _lobbyWindow!.StartButton.Content = "✕  " + Strings.Get("MpCountdownCancel");
+        }
+        else
+        {
+            _lobbyWindow!.StartButton.Style = (Style)Application.Current.FindResource("MpPrimaryButton");
+            _lobbyWindow!.StartButton.Visibility = _isHostInCurrentRoom
+                ? Visibility.Visible : Visibility.Collapsed;
+            _lobbyWindow!.StartButton.IsEnabled = _isHostInCurrentRoom && (_session?.IsInLobby ?? false);
+            _lobbyWindow!.StartButton.Content = "▶  " + Strings.Get("MpRoomStart");
+        }
+
+        // In-game cancel caption differs for host vs joiner.
         _lobbyWindow!.InGameCancelButton.Content = _isHostInCurrentRoom
             ? Strings.Get("MpInGameCancelHost")
             : Strings.Get("MpInGameLeave");
@@ -4652,16 +4753,20 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async void InGameCancelButton_Click(object sender, RoutedEventArgs e)
     {
-        var verb = _isHostInCurrentRoom ? "Cancel the game for everyone?" : "Leave the game?";
-        var detail = _isHostInCurrentRoom
-            ? "All players will be disconnected and the room returns to the lobby."
-            : "AoE3 will close. The room keeps playing for the other players.";
-        var result = MessageBox.Show(
-            $"{verb}\n\n{detail}",
-            "Multiplayer",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-        if (result != MessageBoxResult.Yes) return;
+        // Themed in-lobby confirm (replaces the OS MessageBox). Host =
+        // "cancel for everyone" (danger, broadcasts game_cancelled); joiner
+        // = "leave the game" (only this player drops, room plays on). Needs
+        // the lobby window open to host the overlay — it always is here
+        // (this button lives in that window), but guard anyway.
+        if (_lobbyWindow == null) return;
+        bool confirmed = await MpAlertOverlay.ConfirmAsync(
+            _lobbyWindow.LobbyRootGrid,
+            _isHostInCurrentRoom ? Strings.Get("MpConfirmCancelHostTitle") : Strings.Get("MpConfirmLeaveTitle"),
+            _isHostInCurrentRoom ? Strings.Get("MpConfirmCancelHostBody") : Strings.Get("MpConfirmLeaveBody"),
+            _isHostInCurrentRoom ? Strings.Get("MpConfirmCancelHostYes") : Strings.Get("MpConfirmLeaveYes"),
+            Strings.Get("MpAlertCancel"),
+            danger: true);
+        if (!confirmed) return;
 
         await EndMatchAsync(_isHostInCurrentRoom ? "host_cancelled" : "joiner_left");
     }

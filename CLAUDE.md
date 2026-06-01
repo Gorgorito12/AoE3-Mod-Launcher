@@ -456,6 +456,63 @@ longer exists — don't go looking for it.)
   `BgBase` — a **global** brush change across every multiplayer surface (rooms
   table included), not a per-dialog recolour.
 
+- **The lobby window NEVER truly minimizes — it shrinks to a glowing in-window
+  "pill", because the real OS minimize is unusable here.** `LobbyWindow` is
+  `WindowStyle="None"` + `ShowInTaskbar="False"`, so a genuine
+  `WindowState.Minimized` drops it to the legacy chromeless desktop *stub* at
+  the bottom-left: we can't style it, and clicking it pops the Windows **system
+  menu** (Restore/Move/Size/…) instead of restoring (the reported bug — "se ve
+  así" + "no me tire un menú"). So minimize is faked: `MinimizeBtn_Click` and a
+  catch-all in `OnStateChanged` (any `Minimized` transition, e.g. Win+D) call
+  `EnterPill()`, which stays in `WindowState.Normal`, shrinks the window to
+  `PillWidth×PillHeight` (188×52) docked bottom-left of `SystemParameters.WorkArea`
+  (primary-monitor assumption, same as the hero-scale code), and shows the
+  `MinimizedPill` overlay (a `Border`, **not** a Button — the implicit global
+  Button style would fight the look). The pill is `Grid.RowSpan="2"` + opaque
+  **`BgSidebar`** filling the WHOLE window (the button covers everything
+  edge-to-edge — an earlier `BgBase` inset read as a black leftover frame, which
+  the user rejected), and carries
+  `shell:WindowChrome.IsHitTestVisibleInChrome="True"` so its `MouseLeftButtonUp`
+  fires even over the `CaptionHeight=30` strip — a **single click → `RestoreFromPill()`**,
+  no menu. `EnterPill` saves geometry/state (using `RestoreBounds` when maximised,
+  and temporarily lowering `MinWidth/MinHeight` from 600/420 + `ResizeMode=NoResize`
+  so the shrink isn't clamped); `RestoreFromPill` reverses all of it. Re-entrancy
+  on our own `WindowState` writes is guarded by `_suppressStateChange`. **Gotchas:**
+  (1) the blue neon glow (`StartPillGlow`/`StopPillGlow`) animates a
+  `DropShadowEffect` (blur 8↔18, opacity 0.5↔0.95) **plus** the pill border's
+  `Color` (mid-blue `#4F8FD8` ↔ bright cyan `#A6DBFF`) — so
+  `PillGlowBorder.BorderBrush` MUST be a **local, unfrozen `SolidColorBrush`**
+  (set inline in XAML), never a `DynamicResource` (a shared frozen brush can't be
+  animated per-window). `AllowsTransparency="False"` means the halo can't spill
+  OUTSIDE the window, so the trick is: `PillGlowBorder` is `Margin="0"` (stroke
+  flush with the window edge → covers everything) with a **`Transparent` fill**,
+  so the glow renders INWARD over the `MinimizedPill` `BgSidebar` (a transparent
+  border glows both sides of its stroke; an opaque fill would hide the inward
+  half — that's why the fill moved from `PillGlowBorder` to the parent). `EnterPill`
+  also zeroes `LobbyOuterFrame.BorderThickness` (the window's 1 px grey edge) so the
+  blue stroke is the outermost line, restoring it to 1 on un-pill. The stroke's
+  `CornerRadius="8"` is picked to match the global DWM corner rounding (see the
+  "Rounded window corners" bullet under Runtime conventions) so the flush-to-edge
+  border isn't clipped square at the window's rounded corners. (2) `OpenLobbyWindow` (MultiplayerTab) calls
+  `_lobbyWindow.RestoreFromMinimized()` **before** `Activate()` — a bare Activate
+  on a pilled window just focuses the pill (this is the rooms-browser "Re-enter"
+  path while minimized). (3) The pill label + tooltip are localised in
+  `ApplyLobbyStaticLabels` (`MpMinimizedPillLabel` / `MpMinimizedPillTooltip`),
+  like the rest of the lobby. A match starting while pilled renders its overlays
+  *under* the pill (hidden) — there's a public `RestoreFromMinimized()` hook if
+  auto-un-pill on countdown is ever wanted, but it's deliberately not wired yet.
+  (4) The window is **owned by the launcher** (`Owner` set in `OpenLobbyWindow`),
+  so it tracks `Owner.StateChanged` (subscribed in `OnSourceInitialized`, dropped
+  in `OnClosed`) and `Hide()`/`Show()`s itself when the launcher minimizes/restores
+  — otherwise the catch-all pill conversion fires on the owner-propagated minimize
+  and leaves the pill **floating alone on the desktop** while the launcher is gone
+  (the reported "se quedó afuera" bug). The `OnStateChanged` pill conversion stands
+  down while the owner is minimized (the `_hiddenByOwner` / `Owner.WindowState`
+  check), and `Hide()`/`Show()` leave `WindowState`/size/position untouched, so a
+  launcher-minimize hides the lobby **in place** (pill stays pill, full stays full)
+  and a launcher-restore brings it back exactly as it was — no floating pill, no
+  surprise conversion.
+
 - **The TRAFFIC + CONNECTION metrics are the only REAL connection numbers, and
   both are OVERALL, not per-peer.** TRAFFIC (in-game overlay, `RefreshInGamePanel`)
   = the Radmin VPN adapter's `BytesSent + BytesReceived` *delta since match start*
@@ -814,7 +871,103 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   stat headers) through `ApplyLobbyStaticLabels()`, and their state-driven text
   plus every `AppendChatSystem(...)` message through `Strings.Get` /
   `Strings.Format` — so the whole multiplayer surface is localised now.
-  (Diagnostic logs stay English on purpose, as everywhere.)
+  (Diagnostic logs stay English on purpose, as everywhere.) **Countdown +
+  in-game layout (load-bearing) — the chat is ALWAYS reachable:** both
+  match-phase surfaces are deliberately scoped so the right-hand chat panel
+  stays visible and interactive through the whole flow (countdown AND live
+  match), because the maintainer's explicit rule is "chat siempre
+  accesible". Neither is a full-content scrim anymore (an earlier iteration
+  had a top glowing bar + a full-room InGame cover; both are gone).
+  **(1) The countdown is a single LIVE LINE INSIDE the chat.**
+  `CountdownOverlay` (the name is kept so the code-behind visibility toggle
+  + `CountdownLabel` / `CountdownNumber` wiring need no change — despite no
+  longer being an overlay) is a `Border` sitting at **`Grid.Row="2"` of the
+  chat panel's inner grid**, between the chat log (Row 1) and the input bar
+  (Row 3). The row is `Height="Auto"`, so `Collapsed` = **0 px** (chat looks
+  normal); during "Starting…" `ApplyMatchPhaseUi` flips it `Visible` and
+  `UpdateCountdownTick` rewrites `CountdownNumber` in place (5→4→3…). It's a
+  compact `⏱ + label + number` line — **no hint, no button** (the old
+  `CountdownHint` TextBlock and its `ApplyLobbyStaticLabels` line were
+  removed; don't re-add a `CountdownHint` reference or it won't compile).
+  **If you add/remove a row in the chat grid, update these `Grid.Row`s** (the
+  chat grid is now header=0 / log=1 / countdown=2 / input=3).
+  **(2) The big left-column `StartButton` doubles as the countdown's
+  Cancel.** During Starting, `ApplyMatchPhaseUi` swaps its Style to
+  `MpDangerButton` (red), caption "✕ Cancel", shown + enabled for
+  **everyone** (host AND joiner) so anyone can abort; `StartButton_Click`
+  early-returns to `CancelCountdownByUser()` whenever
+  `_matchPhase == Starting`. Outside the countdown, ownership returns to
+  `RenderRoomPanel`, which **only touches `StartButton` while
+  `_matchPhase == Lobby`** (blue "Start game", host-only) — load-bearing
+  guard: without it a `room_state` refresh mid-countdown would stomp the red
+  Cancel back to "Start game". The Style swap is safe because `StartButton`'s
+  `Padding`/`FontSize`/`HorizontalContentAlignment` are **local XAML
+  attributes** (precedence over Style setters), so the button keeps its size
+  when the brush changes. There is **no separate countdown-cancel button or
+  `OnCountdownCancel` callback anymore** — both removed; don't reintroduce
+  them. **Do NOT call `StartCountdownGlow()` from `ApplyMatchPhaseUi`** —
+  the methods still exist on `LobbyWindow` (reusable) but are intentionally
+  unwired. The in-chat `CountdownOverlay` Border uses a shared **frozen**
+  `DynamicResource` (`MpBlue`) BorderBrush and has **no `Effect`**, so
+  `StartCountdownGlow` (which animates the brush colour + a DropShadowEffect)
+  threw `InvalidOperationException` on the frozen Freezable. Because the glow
+  call sat in `ApplyMatchPhaseUi` *between* the overlay-Visibility line and
+  the Start→Cancel button-swap — and inside the `StartCountdown` call chain
+  *before* the tick timer started — that throw produced a nasty triple
+  symptom: the countdown line appeared but **froze at the XAML-default
+  number** (timer never armed), the Start button **never turned into
+  Cancel**, and the **"starting in N" chat line never posted** (the throw
+  unwound past it into `OnRoomFrame`'s catch). Fixed by removing the glow
+  calls. If you ever want the chat line to glow, FIRST give its Border a
+  **local unfrozen `SolidColorBrush`** + a `DropShadowEffect` (pill-glow
+  recipe) — only then re-add the call.
+  **(3) The `InGameOverlay` is CONFINED to the left column, not a full
+  cover.** When the countdown hits 0 and AoE3 launches (`EnterInGamePhase`),
+  the room controls must be blocked — but the chat stays live. So
+  `InGameOverlay` is a `Border` at **`Grid.Column="0"` INSIDE the two-column
+  body grid** (it's a sibling of the left column and the chat, NOT a
+  top-level cover): its opaque `BgBase` fill sits over the roster +
+  Ready/Start/Leave actions (blocking them by z-order — later child wins)
+  while the chat in Column 2 is untouched and fully usable. To fit the 340 px
+  column its stats were relaid out from a 4-wide row into a **2×2 grid**
+  (MATCH TIME / TRAFFIC over CONNECTION / ROOM) with a stacked header; all
+  the `InGame*` x:Names are preserved so `RefreshInGamePanel` needs no
+  change. Don't move it back out to a top-level full-content cover — that
+  re-hides the chat and breaks the "chat siempre accesible" rule.
+  **(4) Countdown duration is 10 s (floored).** `game_countdown`'s handler
+  does `durationMs = Math.Max(10000, durationMs)` and both offline-host
+  fallbacks call `StartCountdown(10000)`; the chat-line's XAML default
+  `CountdownNumber` is "10" to match the first paint before the tick timer
+  arms. Bump all four together if you change it.
+- **Multiplayer alerts are themed in-window cards, NOT `MessageBox` — via
+  the `MpAlertOverlay` helper.** `Controls/MpAlertOverlay.cs` is a static
+  helper that injects a scrim + a centred card (MpSurface fill, two-tone
+  rim, ⚠/ℹ glyph, title + body, `MpDangerButton`/`MpPrimaryButton` primary +
+  `MpSecondaryButton` cancel) as the **last child of a host `Grid`**, and
+  returns `Task<bool>` (true = primary/confirm/ack, false = cancel/Esc/
+  scrim-click; a notice is OK-only and always resolves true). Two entry
+  points: `ConfirmAsync` (two buttons) and `NoticeAsync` (one). It replaced
+  **all** the multiplayer `MessageBox.Show` calls — the cancel-game confirm
+  (the one from the screenshot, host = "cancel for everyone" danger / joiner
+  = "leave the game"), hosted in `_lobbyWindow.LobbyRootGrid`; and the
+  join/create/fingerprint/mod-mismatch/Radmin error notices, hosted in the
+  tab's `TabRootGrid`. Both host grids are named in XAML for this. **The ONE
+  remaining `MessageBox` is deliberate:** `ConfirmCloseDuringMatchAsync` runs
+  synchronously from `MainWindow.OnClosing` via `task.Wait(...)`, so an
+  in-window async overlay would deadlock the UI thread — it must stay a
+  blocking modal. Don't "finish the job" by converting it. All alert strings
+  are EN/ES `MpAlert*` / `MpConfirm*` / `MpNotice*` keys in `Strings.cs`.
+  **Gotcha that already bit once:** the card builds its text purely from
+  `Strings.Get(key)`, and a key that's MISSING from the `Strings.Table`
+  renders as **the raw key** ("MpConfirmCancelHostTitle" shown literally in
+  the card) — `Strings.Get` returns the key itself as its visible
+  not-found signal, and the C# compiler can't catch it because the keys are
+  plain string literals, so **the build stays green while the UI shows the
+  key names.** When you add an `MpAlertOverlay` call with a new key, add the
+  matching EN/ES entry to `Strings.cs` in the SAME change and actually run
+  the app (or grep that every `Mp{Alert,Confirm,Notice}*` key used in
+  `MultiplayerTab.xaml.cs` exists in `Strings.cs`) — a clean build is NOT
+  proof the strings landed.
 - **The dashboard hero title stacks `"Game: Subtitle"` names onto two lines.**
   Where `DashboardTitleText.Text` is set, the name renders as
   `DisplayName.ToUpperInvariant().Replace(": ", ":\n")` — so "Age of Empires III:

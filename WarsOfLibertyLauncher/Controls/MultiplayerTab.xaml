@@ -65,21 +65,45 @@
              load-bearing state logic (action caption, in-place ping,
              mod-installed gating) is preserved. -->
         <Style x:Key="MpRoomCard" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource MpSurface}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
+            <!-- Subtle dark-BLUE fill (not the panel's neutral MpSurface) so the
+                 card reads as a distinct item and ties into the blue accents. -->
+            <Setter Property="Background" Value="#1A2433"/>
+            <!-- STATIC, subtle BLUE illumination (no animation): a thin blue
+                 rim (MpBlue, same as the action button) + a faint, tenue blue
+                 halo. Hover lifts the surface and the glow a touch so the row
+                 still reads as "selected". -->
+            <Setter Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Padding" Value="14"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#4F7FBE"
+                                      BlurRadius="8"
+                                      ShadowDepth="0"
+                                      Opacity="0.16"/>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource MpSurfaceAlt}"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
+                    <Setter Property="Background" Value="#22304A"/>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect Color="#4F7FBE"
+                                              BlurRadius="11"
+                                              ShadowDepth="0"
+                                              Opacity="0.3"/>
+                        </Setter.Value>
+                    </Setter>
                 </Trigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
-    <Grid Background="{DynamicResource BgBase}">
+    <!-- x:Name="TabRootGrid" — host for MpAlertOverlay notice/confirm cards
+         (the themed replacement for MessageBox on the join / create / mod
+         error paths that fire from the tab, outside a lobby window). -->
+    <Grid x:Name="TabRootGrid" Background="{DynamicResource BgBase}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>     <!-- Header (subtabs + status bar) -->
             <RowDefinition Height="*"/>        <!-- Active view -->
@@ -472,20 +496,51 @@
                                            FontSize="11"/>
                             </Grid>
 
-                            <!-- (Table header row removed — the room list is now
-                                 a WrapPanel of cards built by BuildRoomCard, so
-                                 there are no columns to label. Row 1 collapses
-                                 to 0 height.) -->
+                            <!-- Column headers for the card list. The cards
+                                 (BuildRoomCard) mirror these EXACT column widths,
+                                 and the 31px side margin matches each card's
+                                 content inset (ScrollViewer pad 16 + card border
+                                 1 + card padding 14) so the columns line up under
+                                 the labels. Keep the three values in sync. -->
+                            <Grid Grid.Row="1" Margin="31,2,31,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" MinWidth="200"/>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="150"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" x:Name="ColHeaderRoom"
+                                           Foreground="{DynamicResource MpTableHeader}"
+                                           FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="1" x:Name="ColHeaderHost"
+                                           Foreground="{DynamicResource MpTableHeader}"
+                                           FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="2" x:Name="ColHeaderPlayers"
+                                           Foreground="{DynamicResource MpTableHeader}"
+                                           FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="3" x:Name="ColHeaderPing"
+                                           Foreground="{DynamicResource MpTableHeader}"
+                                           FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="4" x:Name="ColHeaderStatus"
+                                           Foreground="{DynamicResource MpTableHeader}"
+                                           FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="5" x:Name="ColHeaderAction"
+                                           Foreground="{DynamicResource MpTableHeader}"
+                                           FontSize="11" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"/>
+                            </Grid>
 
                 <!-- Cards OR empty-state. ScrollViewer keeps it scannable
-                     when many rooms exist; RoomsListPanel is a WrapPanel so
-                     the cards tile across the available width. -->
+                     when many rooms exist; RoomsListPanel is a StackPanel so
+                     each card stretches edge-to-edge (full-width list rows). -->
                 <Grid Grid.Row="2">
                     <ScrollViewer x:Name="RoomsListScroll"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Padding="16,10,16,10">
-                        <WrapPanel x:Name="RoomsListPanel" Orientation="Horizontal"/>
+                        <StackPanel x:Name="RoomsListPanel"/>
                     </ScrollViewer>
 
                     <!-- Empty-state card. Visibility is toggled by

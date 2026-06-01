@@ -2048,6 +2048,14 @@ public static class Strings
         ["MpRoomsUpdatedNow"] = new() { [LangEn] = "Updated just now", [LangEs] = "Actualizado ahora" },
         ["MpRoomsUpdatedSecs"] = new() { [LangEn] = "Updated {0}s ago", [LangEs] = "Actualizado hace {0} s" },
         ["MpRoomsUpdatedMins"] = new() { [LangEn] = "Updated {0}m ago", [LangEs] = "Actualizado hace {0} min" },
+        ["MpRoomPrivate"] = new() { [LangEn] = "Private", [LangEs] = "Privado" },
+        // Room-list column headers (the card list mimics a table now).
+        ["MpColRoom"] = new() { [LangEn] = "ROOM", [LangEs] = "SALA" },
+        ["MpColHost"] = new() { [LangEn] = "HOST", [LangEs] = "ANFITRIÓN" },
+        ["MpColPlayers"] = new() { [LangEn] = "PLAYERS", [LangEs] = "JUGADORES" },
+        ["MpColPing"] = new() { [LangEn] = "PING", [LangEs] = "PING" },
+        ["MpColStatus"] = new() { [LangEn] = "STATUS", [LangEs] = "ESTADO" },
+        ["MpColAction"] = new() { [LangEn] = "ACTION", [LangEs] = "ACCIÓN" },
         ["MpRoomLeave"] = new() { [LangEn] = "Leave room", [LangEs] = "Salir de la sala" },
         ["MpRoomReady"] = new() { [LangEn] = "Ready", [LangEs] = "Listo" },
         ["MpRoomStart"] = new() { [LangEn] = "Start game", [LangEs] = "Empezar partida" },
@@ -2077,6 +2085,14 @@ public static class Strings
         ["MpRoomStatusJoining"] = new() { [LangEn] = "Joining…", [LangEs] = "Entrando…" },
         ["MpRoomStatusLeaving"] = new() { [LangEn] = "Leaving…", [LangEs] = "Saliendo…" },
         ["MpRoomStatusInGame"] = new() { [LangEn] = "In game", [LangEs] = "En partida" },
+        // Minimized-lobby pill (LobbyWindow). Shown in place of the chromeless
+        // OS minimize stub when the user minimizes the lobby window.
+        ["MpMinimizedPillLabel"] = new() { [LangEn] = "Lobby", [LangEs] = "Sala" },
+        ["MpMinimizedPillTooltip"] = new()
+        {
+            [LangEn] = "Click to reopen the lobby",
+            [LangEs] = "Clic para reabrir la sala",
+        },
         ["MpRoomP2pReady"] = new() { [LangEn] = "P2P LAN ready", [LangEs] = "P2P LAN listo" },
         ["MpRoomP2pStarting"] = new() { [LangEn] = "P2P starting…", [LangEs] = "Iniciando P2P…" },
         ["MpRoomTitleFallback"] = new() { [LangEn] = "{0}'s room", [LangEs] = "Sala de {0}" },
@@ -2149,6 +2165,117 @@ public static class Strings
         {
             [LangEn] = "↩  Leave game",
             [LangEs] = "↩  Salir de la partida",
+        },
+
+        // ---- Themed in-lobby alert cards (MpAlertOverlay) — replace the
+        //      old OS MessageBox prompts on the multiplayer surfaces. ----
+        ["MpAlertOk"] = new() { [LangEn] = "OK", [LangEs] = "Entendido" },
+        ["MpAlertCancel"] = new() { [LangEn] = "No", [LangEs] = "No" },
+        // Cancel-the-game confirm (host) — the one from the screenshot.
+        ["MpConfirmCancelHostTitle"] = new()
+        {
+            [LangEn] = "Cancel the game for everyone?",
+            [LangEs] = "¿Cancelar la partida para todos?",
+        },
+        ["MpConfirmCancelHostBody"] = new()
+        {
+            [LangEn] = "All players will be disconnected and the room returns to the lobby.",
+            [LangEs] = "Se desconectará a todos los jugadores y la sala volverá al lobby.",
+        },
+        ["MpConfirmCancelHostYes"] = new()
+        {
+            [LangEn] = "Yes, cancel",
+            [LangEs] = "Sí, cancelar",
+        },
+        // Leave-the-game confirm (joiner) — only this player drops out.
+        ["MpConfirmLeaveTitle"] = new()
+        {
+            [LangEn] = "Leave the game?",
+            [LangEs] = "¿Salir de la partida?",
+        },
+        ["MpConfirmLeaveBody"] = new()
+        {
+            [LangEn] = "AoE3 will close. The room keeps playing for the other players.",
+            [LangEs] = "AoE3 se cerrará. La sala sigue jugando para los demás jugadores.",
+        },
+        ["MpConfirmLeaveYes"] = new()
+        {
+            [LangEn] = "Yes, leave",
+            [LangEs] = "Sí, salir",
+        },
+        // Join / create / mod error notices (single-button).
+        ["MpNoticeModNotInstalledTitle"] = new()
+        {
+            [LangEn] = "Mod not installed",
+            [LangEs] = "Mod no instalado",
+        },
+        ["MpNoticeModNotInstalledBody"] = new()
+        {
+            [LangEn] = "You don't have any of the mods you can host installed yet. Install one from the Workshop tab and try again.",
+            [LangEs] = "Todavía no tienes instalado ninguno de los mods que puedes hospedar. Instala uno desde la pestaña Workshop e inténtalo de nuevo.",
+        },
+        ["MpNoticeRoomModMissingTitle"] = new()
+        {
+            [LangEn] = "Mod not installed",
+            [LangEs] = "Mod no instalado",
+        },
+        // {0} = mod display name.
+        ["MpNoticeRoomModMissingBody"] = new()
+        {
+            [LangEn] = "This room is for {0}, but you don't have that mod installed yet. Install it from the Workshop tab and try again.",
+            [LangEs] = "Esta sala es para {0}, pero todavía no tienes ese mod instalado. Instálalo desde la pestaña Workshop e inténtalo de nuevo.",
+        },
+        ["MpNoticeUnknownModTitle"] = new()
+        {
+            [LangEn] = "Unknown mod",
+            [LangEs] = "Mod desconocido",
+        },
+        // {0} = mod id.
+        ["MpNoticeUnknownModBody"] = new()
+        {
+            [LangEn] = "This room uses an unknown mod ('{0}'). The launcher can't switch to it.",
+            [LangEs] = "Esta sala usa un mod desconocido ('{0}'). El launcher no puede cambiar a él.",
+        },
+        ["MpNoticeSwitchFailedTitle"] = new()
+        {
+            [LangEn] = "Mod switch failed",
+            [LangEs] = "No se pudo cambiar de mod",
+        },
+        // {0} = mod display name.
+        ["MpNoticeSwitchFailedBody"] = new()
+        {
+            [LangEn] = "Couldn't switch to {0}. Make sure no install / update is in progress, then try again.",
+            [LangEs] = "No se pudo cambiar a {0}. Asegúrate de que no haya una instalación o actualización en curso e inténtalo de nuevo.",
+        },
+        ["MpNoticeFingerprintTitle"] = new()
+        {
+            [LangEn] = "Couldn't read mod files",
+            [LangEs] = "No se pudieron leer los archivos del mod",
+        },
+        ["MpNoticeMismatchTitle"] = new()
+        {
+            [LangEn] = "Mod version mismatch",
+            [LangEs] = "Versión del mod no coincide",
+        },
+        ["MpNoticeMismatchBody"] = new()
+        {
+            [LangEn] = "Your local mod files don't match the host. Verify or update the mod before trying again.",
+            [LangEs] = "Tus archivos del mod no coinciden con los del anfitrión. Verifica o actualiza el mod antes de volver a intentarlo.",
+        },
+        ["MpNoticeJoinFailedTitle"] = new()
+        {
+            [LangEn] = "Couldn't join the room",
+            [LangEs] = "No se pudo unir a la sala",
+        },
+        ["MpNoticeCreateFailedTitle"] = new()
+        {
+            [LangEn] = "Couldn't enter the lobby",
+            [LangEs] = "No se pudo entrar al lobby",
+        },
+        ["MpNoticeRadminLaunchTitle"] = new()
+        {
+            [LangEn] = "Radmin VPN",
+            [LangEs] = "Radmin VPN",
         },
 
         // -------- Lobby chat-system lines (AppendChatSystem) --------
