@@ -411,8 +411,12 @@ longer exists — don't go looking for it.)
   (ModsBrowser); `TryLoadBitmap` / `TryLoadTileImage` accept **both** on-disk
   paths and `pack://` URIs. The resolved icon is painted on the dashboard hero
   (`DashboardIconHost`), the Workshop tiles / rows / detail header, the Mod
-  Properties header (`HeaderIconHost`), the Create-room mod card, and the
-  install shortcut.
+  Properties header (`HeaderIconHost`), the Create-room mod card **and its
+  mod-dropdown items** (the latter via `ModProfileIconBrushConverter`, bound from
+  each item's `Tag`; the item Content stays the name string so the combo's
+  selection box shows just the name while the disc beside it paints the selected
+  icon), the **rooms-browser room cards** (`ResolveRoomModIcon`, gold ★ fallback),
+  and the install shortcut.
 
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
@@ -456,63 +460,24 @@ longer exists — don't go looking for it.)
   `BgBase` — a **global** brush change across every multiplayer surface (rooms
   table included), not a per-dialog recolour.
 
-- **The lobby window NEVER truly minimizes — it shrinks to a glowing in-window
-  "pill", because the real OS minimize is unusable here.** `LobbyWindow` is
-  `WindowStyle="None"` + `ShowInTaskbar="False"`, so a genuine
-  `WindowState.Minimized` drops it to the legacy chromeless desktop *stub* at
-  the bottom-left: we can't style it, and clicking it pops the Windows **system
-  menu** (Restore/Move/Size/…) instead of restoring (the reported bug — "se ve
-  así" + "no me tire un menú"). So minimize is faked: `MinimizeBtn_Click` and a
-  catch-all in `OnStateChanged` (any `Minimized` transition, e.g. Win+D) call
-  `EnterPill()`, which stays in `WindowState.Normal`, shrinks the window to
-  `PillWidth×PillHeight` (188×52) docked bottom-left of `SystemParameters.WorkArea`
-  (primary-monitor assumption, same as the hero-scale code), and shows the
-  `MinimizedPill` overlay (a `Border`, **not** a Button — the implicit global
-  Button style would fight the look). The pill is `Grid.RowSpan="2"` + opaque
-  **`BgSidebar`** filling the WHOLE window (the button covers everything
-  edge-to-edge — an earlier `BgBase` inset read as a black leftover frame, which
-  the user rejected), and carries
-  `shell:WindowChrome.IsHitTestVisibleInChrome="True"` so its `MouseLeftButtonUp`
-  fires even over the `CaptionHeight=30` strip — a **single click → `RestoreFromPill()`**,
-  no menu. `EnterPill` saves geometry/state (using `RestoreBounds` when maximised,
-  and temporarily lowering `MinWidth/MinHeight` from 600/420 + `ResizeMode=NoResize`
-  so the shrink isn't clamped); `RestoreFromPill` reverses all of it. Re-entrancy
-  on our own `WindowState` writes is guarded by `_suppressStateChange`. **Gotchas:**
-  (1) the blue neon glow (`StartPillGlow`/`StopPillGlow`) animates a
-  `DropShadowEffect` (blur 8↔18, opacity 0.5↔0.95) **plus** the pill border's
-  `Color` (mid-blue `#4F8FD8` ↔ bright cyan `#A6DBFF`) — so
-  `PillGlowBorder.BorderBrush` MUST be a **local, unfrozen `SolidColorBrush`**
-  (set inline in XAML), never a `DynamicResource` (a shared frozen brush can't be
-  animated per-window). `AllowsTransparency="False"` means the halo can't spill
-  OUTSIDE the window, so the trick is: `PillGlowBorder` is `Margin="0"` (stroke
-  flush with the window edge → covers everything) with a **`Transparent` fill**,
-  so the glow renders INWARD over the `MinimizedPill` `BgSidebar` (a transparent
-  border glows both sides of its stroke; an opaque fill would hide the inward
-  half — that's why the fill moved from `PillGlowBorder` to the parent). `EnterPill`
-  also zeroes `LobbyOuterFrame.BorderThickness` (the window's 1 px grey edge) so the
-  blue stroke is the outermost line, restoring it to 1 on un-pill. The stroke's
-  `CornerRadius="8"` is picked to match the global DWM corner rounding (see the
-  "Rounded window corners" bullet under Runtime conventions) so the flush-to-edge
-  border isn't clipped square at the window's rounded corners. (2) `OpenLobbyWindow` (MultiplayerTab) calls
-  `_lobbyWindow.RestoreFromMinimized()` **before** `Activate()` — a bare Activate
-  on a pilled window just focuses the pill (this is the rooms-browser "Re-enter"
-  path while minimized). (3) The pill label + tooltip are localised in
-  `ApplyLobbyStaticLabels` (`MpMinimizedPillLabel` / `MpMinimizedPillTooltip`),
-  like the rest of the lobby. A match starting while pilled renders its overlays
-  *under* the pill (hidden) — there's a public `RestoreFromMinimized()` hook if
-  auto-un-pill on countdown is ever wanted, but it's deliberately not wired yet.
-  (4) The window is **owned by the launcher** (`Owner` set in `OpenLobbyWindow`),
-  so it tracks `Owner.StateChanged` (subscribed in `OnSourceInitialized`, dropped
-  in `OnClosed`) and `Hide()`/`Show()`s itself when the launcher minimizes/restores
-  — otherwise the catch-all pill conversion fires on the owner-propagated minimize
-  and leaves the pill **floating alone on the desktop** while the launcher is gone
-  (the reported "se quedó afuera" bug). The `OnStateChanged` pill conversion stands
-  down while the owner is minimized (the `_hiddenByOwner` / `Owner.WindowState`
-  check), and `Hide()`/`Show()` leave `WindowState`/size/position untouched, so a
-  launcher-minimize hides the lobby **in place** (pill stays pill, full stays full)
-  and a launcher-restore brings it back exactly as it was — no floating pill, no
-  surprise conversion.
-
+- **`LobbyWindow` is an INDEPENDENT top-level window with its own Windows taskbar
+  button.** It's `WindowStyle="None"` + `WindowChrome` + **`ShowInTaskbar="True"`**
+  and has **no `Owner`** (`OpenLobbyWindow` deliberately does NOT set one), so it
+  gets its own taskbar entry next to the launcher, alt-tabs independently, can sit
+  on another monitor, and is NOT hidden when the launcher minimizes. The title bar
+  has the full **minimise / maximise / close** trio (`MinimizeBtn` / `MaximizeBtn`
+  / `CloseHeaderBtn`); minimise is a plain `WindowState.Minimized`, which —
+  *because* `ShowInTaskbar="True"` — goes to the **Windows taskbar button** (click
+  it to restore), NOT a desktop stub. **`ShowInTaskbar="True"` is load-bearing:**
+  the entire original "minimise pops a system menu" bug came from
+  `ShowInTaskbar="False"`, where a chromeless minimise fell to the unstylable
+  bottom-left desktop *stub* whose click opens the OS system menu
+  (Restore/Move/Size/…) — "se ve así" + "no me tire un menú". Don't flip it back to
+  False, and don't re-add an `Owner`. (History, each built then rejected before
+  landing here: a glowing in-window "pill" minimise replacement; an in-tab "Sala"
+  sub-tab; and removing minimise entirely. The accepted answer is "just a normal
+  taskbar window".) `WindowStartupLocation` is `CenterScreen` (was `CenterOwner`,
+  which needs the Owner we no longer set).
 - **The TRAFFIC + CONNECTION metrics are the only REAL connection numbers, and
   both are OVERALL, not per-peer.** TRAFFIC (in-game overlay, `RefreshInGamePanel`)
   = the Radmin VPN adapter's `BytesSent + BytesReceived` *delta since match start*
@@ -569,7 +534,11 @@ longer exists — don't go looking for it.)
 - **Room cards are state-driven — the action button isn't a plain always-"Join".**
   The rooms browser renders each room as a **card** (`BuildRoomCard`, tiled in a
   `WrapPanel`; the old table + column-header strip + zebra rows are gone). The
-  card shows: title (+ 🔒 if private), a status badge, the mod name, the host with
+  card shows: a **leading mod-icon disc** (the room's mod icon, resolved by
+  `ResolveRoomModIcon` = cached catalog `icon.png` → built-in packed icon, cached
+  per mod id and decoded once; **gold ★ fallback** when the mod ships no
+  resolvable icon — so icon-less rooms look exactly as before), title (+ 🔒 if
+  private), a status badge, the mod name, the host with
   an initial circle (`Anfitrión: <name>`), players + ping, and a **full-width
   action button** whose caption + enabled-ness pick per room in this **priority
   order** (first match wins) — enabled Join / Re-enter use `MpPrimaryButton`
@@ -1039,12 +1008,12 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   edge-drag, recipe replicated as the `DialogCloseButton` local style).
   Title-bar buttons diverge: `LauncherSettingsDialog` and
   `ModPropertiesDialog` show only the close ✕ (they're settings sheets —
-  minimise/maximise would be unusual there), while `LobbyWindow` adds the
-  full minimise / maximise / close trio via the `TitleBarChromeButton`
-  style (neutral hover) + `DialogCloseButton` (red hover) — matching what
-  a user expects from a regular OS window since the lobby is a
-  long-running interactive surface that warrants alt-tab + maximise. The
-  maximise glyph swaps via `OnStateChanged` in code-behind (Segoe MDL2
+  minimise/maximise would be unusual there), while `LobbyWindow` shows the full
+  **minimise / maximise / close** trio (`TitleBarChromeButton` neutral hover +
+  `DialogCloseButton` red hover) — it's a `ShowInTaskbar="True"`, ownerless,
+  independent window (see its dedicated bullet above), so minimise goes to its
+  own Windows taskbar button like any normal app window.
+  The maximise glyph swaps via `OnStateChanged` in code-behind (Segoe MDL2
   `0xE922` ↔ `0xE923`); the App.OnStartup WM_GETMINMAXINFO hook handles
   the maximise-respects-taskbar bound. `LobbyWindow` also uses a smaller
   30 px caption + tighter padding because the rich room info lives in its own

@@ -192,7 +192,13 @@ public partial class CreateLobbyDialog : Window
         }
     }
 
-    private static System.Windows.Media.ImageBrush? LoadIconBrush(ModProfile profile)
+    /// <summary>
+    /// Resolve a mod's icon (cached catalog icon.png → built-in packed icon)
+    /// to a frozen UniformToFill brush. Shared with
+    /// <see cref="ModProfileIconBrushConverter"/> so the selected-mod card
+    /// disc and the dropdown items resolve icons identically.
+    /// </summary>
+    internal static System.Windows.Media.ImageBrush? LoadIconBrush(ModProfile profile)
     {
         string? uri =
             (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
@@ -355,4 +361,30 @@ public partial class CreateLobbyDialog : Window
             // the drag just doesn't happen.
         }
     }
+}
+
+/// <summary>
+/// Resolves a <see cref="ModProfile"/> — bound from a mod ComboBoxItem's Tag —
+/// to a circular icon brush for the create-room mod dropdown items. Returns the
+/// mod's real icon when available, else a neutral blue-subtle placeholder disc
+/// so an icon-less mod still shows a consistent avatar. The selected mod's icon
+/// is handled separately by the disc beside the combo (<c>UpdateModIcon</c>), so
+/// the combo's selection box keeps showing just the name string — only the
+/// dropdown items use this converter.
+/// </summary>
+public sealed class ModProfileIconBrushConverter : System.Windows.Data.IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
+    {
+        if (value is ModProfile profile)
+        {
+            var brush = CreateLobbyDialog.LoadIconBrush(profile);
+            if (brush != null) return brush;
+        }
+        return Application.Current?.TryFindResource("MpBlueSubtle")
+            ?? (object)System.Windows.Media.Brushes.Transparent;
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
+        => throw new NotSupportedException();
 }

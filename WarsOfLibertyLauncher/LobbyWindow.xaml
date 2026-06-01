@@ -5,12 +5,12 @@
         Title="Lobby"
         Height="660" Width="920"
         MinHeight="420" MinWidth="600"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
         AllowsTransparency="False"
         Background="{DynamicResource BgBase}"
-        ShowInTaskbar="False">
+        ShowInTaskbar="True">
 
     <!--
         Non-modal lobby window. Replaces the in-tab Canvas overlay that
@@ -160,7 +160,7 @@
          line can't separate two dark surfaces; this uses the app's standard
          border tone. AllowsTransparency=False rules out a drop shadow, so a
          hard edge is the tool available. -->
-    <Border x:Name="LobbyOuterFrame"
+    <Border
             BorderBrush="{DynamicResource BorderSecondary}"
             BorderThickness="1"
             Background="{DynamicResource BgBase}">
@@ -826,86 +826,6 @@
                 </Grid>
             </Grid>
         </Grid>
-
-        <!-- =====================================================
-             MINIMIZED PILL — replaces the chromeless OS minimize
-             "stub". Because this Window is WindowStyle=None +
-             ShowInTaskbar=False, a real WindowState.Minimized drops
-             it to the legacy desktop stub at the bottom-left: we
-             can't style it, and clicking it pops the Windows SYSTEM
-             menu (Restore/Move/Size/…) instead of restoring. So we
-             never truly minimize — MinimizeBtn_Click / OnStateChanged
-             shrink the window to this pill (EnterPill in code-behind)
-             and a single click restores it (RestoreFromPill).
-
-             RowSpan=2 + opaque BgSidebar fills the WHOLE window (chrome
-             row + content) so the lobby underneath is hidden AND the pill
-             reads as one solid surface edge-to-edge — no dark "leftover"
-             frame around it (the earlier BgBase inset looked like a black
-             border; the user asked for the button to cover everything).
-             IsHitTestVisibleInChrome=True routes the click to us even
-             over the WindowChrome caption strip, so MouseLeftButtonUp
-             fires reliably — no system menu, no separate Button (the
-             implicit Button style would fight the custom look).
-
-             The blue neon border + halo "breathe" via animations started
-             in StartPillGlow(): a pulsing DropShadowEffect + an animated
-             BorderBrush colour. AllowsTransparency=False means the halo
-             can't spill OUTSIDE the window, so the trick is: PillGlowBorder
-             sits at Margin=0 (border flush with the window edge → covers
-             everything) with a TRANSPARENT fill, so the DropShadowEffect
-             glows INWARD over the BgSidebar fill (a transparent border
-             glows both sides of its stroke; an opaque fill would hide the
-             inward half). EnterPill also drops LobbyOuterFrame's 1 px grey
-             edge so the blue stroke is the outermost line. Label + tooltip
-             localised from MultiplayerTab.ApplyLobbyStaticLabels(). -->
-        <Border x:Name="MinimizedPill"
-                Grid.RowSpan="2"
-                Visibility="Collapsed"
-                Background="{DynamicResource BgSidebar}"
-                Cursor="Hand"
-                MouseLeftButtonUp="MinimizedPill_MouseLeftButtonUp"
-                shell:WindowChrome.IsHitTestVisibleInChrome="True">
-            <Grid>
-                <!-- Neon stroke + inward halo. Transparent fill so the
-                     glow shows over the MinimizedPill's BgSidebar; flush
-                     to the edge (Margin=0) so it covers the whole window. -->
-                <Border x:Name="PillGlowBorder"
-                        Background="Transparent"
-                        CornerRadius="8"
-                        BorderThickness="2">
-                    <Border.BorderBrush>
-                        <!-- Local (mutable, unfrozen) brush so StartPillGlow
-                             can animate its Color. A DynamicResource brush is
-                             shared/frozen and can't be animated per-window.
-                             Idle = mid blue; the glow pulses toward cyan. -->
-                        <SolidColorBrush Color="#4F8FD8"/>
-                    </Border.BorderBrush>
-                    <Border.Effect>
-                        <DropShadowEffect Color="#6FB8FF"
-                                          ShadowDepth="0"
-                                          BlurRadius="14"
-                                          Opacity="0.7"/>
-                    </Border.Effect>
-                </Border>
-                <StackPanel Orientation="Horizontal"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center">
-                    <TextBlock Text="⚔"
-                               Foreground="#CFE7FF"
-                               FontSize="15"
-                               VerticalAlignment="Center"
-                               Margin="0,0,8,0"/>
-                    <TextBlock x:Name="MinimizedPillText"
-                               Text="Lobby"
-                               FontFamily="{DynamicResource DisplayFont}"
-                               FontSize="15"
-                               FontWeight="SemiBold"
-                               Foreground="#CFE7FF"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-            </Grid>
-        </Border>
     </Grid>
     </Border>
 </Window>

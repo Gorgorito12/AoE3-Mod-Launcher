@@ -3790,20 +3790,35 @@ public partial class MainWindow : Window
     /// row / progress strip — one bottom-left-anchored Grid wrapped in
     /// <c>HeroScaleTransform</c>) proportionally with the window size.
     ///
-    /// The block sits at 1:1 ("current size") when the window fills the
-    /// monitor work area (i.e. maximized) and shrinks as the window gets
-    /// smaller. We express the scale as the window's content footprint over
-    /// the maximized footprint: at maximized the content area equals the work
-    /// area (minus the title bar + nav strip), so the ratio is ~1.0; restore
-    /// the window and the ratio — and the hero — scale down with it.
+    /// The scale is the live content footprint (<see cref="PlayView"/>'s
+    /// ActualWidth/Height) over a FIXED reference footprint
+    /// (<see cref="HeroRefWidth"/> x <see cref="HeroRefHeight"/> — the content
+    /// area of a maximized window on a ~1600x900 screen). So the hero renders at
+    /// 1:1 on a 1600x900-or-larger screen (every Full-HD and bigger monitor
+    /// included) and shrinks gently on anything smaller — a 1366x768 laptop
+    /// lands near 0.82 — instead of always snapping to 1:1 when maximized
+    /// regardless of resolution. (The old reference WAS the device's own work
+    /// area, so maximized was always ~1.0 and the text looked oversized on
+    /// small laptops; the fixed reference is the fix.)
     ///
-    /// Capped at 1.0 so it never grows past the maximized look, and floored at
-    /// <see cref="HeroMinScale"/> so the smallest allowed window still renders
-    /// legible text. SystemParameters.WorkArea is in WPF device-independent
-    /// units, the same as ActualWidth/Height, so the ratio stays correct under
-    /// display scaling (125% / 150% DPI).
+    /// Capped at 1.0 so it never grows past its 1:1 design size on larger monitors
+    /// (those stay visually identical to before), and floored at
+    /// <see cref="HeroMinScale"/> so the smallest screens still render legible
+    /// text. ActualWidth/Height and the reference are both in WPF device-
+    /// independent units, so the ratio stays correct under display scaling
+    /// (125% / 150% DPI).
     /// </summary>
     private const double HeroMinScale = 0.65;
+
+    /// <summary>
+    /// Reference footprint the hero is tuned against: the content area of a
+    /// maximized window on a ~1600x900 screen (work area minus the 96 px
+    /// title-bar + nav-strip chrome, minus a typical taskbar). Screens at or
+    /// above this size render the hero at 1:1; smaller ones scale down. Raise
+    /// these to shrink the hero on more screens, lower them to shrink on fewer.
+    /// </summary>
+    private const double HeroRefWidth = 1600;
+    private const double HeroRefHeight = 760;
 
     private void UpdateHeroScale()
     {
@@ -3813,16 +3828,13 @@ public partial class MainWindow : Window
         double availH = PlayView.ActualHeight;
         if (availW <= 0 || availH <= 0) return;
 
-        // Reference = the maximized content footprint. The title bar (40 px,
-        // Grid.Row=0) + nav strip (56 px, Grid.Row=1) sit above PlayView, so
-        // the maximized content height is the work area minus that 96 px of
-        // chrome. Keep this in sync with MainWindow.xaml's RowDefinitions.
-        var work = SystemParameters.WorkArea;
-        double refW = work.Width;
-        double refH = work.Height - 96;
-        if (refW <= 0 || refH <= 0) return;
-
-        double scale = Math.Min(availW / refW, availH / refH);
+        // Scale = live content footprint over the FIXED reference
+        // (HeroRefWidth x HeroRefHeight ≈ a 1600x900 screen), so the hero
+        // auto-fits the resolution: 1:1 on a 1600x900-or-larger screen, smaller
+        // on anything below. Using a fixed reference (not the device's own work
+        // area) is what makes a maximized small laptop shrink the text instead
+        // of snapping to 1:1.
+        double scale = Math.Min(availW / HeroRefWidth, availH / HeroRefHeight);
         scale = Math.Min(scale, 1.0);
         scale = Math.Max(scale, HeroMinScale);
 

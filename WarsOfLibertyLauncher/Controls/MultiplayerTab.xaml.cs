@@ -1995,8 +1995,6 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.ChatSendButton.Content = Strings.Get("MpRoomChatSend");
         _lobbyWindow.ChatPlaceholderText.Text = Strings.Get("MpRoomChatPlaceholder");
         _lobbyWindow.ChatEmptyHint.Text = Strings.Get("MpRoomChatEmpty");
-        _lobbyWindow.MinimizedPillText.Text = Strings.Get("MpMinimizedPillLabel");
-        _lobbyWindow.MinimizedPill.ToolTip = Strings.Get("MpMinimizedPillTooltip");
 
         // Match-phase static labels (countdown chat-line / InGameOverlay).
         // The dynamic captions — countdown "Go", the in-game mode badge, the
@@ -3189,8 +3187,8 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// Build one room as a full-width CARD styled like a table row: SALA
-    /// (★ + title + mod/private chips), ANFITRIÓN, JUGADORES, PING, ESTADO,
-    /// ACCIÓN. The six column widths mirror the header Grid in
+    /// (mod icon disc — ★ fallback — + title + mod/private chips), ANFITRIÓN,
+    /// JUGADORES, PING, ESTADO, ACCIÓN. The six column widths mirror the header Grid in
     /// MultiplayerTab.xaml (and its 31px side margin) so the columns line up
     /// under the labels. Hover lift comes from the MpRoomCard style.
     /// </summary>
@@ -3232,16 +3230,39 @@ public partial class MultiplayerTab : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
 
-        // === Col 0: SALA — gold ★ + (title over mod/private chips). ===
+        // === Col 0: SALA — mod icon disc (★ fallback) + (title over
+        // mod/private chips). The leading disc shows the room's mod icon so
+        // mods are distinguishable at a glance in the browser; a room whose
+        // mod ships no resolvable icon keeps the gold ★ anchor. ===
         var salaCell = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        salaCell.Children.Add(new TextBlock
+        var modProfile = ModRegistry.Find(lobby.ModId);
+        var modIconBrush = ResolveRoomModIcon(modProfile);
+        if (modIconBrush != null)
         {
-            Text = "★",
-            Foreground = (Brush)Application.Current.FindResource("AccentBrush"),
-            FontSize = 16,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0),
-        });
+            // Border background is clipped to CornerRadius, so the
+            // UniformToFill brush renders as a centre-cropped circle (same
+            // recipe as the create-room mod card and the host avatar disc).
+            salaCell.Children.Add(new Border
+            {
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
+                Background = modIconBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+            });
+        }
+        else
+        {
+            salaCell.Children.Add(new TextBlock
+            {
+                Text = "★",
+                Foreground = (Brush)Application.Current.FindResource("AccentBrush"),
+                FontSize = 16,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+            });
+        }
         var salaText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         salaText.Children.Add(new TextBlock
         {
@@ -3253,7 +3274,7 @@ public partial class MultiplayerTab : UserControl
         });
         // Chips: the mod (real data, blue) + 🔒 Private (when password-gated).
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 0) };
-        var modName = ModRegistry.Find(lobby.ModId)?.DisplayName;
+        var modName = modProfile?.DisplayName;
         if (string.IsNullOrWhiteSpace(modName)) modName = lobby.ModId;
         chips.Children.Add(BuildRoomChip(
             modName!,
@@ -3425,6 +3446,52 @@ public partial class MultiplayerTab : UserControl
             FontWeight = FontWeights.SemiBold,
         },
     };
+
+    /// <summary>
+    /// Per-mod-id cache of the resolved rooms-browser icon brush, so a quiet
+    /// list refresh (every 10 s) doesn't re-decode the same icon each tick.
+    /// Only successful brushes are cached — a mod whose catalog icon hasn't
+    /// been fetched yet (LocalIconPath still null) is retried on the next
+    /// render so a late-arriving icon still shows.
+    /// </summary>
+    private readonly Dictionary<string, ImageBrush> _roomModIconCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Resolve a room's mod icon (cached catalog icon.png → built-in packed
+    /// icon) to a frozen UniformToFill brush for the card's leading disc, or
+    /// null when the mod ships no resolvable icon (caller falls back to ★).
+    /// Mirrors <c>CreateLobbyDialog.LoadIconBrush</c>.
+    /// </summary>
+    private ImageBrush? ResolveRoomModIcon(ModProfile? profile)
+    {
+        if (profile == null) return null;
+        if (_roomModIconCache.TryGetValue(profile.Id, out var cached)) return cached;
+
+        string? uri =
+            (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
+                ? profile.LocalIconPath
+                : (!string.IsNullOrEmpty(profile.BannerImage) ? profile.BannerImage : null);
+        if (string.IsNullOrEmpty(uri)) return null;
+
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = 48; // disc is 24 logical px; cap the decoded copy
+            bmp.UriSource = new Uri(uri, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+            var brush = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
+            brush.Freeze();
+            _roomModIconCache[profile.Id] = brush;
+            return brush;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Small rounded status badge for a room card: the single most-relevant
@@ -4200,10 +4267,6 @@ public partial class MultiplayerTab : UserControl
     {
         if (_lobbyWindow != null)
         {
-            // If it's sitting as the minimized pill (e.g. the user clicked
-            // "Re-enter" on the rooms browser while minimized), un-pill it
-            // first — a bare Activate() would just focus the pill.
-            _lobbyWindow.RestoreFromMinimized();
             _lobbyWindow.Activate();
             return;
         }
@@ -4211,7 +4274,10 @@ public partial class MultiplayerTab : UserControl
 
         var w = new LobbyWindow(_session)
         {
-            Owner = Window.GetWindow(this),
+            // No Owner: the lobby is an INDEPENDENT top-level window with its
+            // own Windows taskbar button (ShowInTaskbar=True). Minimizing the
+            // launcher doesn't hide it, and it isn't pinned above the launcher
+            // — the user can alt-tab / move it to another monitor freely.
 
             // Click forwarders. The handler bodies stayed in this
             // class (where the Multiplayer state lives); LobbyWindow's

@@ -2085,14 +2085,6 @@ public static class Strings
         ["MpRoomStatusJoining"] = new() { [LangEn] = "Joining…", [LangEs] = "Entrando…" },
         ["MpRoomStatusLeaving"] = new() { [LangEn] = "Leaving…", [LangEs] = "Saliendo…" },
         ["MpRoomStatusInGame"] = new() { [LangEn] = "In game", [LangEs] = "En partida" },
-        // Minimized-lobby pill (LobbyWindow). Shown in place of the chromeless
-        // OS minimize stub when the user minimizes the lobby window.
-        ["MpMinimizedPillLabel"] = new() { [LangEn] = "Lobby", [LangEs] = "Sala" },
-        ["MpMinimizedPillTooltip"] = new()
-        {
-            [LangEn] = "Click to reopen the lobby",
-            [LangEs] = "Clic para reabrir la sala",
-        },
         ["MpRoomP2pReady"] = new() { [LangEn] = "P2P LAN ready", [LangEs] = "P2P LAN listo" },
         ["MpRoomP2pStarting"] = new() { [LangEn] = "P2P starting…", [LangEs] = "Iniciando P2P…" },
         ["MpRoomTitleFallback"] = new() { [LangEn] = "{0}'s room", [LangEs] = "Sala de {0}" },

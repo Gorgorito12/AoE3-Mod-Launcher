@@ -721,10 +721,12 @@
                      so it sits over the dimmest part of the overlay.
 
                      The whole block is wrapped in HeroScaleTransform so it
-                     scales with the window: 1:1 ("current size") when the
-                     window is maximized, shrinking proportionally as the
-                     window gets smaller. UpdateHeroScale() in code-behind
-                     drives ScaleX/ScaleY off SizeChanged. RenderTransform
+                     auto-fits the resolution: 1:1 on a 1600x900-or-larger
+                     screen and shrinking gently on anything smaller
+                     (so the text isn't oversized on small laptops).
+                     UpdateHeroScale() in code-behind divides the live
+                     footprint by a FIXED ~1600x900 reference and drives
+                     ScaleX/ScaleY off SizeChanged. RenderTransform
                      (not LayoutTransform) with RenderTransformOrigin="0,1"
                      pins the bottom-left corner so the block shrinks in
                      place over the dim corner of the hero image without
