@@ -43,7 +43,7 @@
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
@@ -51,7 +51,7 @@
         <!-- Label above each form field. Subtle grey, small. -->
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#aab1bd"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="Margin" Value="0,8,0,4"/>
         </Style>
 
@@ -59,7 +59,7 @@
              label so the form reads as label / control / explanation. -->
         <Style x:Key="FieldHint" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#777"/>
-            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="FontStyle" Value="Italic"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,2,0,0"/>
@@ -127,7 +127,7 @@
                 <TextBlock Grid.Column="0"
                            x:Name="TitleText"
                            FontFamily="{DynamicResource DisplayFont}"
-                           FontSize="15"
+                           FontSize="{StaticResource FontSizeBodyStrong}"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource AccentBrush}"
                            VerticalAlignment="Center"/>
@@ -156,11 +156,11 @@
 
                     <!-- Intro: who this is for + what it produces. -->
                     <TextBlock x:Name="HeaderText"
-                               FontSize="18" FontWeight="SemiBold"
+                               FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
                                Foreground="White"
                                Margin="0,0,0,4"/>
                     <TextBlock x:Name="DescriptionText"
-                               FontSize="12"
+                               FontSize="{StaticResource FontSizeBody}"
                                Foreground="#aab1bd"
                                TextWrapping="Wrap"
                                Margin="0,0,0,16"/>
@@ -279,7 +279,7 @@
                     <TextBlock x:Name="LblCompat" Style="{StaticResource FieldLabel}"/>
                     <CheckBox x:Name="CompatCurrentCheck"
                               Foreground="#ddd"
-                              FontSize="12"
+                              FontSize="{StaticResource FontSizeBody}"
                               IsChecked="True"
                               Margin="0,4,0,0"/>
                     <TextBlock x:Name="HintCompatExtra" Style="{StaticResource FieldHint}" Margin="0,10,0,4"/>
@@ -311,7 +311,7 @@
                     <!-- Status / error band, only visible after a failed
                          submit attempt. -->
                     <TextBlock x:Name="StatusText"
-                               FontSize="12"
+                               FontSize="{StaticResource FontSizeBody}"
                                Foreground="{DynamicResource ErrorBrush}"
                                TextWrapping="Wrap"
                                Margin="0,14,0,0"
@@ -329,10 +329,10 @@
                                    Margin="0,0,12,0"/>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock x:Name="ResultHeaderText"
-                                       FontSize="18" FontWeight="SemiBold"
+                                       FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
                                        Foreground="White"/>
                             <TextBlock x:Name="ResultPathText"
-                                       FontSize="12"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        Foreground="#aab1bd"
                                        TextWrapping="Wrap"
                                        FontFamily="Consolas"/>
@@ -350,7 +350,7 @@
                             CornerRadius="4"
                             Padding="12,10">
                         <TextBlock x:Name="PreviewText"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    Foreground="White"
                                    FontWeight="SemiBold"/>
                     </Border>
@@ -363,7 +363,7 @@
                             Padding="12,8"
                             Margin="0,14,0,8">
                         <TextBlock x:Name="ResultInstructionsText"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    Foreground="#9bb8d9"
                                    TextWrapping="Wrap"/>
                     </Border>

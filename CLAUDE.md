@@ -240,16 +240,33 @@ longer exists — don't go looking for it.)
 
 - **The cinema dashboard hero scales with the window — via one transform, not
   per-element font sizes.** The PlayView "Layer 4" Grid (title + description +
-  version chip + action row + progress strip) is wrapped in a `ScaleTransform`
-  named `HeroScaleTransform` and driven by `UpdateHeroScale()` in code-behind.
-  The whole block scales as a unit so proportions stay fixed: **1:1 ("current
-  size") when the window is maximized, shrinking down to a floor of
-  `HeroMinScale` (0.65)** as the window gets smaller. The scale is
-  *(PlayView content footprint) ÷ (maximized footprint)*, where the maximized
-  footprint is `SystemParameters.WorkArea` **minus 96 px** of chrome — that 96
-  is the title bar (`Grid.Row=0`, 40) + nav strip (`Grid.Row=1`, 56); **if you
-  change those RowDefinition heights, update the `- 96` in `UpdateHeroScale`
-  too** (they're coupled by hand, not computed). Three deliberate, non-obvious
+  version chip + action row + progress strip, `HeroContentGrid`) is scaled by
+  the **shared window-size scaler** — `UiScale.Attach(HeroContentGrid, PlayView,
+  1500, 760, Kind.Render, (0,1))` in `MainWindow`'s ctor (`Controls/UiScale.cs`,
+  see its own bullet). The hero-private `HeroScaleTransform` / `UpdateHeroScale()`
+  / `Hero*` consts are **retired** — folded into the shared scaler with the
+  hero's SAME reference + floor + render-pin + crispness toggle, so the hero
+  looks byte-for-byte what it did before. (Below, `HeroRefWidth`/`HeroRefHeight`/
+  `HeroMinScale` describe the literals now passed to `Attach`, not consts.)
+  The whole block scales as a unit so proportions stay fixed: it **adapts to the
+  window size** — roughly **0.90 at a typical ~1357-wide window**, up to **1:1
+  only on a large / maximized window**, and down to a floor of `HeroMinScale`
+  (**0.82**) on small windows, so it neither shrinks to tiny nor blows up cramped.
+  The scale is
+  `min(PlayView.ActualWidth/HeroRefWidth, PlayView.ActualHeight/HeroRefHeight)`
+  clamped to `[0.82, 1.0]`, where `HeroRefWidth`/`HeroRefHeight` are **fixed
+  constants** (**1500x760** — deliberately a bit ABOVE a typical window's content
+  area, so the hero keeps adapting across normal window sizes instead of capping
+  at 1:1). `PlayView`'s ActualWidth/Height already exclude the 96 px chrome (title
+  bar `Grid.Row=0`=40 + nav strip `Grid.Row=1`=56), so there is **no `- 96` in the
+  code**; if you change those row heights, re-tune `HeroRefHeight`. **Two
+  load-bearing tuning lessons:** (a) the FLOOR (`HeroMinScale`) controls how small
+  the hero gets on small windows — raise it (it went 0.65→0.82) if it looks tiny
+  there; (b) the REFERENCE controls when it caps at 1:1 and MUST stay above
+  typical window widths, or the adjust dies (dropping it to ~1080 once made every
+  normal window cap at 1:1, so the hero stopped adapting and looked oversized —
+  the wrong lever; the fix for "too small on a small window" is the floor, not the
+  reference). Three deliberate, non-obvious
   choices: (1) it's a **`RenderTransform` (not `LayoutTransform`) with
   `RenderTransformOrigin="0,1"`** so the block shrinks in place pinned to its
   bottom-left corner without reflowing or nudging the gradient/background layers
@@ -259,20 +276,22 @@ longer exists — don't go looking for it.)
   even though the window never resized (the window's own `SizeChanged` would
   miss that); (3) it caps at 1.0 so it never grows *past* the maximized look on
   huge monitors. Don't add per-XAML `FontSize` scaling, a `Viewbox`, or DPI
-  tweaks to make the hero responsive — route everything through
-  `HeroScaleTransform`. **Text crispness is coupled to the global HiDPI setup:**
+  tweaks to make the hero responsive — route everything through the shared
+  `UiScale` scaler (`Kind.Render` for the hero). **Text crispness is coupled to
+  the global HiDPI setup:**
   `App.OnStartup` renders all text in `TextFormattingMode=Display` (pixel-
   snapped) + `Fixed` hinting + `ClearType` — razor-sharp at 1:1 but **blurry
   once the scale transform shrinks the glyphs** (they're rasterised for the
-  pre-transform pixel grid, then squashed). So `UpdateHeroScale` flips the named
-  `HeroContentGrid` subtree to `Ideal` formatting + `Animated` hinting +
-  `Grayscale` rendering whenever scale < 1.0 (WPF's mode for text under a
-  transform), and restores the `Display`/`ClearType`/`Fixed` trio at exactly 1.0
-  so the maximized hero stays pixel-crisp. Don't hard-set static `TextOptions`
-  on the hero subtree — the toggle owns them. (Reference is the **primary**
-  monitor's work area, so on a multi-monitor setup with mismatched resolutions a
-  window maximized on a *secondary* monitor won't land exactly at 1.0 — a known,
-  minor cosmetic edge case.)
+  pre-transform pixel grid, then squashed). So the scaler
+  (`UiScale.SetTextCrispForScale`) flips the `HeroContentGrid` subtree to `Ideal`
+  formatting + `Animated` hinting + `Grayscale` rendering whenever scale < 1.0
+  (WPF's mode for text under a transform), and restores the
+  `Display`/`ClearType`/`Fixed` trio at exactly 1.0 so the maximized hero stays
+  pixel-crisp. Don't hard-set static `TextOptions`
+  on the hero subtree — the toggle owns them. (The reference is now a fixed
+  window-content footprint, not the monitor's work area, so maximizing on any
+  monitor lands at 1.0 — the old multi-monitor "secondary screen won't hit 1.0"
+  edge case is gone.)
 
 - **`LauncherConfig` is per-mod.** Real state lives in a `mods` dictionary of
   `ModState` keyed by mod id and selected by `activeModId`; the flat
@@ -746,6 +765,37 @@ engine** and the UI binds to it.
   use `BasedOn="{StaticResource {x:Type ComboBox}}"` instead of redefining the
   template.
 
+- **Typography sizing is centralized in `App.xaml` as a semantic scale — new UI
+  must bind to a token, NOT hardcode `FontSize`.** Seven role-named `sys:Double`
+  resources (`FontSizeCaption=13`, `FontSizeBody=14`, `FontSizeBodyStrong=15`,
+  `FontSizeSubtitle=16`, `FontSizeTitle=18`, `FontSizeHeading=24`,
+  `FontSizeDisplay=34`) live next to `DisplayFont`/`BodyFont`. Bind via
+  `FontSize="{StaticResource FontSizeBody}"` in XAML, or — in code-behind that
+  builds elements — `(double)FindResource("FontSizeBody")` from an instance
+  method (cache it; see `ModsBrowser`'s ctor `_fsCaption`/`_fsBody`/
+  `_fsBodyStrong`) **or `(double)Application.Current.FindResource("FontSizeBody")`
+  from a `static` builder/helper** (instance `FindResource` won't compile there —
+  `MultiplayerTab`'s `BuildBadge`, `MpAlertOverlay`, and `MainWindow`'s static card
+  builder all use the `Application.Current` form). `StaticResource` on purpose
+  (app-lifetime constants — no runtime text-scale feature). **Floor is 13, body
+  14 — calibrated to Steam's client** (its comfortable body ≈14px); 10-11px
+  secondary text was unreadable on 125/150% displays (the original "text is too
+  small" report). **The whole launcher is migrated** — every surface (dashboard
+  chrome, Workshop, MultiplayerTab, LobbyWindow, all the `*Dialog`s, the shared
+  `Buttons.xaml`/`Inputs.xaml` implicit + keyed styles) reads the tokens. **Two
+  deliberate classes of non-adopter stay literal:** (1) the **dashboard hero
+  subtree** (`HeroContentGrid` in `MainWindow.xaml`, ~lines 742-1019) — it scales
+  as a unit via the shared `UiScale` transform, so its title/PLAY/progress sizes
+  are hand-tuned literals (see the hero bullet), never per-element
+  tokens; and (2) **icon glyphs / disc-geometry**: anything with
+  `FontFamily="Segoe MDL2 Assets"` (chrome ✕/min/max/chevron/checkmark), large
+  decorative symbols sized to a fixed square/circle (the lobby `⚔` at 28, the
+  rooms `★` fallback, the `MpIconButton` style), and avatar/icon **monograms** (a
+  single letter filling a fixed circle — Workshop card icon `18`, the MP avatar
+  initials, the dashboard mod-icon letter). These are sized to their container or
+  are pictographic, not typographic. **Don't tokenize a hero element or an
+  icon-glyph, and don't hardcode a FontSize on ordinary text.**
+
 ### Three core flows (detailed diagrams in README.md)
 
 1. **Install** — detect AoE3 → download multi-part payload ZIP → clone AoE3 into
@@ -961,6 +1011,95 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   `ModPropertiesDialog`) still carry redundant `TextOptions.*` XAML attributes
   from before this was centralised; harmless (the values match) but not the
   pattern to copy.
+- **UI scaling is automatic and native — don't write DPI-detection code; route
+  any window-size zoom through `UiScale` (its own bullet below).** The app
+  declares **PerMonitorV2** DPI awareness (`app.manifest`
+  → `<dpiAwareness>PerMonitorV2</dpiAwareness>`, wired via `<ApplicationManifest>`
+  in the `.csproj`), and WPF measures everything in **DIPs** (1/96"), which are
+  already relative to the display scale. So the entire UI — fonts, buttons, icons,
+  margins, sidebar, cards, **and modals** — scales proportionally and crisply at
+  100/125/150/175/200% with zero per-element code, and WPF recomputes the layout
+  automatically on window resize (reflow) and on DPI/monitor change
+  (`WM_DPICHANGED`, handled natively under PerMonitorV2). There is **no** manual
+  scale picker and none is needed; the consistent base scale is the App.xaml
+  typography tokens. **Web concepts do not apply** (this is not a WebView): there
+  are no `rem`/`em`/`clamp`/`vw`/`vh`, no `devicePixelRatio` — the WPF
+  equivalent of a "relative unit" is the DIP itself. **On TOP of DPI there is now
+  a window-size *zoom* layer** (`Controls/UiScale.cs`, see its bullet): it
+  generalises the old hero-only transform to every main surface (Library hero,
+  Workshop, Multiplayer, the lobby, the settings/properties dialogs), shrinking
+  content to fit windows smaller than each surface's default footprint (capped at
+  1.0 so the default + larger render unchanged, floored at 0.82). DPI and the
+  window-size zoom compose; neither needs per-element code. **DPI
+  scaling is uniform** (it scales text and its container by the same factor), so
+  DPI alone never clips text — the only real clip vector is a longer **localized**
+  string (ES > EN) in a fixed-width single-line label. **Robustness convention:** a
+  one-line `TextBlock` with dynamic/localized text living in a fixed-width context
+  (a fixed `Width`/`ColumnDefinition`) must carry `TextTrimming="CharacterEllipsis"`
+  so the worst case is an ellipsis, never a hard clip or overflow (e.g. the rooms-
+  table `ColHeader*`, `RoomPasswordText`). Don't fix a fixed-`Height` **image**
+  strip (e.g. `ModsBrowser`'s `DetailBanner`) to `Auto` — it holds no wrapping text
+  and `Auto` would collapse it.
+- **Window-size UI scaling is centralised in `Controls/UiScale.cs` — don't roll a
+  per-view transform.** `UiScale.Attach(scaled, sizeSource, refW, refH, kind,
+  origin)` installs a `ScaleTransform` on a FOREGROUND content root, driven by
+  `sizeSource`'s footprint over a fixed reference, clamped to **`[0.82, 1.0]`**
+  (never grows past design size: the default window and larger render at the
+  crisp 1.0 ClearType path; only smaller windows shrink). Each caller passes its
+  OWN default content footprint as the reference, so a default-sized window is
+  exactly **1.0 — zero regression** vs the pre-scaler build; the scaler only ADDS
+  "shrink to fit" below that. Crispness rides the hero's recipe
+  (`SetTextCrispForScale`: Ideal/Grayscale/Animated below 1.0,
+  Display/ClearType/Fixed at 1.0). **Two load-bearing rules:** (1) attach only to
+  a foreground content root — NEVER a full-bleed background (it must keep filling
+  the window) or an alert-overlay host; (2) `sizeSource` must be a container the
+  transform does NOT resize (the element's parent / the window) — a
+  `LayoutTransform` changes the scaled element's own ActualWidth, so
+  `sizeSource == scaled` oscillates. `Kind.Render` (RenderTransform, no reflow) is
+  the bottom-pinned **hero only**; everything else uses `Kind.Layout` (reflows,
+  fills the slot, feeds the enclosing ScrollViewer). Wired: hero (`PlayView`, ref
+  1500x760, Render); `ModsBrowser` + `MultiplayerTab` (sizeSource = the
+  UserControl, ref 1100x604); `LobbyWindow` (ref 900x600);
+  `LauncherSettingsDialog` / `ModPropertiesDialog` (their `Grid.Row=1` content,
+  sized by the Window). `RadminAssistantWindow` + `CreateLobbyDialog` are
+  `NoResize` → not scaled. `UiScale.Track(ContentHost, 1100, 604)` publishes
+  `UiScale.Current` (the general content factor) for the two code-built popups
+  (brand, mod-switch), which live in their own visual tree and read it via
+  `ApplyPopupScale`; the gear `ContextMenu` + `ComboBox` dropdowns stay base-size
+  (a transient menu over scaled content is an accepted minor mismatch).
+- **Geometry tokens mirror the FontSize scale — bind a token, don't hardcode a
+  size. They live in `Styles/Tokens.xaml`, merged FIRST in `App.xaml` (a
+  load-bearing placement, see below).** The dictionary defines (all
+  `StaticResource`): spacing `Thickness` tokens (`SpaceXs`..`SpaceXl`,
+  `CardPadding`=14,12, `SectionPadding`=24,16); corner-radius `CornerRadius`
+  tokens (`RadiusSm`=4 / `RadiusMd`=6 / `RadiusLg`=10, plus the two-tone popup-rim
+  pairs `RadiusPopupInner/Outer`=6/7 and `RadiusPopupSubmenuInner/Outer`=4/5);
+  icon-disc sizes (`DiscSizeSm/Md/Xxl`=24/36/72 with paired `DiscRadius*`); and
+  button-padding `Thickness` tokens (`BtnPad{Compact,Default,Row,Roomy,Cta}`).
+  Circular discs use the `IconDiscSm/Md/Xxl` Border styles (in `Buttons.xaml`) so
+  radius can't drift from size/2. Same StaticResource rationale as the FontSize
+  scale — the window scaler transforms the RENDER, not these VALUES, so static
+  stays correct. **WHY a SEPARATE dictionary merged FIRST, not inline in App.xaml
+  like the FontSize tokens (this bit the build once — a startup
+  `XamlParseException` "cannot find resource 'RadiusMd'"):** a `{StaticResource}`
+  used INSIDE a `ControlTemplate` body in a merged dictionary (the button / input
+  corner radii in `Buttons.xaml` / `Inputs.xaml`) resolves only against
+  dictionaries merged BEFORE it — it canNOT see `App.xaml`'s inline resources
+  (those are added after the `MergedDictionaries` block, so a template-body lookup
+  never finds them and throws at load). The FontSize tokens survive inline only
+  because they're referenced exclusively from Setters (deferred) + direct element
+  attributes, never from a merged-dict template body. Geometry tokens ARE used in
+  template bodies, so they must be merged ahead of Buttons/Inputs (same reason
+  Colors.xaml is merged early — its brushes resolve inside those templates too).
+  If you add a token used in a template, put it in `Tokens.xaml`, not inline.
+  Code-behind card builders (`ModsBrowser` rows, MP cards/badges) use numeric
+  literals that MATCH these token values on purpose (a hot per-card path;
+  `FindResource` per card would crash on a typo'd key). **Load-bearing exemptions
+  stay literal:** the popup-rim radii are a paired set (outer = inner + 1, NOT
+  folded into the Radius scale), the gold brand-popup rim keeps its own value, and
+  the hero subtree / Segoe MDL2 glyph + monogram sizes / intentional fixed widths
+  (chat 380, lobby left 340, hero icon 64, `RadminAssistant` 430x540) are NOT
+  tokenised.
 - **Maximize-respects-taskbar is set globally — don't roll your own per-Window.**
   The same `App.OnStartup` class handler that wires HiDPI crispness also
   installs a `WM_GETMINMAXINFO` WndProc hook on every Window whose
@@ -1070,14 +1209,28 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   (✕, Esc, Alt+F4, our own `CloseLobbyWindow()`).
   **`ModPropertiesDialog`'s action buttons close the dialog SELECTIVELY,
   by design — don't make them uniform.** A handler closes the Properties
-  window *only* when its callback opens **another surface** the dialog
-  would otherwise cover: Verify / Repair (main-window progress strip),
-  Change mod folder / Change AoE3 folder (path picker), Create / Restore
-  backup, and Uninstall (confirmation). Handlers that merely shell out to
+  window *only* when its flow lands on the **main window**: Verify / Repair
+  (their progress runs on the main-window progress strip, which a non-modal
+  Properties window would otherwise cover) and Uninstall (the mod is gone
+  afterwards, so the open view would be stale). The path pickers (Change mod
+  folder / Change AoE3 folder) and the backup/restore dialogs **used to
+  close too, but no longer do** (the maintainer found the vanishing window
+  jarring): those are modals that appear **on top** with nothing to uncover,
+  so the handlers now **stay open and refresh the displayed paths / version /
+  user-data state in place** via the public `RefreshData()` method
+  (`LoadGeneral` + `LoadLocalFiles` + `LoadUserData`, deliberately NOT
+  `LoadLanguage` so the language combo / active tab aren't disturbed).
+  `RefreshData()` is called right after the callback returns (backup/restore
+  callbacks are synchronous, so the final state is visible immediately); for
+  the folder pickers the new path is written to config before the callback's
+  `await CheckAsync()`, so the in-handler call shows the path and **MainWindow
+  additionally calls `_modPropertiesDialog?.RefreshData()` after the async
+  re-detection completes** (in `BrowseButton_Click` / `BrowseAoE3Button_Click`)
+  so the re-detected version catches up. Handlers that merely shell out to
   Explorer/Notepad with **no covering window** — Open folder, Open AoE3
-  folder, Open user-data folder, View logs — **stay open**, because
-  closing left the user staring at the main window unsure anything
-  happened. **"Buscar actualizaciones" (`CheckUpdatesBtn_Click`) is the
+  folder, Open user-data folder, View logs — also **stay open** (they always
+  did), because closing left the user staring at the main window unsure
+  anything happened. **"Buscar actualizaciones" (`CheckUpdatesBtn_Click`) is the
   special case:** it is `async`, does NOT close, disables itself, shows a
   "Comprobando…" line, awaits the real check on the main window (the
   callback is a `Func<Task<UpdateService.CheckResult?>>`, not a fire-and-

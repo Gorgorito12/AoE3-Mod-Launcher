@@ -8,7 +8,7 @@
             <TextBlock x:Name="ActionsLabel"
                        x:FieldModifier="public"
                        Foreground="#666"
-                       FontSize="10"
+                       FontSize="{StaticResource FontSizeCaption}"
                        FontWeight="SemiBold"
                        Margin="0,0,0,8"/>
 
@@ -123,7 +123,7 @@
                                                  two-tone "punched out" boundary documented
                                                  by MenuBorder/MenuBorderOuter in Colors.xaml. -->
                                             <Border Background="{DynamicResource MenuBorderOuter}"
-                                                    CornerRadius="7"
+                                                    CornerRadius="{StaticResource RadiusPopupOuter}"
                                                     Padding="1"
                                                     SnapsToDevicePixels="True">
                                                 <Border.Effect>
@@ -135,7 +135,7 @@
                                                 <Border Background="{TemplateBinding Background}"
                                                         BorderBrush="{TemplateBinding BorderBrush}"
                                                         BorderThickness="{TemplateBinding BorderThickness}"
-                                                        CornerRadius="6"
+                                                        CornerRadius="{StaticResource RadiusPopupInner}"
                                                         Padding="{TemplateBinding Padding}"
                                                         SnapsToDevicePixels="True">
                                                     <ItemsPresenter/>
@@ -164,7 +164,7 @@
                                 <Setter Property="Foreground" Value="White"/>
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="Padding" Value="8,7"/>
-                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="Cursor" Value="Hand"/>
                                 <Setter Property="OverridesDefaultStyle" Value="True"/>
@@ -176,7 +176,7 @@
                                         <ControlTemplate TargetType="MenuItem">
                                             <Border x:Name="border"
                                                     Background="{TemplateBinding Background}"
-                                                    CornerRadius="3"
+                                                    CornerRadius="{StaticResource RadiusSm}"
                                                     Padding="{TemplateBinding Padding}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
@@ -217,7 +217,7 @@
                                                              border — so cascaded submenus
                                                              share the same crisp boundary. -->
                                                         <Border Background="{DynamicResource MenuBorderOuter}"
-                                                                CornerRadius="5"
+                                                                CornerRadius="{StaticResource RadiusPopupSubmenuOuter}"
                                                                 Padding="1"
                                                                 Margin="4">
                                                             <Border.Effect>
@@ -229,7 +229,7 @@
                                                             <Border Background="{DynamicResource BgPanel}"
                                                                     BorderBrush="{DynamicResource MenuBorder}"
                                                                     BorderThickness="2"
-                                                                    CornerRadius="4"
+                                                                    CornerRadius="{StaticResource RadiusPopupSubmenuInner}"
                                                                     Padding="4">
                                                                 <StackPanel IsItemsHost="True"/>
                                                             </Border>
@@ -258,7 +258,7 @@
                                 <Setter Property="Foreground" Value="#f0f0f0"/>
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="Padding" Value="8,8,8,4"/>
-                                <Setter Property="FontSize" Value="14"/>
+                                <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
                                 <Setter Property="FontWeight" Value="Bold"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
                                 <Setter Property="IsHitTestVisible" Value="False"/>

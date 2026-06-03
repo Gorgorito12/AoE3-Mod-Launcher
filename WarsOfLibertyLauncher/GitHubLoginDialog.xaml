@@ -21,13 +21,13 @@
         <TextBlock Grid.Row="0"
                    x:Name="TitleText"
                    Foreground="{DynamicResource TextPrimary}"
-                   FontSize="18"
+                   FontSize="{StaticResource FontSizeHeading}"
                    FontWeight="Bold"/>
 
         <TextBlock Grid.Row="1"
                    x:Name="Step1Text"
                    Foreground="{DynamicResource TextSecondary}"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    TextWrapping="Wrap"
                    Margin="0,14,0,6"/>
 
@@ -47,7 +47,7 @@
                            x:Name="VerificationUriText"
                            Foreground="{DynamicResource TextPrimary}"
                            FontFamily="Consolas, Courier New, monospace"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"/>
                 <Button Grid.Column="1"
@@ -67,7 +67,7 @@
         <TextBlock Grid.Row="3"
                    x:Name="Step2Text"
                    Foreground="{DynamicResource TextSecondary}"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    TextWrapping="Wrap"
                    Margin="0,18,0,6"/>
 
@@ -88,7 +88,7 @@
                            x:Name="UserCodeText"
                            Foreground="{DynamicResource TextPrimary}"
                            FontFamily="Consolas, Courier New, monospace"
-                           FontSize="28"
+                           FontSize="{StaticResource FontSizeDisplay}"
                            FontWeight="Bold"
                            VerticalAlignment="Center"/>
                 <Button Grid.Column="1"
@@ -110,7 +110,7 @@
             <TextBlock Grid.Column="0"
                        x:Name="StatusText"
                        Foreground="{DynamicResource TextSecondary}"
-                       FontSize="12"
+                       FontSize="{StaticResource FontSizeBody}"
                        VerticalAlignment="Center"/>
             <Button Grid.Column="1"
                     x:Name="CancelButton"

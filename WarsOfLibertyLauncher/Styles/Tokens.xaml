@@ -1,0 +1,81 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <!-- ============================================================
+         GEOMETRY SCALE — semantic spacing / radius / icon-disc /
+         button-padding tokens. Same idea + rules as the FontSize scale
+         in App.xaml: one knob per role, StaticResource (app-lifetime
+         constants), consumed by Buttons.xaml / Inputs.xaml and every
+         Controls/*.xaml. New UI binds to a token; it must not hardcode
+         a literal size.
+
+         WHY A SEPARATE DICTIONARY MERGED FIRST (not inline in App.xaml):
+         a `{StaticResource}` used INSIDE a ControlTemplate body in a
+         merged dictionary (Buttons/Inputs) can only resolve resources in
+         dictionaries merged BEFORE it — NOT App.xaml's inline resources
+         (those are added after the MergedDictionaries block, so a
+         template-body lookup never sees them and throws "resource not
+         found" at load). The FontSize tokens get away with living inline
+         because they're only referenced from Setters (deferred) + direct
+         element attributes, never from a merged-dictionary template body.
+         These geometry tokens ARE referenced from template bodies (button
+         + input corner radii), so they must live here and be merged ahead
+         of Buttons.xaml / Inputs.xaml. (Same reason Colors.xaml is merged
+         first — its brushes resolve inside those templates too.)
+
+         The window-size scaler (Controls/UiScale.cs) scales the RENDER via
+         a transform, not these token VALUES, so StaticResource stays
+         correct. Load-bearing exemptions that deliberately stay literal:
+         the two-tone popup-rim radii (kept here as a paired set, outer =
+         inner + 1, NOT folded into the Radius scale), the gold brand-popup
+         rim, the hero subtree, Segoe MDL2 glyph / monogram sizes, and the
+         intentional fixed widths (chat 380, lobby left 340, hero icon 64).
+         See CLAUDE.md before changing any of those.
+         ============================================================ -->
+
+    <!-- Spacing (Thickness). 4px base grid. CardPadding is the dominant
+         existing card padding (kept at 14,12 to avoid drift);
+         SectionPadding is the header gutter. -->
+    <Thickness x:Key="SpaceXs">4</Thickness>
+    <Thickness x:Key="SpaceSm">8</Thickness>
+    <Thickness x:Key="SpaceMd">12</Thickness>
+    <Thickness x:Key="SpaceLg">16</Thickness>
+    <Thickness x:Key="SpaceXl">24</Thickness>
+    <Thickness x:Key="CardPadding">14,12</Thickness>
+    <Thickness x:Key="SectionPadding">24,16</Thickness>
+
+    <!-- Corner radius (CornerRadius). Sm = buttons/inputs/badges,
+         Md = cards/panels/info boxes, Lg = prominent tiles. -->
+    <CornerRadius x:Key="RadiusSm">4</CornerRadius>
+    <CornerRadius x:Key="RadiusMd">6</CornerRadius>
+    <CornerRadius x:Key="RadiusLg">10</CornerRadius>
+    <!-- Two-tone "punched-out" popup rim — NOT part of the scale. Outer
+         MUST stay inner+1 (the 1px near-black band over the 2px bright
+         inner line). See the popup-rim gotcha in CLAUDE.md. -->
+    <CornerRadius x:Key="RadiusPopupInner">6</CornerRadius>
+    <CornerRadius x:Key="RadiusPopupOuter">7</CornerRadius>
+    <CornerRadius x:Key="RadiusPopupSubmenuInner">4</CornerRadius>
+    <CornerRadius x:Key="RadiusPopupSubmenuOuter">5</CornerRadius>
+
+    <!-- Icon-disc sizes (sys:Double for Width/Height) + paired radii
+         (CornerRadius = size/2). Use the IconDisc* Border styles in
+         Buttons.xaml so the radius can't drift from the size. Only for
+         CIRCULAR discs — rounded squares (the 64px hero icon host) use a
+         Radius* token instead. -->
+    <sys:Double x:Key="DiscSizeSm">24</sys:Double>
+    <sys:Double x:Key="DiscSizeMd">36</sys:Double>
+    <sys:Double x:Key="DiscSizeXxl">72</sys:Double>
+    <CornerRadius x:Key="DiscRadiusSm">12</CornerRadius>
+    <CornerRadius x:Key="DiscRadiusMd">18</CornerRadius>
+    <CornerRadius x:Key="DiscRadiusXxl">36</CornerRadius>
+
+    <!-- Button padding (Thickness). The default family normalises the old
+         7/8/9 vertical values to 8. -->
+    <Thickness x:Key="BtnPadCompact">10,5</Thickness>
+    <Thickness x:Key="BtnPadDefault">14,8</Thickness>
+    <Thickness x:Key="BtnPadRow">14,10</Thickness>
+    <Thickness x:Key="BtnPadRoomy">18,8</Thickness>
+    <Thickness x:Key="BtnPadCta">14,14</Thickness>
+
+</ResourceDictionary>

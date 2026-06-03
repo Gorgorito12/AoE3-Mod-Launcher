@@ -11,11 +11,11 @@
     <StackPanel Margin="24">
         <!-- Header -->
         <TextBlock x:Name="HeaderText"
-                   FontSize="18" FontWeight="SemiBold"
+                   FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="DescriptionText"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    Foreground="#aaa"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
@@ -29,16 +29,16 @@
                 Margin="0,0,0,12">
             <StackPanel>
                 <TextBlock x:Name="WarningTitleText"
-                           FontSize="11" FontWeight="SemiBold"
+                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold"
                            Foreground="#d4a04a"
                            Margin="0,0,0,4"/>
                 <TextBlock x:Name="UserDataPathText"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            Foreground="White"
                            TextWrapping="Wrap"
                            FontFamily="Consolas"/>
                 <TextBlock x:Name="SavegameCountText"
-                           FontSize="11"
+                           FontSize="{StaticResource FontSizeCaption}"
                            Foreground="#d4a04a"
                            TextWrapping="Wrap"
                            Margin="0,6,0,0"
@@ -48,7 +48,7 @@
 
         <!-- Recommendation text -->
         <TextBlock x:Name="RecommendationText"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    Foreground="#ccc"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>

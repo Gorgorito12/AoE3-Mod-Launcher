@@ -141,7 +141,7 @@ internal static class MpAlertOverlay
         headerRow.Children.Add(new TextBlock
         {
             Text = title,
-            FontSize = 16,
+            FontSize = (double)Application.Current.FindResource("FontSizeTitle"),
             FontWeight = FontWeights.Bold,
             Foreground = Res("TextPrimary"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -152,7 +152,7 @@ internal static class MpAlertOverlay
         stack.Children.Add(new TextBlock
         {
             Text = body,
-            FontSize = 13,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             Foreground = Res("TextSecondary"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 20),

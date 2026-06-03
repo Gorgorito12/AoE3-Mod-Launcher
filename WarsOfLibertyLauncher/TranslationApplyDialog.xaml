@@ -48,7 +48,7 @@
                 <TextBlock x:Name="TitleBarText"
                            Grid.Column="0"
                            Foreground="{DynamicResource TextSecondary}"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
                 <Button x:Name="CloseXButton"
@@ -77,11 +77,11 @@
                     </Border>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock x:Name="NameText"
-                                   FontSize="20"
+                                   FontSize="{StaticResource FontSizeHeading}"
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock x:Name="AuthorText"
-                                   FontSize="12"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    Foreground="{DynamicResource TextSecondary}"
                                    Margin="0,2,0,0"/>
                     </StackPanel>
@@ -98,7 +98,7 @@
                                    VerticalAlignment="Center"
                                    Margin="0,0,8,0"/>
                         <TextBlock x:Name="CompatText"
-                                   FontSize="12"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    VerticalAlignment="Center"
                                    TextWrapping="Wrap"
                                    MaxWidth="430"/>
@@ -119,29 +119,29 @@
                     <TextBlock Grid.Row="0" Grid.Column="0"
                                x:Name="LblModVersions"
                                Foreground="{DynamicResource TextSecondary}"
-                               FontSize="11"
+                               FontSize="{StaticResource FontSizeCaption}"
                                Margin="0,0,12,4"/>
                     <TextBlock Grid.Row="0" Grid.Column="1"
                                x:Name="ModVersionsText"
                                Foreground="{DynamicResource TextPrimary}"
-                               FontSize="12"
+                               FontSize="{StaticResource FontSizeBody}"
                                FontFamily="Consolas"
                                Margin="0,0,0,4"/>
 
                     <TextBlock Grid.Row="1" Grid.Column="0"
                                x:Name="LblSize"
                                Foreground="{DynamicResource TextSecondary}"
-                               FontSize="11"
+                               FontSize="{StaticResource FontSizeCaption}"
                                Margin="0,0,12,0"/>
                     <TextBlock Grid.Row="1" Grid.Column="1"
                                x:Name="SizeText"
                                Foreground="{DynamicResource TextPrimary}"
-                               FontSize="12"/>
+                               FontSize="{StaticResource FontSizeBody}"/>
                 </Grid>
 
                 <!-- Optional description -->
                 <TextBlock x:Name="DescriptionText"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            Foreground="{DynamicResource TextSecondary}"
                            TextWrapping="Wrap"
                            Margin="0,0,0,12"
@@ -152,16 +152,16 @@
                     <Grid Margin="0,0,0,4">
                         <TextBlock x:Name="ProgressLabelText"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="11"/>
+                                   FontSize="{StaticResource FontSizeCaption}"/>
                         <TextBlock x:Name="ProgressPercentText"
                                    HorizontalAlignment="Right"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="11"/>
+                                   FontSize="{StaticResource FontSizeCaption}"/>
                     </Grid>
                     <ProgressBar x:Name="DownloadProgress"/>
                     <TextBlock x:Name="ProgressBytesText"
                                Foreground="{DynamicResource TextSecondary}"
-                               FontSize="10"
+                               FontSize="{StaticResource FontSizeCaption}"
                                Margin="0,4,0,0"/>
                 </StackPanel>
 
@@ -172,7 +172,7 @@
                         Margin="0,0,0,12"
                         Visibility="Collapsed">
                     <TextBlock x:Name="MessageText"
-                               FontSize="12"
+                               FontSize="{StaticResource FontSizeBody}"
                                TextWrapping="Wrap"/>
                 </Border>
 

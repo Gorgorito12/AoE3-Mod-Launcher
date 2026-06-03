@@ -74,7 +74,7 @@
         <Style x:Key="SidebarColoredButton" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="14,9"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -115,7 +115,7 @@
             <Setter Property="Background" Value="#2a2d34"/>
             <Setter Property="Foreground" Value="#ddd"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="Padding" Value="14,9"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -154,7 +154,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#888"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="0,10"/>
             <Setter Property="Margin" Value="0,0,28,0"/>
@@ -183,7 +183,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#666"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="8,3"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -520,7 +520,7 @@
                         </Image>
                         <TextBlock Text="AoE3 Mod Launcher"
                                    FontFamily="{DynamicResource DisplayFont}"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
                         <!-- Chevron flips ▾↔▴ in code-behind on open/close
@@ -604,7 +604,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="&#xE80F;"
                                    FontFamily="Segoe MDL2 Assets"
-                                   FontSize="15"
+                                   FontSize="18"
                                    Margin="0,0,10,0"
                                    VerticalAlignment="Center"/>
                         <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
@@ -616,7 +616,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="&#xE7C5;"
                                    FontFamily="Segoe MDL2 Assets"
-                                   FontSize="15"
+                                   FontSize="18"
                                    Margin="0,0,10,0"
                                    VerticalAlignment="Center"/>
                         <TextBlock x:Name="SidebarLabelCatalog" VerticalAlignment="Center"/>
@@ -628,7 +628,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="&#xE716;"
                                    FontFamily="Segoe MDL2 Assets"
-                                   FontSize="15"
+                                   FontSize="18"
                                    Margin="0,0,10,0"
                                    VerticalAlignment="Center"/>
                         <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
@@ -652,7 +652,7 @@
              touch the chrome itself, so the one-surface look (no title-bar
              divider) is preserved.
              ============================================================= -->
-        <Grid Grid.Row="2" ClipToBounds="True">
+        <Grid x:Name="ContentHost" Grid.Row="2" ClipToBounds="True">
 
             <!-- ============================================================
                  PLAY VIEW — cinema dashboard.
@@ -739,12 +739,12 @@
                      hinting whenever scale < 1.0 (smooth under transform) and
                      back to Display at exactly 1.0 (maximized) so the full-
                      size hero keeps its pixel-crisp look. -->
+                <!-- Hero block. The window-size scale + bottom-left render-pin
+                     are installed in code by UiScale.Attach(... Kind.Render,
+                     origin 0,1) — see the constructor. Keep this subtree free of
+                     a static RenderTransform so the scaler owns it. -->
                 <Grid x:Name="HeroContentGrid"
-                      Margin="48,0,48,32" VerticalAlignment="Bottom"
-                      RenderTransformOrigin="0,1">
-                    <Grid.RenderTransform>
-                        <ScaleTransform x:Name="HeroScaleTransform"/>
-                    </Grid.RenderTransform>
+                      Margin="48,0,48,32" VerticalAlignment="Bottom">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -761,7 +761,7 @@
                              collapsed when the active mod has no icon. -->
                         <Border x:Name="DashboardIconHost"
                                 Width="64" Height="64"
-                                CornerRadius="10"
+                                CornerRadius="{StaticResource RadiusLg}"
                                 HorizontalAlignment="Left"
                                 Margin="0,0,0,14"
                                 Visibility="Collapsed">
@@ -795,7 +795,7 @@
                                 HorizontalAlignment="Left"
                                 Margin="0,10,0,0"
                                 Padding="10,3"
-                                CornerRadius="10"
+                                CornerRadius="{StaticResource RadiusLg}"
                                 BorderBrush="{DynamicResource StatusInstalledFg}"
                                 BorderThickness="1"
                                 Background="{DynamicResource StatusInstalledBg}"
@@ -936,7 +936,7 @@
                             <StackPanel Grid.Column="1" Margin="14,0,0,0">
                                 <TextBlock Text="VELOCIDAD"
                                            Foreground="{DynamicResource Secondary}"
-                                           FontSize="9"
+                                           FontSize="11"
                                            FontWeight="SemiBold"/>
                                 <!-- Data values use SecondaryFixed (cool
                                      bright blue-white) so progress reads
@@ -951,7 +951,7 @@
                             <StackPanel Grid.Column="2" Margin="14,0,0,0">
                                 <TextBlock Text="TIEMPO RESTANTE"
                                            Foreground="{DynamicResource Secondary}"
-                                           FontSize="9"
+                                           FontSize="11"
                                            FontWeight="SemiBold"/>
                                 <TextBlock x:Name="DashboardProgressEta"
                                            Foreground="{DynamicResource SecondaryFixed}"
@@ -961,7 +961,7 @@
                             <StackPanel Grid.Column="3" Margin="14,0,0,0">
                                 <TextBlock Text="PROGRESO"
                                            Foreground="{DynamicResource Secondary}"
-                                           FontSize="9"
+                                           FontSize="11"
                                            FontWeight="SemiBold"/>
                                 <TextBlock x:Name="DashboardProgressPercent"
                                            Foreground="{DynamicResource SecondaryFixed}"
@@ -1052,7 +1052,7 @@
                             MaxWidth="500">
                     <TextBlock x:Name="SettingsTeaserText"
                                Foreground="{DynamicResource TextPrimary}"
-                               FontSize="14"
+                               FontSize="{StaticResource FontSizeBodyStrong}"
                                TextAlignment="Center"
                                TextWrapping="Wrap"
                                Margin="0,0,0,16"/>

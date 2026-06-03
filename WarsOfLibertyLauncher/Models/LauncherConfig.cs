@@ -267,6 +267,16 @@ public class LauncherConfig
         {
             if (string.Equals(p.Id, excludeModId, StringComparison.OrdinalIgnoreCase))
                 continue;
+            // NEVER exclude the stock base game (aoe3-tad, IsStockGame=true).
+            // Its "install path" is the user's real AoE3 (e.g. ...\Age Of
+            // Empires 3\bin) — which is exactly the base the installer CLONES
+            // (then flattens bin\ into the mod root). Excluding it makes the
+            // clone copy 0 base files, so the mod ships with no engine DLLs
+            // (RockallDLL/binkw32/granny2/deformerdlly) or data\*.xml and the
+            // game exits on launch. The stock game is detect-only and never a
+            // "sibling mod" that could be scooped into another install.
+            if (p.IsStockGame)
+                continue;
             var path = GetState(p.Id).InstallPath;
             if (!string.IsNullOrEmpty(path))
                 paths.Add(path);

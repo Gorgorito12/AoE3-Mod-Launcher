@@ -11,11 +11,11 @@
     <StackPanel Margin="24">
         <!-- Header -->
         <TextBlock x:Name="HeaderText"
-                   FontSize="18" FontWeight="SemiBold"
+                   FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="DescriptionText"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    Foreground="#aaa"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
@@ -29,11 +29,11 @@
                 Margin="0,0,0,12">
             <StackPanel>
                 <TextBlock x:Name="BackupTitleText"
-                           FontSize="11" FontWeight="SemiBold"
+                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold"
                            Foreground="#9bd99b"
                            Margin="0,0,0,4"/>
                 <TextBlock x:Name="BackupDetailsText"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            Foreground="White"
                            TextWrapping="Wrap"/>
             </StackPanel>
@@ -41,14 +41,14 @@
 
         <!-- Behavior explanation -->
         <TextBlock x:Name="ExplanationText"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    Foreground="#ccc"
                    TextWrapping="Wrap"
                    Margin="0,0,0,8"/>
 
         <!-- Older backups note (only visible if there are any) -->
         <TextBlock x:Name="OlderBackupsText"
-                   FontSize="11"
+                   FontSize="{StaticResource FontSizeCaption}"
                    Foreground="#888"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"

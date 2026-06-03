@@ -48,18 +48,18 @@
     <StackPanel Margin="24">
         <!-- Header -->
         <TextBlock x:Name="HeaderText"
-                   FontSize="18" FontWeight="SemiBold"
+                   FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="DescriptionText"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    Foreground="#aaa"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
 
         <!-- Backup list -->
         <TextBlock x:Name="ListLabelText"
-                   FontSize="11"
+                   FontSize="{StaticResource FontSizeCaption}"
                    Foreground="#888"
                    Margin="0,0,0,6"/>
         <ListBox x:Name="BackupsList"
@@ -83,17 +83,17 @@
                                            Foreground="#9bd99b"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Text="{Binding DateLabel}"
-                                           FontSize="13"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            FontWeight="SemiBold"
                                            Foreground="White"/>
                             </StackPanel>
                             <TextBlock Text="{Binding DetailLabel}"
-                                       FontSize="11"
+                                       FontSize="{StaticResource FontSizeCaption}"
                                        Foreground="#aaa"/>
                         </StackPanel>
                         <TextBlock Grid.Column="1"
                                    Text="{Binding SizeLabel}"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    FontWeight="SemiBold"
                                    Foreground="#ccc"
                                    VerticalAlignment="Center"/>
@@ -110,7 +110,7 @@
                 Padding="12,8"
                 Margin="0,0,0,16">
             <TextBlock x:Name="ReassuranceText"
-                       FontSize="11"
+                       FontSize="{StaticResource FontSizeCaption}"
                        Foreground="#9bb8d9"
                        TextWrapping="Wrap"/>
         </Border>

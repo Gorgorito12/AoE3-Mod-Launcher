@@ -28,7 +28,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="11,8"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -64,7 +64,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="11,8"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="PasswordBox">
@@ -103,7 +103,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="11,7"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="Height" Value="38"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -243,7 +243,7 @@
 
         <Style x:Key="LabelText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
         </Style>
@@ -251,7 +251,7 @@
         <!-- Custom CheckBox: square + a blue tint on check. -->
         <Style x:Key="MpCheckBox" TargetType="CheckBox">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -331,7 +331,7 @@
                 <TextBlock Grid.Column="1"
                            x:Name="TitleText"
                            Foreground="{DynamicResource TextPrimary}"
-                           FontSize="17"
+                           FontSize="{StaticResource FontSizeHeading}"
                            FontWeight="Bold"
                            VerticalAlignment="Center"
                            MouseLeftButtonDown="HeaderDrag_MouseDown"/>
@@ -447,7 +447,7 @@
 
                 <TextBlock x:Name="ErrorText"
                            Foreground="{DynamicResource MpStatusOffline}"
-                           FontSize="11"
+                           FontSize="{StaticResource FontSizeCaption}"
                            TextWrapping="Wrap"
                            Margin="0,12,0,0"
                            Visibility="Collapsed"/>
@@ -479,12 +479,12 @@
                                        Margin="0,0,6,0"/>
                             <TextBlock Text="Advanced details"
                                        Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="12"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="HashLabel"
                                        Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="11"
+                                       FontSize="{StaticResource FontSizeCaption}"
                                        VerticalAlignment="Center"
                                        Margin="6,0,0,0"/>
                         </StackPanel>
@@ -492,7 +492,7 @@
                     <TextBlock x:Name="HashText"
                                Foreground="{DynamicResource TextSecondary}"
                                FontFamily="Consolas, Courier New, monospace"
-                               FontSize="11"
+                               FontSize="{StaticResource FontSizeCaption}"
                                TextTrimming="CharacterEllipsis"
                                Margin="14,6,0,4"
                                Visibility="Collapsed"/>

@@ -67,7 +67,7 @@
              to align with the box's label text. -->
         <Style x:Key="HintText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#888"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="22,1,0,8"/>
         </Style>
@@ -139,7 +139,7 @@
                 <TextBlock Grid.Column="0"
                            x:Name="TitleText"
                            FontFamily="{DynamicResource DisplayFont}"
-                           FontSize="15"
+                           FontSize="{StaticResource FontSizeHeading}"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource AccentBrush}"
                            VerticalAlignment="Center"/>
@@ -156,7 +156,7 @@
         <!-- =========================================================
              SIDEBAR + TAB PANELS
              ========================================================= -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" x:Name="SettingsContentRoot">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="200"/>
                 <ColumnDefinition Width="*"/>
@@ -179,7 +179,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabGeneralLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -193,7 +193,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabInterfaceLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -207,7 +207,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabUpdatesLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -221,7 +221,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabCatalogLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -235,7 +235,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabTranslationsLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -249,7 +249,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabMaintenanceLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -277,7 +277,7 @@
                             <TextBlock Grid.Column="0"
                                        x:Name="LanguageLabel"
                                        Foreground="#ddd"
-                                       FontSize="12"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                             <ComboBox Grid.Column="1"
                                       x:Name="LanguageCombo"
@@ -318,7 +318,7 @@
                              labels can follow the language switch. -->
                         <TextBlock x:Name="RadAsstLabelText"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,6"/>
                         <ComboBox x:Name="RadAsstCombo"
@@ -340,7 +340,7 @@
                     <StackPanel x:Name="InterfacePanel" Visibility="Collapsed">
                         <TextBlock x:Name="TabOrderLabel"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,4"/>
                         <TextBlock x:Name="TabOrderHint"
@@ -378,7 +378,7 @@
                                  HorizontalAlignment="Left"/>
                         <TextBlock x:Name="CatalogInvalidText"
                                    Foreground="{DynamicResource ErrorBrush}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    Margin="22,2,0,4"
                                    Visibility="Collapsed"/>
                         <RadioButton x:Name="CatalogDisabledRadio"
@@ -418,12 +418,12 @@
                     <StackPanel x:Name="TranslationsPanel" Visibility="Collapsed">
                         <TextBlock x:Name="TranslationsHeader"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="14"
+                                   FontSize="{StaticResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <TextBlock x:Name="TranslationsDescription"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="12"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,16"/>
                         <Button x:Name="OpenPackagerButton"

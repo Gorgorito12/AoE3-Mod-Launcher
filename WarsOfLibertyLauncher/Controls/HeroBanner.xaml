@@ -7,7 +7,7 @@
          BorderSubtle, etc. are now warm-gold tones via Colors.xaml). -->
     <Border x:Name="ModBannerHost"
             Height="140"
-            CornerRadius="8"
+            CornerRadius="{StaticResource RadiusMd}"
             BorderBrush="{DynamicResource BorderSubtle}"
             BorderThickness="1"
             ClipToBounds="True">
@@ -20,11 +20,11 @@
                         Margin="14,0,14,12"
                         VerticalAlignment="Bottom">
                 <TextBlock x:Name="TitleText"
-                           FontSize="18"
+                           FontSize="{StaticResource FontSizeHeading}"
                            FontWeight="Bold"
                            Foreground="White"/>
                 <TextBlock x:Name="SubtitleText"
-                           FontSize="11"
+                           FontSize="{StaticResource FontSizeCaption}"
                            Foreground="#ccc"
                            Margin="0,2,0,0"/>
             </StackPanel>

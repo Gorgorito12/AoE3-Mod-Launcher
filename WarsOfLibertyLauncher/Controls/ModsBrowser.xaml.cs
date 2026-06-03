@@ -124,9 +124,29 @@ public partial class ModsBrowser : UserControl
     private ModProfile? _selectedProfile;
     private readonly Dictionary<string, Border> _rowsByProfileId = new(StringComparer.OrdinalIgnoreCase);
 
+    // Typography tokens from the App.xaml scale, resolved once. Cached
+    // because BuildRow reads several per row and the values are app-lifetime
+    // constants — same pattern the row builders use for the theme brushes.
+    private readonly double _fsCaption;
+    private readonly double _fsBody;
+    private readonly double _fsBodyStrong;
+
     public ModsBrowser()
     {
         InitializeComponent();
+
+        _fsCaption    = (double)FindResource("FontSizeCaption");
+        _fsBody       = (double)FindResource("FontSizeBody");
+        _fsBodyStrong = (double)FindResource("FontSizeBodyStrong");
+
+        // Window-size scaling (Controls/UiScale.cs): the whole Workshop content
+        // shrinks to fit windows smaller than MainWindow's default footprint
+        // (ref 1100x604 → a default-sized window is exactly 1.0, no regression).
+        // sizeSource is the UserControl itself: its size is set by the content
+        // host and is NOT affected by the LayoutTransform on the content root,
+        // so there's no measure feedback loop.
+        if (Content is FrameworkElement modsRoot)
+            UiScale.Attach(modsRoot, this, 1100, 604);
 
         // Search.
         SearchBox.TextChanged += (_, _) =>
@@ -460,6 +480,7 @@ public partial class ModsBrowser : UserControl
             iconChild = new TextBlock
             {
                 Text = string.IsNullOrEmpty(profile.DisplayName) ? "?" : profile.DisplayName[..1].ToUpperInvariant(),
+                // Disc-geometry, not a type-scale token — sized to fill the 48px circle.
                 FontSize = 18,
                 FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White,
@@ -482,7 +503,7 @@ public partial class ModsBrowser : UserControl
         var titleText = new TextBlock
         {
             Text = profile.DisplayName,
-            FontSize = 14,
+            FontSize = _fsBodyStrong,
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)FindResource("TextPrimary"),
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -490,17 +511,20 @@ public partial class ModsBrowser : UserControl
         var descText = new TextBlock
         {
             Text = ResolveDescription(profile, _uiLanguage),
-            FontSize = 11,
+            FontSize = _fsBody,
             Foreground = (Brush)FindResource("TextSecondary"),
             TextWrapping = TextWrapping.Wrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxHeight = 32,
+            // Sized for two lines at the body token (~37px at 14px) plus
+            // breathing room — keeps the second line's descenders from
+            // clipping. Bump this if FontSizeBody grows again.
+            MaxHeight = 42,
             Margin = new Thickness(0, 3, 0, 5),
         };
         var authorText = new TextBlock
         {
             Text = profile.Author ?? "",
-            FontSize = 10,
+            FontSize = _fsCaption,
             Foreground = (Brush)FindResource("TextSecondary"),
             Visibility = string.IsNullOrWhiteSpace(profile.Author) ? Visibility.Collapsed : Visibility.Visible,
         };
@@ -517,7 +541,7 @@ public partial class ModsBrowser : UserControl
         var versionText = new TextBlock
         {
             Text = FormatVersionLine(state),
-            FontSize = 11,
+            FontSize = _fsCaption,
             Foreground = (Brush)FindResource("TextPrimary"),
             HorizontalAlignment = HorizontalAlignment.Right,
             Visibility = string.IsNullOrEmpty(FormatVersionLine(state)) ? Visibility.Collapsed : Visibility.Visible,
@@ -552,7 +576,10 @@ public partial class ModsBrowser : UserControl
 
         var row = new Border
         {
-            CornerRadius = new CornerRadius(8),
+            // RadiusMd (matches the App.xaml geometry token; card rows align
+            // with every other card surface). The icon disc above keeps its
+            // own rounding — it's a tile, not a card.
+            CornerRadius = new CornerRadius(6),
             BorderThickness = new Thickness(1),
             BorderBrush = (Brush)FindResource("BorderSubtle"),
             Background = (Brush)FindResource("BgPanel"),
@@ -638,12 +665,12 @@ public partial class ModsBrowser : UserControl
         return new Border
         {
             Background = bg,
-            CornerRadius = new CornerRadius(3),
+            CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8, 3, 8, 3),
             Child = new TextBlock
             {
                 Text = label,
-                FontSize = 10,
+                FontSize = _fsCaption,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = fg,
             },
@@ -674,7 +701,7 @@ public partial class ModsBrowser : UserControl
                 BorderBrush = (Brush)FindResource("BorderSubtle"),
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(14, 5, 14, 5),
-                FontSize = 11,
+                FontSize = _fsCaption,
                 FontWeight = FontWeights.SemiBold,
                 Cursor = Cursors.Arrow,
                 IsEnabled = false,
@@ -694,7 +721,7 @@ public partial class ModsBrowser : UserControl
                 : (Brush)FindResource("CatalogBlue"),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(14, 5, 14, 5),
-            FontSize = 11,
+            FontSize = _fsCaption,
             FontWeight = FontWeights.SemiBold,
             Cursor = Cursors.Hand,
         };
@@ -823,14 +850,14 @@ public partial class ModsBrowser : UserControl
         sp.Children.Add(new TextBlock
         {
             Text = label,
-            FontSize = 10,
+            FontSize = _fsCaption,
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)FindResource("TextSecondary"),
         });
         sp.Children.Add(new TextBlock
         {
             Text = value,
-            FontSize = 12,
+            FontSize = _fsBody,
             Foreground = (Brush)FindResource("TextPrimary"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 0),
@@ -857,13 +884,13 @@ public partial class ModsBrowser : UserControl
                 Background = (Brush)FindResource("BgBase"),
                 BorderBrush = (Brush)FindResource("BorderSubtle"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(3),
+                CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(8, 2, 8, 2),
                 Margin = new Thickness(0, 0, 6, 6),
                 Child = new TextBlock
                 {
                     Text = key.ToUpperInvariant(),
-                    FontSize = 10,
+                    FontSize = _fsCaption,
                     FontWeight = FontWeights.SemiBold,
                     Foreground = (Brush)FindResource("TextSecondary"),
                 },

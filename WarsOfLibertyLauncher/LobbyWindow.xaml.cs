@@ -102,6 +102,14 @@ public partial class LobbyWindow : Window
     {
         InitializeComponent();
         _session = session;
+
+        // Window-size scaling (Controls/UiScale.cs): the lobby content (Row 1,
+        // below the fixed title bar) shrinks to fit smaller windows. sizeSource
+        // is the window root grid (window-sized, so the LayoutTransform on the
+        // content can't feed back into it); the title bar (Row 0) and the
+        // MpAlertOverlay host (LobbyRootGrid) stay at base scale. ref 900x600 ≈
+        // the default content footprint, so a default-sized window is 1.0.
+        UiScale.Attach(LobbyContentRoot, LobbyRootGrid, 900, 600);
     }
 
     // ------------------------------------------------------------------

@@ -99,7 +99,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="4">
+                                CornerRadius="{StaticResource RadiusSm}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                         </Border>
@@ -139,7 +139,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="4">
+                                CornerRadius="{StaticResource RadiusSm}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                         </Border>
@@ -199,7 +199,7 @@
                            x:Name="TitleText"
                            Text="Lobby"
                            FontFamily="{DynamicResource DisplayFont}"
-                           FontSize="15"
+                           FontSize="{StaticResource FontSizeSubtitle}"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource AccentBrush}"
                            VerticalAlignment="Center"/>
@@ -242,7 +242,7 @@
              (later children render later); their Visibility is
              flipped from ApplyMatchPhaseUi() in code-behind.
              ========================================================= -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" x:Name="LobbyContentRoot">
 
             <!-- =====================================================
                  LOBBY BODY — sub-header strip + 2-column body.
@@ -267,7 +267,7 @@
                         BorderBrush="{DynamicResource MpDivider}"
                         BorderThickness="0,0,0,1"
                         Margin="14,14,14,0"
-                        CornerRadius="6">
+                        CornerRadius="{StaticResource RadiusMd}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>   <!-- Blue icon square -->
@@ -295,7 +295,7 @@
                                     Margin="18,16,24,16">
                             <TextBlock x:Name="RoomTitleText"
                                        Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="20"
+                                       FontSize="{StaticResource FontSizeHeading}"
                                        FontWeight="Bold"
                                        TextTrimming="CharacterEllipsis"/>
                             <!-- RoomMetaText kept for compatibility
@@ -304,7 +304,7 @@
                                  with subtle colouring. -->
                             <TextBlock x:Name="RoomMetaText"
                                        Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="12"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        Margin="0,4,0,0"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
@@ -324,12 +324,12 @@
                                 <TextBlock x:Name="PlayersStatHeader"
                                            Text="PLAYERS"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="10"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,4"/>
                                 <TextBlock x:Name="RoomPlayersText"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="14"
+                                           FontSize="{StaticResource FontSizeBodyStrong}"
                                            FontWeight="SemiBold"/>
                             </StackPanel>
                             <!-- Connection latency = your internet RTT. Not a
@@ -339,26 +339,26 @@
                                 <TextBlock x:Name="RoomConnHeader"
                                            Text="CONNECTION"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="10"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,4"/>
                                 <TextBlock x:Name="RoomConnText"
                                            Text="…"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="14"
+                                           FontSize="{StaticResource FontSizeBodyStrong}"
                                            FontWeight="SemiBold"/>
                             </StackPanel>
                             <StackPanel>
                                 <TextBlock x:Name="RoomIdStatHeader"
                                            Text="ROOM ID"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="10"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,4"/>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock x:Name="RoomIdText"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="14"
+                                               FontSize="{StaticResource FontSizeBodyStrong}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"
                                                FontFamily="Consolas, Courier New, monospace"/>
@@ -368,7 +368,7 @@
                                             Width="26" Height="22"
                                             Padding="0"
                                             Margin="8,0,0,0"
-                                            FontSize="12"
+                                            FontSize="{StaticResource FontSizeBody}"
                                             Content="📋"
                                             VerticalAlignment="Center"
                                             ToolTip="Copy code"/>
@@ -399,7 +399,7 @@
                                    x:Name="PlayersListHeader"
                                    Text="PLAYERS"
                                    Foreground="{DynamicResource MpTableHeader}"
-                                   FontSize="10"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    FontWeight="SemiBold"
                                    Margin="2,0,0,10"/>
 
@@ -407,7 +407,7 @@
                                 Background="{DynamicResource MpSurface}"
                                 BorderBrush="{DynamicResource MpDivider}"
                                 BorderThickness="1"
-                                CornerRadius="6"
+                                CornerRadius="{StaticResource RadiusMd}"
                                 Padding="10,8"
                                 Margin="0,0,0,14">
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -426,20 +426,20 @@
                                 Background="{DynamicResource MpSurface}"
                                 BorderBrush="{DynamicResource MpDivider}"
                                 BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="14,12"
+                                CornerRadius="{StaticResource RadiusMd}"
+                                Padding="{StaticResource CardPadding}"
                                 Margin="0,0,0,14">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal"
                                             Margin="0,0,0,10">
                                     <TextBlock Text="ℹ "
                                                Foreground="{DynamicResource MpBlue}"
-                                               FontSize="11"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                VerticalAlignment="Center"/>
                                     <TextBlock x:Name="RoomInfoHeaderText"
                                                Text="ROOM INFO"
                                                Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="10"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
@@ -452,11 +452,11 @@
                                         <TextBlock x:Name="RoomModLabel"
                                                    Text="Mod"
                                                    Foreground="{DynamicResource TextSecondary}"
-                                                   FontSize="10"
+                                                   FontSize="{StaticResource FontSizeCaption}"
                                                    Margin="0,0,0,2"/>
                                         <TextBlock x:Name="RoomModText"
                                                    Foreground="{DynamicResource TextPrimary}"
-                                                   FontSize="12"
+                                                   FontSize="{StaticResource FontSizeBody}"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
@@ -464,12 +464,13 @@
                                         <TextBlock x:Name="RoomPasswordLabel"
                                                    Text="Password"
                                                    Foreground="{DynamicResource TextSecondary}"
-                                                   FontSize="10"
+                                                   FontSize="{StaticResource FontSizeCaption}"
                                                    Margin="0,0,0,2"/>
                                         <TextBlock x:Name="RoomPasswordText"
                                                    Foreground="{DynamicResource TextPrimary}"
-                                                   FontSize="12"
-                                                   FontWeight="SemiBold"/>
+                                                   FontSize="{StaticResource FontSizeBody}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
                                 </Grid>
                             </StackPanel>
@@ -488,7 +489,7 @@
                                     Style="{StaticResource MpPrimaryButton}"
                                     Padding="14,12"
                                     HorizontalContentAlignment="Center"
-                                    FontSize="13"
+                                    FontSize="{StaticResource FontSizeBody}"
                                     Margin="0,0,0,8"
                                     Visibility="Collapsed"/>
                             <Button x:Name="LeaveRoomButton"
@@ -496,7 +497,7 @@
                                     Style="{StaticResource MpDangerButton}"
                                     Padding="14,12"
                                     HorizontalContentAlignment="Center"
-                                    FontSize="13"/>
+                                    FontSize="{StaticResource FontSizeBody}"/>
                         </StackPanel>
                     </Grid>
 
@@ -505,7 +506,7 @@
                             Background="{DynamicResource MpSurface}"
                             BorderBrush="{DynamicResource MpDivider}"
                             BorderThickness="1"
-                            CornerRadius="6">
+                            CornerRadius="{StaticResource RadiusMd}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>   <!-- header -->
@@ -528,7 +529,7 @@
                                                x:Name="ChatHeaderText"
                                                Text="CHAT &amp; ACTIVITY"
                                                Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="10"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
@@ -552,7 +553,7 @@
                                        x:Name="ChatEmptyHint"
                                        Text="No messages yet — say hi!"
                                        Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="12"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        FontStyle="Italic"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
@@ -577,7 +578,7 @@
                                     Background="{DynamicResource MpBlueSubtle}"
                                     BorderBrush="{DynamicResource MpBlue}"
                                     BorderThickness="1"
-                                    CornerRadius="6"
+                                    CornerRadius="{StaticResource RadiusMd}"
                                     Margin="20,0,14,10"
                                     Padding="14,9"
                                     Visibility="Collapsed">
@@ -586,13 +587,13 @@
                                             VerticalAlignment="Center">
                                     <TextBlock Text="⏱"
                                                Foreground="{DynamicResource MpBlue}"
-                                               FontSize="16"
+                                               FontSize="{StaticResource FontSizeSubtitle}"
                                                VerticalAlignment="Center"
                                                Margin="0,0,10,0"/>
                                     <TextBlock x:Name="CountdownLabel"
                                                Text="Starting in"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="13"
+                                               FontSize="{StaticResource FontSizeBody}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <!-- Default "5" (not "3") so even the
@@ -601,7 +602,7 @@
                                     <TextBlock x:Name="CountdownNumber"
                                                Text="10"
                                                Foreground="{DynamicResource MpBlue}"
-                                               FontSize="22"
+                                               FontSize="{StaticResource FontSizeHeading}"
                                                FontWeight="Bold"
                                                VerticalAlignment="Center"
                                                Margin="10,0,0,0"/>
@@ -630,14 +631,14 @@
                                                  BorderBrush="{DynamicResource MpDivider}"
                                                  BorderThickness="1"
                                                  Padding="12,9"
-                                                 FontSize="12"
+                                                 FontSize="{StaticResource FontSizeBody}"
                                                  MaxLength="500"
                                                  KeyDown="ChatInputBox_KeyDown"
                                                  TextChanged="ChatInputBox_TextChanged"/>
                                         <TextBlock x:Name="ChatPlaceholderText"
                                                    Text="Type a message..."
                                                    Foreground="#777"
-                                                   FontSize="12"
+                                                   FontSize="{StaticResource FontSizeBody}"
                                                    FontStyle="Italic"
                                                    IsHitTestVisible="False"
                                                    VerticalAlignment="Center"
@@ -651,7 +652,7 @@
                                             Width="36" Height="36"
                                             Margin="6,0,0,0"
                                             Content="😊"
-                                            FontSize="14"
+                                            FontSize="{StaticResource FontSizeBodyStrong}"
                                             ToolTip="Insert emoji"/>
 
                                     <Button Grid.Column="2"
@@ -689,7 +690,7 @@
                             Background="{DynamicResource BgBase}"
                             BorderBrush="{DynamicResource MpDivider}"
                             BorderThickness="1"
-                            CornerRadius="6"
+                            CornerRadius="{StaticResource RadiusMd}"
                             Visibility="Collapsed">
                         <Grid Margin="16,16">
                             <Grid.RowDefinitions>
@@ -712,14 +713,14 @@
                                     <TextBlock x:Name="InGameTitleText"
                                                Text="GAME IN PROGRESS"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="16"
+                                               FontSize="{StaticResource FontSizeSubtitle}"
                                                FontWeight="Bold"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock x:Name="InGameModeText"
                                            Text="— Connected via P2P LAN"
                                            Foreground="{DynamicResource MpStatusOnline}"
-                                           FontSize="12"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis"
                                            Margin="0,4,0,0"/>
@@ -740,13 +741,13 @@
                                     <TextBlock x:Name="InGameMatchTimeHeader"
                                                Text="MATCH TIME"
                                                Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="10"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,4"/>
                                     <TextBlock x:Name="InGameMatchTimer"
                                                Text="00:00"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="17"
+                                               FontSize="{StaticResource FontSizeSubtitle}"
                                                FontFamily="Consolas, Courier New, monospace"
                                                FontWeight="SemiBold"/>
                                 </StackPanel>
@@ -754,13 +755,13 @@
                                     <TextBlock x:Name="InGameTrafficHeader"
                                                Text="TRAFFIC"
                                                Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="10"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,4"/>
                                     <TextBlock x:Name="InGameTrafficText"
                                                Text="0 KB"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="17"
+                                               FontSize="{StaticResource FontSizeSubtitle}"
                                                FontFamily="Consolas, Courier New, monospace"
                                                FontWeight="SemiBold"/>
                                 </StackPanel>
@@ -771,13 +772,13 @@
                                     <TextBlock x:Name="InGameConnectionHeader"
                                                Text="CONNECTION"
                                                Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="10"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,4"/>
                                     <TextBlock x:Name="InGameConnectionText"
                                                Text="—"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="17"
+                                               FontSize="{StaticResource FontSizeSubtitle}"
                                                FontFamily="Consolas, Courier New, monospace"
                                                FontWeight="SemiBold"/>
                                 </StackPanel>
@@ -785,13 +786,13 @@
                                     <TextBlock x:Name="InGameRoomHeader"
                                                Text="ROOM"
                                                Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="10"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,4"/>
                                     <TextBlock x:Name="InGameRoomText"
                                                Text=""
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="13"
+                                               FontSize="{StaticResource FontSizeBody}"
                                                FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
@@ -802,7 +803,7 @@
                                     Background="{DynamicResource MpSurface}"
                                     BorderBrush="{DynamicResource MpDivider}"
                                     BorderThickness="1"
-                                    CornerRadius="6"
+                                    CornerRadius="{StaticResource RadiusMd}"
                                     Padding="12,8">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <StackPanel x:Name="InGamePeersPanel"/>
@@ -819,7 +820,7 @@
                                     Padding="14,11"
                                     Margin="0,14,0,0"
                                     HorizontalContentAlignment="Center"
-                                    FontSize="13"
+                                    FontSize="{StaticResource FontSizeBody}"
                                     Content="⚠  Cancel game"/>
                         </Grid>
                     </Border>

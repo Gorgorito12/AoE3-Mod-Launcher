@@ -76,6 +76,13 @@ public partial class LauncherSettingsDialog : Window
         // this call is mainly to paint TabGeneralBtn's Tag="active"
         // accent stripe (the SidebarNavButton style reads Tag).
         SetActiveTab(TabGeneralBtn);
+
+        // Window-size scaling (Controls/UiScale.cs): the content area (Row 1,
+        // between the fixed header and the sticky footer) shrinks to fit smaller
+        // dialogs. sizeSource is the Window (window-sized → no feedback); the
+        // header and footer stay at base scale. ref ≈ the default footprint, so
+        // the default-sized dialog renders at 1.0.
+        UiScale.Attach(SettingsContentRoot, this, 800, 520);
     }
 
     /// <summary>
@@ -341,7 +348,7 @@ public partial class LauncherSettingsDialog : Window
             {
                 Text = (i + 1).ToString() + ".",
                 Foreground = (Brush)FindResource("TextSecondary"),
-                FontSize = 12,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0),
@@ -358,7 +365,7 @@ public partial class LauncherSettingsDialog : Window
             {
                 Text = TabDisplayName(id),
                 Foreground = (Brush)FindResource("TextPrimary"),
-                FontSize = 13,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
             });
@@ -369,7 +376,7 @@ public partial class LauncherSettingsDialog : Window
                 {
                     Text = "  " + Strings.Get("DlgLauncherSettingsTabOrderOpensFirst"),
                     Foreground = (Brush)FindResource("AccentBrush"),
-                    FontSize = 10,
+                    FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                     FontWeight = FontWeights.SemiBold,
                     VerticalAlignment = VerticalAlignment.Center,
                 });

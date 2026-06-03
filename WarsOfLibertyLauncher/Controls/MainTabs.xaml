@@ -60,7 +60,7 @@
                 <TextBlock x:Name="ChangelogText"
                            x:FieldModifier="public"
                            Foreground="#ccc"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            TextWrapping="Wrap"/>
             </ScrollViewer>
 
@@ -72,7 +72,7 @@
                 <TextBlock x:Name="HelpText"
                            x:FieldModifier="public"
                            Foreground="#ccc"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            TextWrapping="Wrap"/>
             </ScrollViewer>
         </Grid>

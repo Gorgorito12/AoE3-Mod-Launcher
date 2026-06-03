@@ -10,11 +10,11 @@
 
     <StackPanel Margin="24">
         <TextBlock x:Name="HeaderText"
-                   FontSize="18" FontWeight="SemiBold"
+                   FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="DescriptionText"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    Foreground="#aaa"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
@@ -25,7 +25,7 @@
                  BorderThickness="1"
                  BorderBrush="{DynamicResource BorderSubtle}"
                  Foreground="White"
-                 FontSize="13"
+                 FontSize="{StaticResource FontSizeBody}"
                  MaxHeight="220"
                  SelectionMode="Single"
                  Margin="0,0,0,12"
@@ -66,7 +66,7 @@
                 Click="BrowseManualButton_Click"/>
 
         <TextBlock x:Name="WarningText"
-                   FontSize="11"
+                   FontSize="{StaticResource FontSizeCaption}"
                    Foreground="{DynamicResource ErrorBrush}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,12"

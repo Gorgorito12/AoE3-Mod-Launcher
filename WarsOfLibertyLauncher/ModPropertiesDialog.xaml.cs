@@ -101,6 +101,12 @@ public partial class ModPropertiesDialog : Window
         LoadUserData();
         LoadLanguage();
         SetActiveTab(TabGeneralBtn);
+
+        // Window-size scaling (Controls/UiScale.cs): the content area (Row 1,
+        // below the fixed header) shrinks to fit smaller dialogs. sizeSource is
+        // the Window (window-sized → no feedback); the header stays at base
+        // scale. ref ≈ the default footprint, so the default dialog is 1.0.
+        UiScale.Attach(PropsContentRoot, this, 860, 540);
     }
 
     private void ApplyStrings()
@@ -372,15 +378,18 @@ public partial class ModPropertiesDialog : Window
 
     // -- Action handlers ----------------------------------------------------
     //
-    // Handlers that open ANOTHER surface (verify/repair progress strip on
-    // the main window, uninstall confirmation, path picker, backup/restore
-    // dialogs) close this dialog first so the Properties window doesn't
-    // cover the flow they launch. Handlers that only open Explorer/Notepad
-    // (Open folder, Open AoE3 folder, Open user-data folder, View logs),
-    // the website/language handlers, and "Check for updates" do NOT close —
-    // there's nothing for them to land on, so closing just left the user
-    // confused about whether anything happened. Check-for-updates shows its
-    // result inline instead.
+    // Only handlers whose flow lands on the MAIN WINDOW close this dialog:
+    // Verify / Repair (their progress runs on the main-window progress strip,
+    // which a non-modal Properties window would otherwise cover) and Uninstall
+    // (the mod is gone afterwards, so the open view would be stale). Everything
+    // else STAYS OPEN: the path pickers and the backup/restore dialogs are
+    // modals that appear on top with nothing to uncover, so closing only
+    // disoriented the user — instead those handlers refresh the displayed
+    // paths/state in place via RefreshData() when the modal returns. Handlers
+    // that just open Explorer/Notepad (Open folder, Open AoE3 folder, Open
+    // user-data folder, View logs), the website/language handlers, and "Check
+    // for updates" never closed (nothing to land on); check-for-updates shows
+    // its result inline.
     //
     // None of these set DialogResult: the dialog is shown non-modally
     // via Show() from MainWindow, and setting DialogResult outside of
@@ -388,6 +397,21 @@ public partial class ModPropertiesDialog : Window
     // read DialogResult here anyway — the post-close refresh
     // (RefreshIdlePanel + RefreshActiveModBanner) runs on the Closed
     // event regardless of how the dialog was dismissed.
+
+    /// <summary>
+    /// Re-reads config and repaints the data-bearing labels (General /
+    /// Local Files / User Data) without disturbing the active tab or the
+    /// language combo. Called by the stay-open action handlers after their
+    /// modal returns, and by MainWindow once an async folder re-detection
+    /// completes, so an open Properties window reflects the new paths /
+    /// version / user-data state in place.
+    /// </summary>
+    public void RefreshData()
+    {
+        LoadGeneral();
+        LoadLocalFiles();
+        LoadUserData();
+    }
 
     private void ValWebsite_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
@@ -486,14 +510,18 @@ public partial class ModPropertiesDialog : Window
 
     private void ChangeModFolderBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        // Stays open: the folder picker is a modal that lands on top. The
+        // new path is written to config before the callback's await, so the
+        // immediate RefreshData() shows it; the re-detected version catches
+        // up via MainWindow's post-CheckAsync RefreshData call.
         _changeModFolder?.Invoke();
+        RefreshData();
     }
 
     private void ChangeAoE3FolderBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
         _changeAoE3Folder?.Invoke();
+        RefreshData();
     }
 
     private void VerifyBtn_Click(object sender, RoutedEventArgs e)
@@ -528,14 +556,17 @@ public partial class ModPropertiesDialog : Window
 
     private void CreateBackupBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        // Stays open: the backup confirmation/MessageBox is modal and lands
+        // on top. The callback is synchronous, so RefreshData() afterwards
+        // sees the final user-data state.
         _createBackup?.Invoke();
+        RefreshData();
     }
 
     private void RestoreBackupBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
         _restoreBackup?.Invoke();
+        RefreshData();
     }
 
     private void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

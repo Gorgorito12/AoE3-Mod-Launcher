@@ -264,6 +264,14 @@ public partial class MultiplayerTab : UserControl
     {
         InitializeComponent();
         ApplyStrings();
+
+        // Window-size scaling for the whole Multiplayer surface (Controls/UiScale.cs).
+        // sizeSource = this UserControl (host-sized, transform-independent → no
+        // feedback). A LayoutTransform makes the scaled root still fill its slot,
+        // so the MpAlertOverlay scrim injected into the root keeps covering the
+        // full tab.
+        if (Content is FrameworkElement mpRoot)
+            UiScale.Attach(mpRoot, this, 1100, 604);
         // Initial Radmin banner render (state poll + paint). The timer
         // starts ticking only once IsVisible flips to true via the
         // OnVisibleChangedTabGate hook installed by Attach().
@@ -1338,7 +1346,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = Strings.Get("MpRoomSlotOpen"),
             Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             FontStyle = FontStyles.Italic,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -1420,7 +1428,7 @@ public partial class MultiplayerTab : UserControl
                 {
                     Text = initialText,
                     Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                    FontSize = 12,
+                    FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -1433,7 +1441,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = initialText,
                 Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                FontSize = 12,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -1450,7 +1458,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = m.Login,
             Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
@@ -1508,7 +1516,7 @@ public partial class MultiplayerTab : UserControl
             Background = background,
             BorderBrush = foreground,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(3),
+            CornerRadius = new CornerRadius(4),
             Padding = new Thickness(7, 2, 7, 2),
             Margin = new Thickness(4, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -1516,7 +1524,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = text,
                 Foreground = foreground,
-                FontSize = 10,
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 FontWeight = FontWeights.SemiBold,
             },
         };
@@ -1610,7 +1618,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = timestamp.ToString("h:mm tt"),
             Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-            FontSize = 11,
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             VerticalAlignment = VerticalAlignment.Center,
             Opacity = 0.75,
         }, 0));
@@ -1622,7 +1630,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = "[System]",
                 Foreground = (Brush)Application.Current.FindResource("MpBlue"),
-                FontSize = 12,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
             }, 1));
@@ -1670,7 +1678,7 @@ public partial class MultiplayerTab : UserControl
                             ? authorLogin.Substring(0, 1).ToUpperInvariant()
                             : "?",
                         Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                        FontSize = 10,
+                        FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                         FontWeight = FontWeights.Bold,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Center,
@@ -1685,7 +1693,7 @@ public partial class MultiplayerTab : UserControl
                         ? authorLogin.Substring(0, 1).ToUpperInvariant()
                         : "?",
                     Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                    FontSize = 10,
+                    FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -1696,7 +1704,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = (authorLogin ?? "?") + ":",
                 Foreground = (Brush)Application.Current.FindResource("MpBlue"),
-                FontSize = 12,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1718,7 +1726,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = body,
             Foreground = bodyBrush,
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(14, 0, 0, 0),   // small gap after the name
@@ -1746,7 +1754,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = text,
             Foreground = color,
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 1, 0, 1),
         });
@@ -2486,14 +2494,14 @@ public partial class MultiplayerTab : UserControl
             Text = label,
             Foreground = color,
             FontWeight = FontWeights.Bold,
-            FontSize = 13,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             Margin = new Thickness(0, 0, 8, 0),
         });
         header.Children.Add(new TextBlock
         {
             Text = $"{row.ModId} · {row.MapName ?? "—"}",
             Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
-            FontSize = 13,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
         });
         left.Children.Add(header);
 
@@ -2508,7 +2516,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = meta,
             Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-            FontSize = 11,
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             Margin = new Thickness(0, 2, 0, 0),
         });
 
@@ -2990,7 +2998,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = body,
                 Foreground = textPrimary,
-                FontSize = 12.5,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 TextWrapping = TextWrapping.Wrap,
             },
         };
@@ -3020,7 +3028,7 @@ public partial class MultiplayerTab : UserControl
                 Text = Monogram(login),
                 Foreground = textSecondary,
                 FontWeight = FontWeights.Bold,
-                FontSize = 12,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             });
@@ -3059,7 +3067,7 @@ public partial class MultiplayerTab : UserControl
                 Text = string.IsNullOrWhiteSpace(login) ? "—" : login,
                 Foreground = textPrimary,
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 12.5,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 VerticalAlignment = VerticalAlignment.Center,
             });
             if (atMs > 0)
@@ -3068,7 +3076,7 @@ public partial class MultiplayerTab : UserControl
                 {
                     Text = FormatChatTime(atMs),
                     Foreground = textSecondary,
-                    FontSize = 10.5,
+                    FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                     Margin = new Thickness(8, 1, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                 });
@@ -3258,6 +3266,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = "★",
                 Foreground = (Brush)Application.Current.FindResource("AccentBrush"),
+                // Mod-icon fallback glyph — sized to the icon slot, not a type token.
                 FontSize = 16,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0),
@@ -3268,7 +3277,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = lobby.Title,
             Foreground = textPrimary,
-            FontSize = 14,
+            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
@@ -3326,7 +3335,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = Monogram(hostName),
                 Foreground = textSecondary,
-                FontSize = 11,
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -3336,7 +3345,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = hostName,
             Foreground = textPrimary,
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -3348,7 +3357,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = $"👤 {lobby.CurrentPlayers} / {lobby.MaxPlayers}",
             Foreground = textPrimary,
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(playersCell, 2);
@@ -3442,7 +3451,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = text,
             Foreground = fg,
-            FontSize = 10.5,
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             FontWeight = FontWeights.SemiBold,
         },
     };
@@ -3527,7 +3536,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = label,
                 Foreground = fg,
-                FontSize = 10.5,
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 FontWeight = FontWeights.SemiBold,
             },
         };
@@ -3588,7 +3597,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = "—",
                 Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                FontSize = 12,
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 VerticalAlignment = VerticalAlignment.Center,
             });
             return;
@@ -3605,14 +3614,14 @@ public partial class MultiplayerTab : UserControl
         {
             Text = "▂▄▆ ",
             Foreground = brush,
-            FontSize = 11,
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             VerticalAlignment = VerticalAlignment.Center,
         });
         panel.Children.Add(new TextBlock
         {
             Text = $"{(int)rtt} ms",
             Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             VerticalAlignment = VerticalAlignment.Center,
         });
     }
@@ -3651,7 +3660,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = "🔒",
                 Foreground = (Brush)Application.Current.FindResource("MpStatusInGame"),
-                FontSize = 11,
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 6, 0),
             });
@@ -3671,7 +3680,7 @@ public partial class MultiplayerTab : UserControl
             Text = label,
             Foreground = (Brush)Application.Current.FindResource(
                 inGame ? "MpStatusInGame" : "TextPrimary"),
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             FontWeight = inGame ? FontWeights.SemiBold : FontWeights.Normal,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -4659,7 +4668,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = Strings.Get("MpInGameWaitingPeers"),
                 Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                FontSize = 11,
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 FontStyle = FontStyles.Italic,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 12, 0, 0),
@@ -4748,7 +4757,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = login,
             Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -4770,7 +4779,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = state,
             Foreground = stateBrush,
-            FontSize = 11,
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -4782,7 +4791,7 @@ public partial class MultiplayerTab : UserControl
             Text = isSelf ? "—" : (rttMs > 0 ? $"{(int)rttMs} ms" : "…"),
             Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
             FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
-            FontSize = 11,
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(rttTb, 2);
@@ -4793,7 +4802,7 @@ public partial class MultiplayerTab : UserControl
             Text = $"↑ {FormatBytes(bytesOut)}   ↓ {FormatBytes(bytesIn)}",
             Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
             FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
-            FontSize = 11,
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(bytesTb, 3);

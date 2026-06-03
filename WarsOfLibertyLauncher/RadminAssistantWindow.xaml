@@ -56,13 +56,13 @@
         </Style>
         <Style x:Key="StepTitle" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
             <Setter Property="Margin" Value="0,0,0,3"/>
         </Style>
         <Style x:Key="StepBody" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
@@ -114,12 +114,12 @@
                     <StackPanel Grid.Column="0" Margin="16,8,8,8" VerticalAlignment="Center">
                         <TextBlock x:Name="HeaderTitleText"
                                    FontFamily="{DynamicResource DisplayFont}"
-                                   FontSize="14"
+                                   FontSize="{StaticResource FontSizeHeading}"
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource AccentBrush}"/>
                         <TextBlock x:Name="HeaderSubtitleText"
                                    Foreground="{DynamicResource Secondary}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    Margin="0,2,0,0"/>
                     </StackPanel>
                     <Button Grid.Column="1"
@@ -216,7 +216,7 @@
                                     <TextBlock x:Name="NetworkNameBox"
                                                Foreground="{DynamicResource SecondaryFixed}"
                                                FontFamily="Consolas"
-                                               FontSize="11"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                TextTrimming="CharacterEllipsis"/>
                                 </Border>
                                 <Button Grid.Column="1"
@@ -270,7 +270,7 @@
                     <CheckBox Grid.Column="0"
                               x:Name="DontShowAgainCheck"
                               Foreground="{DynamicResource Secondary}"
-                              FontSize="11"
+                              FontSize="{StaticResource FontSizeCaption}"
                               VerticalAlignment="Center"/>
                     <Button Grid.Column="1"
                             x:Name="CloseBtn"

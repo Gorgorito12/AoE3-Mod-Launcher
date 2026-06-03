@@ -4,8 +4,8 @@
     <Border Background="{DynamicResource BgPanel}"
             BorderBrush="{DynamicResource BorderSubtle}"
             BorderThickness="1"
-            CornerRadius="6"
-            Padding="14,12">
+            CornerRadius="{StaticResource RadiusMd}"
+            Padding="{StaticResource CardPadding}">
         <StackPanel>
             <!-- Estado row -->
             <Grid>
@@ -25,12 +25,12 @@
                 <TextBlock Grid.Column="1"
                            Text="Estado:"
                            Foreground="#888"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2"
                            x:Name="StatusValueText"
                            Text="—"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource SuccessBrush}"
                            VerticalAlignment="Center"/>
@@ -53,13 +53,13 @@
                 <TextBlock Grid.Column="1"
                            x:Name="StatusInstalledLabel"
                            Foreground="#888"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2"
                            x:Name="CurrentVersionText"
                            Text="—"
                            Foreground="White"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
             </Grid>
@@ -81,13 +81,13 @@
                 <TextBlock Grid.Column="1"
                            x:Name="StatusLatestLabel"
                            Foreground="#888"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2"
                            x:Name="LatestVersionText"
                            Text="—"
                            Foreground="White"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
             </Grid>
@@ -112,7 +112,7 @@
                 <TextBlock Grid.Column="1"
                            x:Name="AoE3MissingLabel"
                            Foreground="{DynamicResource ErrorBrush}"
-                           FontSize="11"
+                           FontSize="{StaticResource FontSizeCaption}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            TextWrapping="Wrap"/>
@@ -121,7 +121,7 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="{DynamicResource InfoBrush}"
-                        FontSize="11"
+                        FontSize="{StaticResource FontSizeCaption}"
                         FontWeight="SemiBold"
                         Cursor="Hand"
                         Padding="6,2"

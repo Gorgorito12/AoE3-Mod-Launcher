@@ -136,14 +136,21 @@ public partial class MainWindow : Window
         StateChanged += (_, _) => SyncMaximizeGlyph();
         Loaded += (_, _) => SyncMaximizeGlyph();
 
-        // Hero block scales with the window — see UpdateHeroScale. Hooked to
-        // PlayView.SizeChanged (not the window's) so it also re-fires when the
-        // dashboard tab is re-shown: switching away collapses PlayView to a
-        // 0-size (guarded no-op), and switching back grows it from 0 to its
-        // real size — a size change that recomputes the scale even though the
-        // window itself never resized. The Loaded pass sizes the first paint.
-        PlayView.SizeChanged += (_, _) => UpdateHeroScale();
-        Loaded += (_, _) => UpdateHeroScale();
+        // Window-size UI scaling (Controls/UiScale.cs). The hero keeps its OWN
+        // render transform pinned bottom-left over its full-bleed background
+        // (Kind.Render, origin 0,1) and its hand-tuned 1500x760 reference, so
+        // its behaviour is byte-for-byte what it was before the shared scaler.
+        // Hooked to PlayView.SizeChanged (not the window's) so it re-fires when
+        // the dashboard tab is re-shown: switching away collapses PlayView to a
+        // 0-size (guarded no-op), switching back grows it from 0 — a size change
+        // even though the window itself never resized.
+        UiScale.Attach(HeroContentGrid, PlayView, 1500, 760,
+            UiScale.Kind.Render, new System.Windows.Point(0, 1));
+        // Publish the general content factor (reference = the default content
+        // footprint, so a default-sized window resolves to 1.0) for the code-
+        // built brand / mod-switch popups, which live in their own top-level
+        // visual tree and can't ride a content-root transform.
+        UiScale.Track(ContentHost, 1100, 604);
 
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
@@ -580,14 +587,14 @@ public partial class MainWindow : Window
         var titleText = new System.Windows.Controls.TextBlock
         {
             Text = profile.DisplayName,
-            FontSize = 14,
+            FontSize = (double)FindResource("FontSizeBodyStrong"),
             FontWeight = FontWeights.SemiBold,
             Foreground = System.Windows.Media.Brushes.White,
         };
         var stateText = new System.Windows.Controls.TextBlock
         {
             Text = ProbeInstalledState(profile),
-            FontSize = 10,
+            FontSize = (double)FindResource("FontSizeCaption"),
             Foreground = SafeBrush(isActive ? profile.AccentColor : "#888", "#888"),
             Margin = new Thickness(0, 1, 0, 0),
         };
@@ -1860,6 +1867,8 @@ public partial class MainWindow : Window
         DiagnosticLog.Write($"User manually set AoE3 path: {resolvedExe}");
 
         RefreshIdlePanel();
+        // Keep an open Mod Properties window in sync with the new AoE3 path.
+        _modPropertiesDialog?.RefreshData();
         SetStatus(Strings.Get("StatusAoE3Configured"));
     }
 
@@ -2407,7 +2416,7 @@ public partial class MainWindow : Window
         stack.Children.Add(new System.Windows.Controls.TextBlock
         {
             Text = title,
-            FontSize = 15,
+            FontSize = (double)FindResource("FontSizeSubtitle"),
             FontWeight = FontWeights.SemiBold,
             Foreground = (System.Windows.Media.Brush)FindResource("TextPrimary"),
             TextWrapping = TextWrapping.Wrap,
@@ -2419,7 +2428,7 @@ public partial class MainWindow : Window
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = when,
-                FontSize = 10,
+                FontSize = (double)FindResource("FontSizeCaption"),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSecondary"),
                 Margin = new Thickness(0, 2, 0, 6),
             });
@@ -2430,7 +2439,7 @@ public partial class MainWindow : Window
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = body,
-                FontSize = 12,
+                FontSize = (double)FindResource("FontSizeBody"),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextPrimary"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 4),
@@ -2449,7 +2458,7 @@ public partial class MainWindow : Window
                 Background = System.Windows.Media.Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Foreground = (System.Windows.Media.Brush)FindResource("InfoBrush"),
-                FontSize = 11,
+                FontSize = (double)FindResource("FontSizeCaption"),
                 FontWeight = FontWeights.SemiBold,
                 Cursor = System.Windows.Input.Cursors.Hand,
                 Padding = new Thickness(0, 4, 0, 0),
@@ -3673,7 +3682,7 @@ public partial class MainWindow : Window
 
         var content = new System.Windows.Controls.StackPanel();
         border.Child = content;
-        ApplyAntiBlur(border);
+        ApplyPopupScale(border);
         popup.Child = border;
 
         // Header — same dorado caption treatment as the other
@@ -3682,7 +3691,7 @@ public partial class MainWindow : Window
         {
             Text = Strings.Get("BrandMenuTitle"),
             FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
-            FontSize = 11,
+            FontSize = (double)FindResource("FontSizeCaption"),
             FontWeight = FontWeights.SemiBold,
             Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
             Margin = new Thickness(8, 4, 8, 8),
@@ -3785,83 +3794,12 @@ public partial class MainWindow : Window
     }
 
 
-    /// <summary>
-    /// Scale the cinema dashboard's hero block (title / description / action
-    /// row / progress strip — one bottom-left-anchored Grid wrapped in
-    /// <c>HeroScaleTransform</c>) proportionally with the window size.
-    ///
-    /// The scale is the live content footprint (<see cref="PlayView"/>'s
-    /// ActualWidth/Height) over a FIXED reference footprint
-    /// (<see cref="HeroRefWidth"/> x <see cref="HeroRefHeight"/> — the content
-    /// area of a maximized window on a ~1600x900 screen). So the hero renders at
-    /// 1:1 on a 1600x900-or-larger screen (every Full-HD and bigger monitor
-    /// included) and shrinks gently on anything smaller — a 1366x768 laptop
-    /// lands near 0.82 — instead of always snapping to 1:1 when maximized
-    /// regardless of resolution. (The old reference WAS the device's own work
-    /// area, so maximized was always ~1.0 and the text looked oversized on
-    /// small laptops; the fixed reference is the fix.)
-    ///
-    /// Capped at 1.0 so it never grows past its 1:1 design size on larger monitors
-    /// (those stay visually identical to before), and floored at
-    /// <see cref="HeroMinScale"/> so the smallest screens still render legible
-    /// text. ActualWidth/Height and the reference are both in WPF device-
-    /// independent units, so the ratio stays correct under display scaling
-    /// (125% / 150% DPI).
-    /// </summary>
-    private const double HeroMinScale = 0.65;
-
-    /// <summary>
-    /// Reference footprint the hero is tuned against: the content area of a
-    /// maximized window on a ~1600x900 screen (work area minus the 96 px
-    /// title-bar + nav-strip chrome, minus a typical taskbar). Screens at or
-    /// above this size render the hero at 1:1; smaller ones scale down. Raise
-    /// these to shrink the hero on more screens, lower them to shrink on fewer.
-    /// </summary>
-    private const double HeroRefWidth = 1600;
-    private const double HeroRefHeight = 760;
-
-    private void UpdateHeroScale()
-    {
-        if (HeroScaleTransform == null || PlayView == null) return;
-
-        double availW = PlayView.ActualWidth;
-        double availH = PlayView.ActualHeight;
-        if (availW <= 0 || availH <= 0) return;
-
-        // Scale = live content footprint over the FIXED reference
-        // (HeroRefWidth x HeroRefHeight ≈ a 1600x900 screen), so the hero
-        // auto-fits the resolution: 1:1 on a 1600x900-or-larger screen, smaller
-        // on anything below. Using a fixed reference (not the device's own work
-        // area) is what makes a maximized small laptop shrink the text instead
-        // of snapping to 1:1.
-        double scale = Math.Min(availW / HeroRefWidth, availH / HeroRefHeight);
-        scale = Math.Min(scale, 1.0);
-        scale = Math.Max(scale, HeroMinScale);
-
-        HeroScaleTransform.ScaleX = scale;
-        HeroScaleTransform.ScaleY = scale;
-
-        // Keep the scaled text crisp. The app-wide HiDPI setup renders text in
-        // TextFormattingMode=Display (pixel-snapped) + Fixed hinting, which is
-        // razor-sharp at 1:1 but turns blurry once the ScaleTransform shrinks
-        // the glyphs (they're rasterised for the pre-transform pixel grid, then
-        // squashed). When we're actually scaling, flip this subtree to Ideal
-        // formatting + Animated hinting — WPF's mode for text under a transform,
-        // which re-renders smoothly at the effective size — and drop ClearType
-        // (its sub-pixel fringes misalign under a non-integer scale). At exactly
-        // 1.0 (maximized) restore the Display/ClearType/Fixed trio so the full-
-        // size hero matches the rest of the launcher's pixel-crisp text.
-        bool scaled = scale < 0.999;
-        System.Windows.Media.TextOptions.SetTextFormattingMode(HeroContentGrid,
-            scaled ? System.Windows.Media.TextFormattingMode.Ideal
-                   : System.Windows.Media.TextFormattingMode.Display);
-        System.Windows.Media.TextOptions.SetTextRenderingMode(HeroContentGrid,
-            scaled ? System.Windows.Media.TextRenderingMode.Grayscale
-                   : System.Windows.Media.TextRenderingMode.ClearType);
-        System.Windows.Media.TextOptions.SetTextHintingMode(HeroContentGrid,
-            scaled ? System.Windows.Media.TextHintingMode.Animated
-                   : System.Windows.Media.TextHintingMode.Fixed);
-    }
+    // The dashboard hero's window-size scaling moved to the shared scaler
+    // (Controls/UiScale.cs): see the UiScale.Attach(HeroContentGrid, PlayView,
+    // 1500, 760, Kind.Render, (0,1)) call in the constructor. The reference,
+    // [0.82, 1.0] band, bottom-left render-pin and the Display<->Ideal text
+    // crispness toggle are all preserved there, so the hero looks identical;
+    // the rest of the UI now rides the same scaler (Kind.Layout) per view.
 
 
     // -- Maximize-bounds fix (WM_GETMINMAXINFO) -----------------------------
@@ -4033,7 +3971,7 @@ public partial class MainWindow : Window
         {
             Text = label ?? "",
             FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
-            FontSize = 13,
+            FontSize = (double)FindResource("FontSizeBody"),
             FontWeight = activeAccent ? FontWeights.Bold : FontWeights.Medium,
             Foreground = labelBrush,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -4043,7 +3981,7 @@ public partial class MainWindow : Window
             labelStack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = subtitle,
-                FontSize = 10,
+                FontSize = (double)FindResource("FontSizeCaption"),
                 FontWeight = FontWeights.Normal,
                 // Slightly dimmed cool tone — present but recedes
                 // behind the main label.
@@ -4196,15 +4134,23 @@ public partial class MainWindow : Window
     /// + ClearType + Fixed hinting → glyphs align to pixel and look
     /// crisp at the small popup font sizes (10–13pt).
     /// </summary>
-    private static void ApplyAntiBlur(System.Windows.UIElement element)
+    /// <summary>
+    /// Crispness + window-size scaling for the code-built popups (brand menu,
+    /// mod-switch). They live in their own top-level visual tree, out of reach
+    /// of the per-view content-root transform, so they read
+    /// <see cref="UiScale.Current"/> to match the shell. At 1.0 (the default
+    /// window) this is an identity transform + the Display/ClearType/Fixed trio
+    /// — identical to the old anti-blur pass; below 1.0 it shrinks the popup and
+    /// flips to the Ideal/Grayscale/Animated text mode WPF uses under a transform.
+    /// </summary>
+    private static void ApplyPopupScale(System.Windows.FrameworkElement element)
     {
         if (element == null) return;
-        System.Windows.Media.TextOptions.SetTextFormattingMode(
-            element, System.Windows.Media.TextFormattingMode.Display);
-        System.Windows.Media.TextOptions.SetTextRenderingMode(
-            element, System.Windows.Media.TextRenderingMode.ClearType);
-        System.Windows.Media.TextOptions.SetTextHintingMode(
-            element, System.Windows.Media.TextHintingMode.Fixed);
+        double s = UiScale.Current;
+        element.LayoutTransform = s < 0.999
+            ? new System.Windows.Media.ScaleTransform(s, s)
+            : System.Windows.Media.Transform.Identity;
+        UiScale.SetTextCrispForScale(element, s);
     }
 
     /// <summary>
@@ -4253,7 +4199,7 @@ public partial class MainWindow : Window
             Background = (System.Windows.Media.Brush)FindResource("BgSidebar"),
             BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
             BorderThickness = new Thickness(2),
-            CornerRadius = new CornerRadius(7),
+            CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
             Padding = new Thickness(10),
             // Auto-sized to its content — same guardrails as the
             // SETTINGS popup so the two read as a matched pair.
@@ -4263,7 +4209,7 @@ public partial class MainWindow : Window
         var rim = new System.Windows.Controls.Border
         {
             Background = (System.Windows.Media.Brush)FindResource("MenuBorderOuter"),
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = (CornerRadius)FindResource("RadiusPopupOuter"),
             Padding = new Thickness(1),
             Child = panel,
             Effect = new System.Windows.Media.Effects.DropShadowEffect
@@ -4280,13 +4226,16 @@ public partial class MainWindow : Window
         {
             if (popup.Child is FrameworkElement fe && fe.ActualWidth > 0)
             {
-                popup.HorizontalOffset = (btn.ActualWidth - fe.ActualWidth) / 2.0;
+                // fe (the rim) carries the popup scale as a LayoutTransform, so
+                // its rendered width is ActualWidth × the scale — centre on that
+                // (× 1.0 = unchanged at the default window).
+                popup.HorizontalOffset = (btn.ActualWidth - fe.ActualWidth * UiScale.Current) / 2.0;
             }
         };
 
         var stack = new System.Windows.Controls.StackPanel();
         panel.Child = stack;
-        ApplyAntiBlur(rim);
+        ApplyPopupScale(rim);
         popup.Child = rim;
 
         // Header: small dorado caption so the popup feels like a
@@ -4295,7 +4244,7 @@ public partial class MainWindow : Window
         {
             Text = Strings.Get("DashboardChangeMod"),
             FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
-            FontSize = 11,
+            FontSize = (double)FindResource("FontSizeCaption"),
             FontWeight = FontWeights.SemiBold,
             Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
             Margin = new Thickness(8, 4, 8, 8),
@@ -4324,7 +4273,7 @@ public partial class MainWindow : Window
             {
                 Text = Strings.Get("ModSelectorNotInstalled"),
                 Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                FontSize = 12,
+                FontSize = (double)FindResource("FontSizeBody"),
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(8, 8, 8, 12),
             });
@@ -4378,7 +4327,7 @@ public partial class MainWindow : Window
                                 {
                                     Text = p.DisplayName,
                                     FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
-                                    FontSize = 13,
+                                    FontSize = (double)FindResource("FontSizeBody"),
                                     FontWeight = isActive ? FontWeights.Bold : FontWeights.Medium,
                                     // Active row reads dorado; inactive
                                     // rows use the cool secondary so
@@ -4392,7 +4341,7 @@ public partial class MainWindow : Window
                                 new System.Windows.Controls.TextBlock
                                 {
                                     Text = p.Subtitle ?? "",
-                                    FontSize = 10,
+                                    FontSize = (double)FindResource("FontSizeCaption"),
                                     FontWeight = FontWeights.Normal,
                                     Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
                                     Opacity = 0.85,
@@ -4655,6 +4604,9 @@ public partial class MainWindow : Window
         _config.Save();
         InvalidateActiveModCheckCache();
         await CheckAsync();
+        // Keep an open Mod Properties window in sync with the new mod path /
+        // re-detected version once the async re-check completes.
+        _modPropertiesDialog?.RefreshData();
     }
 
     /// <summary>
@@ -6772,14 +6724,14 @@ public partial class MainWindow : Window
         {
             Text = title,
             Foreground = Brush("White"),
-            FontSize = 13,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             FontWeight = System.Windows.FontWeights.SemiBold,
         };
         var descBlock = new System.Windows.Controls.TextBlock
         {
             Text = description,
             Foreground = Brush("#aaa"),
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0),
         };

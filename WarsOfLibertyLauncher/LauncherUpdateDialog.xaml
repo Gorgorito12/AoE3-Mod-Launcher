@@ -16,11 +16,11 @@
 
     <StackPanel Margin="24">
         <TextBlock x:Name="HeaderText"
-                   FontSize="18" FontWeight="SemiBold"
+                   FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="VersionInfoText"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    Foreground="#aaa"
                    Margin="0,0,0,16"/>
 
@@ -29,7 +29,7 @@
              dialog height (the Window is SizeToContent="Height"). -->
         <StackPanel x:Name="ReleaseNotesSection" Visibility="Collapsed" Margin="0,0,0,16">
             <TextBlock x:Name="ReleaseNotesHeader"
-                       FontSize="11" FontWeight="SemiBold"
+                       FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold"
                        Foreground="#888"
                        Margin="0,0,0,4"/>
             <Border Background="{DynamicResource BgPanel}"
@@ -37,7 +37,7 @@
                     CornerRadius="4" Padding="10">
                 <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
                     <TextBlock x:Name="ReleaseNotesText"
-                               FontSize="12"
+                               FontSize="{StaticResource FontSizeBody}"
                                Foreground="#ccc"
                                TextWrapping="Wrap"/>
                 </ScrollViewer>
@@ -46,9 +46,9 @@
 
         <Grid Margin="0,0,0,4">
             <TextBlock x:Name="ProgressLabelText"
-                       FontSize="11" Foreground="#888"/>
+                       FontSize="{StaticResource FontSizeCaption}" Foreground="#888"/>
             <TextBlock x:Name="ProgressPercentText"
-                       FontSize="11" Foreground="#aaa"
+                       FontSize="{StaticResource FontSizeCaption}" Foreground="#aaa"
                        HorizontalAlignment="Right"/>
         </Grid>
         <ProgressBar x:Name="DownloadProgress"
@@ -57,14 +57,14 @@
 
         <Grid Margin="0,0,0,16">
             <TextBlock x:Name="SpeedText"
-                       FontSize="11" Foreground="#888"/>
+                       FontSize="{StaticResource FontSizeCaption}" Foreground="#888"/>
             <TextBlock x:Name="EtaText"
-                       FontSize="11" Foreground="#888"
+                       FontSize="{StaticResource FontSizeCaption}" Foreground="#888"
                        HorizontalAlignment="Right"/>
         </Grid>
 
         <TextBlock x:Name="StatusText"
-                   FontSize="12"
+                   FontSize="{StaticResource FontSizeBody}"
                    Foreground="#ccc"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>

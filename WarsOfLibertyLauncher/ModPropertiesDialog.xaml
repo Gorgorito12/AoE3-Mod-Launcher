@@ -67,7 +67,7 @@
              offset). -->
         <Style x:Key="DialogSectionTitle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,14"/>
         </Style>
@@ -85,7 +85,7 @@
         <!-- Field label (Name / Author / Installed / Website caption). -->
         <Style x:Key="DialogFieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
@@ -93,7 +93,7 @@
         <!-- Field value -->
         <Style x:Key="DialogFieldValue" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
@@ -113,7 +113,7 @@
              header because each row IS the action, not a sub-section. -->
         <Style x:Key="DialogActionTitle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
         </Style>
@@ -121,7 +121,7 @@
         <!-- Description text under an action title. -->
         <Style x:Key="DialogActionDesc" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
@@ -200,7 +200,7 @@
                             Visibility="Collapsed"/>
                     <TextBlock x:Name="HeaderTitleText"
                                FontFamily="{DynamicResource DisplayFont}"
-                               FontSize="15"
+                               FontSize="{StaticResource FontSizeHeading}"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource AccentBrush}"
                                VerticalAlignment="Center"/>
@@ -213,7 +213,7 @@
                         Visibility="Collapsed">
                     <TextBlock x:Name="HeaderVersionText"
                                Foreground="{DynamicResource AccentBrush}"
-                               FontSize="11"
+                               FontSize="{StaticResource FontSizeCaption}"
                                FontWeight="SemiBold"/>
                 </Border>
 
@@ -230,7 +230,7 @@
         <!-- =========================================================
              TABS + CONTENT
              ========================================================= -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" x:Name="PropsContentRoot">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="200"/>
                 <ColumnDefinition Width="*"/>
@@ -252,7 +252,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabGeneralLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -266,7 +266,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabLocalFilesLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -280,7 +280,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabUserDataLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -294,7 +294,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabLanguageLabel"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -350,7 +350,7 @@
                                     Style="{StaticResource DialogPillBadge}">
                                 <TextBlock x:Name="ValVersion"
                                            Foreground="{DynamicResource AccentBrush}"
-                                           FontSize="11"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            FontWeight="SemiBold"/>
                             </Border>
                         </Grid>
@@ -366,7 +366,7 @@
                                        Margin="0,2,0,0"/>
                             <TextBlock Grid.Column="1" x:Name="ValWebsite"
                                        Foreground="{DynamicResource AccentBrush}"
-                                       FontSize="13"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        Cursor="Hand"
                                        MouseLeftButtonUp="ValWebsite_Click"
                                        TextWrapping="Wrap"/>
@@ -379,7 +379,7 @@
                                 Click="CheckUpdatesBtn_Click"/>
                         <TextBlock x:Name="CheckUpdatesResult"
                                    Margin="0,10,0,0"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Visibility="Collapsed"/>
                     </StackPanel>
@@ -404,7 +404,7 @@
                                 Padding="14,10">
                             <TextBlock x:Name="ValInstallPath"
                                        Foreground="{DynamicResource SecondaryFixed}"
-                                       FontSize="12"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        FontFamily="Consolas"
                                        TextWrapping="Wrap"/>
                         </Border>
@@ -468,7 +468,7 @@
                              "destructive area". -->
                         <TextBlock x:Name="LblDangerZone"
                                    Foreground="{DynamicResource ErrorBrush}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeSubtitle}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <TextBlock x:Name="LblDangerZoneDesc"
@@ -568,7 +568,7 @@
                                   SelectionChanged="LanguageCombo_SelectionChanged"/>
                         <TextBlock x:Name="LanguageEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="12"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    Margin="0,10,0,0"
                                    Visibility="Collapsed"
                                    TextWrapping="Wrap"/>

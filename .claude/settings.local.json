@@ -3,7 +3,28 @@
     "allow": [
       "Bash(gh release *)",
       "WebFetch(domain:github.com)",
-      "Bash(dotnet build *)"
+      "Bash(dotnet build *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Jeison\\\\Documents\\\\Updater\\\\WarsOfLibertyLauncher\" -Recurse -Filter \"*.xaml\")",
+      "Bash(Select-Object FullName)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(Get-ChildItem -Filter \"*.xaml\" -Recurse)",
+      "Bash(ConvertTo-Csv -NoTypeInformation)",
+      "Bash(ConvertFrom-Csv)",
+      "Bash(Measure-Object)",
+      "Bash(Select-Object -ExpandProperty Count)",
+      "Read(//c/Program Files/dotnet/shared/Microsoft.WindowsDesktop.App/**)",
+      "Bash(dotnet --version)",
+      "Bash(dotnet --list-runtimes)",
+      "Read(//c/Program Files/dotnet/shared/Microsoft.NETCore.App/8.0.27/**)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Jeison\\\\Documents\\\\Updater\\\\WarsOfLibertyLauncher\" -Recurse -Filter \"*LauncherSettingsDialog*\")",
+      "Bash(cd /c/Users/Jeison/Documents/Updater/WarsOfLibertyLauncher && find . -type f \\\\\\( -name \"*.xaml.cs\" -o -name \"ModPropertiesDialog*\" \\\\\\))",
+      "Bash(xargs grep -l \"Deactivated\")",
+      "Bash(findstr /R /N \"FontSize=\\\\\"[0-9]\" *.xaml Controls/*.xaml Styles/*.xaml)",
+      "Bash(findstr /S /N \"FontSize=\" *.xaml Controls/*.xaml)",
+      "PowerShell(cd C:\\\\Users\\\\Jeison\\\\Documents\\\\Updater\\\\WarsOfLibertyLauncher; Get-Content -Path MainWindow.xaml -Raw | Select-String -Pattern 'FontSize=\"[0-9]' -AllMatches | ForEach-Object { $_.Matches | ForEach-Object { $_.Value } })",
+      "Bash(ls \"C:\\\\Users\\\\Jeison\\\\.claude\\\\plans\\\\\" 2>/dev/null && echo \"---dir exists---\" || echo \"---need to check parent---\")",
+      "Bash(ls -la /c/Users/Jeison/.claude/plans/ 2>/dev/null && echo EXISTS || echo MISSING)"
     ]
   }
 }

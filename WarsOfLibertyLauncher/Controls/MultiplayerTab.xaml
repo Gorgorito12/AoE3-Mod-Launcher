@@ -19,7 +19,7 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0,0,0,2"/>
             <Setter Property="Padding" Value="2,8"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,24,0"/>
@@ -150,7 +150,7 @@
                         <TextBlock x:Name="ConnStatusText"
                                    Text="Connected"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
@@ -161,7 +161,7 @@
                     <StackPanel Style="{StaticResource HeaderStatChip}">
                         <TextBlock x:Name="QuotaText"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
 
@@ -173,13 +173,13 @@
                             Background="{DynamicResource MpSurfaceAlt}"
                             BorderBrush="{DynamicResource BorderSubtle}"
                             BorderThickness="1"
-                            CornerRadius="3"
+                            CornerRadius="{StaticResource RadiusSm}"
                             Padding="8,2"
                             Margin="14,0,0,0"
                             Cursor="Help">
                         <TextBlock x:Name="NatBadgeText"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    FontWeight="SemiBold"/>
                     </Border>
                 </StackPanel>
@@ -200,13 +200,13 @@
                         MaxWidth="480">
                 <TextBlock x:Name="SignInTitleText"
                            Foreground="{DynamicResource TextPrimary}"
-                           FontSize="18"
+                           FontSize="{StaticResource FontSizeHeading}"
                            FontWeight="Bold"
                            TextAlignment="Center"
                            TextWrapping="Wrap"/>
                 <TextBlock x:Name="SignInBodyText"
                            Foreground="{DynamicResource TextSecondary}"
-                           FontSize="12"
+                           FontSize="{StaticResource FontSizeBody}"
                            TextAlignment="Center"
                            TextWrapping="Wrap"
                            Margin="0,12,0,18"/>
@@ -218,7 +218,7 @@
                         MinWidth="220"/>
                 <TextBlock x:Name="SignInErrorText"
                            Foreground="{DynamicResource MpStatusOffline}"
-                           FontSize="11"
+                           FontSize="{StaticResource FontSizeCaption}"
                            TextWrapping="Wrap"
                            TextAlignment="Center"
                            Margin="0,12,0,0"
@@ -254,7 +254,7 @@
                         Background="#1f2c3d"
                         BorderBrush="#3a5a8c"
                         BorderThickness="1"
-                        CornerRadius="6"
+                        CornerRadius="{StaticResource RadiusMd}"
                         Margin="24,12,24,0"
                         Padding="14,10">
                     <Grid>
@@ -273,8 +273,8 @@
                              RefreshRadminBanner() in code-behind. -->
                         <Border Grid.Row="0" Grid.Column="0"
                                 x:Name="RadminStatusIcon"
-                                Width="24" Height="24"
-                                CornerRadius="12"
+                                Width="{StaticResource DiscSizeSm}" Height="{StaticResource DiscSizeSm}"
+                                CornerRadius="{StaticResource DiscRadiusSm}"
                                 Background="#3a5a8c"
                                 VerticalAlignment="Center"
                                 Margin="0,0,12,0">
@@ -291,12 +291,12 @@
                         <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock x:Name="RadminBannerTitle"
                                        Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="12"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        FontWeight="SemiBold"
                                        TextWrapping="Wrap"/>
                             <TextBlock x:Name="RadminBannerBody"
                                        Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="11"
+                                       FontSize="{StaticResource FontSizeCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"/>
                         </StackPanel>
@@ -316,12 +316,12 @@
                                     Style="{StaticResource MpSecondaryButton}"
                                     Padding="12,6"
                                     Margin="0,0,6,0"
-                                    FontSize="11"/>
+                                    FontSize="{StaticResource FontSizeCaption}"/>
                             <Button x:Name="RadminPrimaryButton"
                                     Click="RadminPrimaryButton_Click"
                                     Style="{StaticResource MpSecondaryButton}"
                                     Padding="12,6"
-                                    FontSize="11"/>
+                                    FontSize="{StaticResource FontSizeCaption}"/>
                         </StackPanel>
 
                         <!-- Network-name copier. A read-only TextBox so
@@ -335,7 +335,7 @@
                                 Background="#15282a"
                                 BorderBrush="#3a8c5a"
                                 BorderThickness="1"
-                                CornerRadius="4"
+                                CornerRadius="{StaticResource RadiusSm}"
                                 Margin="0,10,0,0"
                                 Padding="8,6"
                                 Visibility="Collapsed">
@@ -351,7 +351,7 @@
                                          Background="Transparent"
                                          BorderThickness="0"
                                          FontFamily="Consolas, Courier New, monospace"
-                                         FontSize="11"
+                                         FontSize="{StaticResource FontSizeCaption}"
                                          Foreground="{DynamicResource TextPrimary}"
                                          VerticalAlignment="Center"
                                          VerticalContentAlignment="Center"/>
@@ -361,7 +361,7 @@
                                         Style="{StaticResource MpSecondaryButton}"
                                         Padding="10,4"
                                         Margin="8,0,0,0"
-                                        FontSize="11"
+                                        FontSize="{StaticResource FontSizeCaption}"
                                         MinWidth="100"/>
                             </Grid>
                         </Border>
@@ -373,7 +373,7 @@
                         <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
                                    x:Name="RadminInstructionsText"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    TextWrapping="Wrap"
                                    Margin="0,8,0,0"
                                    Visibility="Collapsed"/>
@@ -392,8 +392,8 @@
                     <StackPanel Grid.Column="0"
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
-                        <Border Width="34" Height="34"
-                                CornerRadius="17"
+                        <Border Width="{StaticResource DiscSizeMd}" Height="{StaticResource DiscSizeMd}"
+                                CornerRadius="{StaticResource DiscRadiusMd}"
                                 Background="{DynamicResource MpSurfaceAlt}"
                                 BorderBrush="{DynamicResource BorderSubtle}"
                                 BorderThickness="1"
@@ -408,7 +408,7 @@
                                 <TextBlock x:Name="UserAvatarInitial"
                                            Text=""
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="13"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            FontWeight="Bold"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"/>
@@ -416,12 +416,12 @@
                         </Border>
                         <TextBlock x:Name="SignedInAsText"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
                         <TextBlock Text="|"
                                    Foreground="{DynamicResource BorderSubtle}"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    Margin="8,0"
                                    VerticalAlignment="Center"/>
                         <Button x:Name="SignOutLink"
@@ -429,7 +429,7 @@
                                 Background="Transparent"
                                 BorderBrush="Transparent"
                                 Foreground="#7fb0ff"
-                                FontSize="12"
+                                FontSize="{StaticResource FontSizeBody}"
                                 Cursor="Hand"
                                 Padding="0"/>
                     </StackPanel>
@@ -465,7 +465,7 @@
                             Background="{DynamicResource MpSurface}"
                             BorderBrush="{DynamicResource MpDivider}"
                             BorderThickness="1"
-                            CornerRadius="8">
+                            CornerRadius="{StaticResource RadiusMd}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>   <!-- section title -->
@@ -480,12 +480,12 @@
                                 <StackPanel Orientation="Horizontal"
                                             VerticalAlignment="Center">
                                     <TextBlock Text="👥"
-                                               FontSize="15"
+                                               FontSize="{StaticResource FontSizeSubtitle}"
                                                VerticalAlignment="Center"
                                                Margin="0,0,9,0"/>
                                     <TextBlock x:Name="RoomsSectionTitle"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="15"
+                                               FontSize="{StaticResource FontSizeSubtitle}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
@@ -493,7 +493,7 @@
                                            HorizontalAlignment="Right"
                                            VerticalAlignment="Center"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="11"/>
+                                           FontSize="{StaticResource FontSizeCaption}"/>
                             </Grid>
 
                             <!-- Column headers for the card list. The cards
@@ -513,22 +513,22 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" x:Name="ColHeaderRoom"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="11" FontWeight="SemiBold"/>
+                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Grid.Column="1" x:Name="ColHeaderHost"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="11" FontWeight="SemiBold"/>
+                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Grid.Column="2" x:Name="ColHeaderPlayers"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="11" FontWeight="SemiBold"/>
+                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Grid.Column="3" x:Name="ColHeaderPing"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="11" FontWeight="SemiBold"/>
+                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Grid.Column="4" x:Name="ColHeaderStatus"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="11" FontWeight="SemiBold"/>
+                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Grid.Column="5" x:Name="ColHeaderAction"
                                            Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="11" FontWeight="SemiBold"
+                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                            HorizontalAlignment="Center"/>
                             </Grid>
 
@@ -551,7 +551,7 @@
                             Background="Transparent"
                             BorderBrush="{DynamicResource MpDivider}"
                             BorderThickness="1"
-                            CornerRadius="6"
+                            CornerRadius="{StaticResource RadiusMd}"
                             Margin="40,30,40,30"
                             Padding="40,40"
                             Visibility="Collapsed">
@@ -597,12 +597,12 @@
                             </Viewbox>
                             <TextBlock x:Name="EmptyTitleText"
                                        Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="16"
+                                       FontSize="{StaticResource FontSizeSubtitle}"
                                        FontWeight="SemiBold"
                                        HorizontalAlignment="Center"/>
                             <TextBlock x:Name="EmptyBodyText"
                                        Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="12"
+                                       FontSize="{StaticResource FontSizeBody}"
                                        Margin="0,6,0,18"
                                        HorizontalAlignment="Center"/>
                             <Button x:Name="EmptyCreateButton"
@@ -623,11 +623,11 @@
                             Background="{DynamicResource StatusErrorBg}"
                             BorderBrush="{DynamicResource MpStatusOffline}"
                             BorderThickness="1"
-                            CornerRadius="4"
+                            CornerRadius="{StaticResource RadiusSm}"
                             Visibility="Collapsed">
                         <TextBlock x:Name="RoomsErrorText"
                                    Foreground="{DynamicResource MpStatusOffline}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    TextWrapping="Wrap"/>
                     </Border>
                 </Grid>
@@ -640,7 +640,7 @@
                             Background="{DynamicResource MpSurface}"
                             BorderBrush="{DynamicResource MpDivider}"
                             BorderThickness="1"
-                            CornerRadius="8">
+                            CornerRadius="{StaticResource RadiusMd}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>   <!-- title -->
@@ -659,17 +659,17 @@
                                         Margin="18,16,18,12"
                                         VerticalAlignment="Center">
                                 <TextBlock Text="💬"
-                                           FontSize="15"
+                                           FontSize="{StaticResource FontSizeSubtitle}"
                                            VerticalAlignment="Center"
                                            Margin="0,0,8,0"/>
                                 <TextBlock x:Name="GlobalChatHeaderText"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="15"
+                                           FontSize="{StaticResource FontSizeSubtitle}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Text="·"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="15"
+                                           FontSize="{StaticResource FontSizeSubtitle}"
                                            Margin="8,0,8,0"
                                            VerticalAlignment="Center"/>
                                 <Ellipse Width="8" Height="8"
@@ -678,7 +678,7 @@
                                          Margin="0,0,6,0"/>
                                 <TextBlock x:Name="GlobalChatPresenceText"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12.5"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
 
@@ -698,7 +698,7 @@
                                 </ScrollViewer>
                                 <TextBlock x:Name="GlobalChatEmptyHint"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            FontStyle="Italic"
                                            TextWrapping="Wrap"
                                            TextAlignment="Center"
@@ -717,7 +717,7 @@
                                          server drops a message, cleared on next keystroke. -->
                                     <TextBlock x:Name="GlobalChatNotice"
                                                Foreground="{DynamicResource MpStatusReconnect}"
-                                               FontSize="11"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                TextWrapping="Wrap"
                                                Margin="2,0,2,6"
                                                Visibility="Collapsed"/>
@@ -736,7 +736,7 @@
                                                  KeyDown="GlobalChatInput_KeyDown"/>
                                         <TextBlock x:Name="GlobalChatPlaceholder"
                                                    Foreground="{DynamicResource TextSecondary}"
-                                                   FontSize="12"
+                                                   FontSize="{StaticResource FontSizeBody}"
                                                    Margin="12,0,0,0"
                                                    VerticalAlignment="Center"
                                                    IsHitTestVisible="False"/>
@@ -782,19 +782,19 @@
                 <StackPanel Margin="32,24" MaxWidth="640" HorizontalAlignment="Left">
                     <TextBlock x:Name="ProfileNameText"
                                Foreground="{DynamicResource TextPrimary}"
-                               FontSize="18"
+                               FontSize="{StaticResource FontSizeHeading}"
                                FontWeight="Bold"/>
                     <TextBlock x:Name="ProfileLoginText"
                                Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12"
+                               FontSize="{StaticResource FontSizeBody}"
                                Margin="0,2,0,16"/>
                     <TextBlock x:Name="ProfileEloText"
                                Foreground="{DynamicResource TextPrimary}"
-                               FontSize="14"
+                               FontSize="{StaticResource FontSizeBodyStrong}"
                                Margin="0,0,0,4"/>
                     <TextBlock x:Name="ProfileGamesText"
                                Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12"/>
+                               FontSize="{StaticResource FontSizeBody}"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

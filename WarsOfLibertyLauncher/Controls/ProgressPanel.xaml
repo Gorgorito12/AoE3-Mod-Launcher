@@ -6,14 +6,14 @@
             Background="{DynamicResource BgPanel}"
             BorderBrush="{DynamicResource BorderSubtle}"
             BorderThickness="1"
-            CornerRadius="6"
+            CornerRadius="{StaticResource RadiusMd}"
             Padding="12,10">
         <StackPanel>
             <!-- Header label -->
             <TextBlock x:Name="ProgressPanelLabel"
                        x:FieldModifier="public"
                        Foreground="#5b9bd5"
-                       FontSize="10"
+                       FontSize="{StaticResource FontSizeCaption}"
                        FontWeight="SemiBold"
                        Margin="0,0,0,4"/>
 
@@ -35,13 +35,13 @@
                     <TextBlock x:Name="ProgressTitleText"
                                x:FieldModifier="public"
                                Foreground="White"
-                               FontSize="13"
+                               FontSize="{StaticResource FontSizeBody}"
                                FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis"/>
                     <TextBlock x:Name="ProgressSubtitleText"
                                x:FieldModifier="public"
                                Foreground="#aaa"
-                               FontSize="10"
+                               FontSize="{StaticResource FontSizeCaption}"
                                Margin="0,1,0,0"
                                TextWrapping="Wrap"/>
                 </StackPanel>
@@ -54,10 +54,10 @@
                 <Grid Margin="0,8,0,2">
                     <TextBlock x:Name="LblCurrentPatch"
                                x:FieldModifier="public"
-                               Foreground="#888" FontSize="10"/>
+                               Foreground="#888" FontSize="{StaticResource FontSizeCaption}"/>
                     <TextBlock x:Name="PatchBytesText"
                                x:FieldModifier="public"
-                               Foreground="#aaa" FontSize="10"
+                               Foreground="#aaa" FontSize="{StaticResource FontSizeCaption}"
                                HorizontalAlignment="Right"/>
                 </Grid>
                 <ProgressBar x:Name="PatchProgress"
@@ -66,10 +66,10 @@
                 <Grid Margin="0,6,0,2">
                     <TextBlock x:Name="LblOverall"
                                x:FieldModifier="public"
-                               Foreground="#888" FontSize="10"/>
+                               Foreground="#888" FontSize="{StaticResource FontSizeCaption}"/>
                     <TextBlock x:Name="OverallBytesText"
                                x:FieldModifier="public"
-                               Foreground="#aaa" FontSize="10"
+                               Foreground="#aaa" FontSize="{StaticResource FontSizeCaption}"
                                HorizontalAlignment="Right"/>
                 </Grid>
                 <ProgressBar x:Name="OverallProgress"
@@ -84,12 +84,12 @@
                                x:Name="SpeedText"
                                x:FieldModifier="public"
                                Foreground="#888"
-                               FontSize="10"/>
+                               FontSize="{StaticResource FontSizeCaption}"/>
                     <TextBlock Grid.Column="1"
                                x:Name="ProgressStepText"
                                x:FieldModifier="public"
                                Foreground="#888"
-                               FontSize="10"/>
+                               FontSize="{StaticResource FontSizeCaption}"/>
                 </Grid>
             </StackPanel>
             <!-- Kept hidden so the existing OnProgress reporter can still
@@ -111,7 +111,7 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="#5b9bd5"
-                        FontSize="10"
+                        FontSize="{StaticResource FontSizeCaption}"
                         FontWeight="SemiBold"
                         Cursor="Hand"
                         Padding="6,2"
@@ -121,7 +121,7 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="#c84a4a"
-                        FontSize="10"
+                        FontSize="{StaticResource FontSizeCaption}"
                         FontWeight="SemiBold"
                         Cursor="Hand"
                         Padding="6,2"/>
@@ -131,12 +131,12 @@
             <Border x:Name="ProgressMessagePanel"
                     x:FieldModifier="public"
                     Visibility="Collapsed"
-                    CornerRadius="3"
+                    CornerRadius="{StaticResource RadiusSm}"
                     Padding="8,6"
                     Margin="0,8,0,0">
                 <TextBlock x:Name="ProgressMessageText"
                            x:FieldModifier="public"
-                           FontSize="11"
+                           FontSize="{StaticResource FontSizeCaption}"
                            FontWeight="SemiBold"
                            TextWrapping="Wrap"/>
             </Border>
@@ -153,7 +153,7 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="#d4a04a"
-                        FontSize="10"
+                        FontSize="{StaticResource FontSizeCaption}"
                         FontWeight="SemiBold"
                         Cursor="Hand"
                         Padding="6,2"

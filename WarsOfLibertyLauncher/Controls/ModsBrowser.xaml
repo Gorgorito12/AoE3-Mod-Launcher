@@ -17,7 +17,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="14,6"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
         </Style>
@@ -32,7 +32,7 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0,0,0,2"/>
             <Setter Property="Padding" Value="2,6"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,22,0"/>
@@ -84,14 +84,16 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0">
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
                         <TextBlock x:Name="HeaderTitle"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="20"
-                                   FontWeight="Bold"/>
+                                   FontSize="{StaticResource FontSizeHeading}"
+                                   FontWeight="Bold"
+                                   TextTrimming="CharacterEllipsis"/>
                         <TextBlock x:Name="HeaderSubtitle"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="12"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   TextTrimming="CharacterEllipsis"
                                    Margin="0,2,0,0"/>
                     </StackPanel>
 
@@ -102,23 +104,24 @@
                         <Border Background="{DynamicResource BgBase}"
                                 BorderBrush="{DynamicResource BorderSubtle}"
                                 BorderThickness="1"
-                                CornerRadius="4"
-                                Padding="10,5"
-                                Width="240"
+                                CornerRadius="{StaticResource RadiusSm}"
+                                Padding="10,3"
+                                Width="200"
                                 Margin="0,0,10,0">
                             <Grid>
                                 <TextBlock x:Name="SearchPlaceholderText"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            FontStyle="Italic"
                                            VerticalAlignment="Center"
                                            IsHitTestVisible="False"/>
                                 <TextBox x:Name="SearchBox"
                                          Background="Transparent"
                                          BorderThickness="0"
+                                         Padding="8,3"
                                          Foreground="{DynamicResource TextPrimary}"
                                          CaretBrush="{DynamicResource TextPrimary}"
-                                         FontSize="12"
+                                         FontSize="{StaticResource FontSizeBody}"
                                          VerticalContentAlignment="Center"/>
                             </Grid>
                         </Border>
@@ -128,20 +131,24 @@
                                 Foreground="{DynamicResource TextPrimary}"
                                 BorderBrush="{DynamicResource BorderSubtle}"
                                 BorderThickness="1"
-                                Padding="12,6"
+                                Padding="16,8"
                                 Margin="0,0,8,0"
-                                FontSize="12"
-                                Cursor="Hand"/>
+                                FontSize="{StaticResource FontSizeBody}"
+                                Cursor="Hand"
+                                VerticalAlignment="Center"
+                                Height="36"/>
 
                         <Button x:Name="AddLocalModButton"
                                 Background="{DynamicResource CatalogBlue}"
                                 Foreground="White"
                                 BorderThickness="0"
-                                Padding="14,6"
+                                Padding="18,8"
                                 Margin="0,0,8,0"
-                                FontSize="12"
+                                FontSize="{StaticResource FontSizeBody}"
                                 FontWeight="SemiBold"
-                                Cursor="Hand"/>
+                                Cursor="Hand"
+                                VerticalAlignment="Center"
+                                Height="36"/>
 
                         <!-- Publish wizard — promoted out of the ⋮ overflow into a
                              first-class accent-outlined header button so modders can
@@ -152,11 +159,13 @@
                                 Foreground="{DynamicResource AccentBrush}"
                                 BorderBrush="{DynamicResource AccentBrush}"
                                 BorderThickness="1"
-                                Padding="12,6"
+                                Padding="16,8"
                                 Margin="0,0,8,0"
-                                FontSize="12"
+                                FontSize="{StaticResource FontSizeBody}"
                                 FontWeight="SemiBold"
-                                Cursor="Hand"/>
+                                Cursor="Hand"
+                                VerticalAlignment="Center"
+                                Height="36"/>
 
                         <Button x:Name="MoreMenuButton"
                                 Background="Transparent"
@@ -164,9 +173,10 @@
                                 BorderBrush="{DynamicResource BorderSubtle}"
                                 BorderThickness="1"
                                 Padding="8,3"
-                                FontSize="14"
+                                FontSize="{StaticResource FontSizeTitle}"
                                 FontWeight="Bold"
                                 Cursor="Hand"
+                                VerticalAlignment="Center"
                                 Content="⋮">
                             <Button.ContextMenu>
                                 <ContextMenu x:Name="MoreMenu"/>
@@ -191,7 +201,7 @@
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
                         <TextBlock x:Name="FiltersLabel"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"
                                    Margin="0,0,10,0"/>
@@ -207,7 +217,7 @@
                                 VerticalAlignment="Center">
                         <TextBlock x:Name="SortLabel"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource FontSizeCaption}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"
                                    Margin="0,0,10,0"/>
@@ -216,7 +226,7 @@
                                   Foreground="{DynamicResource TextPrimary}"
                                   BorderBrush="{DynamicResource BorderSubtle}"
                                   Width="160"
-                                  FontSize="12"/>
+                                  FontSize="{StaticResource FontSizeBody}"/>
                     </StackPanel>
                 </Grid>
             </StackPanel>
@@ -245,7 +255,7 @@
                 <TextBlock x:Name="ListSummary"
                            Grid.Row="0"
                            Foreground="{DynamicResource TextSecondary}"
-                           FontSize="11"
+                           FontSize="{StaticResource FontSizeCaption}"
                            FontWeight="SemiBold"
                            Margin="24,14,16,8"/>
 
@@ -279,7 +289,7 @@
                                 MaxWidth="280">
                         <TextBlock x:Name="DetailEmptyText"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="13"
+                                   FontSize="{StaticResource FontSizeBody}"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap"/>
                     </StackPanel>
@@ -304,13 +314,13 @@
                                      no real banner; otherwise the Image
                                      covers everything. -->
                                 <Border x:Name="DetailMonogramHero"
-                                        Width="72" Height="72"
-                                        CornerRadius="36"
+                                        Width="{StaticResource DiscSizeXxl}" Height="{StaticResource DiscSizeXxl}"
+                                        CornerRadius="{StaticResource DiscRadiusXxl}"
                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Bottom"
                                         Margin="0,0,20,-36">
                                     <TextBlock x:Name="DetailMonogram"
-                                               FontSize="32"
+                                               FontSize="{StaticResource FontSizeDisplay}"
                                                FontWeight="Bold"
                                                Foreground="White"
                                                HorizontalAlignment="Center"
@@ -332,24 +342,24 @@
                                     <TextBlock x:Name="DetailTitle"
                                                Grid.Column="0"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="20"
+                                               FontSize="{StaticResource FontSizeHeading}"
                                                FontWeight="Bold"
                                                TextWrapping="Wrap"
                                                VerticalAlignment="Center"/>
                                     <Border x:Name="DetailStateBadge"
                                             Grid.Column="1"
-                                            CornerRadius="3"
+                                            CornerRadius="{StaticResource RadiusSm}"
                                             Padding="8,3"
                                             VerticalAlignment="Center">
                                         <TextBlock x:Name="DetailStateBadgeText"
-                                                   FontSize="10"
+                                                   FontSize="{StaticResource FontSizeCaption}"
                                                    FontWeight="SemiBold"/>
                                     </Border>
                                 </Grid>
 
                                 <TextBlock x:Name="DetailDescription"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="12"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            TextWrapping="Wrap"
                                            Margin="0,0,0,16"/>
 
@@ -372,7 +382,7 @@
                                      repurposed as 'available languages'. -->
                                 <TextBlock x:Name="DetailFeaturesTitle"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="11"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            FontWeight="SemiBold"
                                            Margin="0,16,0,6"
                                            Visibility="Collapsed"/>
@@ -387,13 +397,13 @@
                                         Background="{DynamicResource StatusIncompatibleBg}"
                                         BorderBrush="{DynamicResource StatusIncompatibleFg}"
                                         BorderThickness="0,0,0,0"
-                                        CornerRadius="4"
+                                        CornerRadius="{StaticResource RadiusSm}"
                                         Padding="12,8"
                                         Margin="0,16,0,0"
                                         Visibility="Collapsed">
                                     <TextBlock x:Name="DetailCompatText"
                                                Foreground="{DynamicResource StatusIncompatibleFg}"
-                                               FontSize="11"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                TextWrapping="Wrap"/>
                                 </Border>
                             </StackPanel>
@@ -421,7 +431,7 @@
                                         BorderThickness="0"
                                         Padding="0,10"
                                         FontWeight="SemiBold"
-                                        FontSize="13"
+                                        FontSize="{StaticResource FontSizeBodyStrong}"
                                         Cursor="Hand"
                                         Margin="0,0,8,0"/>
                                 <Button x:Name="DetailSecondaryButton"
@@ -431,7 +441,7 @@
                                         BorderBrush="{DynamicResource BorderSubtle}"
                                         BorderThickness="1"
                                         Padding="12,10"
-                                        FontSize="13"
+                                        FontSize="{StaticResource FontSizeBody}"
                                         Cursor="Hand"
                                         Margin="0,0,6,0"/>
                                 <Button x:Name="DetailMoreButton"
@@ -441,7 +451,7 @@
                                         BorderBrush="{DynamicResource BorderSubtle}"
                                         BorderThickness="1"
                                         Padding="10,8"
-                                        FontSize="14"
+                                        FontSize="{StaticResource FontSizeTitle}"
                                         FontWeight="Bold"
                                         Cursor="Hand"
                                         Content="⋯">
