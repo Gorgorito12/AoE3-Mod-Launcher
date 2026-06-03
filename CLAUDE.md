@@ -435,7 +435,35 @@ longer exists — don't go looking for it.)
   each item's `Tag`; the item Content stays the name string so the combo's
   selection box shows just the name while the disc beside it paints the selected
   icon), the **rooms-browser room cards** (`ResolveRoomModIcon`, gold ★ fallback),
-  and the install shortcut.
+  and the install shortcut. **The desktop / Start-Menu shortcut (`.lnk`
+  IconLocation) uses a DIFFERENT, stricter resolution than every surface above
+  — and getting it wrong silently shows the stock-AoE3 exe icon (the original
+  "el juego está sin icono del mod" bug).** A Windows `.lnk` IconLocation only
+  renders `.ico` / `.exe` / `.dll`; a `.png` path is NOT rejected — it silently
+  falls back to the **target exe's** embedded icon. The old `FindShortcutIcon`
+  returned `LocalIconPath` (the cached **`icon.png`**) first, so every
+  launcher-made WoL shortcut pointed at a PNG and showed the generic AoE3 icon,
+  even though the real `WoL.ico` ships right there in the install folder.
+  `FindShortcutIcon` (`NativeInstallService`) now resolves in this order, and
+  the invariant **"never hand a `.png` to a `.lnk`"** must be preserved: (1) any
+  `.ico` in the **install-folder root** (WoL/stock ship `WoL.ico`) — wins
+  outright; (2) `LocalIconPath` **only if it is itself a `.ico`**; (3) else the
+  cached PNG is wrapped into a real `<modid>-shortcut.ico` by
+  `IconConverter.TryWritePngAsIco` (a dependency-free PNG→ICO container writer —
+  Vista+ renders PNG-compressed icon frames, so the PNG bytes are embedded
+  verbatim, no `System.Drawing`), written into the **install folder** so the
+  manifest tracks it (clean uninstall) and it survives the "clear icons cache"
+  button (which only wipes `mod-assets\`); (4) else null → the exe icon. The
+  generated `.ico` is created during `CreateShortcuts`, which runs **before**
+  `WriteManifest`, so `EnumerateInstalledItems` records it. Pre-existing broken
+  shortcuts self-heal: `NativeInstallService.TryHealShortcutIcons` (kicked once
+  per mod per session from `MainWindow.ApplyCheckResult`, off-thread, guarded by
+  `_shortcutHealAttempted`) reads the manifest's `Shortcuts`, and for any `.lnk`
+  whose IconLocation points at a non-`.ico` / missing file, re-points **only**
+  the IconLocation at the resolved `.ico`. For WoL that's a pure re-point of the
+  user-writable Desktop / Start-Menu `.lnk` to the already-present `WoL.ico` —
+  no elevation, no re-download. Don't reintroduce a path that lets a PNG reach a
+  shortcut's IconLocation.
 
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`

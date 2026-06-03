@@ -1204,26 +1204,148 @@ public class NativeInstallService
     }
 
     /// <summary>
-    /// Picks the icon for the desktop/Start Menu shortcut, in priority
-    /// order: the community-cached profile icon (downloaded by
-    /// <c>ModAssetCacheService</c>); any <c>.ico</c> shipping inside the
-    /// install folder root (e.g. WoL.ico); otherwise null (the shortcut
-    /// falls back to the .exe's embedded icon).
+    /// Picks the icon for the desktop / Start Menu shortcut. A Windows
+    /// <c>.lnk</c> IconLocation only renders <c>.ico</c> / <c>.exe</c> /
+    /// <c>.dll</c> — a <c>.png</c> path silently falls back to the target
+    /// exe's embedded icon — so this method must NEVER return a non-<c>.ico</c>
+    /// path. Priority:
+    ///   1. Any <c>.ico</c> already in the install-folder root (e.g. the WoL
+    ///      payload ships <c>WoL.ico</c>) — used as-is, no conversion.
+    ///   2. <c>profile.LocalIconPath</c> only if it is itself a <c>.ico</c>.
+    ///   3. Otherwise, if <c>LocalIconPath</c> is a PNG (the common case —
+    ///      catalog icons are <c>icon.png</c>), wrap it into a valid
+    ///      single-frame <c>.ico</c> written into the install root and return
+    ///      that. Writing into the install folder (not the mod-assets cache)
+    ///      means the manifest records it for clean uninstall AND it survives
+    ///      the "clear icons cache" button.
+    ///   4. Otherwise null — the shortcut falls back to the exe icon.
     /// </summary>
     private static string? FindShortcutIcon(string installFolder, ModProfile profile)
     {
-        if (!string.IsNullOrEmpty(profile.LocalIconPath) && File.Exists(profile.LocalIconPath))
-            return profile.LocalIconPath;
-
+        // 1. A real .ico shipped in the install root wins outright.
         try
         {
-            var ico = Directory.EnumerateFiles(installFolder, "*.ico", SearchOption.TopDirectoryOnly)
+            var shippedIco = Directory
+                .EnumerateFiles(installFolder, "*.ico", SearchOption.TopDirectoryOnly)
                 .FirstOrDefault();
-            if (!string.IsNullOrEmpty(ico)) return ico;
+            if (!string.IsNullOrEmpty(shippedIco)) return shippedIco;
         }
-        catch { /* non-fatal, fall through to null */ }
+        catch { /* non-fatal — fall through */ }
 
+        // 2/3. Fall back to the cached community/profile icon.
+        var local = profile.LocalIconPath;
+        if (!string.IsNullOrEmpty(local) && File.Exists(local))
+        {
+            // 2. Already an .ico — usable directly.
+            if (local.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
+                return local;
+
+            // 3. A PNG — Windows can't use it as a .lnk icon. Convert to a
+            //    real .ico in the install root.
+            try
+            {
+                var icoPath = Path.Combine(
+                    installFolder, $"{SanitizeForFileName(profile.Id)}-shortcut.ico");
+                if (IconConverter.TryWritePngAsIco(local, icoPath))
+                    return icoPath;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"PNG->ICO conversion failed (non-fatal): {ex.Message}");
+            }
+        }
+
+        // 4. Nothing usable — caller falls back to the exe's embedded icon.
         return null;
+    }
+
+    /// <summary>
+    /// Maps a mod id to a safe file-name stem for the generated shortcut
+    /// <c>.ico</c>. Mod ids are slug-like today ("wol", "improvement-mod") so
+    /// this is a no-op for them, but it guards against a future id carrying a
+    /// path-illegal char.
+    /// </summary>
+    private static string SanitizeForFileName(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return "mod";
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = id.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
+        return new string(chars);
+    }
+
+    /// <summary>
+    /// Best-effort repair of an already-installed mod's shortcut icons. Older
+    /// installs wrote a <c>.png</c> path into the shortcut's IconLocation,
+    /// which Windows can't render (it falls back to the exe icon). This reads
+    /// the manifest's recorded shortcuts and, for any <c>.lnk</c> whose
+    /// IconLocation points at a non-<c>.ico</c> / missing file, rewrites it to
+    /// the icon <see cref="FindShortcutIcon"/> resolves now (e.g. the shipped
+    /// <c>WoL.ico</c>). Only the IconLocation is touched. Runs off the UI
+    /// thread; every failure is swallowed (logged) so it can never break
+    /// startup. For WoL this is a pure re-point of the desktop / Start Menu
+    /// <c>.lnk</c> (user-writable) to the already-present <c>WoL.ico</c> — no
+    /// elevation, no re-download.
+    /// </summary>
+    public static void TryHealShortcutIcons(ModProfile profile, string installFolder)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(installFolder) || !Directory.Exists(installFolder))
+                return;
+
+            var manifest = InstallManifest.TryLoad(installFolder);
+            if (manifest == null || manifest.Shortcuts.Count == 0) return;
+
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return;
+
+            dynamic shell = Activator.CreateInstance(shellType)!;
+            try
+            {
+                string? resolved = null;     // resolve lazily, only if needed
+                bool resolvedComputed = false;
+
+                foreach (var lnk in manifest.Shortcuts)
+                {
+                    try
+                    {
+                        if (string.IsNullOrEmpty(lnk) || !File.Exists(lnk)) continue;
+
+                        var shortcut = shell.CreateShortcut(lnk);
+                        string current = shortcut.IconLocation ?? "";
+                        // IconLocation is "<path>,<index>".
+                        var iconFile = current.Split(',')[0];
+                        bool alreadyOk =
+                            iconFile.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)
+                            && File.Exists(iconFile);
+                        if (alreadyOk) continue;
+
+                        if (!resolvedComputed)
+                        {
+                            resolved = FindShortcutIcon(installFolder, profile);
+                            resolvedComputed = true;
+                        }
+                        if (string.IsNullOrEmpty(resolved)) return; // nothing better to offer
+
+                        shortcut.IconLocation = $"{resolved},0";
+                        shortcut.Save();
+                        DiagnosticLog.Write($"Healed shortcut icon: {Path.GetFileName(lnk)}");
+                    }
+                    catch (Exception exInner)
+                    {
+                        DiagnosticLog.Write($"Shortcut heal skipped '{lnk}': {exInner.Message}");
+                    }
+                }
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(shell);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Shortcut heal failed (non-fatal): {ex.Message}");
+        }
     }
 
     /// <summary>

@@ -2534,6 +2534,16 @@ public partial class MainWindow : Window
     private readonly HashSet<string> _assetFetchAttempted = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Profile ids whose shortcut icons we've already tried to heal this
+    /// session. Older installs wrote a <c>.png</c> path into the desktop /
+    /// Start Menu <c>.lnk</c> IconLocation (which Windows can't render — it
+    /// falls back to the exe icon); once per mod per session we repoint such
+    /// shortcuts at a real <c>.ico</c>. See
+    /// <see cref="Services.NativeInstallService.TryHealShortcutIcons"/>.
+    /// </summary>
+    private readonly HashSet<string> _shortcutHealAttempted = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Resolves which icon URI the UI should hand to <c>TryLoadTileImage</c>
     /// for the given profile.
     ///   * Community mod with a cached icon → the local file path.
@@ -5058,6 +5068,23 @@ public partial class MainWindow : Window
         InstallPathText.Text = _updateService.InstallPath ?? "(not detected)";
 
         _modIsInstalled = result.IsValidInstall;
+
+        // Once the mod is confirmed installed, make sure its desktop / Start
+        // Menu shortcut points at a real .ico. Older installs wrote the cached
+        // .png path into the shortcut's IconLocation, which Windows can't
+        // render (it falls back to the exe icon = "no mod icon"). This is the
+        // shared check-result path (cache replay + network), so it covers
+        // startup, mod switch, post-install and post-repair. Once per mod per
+        // session, off the UI thread (COM + disk), best-effort.
+        if (result.IsValidInstall
+            && !string.IsNullOrEmpty(_updateService.InstallPath)
+            && _shortcutHealAttempted.Add(_updateService.Profile.Id))
+        {
+            var healProfile = _updateService.Profile;
+            var healInstallPath = _updateService.InstallPath!;
+            _ = Task.Run(() =>
+                Services.NativeInstallService.TryHealShortcutIcons(healProfile, healInstallPath));
+        }
 
             // Non-WoL-style mods don't have the WoL updater pipeline (version
             // detection, UpdateInfo.xml, .tar.xz patches), so we short-circuit
