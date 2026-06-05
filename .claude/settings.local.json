@@ -28,7 +28,8 @@
       "Bash(echo \"=== ¿Existe el config y tiene la entrada aoe3-tad con su ruta guardada? ===\")",
       "Bash([ -f \"$cfg\" ])",
       "Bash(grep -niE 'aoe3-tad|installPath|Age Of Empires 3' WarsOfLibertyLauncher/bin/Debug/net8.0-windows/launcher-config.json)",
-      "Bash(dotnet test *)"
+      "Bash(dotnet test *)",
+      "Bash(find \"C:\\\\Users\\\\Jeison\\\\Documents\\\\wol-launcher-lobby-node\" -name \"index.ts\" -o -name \"server.ts\" -o -name \"app.ts\" | head -5)"
     ]
   }
 }

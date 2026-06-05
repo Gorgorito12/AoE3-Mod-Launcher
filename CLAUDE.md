@@ -48,11 +48,18 @@ All commands run from `WarsOfLibertyLauncher/`.
 - `--update-now` is a launch argument that auto-resumes the update flow elevated
   (used after a UAC relaunch).
 - Two publish scripts exist: `WarsOfLibertyLauncher/build-release.ps1` is the
-  canonical one (cleans, publishes, signs, prints SHA-256). The root
-  `publish.ps1` is an older alternative that also supports `-Tag` to create a
-  `vX.Y.Z` git tag; its header comment claims the output is
-  `WarsOfLibertyLauncher.exe`, but `<AssemblyName>` makes it
-  `Aoe3ModLauncher.exe` — the comment is stale.
+  canonical one (cleans, publishes, signs, verifies the signature, prints
+  SHA-256). The root `publish.ps1` is now a thin **wrapper** around it — it
+  forwards `-Version`/`-Configuration`/`-Runtime` to `build-release.ps1` (single
+  source of truth for the build/sign/hash pipeline) and, on a successful build,
+  optionally creates the **local** `vX.Y.Z` git tag via `-Tag` (which requires
+  `-Version`; it never pushes, and a pre-existing tag / non-git checkout is a
+  soft warning, not a failure). Because it delegates, its output now lands at
+  `WarsOfLibertyLauncher/publish/Aoe3ModLauncher.exe` (the canonical location),
+  NOT a separate root `publish/`. It used to be a standalone copy that looked for
+  a stale `WarsOfLibertyLauncher.exe` (the `<AssemblyName>` rename made it
+  `Aoe3ModLauncher.exe`), so its success output never printed — that drift is
+  the reason it was collapsed into a wrapper.
 
 ### Tests & verification
 
@@ -131,7 +138,26 @@ don't go looking for it.)
 - **Code signing is automatic but optional.** MSBuild `AfterBuild`/`AfterPublish`
   targets Authenticode-sign the binary with a self-signed `CN=Gorgorito` cert
   (thumbprint in `<SignCertThumbprint>`). They are Windows-only and silently
-  no-op if the cert isn't present, so builds still succeed without it.
+  no-op if the cert isn't present, so builds still succeed without it. **The
+  full regenerate recipe lives in the `.csproj` comment right above
+  `<SignCertThumbprint>`** — read it before touching the cert. Three gotchas it
+  encodes: (1) **a stale thumbprint silently no-ops signing** (the build's
+  `Get-Item Cert:\CurrentUser\My\<thumb>` finds nothing → "skipping"), so always
+  repaste `$cert.Thumbprint` into the `.csproj` after regenerating — this exact
+  drift shipped unsigned `.exe`s until it was caught. (2) Adding the cert to
+  **`CurrentUser\Root` CANNOT be done non-interactively** — it pops a Windows
+  "Security Warning" that needs a human "Yes" click (`Import-Certificate` errors
+  "UI is not allowed in this operation"; the raw `X509Store.Add` just *hangs* on
+  the dialog), so the Root-trust step must run in an interactive shell, never
+  from CI/headless. Without Root the file is still signed (`Signer=CN=Gorgorito`,
+  timestamped) but `Get-AuthenticodeSignature` reports `UnknownError` (untrusted
+  chain), not `Valid`; `TrustedPublisher` + `My` add silently. (3) Keep the
+  cert's **Subject = `CN=Gorgorito`** across regenerations — the launcher
+  self-update's authenticity check is *same-signer by Subject*, not thumbprint
+  (`LauncherUpdateService`), so a new key with the same Subject preserves
+  self-update continuity. (A self-signed cert never satisfies SmartScreen on
+  *other* machines — that's expected; the trust only matters on the build
+  machine and for the self-update Subject match.)
 
 - **`third_party/**` and `native/**` are excluded from compile** in the
   `.csproj`. Those dirs don't currently exist; the excludes are defensive guards

@@ -161,13 +161,34 @@
     Application Control / SmartScreen from refusing to load the binary
     with ERROR_APP_BLOCKED_BY_POLICY (0x800711C7) on launch.
 
-    Setup (one-time, already done on this machine):
-      $cert = New-SelfSignedCertificate -Subject 'CN=Gorgorito' `
-              -Type CodeSigning -CertStoreLocation Cert:\CurrentUser\My `
-              -KeyAlgorithm RSA -KeyLength 2048 `
+    Regenerate (run in an INTERACTIVE PowerShell — the Root import below
+    pops a Windows "Security Warning" you must click "Yes" on; it CANNOT
+    be done non-interactively / from CI, so don't try to script the Root
+    step headless):
+
+      # 1. (optional) drop any prior CN=Gorgorito certs so they don't pile up
+      foreach ($s in 'My','Root','TrustedPublisher') {
+        $st = [System.Security.Cryptography.X509Certificates.X509Store]::new($s,'CurrentUser')
+        $st.Open('ReadWrite')
+        $st.Certificates | Where-Object { $_.Subject -eq 'CN=Gorgorito' } |
+          ForEach-Object { $st.Remove($_) }
+        $st.Close()
+      }
+      # 2. create the signing cert (keep Subject = CN=Gorgorito so the
+      #    launcher self-update's same-signer check keeps matching)
+      $cert = New-SelfSignedCertificate -Subject 'CN=Gorgorito' -Type CodeSigning `
+              -CertStoreLocation Cert:\CurrentUser\My -KeyAlgorithm RSA -KeyLength 2048 `
               -NotAfter (Get-Date).AddYears(5)
-      # Then copy $cert into Cert:\CurrentUser\Root and
-      # Cert:\CurrentUser\TrustedPublisher so Windows trusts it.
+      # 3. trust it: TrustedPublisher (silent) + Root (the "Yes" dialog).
+      #    Without Root the signature is valid-but-UnknownError (untrusted
+      #    chain) on this machine; with it, Get-AuthenticodeSignature = Valid.
+      $tmp = "$env:TEMP\gorgorito.cer"
+      Export-Certificate -Cert $cert -FilePath $tmp -Force | Out-Null
+      Import-Certificate -FilePath $tmp -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+      Import-Certificate -FilePath $tmp -CertStoreLocation Cert:\CurrentUser\Root
+      Remove-Item $tmp
+      # 4. MANDATORY: paste $cert.Thumbprint into <SignCertThumbprint> below.
+      #    A stale thumbprint makes signing silently no-op (the original bug).
 
     The thumbprint below identifies that exact certificate. If the cert
     is regenerated, update SignCertThumbprint or signing will silently
@@ -180,7 +201,7 @@
     Windows-only; skipped on other OSes via the Condition.
   -->
   <PropertyGroup>
-    <SignCertThumbprint>6C46C6DEAB2BE94374EFD5925CE9A819946E00E9</SignCertThumbprint>
+    <SignCertThumbprint>892BD8A38156E489F05F731C828EF1D931504363</SignCertThumbprint>
     <SignTimestampServer>http://timestamp.digicert.com</SignTimestampServer>
   </PropertyGroup>
 
