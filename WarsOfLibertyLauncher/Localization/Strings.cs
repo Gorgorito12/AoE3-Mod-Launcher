@@ -3395,6 +3395,14 @@ public static class Strings
             [LangEn] = "Installation finished but {0} item(s) may be missing. Check the log for details.",
             [LangEs] = "La instalación finalizó pero {0} elemento(s) podrían faltar. Revisa el log para más detalles.",
         },
+        // Shown when the AoE3 base clone copied 0 files (integrity gate in
+        // NativeInstallService.InstallAsync) — the mod would be unplayable, so
+        // the install is aborted before overlay/registry/shortcuts.
+        ["StatusInstallBaseMissing"] = new()
+        {
+            [LangEn] = "The Age of Empires III base game wasn't copied, so the mod can't run. Your AoE3 install may be missing, in an unexpected location, or excluded by another mod's path. The mod was NOT installed — check your AoE3 install and try again.",
+            [LangEs] = "No se copió el juego base de Age of Empires III, así que el mod no puede ejecutarse. Tu instalación de AoE3 podría faltar, estar en una ubicación inesperada o quedar excluida por la ruta de otro mod. El mod NO se instaló — revisa tu instalación de AoE3 e inténtalo de nuevo.",
+        },
 
         // -------- Download corruption retry (NativeInstall) --------
         // Shown when ZIP extraction fails because the downloaded payload is

@@ -179,6 +179,24 @@ public class NativeInstallService
         DiagnosticLog.Write($"  AoE3 Source: {aoe3SourcePath}");
         DiagnosticLog.Write($"  Destination: {destinationFolder}");
 
+        // ---- Phase 0: Pre-flight the clone plan BEFORE downloading ----
+        // The post-clone gate (Phase 3) also catches a 0-file clone, but only
+        // AFTER the multi-GB payload download has finished. Counting up-front
+        // (a cheap dir enumeration, no copy) lets a misconfigured AoE3 source or
+        // exclusion set fail FAST — saving the user a long download just to abort
+        // at the clone step. Same exclusion logic as the real clone, so the count
+        // is authoritative.
+        int plannedCloneFiles = _cloneService.CountCloneableFiles(
+            aoe3SourcePath, destinationFolder, extraExcludedSubtrees, ct);
+        if (plannedCloneFiles == 0)
+        {
+            DiagnosticLog.Write(
+                $"ABORT (pre-flight): cloning '{aoe3SourcePath}' would copy 0 files — " +
+                "aborting BEFORE download (source missing/empty or fully excluded).");
+            throw new InstallBaseGameMissingException(aoe3SourcePath);
+        }
+        DiagnosticLog.Write($"  Pre-flight: clone would copy {plannedCloneFiles} base files.");
+
         // ---- Phase 1: Download all parts and concatenate ----
         phaseProgress?.Report(InstallPhase.Download);
         statusProgress?.Report($"Downloading {profile.DisplayName} files...");
@@ -198,8 +216,26 @@ public class NativeInstallService
         // the "improvement mod copies wars of liberty" regression.
         phaseProgress?.Report(InstallPhase.Clone);
         statusProgress?.Report("Copying Age of Empires III files...");
-        await _cloneService.CloneAsync(aoe3SourcePath, destinationFolder, cloneProgress, ct,
+        int clonedFiles = await _cloneService.CloneAsync(aoe3SourcePath, destinationFolder, cloneProgress, ct,
             extraExcludedSubtrees: extraExcludedSubtrees);
+
+        // Integrity gate: a full clone install MUST copy the AoE3 base (it's
+        // thousands of files). If the clone produced NOTHING, the source is
+        // missing/empty or an exclusion removed it (the canonical case: the
+        // stock-game `…\bin` path landing in the sibling-exclusion list — see
+        // LauncherConfig.GetSiblingInstallPaths' IsStockGame guard). Abort
+        // LOUDLY here — BEFORE overlay / registry / shortcuts — instead of
+        // shipping a mod overlaid on an empty base that can't launch (missing
+        // engine DLLs + data\*.xml; the game just exits with "RockallDLL.dll
+        // not found"). The install flow catches this and shows a clear,
+        // localized error; retrying wouldn't help (it's a config/source issue).
+        if (clonedFiles == 0)
+        {
+            DiagnosticLog.Write(
+                $"ABORT: AoE3 clone copied 0 files from '{aoe3SourcePath}' — " +
+                "not overlaying the mod onto an empty base game.");
+            throw new InstallBaseGameMissingException(aoe3SourcePath);
+        }
 
         // ---- Phase 3b: Flatten bin\ subfolder if present ----
         // (Still part of the Clone phase from the UI's perspective.)

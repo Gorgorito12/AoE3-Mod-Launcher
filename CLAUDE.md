@@ -54,11 +54,34 @@ All commands run from `WarsOfLibertyLauncher/`.
   `WarsOfLibertyLauncher.exe`, but `<AssemblyName>` makes it
   `Aoe3ModLauncher.exe` — the comment is stale.
 
-### No automated tests
+### Tests & verification
 
-There is no test project and no test runner. Verification is a manual smoke
-test on Windows. (`CONTRIBUTING.md` links a `docs/ROADMAP.md#smoke-test` that no
-longer exists — don't go looking for it.)
+There is now a **minimal unit-test project** — `WarsOfLibertyLauncher.Tests/`
+(xUnit; a SIBLING of the main project so the main project's compile globs don't
+pick it up). It targets `net8.0-windows` + `UseWPF` because the testable logic
+lives in the WPF assembly (`Aoe3ModLauncher.dll`), so the test host needs the
+WindowsDesktop runtime to load those types. It covers **pure logic with no UI
+dependency** — the first test pins `LauncherConfig.GetSiblingInstallPaths` (the
+stock-game sibling-exclusion regression in the install-gate gotcha below). Run:
+`dotnet test WarsOfLibertyLauncher.Tests` (Windows-only). Coverage is
+deliberately small; **add a test when you fix a pure-logic bug** rather than
+chasing UI coverage.
+
+Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
+Two cheap gates beyond a green build:
+- **Smoke-launch** — a green build does NOT prove the app starts: a
+  `{StaticResource}` that fails to resolve throws at *runtime*, not compile (this
+  bit us once with `RadiusMd`). Run `dotnet
+  bin/Release/net8.0-windows/Aoe3ModLauncher.dll` for ~10 s — it stays up
+  (timeout-kill = OK) or prints the unhandled exception + stack. The `.exe` needs
+  UAC, so run the `.dll` via the dotnet host to capture startup crashes from a
+  plain (non-elevated) shell.
+- **Install** — the installer can produce a broken-but-"successful" result
+  (missing base game), so a real install needs an actual AoE3 + payload download;
+  the integrity gate (below) is the in-process backstop.
+
+(`CONTRIBUTING.md` links a `docs/ROADMAP.md#smoke-test` that no longer exists —
+don't go looking for it.)
 
 ## Important gotchas
 
@@ -123,6 +146,51 @@ longer exists — don't go looking for it.)
   payload files** (`.xml.xmb`, `.bak`, stray `.rar`, …) after install *and* every
   update. It's a deliberate multiplayer LAN-hash-parity step, not cleanup — those
   deletions are load-bearing.
+
+- **The full-clone install has an integrity GATE — `InstallAsync` aborts loudly
+  if the AoE3 clone copied 0 files, and `GetSiblingInstallPaths` MUST skip the
+  stock game.** A real, nasty bug lived here: the installer clones AoE3 (then
+  `FlattenBinSubfolder` moves `bin\` → the mod root) and EXCLUDES every *other*
+  mod's install path so it doesn't scoop a sibling mod into the new install
+  (`LauncherConfig.GetSiblingInstallPaths`). That list iterated **all**
+  `ModRegistry.All` profiles — including the stock base game `aoe3-tad`
+  (`IsStockGame`), whose `InstallPath` is the user's real AoE3 = `…\Age Of
+  Empires 3\bin`. Excluding `bin` made the clone copy **0 base files**, so the mod
+  shipped with no engine DLLs (`RockallDLL`/`binkw32`/`granny2`/`deformerdlly`) or
+  `data\*.xml` and the game exited instantly on launch — yet the install reported
+  *success* (the generic `VerifyInstallation` layer only checked that the mod
+  payload landed, not that the base was cloned — fix (3) below closes that gap;
+  non-WoL/`GitHubReleases` mods got only that layer). The bug was **latent**: it
+  armed the moment the stock game got
+  detected (which persists `aoe3-tad → …\bin` into the config's `mods` dict).
+  Three fixes, all load-bearing: (1) `GetSiblingInstallPaths` now `continue`s on
+  `p.IsStockGame` — the base game is what we CLONE, never a sibling to exclude
+  (pinned by `WarsOfLibertyLauncher.Tests`); (2) `CloneAsync` returns the copied
+  count and `InstallAsync` throws `InstallBaseGameMissingException` when it's 0,
+  BEFORE the overlay / registry / shortcuts, so a misconfigured clone fails fast
+  with a clear, localized error (`StatusInstallBaseMissing`) instead of producing
+  a silent broken install; (3) `VerifyInstallation`'s GENERIC layer (not just the
+  WoL-specific one) now checks the three `data\` version-key files
+  (`protoy/techtreey/stringtabley.xml`) for `WolPatcher` / `GitHubReleases`
+  installs, so a PARTIAL clone (copied SOME files but no `data\`, which slips
+  past the 0-file gate) is reported as "incomplete" instead of a silent success —
+  this is what closes the gap for non-WoL/`GitHubReleases` mods that previously
+  got only the payload-landed check. Don't re-add the stock game to any cross-mod
+  file/exclusion loop, don't drop the clone-count gate, and keep the base-file
+  check generic (it's the backstop that protects non-WoL mods). The clone-count
+  check ALSO runs as a **pre-flight** (`FolderCloneService.CountCloneableFiles`,
+  a dry-run enumeration sharing the exact exclusion set via the extracted
+  `BuildExcludedSubtrees`) at the very START of `InstallAsync` — BEFORE the
+  multi-GB payload download — so a misconfigured source/exclusion fails fast
+  instead of after a long download; the post-clone gate stays as a backstop.
+  `BuildExcludedSubtrees` also **drops + warns** on any exclusion that is (or is
+  a parent of) the clone source itself (it would empty the whole clone — never
+  legitimate). (Unrelated: `SharpCompress` stays at the tested 0.37.2 with
+  advisory `GHSA-6c8g-7p36-r338` suppressed via `NuGetAuditSuppress` in the
+  `.csproj` — it's unpatched in every release incl. the latest, and the launcher
+  only extracts its OWN CRC32-verified `.tar.xz`, so the malicious-archive vector
+  doesn't apply; the suppress is targeted so NuGet audit still flags any future
+  vuln.)
 
 - **The top nav tab ORDER is runtime-driven, not the XAML order.** The three
   tabs (LIBRARY / WORKSHOP / MULTIPLAYER) are declared in a fixed left-to-right

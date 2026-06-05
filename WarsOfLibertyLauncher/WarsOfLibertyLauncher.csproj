@@ -88,8 +88,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- For .tar.xz extraction (the original updater uses this format) -->
+    <!-- For .tar.xz extraction (the original updater uses this format).
+         Kept at 0.37.2 (tested): the moderate advisory GHSA-6c8g-7p36-r338
+         (NU1902) is UNPATCHED in every SharpCompress release, including the
+         latest 0.40.0 — bumping clears nothing and only risks an untested
+         change to the WolPatcher .tar.xz extraction path. Suppressed below. -->
     <PackageReference Include="SharpCompress" Version="0.37.2" />
+    <!-- Suppress ONLY that one advisory (NuGet audit still flags any FUTURE
+         vuln in any package). Justification: the launcher extracts only
+         TRUSTED, CRC32-verified .tar.xz patches from its own update server
+         (aoe3wol.com), never arbitrary user-supplied archives, so the
+         malicious-archive vector this advisory describes doesn't apply.
+         Remove when SharpCompress ships a fixed release. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-6c8g-7p36-r338" />
     <!-- For CRC32 verification of downloaded .tar.xz files -->
     <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
     <!-- System-tray icon (WPF-native; avoids dragging in WinForms just for

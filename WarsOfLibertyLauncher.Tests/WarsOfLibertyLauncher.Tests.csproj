@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Minimal unit-test project for the launcher's PURE LOGIC (no WPF UI).
+    Lives as a sibling of WarsOfLibertyLauncher/ so the main project's
+    compile globs don't pick it up. Targets net8.0-windows + UseWPF because
+    it references the WPF app project (the testable logic — LauncherConfig,
+    ModRegistry — lives in that assembly), so the test host needs the
+    WindowsDesktop runtime to load those types.
+
+    Run with:  dotnet test WarsOfLibertyLauncher.Tests
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WarsOfLibertyLauncher\WarsOfLibertyLauncher.csproj" />
+  </ItemGroup>
+
+</Project>

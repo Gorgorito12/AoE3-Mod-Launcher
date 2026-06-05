@@ -24,7 +24,11 @@
       "Bash(findstr /S /N \"FontSize=\" *.xaml Controls/*.xaml)",
       "PowerShell(cd C:\\\\Users\\\\Jeison\\\\Documents\\\\Updater\\\\WarsOfLibertyLauncher; Get-Content -Path MainWindow.xaml -Raw | Select-String -Pattern 'FontSize=\"[0-9]' -AllMatches | ForEach-Object { $_.Matches | ForEach-Object { $_.Value } })",
       "Bash(ls \"C:\\\\Users\\\\Jeison\\\\.claude\\\\plans\\\\\" 2>/dev/null && echo \"---dir exists---\" || echo \"---need to check parent---\")",
-      "Bash(ls -la /c/Users/Jeison/.claude/plans/ 2>/dev/null && echo EXISTS || echo MISSING)"
+      "Bash(ls -la /c/Users/Jeison/.claude/plans/ 2>/dev/null && echo EXISTS || echo MISSING)",
+      "Bash(echo \"=== ¿Existe el config y tiene la entrada aoe3-tad con su ruta guardada? ===\")",
+      "Bash([ -f \"$cfg\" ])",
+      "Bash(grep -niE 'aoe3-tad|installPath|Age Of Empires 3' WarsOfLibertyLauncher/bin/Debug/net8.0-windows/launcher-config.json)",
+      "Bash(dotnet test *)"
     ]
   }
 }

@@ -101,7 +101,7 @@ public class FolderCloneService
     /// up the entire WoL clone as a sub-folder, blowing up the install size
     /// and producing a confusingly nested layout.
     /// </summary>
-    public async Task CloneAsync(
+    public async Task<int> CloneAsync(
         string sourceFolder,
         string destFolder,
         IProgress<CloneProgress>? progress = null,
@@ -115,55 +115,9 @@ public class FolderCloneService
 
         DiagnosticLog.Write($"Cloning '{sourceFolder}' -> '{destFolder}'");
 
-        // Assemble the full exclusion set. We always exclude destFolder
-        // (to prevent self-recursion when dest lives inside source) and
-        // any caller-supplied subtrees (sibling mod installs). On top of
-        // that we auto-detect any direct subfolder of source that looks
-        // like a launcher-managed mod clone — i.e. contains a file named
-        // "<something>-manifest.json" in its root. Defense in depth: even
-        // if the caller forgets to pass a sibling install path, we still
-        // skip it instead of cloning a multi-GB mod into another mod.
-        var excludedSubtrees = new List<string> { destFolder };
-        if (extraExcludedSubtrees != null)
-        {
-            foreach (var s in extraExcludedSubtrees)
-                if (!string.IsNullOrEmpty(s))
-                    excludedSubtrees.Add(s);
-        }
-        try
-        {
-            foreach (var sub in Directory.EnumerateDirectories(sourceFolder))
-            {
-                var subName = Path.GetFileName(sub);
-                // Hard list — other mods + side-loaded runtimes that we
-                // refuse to clone into a fresh install root regardless
-                // of whether they look like a launcher-managed mod.
-                if (AlwaysExcludeTopLevelDirs.Any(d =>
-                        string.Equals(d, subName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    DiagnosticLog.Write($"Clone: excluding well-known top-level dir '{subName}'");
-                    excludedSubtrees.Add(sub);
-                    continue;
-                }
-                // Heuristic — any sub-folder of source that contains a
-                // "<something>-manifest.json" in its root is a launcher-
-                // managed mod clone. Skip those so AoE3 → ImprovementMod
-                // doesn't scoop up a previously-installed WoL etc.
-                bool looksLikeModClone = Directory.EnumerateFiles(sub, "*-manifest.json",
-                    SearchOption.TopDirectoryOnly).Any();
-                if (looksLikeModClone)
-                {
-                    DiagnosticLog.Write($"Clone: auto-excluding mod-clone subfolder '{sub}'");
-                    excludedSubtrees.Add(sub);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // Don't fail the install just because the auto-detect probe
-            // can't enumerate one of the source subfolders.
-            DiagnosticLog.Write($"Clone: auto-exclude probe failed: {ex.Message}");
-        }
+        // Assemble the full exclusion set (shared with the CountCloneableFiles
+        // pre-flight so the dry-run count matches what we actually copy).
+        var excludedSubtrees = BuildExcludedSubtrees(sourceFolder, destFolder, extraExcludedSubtrees);
 
         // Step 1: enumerate everything to copy. We do this up-front so we can
         // show a real percentage instead of the indeterminate "files copied so
@@ -228,6 +182,103 @@ public class FolderCloneService
 
         DiagnosticLog.Write($"Clone complete: {filesCopied}/{files.Count} files, " +
                             $"{FormatBytes(bytesCopied)}");
+        return filesCopied;
+    }
+
+    /// <summary>
+    /// Pre-flight count: how many files a <see cref="CloneAsync"/> with the SAME
+    /// args would copy, WITHOUT copying anything. The install flow runs this
+    /// BEFORE the (multi-GB) payload download, so a misconfigured clone — missing/
+    /// empty AoE3 source, or one whose base content got fully excluded — fails
+    /// fast instead of after a long download. Uses the exact same exclusion set
+    /// + enumeration as the real clone, so the count is authoritative.
+    /// </summary>
+    public int CountCloneableFiles(
+        string sourceFolder,
+        string destFolder,
+        IEnumerable<string>? extraExcludedSubtrees = null,
+        CancellationToken ct = default)
+    {
+        if (!Directory.Exists(sourceFolder)) return 0;
+        var excluded = BuildExcludedSubtrees(sourceFolder, destFolder, extraExcludedSubtrees);
+        return EnumerateFiles(sourceFolder, excluded, ct).Count;
+    }
+
+    /// <summary>
+    /// Builds the clone exclusion set: destFolder (no self-recursion) + caller-
+    /// supplied sibling subtrees + the hard AlwaysExclude list + auto-detected
+    /// launcher-managed mod clones ("*-manifest.json" probe). Shared by
+    /// <see cref="CloneAsync"/> and <see cref="CountCloneableFiles"/> so the
+    /// pre-flight count and the real clone agree.
+    /// </summary>
+    private static List<string> BuildExcludedSubtrees(
+        string sourceFolder, string destFolder, IEnumerable<string>? extraExcludedSubtrees)
+    {
+        var excludedSubtrees = new List<string> { destFolder };
+        if (extraExcludedSubtrees != null)
+        {
+            foreach (var s in extraExcludedSubtrees)
+                if (!string.IsNullOrEmpty(s))
+                    excludedSubtrees.Add(s);
+        }
+        try
+        {
+            foreach (var sub in Directory.EnumerateDirectories(sourceFolder))
+            {
+                var subName = Path.GetFileName(sub);
+                // Hard list — other mods + side-loaded runtimes we refuse to
+                // clone into a fresh install root.
+                if (AlwaysExcludeTopLevelDirs.Any(d =>
+                        string.Equals(d, subName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    DiagnosticLog.Write($"Clone: excluding well-known top-level dir '{subName}'");
+                    excludedSubtrees.Add(sub);
+                    continue;
+                }
+                // Heuristic — a subfolder with a "<x>-manifest.json" in its root
+                // is a launcher-managed mod clone; skip it so AoE3 → ImprovementMod
+                // doesn't scoop up a previously-installed WoL etc.
+                bool looksLikeModClone = Directory.EnumerateFiles(sub, "*-manifest.json",
+                    SearchOption.TopDirectoryOnly).Any();
+                if (looksLikeModClone)
+                {
+                    DiagnosticLog.Write($"Clone: auto-excluding mod-clone subfolder '{sub}'");
+                    excludedSubtrees.Add(sub);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Don't fail just because the auto-detect probe can't enumerate one
+            // of the source subfolders.
+            DiagnosticLog.Write($"Clone: auto-exclude probe failed: {ex.Message}");
+        }
+
+        // #3 sanity guard: an exclusion that IS the clone source (or a PARENT of
+        // it) would empty the entire clone — never legitimate (you're cloning the
+        // source). Drop such entries + warn loudly instead of silently producing
+        // a 0-file clone. (Excluding a SUBDIR like bin\ is a mod-specific call the
+        // pre-flight count + post-clone gate + VerifyInstallation catch downstream
+        // — not second-guessed here.)
+        string srcFull;
+        try { srcFull = Path.GetFullPath(sourceFolder).TrimEnd('\\', '/'); }
+        catch { return excludedSubtrees; }
+        excludedSubtrees.RemoveAll(s =>
+        {
+            string sFull;
+            try { sFull = Path.GetFullPath(s).TrimEnd('\\', '/'); }
+            catch { return false; }
+            bool emptiesClone = string.Equals(sFull, srcFull, StringComparison.OrdinalIgnoreCase)
+                || srcFull.StartsWith(sFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || srcFull.StartsWith(sFull + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            if (emptiesClone)
+                DiagnosticLog.Write(
+                    $"Clone: REFUSING exclusion '{s}' — it is (or contains) the clone " +
+                    "source itself, which would empty the whole clone.");
+            return emptiesClone;
+        });
+
+        return excludedSubtrees;
     }
 
     /// <summary>

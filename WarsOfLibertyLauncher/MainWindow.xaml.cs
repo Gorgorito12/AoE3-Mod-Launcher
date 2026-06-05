@@ -5829,6 +5829,37 @@ public partial class MainWindow : Window
                 missing.Add(profile.InstallProbeFile);
         }
 
+        // --- Generic: AoE3 base-game presence ---
+        // The native install pipeline (WolPatcher / GitHubReleases) clones AoE3
+        // and flattens bin\ into the root, so a CORRECT install ALWAYS has the
+        // three version-key data files at data\. If they're missing, the base
+        // game wasn't laid down — e.g. a PARTIAL clone the clone-count gate in
+        // NativeInstallService.InstallAsync didn't catch because it copied SOME
+        // files (the gate only fires on a total 0-file clone). Without this the
+        // generic layer below only confirms the MOD payload landed, not the base,
+        // so a GitHubReleases mod (Improvement Mod) could verify "OK" yet be
+        // unplayable (missing engine DLLs + data — the game exits on launch).
+        // Skipped for DelegatedExternal / Manual mechanisms whose on-disk layout
+        // the launcher doesn't control. (IsStockGame never reaches here — verify
+        // is guarded against the detect-only base game.)
+        bool nativeAoe3Install = profile.UpdateMechanism is ModUpdateMechanism.WolPatcher
+                                 or ModUpdateMechanism.GitHubReleases;
+        if (nativeAoe3Install)
+        {
+            string[] baseKeyFiles =
+            {
+                @"data\protoy.xml",
+                @"data\techtreey.xml",
+                @"data\stringtabley.xml",
+            };
+            foreach (var rel in baseKeyFiles)
+            {
+                totalChecked++;
+                if (!File.Exists(Path.Combine(installPath, rel)))
+                    missing.Add(rel + " (AoE3 base file — the game can't launch without it)");
+            }
+        }
+
         // --- WoL-specific layer ---
         // Only applied when the mod uses the WoL-style updater. Skipped for
         // GitHubReleases / DelegatedExternal mods that don't ship the WoL
@@ -6516,6 +6547,17 @@ public partial class MainWindow : Window
         {
             SetStatus(Strings.Get("StatusCancelledUpdate"));
             ShowProgressCancelled();
+        }
+        catch (Services.InstallBaseGameMissingException ex)
+        {
+            // The AoE3 base wasn't cloned (0 files) — the mod would ship
+            // unplayable (missing engine DLLs + data\*.xml). Distinct from a
+            // corrupt payload (no retry); surface a clear, localized cause so
+            // the user knows to check their AoE3 install / exclusions rather
+            // than blaming the mod download.
+            DiagnosticLog.Write($"Install aborted — AoE3 base not cloned: {ex}");
+            SetStatus(Strings.Get("StatusInstallBaseMissing"));
+            ShowProgressError(Strings.Get("StatusInstallBaseMissing"));
         }
         catch (Exception ex)
         {
