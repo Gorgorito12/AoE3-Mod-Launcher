@@ -331,6 +331,7 @@ public static class ModRegistry
             InstallType = installType,
             DefaultInstallFolder = m.Install.DefaultFolder ?? "",
             InstallProbeFile = m.Install.ProbeFile ?? "",
+            InstallMarker = m.Install.Marker ?? "",
             GameExecutable = m.Install.Executable ?? "",
             GameArguments = m.Install.Arguments ?? "",
             UpdateMechanism = updateMechanism,
@@ -477,6 +478,12 @@ public static class ModRegistry
             // dialog if they want a custom location.
             DefaultInstallFolder = "",
             InstallProbeFile = @"data\stringtabley.xml",
+            // Content marker unique to WoL (absent from vanilla AoE3): lets the
+            // launcher recognise a WoL install in a folder with ANY name, and
+            // tells a real WoL folder apart from the base game (whose data\
+            // files satisfy the probe too). Same marker the original Java
+            // updater and RegistryService.IsValidInstall check.
+            InstallMarker = @"art\zulushield",
             GameExecutable = "age3y.exe",
             GameArguments = "",
             UpdateMechanism = ModUpdateMechanism.WolPatcher,

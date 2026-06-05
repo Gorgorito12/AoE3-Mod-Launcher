@@ -14,6 +14,7 @@
     "type": "IsolatedFolder",
     "defaultFolder": "C:\\Program Files (x86)\\Wars of Liberty",
     "probeFile": "data\\stringtabley.xml",
+    "marker": "art\\zulushield",
     "executable": "age3y.exe",
     "arguments": ""
   },

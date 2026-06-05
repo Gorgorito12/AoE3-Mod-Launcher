@@ -228,8 +228,8 @@ public partial class InstallFolderDialog : Window
         if (dialog.ShowDialog(this) == true)
         {
             var picked = dialog.FolderName.TrimEnd('\\', '/');
-            if (!picked.EndsWith("Wars of Liberty", StringComparison.OrdinalIgnoreCase))
-                picked = Path.Combine(picked, "Wars of Liberty");
+            if (!picked.EndsWith(_modDisplayName, StringComparison.OrdinalIgnoreCase))
+                picked = Path.Combine(picked, _modDisplayName);
             FolderTextBox.Text = picked;
         }
     }
@@ -290,7 +290,7 @@ public partial class InstallFolderDialog : Window
         UpdateAoE3Display();
 
         // Also suggest installing inside this AoE3 folder
-        var suggestedWolPath = Path.Combine(gameFolder!, "Wars of Liberty");
+        var suggestedWolPath = Path.Combine(gameFolder!, _modDisplayName);
         FolderTextBox.Text = suggestedWolPath;
     }
 

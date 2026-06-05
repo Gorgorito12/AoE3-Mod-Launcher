@@ -137,6 +137,16 @@ public class ModCatalogInstall
     [JsonPropertyName("probeFile")]
     public string ProbeFile { get; set; } = "";
 
+    /// <summary>
+    /// Optional content marker (file or directory, relative to the install
+    /// folder) unique to the mod and absent from the base game. Projected into
+    /// <see cref="ModProfile.InstallMarker"/>; lets the launcher detect the mod
+    /// by content in a folder with any name. Only needed when
+    /// <see cref="ProbeFile"/> is shared with the base game.
+    /// </summary>
+    [JsonPropertyName("marker")]
+    public string Marker { get; set; } = "";
+
     [JsonPropertyName("executable")]
     public string Executable { get; set; } = "";
 

@@ -98,6 +98,10 @@
           "type": "string",
           "description": "Relative path the launcher checks to confirm the mod is installed at a given location."
         },
+        "marker": {
+          "type": "string",
+          "description": "Optional. Relative path (file or directory) unique to the mod and absent from the base game it clones/overlays. When set, the launcher detects the mod by content in a folder with ANY name and uses it to tell a real install apart from vanilla AoE3. Only needed when probeFile is shared with the base game (e.g. a patched data\\ file)."
+        },
         "executable": {
           "type": "string",
           "pattern": "^[a-zA-Z0-9_.-]+\\.exe$"

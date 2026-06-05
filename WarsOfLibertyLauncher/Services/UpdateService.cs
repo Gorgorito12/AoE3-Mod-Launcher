@@ -105,15 +105,17 @@ public class UpdateService
         // happened on every single mod switch.
         var state = _config.GetState(_profile.Id);
 
-        // 1. Cached install path. Two syscalls (Directory.Exists +
-        //    File.Exists for the probe file) → essentially free. Avoids
-        //    flashing "Not installed" on mod switch. The CachedPathLeafLooksValid
-        //    check rejects stale entries that point at a vanilla AoE3 folder
-        //    (probe file alone isn't enough — vanilla AoE3 has it too).
+        // 1. Cached install path. A few file-system syscalls (Directory.Exists
+        //    + File.Exists for the probe file + the content marker) →
+        //    essentially free. Avoids flashing "Not installed" on mod switch.
+        //    LooksLikeRealModInstall rejects stale entries that point at a
+        //    vanilla AoE3 folder — the probe file alone isn't enough (vanilla
+        //    AoE3 carries data\stringtabley.xml too), so we also require the
+        //    mod's content marker (WoL: art\zulushield) when one is declared.
         var cachedPath = state.InstallPath;
         bool pathCacheHit = !string.IsNullOrWhiteSpace(cachedPath)
             && IsProfileInstalled(cachedPath)
-            && CachedPathLeafLooksValid(cachedPath);
+            && LooksLikeRealModInstall(cachedPath);
         if (pathCacheHit)
         {
             InstallPath = cachedPath.TrimEnd('\\', '/');
@@ -641,17 +643,18 @@ public class UpdateService
         var state = _config.GetState(_profile.Id);
 
         // 1. Path cached for THIS mod from a previous detection (per-mod —
-        //    cannot leak across profiles). For IsolatedFolder mods we also
-        //    require the cached path's leaf folder name to look like the mod
-        //    (DisplayName or DefaultInstallFolder leaf): a stale cache that
-        //    points at a vanilla AoE3 location (e.g. <Steam>\…\Age Of Empires 3\bin)
-        //    can pass IsProfileInstalled by accident — the probe file
-        //    (data\stringtabley.xml etc.) exists in vanilla AoE3 too. Rejecting
-        //    such caches forces re-detection on next CheckAsync.
+        //    cannot leak across profiles). On top of the probe-file check we
+        //    require the mod's content marker when one is declared: a stale
+        //    cache pointing at a vanilla AoE3 location (e.g.
+        //    <Steam>\…\Age Of Empires 3\bin) can pass IsProfileInstalled by
+        //    accident — the probe file (data\stringtabley.xml etc.) exists in
+        //    vanilla AoE3 too — but it lacks the marker (WoL: art\zulushield).
+        //    Detection is by content, not folder name, so a renamed install
+        //    folder still resolves here instead of being wiped.
         if (!string.IsNullOrWhiteSpace(state.InstallPath))
         {
             if (IsProfileInstalled(state.InstallPath)
-                && CachedPathLeafLooksValid(state.InstallPath))
+                && LooksLikeRealModInstall(state.InstallPath))
             {
                 return state.InstallPath.TrimEnd('\\', '/');
             }
@@ -662,7 +665,7 @@ public class UpdateService
             // detection.
             DiagnosticLog.Write(
                 $"ResolveInstallPath: rejecting stale cache for '{_profile.Id}': '{state.InstallPath}' " +
-                "(failed leaf-name or probe-file check). Clearing.");
+                "(failed probe-file or content-marker check). Clearing.");
             state.InstallPath = "";
             try { _config.Save(); }
             catch (Exception ex)
@@ -695,7 +698,7 @@ public class UpdateService
 
             foreach (var candidate in candidates)
             {
-                if (IsProfileInstalled(candidate))
+                if (IsProfileInstalled(candidate) && LooksLikeRealModInstall(candidate))
                 {
                     DiagnosticLog.Write(
                         $"Found '{_profile.Id}' via disk scan: {candidate}");
@@ -710,39 +713,62 @@ public class UpdateService
     }
 
     /// <summary>
-    /// Probe locations for an isolated-folder mod (e.g. WoL).
-    /// Only checks folders named after the mod (<c>profile.DisplayName</c>
-    /// or the leaf of <c>profile.DefaultInstallFolder</c>). Older code also
-    /// fell back to <c>install.ModRoot</c> / <c>install.GameFolder</c> —
-    /// "in case the user extracted the mod on top of AoE3" — but for
-    /// IsolatedFolder mods that's a category error: vanilla AoE3 has the
-    /// same probe files (<c>data\stringtabley.xml</c> etc.), so the
-    /// fallback would happily classify a vanilla AoE3 install as a WoL
-    /// install. Users who legitimately overlay on AoE3 should declare their
-    /// mod as <see cref="ModInstallType.InPlaceOverlay"/> instead.
+    /// Probe locations for an isolated-folder mod (e.g. WoL). Two passes:
+    /// first the fast happy-path guesses where the folder is named after the
+    /// mod (<c>profile.DisplayName</c> or the leaf of
+    /// <c>profile.DefaultInstallFolder</c>); then a CONTENT scan of every
+    /// child folder one level under the AoE3 root, its <c>bin\</c>, and the
+    /// parent that may hold the mod as a sibling — yielding any that look like
+    /// a real install of this mod by content (probe file + marker). The scan
+    /// is what makes detection independent of the folder name, and the marker
+    /// is what keeps it from matching vanilla AoE3 (whose <c>data\</c> files
+    /// satisfy an ambiguous probe). Each candidate is re-validated by the
+    /// caller, so emitting a few extra is harmless.
     /// </summary>
     private IEnumerable<string> IsolatedCandidates(AoE3Detector.Installation install)
     {
-        // Folder name we expect the mod to live in. Prefer the leaf of an
-        // absolute DefaultInstallFolder ("C:\\…\\Improvement Mod" → "Improvement Mod"),
+        var parent = Path.GetDirectoryName(install.ModRoot.TrimEnd('\\', '/'));
+
+        // Pass 1 — folder named after the mod. Prefer the leaf of an absolute
+        // DefaultInstallFolder ("C:\\…\\Improvement Mod" → "Improvement Mod"),
         // else fall back to the DisplayName.
         var folderName = string.IsNullOrEmpty(_profile.DefaultInstallFolder)
             ? _profile.DisplayName
             : Path.GetFileName(_profile.DefaultInstallFolder.TrimEnd('\\', '/'));
 
-        if (string.IsNullOrEmpty(folderName))
+        if (!string.IsNullOrEmpty(folderName))
+        {
+            yield return Path.Combine(install.ModRoot, folderName);
+            yield return Path.Combine(install.GameFolder, folderName);
+            // Sibling-of-AoE3: when DefaultInstallFolder is empty the install
+            // dialog suggests "<parent of AoE3>\<DisplayName>" as the default.
+            if (!string.IsNullOrEmpty(parent))
+                yield return Path.Combine(parent, folderName);
+        }
+
+        // Pass 2 — content scan, so the mod is found in a folder with ANY
+        // name. Needs a content signal to match against; without one, every
+        // subfolder would match.
+        bool hasContentSignal = !string.IsNullOrEmpty(_profile.InstallProbeFile)
+            || !string.IsNullOrEmpty(_profile.InstallMarker);
+        if (!hasContentSignal)
             yield break;
 
-        yield return Path.Combine(install.ModRoot, folderName);
-        yield return Path.Combine(install.GameFolder, folderName);
+        foreach (var baseDir in new[] { install.ModRoot, install.GameFolder, parent })
+        {
+            if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(baseDir))
+                continue;
 
-        // Also check sibling-of-AoE3: when the modder leaves DefaultInstallFolder
-        // empty, the install dialog suggests "<parent of AoE3>\<DisplayName>"
-        // as the default (WoL post-cleanup). Detect there too so a follow-up
-        // launch sees the install.
-        var parent = Path.GetDirectoryName(install.ModRoot.TrimEnd('\\', '/'));
-        if (!string.IsNullOrEmpty(parent))
-            yield return Path.Combine(parent, folderName);
+            string[] subdirs;
+            try { subdirs = Directory.GetDirectories(baseDir); }
+            catch { continue; } // permission / IO — skip this base quietly
+
+            foreach (var sub in subdirs)
+            {
+                if (ModInstallProbe.LooksLikeModInstall(sub, _profile))
+                    yield return sub;
+            }
+        }
     }
 
     /// <summary>Probe locations for an in-place overlay mod (e.g. IM).</summary>
@@ -773,31 +799,21 @@ public class UpdateService
     }
 
     /// <summary>
-    /// Extra sanity gate on a cached install path for IsolatedFolder mods:
-    /// the leaf folder name has to look like the mod's expected folder
-    /// (DisplayName, or the leaf of DefaultInstallFolder). Otherwise a stale
-    /// entry pointing at something like "…\Age Of Empires 3\bin" — which
-    /// also happens to satisfy the probe-file check, since vanilla AoE3
-    /// carries the same data files — would be re-used forever. Always
-    /// passes for InPlaceOverlay mods (which legitimately live under the
-    /// AoE3 root by design) and for mods with no probe file (legacy path).
+    /// Extra content gate layered on top of <see cref="IsProfileInstalled"/>'s
+    /// probe-file check: when the profile declares an
+    /// <see cref="ModProfile.InstallMarker"/> (a file/dir unique to the mod,
+    /// absent from the base game it clones/overlays) require it. This is what
+    /// tells a real mod install apart from a stale path pointing at vanilla
+    /// AoE3 — which also satisfies the probe file (it carries the same
+    /// <c>data\</c> files). Detection is by CONTENT, not folder name, so the
+    /// mod is recognised under any folder name. Profiles with no marker pass:
+    /// their probe file is already exclusive to the mod (e.g. an overlay mod's
+    /// own .exe).
     /// </summary>
-    private bool CachedPathLeafLooksValid(string cachedPath)
+    private bool LooksLikeRealModInstall(string path)
     {
-        if (_profile.InstallType != ModInstallType.IsolatedFolder) return true;
-        if (string.IsNullOrEmpty(_profile.InstallProbeFile)) return true;
-
-        var leaf = Path.GetFileName(cachedPath.TrimEnd('\\', '/'));
-        if (string.IsNullOrEmpty(leaf)) return false;
-
-        string[] expected = new[]
-        {
-            _profile.DisplayName,
-            Path.GetFileName(_profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? ""),
-        };
-        return expected.Any(e =>
-            !string.IsNullOrEmpty(e)
-            && string.Equals(leaf, e, StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrEmpty(_profile.InstallMarker)) return true;
+        return ModInstallProbe.MarkerExists(path, _profile.InstallMarker);
     }
 
     /// <summary>

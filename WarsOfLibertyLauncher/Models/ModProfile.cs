@@ -242,6 +242,26 @@ public class ModProfile
     public string InstallProbeFile { get; set; } = "";
 
     /// <summary>
+    /// Optional path (file OR directory, relative to the install folder) that
+    /// is UNIQUE to this mod and absent from the base game it clones/overlays.
+    /// When set, its presence is the authoritative "this folder really is an
+    /// install of this mod" signal, so the mod is detected in a folder with
+    /// ANY name.
+    ///
+    /// Why this exists: <see cref="InstallProbeFile"/> alone can be ambiguous.
+    /// WoL's probe (<c>data\stringtabley.xml</c>) also ships in vanilla AoE3,
+    /// so a probe hit can't tell a real WoL folder from the base game. The
+    /// launcher used to disambiguate by requiring the folder be named after the
+    /// mod, which broke detection the moment the user renamed it. A content
+    /// marker (WoL: <c>art\zulushield</c>, the same one the original updater and
+    /// <see cref="WarsOfLibertyLauncher.Services.RegistryService.IsValidInstall"/>
+    /// use) distinguishes the mod from its base game without looking at the
+    /// folder name. Leave empty when the probe file is already exclusive to the
+    /// mod (e.g. an overlay mod's own .exe like IM's <c>age3m.exe</c>).
+    /// </summary>
+    public string InstallMarker { get; set; } = "";
+
+    /// <summary>
     /// Filename of the .exe to launch when the user hits PLAY. Resolved
     /// relative to the install folder for in-place mods, or to the mod's
     /// own folder for isolated mods.

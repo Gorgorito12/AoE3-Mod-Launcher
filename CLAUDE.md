@@ -192,6 +192,41 @@ don't go looking for it.)
   doesn't apply; the suppress is targeted so NuGet audit still flags any future
   vuln.)
 
+- **Install detection is by CONTENT, never by folder name —
+  `InstallProbeFile` + an optional `InstallMarker`, unified in
+  `Services/ModInstallProbe.cs`.** The historical bug: WoL (an
+  `IsolatedFolder` mod) was only recognised when its folder was literally
+  named "Wars of Liberty", so renaming/moving it — or pointing the launcher at
+  it via "Change mod folder" — made it read as **not installed** (the next
+  `CheckAsync` re-rejected the path and wiped it). Root cause: WoL's probe file
+  `data\stringtabley.xml` ALSO ships in vanilla AoE3, so the old code used the
+  **leaf folder name** (must equal `DisplayName`) as a proxy for "this isn't
+  vanilla". The fix replaces that proxy with a content **marker** — a file/dir
+  unique to the mod and absent from the base game it clones/overlays
+  (`ModProfile.InstallMarker`; WoL = `art\zulushield`, the SAME marker the
+  legacy Java updater and `RegistryService.IsValidInstall` already use). The
+  single rule lives in `ModInstallProbe.LooksLikeModInstall(path, profile)`:
+  folder exists → probe present (if declared) → marker present (if declared) →
+  true; the **folder name is never consulted**. `UpdateService` uses it two
+  ways: `LooksLikeRealModInstall` (renamed from `CachedPathLeafLooksValid` — the
+  marker gate layered on `IsProfileInstalled`'s probe check, applied to the
+  cached/saved path AND each disk-scan candidate so a renamed install survives
+  the re-check), and `IsolatedCandidates`' SECOND pass, which enumerates one
+  level under the AoE3 root / its `bin\` / the parent-that-holds-AoE3-as-sibling
+  and yields any child that passes the content check — so WoL is auto-detected
+  in a folder with ANY name (the first pass still tries the name-based happy
+  path as a fast guess). `MainWindow`'s tile-side `SavedPathLooksValid` and the
+  manual-picker `LooksLikeModInstall` delegate to the same helper (the picker
+  keeps its WoL Inno-registry fallback). **This is GENERIC, not WoL-specific:**
+  Improvement Mod needs nothing (overlay, probe `age3m.exe` is exclusive, never
+  used the name); catalog mods can declare `install.marker` in `mod.json`
+  (exposed in `mod.schema.json`, documented in `docs/MODDING.md`). Declare a
+  marker only when your probe file is shared with AoE3 — if the probe is already
+  exclusive, it suffices alone, and the content scan needs at least one signal
+  (probe or marker) or it bails (else every subfolder would match). Don't
+  reintroduce a folder-name check; the marker is the anti-vanilla signal now.
+  Pinned by `WarsOfLibertyLauncher.Tests/ModInstallProbeTests`.
+
 - **The top nav tab ORDER is runtime-driven, not the XAML order.** The three
   tabs (LIBRARY / WORKSHOP / MULTIPLAYER) are declared in a fixed left-to-right
   order in `MainWindow.xaml` (`TopTabBar` StackPanel), but that's just the

@@ -775,40 +775,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Tile-side equivalent of <see cref="Services.UpdateService"/>'s
-    /// <c>CachedPathLeafLooksValid</c>: rejects a cached install path that
-    /// happens to satisfy <see cref="Directory.Exists(string)"/> but doesn't
-    /// look like a real install of this mod. Two signals:
-    /// <list type="bullet">
-    ///   <item>For IsolatedFolder mods, the leaf folder name must match
-    ///   <see cref="ModProfile.DisplayName"/> or the leaf of
-    ///   <see cref="ModProfile.DefaultInstallFolder"/>.</item>
-    ///   <item>The probe file must exist inside.</item>
-    /// </list>
+    /// Tile-side equivalent of <see cref="Services.UpdateService"/>'s install
+    /// detection: rejects a cached install path that satisfies
+    /// <see cref="Directory.Exists(string)"/> but isn't a real install of this
+    /// mod. Detection is by CONTENT (probe file + optional marker), never by
+    /// folder name — see <see cref="Services.ModInstallProbe"/> for the rule.
+    /// The marker is what tells a real WoL folder apart from vanilla AoE3,
+    /// which also carries the probe file.
     /// </summary>
     private static bool SavedPathLooksValid(string saved, ModProfile profile)
-    {
-        if (string.IsNullOrEmpty(profile.InstallProbeFile))
-            return true;
-
-        var probe = Path.Combine(saved, profile.InstallProbeFile);
-        if (!File.Exists(probe)) return false;
-
-        if (profile.InstallType != ModInstallType.IsolatedFolder)
-            return true;
-
-        var leaf = Path.GetFileName(saved.TrimEnd('\\', '/'));
-        if (string.IsNullOrEmpty(leaf)) return false;
-
-        string[] expected = new[]
-        {
-            profile.DisplayName,
-            Path.GetFileName(profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? ""),
-        };
-        return expected.Any(e =>
-            !string.IsNullOrEmpty(e)
-            && string.Equals(leaf, e, StringComparison.OrdinalIgnoreCase));
-    }
+        => ModInstallProbe.LooksLikeModInstall(saved, profile);
 
     /// <summary>
     /// Best-effort path resolution: for in-place mods we look inside every
@@ -4630,14 +4606,11 @@ public partial class MainWindow : Window
     /// </summary>
     private static bool LooksLikeModInstall(string candidate, ModProfile profile)
     {
-        if (string.IsNullOrEmpty(candidate) || !Directory.Exists(candidate))
-            return false;
-
-        if (!string.IsNullOrEmpty(profile.InstallProbeFile)
-            && File.Exists(Path.Combine(candidate, profile.InstallProbeFile)))
-        {
+        // Content check (probe file + optional marker), name-independent. The
+        // marker keeps a manually-picked vanilla AoE3 folder from passing as
+        // WoL — its probe file (data\stringtabley.xml) exists in vanilla too.
+        if (ModInstallProbe.LooksLikeModInstall(candidate, profile))
             return true;
-        }
 
         // Backwards-compat for WoL installs from the Inno-installer era,
         // which may predate the probe-file-based detection. Other mods don't

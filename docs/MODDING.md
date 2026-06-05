@@ -167,7 +167,8 @@ max per language.
 |---|---|
 | `type` | `IsolatedFolder` or `InPlaceOverlay`. Details in §4. |
 | `defaultFolder` | Suggested path for the install dialog. Empty for `InPlaceOverlay` — the launcher uses the detected AoE3 path. |
-| `probeFile` | Relative path the launcher checks to confirm the mod is installed at a given location (`File.Exists(install + probeFile)`). Pick something **unique** to your mod — `age3y.exe` exists in vanilla AoE3 too. |
+| `probeFile` | Relative path the launcher checks to confirm the mod is installed at a given location (`File.Exists(install + probeFile)`). Pick something **unique** to your mod — `age3y.exe` exists in vanilla AoE3 too. If you can't (your mod patches a base-game file rather than adding a new one), declare a `marker` as well. |
+| `marker` | *Optional.* Relative path (file **or** directory) that is unique to your mod and absent from vanilla AoE3. When set, the launcher detects your mod **by content in a folder with any name** (the install folder no longer has to be named after the mod) and uses it to tell a real install apart from the base game. Needed only when `probeFile` is shared with AoE3 — WoL uses `art\\zulushield`, because its probe `data\\stringtabley.xml` also ships in vanilla. |
 | `executable` | Filename of the .exe that launches the game (`age3y.exe` for WoL, `age3m.exe` for Improvement Mod). The launcher looks for it inside the install folder. |
 | `arguments` | Extra args the launcher appends when running. Usually empty. |
 | `payloadUrls` | Array of HTTPS URLs for the initial install zip. If the mod ships in parts (`.zip.001`, `.002`, …) list them in order — the launcher concatenates and then extracts. |
