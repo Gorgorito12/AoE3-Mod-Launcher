@@ -825,15 +825,26 @@ don't go looking for it.)
 - **The launcher self-update (`LauncherUpdateService`) verifies before it
   swaps, and the swap is reversible — don't loosen either.** Detection is
   still **tag-based** (compare GitHub's `releases/latest` `tag_name` to
-  `config.LastInstalledLauncherTag`, decoupled from AssemblyVersion), but the
-  flow is now hardened in four load-bearing ways: (1) **SemVer guard** —
+  `config.LastInstalledLauncherTag`, decoupled from AssemblyVersion except as
+  the no-saved-tag fallback — see (1)), but the flow is now hardened in four
+  load-bearing ways: (1) **SemVer guard** —
   `CheckAsync` only offers an update when the remote tag parses as a *strictly
   newer* SemVer than the installed one (`TryParseSemVer` strips a leading `v`
-  and any `-rc`/`+commit` suffix). The guard applies **only when BOTH tags
-  parse**; an empty installed tag (fresh install) or a non-SemVer tag falls
-  back to the old prompt-on-any-difference behaviour, so a weird tag scheme
-  can't silently hide an update — but it also means **releases must use SemVer
-  tags** (`v0.9.8`) for the "don't update backwards" protection to engage.
+  and any `-rc`/`+commit` suffix). The guard compares the remote tag against an
+  **effective current version**: the saved tag when present, else — for a binary
+  that never self-updated in-app (a manual download from GitHub Releases, or a
+  build run straight from `publish\`) — the binary's **stamped AssemblyVersion**
+  (`EvaluateUpdate` → `FormatVersionTag`, `0.9.9.0` → `v0.9.9`). This closed a
+  real bug: an empty saved tag used to fall through to prompt-on-any-difference,
+  so a freshly-downloaded `v0.9.9` offered an "update" to `v0.9.9` and showed
+  `current: —` (it hit every user the first time they opened the .exe). The
+  fallback relies on `build-release.ps1 -Version` stamping the AssemblyVersion,
+  so **release builds must pass `-Version`** (and use SemVer tags like `v0.9.8`)
+  for both the "don't update backwards" guard and self-recognition to engage; a
+  non-SemVer SAVED tag still keeps the prompt-on-difference fallback so a weird
+  tag scheme can't silently hide an update. The decision lives in the pure,
+  network-free `EvaluateUpdate` (saved-tag → dismissed-tag → SemVer guard),
+  pinned by `WarsOfLibertyLauncher.Tests/LauncherUpdateServiceTests`.
   (2) **Integrity + authenticity verification** runs inside
   `DownloadUpdateAsync` *before* the binary is usable, and on failure deletes
   the downloaded `_new.exe` and throws `UpdateVerificationException` (the dialog

@@ -49,8 +49,15 @@ public class LauncherUpdateService
         string? ResponseETag = null);
 
     /// <summary>
-    /// The AssemblyVersion baked into this binary. Kept for diagnostics only —
-    /// update detection is tag-based, not version-based.
+    /// The AssemblyVersion baked into this binary (the release build stamps it
+    /// via <c>build-release.ps1 -Version</c> → <c>-p:Version</c>). Update
+    /// detection is still tag-based; this is the <em>fallback</em> "current
+    /// version" when there is no saved <c>LastInstalledLauncherTag</c> — e.g. a
+    /// binary obtained outside the in-app self-updater (a manual download from
+    /// GitHub Releases, or a freshly published build run straight from
+    /// <c>publish\</c>). Without it such a binary can't recognise its own version
+    /// and offers an "update" to the version it already is. See
+    /// <see cref="EvaluateUpdate"/>.
     /// </summary>
     public static Version CurrentVersion =>
         Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
@@ -67,8 +74,11 @@ public class LauncherUpdateService
     /// </summary>
     /// <param name="lastInstalledTag">
     /// The tag of the currently-running launcher (saved after the last
-    /// successful self-update). Empty for fresh installs — in that case the
-    /// launcher will prompt once and save the tag the user picks.
+    /// successful in-app self-update). Empty for a binary that never self-updated
+    /// in-app (a manual download / freshly published build) — in that case we
+    /// fall back to the binary's stamped <see cref="CurrentVersion"/> as the
+    /// effective current version (see <see cref="EvaluateUpdate"/>), so it doesn't
+    /// offer an "update" to the very version it is already running.
     /// </param>
     /// <param name="skippedTag">
     /// A tag the user previously dismissed. We won't re-prompt for it.
@@ -117,35 +127,20 @@ public class LauncherUpdateService
 
             var remoteTag = release.TagName;
 
-            // Already on the latest tag.
-            if (string.Equals(remoteTag, lastInstalledTag, StringComparison.OrdinalIgnoreCase))
-            {
-                DiagnosticLog.Write($"Already on latest tag ({remoteTag}); no update.");
-                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
-            }
-
-            // The user dismissed this exact tag before.
-            if (string.Equals(remoteTag, skippedTag, StringComparison.OrdinalIgnoreCase))
-            {
-                DiagnosticLog.Write(
-                    $"User previously dismissed tag {remoteTag}; skipping prompt.");
-                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
-            }
-
-            // Semantic-version guard: only offer an update when the remote tag is
-            // strictly NEWER than what's installed. Tag-difference alone isn't
-            // enough — a re-published or rolled-back "latest" could carry an older
-            // version, and without this we'd happily "update" the user backwards.
-            // We only apply the guard when BOTH tags parse as SemVer; a fresh
-            // install (empty installed tag) or a non-SemVer tag keeps the original
-            // prompt-on-difference behaviour so we never silently miss an update.
-            if (TryParseSemVer(lastInstalledTag, out var installedVer) &&
-                TryParseSemVer(remoteTag, out var remoteVer) &&
-                remoteVer <= installedVer)
+            // Decide whether this remote tag is genuinely newer than what we're
+            // running. EvaluateUpdate falls back to the binary's stamped
+            // AssemblyVersion when there's no saved tag (a manual download /
+            // freshly published build), so we don't offer an "update" to the
+            // version already running. Distinct reasons (already-on-latest,
+            // dismissed, not-newer) all fold into a single not-offered branch.
+            var (offer, currentLabel) =
+                EvaluateUpdate(lastInstalledTag, CurrentVersion, skippedTag, remoteTag);
+            if (!offer)
             {
                 DiagnosticLog.Write(
-                    $"Remote tag {remoteTag} (v{remoteVer}) is not newer than installed " +
-                    $"{lastInstalledTag} (v{installedVer}); no update.");
+                    $"No launcher update: remote {remoteTag} is not newer than current " +
+                    $"{currentLabel} (saved tag '{lastInstalledTag ?? ""}', " +
+                    $"skipped '{skippedTag ?? ""}').");
                 return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
             }
 
@@ -159,12 +154,12 @@ public class LauncherUpdateService
             var expectedSha = ExtractExpectedSha256(asset.Digest, release.Body);
 
             DiagnosticLog.Write(
-                $"Launcher update available: {lastInstalledTag ?? "(unknown)"} -> {remoteTag} " +
+                $"Launcher update available: {currentLabel} -> {remoteTag} " +
                 $"({asset.Name}, {asset.Size} bytes, sha256={expectedSha ?? "(none published)"})");
 
             return new UpdateCheckResult(
                 UpdateAvailable: true,
-                CurrentVersion: string.IsNullOrEmpty(lastInstalledTag) ? "—" : lastInstalledTag!,
+                CurrentVersion: currentLabel,
                 LatestVersion: remoteTag,
                 DownloadUrl: asset.BrowserDownloadUrl,
                 DownloadSize: asset.Size,
@@ -403,6 +398,57 @@ public class LauncherUpdateService
     {
         var label = string.IsNullOrEmpty(currentTag) ? "—" : currentTag!;
         return new(false, label, label, null, 0, currentTag ?? "", null, null);
+    }
+
+    /// <summary>
+    /// Formats an assembly <see cref="Version"/> as a GitHub-style release tag
+    /// ("0.9.9.0" → "v0.9.9"). <see cref="Version.Build"/> is floored at 0 so a
+    /// 2-part version ("1.0", whose Build is -1) still yields a valid "v1.0.0".
+    /// </summary>
+    public static string FormatVersionTag(Version v) =>
+        $"v{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}";
+
+    /// <summary>
+    /// Pure, network-free update decision: given the saved tag, the running
+    /// binary's <paramref name="assemblyVersion"/>, the dismissed tag, and the
+    /// latest remote tag, decides whether to OFFER an update and what to show as
+    /// the "current" version.
+    ///
+    /// Key rule: when <paramref name="lastInstalledTag"/> is empty (a binary that
+    /// never self-updated in-app — a manual download or a freshly published
+    /// build), the stamped <paramref name="assemblyVersion"/> is the effective
+    /// current version. Without this, an empty tag always reads as "different
+    /// from remote" and the launcher offers an "update" to the very version it is
+    /// already running (shown as "current: —"). A saved tag, when present, takes
+    /// precedence over the AssemblyVersion (it's the authoritative record).
+    ///
+    /// Extracted from <see cref="CheckAsync"/> so it can be unit-tested without
+    /// touching the network.
+    /// </summary>
+    public static (bool offer, string currentLabel) EvaluateUpdate(
+        string? lastInstalledTag, Version assemblyVersion, string? skippedTag, string remoteTag)
+    {
+        var effective = string.IsNullOrEmpty(lastInstalledTag)
+            ? FormatVersionTag(assemblyVersion)
+            : lastInstalledTag!;
+
+        // Already on this tag, or the user dismissed it via "Later".
+        if (string.Equals(remoteTag, effective, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(remoteTag, skippedTag, StringComparison.OrdinalIgnoreCase))
+            return (false, effective);
+
+        // Semantic-version guard: only offer when the remote tag is strictly
+        // NEWER. A re-published or rolled-back "latest" can carry an older
+        // version, and without this we'd "update" the user backwards. Applied
+        // whenever both the effective-current and remote tags parse as SemVer; a
+        // non-SemVer saved tag keeps the prompt-on-difference fallback so we
+        // never silently miss an update.
+        if (TryParseSemVer(effective, out var installedVer) &&
+            TryParseSemVer(remoteTag, out var remoteVer) &&
+            remoteVer <= installedVer)
+            return (false, effective);
+
+        return (true, effective);
     }
 
     /// <summary>
