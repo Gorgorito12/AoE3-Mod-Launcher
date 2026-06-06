@@ -267,27 +267,14 @@ public class NativeInstallService
             catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
         }
 
-        // ---- Phase 5b: Remove stale precompiled XMB files ----
-        // The legacy WolPayload.zip ships .xml.xmb files alongside
-        // their .xml originals. AoE3 prefers .xmb when present (it's
-        // the parsed binary form, faster to load) and falls back to
-        // re-compiling from .xml when the .xmb is missing.
-        //
-        // Two reasons we strip the shipped .xmb:
-        //   1. They're built against an older revision of the .xml.
-        //      Patches update the .xml but NOT the .xmb, so post-
-        //      patch the .xmb is stale and represents a different
-        //      game state than what the .xml describes.
-        //   2. AoE3's LAN "version match" handshake hashes the .xmb
-        //      bytes. A peer who installed via the original installer
-        //      (no .xmb shipped — gets generated at first run from
-        //      the patched .xml) ends up with a DIFFERENT .xmb hash,
-        //      so the two installs can't see each other on LAN.
-        //
-        // Removing the shipped .xmb files (plus a small set of known
-        // dev-leftover files we found by diffing canonical vs
-        // launcher installs) lets AoE3 regenerate them fresh on
-        // first launch, matching what original-installer peers have.
+        // ---- Phase 5b: Remove dev-leftover junk from the payload ----
+        // Strips files that ship in WolPayload.zip but are absent from a
+        // canonical setup+updater install (.bak, "cópia" duplicates,
+        // art\WoL\interns\, loose .rar, "(enhanced)" .wav). It does NOT
+        // touch .xml.xmb: the canonical distribution ships those and never
+        // deletes/regenerates them, and AoE3 hashes them for its LAN
+        // version match — so we keep them exactly as shipped to stay
+        // byte-faithful to the community (see RemoveStaleBuildArtifacts).
         RemoveStaleBuildArtifacts(profile, destinationFolder);
 
         // ---- Phase 6: Post-install integrity dump ----
@@ -305,29 +292,28 @@ public class NativeInstallService
     }
 
     /// <summary>
-    /// Strip files that ship in the WoL payload zip but cause LAN
-    /// version-mismatch errors when the launcher install meets a
-    /// peer who installed via the legacy Inno installer.
+    /// Strip dev-leftover files that ship in the WoL payload zip but are
+    /// absent from a canonical setup+updater install, so the launcher's
+    /// file set matches what original-installer peers have.
     ///
-    /// Two categories:
+    /// <para><b>We deliberately do NOT touch <c>.xml.xmb</c>.</b> The
+    /// canonical distribution (Inno installer + Java updater) ships these
+    /// precompiled files and never deletes or regenerates them — verified
+    /// by reverse-engineering both. AoE3 hashes the <c>.xmb</c> for its LAN
+    /// version match; deleting ours made the launcher the odd one out,
+    /// because AoE3 regenerates a fresh <c>.xmb</c> on first launch whose
+    /// bytes can differ from a peer's shipped one → version-mismatch / OOS
+    /// against the community. So every <c>.xml.xmb</c> is left exactly as
+    /// the payload ships it.</para>
     ///
-    ///   * <b>Precompiled <c>.xml.xmb</c> files</b> — binary
-    ///     copies of XML game data (protoy.xml.xmb,
-    ///     techtreey.xml.xmb, stringtabley.xml.xmb, ui*.xml.xmb).
-    ///     The payload zip ships them precompiled against an older
-    ///     revision of the .xml. Patches refresh the .xml but not
-    ///     the .xmb, leaving the install with mismatched pairs.
-    ///     AoE3 hashes the .xmb for LAN match — peers regenerated
-    ///     from the patched .xml get a different hash, blocking
-    ///     the connection. Deleting them lets AoE3 rebuild fresh
-    ///     on first launch.
-    ///
-    ///   * <b>Dev leftovers</b> — files with garbled Unicode names
-    ///     (Portuguese "cópia" mis-encoded as "c¢pia" / "cã³pia"),
-    ///     `.bak` backups, and files without extensions
-    ///     (`nativebolasmatrero`). These slipped into the bootstrap
-    ///     zip but aren't part of any released WoL patch; the
-    ///     canonical install doesn't have them.
+    /// What we DO strip — dev leftovers with no gameplay or sync role,
+    /// confirmed absent from a canonical install: <c>.bak</c> backups,
+    /// Portuguese "cópia" duplicates (mojibake "c¢pia"/"cã³pia"),
+    /// extensionless orphans under <c>data\tactics\</c>, the
+    /// <c>art\WoL\interns\</c> dev scratch folder, loose <c>.rar</c> under
+    /// <c>art\</c>, and "(enhanced)" <c>.wav</c> duplicates under
+    /// <c>Sound\WoL\</c>. None of these participate in AoE3's simulation
+    /// sync, so removing them is safe and keeps the install lean.
     ///
     /// Only runs for the WoL profile; other mods aren't affected.
     /// Idempotent — re-running on an already-clean folder is a no-op.
@@ -344,36 +330,18 @@ public class NativeInstallService
         var dataFolder = Path.Combine(destinationFolder, "data");
         if (!Directory.Exists(dataFolder)) return;
 
-        int removedXmb = 0;
         int removedJunk = 0;
         long bytesFreed = 0;
 
-        // 1) Strip every .xml.xmb. AoE3 will regenerate them from
-        //    the .xml at first launch and they'll match what other
-        //    peers' installs produce.
-        try
-        {
-            foreach (var xmb in Directory.EnumerateFiles(dataFolder, "*.xml.xmb", SearchOption.AllDirectories))
-            {
-                try
-                {
-                    var len = new FileInfo(xmb).Length;
-                    File.Delete(xmb);
-                    removedXmb++;
-                    bytesFreed += len;
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write($"  RemoveStaleBuildArtifacts: could not delete '{xmb}': {ex.Message}");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"RemoveStaleBuildArtifacts: enumerating .xmb in '{dataFolder}' failed: {ex.Message}");
-        }
+        // .xml.xmb files are deliberately LEFT IN PLACE. The canonical
+        // install (Inno installer + Java updater) ships them and never
+        // deletes/regenerates them; AoE3 hashes the .xmb for its LAN
+        // version match, so stripping ours would make the launcher the
+        // odd one out vs the community (engine-regenerated .xmb can differ
+        // byte-wise from the shipped one) → version-mismatch / OOS. We only
+        // strip dev junk with no sim/sync role below.
 
-        // 2) Strip .bak files (XML backups left behind by editor
+        // 1) Strip .bak files (XML backups left behind by editor
         //    tools) and known dev-leftover file names. Be defensive
         //    with the EnumerateFiles call — corrupt filenames have
         //    been known to throw here on Windows.
@@ -595,13 +563,12 @@ public class NativeInstallService
             }
         }
 
-        if (removedXmb > 0 || removedJunk > 0)
+        if (removedJunk > 0)
         {
             DiagnosticLog.Write(
                 $"RemoveStaleBuildArtifacts ({profile.Id}): " +
-                $"removed {removedXmb} .xml.xmb + {removedJunk} other junk files " +
-                $"({FormatBytes(bytesFreed)} freed). " +
-                $"AoE3 will regenerate .xmb files from .xml on first launch.");
+                $"removed {removedJunk} dev-leftover/junk files " +
+                $"({FormatBytes(bytesFreed)} freed). .xml.xmb files kept as shipped.");
         }
         else
         {

@@ -33,7 +33,11 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Jeison\\\\Documents\\\\Updater\\\\WarsOfLibertyLauncher\" -Recurse -Filter \"*.cs\")",
       "Bash(Select-Object -First 20)",
       "Bash(powershell -Command \"Select-String -Path '.\\\\MainWindow.xaml.cs' -Pattern '\\(_config\\\\s*=|LauncherConfig\\\\.Load\\)' | Select-Object -First 10\")",
-      "Bash(powershell -Command \"Select-String -Path '.\\\\Models\\\\LauncherConfig.cs' -Pattern 'public\\\\s+static\\\\s+LauncherConfig\\\\s+Load' -Context 0,50 | head -70\")"
+      "Bash(powershell -Command \"Select-String -Path '.\\\\Models\\\\LauncherConfig.cs' -Pattern 'public\\\\s+static\\\\s+LauncherConfig\\\\s+Load' -Context 0,50 | head -70\")",
+      "Bash(Get-Item -Path \"C:\\\\Users\\\\Jeison\\\\Downloads\\\\WOLL_original\\\\Wars of Liberty Updater - v1.4.exe\" -ErrorAction Stop)",
+      "Bash(Select-Object FullName, Length, CreationTime)",
+      "PowerShell(Head -50)",
+      "Bash(timeout 30 bash -c 'while [ ! -f \"C:\\\\\\\\Users\\\\\\\\Jeison\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-Jeison-Documents-Updater\\\\\\\\c5775234-2c33-407a-b893-b44191a9ccc7\\\\\\\\tasks\\\\\\\\bzi8d5t98.output\" ]; do sleep 1; done; cat \"C:\\\\\\\\Users\\\\\\\\Jeison\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-Jeison-Documents-Updater\\\\\\\\c5775234-2c33-407a-b893-b44191a9ccc7\\\\\\\\tasks\\\\\\\\bzi8d5t98.output\"')"
     ]
   }
 }

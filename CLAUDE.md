@@ -168,10 +168,43 @@ don't go looking for it.)
   `InstallProgressMonitor` are a legacy Inno-Setup flow (run a setup `.exe`
   silently). Confirm which one the UI actually calls before editing either.
 
-- **`NativeInstallService.RemoveStaleBuildArtifacts` (WoL only) deletes shipped
-  payload files** (`.xml.xmb`, `.bak`, stray `.rar`, …) after install *and* every
-  update. It's a deliberate multiplayer LAN-hash-parity step, not cleanup — those
-  deletions are load-bearing.
+- **`NativeInstallService.RemoveStaleBuildArtifacts` (WoL only) strips inert dev
+  junk after install *and* every update — but it deliberately does NOT touch
+  `.xml.xmb` anymore.** It removes `.bak`, stray `.rar` under `art\`,
+  `art\WoL\interns\`, `(enhanced).wav` under `Sound\WoL\`, and `cópia`/extensionless
+  `data\tactics\` orphans — files absent from a canonical install with no sim/sync
+  role. It USED to also delete every `.xml.xmb` on a "LAN-hash parity" theory ("peers
+  installed via the original installer have no `.xmb`, they regenerate from `.xml`, so
+  we match them by deleting ours"). Reverse-engineering the canonical distribution
+  (Inno installer + Java updater) proved that inverted: the official build SHIPS the
+  `.xml.xmb` and never deletes or regenerates them. AoE3 hashes the `.xmb` for its LAN
+  version match, so deleting ours made the launcher the odd one out (the engine
+  regenerates a fresh `.xmb` on first launch whose bytes can differ from a peer's
+  shipped one) → version-mismatch / OOS vs the community. Keep every `.xml.xmb`
+  exactly as the payload ships it; only the junk sweeps are load-bearing. Pinned by
+  `WarsOfLibertyLauncher.Tests/InstallParityTests`.
+
+- **Patch `deleteList`s are install-RELATIVE paths, NOT URLs — and the snapshot
+  install bypasses them, so the payload must be pre-cleaned.** Each `<download>` in
+  `UpdateInfo.xml` can carry `deleteList="etc\<name>_delete.lst"`: a path to a text
+  file the patch's own `.tar.xz` extracts into the install, one relative path per line
+  to delete. The original Java updater reads it locally and deletes those files.
+  `UpdateService` used to treat `dl.DeleteList` as a URL (`DownloadStringAsync`), which
+  silently failed (caught) for every real WoL patch, so patch deletions never applied.
+  Fixed: a `http(s)://` value is still downloaded, otherwise it's read locally via
+  `ArchiveService.ReadLocalDeleteList` (`Path.Combine(InstallPath, dl.DeleteList)`) and
+  applied with `ApplyDeleteList`. **Caveat:** this only runs during incremental
+  patching. The normal install lays down a pre-built `WolPayload.zip` snapshot already
+  newer than the latest `UpdateInfo` version, so NO patch — and no delete-list — runs;
+  any file the patch chain removed must already be absent from the payload. A diff of a
+  launcher install vs a canonical one found ~158 such stray files (e.g.
+  `data\homecityhabsburgs.xml`, `art\War of the Triple Alliance\*`, `Sound\WOLConsulate*`)
+  that the official `etc\*_delete.lst` remove — so the payload must be (re)built from a
+  properly-patched install. Do NOT "fix" this by blindly applying all shipped
+  `etc\*_delete.lst` to the final snapshot: ~11 of those entries (e.g.
+  `data\tactics\*.tactics` like `sarna`/`batidor`) were re-added by a later patch and ARE
+  present in the canonical build, so a blind sweep would wrongly delete them → new OOS.
+  Pinned by `WarsOfLibertyLauncher.Tests/InstallParityTests`.
 
 - **The full-clone install has an integrity GATE — `InstallAsync` aborts loudly
   if the AoE3 clone copied 0 files, and `GetSiblingInstallPaths` MUST skip the

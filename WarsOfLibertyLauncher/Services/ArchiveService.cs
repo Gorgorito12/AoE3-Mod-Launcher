@@ -335,4 +335,19 @@ public class ArchiveService
             }
         }
     }
+
+    /// <summary>
+    /// Resolves a download's <c>deleteList</c> reference to its text content.
+    /// The official WoL format is an install-RELATIVE path to a file the patch
+    /// shipped (e.g. <c>etc\1013c_delete.lst</c>), read locally. Callers handle
+    /// the <c>http(s)://</c> URL fallback. Returns "" when the path is empty or
+    /// the local file is absent (a missing list is a no-op, like the original
+    /// updater).
+    /// </summary>
+    public static string ReadLocalDeleteList(string installPath, string deleteListRef)
+    {
+        if (string.IsNullOrWhiteSpace(deleteListRef)) return "";
+        var local = Path.Combine(installPath, deleteListRef.TrimStart('\\', '/'));
+        return File.Exists(local) ? File.ReadAllText(local) : "";
+    }
 }

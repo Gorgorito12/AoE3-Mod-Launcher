@@ -514,12 +514,28 @@ public class UpdateService
                 extractStatus, extractByteProgress, ct);
 
             // ---- 5. Apply delete list ----
+            // The official UpdateInfo.xml gives deleteList as an install-
+            // RELATIVE PATH (e.g. "etc\1013c_delete.lst") to a text file the
+            // patch itself just extracted — the Java updater reads it locally
+            // and deletes the listed files. We must do the same; the older
+            // "download it as a URL" path silently failed for every real WoL
+            // patch (the value isn't a URL), so patch deletions never applied.
+            // A http(s) URL is still honoured as a fallback for other mods.
             if (!string.IsNullOrEmpty(dl.DeleteList))
             {
                 try
                 {
                     status?.Report(Strings.Format("StatusCleanup", dl.Id));
-                    var deleteListContent = await _downloader.DownloadStringAsync(dl.DeleteList, ct);
+                    string deleteListContent;
+                    if (dl.DeleteList.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                        || dl.DeleteList.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        deleteListContent = await _downloader.DownloadStringAsync(dl.DeleteList, ct);
+                    }
+                    else
+                    {
+                        deleteListContent = ArchiveService.ReadLocalDeleteList(InstallPath, dl.DeleteList);
+                    }
                     ArchiveService.ApplyDeleteList(InstallPath, deleteListContent);
                 }
                 catch

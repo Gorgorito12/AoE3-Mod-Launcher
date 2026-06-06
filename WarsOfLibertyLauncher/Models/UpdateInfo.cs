@@ -17,7 +17,7 @@ namespace WarsOfLibertyLauncher.Models;
 ///
 ///     &lt;download id="6" size="104857600" crc32="abc123"
 ///               link="http://..." altLink="http://..."
-///               deleteList="http://..." version="3.3"
+///               deleteList="etc\..._delete.lst" version="3.3"
 ///               postUpdatePage="http://..."/&gt;
 ///     ...more downloads...
 ///   &lt;/UpdateInfo&gt;
@@ -60,7 +60,12 @@ public class DownloadInfo
     public string Link { get; set; } = "";
     public string AltLink { get; set; } = "";
 
-    /// <summary>URL of a text file listing files to delete after applying this update.</summary>
+    /// <summary>
+    /// A text file (one relative path per line) listing files to delete after
+    /// applying this update. The official WoL format is an INSTALL-RELATIVE path
+    /// to a file the patch itself ships (e.g. <c>etc\1013c_delete.lst</c>), read
+    /// locally; an <c>http(s)://</c> URL is also accepted as a fallback.
+    /// </summary>
     public string DeleteList { get; set; } = "";
 
     /// <summary>The mod version this download brings the user TO.</summary>
