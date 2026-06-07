@@ -1,6 +1,6 @@
 # aoe3-mods-catalog template
 
-This folder is **scaffolding for a separate GitHub repo** — `papillo12/aoe3-mods-catalog` (or whatever you call it). It is not meant to live inside the launcher repo. Copy these files into a fresh repo when you're ready.
+This folder is **scaffolding for a separate GitHub repo** — `Gorgorito12/aoe3-mods-catalog` (or whatever you call it). It is not meant to live inside the launcher repo. Copy these files into a fresh repo when you're ready.
 
 ---
 

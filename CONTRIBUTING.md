@@ -7,8 +7,13 @@ profiles, translations and feature work are all welcome.
 ## Quick checklist before opening a PR
 
 1. **One topic per PR.** Keep refactors out of feature PRs.
-2. **Run the launcher locally** (`dotnet build -c Release` in
-   `WarsOfLibertyLauncher/`) and exercise the [smoke test](docs/ROADMAP.md#smoke-test-run-after-every-ui-commit-during-v08).
+2. **Build and verify locally** (Windows-only — the project is
+   `net8.0-windows` + WPF and won't build off-Windows). From
+   `WarsOfLibertyLauncher/`, run `dotnet build -c Release`, then
+   `dotnet test WarsOfLibertyLauncher.Tests` for the pure-logic tests, and
+   smoke-launch the build for ~10 s to catch runtime XAML/resource errors a
+   green build misses: `dotnet bin/Release/net8.0-windows/Aoe3ModLauncher.dll`.
+   When you fix a pure-logic bug, add a unit test that pins it.
 3. **Follow the existing style.** The codebase uses file-scoped namespaces,
    `Nullable` enabled, and brief doc-comments explaining *why* a piece of
    code exists. Don't add comments that just restate the code.

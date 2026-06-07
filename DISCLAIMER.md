@@ -25,23 +25,26 @@ affiliation or endorsement.
   the mirrors those projects designate, e.g. SourceForge for Wars of
   Liberty) using exactly the same URLs and formats their own updaters use.
 
-## Multiplayer (v1.0)
+## Multiplayer
 
-The integrated multiplayer feature uses two third-party services:
+The integrated multiplayer feature relies on:
 
-- **[Cloudflare Workers / D1 / R2](https://www.cloudflare.com/)** for the
-  meta layer (auth, lobbies, chat, matchmaking, replay storage). Subject to
-  Cloudflare's terms of service.
-- **[ZeroTier](https://www.zerotier.com/)** for the in-game traffic, which
-  creates a virtual Ethernet network so AoE3's original LAN code can find
-  peers across the public internet. The ZeroTier client (`zerotier-one`) is
-  licensed under the **Business Source License 1.1**; if the launcher
-  bundles or auto-installs it, that happens under the terms of the BSL.
-  Calling ZeroTier Central's public API from the backend is unaffected.
+- **A self-hosted [Node.js](https://nodejs.org/) + [Fastify](https://fastify.dev/)
+  backend** for the meta layer (Discord sign-in, lobbies, chat, matchmaking).
+  It runs on the maintainer's own server; the source lives in a companion
+  repository.
+- **[Radmin VPN](https://www.radmin-vpn.com/)** (by Famatech) for the in-game
+  traffic — a free, user-managed virtual LAN so AoE3's original LAN code can
+  find peers across the public internet. The launcher only **assists** with
+  Radmin (it can detect, help install, and launch the Radmin client, and copy
+  a network name to the clipboard); it does **not** bundle Radmin and cannot
+  join a network on the user's behalf. Radmin VPN is subject to Famatech's own
+  terms of use.
 
-ESO (Microsoft's original online service for AoE3) was shut down in 2014;
-this launcher does not connect to it and is not a replacement for it
-provided by Microsoft.
+Sign-in uses **Discord OAuth**; the launcher stores only the session token the
+backend issues. ESO (Microsoft's original online service for AoE3) was shut
+down in 2014; this launcher does not connect to it and is not a replacement for
+it provided by Microsoft.
 
 ## No warranty
 
