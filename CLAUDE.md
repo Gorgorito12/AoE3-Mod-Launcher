@@ -1173,9 +1173,10 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   attributes** (precedence over Style setters), so the button keeps its size
   when the brush changes. There is **no separate countdown-cancel button or
   `OnCountdownCancel` callback anymore** — both removed; don't reintroduce
-  them. **Do NOT call `StartCountdownGlow()` from `ApplyMatchPhaseUi`** —
-  the methods still exist on `LobbyWindow` (reusable) but are intentionally
-  unwired. The in-chat `CountdownOverlay` Border uses a shared **frozen**
+  them. **Do NOT re-add a `StartCountdownGlow()` call to `ApplyMatchPhaseUi`** —
+  that method was **removed**; only a comment at `MultiplayerTab.xaml.cs` (next to
+  the `StartCountdown` definition) documents why it must not come back.
+  The in-chat `CountdownOverlay` Border uses a shared **frozen**
   `DynamicResource` (`MpBlue`) BorderBrush and has **no `Effect`**, so
   `StartCountdownGlow` (which animates the brush colour + a DropShadowEffect)
   threw `InvalidOperationException` on the frozen Freezable. Because the glow
