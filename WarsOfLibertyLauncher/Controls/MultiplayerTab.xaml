@@ -497,19 +497,29 @@
                             </Grid>
 
                             <!-- Column headers for the card list. The cards
-                                 (BuildRoomCard) mirror these EXACT column widths,
+                                 (BuildRoomCard) mirror these EXACT column defs,
                                  and the 31px side margin matches each card's
                                  content inset (ScrollViewer pad 16 + card border
                                  1 + card padding 14) so the columns line up under
-                                 the labels. Keep the three values in sync. -->
+                                 the labels. Keep the two grids in sync.
+                                 Columns are STAR-sized with Min/Max (not fixed
+                                 px): fixed widths summed ~810px and overflowed a
+                                 narrow window with horizontal scroll disabled, so
+                                 the right-most ACTION column (the Join/Re-enter
+                                 button) was clipped off-screen on small windows.
+                                 Stars always divide the available width so the
+                                 row never overflows; MaxWidth keeps the large-
+                                 window look identical to the old fixed widths,
+                                 MinWidth (esp. ACTION) guarantees the button stays
+                                 fully visible when space is tight. -->
                             <Grid Grid.Row="1" Margin="31,2,31,8">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" MinWidth="200"/>
-                                    <ColumnDefinition Width="150"/>
-                                    <ColumnDefinition Width="90"/>
-                                    <ColumnDefinition Width="100"/>
-                                    <ColumnDefinition Width="120"/>
-                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*" MinWidth="120"/>
+                                    <ColumnDefinition Width="*" MinWidth="88" MaxWidth="150"/>
+                                    <ColumnDefinition Width="*" MinWidth="58" MaxWidth="90"/>
+                                    <ColumnDefinition Width="*" MinWidth="66" MaxWidth="100"/>
+                                    <ColumnDefinition Width="*" MinWidth="74" MaxWidth="120"/>
+                                    <ColumnDefinition Width="*" MinWidth="110" MaxWidth="150"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" x:Name="ColHeaderRoom"
                                            Foreground="{DynamicResource MpTableHeader}"

@@ -740,18 +740,33 @@ don't go looking for it.)
   in place; actually emitting `lobby_created/closed/updated` onto it is still
   deferred (the 10 s poll is enough at current scale).
 
-- **Room cards are state-driven — the action button isn't a plain always-"Join".**
-  The rooms browser renders each room as a **card** (`BuildRoomCard`, tiled in a
-  `WrapPanel`; the old table + column-header strip + zebra rows are gone). The
-  card shows: a **leading mod-icon disc** (the room's mod icon, resolved by
-  `ResolveRoomModIcon` = cached catalog `icon.png` → built-in packed icon, cached
-  per mod id and decoded once; **gold ★ fallback** when the mod ships no
-  resolvable icon — so icon-less rooms look exactly as before), title (+ 🔒 if
-  private), a status badge, the mod name, the host with
-  an initial circle (`Anfitrión: <name>`), players + ping, and a **full-width
+- **The rooms browser is a TABLE with responsive columns — the action button
+  isn't a plain always-"Join".** (Doc heads-up: an earlier revision of this
+  bullet described a `WrapPanel` of cards whose "old table + column-header strip
+  + zebra rows are gone" — that was **REVERTED**. The code is a table; trust it.)
+  `BuildRoomCard` builds one full-width row per room into a `StackPanel`
+  (`RoomsListPanel`), each a 6-column `Grid` aligned under the `ColHeader*` strip
+  in `MultiplayerTab.xaml`: SALA, ANFITRIÓN, JUGADORES, PING, ESTADO, ACCIÓN.
+  **Those six columns are STAR-sized with Min/Max, NOT fixed px** — fixed widths
+  summed ~810px and, since the rooms list shares its row with the 380px
+  global-chat column and the `RoomsListScroll` ScrollViewer **disables horizontal
+  scroll**, the right-most ACCIÓN column (the Join/Re-enter button) got
+  **clipped off-screen on a small / restored window** (it only showed fully when
+  maximized — the reported bug). Stars always divide the available width so the
+  row can't overflow; each column's `MaxWidth` replicates the old fixed look on a
+  large window and its `MinWidth` (esp. ACCIÓN = 110) keeps the button fully
+  visible when space is tight. **Keep the header strip and the `BuildRoomCard`
+  column defs in lockstep, and don't revert either to fixed px** — that re-clips
+  the button. The row shows: a **leading mod-icon disc** (the room's mod icon,
+  resolved by `ResolveRoomModIcon` = cached catalog `icon.png` → built-in packed
+  icon, cached per mod id and decoded once; **gold ★ fallback** when the mod
+  ships no resolvable icon — so icon-less rooms look exactly as before), title
+  (+ 🔒 if private), the mod name (chip), the host with an initial circle
+  (`Anfitrión: <name>`), players, ping, a status cell, and the **ACCIÓN-column
   action button** whose caption + enabled-ness pick per room in this **priority
-  order** (first match wins) — enabled Join / Re-enter use `MpPrimaryButton`
-  (blue), the disabled states use `MpSecondaryButton` (neutral):
+  order** (first match wins) — enabled Join / Re-enter use the
+  `MpOutlineBlueButton` outline style, the disabled states use
+  `MpSecondaryButton` (neutral):
   1. **room we're currently in** (`iAmInThisRoom` = `lobby.Id ==
      _session.CurrentLobbyId`) → **"Re-enter"** (`MpRoomReenter`, ES "Reingresar")
      wired to `OpenLobbyWindow()` (re-opens / Activates the lobby window) — never a
@@ -768,12 +783,12 @@ don't go looking for it.)
   5. **mod not installed locally** → **disabled "Join"** (`IsEnabled =
      modInstalled`); else → **enabled "Join"** → `JoinRoomButton_Click`.
 
-  Status shows as a coloured **badge** in the card header (`BuildRoomBadge`): the
-  single most-relevant state — `Esperando` (waiting), `Llena` (full) or `En partida`
-  (in game) — each in its own colour, localised via `MpRoomStatusWaiting` /
-  `MpRoomFull` / `MpRoomStatusInGame`. (The old table's `BuildStatusCell` + the
-  per-column STATUS cell are gone — `BuildStatusCell` lingers unused; the disabled
-  "In game" button is the actual join block.) The header also carries an
+  Status shows in the ESTADO column as a dot + label (`BuildStatusCell`):
+  `Esperando` (waiting) or `En partida` (in game), localised via
+  `MpRoomStatusWaiting` / `MpRoomStatusInGame`. (`BuildRoomBadge` exists but is
+  currently **UNUSED** — leftover from the reverted card design, the inverse of
+  what an earlier doc revision claimed; the disabled "In game" / "Full" action
+  button is the actual join block.) The header also carries an
   `Actualizado hace X` timestamp (`RoomsUpdatedText` / `UpdateRoomsUpdatedLabel`,
   ticked by `_roomsPingTimer`), and the empty state is now localized
   (`MpRoomsEmptyTitle` / `MpRoomsEmptyBody` — they used to be hardcoded English).

@@ -3227,16 +3227,23 @@ public partial class MultiplayerTab : UserControl
         // (The card's illumination — a STATIC, subtle BLUE rim + faint blue
         // glow — lives in the MpRoomCard style now; no per-card animation.)
 
-        // Six columns mirroring the header Grid (MultiplayerTab.xaml): SALA*,
-        // ANFITRIÓN 150, JUGADORES 90, PING 100, ESTADO 120, ACCIÓN 150. Keep
-        // these in sync with the header so the columns line up.
+        // Six columns mirroring the header Grid (MultiplayerTab.xaml): SALA,
+        // ANFITRIÓN, JUGADORES, PING, ESTADO, ACCIÓN. STAR-sized with Min/Max
+        // (NOT fixed px) — fixed widths summed ~810px and overflowed a narrow
+        // window (the rooms list shares its row with the 380px chat, and the
+        // ScrollViewer has horizontal scroll disabled), so the right-most ACCIÓN
+        // column (the Join/Re-enter button) was clipped off-screen when the
+        // window was small. Stars always divide the available width so the row
+        // never overflows; MaxWidth replicates the old fixed widths on a large
+        // window, MinWidth (esp. ACCIÓN) keeps the button fully visible when
+        // space is tight. Keep these in lockstep with the header definitions.
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 200 });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 120 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 88, MaxWidth = 150 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 58, MaxWidth = 90 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 66, MaxWidth = 100 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 74, MaxWidth = 120 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 110, MaxWidth = 150 });
 
         // === Col 0: SALA — mod icon disc (★ fallback) + (title over
         // mod/private chips). The leading disc shows the room's mod icon so
