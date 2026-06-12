@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Documents;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Services;
@@ -52,6 +53,7 @@ public partial class GitHubLoginDialog : Window
         OpenBrowserButton.Content = Strings.Get("MpSignInOpenBrowser");
         CopyButton.Content = Strings.Get("MpSignInCopy");
         CancelButton.Content = Strings.Get("MpSignInCancel");
+        BuildPrivacyConsent();
 
         // Disable until /device returns; otherwise the user could open
         // an empty browser tab.
@@ -60,6 +62,41 @@ public partial class GitHubLoginDialog : Window
 
         Loaded += OnLoaded;
         Closed += OnClosed;
+    }
+
+    /// <summary>
+    /// Builds the "by signing in you agree to our privacy policy" line with
+    /// the policy name as a clickable hyperlink. Done in code (not XAML) so
+    /// the localized prefix + link text compose in the right order for both
+    /// EN and ES. The link opens PRIVACY.md (LauncherConfig.PrivacyPolicyUrl);
+    /// the same policy is reachable from Launcher Settings → Privacy.
+    /// </summary>
+    private void BuildPrivacyConsent()
+    {
+        PrivacyConsentBlock.Inlines.Clear();
+        PrivacyConsentBlock.Inlines.Add(new Run(Strings.Get("MpSignInPrivacyPrefix")));
+        var link = new Hyperlink(new Run(Strings.Get("MpSignInPrivacyLink")))
+        {
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+        };
+        link.Click += PrivacyLink_Click;
+        PrivacyConsentBlock.Inlines.Add(link);
+    }
+
+    private void PrivacyLink_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Models.LauncherConfig.PrivacyPolicyUrl,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"DiscordLoginDialog: open privacy policy failed: {ex.Message}");
+        }
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

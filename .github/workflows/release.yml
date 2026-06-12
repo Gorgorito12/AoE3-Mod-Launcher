@@ -1,0 +1,152 @@
+# Release build pipeline for the AoE3 Mod Launcher.
+#
+# Why this exists: SignPath Foundation (free code signing for OSS) only signs
+# binaries that are BUILT IN CI on GitHub-hosted runners and origin-verified.
+# Locally built / locally signed artifacts are NOT accepted. So a release build
+# must run here, not via build-release.ps1 on the maintainer's machine.
+#
+# This workflow builds the SAME self-contained, single-file Aoe3ModLauncher.exe
+# that build-release.ps1 produces, but UNSIGNED (-p:SignOutput=false skips the
+# local CN=Gorgorito Authenticode targets in the .csproj), then hands the
+# artifact to SignPath to sign.
+#
+# Until the SignPath project is approved and configured, the `sign` job is
+# skipped automatically (see its `if:` gate), so the `build` job alone produces
+# a verifiable unsigned artifact — which is exactly what SignPath reviews during
+# the application. After approval, define the repo variables / secret listed on
+# the `sign` job and it activates on the next tagged build with no other change.
+
+name: Release build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SemVer to stamp, e.g. 0.9.9 (blank = use the csproj <Version>)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # A tagged build (refs/tags/vX.Y.Z) stamps that version; a manual run uses
+      # the optional input; otherwise the build falls back to the csproj
+      # <Version>. The SemVer stamp feeds the launcher self-update tag check, so
+      # release tags must be SemVer (vX.Y.Z) — same contract as build-release.ps1.
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref }}"
+          $inp = "${{ github.event.inputs.version }}"
+          if ($ref -like "refs/tags/v*") {
+            $v = $ref -replace "^refs/tags/v", ""
+          } elseif ($inp) {
+            $v = $inp
+          } else {
+            $v = ""
+          }
+          if ($v) { Write-Host "Stamping version $v" } else { Write-Host "Using csproj <Version>" }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      # Pure-logic xUnit tests (Windows-only: the test host needs the
+      # WindowsDesktop runtime to load the WPF assembly's types).
+      - name: Run unit tests
+        shell: pwsh
+        run: dotnet test WarsOfLibertyLauncher.Tests/WarsOfLibertyLauncher.Tests.csproj -c Release --nologo
+
+      # Same distribution flags as build-release.ps1, but:
+      #   * -p:SignOutput=false  -> skip the local Authenticode signing targets
+      #                             (SignPath signs the artifact downstream).
+      #   * -p:ContinuousIntegrationBuild=true -> normalize embedded paths.
+      - name: Publish (unsigned, self-contained single-file)
+        shell: pwsh
+        run: |
+          $publishArgs = @(
+            "publish", "WarsOfLibertyLauncher/WarsOfLibertyLauncher.csproj",
+            "-c", "Release", "-r", "win-x64", "--self-contained",
+            "-p:PublishSingleFile=true",
+            "-p:IncludeNativeLibrariesForSelfExtract=true",
+            "-p:SignOutput=false",
+            "-p:ContinuousIntegrationBuild=true",
+            "-o", "publish", "--nologo"
+          )
+          $v = "${{ steps.ver.outputs.version }}"
+          if ($v) { $publishArgs += "-p:Version=$v" }
+          & dotnet @publishArgs
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
+
+      # Print the SHA-256 into the run summary so it can be pasted into the
+      # GitHub release notes (the launcher self-update parses a "SHA256:" line
+      # from the release body as its download integrity fallback).
+      - name: Compute SHA-256
+        shell: pwsh
+        run: |
+          $exe = "publish/Aoe3ModLauncher.exe"
+          if (-not (Test-Path $exe)) { throw "Expected output not found: $exe" }
+          $hash = (Get-FileHash -Algorithm SHA256 -Path $exe).Hash
+          $sizeMB = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "SHA-256: $hash"
+          "## Aoe3ModLauncher.exe (unsigned CI build)"        | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "- Version: ${{ steps.ver.outputs.version || 'csproj default' }}" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "- Size: $sizeMB MB"                                | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "- ``SHA256: $hash``"                               | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Upload unsigned artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aoe3ModLauncher-unsigned
+          path: publish/Aoe3ModLauncher.exe
+          if-no-files-found: error
+
+  # Downstream signing via SignPath. SKIPPED until SignPath is configured:
+  # once the project is approved, add these to the GitHub repo settings and the
+  # job activates on the next tagged build (no other edit needed):
+  #   * Repo VARIABLE  SIGNPATH_ORGANIZATION_ID
+  #   * Repo VARIABLE  SIGNPATH_PROJECT_SLUG
+  #   * Repo VARIABLE  SIGNPATH_SIGNING_POLICY_SLUG
+  #   * Repo SECRET    SIGNPATH_API_TOKEN
+  # While SIGNPATH_ORGANIZATION_ID is unset the `if:` evaluates false, so this
+  # job is skipped (not failed) and the pipeline stays green pre-approval.
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Submit signing request to SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Upload signed artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aoe3ModLauncher-signed
+          path: signed/
+          if-no-files-found: error

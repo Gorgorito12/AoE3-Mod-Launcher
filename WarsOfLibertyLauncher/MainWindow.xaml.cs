@@ -157,6 +157,13 @@ public partial class MainWindow : Window
 
         _config = LauncherConfig.Load();
 
+        // Telemetry is opt-in (PRIVACY.md / SignPath Foundation terms):
+        // MultiplayerTelemetry defaults to on in-process, but the launcher
+        // must collect nothing until the user enables it in Launcher
+        // Settings → Privacy. Apply the saved choice at startup;
+        // LauncherSettingsDialog re-applies it on Save.
+        Services.Multiplayer.MultiplayerTelemetry.Enabled = _config.MultiplayerTelemetryEnabled;
+
         // Workshop migration — first launch with the new UserModIds
         // field on an old config. Seed the personal collection from
         // whatever the user already had installed, so the Dashboard's

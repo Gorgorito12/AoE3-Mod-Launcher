@@ -39,7 +39,9 @@
       "PowerShell(Head -50)",
       "Bash(timeout 30 bash -c 'while [ ! -f \"C:\\\\\\\\Users\\\\\\\\Jeison\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-Jeison-Documents-Updater\\\\\\\\c5775234-2c33-407a-b893-b44191a9ccc7\\\\\\\\tasks\\\\\\\\bzi8d5t98.output\" ]; do sleep 1; done; cat \"C:\\\\\\\\Users\\\\\\\\Jeison\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-Jeison-Documents-Updater\\\\\\\\c5775234-2c33-407a-b893-b44191a9ccc7\\\\\\\\tasks\\\\\\\\bzi8d5t98.output\"')",
       "Bash(Get-ChildItem -Depth 1)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "WebSearch",
+      "WebFetch(domain:signpath.org)"
     ]
   }
 }

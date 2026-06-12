@@ -1825,6 +1825,16 @@ public static class Strings
         ["MpSignInOpenBrowser"] = new() { [LangEn] = "Open browser", [LangEs] = "Abrir navegador" },
         ["MpSignInCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
         ["MpSignInCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
+        ["MpSignInPrivacyPrefix"] = new()
+        {
+            [LangEn] = "By signing in you agree to our ",
+            [LangEs] = "Al iniciar sesión aceptas nuestra ",
+        },
+        ["MpSignInPrivacyLink"] = new()
+        {
+            [LangEn] = "privacy policy",
+            [LangEs] = "política de privacidad",
+        },
 
         // -------------------------------------------------------------
         // Radmin assistant overlay (always-on-top guided checklist).
@@ -2432,6 +2442,41 @@ public static class Strings
         {
             [LangEn] = "A system tray balloon appears when an update completes while the launcher window is hidden or minimised.",
             [LangEs] = "Aparece una notificación en la bandeja cuando termina una actualización y la ventana del launcher está oculta o minimizada.",
+        },
+        ["DlgLauncherSettingsSectionPrivacy"] = new()
+        {
+            [LangEn] = "PRIVACY",
+            [LangEs] = "PRIVACIDAD",
+        },
+        ["DlgLauncherSettingsPrivacyHeader"] = new()
+        {
+            [LangEn] = "Privacy & data",
+            [LangEs] = "Privacidad y datos",
+        },
+        ["DlgLauncherSettingsPrivacyDescription"] = new()
+        {
+            [LangEn] = "The launcher collects no analytics by default. Multiplayer (Discord sign-in, lobbies, chat) sends only what those features need to the lobby server. See the privacy policy for the full detail.",
+            [LangEs] = "El launcher no recopila analíticas por defecto. El multijugador (inicio de sesión con Discord, salas, chat) solo envía al servidor lo que esas funciones necesitan. Consulta la política de privacidad para el detalle completo.",
+        },
+        ["DlgLauncherSettingsTelemetry"] = new()
+        {
+            [LangEn] = "Enable local telemetry log (off by default)",
+            [LangEs] = "Habilitar registro de telemetría local (desactivado por defecto)",
+        },
+        ["DlgLauncherSettingsTelemetryHint"] = new()
+        {
+            [LangEn] = "Writes a local multiplayer-events.log next to the launcher with plain event counters (sign-ins, lobby joins, error codes). No network, no third parties — it never leaves your PC. Helps diagnose multiplayer issues if you share it in a bug report.",
+            [LangEs] = "Escribe un multiplayer-events.log local junto al launcher con contadores de eventos (inicios de sesión, entradas a salas, códigos de error). Sin red ni terceros: nunca sale de tu PC. Ayuda a diagnosticar problemas de multijugador si lo adjuntas a un reporte.",
+        },
+        ["DlgLauncherSettingsViewPrivacy"] = new()
+        {
+            [LangEn] = "View privacy policy",
+            [LangEs] = "Ver política de privacidad",
+        },
+        ["DlgLauncherSettingsPrivacyHint"] = new()
+        {
+            [LangEn] = "Opens PRIVACY.md on GitHub in your browser.",
+            [LangEs] = "Abre PRIVACY.md en GitHub en tu navegador.",
         },
         ["ToastUpdateCompleteTitle"] = new()
         {

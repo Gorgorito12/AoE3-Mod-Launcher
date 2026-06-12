@@ -41,6 +41,7 @@ All commands run from `WarsOfLibertyLauncher/`.
 | Dev build (framework-dependent, needs .NET 8 runtime) | `dotnet build -c Release` |
 | Release single-file `.exe` (publish + sign + print SHA-256) | `.\build-release.ps1` (PowerShell, Windows-only) |
 | Manual publish | `dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish` |
+| CI release build (unsigned → SignPath) | push a `vX.Y.Z` tag, or run `.github/workflows/release.yml` manually |
 
 - Dev build output: `bin/Release/net8.0-windows/Aoe3ModLauncher.exe`.
 - Release output: `publish/Aoe3ModLauncher.exe` (~120 MB, self-contained). The
@@ -60,6 +61,24 @@ All commands run from `WarsOfLibertyLauncher/`.
   a stale `WarsOfLibertyLauncher.exe` (the `<AssemblyName>` rename made it
   `Aoe3ModLauncher.exe`), so its success output never printed — that drift is
   the reason it was collapsed into a wrapper.
+- **CI release builds run in GitHub Actions, NOT locally — this is a SignPath
+  requirement.** `.github/workflows/release.yml` builds the same self-contained
+  single-file `Aoe3ModLauncher.exe` on a `windows-latest` runner (runs the unit
+  tests first), but UNSIGNED: it passes `-p:SignOutput=false` so the `.csproj`'s
+  local `CN=Gorgorito` Authenticode targets are skipped. SignPath Foundation (free
+  OSS code signing) only signs binaries built in CI on GitHub-hosted runners and
+  origin-verified — a locally built/signed `.exe` is not accepted — so the release
+  artifact must come from here, not `build-release.ps1` (which stays the LOCAL,
+  self-signed path for ad-hoc builds). Triggers: a `v*` tag push or manual
+  `workflow_dispatch` (with an optional version input; a tagged build derives the
+  SemVer from the tag, same contract as `build-release.ps1 -Version`). The
+  downstream `sign` job is auto-skipped (`if: vars.SIGNPATH_ORGANIZATION_ID != ''`)
+  until the SignPath project is approved and the repo variables/secret it documents
+  are set, so the pipeline stays green pre-approval and the `build` job alone
+  produces the verifiable unsigned artifact SignPath reviews. Application
+  progress: CI (the big one) ✅, privacy policy (`PRIVACY.md`) + wired telemetry
+  opt-out ✅ — the remaining gap is a published **code-signing policy** doc (team
+  roles + crediting SignPath) plus enabling MFA on GitHub/SignPath.
 
 ### Tests & verification
 
@@ -157,7 +176,11 @@ don't go looking for it.)
   (`LauncherUpdateService`), so a new key with the same Subject preserves
   self-update continuity. (A self-signed cert never satisfies SmartScreen on
   *other* machines — that's expected; the trust only matters on the build
-  machine and for the self-update Subject match.)
+  machine and for the self-update Subject match.) **CI skips this signing
+  entirely:** the GitHub Actions release pipeline passes `-p:SignOutput=false`
+  (added to both `Sign*` targets' `Condition`), producing an UNSIGNED `.exe` that
+  SignPath signs downstream — see the CI bullet under *Build & run*. Omitting the
+  flag (every local build) keeps the self-signed behaviour described above.
 
 - **`third_party/**` and `native/**` are excluded from compile** in the
   `.csproj`. Those dirs don't currently exist; the excludes are defensive guards
@@ -1086,8 +1109,16 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   non-blocking queued logger that resets at each launch and writes
   `launcher-debug.log`. Log messages are **always English** (they're for bug
   reports), even though the UI is localized. Separately, `MultiplayerTelemetry`
-  appends a plaintext `multiplayer-events.log` next to the `.exe` — its opt-out
-  isn't wired, so it always writes.
+  appends a plaintext `multiplayer-events.log` next to the `.exe`. It is now
+  **opt-in and OFF by default** (`LauncherConfig.MultiplayerTelemetryEnabled`,
+  wired to `MultiplayerTelemetry.Enabled` in `MainWindow`'s ctor at startup and
+  re-applied on `LauncherSettingsDialog` save) — a fresh install writes nothing
+  until the user enables it in **Launcher Settings → Privacy**. Disclosed in
+  `PRIVACY.md` (a SignPath Foundation OSS requirement: collected data must be
+  both disclosed and disableable). The policy is also linked from the Discord
+  sign-in dialog (`GitHubLoginDialog`) — the point where multiplayer data
+  collection begins — and `LauncherConfig.PrivacyPolicyUrl` is the single source
+  for that URL (used by both the settings button and the sign-in hyperlink).
 - **Localization is mandatory for user-facing strings.** Add every UI string to
   the `Table` in `Localization/Strings.cs` with both `en` and `es` entries, and
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a

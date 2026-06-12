@@ -411,6 +411,30 @@ public class LauncherConfig
     [JsonPropertyName("openPostUpdatePages")]
     public bool OpenPostUpdatePages { get; set; } = true;
 
+    /// <summary>
+    /// Opt-in switch for the local multiplayer telemetry log
+    /// (<c>multiplayer-events.log</c>): plain event counters (sign-ins,
+    /// lobby joins, error codes) appended next to the .exe, with NO network
+    /// and NO third-party SDK. Off by default — a fresh install collects
+    /// nothing until the user enables it in Launcher Settings → Privacy.
+    /// Wired to <see cref="Services.Multiplayer.MultiplayerTelemetry.Enabled"/>
+    /// at startup and on settings save. Disclosed in PRIVACY.md (the SignPath
+    /// Foundation OSS terms require data collection to be both disclosed and
+    /// disableable).
+    /// </summary>
+    [JsonPropertyName("multiplayerTelemetryEnabled")]
+    public bool MultiplayerTelemetryEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Public URL of the project's privacy policy (PRIVACY.md on GitHub).
+    /// Opened from Launcher Settings → Privacy and linked from the Discord
+    /// sign-in dialog (the point where multiplayer data collection begins).
+    /// A const, not a serialised field — it's a fixed project link, not user
+    /// state.
+    /// </summary>
+    public const string PrivacyPolicyUrl =
+        "https://github.com/Gorgorito12/Updater/blob/main/PRIVACY.md";
+
     /// <summary>UI language: "en" (default) or "es".</summary>
     [JsonPropertyName("language")]
     public string Language { get; set; } = "en";

@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
@@ -101,8 +102,19 @@
             </Grid>
         </Border>
 
+        <!-- Privacy consent line — links to PRIVACY.md (the policy is also
+             reachable from Launcher Settings → Privacy). Built in code-behind
+             (PrivacyConsentBlock.Inlines) so the localized prefix + hyperlink
+             compose cleanly across EN/ES. -->
+        <TextBlock Grid.Row="5"
+                   x:Name="PrivacyConsentBlock"
+                   Foreground="{DynamicResource TextSecondary}"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   TextWrapping="Wrap"
+                   Margin="0,18,0,0"/>
+
         <!-- Status row (waiting…) + Cancel. -->
-        <Grid Grid.Row="5" Margin="0,22,0,0">
+        <Grid Grid.Row="6" Margin="0,22,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>

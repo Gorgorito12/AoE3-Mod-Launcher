@@ -441,7 +441,7 @@ Updater/
 ├── WarsOfLibertyLauncher.Tests/   xUnit tests for pure logic (sibling project)
 ├── docs/MODDING.md                Authoritative mod.json / catalog spec for modders
 ├── aoe3-mods-catalog-template/    Template for the separate community catalog repo
-├── README.md  CONTRIBUTING.md  DISCLAIMER.md  CLAUDE.md  LICENSE
+├── README.md  CONTRIBUTING.md  DISCLAIMER.md  PRIVACY.md  CLAUDE.md  LICENSE
 ```
 
 The launcher project (`Aoe3ModLauncher.exe` ships as the assembly name; every
@@ -605,3 +605,11 @@ Improvement Mod, …) — this launcher is an unofficial alternative client and
 not affiliated with them. *Age of Empires III* is a trademark of Microsoft
 Corporation; see [`DISCLAIMER.md`](DISCLAIMER.md) for trademark and
 third-party-component notes.
+
+## Privacy
+
+The launcher collects no analytics and runs no third-party trackers. It only
+reaches the network to check for updates (which you can disable) and — once you
+opt in by signing in with Discord — for multiplayer lobbies and chat. The
+optional local telemetry log is **off by default**. See [`PRIVACY.md`](PRIVACY.md)
+for the full detail.

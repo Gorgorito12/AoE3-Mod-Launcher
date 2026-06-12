@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -7,6 +8,7 @@ using System.Windows.Media;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
+using WarsOfLibertyLauncher.Services.Multiplayer;
 
 namespace WarsOfLibertyLauncher;
 
@@ -106,6 +108,7 @@ public partial class LauncherSettingsDialog : Window
         TabCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
         TabTranslationsLabel.Text = Strings.Get("DlgLauncherSettingsSectionTranslations");
         TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
+        TabPrivacyLabel.Text = Strings.Get("DlgLauncherSettingsSectionPrivacy");
 
         TabOrderLabel.Text = Strings.Get("DlgLauncherSettingsTabOrderLabel");
         TabOrderHint.Text = Strings.Get("DlgLauncherSettingsTabOrderHint");
@@ -168,6 +171,13 @@ public partial class LauncherSettingsDialog : Window
         ClearTempButton.Content = Strings.Get("DlgLauncherSettingsClearTemp");
         ClearTempHint.Text = Strings.Get("DlgLauncherSettingsClearTempHint");
 
+        PrivacyHeader.Text = Strings.Get("DlgLauncherSettingsPrivacyHeader");
+        PrivacyDescription.Text = Strings.Get("DlgLauncherSettingsPrivacyDescription");
+        TelemetryCheck.Content = Strings.Get("DlgLauncherSettingsTelemetry");
+        TelemetryHint.Text = Strings.Get("DlgLauncherSettingsTelemetryHint");
+        PrivacyPolicyButton.Content = Strings.Get("DlgLauncherSettingsViewPrivacy");
+        PrivacyPolicyHint.Text = Strings.Get("DlgLauncherSettingsPrivacyHint");
+
         CancelButton.Content = Strings.Get("BtnCancel");
         SaveButton.Content = Strings.Get("BtnSave");
     }
@@ -201,6 +211,7 @@ public partial class LauncherSettingsDialog : Window
         ShowToastsCheck.IsChecked = _config.ShowToastNotifications;
         AutoCheckCheck.IsChecked = _config.CheckUpdatesOnStartup;
         OpenPostUpdateCheck.IsChecked = _config.OpenPostUpdatePages;
+        TelemetryCheck.IsChecked = _config.MultiplayerTelemetryEnabled;
 
         // Radmin assistant mode — match by Tag against the persisted
         // "Auto"/"OnRequest"/"Never" value. Unknown / missing values
@@ -276,6 +287,7 @@ public partial class LauncherSettingsDialog : Window
         TabCatalogBtn.Tag = ReferenceEquals(activeBtn, TabCatalogBtn) ? "active" : null;
         TabTranslationsBtn.Tag = ReferenceEquals(activeBtn, TabTranslationsBtn) ? "active" : null;
         TabMaintenanceBtn.Tag = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? "active" : null;
+        TabPrivacyBtn.Tag = ReferenceEquals(activeBtn, TabPrivacyBtn) ? "active" : null;
 
         GeneralPanel.Visibility = ReferenceEquals(activeBtn, TabGeneralBtn) ? Visibility.Visible : Visibility.Collapsed;
         InterfacePanel.Visibility = ReferenceEquals(activeBtn, TabInterfaceBtn) ? Visibility.Visible : Visibility.Collapsed;
@@ -283,6 +295,7 @@ public partial class LauncherSettingsDialog : Window
         CatalogPanel.Visibility = ReferenceEquals(activeBtn, TabCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
         TranslationsPanel.Visibility = ReferenceEquals(activeBtn, TabTranslationsBtn) ? Visibility.Visible : Visibility.Collapsed;
         MaintenancePanel.Visibility = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? Visibility.Visible : Visibility.Collapsed;
+        PrivacyPanel.Visibility = ReferenceEquals(activeBtn, TabPrivacyBtn) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void TabGeneralBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabGeneralBtn);
@@ -291,6 +304,28 @@ public partial class LauncherSettingsDialog : Window
     private void TabCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabCatalogBtn);
     private void TabTranslationsBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabTranslationsBtn);
     private void TabMaintenanceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabMaintenanceBtn);
+    private void TabPrivacyBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabPrivacyBtn);
+
+    /// <summary>
+    /// Opens the project's privacy policy (PRIVACY.md on GitHub) in the
+    /// user's browser. The policy is also reachable from the Discord
+    /// sign-in dialog — see <see cref="GitHubLoginDialog"/>.
+    /// </summary>
+    private void PrivacyPolicyButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = LauncherConfig.PrivacyPolicyUrl,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Open privacy policy failed: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// Launches the translator-facing packaging dialog modally over this
@@ -504,6 +539,7 @@ public partial class LauncherSettingsDialog : Window
         _config.ShowToastNotifications = ShowToastsCheck.IsChecked == true;
         _config.CheckUpdatesOnStartup = AutoCheckCheck.IsChecked == true;
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
+        _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
         _config.ModsCatalogRepo = newCatalogRepo;
         _config.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
 
@@ -532,6 +568,10 @@ public partial class LauncherSettingsDialog : Window
         //      app updates immediately.
         StartupRegistrationService.Apply(_config.StartWithWindows);
         Strings.SetLanguage(newLang);
+        // Re-apply the telemetry opt-in immediately so the change takes
+        // effect this session without a restart (mirrors how MainWindow
+        // wires it at startup).
+        MultiplayerTelemetry.Enabled = _config.MultiplayerTelemetryEnabled;
 
         // 5. Persist to disk.
         try
