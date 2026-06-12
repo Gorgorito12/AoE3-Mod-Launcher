@@ -214,19 +214,6 @@
         </Style.Triggers>
     </Style>
 
-    <!-- Safe / "Restore backup" green confirm. Used only in RestoreBackupDialog. -->
-    <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
-        <Setter Property="Background" Value="#3a8c3a"/>
-        <Style.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#4ba94b"/>
-            </Trigger>
-            <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Background" Value="{DynamicResource BgNeutral}"/>
-            </Trigger>
-        </Style.Triggers>
-    </Style>
-
     <!-- MainWindow sidebar: the big PLAY / INSTALL button.
          Fase 3 redesign: vertical gold gradient + warm drop shadow +
          subtle inner highlight, matching the Stitch hero CTA. Uses

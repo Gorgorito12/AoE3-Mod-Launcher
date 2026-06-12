@@ -188,10 +188,13 @@ don't go looking for it.)
   `.csproj`. Those dirs don't currently exist; the excludes are defensive guards
   against duplicate-attribute build errors if vendored native code is re-added.
 
-- **Two installer stacks coexist.** `NativeInstallService` is the live path
-  (download multi-part ZIP → clone → flatten → overlay). `InstallerService` +
-  `InstallProgressMonitor` are a legacy Inno-Setup flow (run a setup `.exe`
-  silently). Confirm which one the UI actually calls before editing either.
+- **`NativeInstallService` is the only live install path** (download multi-part
+  ZIP → clone → flatten → overlay). `InstallerService` is a **vestige** of a legacy
+  Inno-Setup flow (run a setup `.exe` silently): its Inno-Setup methods are dead
+  code — the UI only still calls its `TryCleanupTemp` (temp-dir sweep) and reads
+  its `IsPaused` pause flag. Don't wire the Inno methods back in; do install work
+  through `NativeInstallService`. (Its old companion `InstallProgressMonitor` was
+  removed once nothing referenced it.)
 
 - **`NativeInstallService.RemoveStaleBuildArtifacts` (WoL only) strips inert dev
   junk after install *and* every update — but it deliberately does NOT touch
@@ -981,7 +984,7 @@ engine** and the UI binds to it.
 - **`Services/`** — install pipeline (`NativeInstallService`, `InstallerService`,
   `FolderCloneService`), update orchestration (`UpdateService`,
   `UpdateInfoService`, `ArchiveService`, `DownloadService`), detection
-  (`AoE3Detector`, `Aoe3DetectorService`, `RegistryService`), hashing
+  (`AoE3Detector`, `RegistryService`), hashing
   (`HashService` = MD5 + CRC32 + SHA-256), self-update (`LauncherUpdateService`),
   Radmin VPN assist (`RadminVpnService` = registry + NIC probe,
   `RadminLogService` = `service.log` parser for network membership,

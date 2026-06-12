@@ -454,13 +454,11 @@ WarsOfLibertyLauncher/
 ├── build-release.ps1                 Release build script (publish + sign + hash)
 ├── INSTALL.md                        End-user install / SmartScreen guide
 │
-├── Aoe3PickerDialog.xaml(.cs)        Pick AoE3 install when multiple are detected
 ├── InstallFolderDialog.xaml(.cs)     Install destination + AoE3 source picker
 ├── UninstallDialog.xaml(.cs)         Uninstall confirmation + options
 ├── LauncherUpdateDialog.xaml(.cs)    Self-update prompt + "what's new"
 ├── UserDataAlertDialog.xaml(.cs)     Documents user-data backup prompt
 ├── UserDataRestoreDialog.xaml(.cs)   Restore previously backed-up user data
-├── RestoreBackupDialog.xaml(.cs)     Restore from a patch-time backup
 ├── TranslationApplyDialog.xaml(.cs)  Apply a community translation
 ├── TranslationPackagerDialog.xaml(.cs) Build a translation .zip from a folder
 ├── CreateLobbyDialog.xaml(.cs)       Create-a-room modal (Multiplayer)
@@ -511,7 +509,6 @@ WarsOfLibertyLauncher/
     ├── HashService.cs                MD5 + CRC32 + SHA-256
     ├── RegistryService.cs            Detect mods via registry
     ├── AoE3Detector.cs               Disk scan for AoE3 (Steam/GOG/retail)
-    ├── Aoe3DetectorService.cs        Higher-level AoE3 detection facade
     ├── ModInstallProbe.cs            Content-based install detection (probe+marker)
     ├── DownloadService.cs            HTTP with resume + URL fallback
     ├── GitHubReleaseDownloader.cs    Resolve + download a GitHubReleases asset
@@ -520,8 +517,7 @@ WarsOfLibertyLauncher/
     ├── ArchiveService.cs             .tar.xz extraction + local delete-list
     ├── UpdateService.cs              Update flow orchestrator
     ├── NativeInstallService.cs       Full install pipeline (live path)
-    ├── InstallerService.cs           Legacy Inno-Setup install orchestrator
-    ├── InstallProgressMonitor.cs     Progress reporting (legacy install)
+    ├── InstallerService.cs           Legacy Inno-Setup install orchestrator (vestigial)
     ├── FolderCloneService.cs         AoE3 → mod clone (+ pre-flight count)
     ├── InstallBaseGameMissingException.cs  Clone-count integrity gate
     ├── UninstallService.cs           Manifest-tracked removal (refuses stock game)
