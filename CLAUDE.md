@@ -77,8 +77,10 @@ All commands run from `WarsOfLibertyLauncher/`.
   are set, so the pipeline stays green pre-approval and the `build` job alone
   produces the verifiable unsigned artifact SignPath reviews. Application
   progress: CI (the big one) ✅, privacy policy (`PRIVACY.md`) + wired telemetry
-  opt-out ✅ — the remaining gap is a published **code-signing policy** doc (team
-  roles + crediting SignPath) plus enabling MFA on GitHub/SignPath.
+  opt-out ✅, code-signing policy (`CODE_SIGNING_POLICY.md`, linked from the README
+  home page with the verbatim SignPath attribution) ✅ — the remaining gaps are
+  operational, not code: enable MFA on GitHub/SignPath for all team members (the
+  policy doc already asserts it), and confirm the lobby backend repo is public OSS.
 
 ### Tests & verification
 

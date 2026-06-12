@@ -441,7 +441,7 @@ Updater/
 ├── WarsOfLibertyLauncher.Tests/   xUnit tests for pure logic (sibling project)
 ├── docs/MODDING.md                Authoritative mod.json / catalog spec for modders
 ├── aoe3-mods-catalog-template/    Template for the separate community catalog repo
-├── README.md  CONTRIBUTING.md  DISCLAIMER.md  PRIVACY.md  CLAUDE.md  LICENSE
+├── README.md  CONTRIBUTING.md  DISCLAIMER.md  PRIVACY.md  CODE_SIGNING_POLICY.md  CLAUDE.md  LICENSE
 ```
 
 The launcher project (`Aoe3ModLauncher.exe` ships as the assembly name; every
@@ -613,3 +613,11 @@ reaches the network to check for updates (which you can disable) and — once yo
 opt in by signing in with Discord — for multiplayer lobbies and chat. The
 optional local telemetry log is **off by default**. See [`PRIVACY.md`](PRIVACY.md)
 for the full detail.
+
+## Code signing
+
+Release binaries are Authenticode-signed. Free code signing provided by
+[SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org). See the
+[code signing policy](CODE_SIGNING_POLICY.md) for the team roles and the
+CI build / origin-verification model.
