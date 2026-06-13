@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Expose internal helpers (NativeInstallService overlay classification +
+       update-time deletion) to the unit-test project. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="WarsOfLibertyLauncher.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -35,13 +41,21 @@
          step takes 1-2 minutes longer, but the launcher feels noticeably
          snappier when the user double-clicks the icon. -->
     <PublishReadyToRun>true</PublishReadyToRun>
-    <!-- Compress the assemblies embedded in the single-file binary.
-         Roughly 30-40% smaller .exe on disk (~190 MB → ~120-130 MB).
-         The runtime decompresses to the per-user extraction cache on first
-         launch, adding maybe half a second the first time the user opens
-         the launcher; subsequent launches read from the cache and are the
-         same speed as before. Zero behavioral change. -->
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Single-file bundle compression is DELIBERATELY OFF to dodge an
+         antivirus false positive. When ON (~30-40% smaller .exe, ~190 MB →
+         ~120-130 MB), the runtime decompresses the embedded assemblies into a
+         per-user extraction cache on first launch — self-extracting behaviour
+         that Windows Defender's "packer/injector" heuristic flags as
+         Win32/Injector, quarantining the .exe. Compression was the #1 trigger,
+         so it's disabled: the cost is a bigger .exe on disk (~190 MB), zero
+         behavioural change.
+         TODO (re-enable): flip back to `true` once the binary is signed by a
+         REAL trusted certificate (SignPath — see CI bullet in CLAUDE.md and the
+         SignPath application). A trust-chain-valid signature earns the binary
+         reputation and the packer heuristic stops firing, so we get the ~70 MB
+         back. Don't re-enable while shipping only the self-signed CN=Gorgorito
+         cert (untrusted off the build machine — won't suppress the FP). -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
     <!-- We deliberately do NOT use IncludeAllContentForSelfExtract.
          When that flag is on, AppContext.BaseDirectory points at the
          %TEMP%\.net\<appname>\<hash>\ extract directory instead of the

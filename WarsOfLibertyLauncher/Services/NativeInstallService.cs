@@ -244,7 +244,16 @@ public class NativeInstallService
         // ---- Phase 4: Copy mod files on top ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
         statusProgress?.Report($"Installing {profile.DisplayName} mod files...");
-        await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
+        var overlayCapture = await CopyPayloadToDestinationAsync(
+            extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
+        // Just-cloned base + overlay: existence at copy time classifies net-new
+        // vs base-shadowing. A re-install over an existing one inherits status
+        // stickily via the prior manifest. No update-time deletion here — that's
+        // the re-overlay (InstallModOnlyAsync) path used by Repair/Update — but
+        // still strip any delete.lst the payload shipped so it isn't tracked.
+        StripDeleteListArtifact(destinationFolder, overlayCapture);
+        var (overlayFiles, overlayNetNew) =
+            ClassifyOverlay(overlayCapture, InstallManifest.TryLoad(destinationFolder));
 
         // ---- Phase 5: Finalize (shortcuts, registry, manifest) ----
         phaseProgress?.Report(InstallPhase.Finalize);
@@ -255,7 +264,7 @@ public class NativeInstallService
         WriteRegistryEntries(profile, version, destinationFolder);
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath, clonedAoe3: true,
-            shortcuts, startMenuFolder);
+            shortcuts, startMenuFolder, overlayFiles, overlayNetNew);
 
         // Translation snapshot is WoL-specific (it relies on the WoL-style
         // <c>data\stringtabley.xml</c> and <c>unithelpstringsy.xml</c> layout
@@ -263,7 +272,7 @@ public class NativeInstallService
         // avoid scary error logs about missing files.
         if (profile.Translations != null && profile.Translations.CoveredFiles.Count > 0)
         {
-            try { new TranslationService(destinationFolder).RefreshOriginalsSnapshot(); }
+            try { new TranslationService(destinationFolder, profile.Translations.CoveredFiles).RefreshOriginalsSnapshot(); }
             catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
         }
 
@@ -724,7 +733,28 @@ public class NativeInstallService
         // ---- Phase 3: Copy mod on top (no Clone phase in mod-only) ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
         statusProgress?.Report($"Installing {profile.DisplayName} mod files...");
-        await CopyPayloadToDestinationAsync(extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
+        // Load the previous manifest BEFORE the overlay so we can (a) classify
+        // stickily and (b) diff for update-time deletions. The manifest on disk
+        // is untouched until WriteManifest below.
+        var previousManifest = InstallManifest.TryLoad(destinationFolder);
+        var overlayCapture = await CopyPayloadToDestinationAsync(
+            extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
+
+        // Update-time file deletion: ONLY for a GitHubReleases re-overlay — i.e.
+        // a previous manifest that actually tracked an overlay exists. This is
+        // the Repair / Update path; a first-time mod-only install has no baseline
+        // and skips deletion. WolPatcher / DelegatedExternal / Manual never reach
+        // this (their re-apply doesn't run an auto-diff), and WoL keeps its own
+        // UpdateInfo.xml delete-list flow untouched.
+        bool isReoverlay = previousManifest != null && previousManifest.OverlayFiles.Count > 0;
+        if (isReoverlay && profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
+            ApplyUpdateDeletions(destinationFolder, overlayCapture, previousManifest!, statusProgress);
+        else
+            // Fresh mod-only install (no baseline to diff against): still strip
+            // any delete.lst the payload shipped so it isn't tracked/re-applied.
+            StripDeleteListArtifact(destinationFolder, overlayCapture);
+
+        var (overlayFiles, overlayNetNew) = ClassifyOverlay(overlayCapture, previousManifest);
 
         // ---- Phase 4: Finalize ----
         phaseProgress?.Report(InstallPhase.Finalize);
@@ -733,13 +763,13 @@ public class NativeInstallService
         WriteRegistryEntries(profile, version, destinationFolder);
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
-            shortcuts, startMenuFolder);
+            shortcuts, startMenuFolder, overlayFiles, overlayNetNew);
 
         // Translation snapshot only applies to mods that opt into the WoL-
         // style translation overlay system (CoveredFiles non-empty).
         if (profile.Translations != null && profile.Translations.CoveredFiles.Count > 0)
         {
-            try { new TranslationService(destinationFolder).RefreshOriginalsSnapshot(); }
+            try { new TranslationService(destinationFolder, profile.Translations.CoveredFiles).RefreshOriginalsSnapshot(); }
             catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
         }
 
@@ -1096,14 +1126,23 @@ public class NativeInstallService
         long BytesDone,
         long BytesTotal);
 
-    private async Task CopyPayloadToDestinationAsync(
+    /// <summary>
+    /// What a mod-overlay copy laid down. <see cref="AllFiles"/> is every
+    /// overlay file (relative, forward slashes). <see cref="FreshOnDisk"/> is
+    /// the subset that did NOT already exist at copy time — on a fresh install
+    /// (clone present) that means "net-new vs the base game"; on a re-overlay
+    /// the sticky classifier reconciles it against the previous manifest.
+    /// </summary>
+    public sealed record OverlayCaptureResult(List<string> AllFiles, List<string> FreshOnDisk);
+
+    internal async Task<OverlayCaptureResult> CopyPayloadToDestinationAsync(
         string extractedFolder,
         string destinationFolder,
         IProgress<string>? statusProgress,
         IProgress<ModOverlayProgress>? overlayProgress,
         CancellationToken ct)
     {
-        await Task.Run(() =>
+        return await Task.Run(() =>
         {
             var files = Directory.GetFiles(extractedFolder, "*", SearchOption.AllDirectories);
             int total = files.Length;
@@ -1119,7 +1158,12 @@ public class NativeInstallService
             }
             long bytesDone = 0;
 
-            DiagnosticLog.Write($"Copying {total} WoL mod files to destination...");
+            // Capture which overlay files we lay down, and which of them did
+            // NOT already exist on disk before this copy. See OverlayCaptureResult.
+            var allFiles = new List<string>(total);
+            var freshOnDisk = new List<string>();
+
+            DiagnosticLog.Write($"Copying {total} mod overlay files to destination...");
 
             foreach (var srcFile in files)
             {
@@ -1131,10 +1175,15 @@ public class NativeInstallService
                 done++;
                 var relativePath = Path.GetRelativePath(extractedFolder, srcFile);
                 var destPath = Path.Combine(destinationFolder, relativePath);
+                var relForward = relativePath.Replace('\\', '/');
 
                 var destDir = Path.GetDirectoryName(destPath);
                 if (!string.IsNullOrEmpty(destDir))
                     Directory.CreateDirectory(destDir);
+
+                bool existed = File.Exists(destPath);
+                allFiles.Add(relForward);
+                if (!existed) freshOnDisk.Add(relForward);
 
                 long srcSize = 0;
                 try { srcSize = new FileInfo(srcFile).Length; } catch { }
@@ -1148,8 +1197,198 @@ public class NativeInstallService
                 }
             }
 
-            DiagnosticLog.Write($"WoL mod file copy complete: {done} files.");
+            DiagnosticLog.Write(
+                $"Mod overlay copy complete: {done} files ({freshOnDisk.Count} net-new on disk).");
+            return new OverlayCaptureResult(allFiles, freshOnDisk);
         }, ct);
+    }
+
+    /// <summary>
+    /// "Sticky" net-new/shadow classification for the overlay. A file keeps the
+    /// net-new/shadow status it had in the previous manifest; only paths that
+    /// are genuinely new (absent from the previous overlay) are classified by
+    /// whether they existed on disk at copy time. This prevents the feature from
+    /// degrading itself: without stickiness, every net-new file the new release
+    /// re-ships would "exist" on a re-overlay and be mis-flagged as shadow,
+    /// dropping out of <c>overlayNetNew</c> forever.
+    /// </summary>
+    internal static (List<string> OverlayFiles, List<string> OverlayNetNew) ClassifyOverlay(
+        OverlayCaptureResult capture, InstallManifest? previous)
+    {
+        var fresh = new HashSet<string>(capture.FreshOnDisk, StringComparer.OrdinalIgnoreCase);
+        bool hasPrev = previous != null && previous.OverlayFiles.Count > 0;
+        var prevAll = hasPrev
+            ? new HashSet<string>(previous!.OverlayFiles, StringComparer.OrdinalIgnoreCase)
+            : null;
+        var prevNetNew = hasPrev
+            ? new HashSet<string>(previous!.OverlayNetNew, StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        var netNew = new List<string>();
+        foreach (var path in capture.AllFiles)
+        {
+            bool isNetNew;
+            if (prevAll != null && prevAll.Contains(path))
+                isNetNew = prevNetNew!.Contains(path);   // sticky: inherit prior status
+            else
+                isNetNew = fresh.Contains(path);          // genuinely new (or fresh install)
+            if (isNetNew) netNew.Add(path);
+        }
+        return (capture.AllFiles, netNew);
+    }
+
+    /// <summary>File a re-overlay ships to request explicit deletions.</summary>
+    private const string DeleteListName = "delete.lst";
+
+    /// <summary>Scratch folder holding pre-delete backups during an update.</summary>
+    private const string UpdateBackupDirName = "_upd_delete_backup";
+
+    /// <summary>
+    /// Update-time file deletion for a GitHubReleases re-overlay. Runs AFTER the
+    /// new overlay is copied. Two vias: (1) the modder's explicit
+    /// <c>delete.lst</c> shipped in the payload — any path, the modder's
+    /// responsibility (it can remove base-shadowing files, which is exactly why
+    /// it must be explicit); (2) auto-deletion of "net-new" overlay files the new
+    /// release stopped shipping — safe, because net-new files never existed in
+    /// the base game, so removing them can't leave a hole. Everything is backed
+    /// up first so a failure is recoverable, and every target is clamped to the
+    /// install root, so the cloned base game outside the overlay is never touched.
+    /// Mutates <paramref name="capture"/> to drop the consumed <c>delete.lst</c>.
+    /// </summary>
+    internal static void ApplyUpdateDeletions(
+        string installPath,
+        OverlayCaptureResult capture,
+        InstallManifest previous,
+        IProgress<string>? statusProgress)
+    {
+        var backupDir = Path.Combine(installPath, UpdateBackupDirName);
+        var newSet = new HashSet<string>(capture.AllFiles, StringComparer.OrdinalIgnoreCase);
+
+        // (1) Explicit delete.lst (one relative path per line; '#' comments).
+        var deleteListPath = Path.Combine(installPath, DeleteListName);
+        var explicitTargets = new List<string>();
+        if (File.Exists(deleteListPath))
+        {
+            statusProgress?.Report("Applying delete list...");
+            foreach (var raw in File.ReadAllLines(deleteListPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal)) continue;
+                explicitTargets.Add(line);
+            }
+        }
+
+        // (2) Auto-delete net-new files the new release no longer ships.
+        var autoTargets = new List<string>();
+        foreach (var rel in previous.OverlayNetNew)
+            if (!newSet.Contains(rel)) autoTargets.Add(rel);
+
+        var removed = DeleteWithBackup(installPath, explicitTargets, backupDir);
+        removed.AddRange(DeleteWithBackup(installPath, autoTargets, backupDir));
+
+        // delete.lst is an instruction file, not part of the mod: remove it and
+        // drop it from the capture so it isn't recorded as an overlay file.
+        StripDeleteListArtifact(installPath, capture);
+
+        PruneEmptyDirs(installPath, removed);
+
+        // Success → discard backups.
+        try { if (Directory.Exists(backupDir)) Directory.Delete(backupDir, recursive: true); } catch { /* best-effort */ }
+
+        if (removed.Count > 0)
+            DiagnosticLog.Write(
+                $"Update deletions: {explicitTargets.Count} explicit + {autoTargets.Count} net-new requested, {removed.Count} removed.");
+    }
+
+    /// <summary>
+    /// Removes the <c>delete.lst</c> instruction file from the install and drops
+    /// it from the overlay capture so it is never recorded as a mod file. Must
+    /// run on EVERY install/re-overlay (not just updates): on a fresh install a
+    /// payload that ships a delete.lst would otherwise leave it on disk and a
+    /// later update shipping none would re-read and re-apply the stale list.
+    /// </summary>
+    private static void StripDeleteListArtifact(string installPath, OverlayCaptureResult capture)
+    {
+        try
+        {
+            var p = Path.Combine(installPath, DeleteListName);
+            if (File.Exists(p)) File.Delete(p);
+        }
+        catch { /* best-effort */ }
+        capture.AllFiles.RemoveAll(p => string.Equals(p, DeleteListName, StringComparison.OrdinalIgnoreCase));
+        capture.FreshOnDisk.RemoveAll(p => string.Equals(p, DeleteListName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Deletes each relative path under <paramref name="installPath"/>, backing
+    /// it up to <paramref name="backupDir"/> first. Clamps every target to the
+    /// install root (path-traversal defence). Returns the relative paths
+    /// (forward slashes) actually removed.
+    /// </summary>
+    private static List<string> DeleteWithBackup(
+        string installPath, IEnumerable<string> relativePaths, string backupDir)
+    {
+        var removed = new List<string>();
+        var installRoot = Path.GetFullPath(installPath)
+            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        foreach (var raw in relativePaths)
+        {
+            var rel = raw.Trim().TrimStart('\\', '/');
+            if (rel.Length == 0) continue;
+            try
+            {
+                var fullPath = Path.GetFullPath(Path.Combine(installPath, rel));
+                if (!fullPath.StartsWith(installRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    DiagnosticLog.Write($"Update delete: rejecting '{rel}' (escapes install root).");
+                    continue;
+                }
+                if (!File.Exists(fullPath)) continue;
+
+                var backupPath = Path.Combine(backupDir, rel);
+                var backupParent = Path.GetDirectoryName(backupPath);
+                if (!string.IsNullOrEmpty(backupParent)) Directory.CreateDirectory(backupParent);
+                File.Copy(fullPath, backupPath, overwrite: true);
+
+                File.Delete(fullPath);
+                removed.Add(rel.Replace('\\', '/'));
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Update delete failed for '{rel}': {ex.Message}");
+            }
+        }
+        return removed;
+    }
+
+    /// <summary>
+    /// Removes directories left empty after deleting files. Walks each removed
+    /// file's ancestor chain bottom-up, deleting a directory only while it is
+    /// empty and strictly inside the install root.
+    /// </summary>
+    private static void PruneEmptyDirs(string installPath, IEnumerable<string> removedRelPaths)
+    {
+        var installRoot = Path.GetFullPath(installPath).TrimEnd(Path.DirectorySeparatorChar);
+        foreach (var rel in removedRelPaths)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(Path.Combine(installPath, rel.Replace('/', '\\')));
+                while (!string.IsNullOrEmpty(dir))
+                {
+                    var full = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar);
+                    if (string.Equals(full, installRoot, StringComparison.OrdinalIgnoreCase)
+                        || !full.StartsWith(installRoot, StringComparison.OrdinalIgnoreCase))
+                        break;
+                    if (!Directory.Exists(full)) { dir = Path.GetDirectoryName(full); continue; }
+                    if (Directory.EnumerateFileSystemEntries(full).Any()) break;
+                    Directory.Delete(full);
+                    dir = Path.GetDirectoryName(full);
+                }
+            }
+            catch { /* best-effort */ }
+        }
     }
 
     /// <summary>
@@ -1367,7 +1606,9 @@ public class NativeInstallService
         string? aoe3SourcePath,
         bool clonedAoe3,
         List<string> shortcuts,
-        string? startMenuFolder)
+        string? startMenuFolder,
+        List<string>? overlayFiles = null,
+        List<string>? overlayNetNew = null)
     {
         try
         {
@@ -1388,9 +1629,13 @@ public class NativeInstallService
                 Directories = dirs,
                 Shortcuts = shortcuts,
                 StartMenuFolder = startMenuFolder,
+                OverlayFiles = overlayFiles ?? new(),
+                OverlayNetNew = overlayNetNew ?? new(),
             };
             manifest.Save();
-            DiagnosticLog.Write($"Install manifest written: {files.Count} files, {dirs.Count} dirs.");
+            DiagnosticLog.Write(
+                $"Install manifest written: {files.Count} files, {dirs.Count} dirs, " +
+                $"{manifest.OverlayFiles.Count} overlay ({manifest.OverlayNetNew.Count} net-new).");
         }
         catch (Exception ex)
         {

@@ -293,6 +293,43 @@ time. **`externalAssetSha256` is mandatory** when you set the template
 — the launcher refuses to install from an external host without a
 hash, because GitHub no longer underwrites the authenticity.
 
+#### Removing files in an update (deletion)
+
+Each release `.zip` is your mod's **complete overlay**. When the user
+updates, the launcher extracts the new `.zip` on top of their install,
+adding and overwriting files. To **remove** files an old version shipped
+but the new one shouldn't, there are two ways — and you can use both:
+
+1. **Automatic (net-new files).** If you stop shipping a file that *you*
+   added (one that did **not** exist in the base game), the launcher
+   deletes it automatically on update. You don't declare anything — just
+   leave it out of the new `.zip`. Files that **overwrite** a base-game
+   file are never auto-deleted (removing one would leave a hole the engine
+   expects → broken game), so those stay until you say otherwise.
+
+2. **Explicit (`delete.lst`).** Ship a plain-text `delete.lst` at the root
+   of your `.zip` with **one relative path per line** (`#` starts a
+   comment). The launcher deletes exactly those paths, then removes the
+   `delete.lst` itself. Use this for files you can't express as "net-new
+   I dropped" — e.g. removing a folder you no longer use.
+
+   ```
+   # delete.lst — remove files this version drops
+   data/old_unit.xml
+   art/legacy/banner.tga
+   ```
+
+> ⚠️ **`delete.lst` DELETES — it does not revert.** Listing a file your
+> mod *overwrote* from the base game **removes** it, leaving a hole where
+> the game expects it → broken install. `delete.lst` is only for files
+> that should stop existing. To return a base-game file to its original
+> (vanilla) bytes, **re-pack those original bytes in your `.zip`** so the
+> launcher overwrites it back — never list it in `delete.lst`.
+
+Deletions are backed up before they run, so a failed update rolls back.
+None of this applies to Wars of Liberty, which uses its own
+`WolPatcher` delete-list pipeline (§5.2).
+
 ### 5.2. `WolPatcher` — for mods already running the legacy pipeline
 
 What Wars of Liberty uses: an `UpdateInfo.xml` on the mod's server

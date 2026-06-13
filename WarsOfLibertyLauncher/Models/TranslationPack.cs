@@ -77,6 +77,15 @@ public class TranslationManifest
     [JsonPropertyName("description")]
     public string? Description { get; set; }
 
+    /// <summary>
+    /// The mod id this pack targets (e.g. "wol", "improvement-mod"). Guards
+    /// against applying a pack to the wrong mod, which would corrupt its files.
+    /// Empty for packs made before this field existed — treated as "unverified"
+    /// (allowed, not rejected) for backward compatibility.
+    /// </summary>
+    [JsonPropertyName("targetMod")]
+    public string TargetMod { get; set; } = "";
+
     public const string ManifestFileName = "translation.json";
 }
 
@@ -120,7 +129,75 @@ public class TranslationIndexEntry
 
     [JsonPropertyName("description")]
     public string? Description { get; set; }
+
+    /// <summary>Mod id this pack targets. See <see cref="TranslationManifest.TargetMod"/>.</summary>
+    [JsonPropertyName("targetMod")]
+    public string TargetMod { get; set; } = "";
 }
+
+/// <summary>
+/// Pure, UI-free compatibility helpers for translation packs. The AUTHORITATIVE
+/// check is the per-file MD5 hash (see
+/// <see cref="WarsOfLibertyLauncher.Services.TranslationService.CheckCompatibilityAsync"/>);
+/// these cover the secondary version-string layer used to pre-filter packs in
+/// menus (the hash isn't available for remote-only entries) and the target-mod
+/// guard. Kept here so they can be unit-tested without WPF.
+/// </summary>
+public static class TranslationCompat
+{
+    /// <summary>
+    /// Best-effort version-list compatibility: true only when the mod's current
+    /// version is one the translator explicitly declared. Deliberately exact
+    /// membership — NO ranges: a pack tested for 1.2.0 makes no promise about
+    /// 1.3.0, whose strings may have changed. Empty list or unknown version →
+    /// false (indeterminate; the caller decides, and the hash check / apply
+    /// dialog remains the final authority).
+    /// </summary>
+    public static bool IsCompatible(IReadOnlyCollection<string>? compatibleWith, string? modVersion)
+    {
+        if (compatibleWith == null || compatibleWith.Count == 0) return false;
+        if (string.IsNullOrWhiteSpace(modVersion)) return false;
+        var target = modVersion.Trim();
+        foreach (var v in compatibleWith)
+            if (string.Equals(v?.Trim(), target, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// True when the card/menu should mark a pack as INCOMPATIBLE on version
+    /// grounds alone: the translator declared specific versions and the current
+    /// one isn't among them. An empty declared list is "unknown", NOT blocked —
+    /// the hash check at apply time decides. (For installed packs the caller
+    /// should prefer the hash-first <c>CheckCompatibilityAsync</c> instead.)
+    /// </summary>
+    public static bool IsVersionBlocked(IReadOnlyCollection<string>? compatibleWith, string? modVersion)
+        => compatibleWith != null && compatibleWith.Count > 0
+           && !IsCompatible(compatibleWith, modVersion);
+
+    /// <summary>
+    /// Target-mod guard: allowed when the pack names no target mod
+    /// (legacy/unverified) or it matches the mod being applied to. Rejected only
+    /// when it explicitly names a DIFFERENT mod.
+    /// </summary>
+    public static bool TargetModMatches(string? packTargetMod, string? modId)
+    {
+        if (string.IsNullOrWhiteSpace(packTargetMod)) return true;  // unverified → allow
+        if (string.IsNullOrWhiteSpace(modId)) return true;
+        return string.Equals(packTargetMod.Trim(), modId.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+/// <summary>
+/// Returned by the post-update reconciliation when an active translation was
+/// reverted to English because it's no longer compatible with the new mod
+/// version. The UI surfaces it so the user isn't silently switched to English.
+/// </summary>
+public record TranslationRevertNotice(
+    string PackId,
+    string PackName,
+    IReadOnlyList<string> PackForVersions,
+    string? NewModVersion);
 
 /// <summary>
 /// In-memory list of translations the launcher has discovered, populated

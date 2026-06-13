@@ -234,6 +234,14 @@ public class UpdateService
     /// <summary>The latest available version on the server.</summary>
     public VersionInfo? LatestVersion { get; private set; }
 
+    /// <summary>
+    /// Set by <see cref="ApplyUpdatesAsync"/> when a just-updated mod's active
+    /// translation was reverted to English for incompatibility. The UI reads it
+    /// after the update to notify the user, then clears it. Null when nothing
+    /// was reverted.
+    /// </summary>
+    public Models.TranslationRevertNotice? LastTranslationRevertNotice { get; set; }
+
     /// <summary>Result of a check operation.</summary>
     public record CheckResult(
         UpdateInfo Info,
@@ -581,40 +589,16 @@ public class UpdateService
             }
         }
 
-        // ---- Post-update: refresh translation snapshot + re-apply active pack ----
-        // The patches we just applied have overwritten data\stringtabley.xml and
-        // data\unithelpstringsy.xml with the latest English versions. Capture
-        // those as the new canonical snapshot, then if the user had a translation
-        // active, re-apply it on top so they don't fall back to English silently.
+        // ---- Post-update: reconcile the active translation (shared helper) ----
+        // The patches just overwrote the covered files with the latest English
+        // versions. ReconcileAfterUpdate re-snapshots, then re-applies a still-
+        // compatible pack or reverts to English (and reports it) when not. The
+        // same helper runs on the GitHubReleases re-overlay path (MainWindow).
         try
         {
-            var translations = new TranslationService(InstallPath);
-            translations.RefreshOriginalsSnapshot();
-
-            var activeState = _config.GetState(_profile.Id);
-            if (!string.IsNullOrEmpty(activeState.ActiveTranslationId))
-            {
-                var manifest = translations.GetInstalled(activeState.ActiveTranslationId);
-                if (manifest != null)
-                {
-                    var compat = translations.CheckCompatibility(manifest, LatestVersion?.Ver);
-                    if (compat == CompatibilityResult.Unknown)
-                    {
-                        DiagnosticLog.Write(
-                            $"Translation '{manifest.Id}' may be incompatible with the new mod " +
-                            "version; reverting to English. User will need an updated pack.");
-                        activeState.ActiveTranslationId = "";
-                        _config.Save();
-                    }
-                    else
-                    {
-                        var apply = translations.Apply(manifest.Id);
-                        DiagnosticLog.Write(apply.Success
-                            ? $"Translation '{manifest.Id}' re-applied after update."
-                            : $"Translation re-apply failed: {apply.ErrorMessage}");
-                    }
-                }
-            }
+            var translations = new TranslationService(InstallPath, _profile.Translations?.CoveredFiles);
+            LastTranslationRevertNotice =
+                translations.ReconcileAfterUpdate(_config, _profile.Id, LatestVersion?.Ver);
         }
         catch (Exception ex)
         {

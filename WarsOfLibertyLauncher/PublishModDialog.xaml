@@ -229,6 +229,10 @@
                     <TextBox  x:Name="FieldProbeFile" Style="{StaticResource FieldInput}"/>
                     <TextBlock x:Name="HintProbeFile" Style="{StaticResource FieldHint}"/>
 
+                    <TextBlock x:Name="LblMarker" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldMarker" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="HintMarker" Style="{StaticResource FieldHint}"/>
+
                     <TextBlock x:Name="LblExecutable" Style="{StaticResource FieldLabel}"/>
                     <TextBox  x:Name="FieldExecutable" Style="{StaticResource FieldInput}"/>
                     <TextBlock x:Name="HintExecutable" Style="{StaticResource FieldHint}"/>
@@ -237,6 +241,30 @@
                     <TextBlock x:Name="LblArguments" Style="{StaticResource FieldLabel}"/>
                     <TextBox  x:Name="FieldArguments" Style="{StaticResource FieldInput}"/>
                     <TextBlock x:Name="HintArguments" Style="{StaticResource FieldHint}"/>
+
+                    <TextBlock x:Name="LblUserDataFolder" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldUserDataFolder" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="HintUserDataFolder" Style="{StaticResource FieldHint}"/>
+
+                    <!-- Advanced install fields — rarely needed; safe to leave blank. -->
+                    <TextBlock x:Name="Step3AdvancedHeader" Style="{StaticResource FieldLabel}"
+                               FontSize="{StaticResource FontSizeBodyStrong}" Foreground="{DynamicResource TextPrimary}"
+                               Margin="0,18,0,2"/>
+
+                    <TextBlock x:Name="LblInstallProductGuid" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldInstallProductGuid" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="HintInstallProductGuid" Style="{StaticResource FieldHint}"/>
+
+                    <TextBlock x:Name="LblPayloadUrls" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldPayloadUrls" Style="{StaticResource FieldInput}"
+                              AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
+                    <TextBlock x:Name="HintPayloadUrls" Style="{StaticResource FieldHint}"/>
+
+                    <TextBlock x:Name="LblPayloadSha256" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldPayloadSha256" Style="{StaticResource FieldInput}"
+                              AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
+                    <TextBlock x:Name="HintPayloadSha256" Style="{StaticResource FieldHint}"/>
+                    <TextBlock x:Name="ErrorPayloadSha256" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
                 </StackPanel>
 
                 <!-- Step 4 — Updates: mechanism (+ contextual subfields). -->
@@ -262,6 +290,21 @@
                         <TextBlock x:Name="LblWolUpdateInfoUrl" Style="{StaticResource FieldLabel}"/>
                         <TextBox  x:Name="FieldWolUpdateInfoUrl" Style="{StaticResource FieldInput}"/>
                         <TextBlock x:Name="HintWolUpdateInfoUrl" Style="{StaticResource FieldHint}"/>
+
+                        <TextBlock x:Name="LblWolUpdateInfoUrlAlt" Style="{StaticResource FieldLabel}"/>
+                        <TextBox  x:Name="FieldWolUpdateInfoUrlAlt" Style="{StaticResource FieldInput}"/>
+                        <TextBlock x:Name="HintWolUpdateInfoUrlAlt" Style="{StaticResource FieldHint}"/>
+
+                        <TextBlock x:Name="LblWolPayloadZipUrls" Style="{StaticResource FieldLabel}"/>
+                        <TextBox  x:Name="FieldWolPayloadZipUrls" Style="{StaticResource FieldInput}"
+                                  AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
+                        <TextBlock x:Name="HintWolPayloadZipUrls" Style="{StaticResource FieldHint}"/>
+
+                        <TextBlock x:Name="LblWolPayloadSha256" Style="{StaticResource FieldLabel}"/>
+                        <TextBox  x:Name="FieldWolPayloadSha256" Style="{StaticResource FieldInput}"
+                                  AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
+                        <TextBlock x:Name="HintWolPayloadSha256" Style="{StaticResource FieldHint}"/>
+                        <TextBlock x:Name="ErrorWolPayloadSha256" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
                     </StackPanel>
 
                     <!-- GitHub Releases subfields. -->
@@ -269,11 +312,50 @@
                         <TextBlock x:Name="LblSourceRepo" Style="{StaticResource FieldLabel}"/>
                         <TextBox  x:Name="FieldSourceRepo" Style="{StaticResource FieldInput}"/>
                         <TextBlock x:Name="HintSourceRepo" Style="{StaticResource FieldHint}"/>
+                        <TextBlock x:Name="ErrorSourceRepo" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
 
                         <TextBlock x:Name="LblApprovedTag" Style="{StaticResource FieldLabel}"/>
                         <TextBox  x:Name="FieldApprovedTag" Style="{StaticResource FieldInput}"/>
                         <TextBlock x:Name="HintApprovedTag" Style="{StaticResource FieldHint}"/>
+
+                        <!-- How updates + file deletion work (GitHubReleases only). -->
+                        <Border Background="{DynamicResource BgPanel}"
+                                BorderBrush="{DynamicResource AccentBrush}"
+                                BorderThickness="1" CornerRadius="4"
+                                Padding="12,10" Margin="0,14,0,4">
+                            <TextBlock x:Name="UpdateDeletionNote"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       FontSize="{StaticResource FontSizeBody}"
+                                       TextWrapping="Wrap" LineHeight="18"/>
+                        </Border>
+
+                        <!-- Advanced: host the payload outside GitHub Releases (own CDN). -->
+                        <TextBlock x:Name="GitHubAdvancedHeader" Style="{StaticResource FieldLabel}"
+                                   FontSize="{StaticResource FontSizeBodyStrong}" Foreground="{DynamicResource TextPrimary}"
+                                   Margin="0,12,0,2"/>
+
+                        <TextBlock x:Name="LblGhExternalUrl" Style="{StaticResource FieldLabel}"/>
+                        <TextBox  x:Name="FieldGhExternalUrl" Style="{StaticResource FieldInput}"/>
+                        <TextBlock x:Name="HintGhExternalUrl" Style="{StaticResource FieldHint}"/>
+
+                        <TextBlock x:Name="LblGhExternalSha" Style="{StaticResource FieldLabel}"/>
+                        <TextBox  x:Name="FieldGhExternalSha" Style="{StaticResource FieldInput}"/>
+                        <TextBlock x:Name="HintGhExternalSha" Style="{StaticResource FieldHint}"/>
+                        <TextBlock x:Name="ErrorGhExternalSha" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
                     </StackPanel>
+
+                    <!-- Translations (any mechanism) — optional community translation repo. -->
+                    <TextBlock x:Name="Step4TranslationsHeader" Style="{StaticResource FieldLabel}"
+                               FontSize="{StaticResource FontSizeBodyStrong}" Foreground="{DynamicResource TextPrimary}"
+                               Margin="0,18,0,2"/>
+                    <TextBlock x:Name="LblTranslationsRepo" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldTranslationsRepo" Style="{StaticResource FieldInput}"/>
+                    <TextBlock x:Name="HintTranslationsRepo" Style="{StaticResource FieldHint}"/>
+
+                    <TextBlock x:Name="LblTranslationsCovered" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldTranslationsCovered" Style="{StaticResource FieldInput}"
+                              AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
+                    <TextBlock x:Name="HintTranslationsCovered" Style="{StaticResource FieldHint}"/>
                 </StackPanel>
 
                 <!-- Step 5 — Description + website. -->

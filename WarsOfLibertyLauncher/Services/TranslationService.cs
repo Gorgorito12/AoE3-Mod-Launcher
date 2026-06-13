@@ -26,8 +26,11 @@ public class TranslationService
     public const string TranslationsFolderName = "translations";
     public const string OriginalsFolderName = "_originals";
 
-    /// <summary>Files that the snapshot covers — the ones translations replace.</summary>
-    private static readonly string[] CoveredFiles =
+    /// <summary>
+    /// WoL-shaped default covered files, used when the caller doesn't pass a
+    /// per-mod list (e.g. legacy call sites or a mod whose profile declares none).
+    /// </summary>
+    private static readonly string[] DefaultCoveredFiles =
     {
         @"data\stringtabley.xml",
         @"data\unithelpstringsy.xml",
@@ -35,9 +38,19 @@ public class TranslationService
 
     private readonly string _installPath;
 
-    public TranslationService(string installPath)
+    /// <summary>The files THIS mod's translations replace (per-mod, not WoL-fixed).</summary>
+    private readonly IReadOnlyList<string> _coveredFiles;
+
+    /// <param name="coveredFiles">
+    /// The mod's <c>ModProfile.Translations.CoveredFiles</c>. When null/empty the
+    /// WoL default is used, preserving old behaviour for callers that don't pass it.
+    /// </param>
+    public TranslationService(string installPath, IReadOnlyList<string>? coveredFiles = null)
     {
         _installPath = installPath;
+        _coveredFiles = (coveredFiles != null && coveredFiles.Count > 0)
+            ? coveredFiles
+            : DefaultCoveredFiles;
     }
 
     /// <summary>Folder where translations live: &lt;install&gt;\translations\</summary>
@@ -50,7 +63,9 @@ public class TranslationService
     public string GetPackFolder(string id) => Path.Combine(TranslationsRoot, id);
 
     /// <summary>The list of files covered by translations (relative to install root).</summary>
-    public static IReadOnlyList<string> CoveredFilePaths => CoveredFiles;
+    public static IReadOnlyList<string> CoveredFilePaths => DefaultCoveredFiles;
+    /// <summary>The covered files for THIS instance's mod (per-mod, may differ from the default).</summary>
+    public IReadOnlyList<string> CoveredFilePathsForMod => _coveredFiles;
 
     // ------------------------------------------------------------------------
     // Originals snapshot — keeps the canonical EN versions for version
@@ -69,7 +84,7 @@ public class TranslationService
         {
             Directory.CreateDirectory(OriginalsFolder);
             int copied = 0;
-            foreach (var rel in CoveredFiles)
+            foreach (var rel in _coveredFiles)
             {
                 var src = Path.Combine(_installPath, rel);
                 if (!File.Exists(src)) continue;
@@ -94,7 +109,7 @@ public class TranslationService
     public bool HasOriginalsSnapshot()
     {
         if (!Directory.Exists(OriginalsFolder)) return false;
-        foreach (var rel in CoveredFiles)
+        foreach (var rel in _coveredFiles)
         {
             var snapshot = Path.Combine(OriginalsFolder, Path.GetFileName(rel));
             if (!File.Exists(snapshot)) return false;
@@ -268,7 +283,7 @@ public class TranslationService
         }
 
         int copied = 0;
-        foreach (var rel in CoveredFiles)
+        foreach (var rel in _coveredFiles)
         {
             var src = Path.Combine(OriginalsFolder, Path.GetFileName(rel));
             var dst = Path.Combine(_installPath, rel);
@@ -352,6 +367,55 @@ public class TranslationService
             .GetAwaiter().GetResult();
     }
 
+    /// <summary>
+    /// Post-update translation reconciliation, shared by the WolPatcher and
+    /// GitHubReleases update paths. Refreshes the originals snapshot, then if a
+    /// translation is active: re-applies it when still compatible, or reverts to
+    /// English (files AND the active id) when not — returning a notice so the UI
+    /// can tell the user. Returns null when nothing changed visibly (no active
+    /// pack, or it stayed active). Safe on a background thread.
+    /// </summary>
+    public TranslationRevertNotice? ReconcileAfterUpdate(
+        LauncherConfig config, string modId, string? newModVersion)
+    {
+        try
+        {
+            RefreshOriginalsSnapshot();
+
+            var state = config.GetState(modId);
+            if (string.IsNullOrEmpty(state.ActiveTranslationId)) return null;
+
+            var manifest = GetInstalled(state.ActiveTranslationId);
+            if (manifest == null) return null;
+
+            var compat = CheckCompatibility(manifest, newModVersion);
+            if (compat == CompatibilityResult.Unknown)
+            {
+                // Revert the files to English AND clear the active id so config
+                // and disk stay consistent, then report it for the UI to surface.
+                RevertToOriginal();
+                var notice = new TranslationRevertNotice(
+                    manifest.Id, manifest.Name, manifest.CompatibleWith, newModVersion);
+                state.ActiveTranslationId = "";
+                config.Save();
+                DiagnosticLog.Write(
+                    $"Translation '{manifest.Id}' incompatible with new mod version; reverted to English.");
+                return notice;
+            }
+
+            var apply = Apply(manifest.Id);
+            DiagnosticLog.Write(apply.Success
+                ? $"Translation '{manifest.Id}' re-applied after update."
+                : $"Translation re-apply failed: {apply.ErrorMessage}");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Post-update translation reconcile failed (non-fatal): {ex.Message}");
+            return null;
+        }
+    }
+
     // ------------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------------
@@ -379,7 +443,15 @@ public class TranslationService
         string TranslatedFolder,
         string OutputZipPath,
         string? Description,
-        string? OriginalsFolder = null);
+        string? OriginalsFolder = null,
+        string TargetMod = "",
+        // Explicit translated files the user picked (any name). When non-empty,
+        // these are used instead of scanning TranslatedFolder by canonical name.
+        IReadOnlyList<string>? TranslatedFiles = null,
+        // Explicit original (English) files the user picked. Same idea as
+        // TranslatedFiles but for the EN baseline. When non-empty, used instead
+        // of OriginalsFolder / the launcher snapshot.
+        IReadOnlyList<string>? OriginalFiles = null);
 
     /// <summary>
     /// Output of <see cref="ExportPackageAsync"/>.
@@ -405,6 +477,48 @@ public class TranslationService
     /// translator provides). The output is a ready-to-upload .zip + a JSON
     /// snippet for translations-index.json.
     /// </summary>
+    /// <summary>
+    /// Resolves the translator's source file for a covered file. Prefers the
+    /// exact canonical name (e.g. "stringtabley.xml"); if absent, accepts a file
+    /// whose base name CONTAINS the canonical base (e.g.
+    /// "stringtabley_translated.xml" → "stringtabley.xml") so translators don't
+    /// have to rename their files. Returns null when nothing matches.
+    /// </summary>
+    internal static string? ResolveTranslatedFile(string folder, string coveredFileName)
+    {
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return null;
+        var exact = Path.Combine(folder, coveredFileName);
+        if (File.Exists(exact)) return exact;
+
+        var baseName = Path.GetFileNameWithoutExtension(coveredFileName);
+        try
+        {
+            return Directory.EnumerateFiles(folder, "*.xml")
+                .FirstOrDefault(f => Path.GetFileNameWithoutExtension(f)
+                    .Contains(baseName, StringComparison.OrdinalIgnoreCase));
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Picks, from an explicit list of files the user selected, the one matching
+    /// a covered file. Prefers an exact base-name match, then a file whose base
+    /// name CONTAINS the canonical base (e.g. "stringtabley_translated.xml" →
+    /// "stringtabley.xml"). Returns null when none matches.
+    /// </summary>
+    internal static string? ResolveFromList(IReadOnlyList<string> files, string coveredFileName)
+    {
+        foreach (var f in files)
+            if (string.Equals(Path.GetFileName(f), coveredFileName, StringComparison.OrdinalIgnoreCase))
+                return f;
+
+        var baseName = Path.GetFileNameWithoutExtension(coveredFileName);
+        foreach (var f in files)
+            if (Path.GetFileNameWithoutExtension(f).Contains(baseName, StringComparison.OrdinalIgnoreCase))
+                return f;
+        return null;
+    }
+
     public async Task<ExportResult> ExportPackageAsync(ExportInputs inputs, CancellationToken ct = default)
     {
         try
@@ -416,48 +530,63 @@ public class TranslationService
                 return ExportFail("Missing translation name.");
             if (string.IsNullOrWhiteSpace(inputs.Version))
                 return ExportFail("Missing pack version.");
-            if (!Directory.Exists(inputs.TranslatedFolder))
+            // The user can either pick explicit files (any name) or point at a
+            // folder. Files win when present.
+            bool useFiles = inputs.TranslatedFiles != null && inputs.TranslatedFiles.Count > 0;
+            if (!useFiles && !Directory.Exists(inputs.TranslatedFolder))
                 return ExportFail($"Translated folder doesn't exist: {inputs.TranslatedFolder}");
 
-            // Resolve the originals folder: explicit path wins, otherwise
-            // fall back to the launcher-managed snapshot. We need at least
-            // one of the two — without originals there are no originalHash
-            // values to put in the manifest.
-            string originalsRoot;
-            if (!string.IsNullOrWhiteSpace(inputs.OriginalsFolder))
+            // Originals source: explicit picked files win, else a folder path,
+            // else the launcher-managed snapshot. We need one of them — without
+            // originals there are no originalHash values for the manifest.
+            bool useOriginalFiles = inputs.OriginalFiles != null && inputs.OriginalFiles.Count > 0;
+            string originalsRoot = "";
+            if (!useOriginalFiles)
             {
-                if (!Directory.Exists(inputs.OriginalsFolder))
-                    return ExportFail($"Originals folder doesn't exist: {inputs.OriginalsFolder}");
-                originalsRoot = inputs.OriginalsFolder;
-            }
-            else if (HasOriginalsSnapshot())
-            {
-                originalsRoot = OriginalsFolder;
-            }
-            else
-            {
-                return ExportFail(
-                    "No source for the original English files. Either install/update " +
-                    "the mod with this launcher (auto-generates the snapshot), or " +
-                    "point the dialog at your own backup folder.");
+                if (!string.IsNullOrWhiteSpace(inputs.OriginalsFolder))
+                {
+                    if (!Directory.Exists(inputs.OriginalsFolder))
+                        return ExportFail($"Originals folder doesn't exist: {inputs.OriginalsFolder}");
+                    originalsRoot = inputs.OriginalsFolder;
+                }
+                else if (HasOriginalsSnapshot())
+                {
+                    originalsRoot = OriginalsFolder;
+                }
+                else
+                {
+                    return ExportFail(
+                        "No source for the original English files. Either install/update " +
+                        "the mod with this launcher (auto-generates the snapshot), or " +
+                        "point the dialog at your own backup files.");
+                }
             }
 
             // ---- For each covered file, gather hashes ----
+            // Maps the canonical covered file name (e.g. "stringtabley.xml") to
+            // the actual source the translator provided (which may be named
+            // differently, e.g. "stringtabley_translated.xml"). The pack always
+            // ships the CANONICAL name so it overwrites the right game file.
             var manifestFiles = new List<TranslationFile>();
+            var sourceByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             int filesIncluded = 0;
-            foreach (var rel in CoveredFiles)
+            foreach (var rel in _coveredFiles)
             {
                 var fileName = Path.GetFileName(rel);
-                var translatedPath = Path.Combine(inputs.TranslatedFolder, fileName);
-                var originalPath = Path.Combine(originalsRoot, fileName);
+                var translatedPath = useFiles
+                    ? ResolveFromList(inputs.TranslatedFiles!, fileName)
+                    : ResolveTranslatedFile(inputs.TranslatedFolder, fileName);
+                var originalPath = useOriginalFiles
+                    ? ResolveFromList(inputs.OriginalFiles!, fileName)
+                    : Path.Combine(originalsRoot, fileName);
 
                 // Skip files the translator didn't provide — pack only what's there.
-                if (!File.Exists(translatedPath))
+                if (translatedPath == null)
                 {
                     DiagnosticLog.Write($"Export: skipping {fileName} (not in translator folder)");
                     continue;
                 }
-                if (!File.Exists(originalPath))
+                if (originalPath == null || !File.Exists(originalPath))
                 {
                     DiagnosticLog.Write($"Export: skipping {fileName} (no original snapshot)");
                     continue;
@@ -476,6 +605,7 @@ public class TranslationService
                     TranslatedHash = translatedHash,
                     Size = size,
                 });
+                sourceByName[fileName] = translatedPath;
                 filesIncluded++;
             }
 
@@ -495,6 +625,7 @@ public class TranslationService
                 CompatibleWith = inputs.CompatibleWith ?? new List<string>(),
                 Files = manifestFiles,
                 Description = string.IsNullOrWhiteSpace(inputs.Description) ? null : inputs.Description.Trim(),
+                TargetMod = inputs.TargetMod?.Trim() ?? "",
             };
 
             // Serialize the manifest once — same bytes go into the zip AND
@@ -516,13 +647,15 @@ public class TranslationService
                     Path.Combine(stagingFolder, TranslationManifest.ManifestFileName),
                     manifestJson);
 
-                // 2. Copy the translated files
+                // 2. Copy the translated files — read from the actual source the
+                //    translator provided, but write under the CANONICAL name.
                 foreach (var file in manifestFiles)
                 {
                     var fileName = Path.GetFileName(file.Path.Replace('/', Path.DirectorySeparatorChar));
-                    File.Copy(
-                        Path.Combine(inputs.TranslatedFolder, fileName),
-                        Path.Combine(stagingFolder, fileName));
+                    var source = sourceByName.TryGetValue(fileName, out var sp)
+                        ? sp
+                        : Path.Combine(inputs.TranslatedFolder, fileName);
+                    File.Copy(source, Path.Combine(stagingFolder, fileName));
                 }
 
                 // 3. Zip the staging folder's contents (NOT the folder itself —

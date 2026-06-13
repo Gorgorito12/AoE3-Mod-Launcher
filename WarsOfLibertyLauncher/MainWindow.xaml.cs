@@ -2918,7 +2918,12 @@ public partial class MainWindow : Window
             createBackup: () => RaiseMenuClick(ActionPanelControl.MenuCreateBackupNow),
             restoreBackup: () => RaiseMenuClick(ActionPanelControl.MenuRestoreUserData),
             viewLogs: () => RaiseMenuClick(ActionPanelControl.MenuViewLogs),
-            uninstall: () => RaiseMenuClick(ActionPanelControl.UninstallMenuItem))
+            uninstall: () => RaiseMenuClick(ActionPanelControl.UninstallMenuItem),
+            refreshTranslations: async () =>
+            {
+                await RefreshTranslationIndexAsync(reportStatus: true);
+                return _cachedTranslationIndex;
+            })
         {
             Owner = this,
         };
@@ -4641,6 +4646,14 @@ public partial class MainWindow : Window
         {
             await InstallAsync();
         }
+        else if (GitHubUpdateAvailable())
+        {
+            // GitHubReleases update: re-overlay the approved release (download +
+            // extract on top, now WITH file deletion — delete.lst + auto net-new).
+            // Same engine as Repair, surfaced as a dedicated Update action.
+            if (!EnsureGameNotRunning()) return;
+            await RepairInstallAsync(asUpdate: true);
+        }
         else if (_pendingDownloads.Count > 0)
         {
             if (!EnsureGameNotRunning()) return;
@@ -4653,6 +4666,23 @@ public partial class MainWindow : Window
             InvalidateActiveModCheckCache();
             await CheckAsync();
         }
+    }
+
+    /// <summary>
+    /// True when a GitHubReleases mod has an update pending: the installed tag
+    /// (<see cref="UpdateService.CurrentVersion"/>) differs from the catalog's
+    /// approved tag (<see cref="UpdateService.LatestVersion"/>). WolPatcher and
+    /// the other mechanisms always return false (they use the pending-downloads
+    /// path or have no auto-update).
+    /// </summary>
+    private bool GitHubUpdateAvailable()
+    {
+        if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.GitHubReleases)
+            return false;
+        var cur = _updateService.CurrentVersion?.Ver;
+        var latest = _updateService.LatestVersion?.Ver;
+        return !string.IsNullOrEmpty(cur) && !string.IsNullOrEmpty(latest)
+            && !string.Equals(cur, latest, StringComparison.OrdinalIgnoreCase);
     }
 
     private async void VerifyButton_Click(object sender, RoutedEventArgs e)
@@ -4677,7 +4707,7 @@ public partial class MainWindow : Window
             subtitle: Strings.Get("ProgressSubVerifying"),
             bar1Label: "ProgressBarVerify",
             bar2Label: "ProgressBarProcess",
-            retry: RepairInstallAsync);
+            retry: () => RepairInstallAsync());
         ProgressPanelControl.PatchProgress.IsIndeterminate = true;
         ProgressPanelControl.OverallProgress.IsIndeterminate = true;
         SetStatus(Strings.Get("StatusVerifying"));
@@ -4730,9 +4760,10 @@ public partial class MainWindow : Window
     /// Repairs the installation by re-downloading the WoL payload and
     /// re-copying the mod files over the existing install.
     /// </summary>
-    private async Task RepairInstallAsync()
+    private async Task RepairInstallAsync(bool asUpdate = false)
     {
         if (_isBusy) return;
+        bool updated = false;
 
         // Resolve payload via the same helper InstallAsync uses so Repair
         // works for every mechanism the launcher can install (WolPatcher,
@@ -4755,11 +4786,13 @@ public partial class MainWindow : Window
 
         StartProgressPanel(
             ProgressOperation.Repair,
-            title: Strings.Format("ProgressTitleRepairing", _updateService.Profile.DisplayName),
+            title: Strings.Format(
+                asUpdate ? "ProgressTitleUpdating" : "ProgressTitleRepairing",
+                _updateService.Profile.DisplayName),
             subtitle: Strings.Get("ProgressSubVerifying"),
             bar1Label: "ProgressBarVerify",
             bar2Label: "ProgressBarRepair",
-            retry: RepairInstallAsync);
+            retry: () => RepairInstallAsync(asUpdate));
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
         ProgressPanelControl.PatchProgress.Value = 0;
         ProgressPanelControl.OverallProgress.Value = 0;
@@ -4827,11 +4860,23 @@ public partial class MainWindow : Window
             var recheck = await Task.Run(() => VerifyInstallation(installPath, recheckProfile));
             if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
             {
-                SetStatus(Strings.Get("StatusRepairSuccess"));
+                // Persist the version we just laid down. For GitHubReleases this
+                // is the approved tag, so the next CheckAsync sees installed ==
+                // approved and stops offering the update (hides the Update button).
+                var st = _config.GetState(_updateService.Profile.Id);
+                var laidDownVersion = ResolveInstallVersion();
+                if (!string.IsNullOrEmpty(laidDownVersion))
+                    st.LastKnownVersion = laidDownVersion;
+                _config.Save();
+                updated = true;
+
+                var okMsg = Strings.Get(asUpdate ? "StatusUpdateSuccess" : "StatusRepairSuccess");
+                SetStatus(okMsg);
                 // Repair: the user could already play before; no need to
                 // surface PLAY on completion (sidebar already has PLAY).
-                ShowProgressCompleted("ProgressTitleCompleted",
-                    Strings.Get("StatusRepairSuccess"));
+                ShowProgressCompleted("ProgressTitleCompleted", okMsg);
+                // Free the re-downloaded payload from %Temp% (see InstallAsync).
+                _ = System.Threading.Tasks.Task.Run(NativeInstallService.TryCleanupTemp);
             }
             else
             {
@@ -4858,6 +4903,47 @@ public partial class MainWindow : Window
             ShowDownloadControls(false);
             ResetProgressUI();
         }
+
+        // After a successful GitHubReleases update, re-check so the StatusCard /
+        // Update button reflect that installed == approved now (button hides).
+        if (asUpdate && updated)
+        {
+            // The GH re-overlay path doesn't run the WolPatcher post-update
+            // translation reconcile, so do it here: revert an incompatible pack
+            // to English and notify. Safe no-op when no pack is active.
+            try
+            {
+                var profile = _updateService.Profile;
+                var ts = new TranslationService(
+                    _updateService.InstallPath!, profile.Translations?.CoveredFiles);
+                var notice = ts.ReconcileAfterUpdate(
+                    _config, profile.Id, _updateService.LatestVersion?.Ver ?? ResolveInstallVersion());
+                ShowTranslationRevertNotice(notice);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"GH post-update translation reconcile failed: {ex.Message}");
+            }
+            InvalidateActiveModCheckCache();
+            await CheckAsync();
+        }
+    }
+
+    /// <summary>
+    /// Surfaces a post-update translation revert to the user (instead of the old
+    /// silent fall-back to English). No-op when <paramref name="notice"/> is null.
+    /// </summary>
+    private void ShowTranslationRevertNotice(Models.TranslationRevertNotice? notice)
+    {
+        if (notice == null) return;
+        var forVer = notice.PackForVersions.Count > 0
+            ? string.Join(", ", notice.PackForVersions)
+            : "?";
+        var body = Strings.Format(
+            "TranslationRevertedBody", notice.PackName, forVer, notice.NewModVersion ?? "?");
+        SetStatus(body);
+        MessageBox.Show(this, body, Strings.Get("TranslationRevertedTitle"),
+            MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     /// <summary>
@@ -5094,11 +5180,28 @@ public partial class MainWindow : Window
             if (result.IsValidInstall)
             {
                 SetPrimaryAction(PrimaryAction.Play);
-                SetStatus(Strings.Format(
-                    _updateService.Profile.IsStockGame
-                        ? "StatusStockReady"
-                        : "StatusReadyExternalUpdates",
-                    _updateService.Profile.DisplayName));
+
+                // GitHubReleases: surface a dedicated Update button when the
+                // installed tag differs from the catalog's approved tag. The
+                // re-overlay (download + extract on top + deletion) runs through
+                // UpdateButton_Click → RepairInstallAsync(asUpdate: true).
+                var ghCur = result.CurrentVersion?.Ver;
+                var ghLatest = result.LatestVersion?.Ver;
+                bool ghUpdate =
+                    _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases
+                    && !string.IsNullOrEmpty(ghCur) && !string.IsNullOrEmpty(ghLatest)
+                    && !string.Equals(ghCur, ghLatest, StringComparison.OrdinalIgnoreCase);
+
+                ActionPanelControl.UpdateButton.Visibility =
+                    ghUpdate ? Visibility.Visible : Visibility.Collapsed;
+
+                SetStatus(ghUpdate
+                    ? Strings.Format("StatusUpdateAvailableGh", ghLatest!)
+                    : Strings.Format(
+                        _updateService.Profile.IsStockGame
+                            ? "StatusStockReady"
+                            : "StatusReadyExternalUpdates",
+                        _updateService.Profile.DisplayName));
             }
             else if (_updateService.Profile.IsStockGame)
             {
@@ -6511,6 +6614,10 @@ public partial class MainWindow : Window
                 ShowProgressCompleted("ProgressTitleCompleted",
                     Strings.Format(
                         "StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
+                // Install succeeded — the multi-GB payload in %Temp% is no longer
+                // needed (a Repair re-downloads). Free it now instead of waiting
+                // for the next launch. Off-thread so the GB delete doesn't block UI.
+                _ = System.Threading.Tasks.Task.Run(NativeInstallService.TryCleanupTemp);
             }
             else
             {
@@ -6681,6 +6788,11 @@ public partial class MainWindow : Window
             ShowToast(
                 Strings.Get("ToastUpdateCompleteTitle"),
                 Strings.Format("ToastUpdateCompleteBody", _updateService.Profile.DisplayName));
+
+            // If the post-update reconcile reverted an incompatible translation,
+            // tell the user instead of silently switching them to English.
+            ShowTranslationRevertNotice(_updateService.LastTranslationRevertNotice);
+            _updateService.LastTranslationRevertNotice = null;
         }
 
         // Re-check AFTER releasing busy state, otherwise the new CheckAsync
@@ -7474,16 +7586,19 @@ public partial class MainWindow : Window
         if (isActive) header += "  ✓";
         else if (hasUpdate) header += $"  🆕 → v{entry.Version}";
 
-        // Compatibility hint (declared list — not authoritative, just a soft warning)
-        bool incompatible = !string.IsNullOrEmpty(currentModVersion)
-            && entry.CompatibleWith.Count > 0
-            && !entry.CompatibleWith.Contains(currentModVersion);
+        // Compatibility: a pack the translator didn't declare for this mod version
+        // is blocked (disabled) here — matching the LANGUAGE-tab cards — UNLESS it's
+        // the currently active pack (which demonstrably works). Empty declared list
+        // is "unknown", not blocked.
+        bool incompatible = Models.TranslationCompat.IsVersionBlocked(
+            entry.CompatibleWith, currentModVersion);
         if (incompatible) header += "  ⚠";
 
         var item = new System.Windows.Controls.MenuItem
         {
             Header = header,
             Foreground = Brush(isActive ? "#9bd99b" : (incompatible ? "#888" : "White")),
+            IsEnabled = isActive || !incompatible,
         };
         item.Click += (_, _) => ApplyTranslationAsync(entry);
         return item;
@@ -7600,7 +7715,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        var translations = new TranslationService(_updateService.InstallPath);
+        // Own the popups with whichever window the user is actually looking at:
+        // the (non-modal) ModPropertiesDialog when it's open, else MainWindow.
+        // Otherwise a modal owned by MainWindow opens BEHIND the Properties dialog
+        // and looks like a freeze (everything disabled, nothing visible).
+        System.Windows.Window owner = _modPropertiesDialog ?? (System.Windows.Window)this;
+
+        // Guard: never apply a pack made for a DIFFERENT mod (it would overwrite
+        // this mod's files with another's). Legacy packs (no targetMod) are allowed.
+        if (!Models.TranslationCompat.TargetModMatches(entry.TargetMod, _updateService.Profile.Id))
+        {
+            MessageBox.Show(owner,
+                Strings.Format("TranslationWrongModBody",
+                    entry.Name, entry.TargetMod, _updateService.Profile.DisplayName),
+                Strings.Get("TranslationWrongModTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var translations = new TranslationService(
+            _updateService.InstallPath, _updateService.Profile.Translations?.CoveredFiles);
         var registry = new TranslationRegistryService();
 
         var dialog = new TranslationApplyDialog(
@@ -7609,7 +7743,7 @@ public partial class MainWindow : Window
             translations,
             registry)
         {
-            Owner = this,
+            Owner = owner,
         };
 
         if (dialog.ShowDialog() == true && dialog.AppliedSuccessfully)
@@ -7617,6 +7751,9 @@ public partial class MainWindow : Window
             _config.GetActiveState().ActiveTranslationId = entry.Id;
             _config.Save();
             SetStatus(Strings.Format("StatusLangApplied", entry.Name));
+            // Rebuild the cards so the just-applied pack shows as active without
+            // needing to close and reopen the Properties dialog.
+            _modPropertiesDialog?.RefreshLanguageTab();
         }
     }
 
@@ -7637,6 +7774,7 @@ public partial class MainWindow : Window
             activeState.ActiveTranslationId = "";
             _config.Save();
             SetStatus(Strings.Get("StatusLangRevertedToEnglish"));
+            _modPropertiesDialog?.RefreshLanguageTab();
         }
         else
         {

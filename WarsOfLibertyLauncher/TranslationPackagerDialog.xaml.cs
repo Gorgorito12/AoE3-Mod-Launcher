@@ -73,6 +73,16 @@ public partial class TranslationPackagerDialog : Window
     /// </summary>
     private bool _outputIsAutoSuggested = true;
 
+    /// <summary>The XML files the translator picked (any name). Empty = folder mode.</summary>
+    private readonly List<string> _selectedTranslatedFiles = new();
+    /// <summary>True while we set FolderBox from the picker, so the TextChanged
+    /// handler doesn't mistake it for a manual edit and clear the file list.</summary>
+    private bool _settingFolderProgrammatically;
+
+    /// <summary>The original (EN) XML files the user picked. Empty = folder/snapshot mode.</summary>
+    private readonly List<string> _selectedOriginalFiles = new();
+    private bool _settingOriginalsProgrammatically;
+
     private readonly string _desktopFolder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
     public TranslationPackagerDialog(LauncherConfig config)
@@ -83,6 +93,16 @@ public partial class TranslationPackagerDialog : Window
             .ToList();
 
         InitializeComponent();
+        // A manual edit of the path box drops back to "folder" mode; a
+        // programmatic set from the file picker keeps the picked file list.
+        FolderBox.TextChanged += (_, _) =>
+        {
+            if (!_settingFolderProgrammatically) _selectedTranslatedFiles.Clear();
+        };
+        OriginalsBox.TextChanged += (_, _) =>
+        {
+            if (!_settingOriginalsProgrammatically) _selectedOriginalFiles.Clear();
+        };
         ApplyLanguage();
         PopulateModCombo();
 
@@ -190,7 +210,9 @@ public partial class TranslationPackagerDialog : Window
         // still works as long as the translator provides an explicit
         // OriginalsFolder).
         var installPath = _config.GetState(profile.Id).InstallPath ?? "";
-        _translationService = new TranslationService(installPath);
+        // Pass the picked mod's covered files so the packager hashes/packs the
+        // RIGHT files (not WoL's) for non-WoL mods.
+        _translationService = new TranslationService(installPath, profile.Translations?.CoveredFiles);
 
         // Compatibility version: prefer the LastKnownVersion the launcher
         // detected on its last check. "?" is the sentinel the existing
@@ -244,6 +266,8 @@ public partial class TranslationPackagerDialog : Window
         LblAuthor.Text = Strings.Get("DlgPackagerFieldAuthor");
         LblVersion.Text = Strings.Get("DlgPackagerFieldVersion");
         HintVersion.Text = Strings.Get("DlgPackagerHintVersion");
+        LblDescription.Text = Strings.Get("DlgPackagerFieldDescription");
+        HintDescription.Text = Strings.Get("DlgPackagerHintDescription");
         LblFolder.Text = Strings.Get("DlgPackagerFieldFolder");
         HintFolder.Text = Strings.Get("DlgPackagerHintFolder");
         LblOriginals.Text = Strings.Get("DlgPackagerFieldOriginals");
@@ -264,27 +288,48 @@ public partial class TranslationPackagerDialog : Window
 
     private void BrowseFolderButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new Microsoft.Win32.OpenFolderDialog
+        // Pick the XML FILE(S) directly — a folder picker hides files and confused
+        // translators ("nothing to select"). We store the containing folder; the
+        // exporter finds the translated files inside it, matching the canonical
+        // names even if the files were renamed (e.g. stringtabley_translated.xml).
+        var picker = new Microsoft.Win32.OpenFileDialog
         {
             Title = Strings.Get("DlgPackagerHintFolder"),
-            Multiselect = false,
+            Filter = "XML files (*.xml)|*.xml|All files (*.*)|*.*",
+            Multiselect = true,
         };
         if (Directory.Exists(FolderBox.Text)) picker.InitialDirectory = FolderBox.Text;
-        if (picker.ShowDialog(this) == true)
-            FolderBox.Text = picker.FolderName;
+        if (picker.ShowDialog(this) == true && picker.FileNames.Length > 0)
+        {
+            _selectedTranslatedFiles.Clear();
+            _selectedTranslatedFiles.AddRange(picker.FileNames);
+            // Show the picked file path(s) so it's clear a FILE was selected.
+            _settingFolderProgrammatically = true;
+            FolderBox.Text = string.Join("; ", picker.FileNames);
+            _settingFolderProgrammatically = false;
+        }
     }
 
     private void BrowseOriginalsButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new Microsoft.Win32.OpenFolderDialog
+        // Same as the translated picker: choose the original English XML FILE(S)
+        // directly (any name). Auto-fill from the snapshot still works as a folder.
+        var picker = new Microsoft.Win32.OpenFileDialog
         {
             Title = Strings.Get("DlgPackagerHintOriginals"),
-            Multiselect = false,
+            Filter = "XML files (*.xml)|*.xml|All files (*.*)|*.*",
+            Multiselect = true,
         };
         if (Directory.Exists(OriginalsBox.Text)) picker.InitialDirectory = OriginalsBox.Text;
         else if (Directory.Exists(FolderBox.Text)) picker.InitialDirectory = FolderBox.Text;
-        if (picker.ShowDialog(this) == true)
-            OriginalsBox.Text = picker.FolderName;
+        if (picker.ShowDialog(this) == true && picker.FileNames.Length > 0)
+        {
+            _selectedOriginalFiles.Clear();
+            _selectedOriginalFiles.AddRange(picker.FileNames);
+            _settingOriginalsProgrammatically = true;
+            OriginalsBox.Text = string.Join("; ", picker.FileNames);
+            _settingOriginalsProgrammatically = false;
+        }
     }
 
     private void BrowseOutputButton_Click(object sender, RoutedEventArgs e)
@@ -343,7 +388,10 @@ public partial class TranslationPackagerDialog : Window
             _userAcknowledgedModVersionWarning = true;
             return;
         }
-        if (!Directory.Exists(FolderBox.Text))
+        // Accept either picked files (any name) or a folder path typed/pasted in.
+        bool hasPickedFiles = _selectedTranslatedFiles.Count > 0;
+        if (hasPickedFiles ? !_selectedTranslatedFiles.All(File.Exists)
+                           : !Directory.Exists(FolderBox.Text))
         {
             ShowError(Strings.Get("DlgPackagerErrorFolderMissing"));
             return;
@@ -384,12 +432,17 @@ public partial class TranslationPackagerDialog : Window
                 Version: VersionBox.Text.Trim(),
                 Language: IdBox.Text.Trim(),
                 CompatibleWith: compat,
-                TranslatedFolder: FolderBox.Text.Trim(),
+                TranslatedFolder: hasPickedFiles
+                    ? (Path.GetDirectoryName(_selectedTranslatedFiles[0]) ?? "")
+                    : FolderBox.Text.Trim(),
                 OutputZipPath: OutputBox.Text.Trim(),
-                Description: null,
-                OriginalsFolder: string.IsNullOrWhiteSpace(OriginalsBox.Text)
+                Description: string.IsNullOrWhiteSpace(DescriptionBox.Text) ? null : DescriptionBox.Text.Trim(),
+                OriginalsFolder: (_selectedOriginalFiles.Count > 0 || string.IsNullOrWhiteSpace(OriginalsBox.Text))
                     ? null
-                    : OriginalsBox.Text.Trim());
+                    : OriginalsBox.Text.Trim(),
+                TargetMod: _selectedProfile?.Id ?? "",
+                TranslatedFiles: hasPickedFiles ? _selectedTranslatedFiles : null,
+                OriginalFiles: _selectedOriginalFiles.Count > 0 ? _selectedOriginalFiles : null);
 
             var result = await _translationService.ExportPackageAsync(inputs);
             if (!result.Success)
@@ -413,7 +466,11 @@ public partial class TranslationPackagerDialog : Window
             }
             ResultPathText.Text = pathLines;
 
-            ResultInstructionsText.Text = Strings.Get("DlgPackagerResultInstructions");
+            // Point the translator at the SELECTED mod's translations repo, not a
+            // hardcoded one — otherwise non-WoL packs get the wrong upload target.
+            var repo = _selectedProfile?.Translations?.Repo;
+            if (string.IsNullOrWhiteSpace(repo)) repo = _config.TranslationsRepo;
+            ResultInstructionsText.Text = Strings.Format("DlgPackagerResultInstructions", repo);
 
             // Build a "this is how players will see it" preview that mirrors
             // BuildLanguageMenuItem in MainWindow.xaml.cs — gives the translator

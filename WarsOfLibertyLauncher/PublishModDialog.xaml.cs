@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using WarsOfLibertyLauncher.Localization;
 
 namespace WarsOfLibertyLauncher;
 
@@ -47,6 +49,7 @@ public partial class PublishModDialog : Window
     private static readonly Regex ExeRegex = new(@"^[a-zA-Z0-9_.-]+\.exe$", RegexOptions.Compiled);
     private static readonly Regex WebsiteRegex = new(@"^https?://", RegexOptions.Compiled);
     private static readonly Regex SourceRepoRegex = new(@"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$", RegexOptions.Compiled);
+    private static readonly Regex Sha256Regex = new("^[a-fA-F0-9]{64}$", RegexOptions.Compiled);
 
     public PublishModDialog()
     {
@@ -211,7 +214,7 @@ public partial class PublishModDialog : Window
         1 => ValidateStep1(),
         2 => ValidateStep2(),
         3 => ValidateStep3(),
-        4 => true, // Step 4 only constrains enum values + optional URLs we don't pre-validate.
+        4 => ValidateStep4(),
         5 => ValidateStep5(),
         6 => true, // Review step — Finish closes the dialog.
         _ => true,
@@ -291,7 +294,63 @@ public partial class PublishModDialog : Window
             ok = false;
         }
         else { ErrorExecutable.Visibility = Visibility.Collapsed; }
+
+        ok &= ValidateSha256Field(FieldPayloadSha256.Text, ErrorPayloadSha256);
         return ok;
+    }
+
+    private bool ValidateStep4()
+    {
+        bool ok = true;
+        string mech = SelectedTag(FieldMechanism) ?? "WolPatcher";
+
+        if (mech == "GitHubReleases")
+        {
+            string repo = FieldSourceRepo.Text.Trim();
+            if (!string.IsNullOrEmpty(repo) && !SourceRepoRegex.IsMatch(repo))
+            {
+                ErrorSourceRepo.Text = Strings.Get("PublishErrorSourceRepo");
+                ErrorSourceRepo.Visibility = Visibility.Visible;
+                ok = false;
+            }
+            else { ErrorSourceRepo.Visibility = Visibility.Collapsed; }
+
+            // dependentRequired: an external URL template needs its SHA-256.
+            string tmpl = FieldGhExternalUrl.Text.Trim();
+            string sha = FieldGhExternalSha.Text.Trim();
+            string? shaError = null;
+            if (!string.IsNullOrEmpty(tmpl) && string.IsNullOrEmpty(sha))
+                shaError = "PublishErrorGhShaRequired";
+            else if (!string.IsNullOrEmpty(sha) && !Sha256Regex.IsMatch(sha))
+                shaError = "PublishErrorSha256";
+            if (shaError != null)
+            {
+                ErrorGhExternalSha.Text = Strings.Get(shaError);
+                ErrorGhExternalSha.Visibility = Visibility.Visible;
+                ok = false;
+            }
+            else { ErrorGhExternalSha.Visibility = Visibility.Collapsed; }
+        }
+        else if (mech == "WolPatcher")
+        {
+            ok &= ValidateSha256Field(FieldWolPayloadSha256.Text, ErrorWolPayloadSha256);
+        }
+
+        return ok;
+    }
+
+    /// <summary>Every non-empty line of a multi-line SHA field must be 64-hex.</summary>
+    private bool ValidateSha256Field(string text, TextBlock error)
+    {
+        bool allValid = SplitLines(text).TrueForAll(line => Sha256Regex.IsMatch(line));
+        if (!allValid)
+        {
+            error.Text = Strings.Get("PublishErrorSha256");
+            error.Visibility = Visibility.Visible;
+            return false;
+        }
+        error.Visibility = Visibility.Collapsed;
+        return true;
     }
 
     private bool ValidateStep5()
@@ -332,56 +391,177 @@ public partial class PublishModDialog : Window
     /// catalog PRs and dodges the schema's <c>additionalProperties:false</c>
     /// branches for empty sub-objects.
     /// </summary>
-    public string GenerateJson()
+    /// <summary>
+    /// Flat, WPF-free snapshot of the wizard form. Built by
+    /// <see cref="ReadFormInput"/> from the controls and consumed by the pure
+    /// <see cref="BuildModJson"/> — so the field→JSON mapping (including the
+    /// load-bearing nesting) is unit-testable without standing up the UI.
+    /// Multi-value fields (payload URLs/hashes, covered files) are lists; the
+    /// wizard collects them as one-per-line text and splits before filling this.
+    /// </summary>
+    public sealed record ModJsonInput
+    {
+        // Identity
+        public string Id { get; init; } = "";
+        public string DisplayName { get; init; } = "";
+        public string? Subtitle { get; init; }
+        public string? Author { get; init; }
+        // Look & feel
+        public string? AccentColor { get; init; }
+        public string? Icon { get; init; }
+        public string? Banner { get; init; }
+        public string? OfficialWebsite { get; init; }
+        public string? DescriptionEn { get; init; }
+        public string? DescriptionEs { get; init; }
+        // install.*  (nested under "install")
+        public string InstallType { get; init; } = "IsolatedFolder";
+        public string? DefaultFolder { get; init; }
+        public string? ProbeFile { get; init; }
+        public string? Marker { get; init; }
+        public string? Executable { get; init; }
+        public string? Arguments { get; init; }
+        public IReadOnlyList<string>? PayloadUrls { get; init; }
+        public IReadOnlyList<string>? PayloadSha256 { get; init; }
+        // TOP-LEVEL extras (NOT under install)
+        public string? UserDataFolder { get; init; }
+        public string? InstallProductGuid { get; init; }
+        public string? TranslationsRepo { get; init; }
+        public IReadOnlyList<string>? TranslationsCoveredFiles { get; init; }
+        // update.*
+        public string Mechanism { get; init; } = "WolPatcher";
+        public string? SourceRepo { get; init; }          // top-level
+        public string? ApprovedReleaseTag { get; init; }  // top-level
+        public string? GithubExternalAssetUrlTemplate { get; init; }  // update.github
+        public string? GithubExternalAssetSha256 { get; init; }       // update.github
+        public string? WolUpdateInfoUrl { get; init; }     // update.wol
+        public string? WolUpdateInfoUrlAlt { get; init; }  // update.wol
+        public IReadOnlyList<string>? WolPayloadZipUrls { get; init; } // update.wol
+        public IReadOnlyList<string>? WolPayloadSha256 { get; init; }  // update.wol
+        // Catalog target (for the $schema URL)
+        public string CatalogRepo { get; init; } = "Gorgorito12/aoe3-mods-catalog";
+        public string CatalogBranch { get; init; } = "main";
+    }
+
+    public string GenerateJson() => BuildModJson(ReadFormInput());
+
+    /// <summary>Reads the live WPF controls into a flat <see cref="ModJsonInput"/>.</summary>
+    private ModJsonInput ReadFormInput() => new()
+    {
+        Id = FieldId.Text,
+        DisplayName = FieldDisplayName.Text,
+        Subtitle = FieldSubtitle.Text,
+        Author = FieldAuthor.Text,
+        AccentColor = FieldAccent.Text,
+        Icon = FieldIcon.Text,
+        Banner = FieldBanner.Text,
+        OfficialWebsite = FieldWebsite.Text,
+        DescriptionEn = FieldDescriptionEn.Text,
+        DescriptionEs = FieldDescriptionEs.Text,
+        InstallType = SelectedTag(FieldInstallType) ?? "IsolatedFolder",
+        DefaultFolder = FieldDefaultFolder.Text,
+        ProbeFile = FieldProbeFile.Text,
+        Marker = FieldMarker.Text,
+        Executable = FieldExecutable.Text,
+        Arguments = FieldArguments.Text,
+        PayloadUrls = SplitLines(FieldPayloadUrls.Text),
+        PayloadSha256 = SplitLines(FieldPayloadSha256.Text),
+        UserDataFolder = FieldUserDataFolder.Text,
+        InstallProductGuid = FieldInstallProductGuid.Text,
+        TranslationsRepo = FieldTranslationsRepo.Text,
+        TranslationsCoveredFiles = SplitLines(FieldTranslationsCovered.Text),
+        Mechanism = SelectedTag(FieldMechanism) ?? "WolPatcher",
+        SourceRepo = FieldSourceRepo.Text,
+        ApprovedReleaseTag = FieldApprovedTag.Text,
+        GithubExternalAssetUrlTemplate = FieldGhExternalUrl.Text,
+        GithubExternalAssetSha256 = FieldGhExternalSha.Text,
+        WolUpdateInfoUrl = FieldWolUpdateInfoUrl.Text,
+        WolUpdateInfoUrlAlt = FieldWolUpdateInfoUrlAlt.Text,
+        WolPayloadZipUrls = SplitLines(FieldWolPayloadZipUrls.Text),
+        WolPayloadSha256 = SplitLines(FieldWolPayloadSha256.Text),
+        CatalogRepo = CatalogRepo,
+        CatalogBranch = CatalogBranch,
+    };
+
+    /// <summary>
+    /// Pure builder: maps a <see cref="ModJsonInput"/> to the catalog JSON.
+    /// Empty optional fields are omitted (keeps PR diffs tidy and dodges the
+    /// schema's <c>additionalProperties:false</c> on empty sub-objects). The
+    /// nesting here is load-bearing — see the schema: userDataFolder /
+    /// installProductGuid / translations are TOP-LEVEL; marker / payload* are
+    /// under install; github.* / wol.* are under update.
+    /// </summary>
+    internal static string BuildModJson(ModJsonInput input)
     {
         var doc = new Dictionary<string, object?>
         {
-            ["$schema"] = $"https://raw.githubusercontent.com/{CatalogRepo}/{CatalogBranch}/schema/mod.schema.json",
-            ["id"] = FieldId.Text.Trim(),
-            ["displayName"] = FieldDisplayName.Text.Trim(),
+            ["$schema"] = $"https://raw.githubusercontent.com/{input.CatalogRepo}/{input.CatalogBranch}/schema/mod.schema.json",
+            ["id"] = input.Id.Trim(),
+            ["displayName"] = input.DisplayName.Trim(),
         };
 
-        AddIfPresent(doc, "subtitle", FieldSubtitle.Text);
-        AddIfPresent(doc, "author", FieldAuthor.Text);
-        AddIfPresent(doc, "accentColor", FieldAccent.Text);
-        AddIfPresent(doc, "icon", FieldIcon.Text);
-        AddIfPresent(doc, "banner", FieldBanner.Text);
-        AddIfPresent(doc, "officialWebsite", FieldWebsite.Text);
+        AddIfPresent(doc, "subtitle", input.Subtitle);
+        AddIfPresent(doc, "author", input.Author);
+        AddIfPresent(doc, "accentColor", input.AccentColor);
+        AddIfPresent(doc, "icon", input.Icon);
+        AddIfPresent(doc, "banner", input.Banner);
+        AddIfPresent(doc, "officialWebsite", input.OfficialWebsite);
 
         var descriptions = new Dictionary<string, string>();
-        AddDescription(descriptions, "en", FieldDescriptionEn.Text);
-        AddDescription(descriptions, "es", FieldDescriptionEs.Text);
+        AddDescription(descriptions, "en", input.DescriptionEn);
+        AddDescription(descriptions, "es", input.DescriptionEs);
         if (descriptions.Count > 0) doc["description"] = descriptions;
 
-        // install.* is required by the schema; always emit it even when
-        // every nested field is blank — the schema will tell the modder
-        // exactly which sub-field is missing if they try to merge.
+        // TOP-LEVEL extras (schema places these at the root, NOT under install).
+        AddIfPresent(doc, "userDataFolder", input.UserDataFolder);
+        AddIfPresent(doc, "installProductGuid", input.InstallProductGuid);
+
+        // install.* — required by the schema; always emitted.
         var install = new Dictionary<string, object?>
         {
-            ["type"] = SelectedTag(FieldInstallType) ?? "IsolatedFolder",
+            ["type"] = string.IsNullOrWhiteSpace(input.InstallType) ? "IsolatedFolder" : input.InstallType.Trim(),
         };
-        AddIfPresent(install, "defaultFolder", FieldDefaultFolder.Text);
-        AddIfPresent(install, "probeFile", FieldProbeFile.Text);
-        AddIfPresent(install, "executable", FieldExecutable.Text);
-        AddIfPresent(install, "arguments", FieldArguments.Text);
+        AddIfPresent(install, "defaultFolder", input.DefaultFolder);
+        AddIfPresent(install, "probeFile", input.ProbeFile);
+        AddIfPresent(install, "marker", input.Marker);
+        AddIfPresent(install, "executable", input.Executable);
+        AddIfPresent(install, "arguments", input.Arguments);
+        AddArrayIfPresent(install, "payloadUrls", input.PayloadUrls);
+        AddArrayIfPresent(install, "payloadSha256", input.PayloadSha256);
         doc["install"] = install;
 
-        string mech = SelectedTag(FieldMechanism) ?? "WolPatcher";
+        // update.* — required by the schema.
+        string mech = string.IsNullOrWhiteSpace(input.Mechanism) ? "WolPatcher" : input.Mechanism.Trim();
         var update = new Dictionary<string, object?> { ["mechanism"] = mech };
         if (mech == "WolPatcher")
         {
             var wol = new Dictionary<string, object?>();
-            AddIfPresent(wol, "updateInfoUrl", FieldWolUpdateInfoUrl.Text);
+            AddIfPresent(wol, "updateInfoUrl", input.WolUpdateInfoUrl);
+            AddIfPresent(wol, "updateInfoUrlAlt", input.WolUpdateInfoUrlAlt);
+            AddArrayIfPresent(wol, "payloadZipUrls", input.WolPayloadZipUrls);
+            AddArrayIfPresent(wol, "payloadSha256", input.WolPayloadSha256);
             if (wol.Count > 0) update["wol"] = wol;
+        }
+        else if (mech == "GitHubReleases")
+        {
+            var gh = new Dictionary<string, object?>();
+            AddIfPresent(gh, "externalAssetUrlTemplate", input.GithubExternalAssetUrlTemplate);
+            AddIfPresent(gh, "externalAssetSha256", input.GithubExternalAssetSha256);
+            if (gh.Count > 0) update["github"] = gh;
         }
         doc["update"] = update;
 
-        // Source repo + approved tag live at the top level, not under update.
+        // Source repo + approved tag live at TOP level, not under update.
         if (mech == "GitHubReleases")
         {
-            AddIfPresent(doc, "sourceRepo", FieldSourceRepo.Text);
-            AddIfPresent(doc, "approvedReleaseTag", FieldApprovedTag.Text);
+            AddIfPresent(doc, "sourceRepo", input.SourceRepo);
+            AddIfPresent(doc, "approvedReleaseTag", input.ApprovedReleaseTag);
         }
+
+        // translations — TOP-LEVEL object.
+        var translations = new Dictionary<string, object?>();
+        AddIfPresent(translations, "repo", input.TranslationsRepo);
+        AddArrayIfPresent(translations, "coveredFiles", input.TranslationsCoveredFiles);
+        if (translations.Count > 0) doc["translations"] = translations;
 
         return JsonSerializer.Serialize(doc, new JsonSerializerOptions
         {
@@ -390,13 +570,28 @@ public partial class PublishModDialog : Window
         });
     }
 
-    private static void AddIfPresent(IDictionary<string, object?> doc, string key, string value)
+    private static void AddIfPresent(IDictionary<string, object?> doc, string key, string? value)
     {
         var trimmed = value?.Trim() ?? "";
         if (!string.IsNullOrEmpty(trimmed)) doc[key] = trimmed;
     }
 
-    private static void AddDescription(IDictionary<string, string> doc, string lang, string value)
+    private static void AddArrayIfPresent(IDictionary<string, object?> doc, string key, IReadOnlyList<string>? values)
+    {
+        if (values == null) return;
+        var cleaned = values.Select(v => v?.Trim() ?? "").Where(v => v.Length > 0).ToArray();
+        if (cleaned.Length > 0) doc[key] = cleaned;
+    }
+
+    /// <summary>Splits one-per-line textbox text into a trimmed, non-empty list.</summary>
+    internal static List<string> SplitLines(string? text) =>
+        (text ?? "")
+            .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 0)
+            .ToList();
+
+    private static void AddDescription(IDictionary<string, string> doc, string lang, string? value)
     {
         var trimmed = value?.Trim() ?? "";
         if (!string.IsNullOrEmpty(trimmed)) doc[lang] = trimmed;
@@ -516,5 +711,40 @@ public partial class PublishModDialog : Window
             "4. Automated checks validate the schema and images. Cosmetic edits and version bumps merge " +
             "automatically; first-time mods and changes to install/update fields get a manual review.\n" +
             "5. Once merged, your mod appears in the Catalog after pressing \"Refresh catalog\".";
+
+        // --- Fields added in the schema-completeness pass. These are localised
+        //     straight from Strings (MainWindow's per-field setters predate them
+        //     and don't cover them), so they read the launcher's current language. ---
+        LblMarker.Text = Strings.Get("PublishFieldMarker");
+        HintMarker.Text = Strings.Get("PublishFieldMarkerHint");
+        LblUserDataFolder.Text = Strings.Get("PublishFieldUserDataFolder");
+        HintUserDataFolder.Text = Strings.Get("PublishFieldUserDataFolderHint");
+        Step3AdvancedHeader.Text = Strings.Get("PublishAdvancedHeader");
+        LblInstallProductGuid.Text = Strings.Get("PublishFieldProductGuid");
+        HintInstallProductGuid.Text = Strings.Get("PublishFieldProductGuidHint");
+        LblPayloadUrls.Text = Strings.Get("PublishFieldPayloadUrls");
+        HintPayloadUrls.Text = Strings.Get("PublishFieldPayloadUrlsHint");
+        LblPayloadSha256.Text = Strings.Get("PublishFieldPayloadSha256");
+        HintPayloadSha256.Text = Strings.Get("PublishFieldPayloadSha256Hint");
+
+        LblWolUpdateInfoUrlAlt.Text = Strings.Get("PublishFieldWolUrlAlt");
+        HintWolUpdateInfoUrlAlt.Text = Strings.Get("PublishFieldWolUrlAltHint");
+        LblWolPayloadZipUrls.Text = Strings.Get("PublishFieldWolPayloadUrls");
+        HintWolPayloadZipUrls.Text = Strings.Get("PublishFieldWolPayloadUrlsHint");
+        LblWolPayloadSha256.Text = Strings.Get("PublishFieldWolPayloadSha256");
+        HintWolPayloadSha256.Text = Strings.Get("PublishFieldPayloadSha256Hint");
+
+        UpdateDeletionNote.Text = Strings.Get("PublishUpdateDeletionNote");
+        GitHubAdvancedHeader.Text = Strings.Get("PublishGhAdvancedHeader");
+        LblGhExternalUrl.Text = Strings.Get("PublishFieldGhExternalUrl");
+        HintGhExternalUrl.Text = Strings.Get("PublishFieldGhExternalUrlHint");
+        LblGhExternalSha.Text = Strings.Get("PublishFieldGhExternalSha");
+        HintGhExternalSha.Text = Strings.Get("PublishFieldGhExternalShaHint");
+
+        Step4TranslationsHeader.Text = Strings.Get("PublishTranslationsHeader");
+        LblTranslationsRepo.Text = Strings.Get("PublishFieldTranslationsRepo");
+        HintTranslationsRepo.Text = Strings.Get("PublishFieldTranslationsRepoHint");
+        LblTranslationsCovered.Text = Strings.Get("PublishFieldTranslationsCovered");
+        HintTranslationsCovered.Text = Strings.Get("PublishFieldTranslationsCoveredHint");
     }
 }

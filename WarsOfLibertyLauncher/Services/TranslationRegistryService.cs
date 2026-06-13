@@ -103,6 +103,7 @@ public class TranslationRegistryService
                         DownloadUrl = zipAsset.BrowserDownloadUrl,
                         Size = zipAsset.Size,
                         Description = manifest.Description,
+                        TargetMod = manifest.TargetMod,
                     });
                     DiagnosticLog.Write(
                         $"  release '{release.TagName}': loaded '{manifest.Id}' v{manifest.Version}");

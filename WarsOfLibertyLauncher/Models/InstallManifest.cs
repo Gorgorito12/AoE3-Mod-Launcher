@@ -95,6 +95,34 @@ public class InstallManifest
     public List<string> Directories { get; set; } = new();
 
     /// <summary>
+    /// Relative paths (forward slashes) of every file that came from the
+    /// mod's OWN payload overlay — i.e. the files the mod ships on top of
+    /// the cloned/overlaid base game. This is a strict subset of the install
+    /// (it excludes the cloned AoE3 base files), and it is the universe the
+    /// update-time file deletion is allowed to touch. Empty for manifests
+    /// written by builds before overlay tracking existed (the update flow
+    /// then captures it on the next re-overlay and skips auto-deletion that
+    /// run — no baseline, nothing safe to remove yet).
+    /// </summary>
+    [JsonPropertyName("overlayFiles")]
+    public List<string> OverlayFiles { get; set; } = new();
+
+    /// <summary>
+    /// The "net-new" subset of <see cref="OverlayFiles"/>: overlay files that
+    /// did NOT exist in the base game the mod was laid over (so removing them
+    /// can never leave a hole the engine expects). These are the ONLY files
+    /// the update flow may auto-delete when a new release stops shipping them.
+    /// Overlay files that shadow a base-game file are deliberately excluded —
+    /// auto-deleting one would break the game (the original bytes were
+    /// overwritten without backup). Those can only be removed via an explicit
+    /// <c>delete.lst</c> (the modder's responsibility). The classification is
+    /// "sticky" across updates: a file keeps its install-time net-new/shadow
+    /// status; only genuinely-new paths are re-classified by existence.
+    /// </summary>
+    [JsonPropertyName("overlayNetNew")]
+    public List<string> OverlayNetNew { get; set; } = new();
+
+    /// <summary>
     /// Absolute paths of shortcuts the installer created. Includes the
     /// .lnk on the desktop and inside the Start Menu folder.
     /// </summary>

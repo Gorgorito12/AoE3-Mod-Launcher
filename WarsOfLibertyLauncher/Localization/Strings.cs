@@ -1652,8 +1652,99 @@ public static class Strings
         },
         ["PublishNextStepsBody"] = new()
         {
-            [LangEn] = "1. Click \"Open PR on GitHub\" — it opens the catalog's new-file editor with this mod.json pre-filled at mods/<id>/mod.json.\n2. Commit it and create the pull request (GitHub forks the repo for you).\n3. Add your icon.png / banner.png to the same folder in the PR.\n4. Automated checks validate the schema and images. Cosmetic edits and version bumps merge automatically; first-time mods and changes to install/update fields get a manual review.\n5. Once merged, your mod appears in the Catalog after pressing \"Refresh catalog\".",
-            [LangEs] = "1. Pulsa \"Abrir PR en GitHub\": abre el editor de archivo nuevo del catálogo con este mod.json ya rellenado en mods/<id>/mod.json.\n2. Confírmalo y crea la pull request (GitHub bifurca el repo por ti).\n3. Agrega tu icon.png / banner.png a la misma carpeta de la PR.\n4. Comprobaciones automáticas validan el esquema y las imágenes. Los cambios cosméticos y de versión se fusionan solos; los mods nuevos y los cambios en campos de instalación/actualización pasan por revisión manual.\n5. Una vez fusionado, tu mod aparece en el Catálogo tras pulsar \"Actualizar catálogo\".",
+            [LangEn] = "1. Click \"Open PR on GitHub\" — it opens the catalog's new-file editor with this mod.json pre-filled at mods/<id>/mod.json.\n2. Commit it and create the pull request (GitHub forks the repo for you).\n3. Add your icon.png / banner.png to the same folder in the PR.\n4. Automated checks validate the schema and images. Cosmetic edits and version bumps merge automatically; first-time mods and changes to install/update fields get a manual review.\n5. Once merged, your mod appears in the Catalog after pressing \"Refresh catalog\".\n\nPublishing an UPDATE (GitHubReleases): upload your new build as a .zip on a new GitHub release, then open a tiny PR that only bumps \"approvedReleaseTag\" — that auto-merges. The launcher then shows an Update button; updating adds/overwrites your files and deletes the ones you dropped (see the deletion note on the Updates step). Full guide: https://github.com/Gorgorito12/Updater/blob/main/docs/MODDING.md",
+            [LangEs] = "1. Pulsa \"Abrir PR en GitHub\": abre el editor de archivo nuevo del catálogo con este mod.json ya rellenado en mods/<id>/mod.json.\n2. Confírmalo y crea la pull request (GitHub bifurca el repo por ti).\n3. Agrega tu icon.png / banner.png a la misma carpeta de la PR.\n4. Comprobaciones automáticas validan el esquema y las imágenes. Los cambios cosméticos y de versión se fusionan solos; los mods nuevos y los cambios en campos de instalación/actualización pasan por revisión manual.\n5. Una vez fusionado, tu mod aparece en el Catálogo tras pulsar \"Actualizar catálogo\".\n\nPublicar una ACTUALIZACIÓN (GitHubReleases): sube tu nueva versión como .zip en un release nuevo de GitHub y abre una PR pequeña que solo cambie \"approvedReleaseTag\": se fusiona sola. El launcher mostrará un botón Actualizar; al actualizar añade/sobrescribe tus archivos y borra los que quitaste (ver la nota de borrado en el paso Actualizaciones). Guía completa: https://github.com/Gorgorito12/Updater/blob/main/docs/MODDING.md",
+        },
+        // --- Schema-completeness pass: fields the wizard previously omitted. ---
+        ["PublishFieldMarker"] = new() { [LangEn] = "Content marker (optional)", [LangEs] = "Marcador de contenido (opcional)" },
+        ["PublishFieldMarkerHint"] = new()
+        {
+            [LangEn] = "A file or folder unique to your mod and absent from vanilla AoE3. Lets the launcher recognise your mod in a folder of ANY name. Only needed when your probe file also exists in the base game. Example: art\\my-mod-marker",
+            [LangEs] = "Un archivo o carpeta exclusivo de tu mod y ausente en el AoE3 original. Permite al launcher reconocer tu mod en una carpeta con CUALQUIER nombre. Solo hace falta si tu probe file también existe en el juego base. Ejemplo: art\\mi-marcador",
+        },
+        ["PublishFieldUserDataFolder"] = new() { [LangEn] = "User-data folder (optional)", [LangEs] = "Carpeta de datos de usuario (opcional)" },
+        ["PublishFieldUserDataFolderHint"] = new()
+        {
+            [LangEn] = "Folder name under Documents\\My Games\\ where your mod stores saves/replays. When set, the launcher offers backup/restore. Leave blank if your mod shares vanilla AoE3's folder. Example: My Mod",
+            [LangEs] = "Nombre de carpeta dentro de Documents\\My Games\\ donde tu mod guarda partidas/repeticiones. Si la pones, el launcher ofrece copia/restauración. Déjala vacía si tu mod comparte la carpeta del AoE3 original. Ejemplo: Mi Mod",
+        },
+        ["PublishAdvancedHeader"] = new() { [LangEn] = "Advanced (optional)", [LangEs] = "Avanzado (opcional)" },
+        ["PublishFieldProductGuid"] = new() { [LangEn] = "Uninstall registry key (optional)", [LangEs] = "Clave de registro de desinstalación (opcional)" },
+        ["PublishFieldProductGuidHint"] = new()
+        {
+            [LangEn] = "Stable Add/Remove Programs subkey. Leave blank and the launcher derives <id>_launcher automatically. Only set it if you need a fixed value across releases.",
+            [LangEs] = "Subclave estable de Agregar o quitar programas. Déjala vacía y el launcher deriva <id>_launcher automáticamente. Ponla solo si necesitas un valor fijo entre versiones.",
+        },
+        ["PublishFieldPayloadUrls"] = new() { [LangEn] = "Initial-install payload URLs (optional)", [LangEs] = "URLs del paquete de instalación inicial (opcional)" },
+        ["PublishFieldPayloadUrlsHint"] = new()
+        {
+            [LangEn] = "One HTTPS URL per line. The archive(s) the launcher downloads for a fresh install when not using a GitHub release asset. For a multi-part archive (.zip.001/.002/…), list every part in order.",
+            [LangEs] = "Una URL HTTPS por línea. El/los archivo(s) que el launcher descarga en una instalación nueva cuando no usas el asset de un release de GitHub. Para un archivo multi-parte (.zip.001/.002/…), lista cada parte en orden.",
+        },
+        ["PublishFieldPayloadSha256"] = new() { [LangEn] = "Payload SHA-256 (optional)", [LangEs] = "SHA-256 del paquete (opcional)" },
+        ["PublishFieldPayloadSha256Hint"] = new()
+        {
+            [LangEn] = "One 64-hex SHA-256 per line, matching the URLs above in order. Strongly recommended — the launcher rejects a download whose hash doesn't match, blocking tampered payloads.",
+            [LangEs] = "Un SHA-256 (64 hex) por línea, en el mismo orden que las URLs de arriba. Muy recomendado: el launcher rechaza una descarga cuyo hash no coincida, bloqueando paquetes manipulados.",
+        },
+        ["PublishFieldWolUrlAlt"] = new() { [LangEn] = "UpdateInfo.xml mirror URL (optional)", [LangEs] = "URL espejo de UpdateInfo.xml (opcional)" },
+        ["PublishFieldWolUrlAltHint"] = new()
+        {
+            [LangEn] = "Fallback URL the launcher tries if the primary UpdateInfo.xml is unreachable.",
+            [LangEs] = "URL de respaldo que el launcher prueba si el UpdateInfo.xml principal no responde.",
+        },
+        ["PublishFieldWolPayloadUrls"] = new() { [LangEn] = "Install payload ZIP URLs (optional)", [LangEs] = "URLs del ZIP de instalación (opcional)" },
+        ["PublishFieldWolPayloadUrlsHint"] = new()
+        {
+            [LangEn] = "One HTTPS URL per line. The full install snapshot ZIP (multi-part allowed, in order). Used for a fresh install before the patch chain runs.",
+            [LangEs] = "Una URL HTTPS por línea. El ZIP completo de instalación (multi-parte permitido, en orden). Se usa en una instalación nueva antes de aplicar la cadena de parches.",
+        },
+        ["PublishFieldWolPayloadSha256"] = new() { [LangEn] = "Install ZIP SHA-256 (optional)", [LangEs] = "SHA-256 del ZIP de instalación (opcional)" },
+        ["PublishUpdateDeletionNote"] = new()
+        {
+            [LangEn] = "Updates & file deletion: when a player updates, the launcher extracts your new .zip on top — adding and overwriting files — and automatically deletes files YOU added that you've dropped from the new .zip. To delete files explicitly, ship a delete.lst (one path per line) at the root of your .zip. ⚠ delete.lst DELETES, it does not revert — never list a file your mod overwrote from the base game (re-pack the original bytes instead, or the game breaks). Deletions are backed up first. (Wars of Liberty uses its own update system.)",
+            [LangEs] = "Actualizaciones y borrado de archivos: cuando un jugador actualiza, el launcher extrae tu nuevo .zip encima —añadiendo y sobrescribiendo archivos— y borra automáticamente los archivos que TÚ agregaste y quitaste del nuevo .zip. Para borrar archivos de forma explícita, incluye un delete.lst (una ruta por línea) en la raíz de tu .zip. ⚠ delete.lst BORRA, no revierte: nunca listes un archivo que tu mod sobrescribió del juego base (re-empaqueta los bytes originales en su lugar, o el juego se rompe). Los borrados se respaldan antes. (Wars of Liberty usa su propio sistema.)",
+        },
+        ["PublishGhAdvancedHeader"] = new() { [LangEn] = "Advanced: host the payload outside GitHub (optional)", [LangEs] = "Avanzado: alojar el paquete fuera de GitHub (opcional)" },
+        ["PublishFieldGhExternalUrl"] = new() { [LangEn] = "External asset URL template", [LangEs] = "Plantilla de URL del asset externo" },
+        ["PublishFieldGhExternalUrlHint"] = new()
+        {
+            [LangEn] = "HTTPS URL with the literal {tag}, replaced by the approved release tag at download time. Use it to host the .zip on your own CDN while keeping the tag as the version. Example: https://my-cdn.com/my-mod-{tag}.zip",
+            [LangEs] = "URL HTTPS con el literal {tag}, que se reemplaza por el tag aprobado al descargar. Úsala para alojar el .zip en tu propia CDN manteniendo el tag como versión. Ejemplo: https://mi-cdn.com/mi-mod-{tag}.zip",
+        },
+        ["PublishFieldGhExternalSha"] = new() { [LangEn] = "External asset SHA-256", [LangEs] = "SHA-256 del asset externo" },
+        ["PublishFieldGhExternalShaHint"] = new()
+        {
+            [LangEn] = "64-hex SHA-256 of the file the template serves. REQUIRED when you set a URL template — without GitHub's authenticity boundary the launcher won't install an external download unverified.",
+            [LangEs] = "SHA-256 (64 hex) del archivo que sirve la plantilla. OBLIGATORIO si pones una plantilla de URL: sin la garantía de autenticidad de GitHub, el launcher no instala una descarga externa sin verificar.",
+        },
+        ["PublishTranslationsHeader"] = new() { [LangEn] = "Community translations (optional)", [LangEs] = "Traducciones de la comunidad (opcional)" },
+        ["PublishFieldTranslationsRepo"] = new() { [LangEn] = "Translations repo (owner/repo)", [LangEs] = "Repo de traducciones (owner/repo)" },
+        ["PublishFieldTranslationsRepoHint"] = new()
+        {
+            [LangEn] = "GitHub repo where community translation packs live (one release per language). Leave blank if your mod has no translation system.",
+            [LangEs] = "Repo de GitHub donde viven los paquetes de traducción de la comunidad (un release por idioma). Déjalo vacío si tu mod no tiene sistema de traducciones.",
+        },
+        ["PublishFieldTranslationsCovered"] = new() { [LangEn] = "Translatable files (optional)", [LangEs] = "Archivos traducibles (opcional)" },
+        ["PublishFieldTranslationsCoveredHint"] = new()
+        {
+            [LangEn] = "One relative path per line — the files a translation pack is allowed to replace. Example: data\\stringtable.xml",
+            [LangEs] = "Una ruta relativa por línea: los archivos que un paquete de traducción puede reemplazar. Ejemplo: data\\stringtable.xml",
+        },
+        ["PublishErrorSourceRepo"] = new()
+        {
+            [LangEn] = "Source repo must be owner/repo (letters, digits, . _ -).",
+            [LangEs] = "El repo debe ser owner/repo (letras, dígitos, . _ -).",
+        },
+        ["PublishErrorSha256"] = new()
+        {
+            [LangEn] = "Each SHA-256 must be 64 hexadecimal characters.",
+            [LangEs] = "Cada SHA-256 debe tener 64 caracteres hexadecimales.",
+        },
+        ["PublishErrorGhShaRequired"] = new()
+        {
+            [LangEn] = "An external asset URL needs its SHA-256 (64 hex).",
+            [LangEs] = "Una URL de asset externo necesita su SHA-256 (64 hex).",
         },
         ["PublishErrorId"] = new()
         {
@@ -3525,6 +3616,79 @@ public static class Strings
             [LangEn] = "✓ Repair complete — all files verified successfully.",
             [LangEs] = "✓ Reparación completa — todos los archivos verificados correctamente.",
         },
+        ["StatusUpdateSuccess"] = new()
+        {
+            [LangEn] = "✓ Update complete — the mod is now up to date.",
+            [LangEs] = "✓ Actualización completa — el mod está al día.",
+        },
+        ["TranslationRevertedTitle"] = new()
+        {
+            [LangEn] = "Translation reset to English",
+            [LangEs] = "Traducción restablecida a inglés",
+        },
+        ["DlgLangRefreshButton"] = new()
+        {
+            [LangEn] = "🔄  Check for new translations",
+            [LangEs] = "🔄  Buscar nuevas traducciones",
+        },
+        ["DlgLangRefreshing"] = new() { [LangEn] = "⏳  Checking…", [LangEs] = "⏳  Buscando…" },
+        ["ModPropTempSection"] = new()
+        {
+            [LangEn] = "TEMPORARY FILES",
+            [LangEs] = "ARCHIVOS TEMPORALES",
+        },
+        ["ModPropTempDesc"] = new()
+        {
+            [LangEn] = "Free up the install download left in the temp folder (can be several GB). Safe to delete — it's only a download cache and gets re-downloaded if you ever repair.",
+            [LangEs] = "Libera la descarga de instalación que queda en la carpeta temporal (pueden ser varios GB). Es seguro borrarla — solo es caché de descarga y se vuelve a descargar si reparas.",
+        },
+        ["ModPropClearTemp"] = new()
+        {
+            [LangEn] = "🗑  Clear temporary files",
+            [LangEs] = "🗑  Limpiar archivos temporales",
+        },
+        ["DlgTempClearing"] = new() { [LangEn] = "⏳  Clearing…", [LangEs] = "⏳  Limpiando…" },
+        ["DlgTempClearedTitle"] = new()
+        {
+            [LangEn] = "Temporary files",
+            [LangEs] = "Archivos temporales",
+        },
+        ["DlgTempCleared"] = new()
+        {
+            [LangEn] = "Temporary install files were cleared successfully.",
+            [LangEs] = "Los archivos temporales de instalación se borraron correctamente.",
+        },
+        ["DlgTempClearFailed"] = new()
+        {
+            [LangEn] = "Couldn't clear some files (they may be in use). Try again after closing the game.",
+            [LangEs] = "No se pudieron borrar algunos archivos (pueden estar en uso). Inténtalo de nuevo tras cerrar el juego.",
+        },
+        ["TranslationWrongModTitle"] = new() { [LangEn] = "Translation is for another mod", [LangEs] = "La traducción es para otro mod" },
+        ["TranslationWrongModBody"] = new()
+        {
+            [LangEn] = "The translation \"{0}\" was made for the mod \"{1}\", not {2}. Applying it could overwrite this mod's files with the wrong text, so it was blocked.",
+            [LangEs] = "La traducción \"{0}\" se hizo para el mod \"{1}\", no para {2}. Aplicarla podría sobrescribir los archivos de este mod con el texto equivocado, así que se bloqueó.",
+        },
+        ["LangCardForMod"] = new() { [LangEn] = "For mod {0}", [LangEs] = "Para el mod {0}" },
+        ["LangCardPackVer"] = new() { [LangEn] = "Pack v{0}", [LangEs] = "Pack v{0}" },
+        ["LangCardActive"] = new() { [LangEn] = "In use ✓", [LangEs] = "En uso ✓" },
+        ["LangCardBlocked"] = new() { [LangEn] = "Incompatible", [LangEs] = "Incompatible" },
+        ["LangCardUse"] = new() { [LangEn] = "Use", [LangEs] = "Usar" },
+        ["LangCardBlockedHint"] = new()
+        {
+            [LangEn] = "Not made for your installed mod version — pick it again once an updated pack is out.",
+            [LangEs] = "No es para la versión del mod que tienes instalada — vuelve a elegirla cuando salga un pack actualizado.",
+        },
+        ["TranslationRevertedBody"] = new()
+        {
+            [LangEn] = "Your \"{0}\" translation was made for version {1}, but the mod is now {2}. It was switched back to English to avoid mixing old translated text with new content — pick it again once an updated pack is released.",
+            [LangEs] = "Tu traducción \"{0}\" era para la versión {1}, pero el mod ahora está en {2}. Se cambió a inglés para no mezclar texto traducido viejo con contenido nuevo — vuelve a elegirla cuando salga un pack actualizado.",
+        },
+        ["StatusUpdateAvailableGh"] = new()
+        {
+            [LangEn] = "Update available: {0}. Click Update to install it.",
+            [LangEs] = "Actualización disponible: {0}. Pulsa Actualizar para instalarla.",
+        },
         ["StatusRepairPartial"] = new()
         {
             [LangEn] = "⚠ Repair finished but {0} problem(s) remain. Some AoE3 base files may need manual reinstall.",
@@ -4123,25 +4287,25 @@ public static class Strings
         },
         ["DlgPackagerFieldFolder"] = new()
         {
-            [LangEn] = "FOLDER WITH TRANSLATED XML FILES",
-            [LangEs] = "CARPETA CON LOS XML TRADUCIDOS",
+            [LangEn] = "TRANSLATED XML FILES",
+            [LangEs] = "ARCHIVOS XML TRADUCIDOS",
         },
         ["DlgPackagerHintFolder"] = new()
         {
-            [LangEn] = "Should contain stringtabley.xml and/or unithelpstringsy.xml",
-            [LangEs] = "Debe contener stringtabley.xml y/o unithelpstringsy.xml",
+            [LangEn] = "Pick your translated stringtabley.xml and/or unithelpstringsy.xml. The file name can differ (e.g. stringtabley_translated.xml) — it's matched automatically.",
+            [LangEs] = "Selecciona tu stringtabley.xml y/o unithelpstringsy.xml traducidos. El nombre del archivo puede ser distinto (ej. stringtabley_translated.xml) — se detecta automáticamente.",
         },
         ["DlgPackagerFieldOriginals"] = new()
         {
-            [LangEn] = "FOLDER WITH ORIGINAL ENGLISH XML FILES",
-            [LangEs] = "CARPETA CON LOS XML ORIGINALES EN INGLÉS",
+            [LangEn] = "ORIGINAL ENGLISH XML FILES",
+            [LangEs] = "ARCHIVOS XML ORIGINALES EN INGLÉS",
         },
         ["DlgPackagerHintOriginals"] = new()
         {
-            [LangEn] = "Same file names as above (stringtabley.xml etc.) but the EN versions. " +
-                       "Auto-filled from the launcher's snapshot when available.",
-            [LangEs] = "Mismos nombres de archivo (stringtabley.xml, etc.) pero en inglés. " +
-                       "Se auto-completa con el respaldo del launcher si está disponible.",
+            [LangEn] = "The same files as above but the ENGLISH versions. The file name can " +
+                       "differ — it's matched automatically. Auto-filled from the launcher's snapshot when available.",
+            [LangEs] = "Los mismos archivos de arriba pero en INGLÉS. El nombre puede ser distinto " +
+                       "— se detecta automáticamente. Se auto-completa con el respaldo del launcher si está disponible.",
         },
         ["DlgPackagerFieldCompat"] = new()
         {
@@ -4225,17 +4389,27 @@ public static class Strings
         ["DlgPackagerResultInstructions"] = new()
         {
             [LangEn] = "ⓘ How to publish:\n" +
-                       "1. Go to github.com/papillo12/translations and create a new release.\n" +
+                       "1. Go to github.com/{0} and create a new release.\n" +
                        "2. Upload BOTH files above as assets on that release: the .zip " +
                        "and translation.json (keep that exact filename).\n" +
                        "3. Done — players will see the new translation in their launcher " +
                        "menu the next time it refreshes the list.",
             [LangEs] = "ⓘ Cómo publicar:\n" +
-                       "1. Andá a github.com/papillo12/translations y creá una nueva release.\n" +
+                       "1. Andá a github.com/{0} y creá una nueva release.\n" +
                        "2. Subí AMBOS archivos de arriba como assets de esa release: el .zip " +
                        "y translation.json (mantené ese nombre exacto).\n" +
                        "3. Listo — los jugadores verán la nueva traducción en su launcher " +
                        "la próxima vez que refresque la lista.",
+        },
+        ["DlgPackagerFieldDescription"] = new()
+        {
+            [LangEn] = "Description / changelog (optional)",
+            [LangEs] = "Descripción / cambios (opcional)",
+        },
+        ["DlgPackagerHintDescription"] = new()
+        {
+            [LangEn] = "Shown when players pick this pack. e.g. what's translated, or what changed in this version.",
+            [LangEs] = "Se muestra cuando los jugadores eligen este pack. Ej.: qué está traducido o qué cambió en esta versión.",
         },
         ["DlgPackagerResultPreviewLabel"] = new()
         {

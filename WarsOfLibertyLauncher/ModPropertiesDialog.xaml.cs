@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -33,7 +34,10 @@ public partial class ModPropertiesDialog : Window
     private readonly ModProfile _profile;
     private readonly UpdateService _service;
     private readonly LauncherConfig _config;
-    private readonly TranslationIndex? _translationIndex;
+    // Mutable: the "Buscar nuevas traducciones" button reassigns it after a re-fetch.
+    private TranslationIndex? _translationIndex;
+    // Re-fetches the translation index from GitHub and returns the fresh one.
+    private readonly Func<Task<TranslationIndex?>>? _refreshTranslations;
 
     // Existing callbacks (4) carried over from the original dialog.
     private readonly Action<TranslationIndexEntry> _applyTranslation;
@@ -55,8 +59,6 @@ public partial class ModPropertiesDialog : Window
     private readonly Action _viewLogs;
     private readonly Action _uninstall;
 
-    private bool _suppressLanguageChange;
-
     public ModPropertiesDialog(
         ModProfile profile,
         UpdateService service,
@@ -74,7 +76,8 @@ public partial class ModPropertiesDialog : Window
         Action createBackup,
         Action restoreBackup,
         Action viewLogs,
-        Action uninstall)
+        Action uninstall,
+        Func<Task<TranslationIndex?>>? refreshTranslations = null)
     {
         _profile = profile;
         _service = service;
@@ -93,6 +96,7 @@ public partial class ModPropertiesDialog : Window
         _restoreBackup = restoreBackup;
         _viewLogs = viewLogs;
         _uninstall = uninstall;
+        _refreshTranslations = refreshTranslations;
 
         InitializeComponent();
         ApplyStrings();
@@ -134,6 +138,9 @@ public partial class ModPropertiesDialog : Window
 
         // LOCAL FILES tab
         LblInstallPath.Text = Strings.Get("ModPropInstallSection");
+        LblTempSection.Text = Strings.Get("ModPropTempSection");
+        LblTempDesc.Text = Strings.Get("ModPropTempDesc");
+        ClearTempBtn.Content = Strings.Get("ModPropClearTemp");
         LblPathsSection.Text = Strings.Get("ModPropPathsSection");
         OpenFolderBtn.Content = Strings.Get("ModPropOpenFolder");
         OpenAoE3FolderBtn.Content = Strings.Get("ModPropOpenAoE3Folder");
@@ -165,6 +172,7 @@ public partial class ModPropertiesDialog : Window
         // LANGUAGE tab
         LblLanguageSectionTitle.Text = Strings.Get("ModPropLanguageSectionTitle");
         LblLanguageDesc.Text = Strings.Get("ModPropLanguageDesc");
+        RefreshTranslationsBtn.Content = Strings.Get("DlgLangRefreshButton");
         LblLanguageCurrent.Text = Strings.Get("ModPropLanguageCurrent");
         LanguageEmptyHint.Text = Strings.Get("ModPropNoTranslations");
 
@@ -305,56 +313,166 @@ public partial class ModPropertiesDialog : Window
 
     private void LoadLanguage()
     {
-        _suppressLanguageChange = true;
-        LanguageCombo.Items.Clear();
+        LanguageCardList.Children.Clear();
 
         var activeId = _config.GetActiveState().ActiveTranslationId ?? "";
-        LanguageCombo.Items.Add(new ComboBoxItem
-        {
-            Content = Strings.Get("MenuLangEnglish"),
-            Tag = null,
-            IsSelected = string.IsNullOrEmpty(activeId),
-        });
+        var modVersion = _service.CurrentVersion?.Ver;
+
+        // English (default) — always available.
+        LanguageCardList.Children.Add(BuildLanguageCard(
+            "🌐", Strings.Get("MenuLangEnglish"), "", null, "",
+            isActive: string.IsNullOrEmpty(activeId), blocked: false,
+            onUse: () => _revertToEnglish?.Invoke()));
 
         var entries = new Dictionary<string, TranslationIndexEntry>(StringComparer.OrdinalIgnoreCase);
         if (_translationIndex != null)
-        {
-            foreach (var e in _translationIndex.Translations)
-                entries[e.Id] = e;
-        }
+            foreach (var e in _translationIndex.Translations) entries[e.Id] = e;
         try
         {
             if (!string.IsNullOrEmpty(_service.InstallPath))
             {
-                var installed = new TranslationService(_service.InstallPath).ListInstalled();
+                var installed = new TranslationService(
+                    _service.InstallPath, _service.Profile.Translations?.CoveredFiles).ListInstalled();
                 foreach (var m in installed)
-                {
-                    if (entries.ContainsKey(m.Id)) continue;
-                    entries[m.Id] = new TranslationIndexEntry
-                    {
-                        Id = m.Id, Name = m.Name, Author = m.Author, Version = m.Version,
-                    };
-                }
+                    if (!entries.ContainsKey(m.Id))
+                        entries[m.Id] = new TranslationIndexEntry
+                        {
+                            Id = m.Id, Name = m.Name, Author = m.Author,
+                            Version = m.Version, CompatibleWith = m.CompatibleWith,
+                        };
             }
         }
         catch { /* probe failure is non-fatal */ }
 
         foreach (var entry in entries.Values.OrderBy(e => e.Name))
         {
-            var label = string.IsNullOrWhiteSpace(entry.Version)
-                ? entry.Name
-                : $"{entry.Name}  (v{entry.Version})";
-            var item = new ComboBoxItem { Content = label, Tag = entry };
-            if (string.Equals(entry.Id, activeId, StringComparison.OrdinalIgnoreCase))
-                item.IsSelected = true;
-            LanguageCombo.Items.Add(item);
+            bool isActive = string.Equals(entry.Id, activeId, StringComparison.OrdinalIgnoreCase);
+            // Block on version grounds only when NOT the active pack (the active
+            // one demonstrably works); the apply dialog's hash check is the final
+            // word, so this is a pre-filter, not the sole authority.
+            bool blocked = !isActive
+                && TranslationCompat.IsVersionBlocked(entry.CompatibleWith, modVersion);
+            var captured = entry;
+            LanguageCardList.Children.Add(BuildLanguageCard(
+                LanguageFlag(entry.Id), entry.Name, entry.Author, entry.CompatibleWith, entry.Version,
+                isActive, blocked, () => _applyTranslation?.Invoke(captured)));
         }
 
         bool hasPacks = entries.Count > 0;
         LanguageEmptyHint.Visibility = hasPacks ? Visibility.Collapsed : Visibility.Visible;
-        LanguageCombo.IsEnabled = hasPacks;
-        _suppressLanguageChange = false;
     }
+
+    private FrameworkElement BuildLanguageCard(string flag, string name, string author,
+        IReadOnlyList<string>? compatibleWith, string packVersion,
+        bool isActive, bool blocked, Action onUse)
+    {
+        var col = new StackPanel();
+        var title = new TextBlock
+        {
+            Text = $"{flag}  {name}" + (string.IsNullOrWhiteSpace(author) ? "" : $"    ·  {author}"),
+            FontSize = 15, FontWeight = FontWeights.SemiBold,
+            Foreground = Res("TextPrimary", "#E6EEF8"), TextWrapping = TextWrapping.Wrap,
+        };
+        col.Children.Add(title);
+
+        var subParts = new List<string>();
+        if (compatibleWith != null && compatibleWith.Count > 0)
+            subParts.Add(Strings.Format("LangCardForMod", string.Join(", ", compatibleWith)));
+        if (!string.IsNullOrWhiteSpace(packVersion))
+            subParts.Add(Strings.Format("LangCardPackVer", packVersion));
+        if (subParts.Count > 0)
+            col.Children.Add(new TextBlock
+            {
+                Text = string.Join("       ", subParts), FontSize = 12,
+                Foreground = Res("TextSecondary", "#9AA6B2"),
+                Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
+            });
+        if (blocked)
+            col.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("LangCardBlockedHint"), FontSize = 12,
+                Foreground = Res("ErrorBrush", "#E0708A"),
+                Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
+            });
+
+        // Status indicator (not a button anymore — the WHOLE card is the click
+        // target, which is more forgiving than a small "Use" button).
+        var status = new TextBlock
+        {
+            Text = isActive ? Strings.Get("LangCardActive")
+                : blocked ? Strings.Get("LangCardBlocked") : Strings.Get("LangCardUse"),
+            FontSize = 13, FontWeight = FontWeights.SemiBold,
+            Foreground = isActive ? Res("SuccessBrush", "#9BD99B")
+                : blocked ? Res("TextSecondary", "#9AA6B2") : Res("AccentBrush", "#C8A24A"),
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(10, 0, 0, 0),
+        };
+
+        var grid = new Grid { Margin = new Thickness(12, 10, 12, 10) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(col, 0);
+        Grid.SetColumn(status, 1);
+        grid.Children.Add(col);
+        grid.Children.Add(status);
+
+        bool clickable = !isActive && !blocked;
+        var border = new Border
+        {
+            Background = Res("BgPanel", "#1B2430"),
+            BorderBrush = isActive ? Res("AccentBrush", "#C8A24A") : Res("BorderSubtle", "#2C313A"),
+            BorderThickness = new Thickness(isActive ? 2 : 1),
+            CornerRadius = new CornerRadius(6),
+            Margin = new Thickness(0, 0, 0, 8),
+            Opacity = blocked ? 0.6 : 1.0,
+            Child = grid,
+        };
+        if (!clickable) return border;
+
+        // Wrap the whole card in a CHROMELESS Button. Button.Click fires reliably
+        // (MouseLeftButtonUp on a Border can be swallowed by the surrounding
+        // ScrollViewer), and we get keyboard/focus behaviour for free. The custom
+        // template strips the default button chrome so it still looks like a card.
+        var template = new ControlTemplate(typeof(Button))
+        {
+            VisualTree = new FrameworkElementFactory(typeof(ContentPresenter)),
+        };
+        var button = new Button
+        {
+            Content = border,
+            Template = template,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+        button.Click += (_, _) => onUse();
+        return button;
+    }
+
+    private Brush Res(string key, string fallbackHex)
+    {
+        if (TryFindResource(key) is Brush b) return b;
+        try { return (Brush)new BrushConverter().ConvertFromString(fallbackHex)!; }
+        catch { return Brushes.Gray; }
+    }
+
+    private static string LanguageFlag(string id) => id.ToLowerInvariant() switch
+    {
+        "es" or "es-es" or "es-mx" or "es-ar" => "🇪🇸",
+        "fr" or "fr-fr" => "🇫🇷",
+        "de" or "de-de" => "🇩🇪",
+        "it" or "it-it" => "🇮🇹",
+        "pt" or "pt-pt" => "🇵🇹",
+        "pt-br" => "🇧🇷",
+        "ru" or "ru-ru" => "🇷🇺",
+        "zh" or "zh-cn" or "zh-tw" => "🇨🇳",
+        "ja" or "ja-jp" => "🇯🇵",
+        "ko" or "ko-kr" => "🇰🇷",
+        "pl" or "pl-pl" => "🇵🇱",
+        _ => "🌐",
+    };
 
     // -- Tab switching ------------------------------------------------------
 
@@ -411,6 +529,66 @@ public partial class ModPropertiesDialog : Window
         LoadGeneral();
         LoadLocalFiles();
         LoadUserData();
+    }
+
+    /// <summary>
+    /// Rebuilds the language cards so the active/compatible state reflects the
+    /// latest config (e.g. right after a translation is applied or reverted).
+    /// Called by MainWindow once the apply/revert flow finishes.
+    /// </summary>
+    public void RefreshLanguageTab() => LoadLanguage();
+
+    private async void RefreshTranslationsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_refreshTranslations == null) return;
+        var original = RefreshTranslationsBtn.Content;
+        RefreshTranslationsBtn.IsEnabled = false;
+        RefreshTranslationsBtn.Content = Strings.Get("DlgLangRefreshing");
+        try
+        {
+            var idx = await _refreshTranslations();
+            if (idx != null) _translationIndex = idx;
+            LoadLanguage();   // rebuild the cards with the freshly fetched index
+        }
+        catch { /* re-fetch failure is non-fatal; cards keep the old index */ }
+        finally
+        {
+            RefreshTranslationsBtn.Content = original;
+            RefreshTranslationsBtn.IsEnabled = true;
+        }
+    }
+
+    private async void ClearTempBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var original = ClearTempBtn.Content;
+        ClearTempBtn.IsEnabled = false;
+        ClearTempBtn.Content = Strings.Get("DlgTempClearing");
+        ClearTempResult.Visibility = Visibility.Collapsed;
+
+        bool ok = false;
+        try
+        {
+            await System.Threading.Tasks.Task.Run(NativeInstallService.TryCleanupTemp);
+            ok = true;
+            ClearTempResult.Text = Strings.Get("DlgTempCleared");
+        }
+        catch
+        {
+            ClearTempResult.Text = Strings.Get("DlgTempClearFailed");
+        }
+        finally
+        {
+            ClearTempResult.Visibility = Visibility.Visible;
+            ClearTempBtn.Content = original;
+            ClearTempBtn.IsEnabled = true;
+        }
+
+        // A clear popup so the user actually sees that something happened.
+        MessageBox.Show(this,
+            Strings.Get(ok ? "DlgTempCleared" : "DlgTempClearFailed"),
+            Strings.Get("DlgTempClearedTitle"),
+            MessageBoxButton.OK,
+            ok ? MessageBoxImage.Information : MessageBoxImage.Warning);
     }
 
     private void ValWebsite_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -567,20 +745,6 @@ public partial class ModPropertiesDialog : Window
     {
         _restoreBackup?.Invoke();
         RefreshData();
-    }
-
-    private void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppressLanguageChange) return;
-        if (LanguageCombo.SelectedItem is not ComboBoxItem item) return;
-        if (item.Tag is TranslationIndexEntry entry)
-        {
-            _applyTranslation?.Invoke(entry);
-        }
-        else
-        {
-            _revertToEnglish?.Invoke();
-        }
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e)

@@ -229,6 +229,11 @@
                         </StackPanel>
                     </Grid>
 
+                    <TextBlock x:Name="LblDescription" Style="{StaticResource FieldLabel}" Margin="0,12,0,4"/>
+                    <TextBox x:Name="DescriptionBox" AcceptsReturn="True" TextWrapping="Wrap"
+                             Height="48" VerticalScrollBarVisibility="Auto"/>
+                    <TextBlock x:Name="HintDescription" Style="{StaticResource FieldHint}"/>
+
                     <Border Style="{StaticResource SectionDivider}"/>
 
                     <!-- ===================================================

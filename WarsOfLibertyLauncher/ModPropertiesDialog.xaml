@@ -411,6 +411,24 @@
 
                         <Border Style="{StaticResource DialogDivider}"/>
 
+                        <!-- Temp / cache cleanup -->
+                        <TextBlock x:Name="LblTempSection"
+                                   Style="{StaticResource DialogSectionTitle}"/>
+                        <TextBlock x:Name="LblTempDesc"
+                                   Style="{StaticResource DialogActionDesc}"
+                                   Margin="0,0,0,10"/>
+                        <Button x:Name="ClearTempBtn"
+                                Style="{StaticResource PropertyActionButton}"
+                                HorizontalAlignment="Left"
+                                Click="ClearTempBtn_Click"/>
+                        <TextBlock x:Name="ClearTempResult"
+                                   Margin="0,10,0,0"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   TextWrapping="Wrap"
+                                   Visibility="Collapsed"/>
+
+                        <Border Style="{StaticResource DialogDivider}"/>
+
                         <!-- Paths -->
                         <TextBlock x:Name="LblPathsSection"
                                    Style="{StaticResource DialogSectionTitle}"/>
@@ -559,13 +577,15 @@
                         <TextBlock x:Name="LblLanguageDesc"
                                    Style="{StaticResource DialogActionDesc}"
                                    Margin="0,0,0,14"/>
+                        <Button x:Name="RefreshTranslationsBtn"
+                                Style="{StaticResource PropertyActionButton}"
+                                HorizontalAlignment="Left"
+                                Margin="0,0,0,14"
+                                Click="RefreshTranslationsBtn_Click"/>
                         <TextBlock x:Name="LblLanguageCurrent"
                                    Style="{StaticResource DialogFieldLabel}"
                                    Margin="0,0,0,6"/>
-                        <ComboBox x:Name="LanguageCombo"
-                                  Width="380"
-                                  HorizontalAlignment="Left"
-                                  SelectionChanged="LanguageCombo_SelectionChanged"/>
+                        <StackPanel x:Name="LanguageCardList" MaxWidth="520" HorizontalAlignment="Left"/>
                         <TextBlock x:Name="LanguageEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
                                    FontSize="{StaticResource FontSizeBody}"

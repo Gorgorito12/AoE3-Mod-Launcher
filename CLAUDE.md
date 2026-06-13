@@ -44,8 +44,15 @@ All commands run from `WarsOfLibertyLauncher/`.
 | CI release build (unsigned → SignPath) | push a `vX.Y.Z` tag, or run `.github/workflows/release.yml` manually |
 
 - Dev build output: `bin/Release/net8.0-windows/Aoe3ModLauncher.exe`.
-- Release output: `publish/Aoe3ModLauncher.exe` (~120 MB, self-contained). The
+- Release output: `publish/Aoe3ModLauncher.exe` (~190 MB, self-contained). The
   `publish/` folder is git-ignored — release binaries go to GitHub Releases.
+  **Single-file compression is OFF on purpose** (`EnableCompressionInSingleFile=false`
+  in the `.csproj`, ~line 50): the self-extracting decompression was the #1
+  trigger for Defender's `Win32/Injector` packer heuristic, which quarantined the
+  `.exe`. That's why the binary is ~190 MB instead of the old ~120-130 MB.
+  **Re-enable compression (`true`, recovers ~70 MB) only once the binary is signed
+  by a REAL trusted cert (SignPath)** — a trust-valid signature suppresses the
+  packer FP; the self-signed `CN=Gorgorito` cert does not.
 - `--update-now` is a launch argument that auto-resumes the update flow elevated
   (used after a UAC relaunch).
 - Two publish scripts exist: `WarsOfLibertyLauncher/build-release.ps1` is the
