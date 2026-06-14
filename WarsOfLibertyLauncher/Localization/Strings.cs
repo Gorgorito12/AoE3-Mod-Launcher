@@ -923,6 +923,66 @@ public static class Strings
             [LangEn] = "Check for updates",
             [LangEs] = "Buscar actualizaciones",
         },
+        ["ModPropStayOnVersion"] = new()
+        {
+            [LangEn] = "Stay on this version (v{0}) — pause update prompts",
+            [LangEs] = "Quedarme en esta versión (v{0}) — pausar avisos de actualización",
+        },
+        ["ModPropStayOnVersionHint"] = new()
+        {
+            [LangEn] = "Keeps you on your current version: the launcher won't push updates. Nothing is auto-updated; uncheck to resume. Updates that fix multiplayer compatibility may be needed to play with others.",
+            [LangEs] = "Te mantiene en tu versión actual: el launcher no te empujará a actualizar. Nada se actualiza solo; destildá para reanudar. Algunas actualizaciones arreglan la compatibilidad multijugador y pueden ser necesarias para jugar con otros.",
+        },
+        ["ModPropVersionSection"] = new()
+        {
+            [LangEn] = "Version",
+            [LangEs] = "Versión",
+        },
+        ["ModPropVersionHint"] = new()
+        {
+            [LangEn] = "Install or roll back to a specific published version. Older versions may lack fixes and can break multiplayer compatibility with players on the recommended version.",
+            [LangEs] = "Instalá o volvé a una versión publicada específica. Las versiones anteriores pueden no tener correcciones y romper la compatibilidad multijugador con quienes usan la recomendada.",
+        },
+        ["ModPropVersionInstallBtn"] = new()
+        {
+            [LangEn] = "Install this version",
+            [LangEs] = "Instalar esta versión",
+        },
+        ["ModPropVersionsLoading"] = new()
+        {
+            [LangEn] = "Loading versions…",
+            [LangEs] = "Cargando versiones…",
+        },
+        ["ModPropVersionsFailed"] = new()
+        {
+            [LangEn] = "Couldn't load the version list. Check your connection and try again.",
+            [LangEs] = "No se pudo cargar la lista de versiones. Revisá tu conexión e intentá de nuevo.",
+        },
+        ["ModPropVersionsNone"] = new()
+        {
+            [LangEn] = "No published versions found.",
+            [LangEs] = "No se encontraron versiones publicadas.",
+        },
+        ["ModPropVersionInstalled"] = new()
+        {
+            [LangEn] = "installed",
+            [LangEs] = "instalada",
+        },
+        ["ModPropVersionRecommended"] = new()
+        {
+            [LangEn] = "recommended",
+            [LangEs] = "recomendada",
+        },
+        ["ModPropVersionPrerelease"] = new()
+        {
+            [LangEn] = "pre-release",
+            [LangEs] = "preliminar",
+        },
+        ["ModPropVersionAlready"] = new()
+        {
+            [LangEn] = "That version is already installed.",
+            [LangEs] = "Esa versión ya está instalada.",
+        },
         ["ModPropChecking"] = new()
         {
             [LangEn] = "Checking for updates…",
@@ -3693,12 +3753,13 @@ public static class Strings
         ["LangCardForMod"] = new() { [LangEn] = "For mod {0}", [LangEs] = "Para el mod {0}" },
         ["LangCardPackVer"] = new() { [LangEn] = "Pack v{0}", [LangEs] = "Pack v{0}" },
         ["LangCardActive"] = new() { [LangEn] = "In use ✓", [LangEs] = "En uso ✓" },
-        ["LangCardBlocked"] = new() { [LangEn] = "Incompatible", [LangEs] = "Incompatible" },
+        ["LangCardBlocked"] = new() { [LangEn] = "Other version", [LangEs] = "Otra versión" },
         ["LangCardUse"] = new() { [LangEn] = "Use", [LangEs] = "Usar" },
+        ["LangCardUseAnyway"] = new() { [LangEn] = "Use anyway", [LangEs] = "Usar igual" },
         ["LangCardBlockedHint"] = new()
         {
-            [LangEn] = "Not made for your installed mod version — pick it again once an updated pack is out.",
-            [LangEs] = "No es para la versión del mod que tienes instalada — vuelve a elegirla cuando salga un pack actualizado.",
+            [LangEn] = "⚠ Made for a different mod version. Some text may be wrong, missing, or in English. You can use it anyway.",
+            [LangEs] = "⚠ Hecha para otra versión del mod. Algunos textos pueden quedar incorrectos, faltantes o en inglés. Podés usarla igual.",
         },
         ["TranslationRevertedBody"] = new()
         {
@@ -3709,6 +3770,11 @@ public static class Strings
         {
             [LangEn] = "Update available: {0}. Click Update to install it.",
             [LangEs] = "Actualización disponible: {0}. Pulsa Actualizar para instalarla.",
+        },
+        ["StatusUpdatePausedPinned"] = new()
+        {
+            [LangEn] = "On v{0} — updates paused. Resume them in Mod Properties.",
+            [LangEs] = "En la v{0} — actualizaciones en pausa. Reanudalas en Propiedades del mod.",
         },
         ["StatusRepairPartial"] = new()
         {
@@ -4552,9 +4618,11 @@ public static class Strings
         ["DlgLangIncompatibleBody"] = new()
         {
             [LangEn] = "This translation was made for a different version of the mod. " +
-                       "Some new strings may stay in English.\n\nApply anyway?",
+                       "Some text may be wrong, missing, or stay in English. " +
+                       "You can use it anyway at your own risk.\n\nApply anyway?",
             [LangEs] = "Esta traducción se hizo para una versión diferente del mod. " +
-                       "Algunos strings nuevos pueden quedar en inglés.\n\n¿Aplicar igual?",
+                       "Algunos textos pueden quedar incorrectos, faltantes o en inglés. " +
+                       "Podés usarla igual bajo tu propia responsabilidad.\n\n¿Aplicar igual?",
         },
         ["DlgLangApplyFailedTitle"] = new()
         {

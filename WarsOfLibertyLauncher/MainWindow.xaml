@@ -299,7 +299,7 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- Custom title bar (shared controls:TitleBar, height = TitleBarHeight token) -->
+            <RowDefinition Height="Auto"/> <!-- Custom title bar (shared controls:TitleBar, height = TitleBarHeightMain token = classic 36; the slim 28px is secondary-windows only) -->
             <RowDefinition Height="38"/>   <!-- Horizontal nav strip (Steam-style); compact, 14px main tabs -->
             <RowDefinition Height="*"/>    <!-- App content -->
         </Grid.RowDefinitions>
@@ -321,7 +321,14 @@
              surface. The seam below the nav tabs is the nav strip's
              OWN bottom border — that one stays, since it delimits
              chrome from content. -->
+        <!-- Main header opts OUT of the slim secondary bar: pins the classic
+             36px height + 46/10 buttons so the brand bar + nav strip are
+             untouched. Height reads TitleBarHeightMain so it matches the
+             CaptionHeight App.ApplyWindowChrome assigns to MainWindow. -->
         <controls:TitleBar Grid.Row="0"
+                           Height="{StaticResource TitleBarHeightMain}"
+                           ButtonWidth="46"
+                           GlyphSize="10"
                            ShowMinimize="True"
                            ShowMaximize="True"
                            ShowClose="True">

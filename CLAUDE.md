@@ -539,6 +539,51 @@ don't go looking for it.)
   config example is out of date. `Save()` is non-atomic and runs from background
   threads.
 
+- **`ModState.PinnedVersion` pauses update PROMPTS, it never auto-updates — and it
+  self-corrects when stale.** Empty (default) = follow the latest, normal
+  behaviour. When it equals the installed version, `MainWindow.IsUpdatePausedByPin`
+  returns true and `ApplyCheckResult` keeps the PLAY button as **Play** (instead of
+  flipping it to Update) and hides the secondary Update button — for BOTH WoL
+  (`WolPatcher`, patches-pending branch) and `GitHubReleases` (the `ghPaused` split);
+  status shows `StatusUpdatePausedPinned`. The user sets/clears it from the Mod
+  Properties General tab (`StayOnVersionCheck`, pins to `_service.CurrentVersion.Ver`),
+  and the dialog calls back `onUpdatePolicyChanged` so MainWindow re-applies the
+  CACHED check result (no network). `ApplyCheckResult` is the SOLE place that raises
+  the update CTA (the only `SetPrimaryAction(PrimaryAction.Update)` + the only
+  `UpdateButton.Visibility = Visible`), so gating it there is complete — don't raise
+  the update CTA from anywhere else. The pin only suppresses while it matches the
+  installed version, so after a real update it stops matching and updates resume on
+  their own (the checkbox also reads unchecked then). Nothing is ever auto-applied;
+  this is purely "stop nagging me". Caveat surfaced to the user in the hint string:
+  skipping updates can break multiplayer version-match with other players.
+
+- **Version picker (Mod Properties → General) is GitHubReleases-only and installs
+  through the SHARED re-overlay path — not a new install flow.** For an installed
+  `GitHubReleases` mod, `ModPropertiesDialog.LoadVersions` lists the repo's releases
+  (`GitHubReleaseDownloader.ListReleasesAsync` → `/releases?per_page=100`, the same
+  endpoint the translation registry uses) and `InstallVersionBtn` installs the
+  chosen tag via `MainWindow.InstallGitHubVersionAsync` →
+  `RepairInstallAsync(asUpdate:true, targetReleaseTag:<tag>)`. The tag threads
+  through `ResolvePayloadUrlsAsync`/`ResolveInstallVersion`/`GitHubReleaseDownloader.
+  ResolveAssetAsync` (all gained an `overrideTag`/`targetReleaseTag` param defaulting
+  to null = the approved tag = unchanged behaviour). **Three load-bearing rules:**
+  (1) the section is gated to GitHubReleases + installed + NOT external-hosted —
+  external hosts pin a SHA-256 for the approved tag only, so other versions can't be
+  verified (`ResolveAssetAsync` throws on a non-approved tag for external hosts).
+  (2) Installing a NON-approved version auto-sets `ModState.PinnedVersion` to it
+  (reusing the pin above) so the launcher doesn't immediately offer to "update" the
+  user back to the approved tag; installing the approved version clears the pin.
+  (3) **Rollback is as clean as a forward update because it IS one** — the re-overlay
+  runs `ApplyUpdateDeletions`, which auto-removes the previous overlay's net-new
+  files the chosen version no longer ships (`previous.OverlayNetNew` minus the new
+  capture), so downgrading doesn't leave v2's added files orphaned. The residual
+  (base-game files v2 *modified* aren't reverted unless the payload's `delete.lst`
+  says so) is identical to forward-update behaviour. Fresh first-time installs still
+  take the recommended tag through the normal Install flow — version choice there is
+  a deferred follow-up. Known follow-up: `ListReleasesAsync` hits GitHub
+  unauthenticated on every dialog open (60/h per IP — no ETag/304 like the self-
+  updater yet).
+
 - **`config.GameExecutable` is a GLOBAL exe cache that two profiles share — it
   MUST be cleared on mod switch.** Despite the per-mod `Mods` dictionary, the
   resolved game-exe path is cached in the flat, launcher-wide
@@ -590,6 +635,24 @@ don't go looking for it.)
   vanish until the user hits Refresh. The fetch itself was never the problem
   (`launcher-debug.log` shows "Translation releases scanned: N valid entries") —
   the index was just being discarded without re-fetching.
+
+- **A version-mismatched translation WARNS, it does NOT block — don't re-disable
+  it.** A pack whose `compatibleWith` list doesn't include the installed mod
+  version (`TranslationCompat.IsVersionBlocked`, `Models/TranslationPack.cs`) is
+  surfaced as a *caution the user can override*, not a dead entry: the gear
+  language menu item (`MainWindow.BuildLanguageMenuItem`) stays **enabled** in
+  **amber + ⚠** (not disabled/grey), and the Mod Properties language card
+  (`ModPropertiesDialog.BuildLanguageCard`) stays **clickable** showing
+  **"Use anyway"** (`LangCardUseAnyway`) with a warning hint. Both route to
+  `ApplyTranslationAsync` → `TranslationApplyDialog`, which is the real gate: it
+  shows the ⚠ badge + the pack's declared compatible versions and **soft-blocks**
+  (first click warns + flips the button to "Apply anyway"/`DlgLangApplyBtnForce`,
+  second click proceeds), then does the deep MD5 hash recheck. Two HARD blocks
+  stay: a pack for a **different mod** (`TargetModMatches`, would overwrite another
+  mod's files) and the post-update auto-revert-to-English (`ReconcileAfterUpdate`).
+  Don't reintroduce `IsEnabled = !incompatible` on the menu item or
+  `clickable = !blocked` on the card — incompatibility is a warning, the apply
+  dialog owns the confirmation.
 
 - **The translator-facing packager lives in Settings → Translations, NOT the
   Game-language gear submenu, and it's globalised across mods.** The packaging
@@ -1454,17 +1517,28 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   `Styles/Chrome.xaml` (implicit `Style TargetType="controls:TitleBar"`), the
   caption-button styles (`TitleBarButton` / `TitleBarCloseButton`) are there too,
   and ALL geometry — bar height, button size, glyph + title sizes, gutters — comes
-  from the `TitleBar*` tokens in `Styles/Tokens.xaml` (`TitleBarHeight=36` is the
-  single height knob; change it once and every window + the caption drag region
-  follow). **Bar height and title size are SEPARATE tokens** — `TitleBarTitleSize`
-  is 24 (the original window-title size, gold DisplayFont); shrinking the bar must
-  never shrink the title, so the height is sized to fit the 24px title centred
-  (~28px tall, fits within 36 with margin), not the other way around. (History: the title was briefly unified down to 18 to
-  compact the bar — that was wrong; restored to 24 and the bar grows to hold it.) Per-window config is **only** via DependencyProperties — `Title`,
+  from the `TitleBar*` tokens in `Styles/Tokens.xaml`. **Secondary windows use a slim
+  28px bar; the main launcher header is the deliberate EXCEPTION at 36px.**
+  `TitleBarHeight=28` is the single height knob for every secondary window (change it
+  once and they all follow); `TitleBarHeightMain=36` pins MainWindow's brand-bar
+  header so the compact secondaries never shrink it. **Bar height and title size are
+  SEPARATE tokens, but the rule INVERTED** — the bar is the fixed dimension now and the
+  title fits IT: `TitleBarTitleSize=16` sits centred in the 28px bar (gold
+  DisplayFont). The old "title size wins, the bar grows to hold a 24px title" rule is
+  GONE (as is the earlier 18px-unify experiment). Button geometry is compact too
+  (`TitleBarButtonWidth=40`, `TitleBarGlyphSize=8`); all four compact values are
+  DPI-clean at 125/150% (whole pixels, no sub-pixel blur). The control exposes the
+  geometry as DependencyProperties (`Height`, `ButtonWidth`, `GlyphSize`, `TitleSize`)
+  whose defaults are the compact tokens, and the template TemplateBinds the buttons +
+  title to them; **MainWindow opts out by setting
+  `Height="{StaticResource TitleBarHeightMain}"` + `ButtonWidth="46"` + `GlyphSize="10"`
+  locally** (local values beat the implicit-style setters). Per-window config is
+  **only** via DependencyProperties — `Title`,
   `TitleIcon` (ImageSource), `Content` (extra bar content: MainWindow's brand
   dropdown button, ModProperties' version badge, PublishMod/Radmin subtitle),
-  `ShowMinimize` / `ShowMaximize` / `ShowClose` — plus the window's own
-  `ResizeMode`/`SizeToContent`. **No window-name conditions anywhere.** Button
+  `ShowMinimize` / `ShowMaximize` / `ShowClose`, the geometry DPs above — plus the
+  window's own `ResizeMode`/`SizeToContent`. **No window-name conditions anywhere**
+  (MainWindow's height opt-out is a plain local property value, not a name check). Button
   policy (property-driven, no name checks): **resizable non-modal** windows
   (`MainWindow`, `LobbyWindow`, `LauncherSettingsDialog`, `ModPropertiesDialog`)
   show **min+max+close** — and those must be `ShowInTaskbar="True"` so minimize
@@ -1478,8 +1552,10 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   when the window can't actually maximize (NoResize/CanMinimize or
   SizeToContent≠Manual), so a misconfig can't show a dead button. **WindowChrome is applied CENTRALLY**
   in `App.OnAnyWindowLoaded` (`ApplyWindowChrome`) to every `WindowStyle=None`
-  window — CaptionHeight = the `TitleBarHeight` token (so the whole bar is the
-  native drag region), ResizeBorderThickness = 6 if resizable else 0 — so **no
+  window — CaptionHeight = the window's own bar-height token (the slim
+  `TitleBarHeight` for secondaries, `TitleBarHeightMain` for MainWindow, branched
+  by qualified type) so the whole bar is the native drag region,
+  ResizeBorderThickness = 6 if resizable else 0 — so **no
   window declares `<WindowChrome>` in XAML anymore**, and drag / double-click-
   maximize / restore-on-drag / min-size / DPI / multi-monitor all come free and
   native (no DragMove/OnStateChanged code per window). The buttons wire to
@@ -1496,7 +1572,8 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   one consistent left gutter snug to the corner — don't reintroduce a per-button
   left margin to "fix" alignment, keep the shared 12 gutter. The main tabs are sized via the dedicated
   `NavTabTextSize` token (14 = `FontSizeBody`, Steam-like; icons 16) in a 38px nav
-  strip row (the title bar itself stays 36). **Crispness:** the TitleBar template root sets
+  strip row (the main header's title bar stays 36 via `TitleBarHeightMain`; only the
+  secondary windows' bars are the slim 28). **Crispness:** the TitleBar template root sets
   `SnapsToDevicePixels="True"` + `UseLayoutRounding="True"` (both INHERITED) so the
   brand's bitmap icon + wordmark pin to whole device pixels — without it the icon
   landed on a sub-pixel X at 125/150% DPI (18 DIP × 1.25 = 22.5 px) and looked

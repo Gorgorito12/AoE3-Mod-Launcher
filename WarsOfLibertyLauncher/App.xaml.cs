@@ -177,20 +177,28 @@ public partial class App : System.Windows.Application
     /// <summary>
     /// Apply the launcher's standard <see cref="WindowChrome"/> to a
     /// WindowStyle=None window so each window no longer repeats the block.
-    /// CaptionHeight is bound to the single TitleBarHeight token so the
-    /// native caption region (drag / double-click-maximize / restore-on-drag)
-    /// always matches the global TitleBar's height; ResizeBorderThickness is
-    /// 6 for resizable windows (edge-drag) and 0 otherwise. Windows that
-    /// already declared a WindowChrome in XAML are left untouched, so this is
-    /// a safe additive default. No-op if the TitleBarHeight token is missing.
+    /// CaptionHeight matches the window's own TitleBar height so the native
+    /// caption region (drag / double-click-maximize / restore-on-drag) always
+    /// covers the whole bar: the slim TitleBarHeight token for every secondary
+    /// window, and the classic TitleBarHeightMain token for the main launcher
+    /// header (which keeps the taller bar). ResizeBorderThickness is 6 for
+    /// resizable windows (edge-drag) and 0 otherwise. Windows that already
+    /// declared a WindowChrome in XAML are left untouched, so this is a safe
+    /// additive default. No-op if the token is missing.
     /// </summary>
     private static void ApplyWindowChrome(Window w)
     {
         if (WindowChrome.GetWindowChrome(w) != null)
             return;
 
+        // Qualify the type as in OnAnyWindowLoaded: bare MainWindow binds to the
+        // inherited Application.MainWindow property, not our window type.
+        string heightKey = w is WarsOfLibertyLauncher.MainWindow
+            ? "TitleBarHeightMain"
+            : "TitleBarHeight";
+
         double caption = 44;
-        if (Current?.TryFindResource("TitleBarHeight") is double h)
+        if (Current?.TryFindResource(heightKey) is double h)
             caption = h;
 
         bool resizable = w.ResizeMode is ResizeMode.CanResize or ResizeMode.CanResizeWithGrip;

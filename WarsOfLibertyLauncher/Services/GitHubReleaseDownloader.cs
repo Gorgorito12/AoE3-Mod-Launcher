@@ -59,6 +59,52 @@ public class GitHubReleaseDownloader
     public record ResolvedAsset(string Url, long Size, string? ExpectedSha256);
 
     /// <summary>
+    /// One selectable version from a mod's GitHub repo. <see cref="Prerelease"/>
+    /// flags GitHub "pre-release" entries so the UI can mark them. Drafts are
+    /// filtered out (no public assets).
+    /// </summary>
+    public record ReleaseInfo(string Tag, string Name, bool Prerelease);
+
+    /// <summary>
+    /// Enumerate the mod's published releases (newest first) so the user can
+    /// pick a version to install instead of only the catalog's approved tag.
+    /// Mirrors <see cref="TranslationRegistryService"/>'s use of the paginated
+    /// <c>/releases</c> endpoint. Drafts are skipped; prereleases are kept and
+    /// flagged. Returns at most the newest 100 (one API page) — a soft cap that
+    /// covers every real mod's history; older entries are logged as omitted.
+    /// Throws on network / auth failure for the caller to surface.
+    /// </summary>
+    public async Task<IReadOnlyList<ReleaseInfo>> ListReleasesAsync(
+        string sourceRepo, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceRepo))
+            throw new ArgumentException("SourceRepo is required.", nameof(sourceRepo));
+
+        var apiUrl = $"https://api.github.com/repos/{sourceRepo}/releases?per_page=100";
+        DiagnosticLog.Write($"GitHubReleases: listing {apiUrl}");
+
+        var releases = await Http.GetFromJsonAsync<List<GitHubRelease>>(apiUrl, ct)
+            ?? new List<GitHubRelease>();
+
+        var list = new List<ReleaseInfo>();
+        foreach (var r in releases)
+        {
+            if (r.Draft) continue;                       // not installable
+            if (string.IsNullOrWhiteSpace(r.TagName)) continue;
+            list.Add(new ReleaseInfo(
+                r.TagName,
+                string.IsNullOrWhiteSpace(r.Name) ? r.TagName : r.Name,
+                r.Prerelease));
+        }
+
+        if (releases.Count >= 100)
+            DiagnosticLog.Write(
+                "GitHubReleases: release list hit the 100-item page cap; older versions omitted.");
+
+        return list;
+    }
+
+    /// <summary>
     /// Resolve the modder's release tag into a concrete .zip asset URL.
     /// Doesn't download the asset — just enumerates and picks (or, for
     /// external hosting, templates the URL). Use this to pre-flight
@@ -80,12 +126,18 @@ public class GitHubReleaseDownloader
     /// asset, or an external URL was configured without its SHA-256.
     /// </summary>
     public async Task<ResolvedAsset> ResolveAssetAsync(
-        GitHubReleasesSettings settings, CancellationToken ct = default)
+        GitHubReleasesSettings settings, string? overrideTag = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(settings.SourceRepo))
             throw new ArgumentException("SourceRepo is required.", nameof(settings));
         if (string.IsNullOrWhiteSpace(settings.ApprovedReleaseTag))
             throw new ArgumentException("ApprovedReleaseTag is required.", nameof(settings));
+
+        // The version to resolve: the user-chosen tag when set, else the
+        // catalog's approved/recommended tag (the default path, unchanged).
+        var tag = string.IsNullOrWhiteSpace(overrideTag)
+            ? settings.ApprovedReleaseTag
+            : overrideTag.Trim();
 
         // --- External-hosting path -------------------------------------------
         // When the modder hosts the binary outside GitHub Releases (their
@@ -94,6 +146,14 @@ public class GitHubReleaseDownloader
         // to anchor the version tag; we never call the GitHub API here.
         if (!string.IsNullOrWhiteSpace(settings.ExternalAssetUrlTemplate))
         {
+            // External hosts pin a SHA-256 for the APPROVED tag only, so we can't
+            // verify any OTHER version's payload — refuse a version switch here
+            // rather than install an unverifiable binary.
+            if (!string.Equals(tag, settings.ApprovedReleaseTag, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Version selection isn't available for '{settings.SourceRepo}': it hosts its payload " +
+                    $"externally with a single pinned hash, so only the recommended version can be verified.");
+
             if (string.IsNullOrWhiteSpace(settings.ExternalAssetSha256))
             {
                 // Refuse external URLs without a hash. Otherwise a
@@ -108,7 +168,7 @@ public class GitHubReleaseDownloader
             }
 
             var external = settings.ExternalAssetUrlTemplate.Replace(
-                "{tag}", settings.ApprovedReleaseTag);
+                "{tag}", tag);
             DiagnosticLog.Write(
                 $"GitHubReleases: resolved external asset '{external}' " +
                 $"(sha256={settings.ExternalAssetSha256.ToLowerInvariant()})");
@@ -119,20 +179,20 @@ public class GitHubReleaseDownloader
         }
 
         // --- Regular GitHub Release asset path -------------------------------
-        var apiUrl = $"https://api.github.com/repos/{settings.SourceRepo}/releases/tags/{settings.ApprovedReleaseTag}";
+        var apiUrl = $"https://api.github.com/repos/{settings.SourceRepo}/releases/tags/{tag}";
         DiagnosticLog.Write($"GitHubReleases: fetching {apiUrl}");
 
         var release = await Http.GetFromJsonAsync<GitHubRelease>(apiUrl, ct)
             ?? throw new InvalidOperationException(
-                $"GitHub release '{settings.ApprovedReleaseTag}' in '{settings.SourceRepo}' returned empty.");
+                $"GitHub release '{tag}' in '{settings.SourceRepo}' returned empty.");
 
         if (release.Assets == null || release.Assets.Count == 0)
             throw new InvalidOperationException(
-                $"Release '{settings.ApprovedReleaseTag}' has no downloadable assets.");
+                $"Release '{tag}' has no downloadable assets.");
 
         var asset = PickAsset(release.Assets, settings.AssetNamePattern)
             ?? throw new InvalidOperationException(
-                $"No asset matching '{settings.AssetNamePattern}' (or *.zip fallback) in release '{settings.ApprovedReleaseTag}'.");
+                $"No asset matching '{settings.AssetNamePattern}' (or *.zip fallback) in release '{tag}'.");
 
         DiagnosticLog.Write(
             $"GitHubReleases: resolved asset '{asset.Name}' ({asset.Size} bytes) at {asset.BrowserDownloadUrl}");
@@ -264,6 +324,12 @@ public class GitHubReleaseDownloader
 
         [JsonPropertyName("name")]
         public string Name { get; set; } = "";
+
+        [JsonPropertyName("draft")]
+        public bool Draft { get; set; }
+
+        [JsonPropertyName("prerelease")]
+        public bool Prerelease { get; set; }
 
         [JsonPropertyName("assets")]
         public List<GitHubAsset>? Assets { get; set; }

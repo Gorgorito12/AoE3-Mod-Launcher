@@ -89,6 +89,11 @@
     <Style TargetType="{x:Type controls:TitleBar}">
         <Setter Property="Background" Value="{DynamicResource BgSidebar}"/>
         <Setter Property="Height" Value="{StaticResource TitleBarHeight}"/>
+        <!-- Geometry defaults: compact secondary sizes (MainWindow overrides
+             Height/ButtonWidth/GlyphSize locally back to the classic header). -->
+        <Setter Property="ButtonWidth" Value="{StaticResource TitleBarButtonWidth}"/>
+        <Setter Property="GlyphSize" Value="{StaticResource TitleBarGlyphSize}"/>
+        <Setter Property="TitleSize" Value="{StaticResource TitleBarTitleSize}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type controls:TitleBar}">
@@ -129,7 +134,7 @@
                                 <TextBlock x:Name="PART_Title" Grid.Column="1"
                                            VerticalAlignment="Center"
                                            FontFamily="{DynamicResource DisplayFont}"
-                                           FontSize="{StaticResource TitleBarTitleSize}"
+                                           FontSize="{TemplateBinding TitleSize}"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource AccentBrush}"
                                            TextTrimming="CharacterEllipsis"
@@ -139,16 +144,29 @@
                                                   shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                             </Grid>
 
+                            <!-- Per-button Width/Height/FontSize are local values
+                                 (templated-parent precedence) so they override the
+                                 TitleBarButton style setters and follow the control's
+                                 geometry DPs (compact by default, classic on MainWindow). -->
                             <Button x:Name="PART_Min" Grid.Column="1"
                                     Style="{StaticResource TitleBarButton}"
+                                    Width="{TemplateBinding ButtonWidth}"
+                                    Height="{TemplateBinding Height}"
+                                    FontSize="{TemplateBinding GlyphSize}"
                                     Content="&#xE921;"
                                     shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                             <Button x:Name="PART_Max" Grid.Column="2"
                                     Style="{StaticResource TitleBarButton}"
+                                    Width="{TemplateBinding ButtonWidth}"
+                                    Height="{TemplateBinding Height}"
+                                    FontSize="{TemplateBinding GlyphSize}"
                                     Content="&#xE922;"
                                     shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                             <Button x:Name="PART_Close" Grid.Column="3"
                                     Style="{StaticResource TitleBarCloseButton}"
+                                    Width="{TemplateBinding ButtonWidth}"
+                                    Height="{TemplateBinding Height}"
+                                    FontSize="{TemplateBinding GlyphSize}"
                                     Content="&#xE8BB;"
                                     shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                         </Grid>

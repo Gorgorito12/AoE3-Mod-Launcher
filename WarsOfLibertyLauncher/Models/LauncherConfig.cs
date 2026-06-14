@@ -105,6 +105,20 @@ public class ModState
     /// </summary>
     [JsonPropertyName("lastKnownLatestVersion")]
     public string LastKnownLatestVersion { get; set; } = "";
+
+    /// <summary>
+    /// Version the user explicitly chose to STAY ON for this mod. Empty (the
+    /// default) means "follow the latest" — the normal behaviour. When it equals
+    /// the installed version, the launcher PAUSES update prompts for this mod: the
+    /// PLAY button stays "Play" instead of flipping to "Update" and the secondary
+    /// Update button is hidden, so the user can keep playing this version without
+    /// being pushed to upgrade. It only suppresses the PROMPT — nothing is ever
+    /// auto-updated. The pin goes stale (and stops suppressing) once the installed
+    /// version no longer matches it, e.g. after a manual update; the user clears it
+    /// from Mod Properties to resume updates.
+    /// </summary>
+    [JsonPropertyName("pinnedVersion")]
+    public string PinnedVersion { get; set; } = "";
 }
 
 /// <summary>

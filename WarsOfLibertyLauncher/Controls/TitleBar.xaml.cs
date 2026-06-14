@@ -101,6 +101,46 @@ public class TitleBar : ContentControl
         set => SetValue(ShowCloseProperty, value);
     }
 
+    // --- Geometry (purely visual; no RefreshChrome callback) ---------------
+    // Defaults match the compact secondary tokens; the implicit Style in
+    // Chrome.xaml feeds the real values from the TitleBar* tokens, and the main
+    // launcher header overrides these locally back to the classic 46/10/— so the
+    // slim secondary bar never shrinks it. Height (the bar height) reuses the
+    // built-in FrameworkElement.Height — no extra DP needed.
+
+    public static readonly DependencyProperty ButtonWidthProperty =
+        DependencyProperty.Register(nameof(ButtonWidth), typeof(double), typeof(TitleBar),
+            new PropertyMetadata(40.0));
+
+    /// <summary>Width of each min/max/close caption button.</summary>
+    public double ButtonWidth
+    {
+        get => (double)GetValue(ButtonWidthProperty);
+        set => SetValue(ButtonWidthProperty, value);
+    }
+
+    public static readonly DependencyProperty GlyphSizeProperty =
+        DependencyProperty.Register(nameof(GlyphSize), typeof(double), typeof(TitleBar),
+            new PropertyMetadata(8.0));
+
+    /// <summary>Segoe MDL2 glyph size for the caption buttons.</summary>
+    public double GlyphSize
+    {
+        get => (double)GetValue(GlyphSizeProperty);
+        set => SetValue(GlyphSizeProperty, value);
+    }
+
+    public static readonly DependencyProperty TitleSizeProperty =
+        DependencyProperty.Register(nameof(TitleSize), typeof(double), typeof(TitleBar),
+            new PropertyMetadata(16.0));
+
+    /// <summary>Font size of the window title text (PART_Title).</summary>
+    public double TitleSize
+    {
+        get => (double)GetValue(TitleSizeProperty);
+        set => SetValue(TitleSizeProperty, value);
+    }
+
     private static void OnChromeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((TitleBar)d).RefreshChrome();
 

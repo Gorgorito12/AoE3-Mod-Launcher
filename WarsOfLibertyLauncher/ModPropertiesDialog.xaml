@@ -298,6 +298,54 @@
                                    FontSize="{StaticResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Visibility="Collapsed"/>
+
+                        <!-- Stay-on-version pin (Fase 0): pauses update prompts for
+                             this mod while the installed version is the pinned one.
+                             Collapsed until we know an installed version. -->
+                        <CheckBox x:Name="StayOnVersionCheck"
+                                  Margin="0,14,0,0"
+                                  Click="StayOnVersionCheck_Click"
+                                  Visibility="Collapsed"/>
+                        <TextBlock x:Name="StayOnVersionHint"
+                                   Margin="0,4,0,0"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   TextWrapping="Wrap"
+                                   Visibility="Collapsed"/>
+
+                        <!-- Version picker (Fase 1): GitHubReleases mods only.
+                             Collapsed for every other mechanism / until the list
+                             loads. Lets the user install or roll back to a specific
+                             published version instead of only the recommended one. -->
+                        <StackPanel x:Name="VersionSection"
+                                    Margin="0,22,0,0"
+                                    Visibility="Collapsed">
+                            <TextBlock x:Name="VersionSectionLabel"
+                                       FontSize="{StaticResource FontSizeBodyStrong}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}"/>
+                            <TextBlock x:Name="VersionSectionHint"
+                                       Margin="0,4,0,0"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <ComboBox x:Name="VersionCombo"
+                                          MinWidth="240"
+                                          VerticalAlignment="Center"/>
+                                <Button x:Name="InstallVersionBtn"
+                                        Style="{StaticResource PropertyActionButton}"
+                                        Margin="10,0,0,0"
+                                        MinWidth="180"
+                                        VerticalAlignment="Center"
+                                        Click="InstallVersionBtn_Click"/>
+                            </StackPanel>
+                            <TextBlock x:Name="VersionStatus"
+                                       Margin="0,10,0,0"
+                                       FontSize="{StaticResource FontSizeBody}"
+                                       TextWrapping="Wrap"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- ===================================================

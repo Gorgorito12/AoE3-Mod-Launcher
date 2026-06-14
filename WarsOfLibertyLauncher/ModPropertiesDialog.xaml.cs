@@ -59,6 +59,16 @@ public partial class ModPropertiesDialog : Window
     private readonly Action _viewLogs;
     private readonly Action _uninstall;
 
+    /// <summary>Invoked after the user pins/unpins "stay on this version" so the
+    /// main window can re-apply its cached check result (refresh PLAY/UPDATE +
+    /// status) with no network call. Null = nothing to refresh.</summary>
+    private readonly Action? _onUpdatePolicyChanged;
+
+    // Fase 1 — version picker (GitHubReleases mods only). Null for other
+    // mechanisms, which hides the whole "Version" section.
+    private readonly Func<Task<IReadOnlyList<GitHubReleaseDownloader.ReleaseInfo>>>? _listVersions;
+    private readonly Func<string, Task>? _installVersion;
+
     public ModPropertiesDialog(
         ModProfile profile,
         UpdateService service,
@@ -77,7 +87,10 @@ public partial class ModPropertiesDialog : Window
         Action restoreBackup,
         Action viewLogs,
         Action uninstall,
-        Func<Task<TranslationIndex?>>? refreshTranslations = null)
+        Func<Task<TranslationIndex?>>? refreshTranslations = null,
+        Action? onUpdatePolicyChanged = null,
+        Func<Task<IReadOnlyList<GitHubReleaseDownloader.ReleaseInfo>>>? listVersions = null,
+        Func<string, Task>? installVersion = null)
     {
         _profile = profile;
         _service = service;
@@ -97,6 +110,9 @@ public partial class ModPropertiesDialog : Window
         _viewLogs = viewLogs;
         _uninstall = uninstall;
         _refreshTranslations = refreshTranslations;
+        _onUpdatePolicyChanged = onUpdatePolicyChanged;
+        _listVersions = listVersions;
+        _installVersion = installVersion;
 
         InitializeComponent();
         ApplyStrings();
@@ -104,6 +120,7 @@ public partial class ModPropertiesDialog : Window
         LoadLocalFiles();
         LoadUserData();
         LoadLanguage();
+        LoadVersions();
         SetActiveTab(TabGeneralBtn);
 
         // Window-size scaling (Controls/UiScale.cs): the content area (Row 1,
@@ -135,6 +152,10 @@ public partial class ModPropertiesDialog : Window
         LblVersion.Text = Strings.Get("ModPropVersion");
         LblWebsite.Text = Strings.Get("ModPropWebsite");
         CheckUpdatesBtn.Content = Strings.Get("ModPropCheckUpdates");
+        StayOnVersionHint.Text = Strings.Get("ModPropStayOnVersionHint");
+        VersionSectionLabel.Text = Strings.Get("ModPropVersionSection");
+        VersionSectionHint.Text = Strings.Get("ModPropVersionHint");
+        InstallVersionBtn.Content = Strings.Get("ModPropVersionInstallBtn");
 
         // LOCAL FILES tab
         LblInstallPath.Text = Strings.Get("ModPropInstallSection");
@@ -210,6 +231,43 @@ public partial class ModPropertiesDialog : Window
             HeaderVersionText.Text = string.Empty;
             HeaderVersionBadge.Visibility = Visibility.Collapsed;
         }
+
+        // Stay-on-version pin (Fase 0): only meaningful once we know the installed
+        // version. Checked only when the pin matches the version we actually have.
+        if (installed)
+        {
+            var pinned = _config.GetState(_profile.Id).PinnedVersion;
+            StayOnVersionCheck.Content = Strings.Format("ModPropStayOnVersion", ver);
+            StayOnVersionCheck.IsChecked =
+                !string.IsNullOrEmpty(pinned)
+                && string.Equals(pinned, ver, StringComparison.OrdinalIgnoreCase);
+            StayOnVersionCheck.Visibility = Visibility.Visible;
+            StayOnVersionHint.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            StayOnVersionCheck.Visibility = Visibility.Collapsed;
+            StayOnVersionHint.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Pin / unpin "stay on this version". Checking it records the installed
+    /// version in <see cref="ModState.PinnedVersion"/> (pausing update prompts for
+    /// this mod); unchecking clears it (resume updates). Nothing is ever
+    /// auto-updated — this only controls whether the prompt is shown. The main
+    /// window is refreshed via the callback so PLAY/UPDATE updates instantly.
+    /// </summary>
+    private void StayOnVersionCheck_Click(object sender, RoutedEventArgs e)
+    {
+        var state = _config.GetState(_profile.Id);
+        var ver = _service.CurrentVersion?.Ver;
+        state.PinnedVersion =
+            (StayOnVersionCheck.IsChecked == true && !string.IsNullOrWhiteSpace(ver))
+                ? ver!
+                : "";
+        _config.Save();
+        _onUpdatePolicyChanged?.Invoke();
     }
 
     /// <summary>
@@ -384,14 +442,16 @@ public partial class ModPropertiesDialog : Window
             });
 
         // Status indicator (not a button anymore — the WHOLE card is the click
-        // target, which is more forgiving than a small "Use" button).
+        // target, which is more forgiving than a small "Use" button). A version-
+        // mismatched pack reads "Use anyway" in amber — a warning the user can
+        // override, NOT a block (the apply dialog confirms first).
         var status = new TextBlock
         {
             Text = isActive ? Strings.Get("LangCardActive")
-                : blocked ? Strings.Get("LangCardBlocked") : Strings.Get("LangCardUse"),
+                : blocked ? Strings.Get("LangCardUseAnyway") : Strings.Get("LangCardUse"),
             FontSize = 13, FontWeight = FontWeights.SemiBold,
             Foreground = isActive ? Res("SuccessBrush", "#9BD99B")
-                : blocked ? Res("TextSecondary", "#9AA6B2") : Res("AccentBrush", "#C8A24A"),
+                : blocked ? Res("WarnBrush", "#E0B341") : Res("AccentBrush", "#C8A24A"),
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(10, 0, 0, 0),
         };
@@ -404,7 +464,10 @@ public partial class ModPropertiesDialog : Window
         grid.Children.Add(col);
         grid.Children.Add(status);
 
-        bool clickable = !isActive && !blocked;
+        // A version-mismatched ("blocked") pack stays clickable: the user can apply
+        // it under their own responsibility and the apply dialog confirms first.
+        // Only the already-active pack is non-clickable (nothing to do).
+        bool clickable = !isActive;
         var border = new Border
         {
             Background = Res("BgPanel", "#1B2430"),
@@ -412,7 +475,8 @@ public partial class ModPropertiesDialog : Window
             BorderThickness = new Thickness(isActive ? 2 : 1),
             CornerRadius = new CornerRadius(6),
             Margin = new Thickness(0, 0, 0, 8),
-            Opacity = blocked ? 0.6 : 1.0,
+            // Slightly dimmed (not inert) so it reads as a caution, not disabled.
+            Opacity = blocked ? 0.85 : 1.0,
             Child = grid,
         };
         if (!clickable) return border;
@@ -652,6 +716,123 @@ public partial class ModPropertiesDialog : Window
             TryFindResource(brushKey) as System.Windows.Media.Brush
             ?? System.Windows.Media.Brushes.White;
         CheckUpdatesResult.Visibility = Visibility.Visible;
+    }
+
+    // ------------------------------------------------------------------------
+    // Version picker (Fase 1) — GitHubReleases mods only.
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Populates the "Version" section for GitHubReleases mods: fetches the
+    /// repo's published releases, lists them newest-first (annotating the
+    /// installed / recommended / pre-release ones) and pre-selects the installed
+    /// version. Stays collapsed for any other mechanism (callbacks null). Network
+    /// failures show an inline hint instead of throwing.
+    /// </summary>
+    private async void LoadVersions()
+    {
+        // Gate the whole section to: callbacks wired AND a GitHubReleases mod AND
+        // actually installed. Version SWITCH re-overlays onto an existing install
+        // (RepairInstallAsync needs the install path); a fresh first install picks
+        // the recommended tag through the normal Install flow, not here.
+        bool isInstalled = !string.IsNullOrWhiteSpace(_service.CurrentVersion?.Ver);
+        // External-hosted payloads pin a SHA-256 for the approved tag ONLY, so no
+        // other version can be verified — hide the picker rather than list
+        // versions that would fail to install.
+        bool externalHosted =
+            !string.IsNullOrWhiteSpace(_profile.GitHubReleases?.ExternalAssetUrlTemplate);
+        if (_listVersions == null || _installVersion == null
+            || _profile.UpdateMechanism != ModUpdateMechanism.GitHubReleases
+            || externalHosted
+            || !isInstalled)
+        {
+            VersionSection.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        VersionSection.Visibility = Visibility.Visible;
+        VersionCombo.IsEnabled = false;
+        InstallVersionBtn.IsEnabled = false;
+        SetVersionStatus(Strings.Get("ModPropVersionsLoading"), "TextSecondary");
+
+        IReadOnlyList<GitHubReleaseDownloader.ReleaseInfo> releases;
+        try
+        {
+            releases = await _listVersions();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModProperties: load versions failed: {ex.Message}");
+            SetVersionStatus(Strings.Get("ModPropVersionsFailed"), "ErrorBrush");
+            return;
+        }
+
+        if (releases.Count == 0)
+        {
+            SetVersionStatus(Strings.Get("ModPropVersionsNone"), "TextSecondary");
+            return;
+        }
+
+        var recommended = _profile.GitHubReleases?.ApprovedReleaseTag ?? "";
+        var installed = _service.CurrentVersion?.Ver ?? "";
+
+        VersionCombo.Items.Clear();
+        int selectIdx = -1, recommendedIdx = -1;
+        for (int i = 0; i < releases.Count; i++)
+        {
+            var r = releases[i];
+            var tags = new List<string>();
+            if (!string.IsNullOrEmpty(installed)
+                && string.Equals(r.Tag, installed, StringComparison.OrdinalIgnoreCase))
+            {
+                tags.Add(Strings.Get("ModPropVersionInstalled"));
+                selectIdx = i;
+            }
+            if (!string.IsNullOrEmpty(recommended)
+                && string.Equals(r.Tag, recommended, StringComparison.OrdinalIgnoreCase))
+            {
+                tags.Add(Strings.Get("ModPropVersionRecommended"));
+                recommendedIdx = i;
+            }
+            if (r.Prerelease) tags.Add(Strings.Get("ModPropVersionPrerelease"));
+
+            var label = tags.Count > 0 ? $"{r.Tag}  —  {string.Join(", ", tags)}" : r.Tag;
+            VersionCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = label, Tag = r.Tag });
+        }
+
+        VersionCombo.SelectedIndex = selectIdx >= 0 ? selectIdx : (recommendedIdx >= 0 ? recommendedIdx : 0);
+        VersionCombo.IsEnabled = true;
+        InstallVersionBtn.IsEnabled = true;
+        VersionStatus.Visibility = Visibility.Collapsed;
+    }
+
+    private void SetVersionStatus(string text, string brushKey)
+    {
+        VersionStatus.Text = text;
+        VersionStatus.Foreground =
+            TryFindResource(brushKey) as System.Windows.Media.Brush
+            ?? System.Windows.Media.Brushes.White;
+        VersionStatus.Visibility = Visibility.Visible;
+    }
+
+    private void InstallVersionBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_installVersion == null) return;
+        if (VersionCombo.SelectedItem is not System.Windows.Controls.ComboBoxItem item) return;
+        if (item.Tag is not string tag || string.IsNullOrWhiteSpace(tag)) return;
+
+        var installed = _service.CurrentVersion?.Ver ?? "";
+        if (string.Equals(tag, installed, StringComparison.OrdinalIgnoreCase))
+        {
+            SetVersionStatus(Strings.Get("ModPropVersionAlready"), "TextSecondary");
+            return;
+        }
+
+        // Install runs on the MAIN window's progress strip (like Verify / Repair),
+        // so close this non-modal dialog first — otherwise it sits over the bar.
+        var run = _installVersion;
+        Close();
+        _ = run(tag);
     }
 
     private void OpenFolderBtn_Click(object sender, RoutedEventArgs e)

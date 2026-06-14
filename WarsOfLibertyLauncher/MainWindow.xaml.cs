@@ -2920,7 +2920,19 @@ public partial class MainWindow : Window
             {
                 await RefreshTranslationIndexAsync(reportStatus: true);
                 return _cachedTranslationIndex;
-            })
+            },
+            // Pin/unpin "stay on this version" — re-apply the cached check result
+            // so the PLAY/UPDATE button + status reflect the new policy instantly,
+            // with no network round-trip.
+            onUpdatePolicyChanged: () =>
+            {
+                if (_checkResultCache.TryGetValue(_updateService.Profile.Id, out var r))
+                    ApplyCheckResult(r);
+            },
+            // Fase 1 — version picker (GitHubReleases only): list the repo's
+            // releases, and install a chosen one through the shared update path.
+            listVersions: () => ListGitHubVersionsAsync(),
+            installVersion: tag => InstallGitHubVersionAsync(tag))
         {
             Owner = this,
         };
@@ -4754,7 +4766,7 @@ public partial class MainWindow : Window
     /// Repairs the installation by re-downloading the WoL payload and
     /// re-copying the mod files over the existing install.
     /// </summary>
-    private async Task RepairInstallAsync(bool asUpdate = false)
+    private async Task RepairInstallAsync(bool asUpdate = false, string? targetReleaseTag = null)
     {
         if (_isBusy) return;
         bool updated = false;
@@ -4764,8 +4776,9 @@ public partial class MainWindow : Window
         // GitHubReleases). DelegatedExternal / Manual mods hit the empty-
         // URL branch and surface "no install URL" — the menu gating in
         // ApplyMenuVisibility hides Repair for them anyway, this is just
-        // belt-and-braces.
-        var payload = await ResolvePayloadUrlsAsync();
+        // belt-and-braces. targetReleaseTag (GitHubReleases only) installs a
+        // user-chosen version; null keeps the default approved-tag behaviour.
+        var payload = await ResolvePayloadUrlsAsync(overrideTag: targetReleaseTag);
         if (payload == null) return;
         var payloadUrls = payload.Urls;
         var payloadSha256 = payload.Sha256;
@@ -4786,7 +4799,7 @@ public partial class MainWindow : Window
             subtitle: Strings.Get("ProgressSubVerifying"),
             bar1Label: "ProgressBarVerify",
             bar2Label: "ProgressBarRepair",
-            retry: () => RepairInstallAsync(asUpdate));
+            retry: () => RepairInstallAsync(asUpdate, targetReleaseTag));
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarDownload");
         ProgressPanelControl.PatchProgress.Value = 0;
         ProgressPanelControl.OverallProgress.Value = 0;
@@ -4834,7 +4847,7 @@ public partial class MainWindow : Window
             // No phase reporter here — repair doesn't show the breadcrumb.
             await nativeInstaller.InstallModOnlyAsync(
                 _updateService.Profile,
-                ResolveInstallVersion(),
+                ResolveInstallVersion(overrideTag: targetReleaseTag),
                 payloadUrls,
                 installPath,
                 dlProgress,
@@ -4858,9 +4871,23 @@ public partial class MainWindow : Window
                 // is the approved tag, so the next CheckAsync sees installed ==
                 // approved and stops offering the update (hides the Update button).
                 var st = _config.GetState(_updateService.Profile.Id);
-                var laidDownVersion = ResolveInstallVersion();
+                var laidDownVersion = ResolveInstallVersion(overrideTag: targetReleaseTag);
                 if (!string.IsNullOrEmpty(laidDownVersion))
                     st.LastKnownVersion = laidDownVersion;
+
+                // Version switch (Fase 1): if the user installed a version OTHER
+                // than the recommended/approved one, PIN it so the launcher doesn't
+                // immediately offer to "update" them back to the approved tag (the
+                // same pause mechanism as Fase 0). Installing the approved version
+                // clears any stale pin so updates flow normally again.
+                if (targetReleaseTag != null)
+                {
+                    var approved = _updateService.Profile.GitHubReleases?.ApprovedReleaseTag ?? "";
+                    st.PinnedVersion =
+                        string.Equals(laidDownVersion, approved, StringComparison.OrdinalIgnoreCase)
+                            ? ""
+                            : laidDownVersion;
+                }
                 _config.Save();
                 updated = true;
 
@@ -4910,8 +4937,15 @@ public partial class MainWindow : Window
                 var profile = _updateService.Profile;
                 var ts = new TranslationService(
                     _updateService.InstallPath!, profile.Translations?.CoveredFiles);
+                // Reconcile translations against the version we actually installed.
+                // For a version SWITCH that's the chosen tag (not LatestVersion,
+                // which would be wrong when switching to an older release).
+                var installedVer = ResolveInstallVersion(overrideTag: targetReleaseTag);
                 var notice = ts.ReconcileAfterUpdate(
-                    _config, profile.Id, _updateService.LatestVersion?.Ver ?? ResolveInstallVersion());
+                    _config, profile.Id,
+                    targetReleaseTag != null
+                        ? installedVer
+                        : (_updateService.LatestVersion?.Ver ?? installedVer));
                 ShowTranslationRevertNotice(notice);
             }
             catch (Exception ex)
@@ -5123,6 +5157,23 @@ public partial class MainWindow : Window
     /// fast path and the post-network slow path share exactly the same
     /// rendering logic — no chance of drift between the two.
     /// </summary>
+    /// <summary>
+    /// True when the user has pinned this mod to its currently-installed version
+    /// (<see cref="ModState.PinnedVersion"/> == the detected version). While
+    /// pinned, the launcher PAUSES update prompts: the PLAY button stays "Play"
+    /// instead of flipping to "Update", and the secondary Update button is hidden.
+    /// The user opted to keep playing this version; they resume updates from Mod
+    /// Properties. Nothing is auto-updated either way — this only hides the prompt.
+    /// </summary>
+    private bool IsUpdatePausedByPin(UpdateService.CheckResult result)
+    {
+        var pinned = _config.GetState(_updateService.Profile.Id).PinnedVersion;
+        if (string.IsNullOrEmpty(pinned)) return false;
+        var cur = result.CurrentVersion?.Ver;
+        return !string.IsNullOrEmpty(cur)
+            && string.Equals(pinned, cur, StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ApplyCheckResult(UpdateService.CheckResult result)
     {
         InstallPathText.Text = _updateService.InstallPath ?? "(not detected)";
@@ -5181,21 +5232,26 @@ public partial class MainWindow : Window
                 // UpdateButton_Click → RepairInstallAsync(asUpdate: true).
                 var ghCur = result.CurrentVersion?.Ver;
                 var ghLatest = result.LatestVersion?.Ver;
-                bool ghUpdate =
+                bool ghHasNewer =
                     _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases
                     && !string.IsNullOrEmpty(ghCur) && !string.IsNullOrEmpty(ghLatest)
                     && !string.Equals(ghCur, ghLatest, StringComparison.OrdinalIgnoreCase);
+                // The user can pause the prompt by pinning their version (Fase 0).
+                bool ghPaused = ghHasNewer && IsUpdatePausedByPin(result);
+                bool ghUpdate = ghHasNewer && !ghPaused;
 
                 ActionPanelControl.UpdateButton.Visibility =
                     ghUpdate ? Visibility.Visible : Visibility.Collapsed;
 
                 SetStatus(ghUpdate
                     ? Strings.Format("StatusUpdateAvailableGh", ghLatest!)
-                    : Strings.Format(
-                        _updateService.Profile.IsStockGame
-                            ? "StatusStockReady"
-                            : "StatusReadyExternalUpdates",
-                        _updateService.Profile.DisplayName));
+                    : ghPaused
+                        ? Strings.Format("StatusUpdatePausedPinned", ghCur!)
+                        : Strings.Format(
+                            _updateService.Profile.IsStockGame
+                                ? "StatusStockReady"
+                                : "StatusReadyExternalUpdates",
+                            _updateService.Profile.DisplayName));
             }
             else if (_updateService.Profile.IsStockGame)
             {
@@ -5268,7 +5324,11 @@ public partial class MainWindow : Window
         //      full chain — that's a fresh install, not an update. Primary
         //      becomes Install and the Update button stays hidden.
         bool versionKnown = result.CurrentVersion != null;
-        ActionPanelControl.UpdateButton.Visibility = (versionKnown && _pendingDownloads.Count > 0)
+        // While the user is pinned to their installed version (Fase 0), pause the
+        // prompt: hide the secondary Update button and (below) keep PLAY as Play.
+        bool updatePaused = IsUpdatePausedByPin(result);
+        ActionPanelControl.UpdateButton.Visibility =
+            (versionKnown && _pendingDownloads.Count > 0 && !updatePaused)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -5299,6 +5359,15 @@ public partial class MainWindow : Window
                     result.LatestVersion?.Ver,
                     _updateService.Profile.OfficialWebsite));
             }
+            SetPrimaryAction(PrimaryAction.Play);
+            ResetProgressUI();
+        }
+        else if (updatePaused)
+        {
+            // User pinned this version: patches exist but we don't push them.
+            // PLAY stays Play (not Update) so they keep playing their version,
+            // and the status explains updates are paused (resume in Mod Properties).
+            SetStatus(Strings.Format("StatusUpdatePausedPinned", result.CurrentVersion?.Ver));
             SetPrimaryAction(PrimaryAction.Play);
             ResetProgressUI();
         }
@@ -6049,7 +6118,8 @@ public partial class MainWindow : Window
     /// On failure the helper sets a user-facing status and returns null —
     /// callers should bail (no return-bool noise needed).
     /// </summary>
-    private async Task<PayloadResolution?> ResolvePayloadUrlsAsync(UpdateService? targetService = null)
+    private async Task<PayloadResolution?> ResolvePayloadUrlsAsync(
+        UpdateService? targetService = null, string? overrideTag = null)
     {
         var service = targetService ?? _updateService;
         var profile = service.Profile;
@@ -6065,8 +6135,10 @@ public partial class MainWindow : Window
             }
             try
             {
+                // overrideTag (when set) installs a user-chosen version instead of
+                // the approved tag; null keeps the default approved-tag behaviour.
                 var asset = await new GitHubReleaseDownloader()
-                    .ResolveAssetAsync(ghs, default);
+                    .ResolveAssetAsync(ghs, overrideTag, default);
                 // External-hosting path carries a SHA-256 pin (required by
                 // ResolveAssetAsync itself). Regular GitHub-asset path
                 // carries no SHA — we trust the asset CDN, like before.
@@ -6105,18 +6177,46 @@ public partial class MainWindow : Window
     /// registry based on the active profile's update mechanism. Shared by
     /// <see cref="InstallAsync"/> and <see cref="RepairInstallAsync"/>.
     /// </summary>
-    private string ResolveInstallVersion(UpdateService? targetService = null)
+    private string ResolveInstallVersion(UpdateService? targetService = null, string? overrideTag = null)
     {
         var service = targetService ?? _updateService;
         var profile = service.Profile;
         return profile.UpdateMechanism switch
         {
+            // overrideTag stamps the user-chosen version; else the approved tag.
             ModUpdateMechanism.GitHubReleases =>
-                profile.GitHubReleases?.ApprovedReleaseTag ?? "",
+                string.IsNullOrWhiteSpace(overrideTag)
+                    ? (profile.GitHubReleases?.ApprovedReleaseTag ?? "")
+                    : overrideTag.Trim(),
             _ => service.CurrentVersion?.Ver
                 ?? service.LatestVersion?.Ver ?? "",
         };
     }
+
+    /// <summary>
+    /// Fase 1 — enumerate the active GitHubReleases mod's published versions so
+    /// the Mod Properties picker can list them. Empty for non-GitHubReleases mods
+    /// or when no source repo is configured. Network errors propagate so the
+    /// dialog can show a "couldn't load versions" hint.
+    /// </summary>
+    private async Task<IReadOnlyList<GitHubReleaseDownloader.ReleaseInfo>> ListGitHubVersionsAsync()
+    {
+        var ghs = _updateService.Profile.GitHubReleases;
+        if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.GitHubReleases
+            || ghs == null || string.IsNullOrWhiteSpace(ghs.SourceRepo))
+            return Array.Empty<GitHubReleaseDownloader.ReleaseInfo>();
+        return await new GitHubReleaseDownloader().ListReleasesAsync(ghs.SourceRepo);
+    }
+
+    /// <summary>
+    /// Fase 1 — install a user-chosen GitHubReleases version (re-overlay the
+    /// chosen tag's payload via the shared repair/update path). Routes through
+    /// <see cref="RepairInstallAsync"/> with the target tag so download +
+    /// verify + manifest-stamp + the auto-pin all run exactly like a normal
+    /// update, just for a specific version.
+    /// </summary>
+    private Task InstallGitHubVersionAsync(string tag) =>
+        RepairInstallAsync(asUpdate: true, targetReleaseTag: tag);
 
     /// <summary>
     /// Full first-time install flow (native — no Inno Setup):
@@ -7581,9 +7681,10 @@ public partial class MainWindow : Window
         else if (hasUpdate) header += $"  🆕 → v{entry.Version}";
 
         // Compatibility: a pack the translator didn't declare for this mod version
-        // is blocked (disabled) here — matching the LANGUAGE-tab cards — UNLESS it's
-        // the currently active pack (which demonstrably works). Empty declared list
-        // is "unknown", not blocked.
+        // is shown with a warning (amber + ⚠) but NOT disabled — matching the
+        // LANGUAGE-tab cards — so the user can apply it under their own
+        // responsibility (the apply dialog confirms first). Empty declared list is
+        // "unknown", not a warning. The active pack stays green.
         bool incompatible = Models.TranslationCompat.IsVersionBlocked(
             entry.CompatibleWith, currentModVersion);
         if (incompatible) header += "  ⚠";
@@ -7591,8 +7692,9 @@ public partial class MainWindow : Window
         var item = new System.Windows.Controls.MenuItem
         {
             Header = header,
-            Foreground = Brush(isActive ? "#9bd99b" : (incompatible ? "#888" : "White")),
-            IsEnabled = isActive || !incompatible,
+            // Active = green; incompatible = amber warning; otherwise white. Always
+            // enabled — incompatibility is a warning the user can override, not a block.
+            Foreground = Brush(isActive ? "#9bd99b" : (incompatible ? "#E0B341" : "White")),
         };
         item.Click += (_, _) => ApplyTranslationAsync(entry);
         return item;
