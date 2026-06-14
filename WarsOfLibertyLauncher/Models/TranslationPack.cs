@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace WarsOfLibertyLauncher.Models;
@@ -185,6 +186,43 @@ public static class TranslationCompat
         if (string.IsNullOrWhiteSpace(packTargetMod)) return true;  // unverified → allow
         if (string.IsNullOrWhiteSpace(modId)) return true;
         return string.Equals(packTargetMod.Trim(), modId.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Display order for the language list (Mod Properties tab + gear menu):
+    /// the ACTIVE pack first, then packs COMPATIBLE with the installed mod version
+    /// (so the one the user can actually use surfaces to the top), then NEWEST
+    /// first, then by name. "Newest" is the position of the pack's id in
+    /// <paramref name="registryOrder"/> — the index built from GitHub releases,
+    /// which is newest-first — so a lower rank means a more recent release; packs
+    /// not in the registry (local-only/sideloaded) sort last. Pure + WPF-free so
+    /// both surfaces share one ordering and it can be unit-tested.
+    /// </summary>
+    public static List<TranslationIndexEntry> OrderForDisplay(
+        IEnumerable<TranslationIndexEntry> entries,
+        IReadOnlyList<TranslationIndexEntry>? registryOrder,
+        string? modVersion,
+        string? activeId)
+    {
+        var rank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (registryOrder != null)
+            for (int i = 0; i < registryOrder.Count; i++)
+            {
+                var id = registryOrder[i].Id;
+                if (!string.IsNullOrEmpty(id) && !rank.ContainsKey(id))
+                    rank[id] = i;
+            }
+
+        int RankOf(string id) => rank.TryGetValue(id ?? "", out var r) ? r : int.MaxValue;
+        bool IsActive(string id) => !string.IsNullOrEmpty(activeId)
+            && string.Equals(id, activeId, StringComparison.OrdinalIgnoreCase);
+
+        return entries
+            .OrderBy(e => IsActive(e.Id) ? 0 : 1)                                  // active pack first
+            .ThenBy(e => IsVersionBlocked(e.CompatibleWith, modVersion) ? 1 : 0)   // compatible/unknown before incompatible
+            .ThenBy(e => RankOf(e.Id))                                             // newest release first
+            .ThenBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase)          // stable, readable tiebreak
+            .ToList();
     }
 }
 

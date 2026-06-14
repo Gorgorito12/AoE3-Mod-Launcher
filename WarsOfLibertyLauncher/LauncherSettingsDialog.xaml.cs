@@ -170,6 +170,8 @@ public partial class LauncherSettingsDialog : Window
         ClearAssetsHint.Text = Strings.Get("DlgLauncherSettingsClearAssetsHint");
         ClearTempButton.Content = Strings.Get("DlgLauncherSettingsClearTemp");
         ClearTempHint.Text = Strings.Get("DlgLauncherSettingsClearTempHint");
+        OpenDataFolderButton.Content = "📂  " + Strings.Get("DlgLauncherSettingsOpenDataFolder");
+        OpenDataFolderHint.Text = Strings.Get("DlgLauncherSettingsOpenDataFolderHint");
 
         PrivacyHeader.Text = Strings.Get("DlgLauncherSettingsPrivacyHeader");
         PrivacyDescription.Text = Strings.Get("DlgLauncherSettingsPrivacyDescription");
@@ -324,6 +326,29 @@ public partial class LauncherSettingsDialog : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Open privacy policy failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Opens the launcher's per-user data folder (%LocalAppData%\AoE3ModLauncher)
+    /// in Explorer — where config, the debug log and caches live now that they no
+    /// longer clutter the .exe's own folder. Creates it first so the open never
+    /// fails on a brand-new install that hasn't written anything yet.
+    /// </summary>
+    private void OpenDataFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(AppPaths.DataDir);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = AppPaths.DataDir,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Open data folder failed: {ex.Message}");
         }
     }
 

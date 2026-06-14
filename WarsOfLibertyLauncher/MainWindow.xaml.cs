@@ -90,17 +90,12 @@ public partial class MainWindow : Window
         MainTabsControl.TabChangelog.Click += TabChangelog_Click;
         MainTabsControl.TabAyuda.Click += TabAyuda_Click;
         // v0.9 mod browser: card clicks open the detail panel inside the
-        // UserControl. The detail panel's primary action raises
-        // SwitchActiveRequested, which we forward to LoadModProfile (same
-        // busy/in-flight guard as the top-strip tiles). OpenWebsiteRequested
-        // opens the mod's official URL in the default browser.
-        ModsBrowserView.SwitchActiveRequested += ModsBrowserView_SwitchActiveRequested;
+        // UserControl; OpenWebsiteRequested opens the mod's official URL in the
+        // default browser. Per-mod install/update/uninstall/repair/play/switch
+        // actions live on the Dashboard now (PLAY state machine + gear menu) —
+        // the Workshop only browses + toggles "my mods" (Add/RemoveFromCollection
+        // below), so the old typed action events were removed.
         ModsBrowserView.OpenWebsiteRequested += ModsBrowserView_OpenWebsiteRequested;
-        ModsBrowserView.InstallRequested += ModsBrowserView_InstallRequested;
-        ModsBrowserView.UninstallRequested += ModsBrowserView_UninstallRequested;
-        ModsBrowserView.UpdateRequested += ModsBrowserView_UpdateRequested;
-        ModsBrowserView.PlayRequested += ModsBrowserView_PlayRequested;
-        ModsBrowserView.RepairRequested += ModsBrowserView_RepairRequested;
         ModsBrowserView.RefreshCatalogRequested += ModsBrowserView_RefreshCatalogRequested;
         ModsBrowserView.AddLocalModRequested += ModsBrowserView_AddLocalModRequested;
         ModsBrowserView.PublishRequested += ModsBrowserView_PublishRequested;
@@ -1162,7 +1157,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var dialog = new LauncherSettingsDialog(_config) { Owner = this };
+        // NO Owner on purpose: an owned window with ShowInTaskbar=True (WPF
+        // WS_EX_APPWINDOW) minimizes its owner when closed — that's the "closing
+        // settings minimizes the launcher" bug. Like LobbyWindow, this is an
+        // independent top-level window (its own taskbar button); Activate() below
+        // brings it to front on first open.
+        var dialog = new LauncherSettingsDialog(_config);
         _launcherSettingsDialog = dialog;
 
         // Closed (fires for Save, Cancel, ✕, Esc, and Alt+F4) is the
@@ -1202,6 +1202,7 @@ public partial class MainWindow : Window
         };
 
         dialog.Show();
+        dialog.Activate(); // ownerless → ensure it comes to front on first open
     }
 
     // ------------------------------------------------------------------------
@@ -2675,18 +2676,6 @@ public partial class MainWindow : Window
     private void TopTabSettings_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Settings);
 
     /// <summary>
-    /// The detail panel's primary action — forward to the existing
-    /// LoadModProfile flow so we share the busy/in-flight guards with
-    /// the top-strip tiles. After the switch the detail panel stays
-    /// open so the user sees the badge update from "not active" to the
-    /// active state on the next RefreshModsBrowser tick.
-    /// </summary>
-    private void ModsBrowserView_SwitchActiveRequested(object? sender, ModProfile profile)
-    {
-        LoadModProfile(profile);
-    }
-
-    /// <summary>
     /// Opens the mod's <c>OfficialWebsite</c> in the user's default browser.
     /// The url has already been validated by the catalog schema (or the
     /// hard-coded built-in profile) before getting to this point.
@@ -2706,58 +2695,6 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write($"OpenWebsite failed for '{url}': {ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// Update flow from the browser. The Update / Apply pipeline currently
-    /// only knows how to upgrade the active mod (it reads pending downloads
-    /// off <c>_updateService</c>); so when the user clicks Update on a
-    /// non-active row we switch to that mod first via <see cref="LoadModProfile"/>
-    /// and let the user re-click after CheckAsync settles. For the active
-    /// mod we go straight to <see cref="ApplyAsync"/>.
-    /// </summary>
-    private async void ModsBrowserView_UpdateRequested(object? sender, ModProfile profile)
-    {
-        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
-        {
-            await ApplyAsync();
-            RefreshModsBrowser();
-            return;
-        }
-        // Non-active: switch first. LoadModProfile triggers CheckAsync which
-        // repopulates the cache; the browser will show Update again once
-        // pending downloads land in _checkResultCache.
-        LoadModProfile(profile);
-    }
-
-    /// <summary>
-    /// Play from the browser. Same active/non-active split as Update —
-    /// the existing PlayButton path runs against the active service.
-    /// </summary>
-    private void ModsBrowserView_PlayRequested(object? sender, ModProfile profile)
-    {
-        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
-        {
-            PlayButton_Click(this, new RoutedEventArgs());
-            return;
-        }
-        LoadModProfile(profile);
-    }
-
-    /// <summary>
-    /// Repair from the browser. RepairInstallAsync uses the active service
-    /// internally; for non-active rows we switch first and let the user
-    /// re-trigger after CheckAsync confirms the install state.
-    /// </summary>
-    private async void ModsBrowserView_RepairRequested(object? sender, ModProfile profile)
-    {
-        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
-        {
-            await RepairInstallAsync();
-            RefreshModsBrowser();
-            return;
-        }
-        LoadModProfile(profile);
     }
 
     /// <summary>
@@ -2932,10 +2869,10 @@ public partial class MainWindow : Window
             // Fase 1 — version picker (GitHubReleases only): list the repo's
             // releases, and install a chosen one through the shared update path.
             listVersions: () => ListGitHubVersionsAsync(),
-            installVersion: tag => InstallGitHubVersionAsync(tag))
-        {
-            Owner = this,
-        };
+            installVersion: tag => InstallGitHubVersionAsync(tag));
+        // NO Owner on purpose: an owned window with ShowInTaskbar=True minimizes
+        // its owner when closed (the "closing properties minimizes the launcher"
+        // bug). Independent top-level window like LobbyWindow; Activate() on open.
         _modPropertiesDialog = dialog;
 
         // Closed (fires for the ✕ button, Esc, and Alt+F4) is the
@@ -2961,59 +2898,7 @@ public partial class MainWindow : Window
         };
 
         dialog.Show();
-    }
-
-    /// <summary>
-    /// Install a mod without switching the active one. We build a fresh
-    /// UpdateService scoped to the requested profile and pass it into the
-    /// existing InstallAsync pipeline (refactored in commit 1 to accept an
-    /// optional target). The active mod's UpdateService and the player's
-    /// current profile selection stay untouched. After the install finishes
-    /// (success or failure), we invalidate the cached CheckResult for that
-    /// profile so the browser reflects the new install state on the next
-    /// refresh.
-    /// </summary>
-    private async void ModsBrowserView_InstallRequested(object? sender, ModProfile profile)
-    {
-        // Reuse the same active-profile install path when the user happened
-        // to click Install on the active mod — InstallAsync(null) already
-        // wires that case correctly (uses the existing _updateService).
-        if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
-        {
-            await InstallAsync();
-            return;
-        }
-
-        UpdateService? target = null;
-        try
-        {
-            target = new UpdateService(_config, profile);
-            await InstallAsync(target);
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"Install from browser failed ({profile.Id}): {ex}");
-            SetStatus($"Install failed: {ex.Message}");
-        }
-        finally
-        {
-            InvalidateCheckCacheFor(profile.Id);
-            RefreshModsBrowser();
-        }
-
-        // After install completes, if the mod actually landed on disk,
-        // promote it to active. Otherwise the Dashboard stays pointed
-        // at whatever was active before (typically WoL) and the user
-        // has to manually switch — surprising flow because they just
-        // explicitly chose to install this mod. Detection re-probes
-        // disk via IsModInstalled, so this is robust against a
-        // cancelled / partial install (no promotion when nothing
-        // actually wrote out).
-        if (IsModInstalled(profile)
-            && !string.Equals(_updateService.Profile.Id, profile.Id, StringComparison.OrdinalIgnoreCase))
-        {
-            LoadModProfile(profile);
-        }
+        dialog.Activate(); // ownerless → ensure it comes to front on first open
     }
 
     /// <summary>
@@ -3111,113 +2996,6 @@ public partial class MainWindow : Window
         dlg.ErrorWebsiteInvalid = Strings.Get("PublishErrorWebsite");
 
         dlg.GoTo(1);
-    }
-
-    /// <summary>
-    /// Uninstall a mod without changing the active selection. Mirrors the
-    /// gear-menu uninstall flow (UninstallMenuItem_Click) but resolves the
-    /// install path from per-mod state instead of the active service, and
-    /// only touches the active LauncherConfig fields when the uninstalled
-    /// mod happens to be the active one.
-    /// </summary>
-    private async void ModsBrowserView_UninstallRequested(object? sender, ModProfile profile)
-    {
-        if (_isBusy && !_isCheckOnly)
-        {
-            SetStatus(Strings.Get("DlgModSwitchBusyBody"));
-            return;
-        }
-        if (!EnsureGameNotRunning()) return;
-
-        // Resolve the install path: active-service if this is the active mod,
-        // otherwise the per-mod state, otherwise an on-disk probe. Anything
-        // that returns "" hits the "Not installed" branch — UninstallService
-        // returns NothingToDo and we skip the dialog.
-        bool isActive = string.Equals(
-            profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
-        string? installPath = isActive
-            ? _updateService.InstallPath
-            : _config.GetState(profile.Id).InstallPath;
-        if (string.IsNullOrEmpty(installPath))
-            installPath = ResolveProbedInstallPath(profile);
-        if (string.IsNullOrEmpty(installPath))
-        {
-            SetStatus(Strings.Get("StatusNotInstalled"));
-            return;
-        }
-
-        var uninstaller = new UninstallService();
-        var plan = uninstaller.Plan(profile, installPath);
-        var dialog = new UninstallDialog(plan, profile.DisplayName, profile.InstallProbeFile)
-        {
-            Owner = this
-        };
-        if (dialog.ShowDialog() != true) return;
-        if (plan.Mode != Services.UninstallMode.Valid) return;
-
-        SetBusy(true);
-        StartProgressPanel(
-            ProgressOperation.Uninstall,
-            title: Strings.Format("ProgressTitleUninstalling", profile.DisplayName),
-            subtitle: Strings.Get("ProgressSubRemoving"),
-            bar1Label: "ProgressBarProcess",
-            bar2Label: "ProgressBarCleanup");
-        SetStatus(Strings.Format("StatusUninstalling", profile.DisplayName));
-
-        var progress = new Progress<(double Pct, string Step)>(p =>
-        {
-            ProgressPanelControl.PatchProgress.Value = p.Pct;
-            ProgressPanelControl.OverallProgress.Value = p.Pct;
-            ProgressPanelControl.PatchBytesText.Text = $"{p.Pct:0}%";
-            ProgressPanelControl.OverallBytesText.Text = $"{p.Pct:0}%";
-            ProgressPanelControl.ProgressSubtitleText.Text = p.Step;
-            SetStatus(p.Step);
-        });
-
-        try
-        {
-            var result = await uninstaller.UninstallAsync(profile, plan, dialog.Options, progress);
-
-            // Per-mod state writeback so re-detection runs from scratch the
-            // next time this profile becomes active. GameExecutable is global
-            // — only clear it when the uninstalled mod is the active one,
-            // otherwise we'd break the active mod's play button.
-            if (dialog.Options.ResetConfig || result.Success)
-            {
-                _config.GetState(profile.Id).InstallPath = "";
-                if (isActive) _config.GameExecutable = "";
-                _config.Save();
-            }
-
-            if (result.Success)
-            {
-                ShowProgressCompleted("ProgressTitleCompleted",
-                    Strings.Format(
-                        "StatusUninstallSuccess",
-                        profile.DisplayName, result.FilesDeleted));
-            }
-            else
-            {
-                foreach (var err in result.Errors)
-                    DiagnosticLog.Write($"  uninstall error: {err}");
-                ShowProgressError(Strings.Format("StatusUninstallPartial", result.Errors.Count));
-            }
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"Uninstall from browser failed ({profile.Id}): {ex}");
-            ShowProgressError(ex.Message);
-        }
-        finally
-        {
-            SetBusy(false);
-            InvalidateCheckCacheFor(profile.Id);
-            // Only re-run the active check when the uninstalled mod is the
-            // active one — otherwise the existing CheckAsync flow would
-            // re-probe a different profile.
-            if (isActive) await CheckAsync();
-            RefreshModsBrowser();
-        }
     }
 
     /// <summary>
@@ -5838,7 +5616,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var logPath = Path.Combine(AppContext.BaseDirectory, "launcher-debug.log");
+            var logPath = AppPaths.LogFile;
             if (!File.Exists(logPath)) return;
             Process.Start(new ProcessStartInfo
             {
@@ -7255,6 +7033,11 @@ public partial class MainWindow : Window
     {
         _isBusy = busy;
         _isCheckOnly = busy && checkOnly;
+
+        // Lock the Mod Properties language tab during REAL ops (install / update /
+        // repair) so the user can't swap translation data files mid-write. The
+        // read-only check (checkOnly) doesn't mutate the install, so it doesn't lock.
+        _modPropertiesDialog?.SetModBusy(busy && !checkOnly);
         // Update button is always disabled while busy — we genuinely don't
         // know what's available to download until the manifest fetch
         // completes, so letting the user click "Update" early would be
@@ -7596,7 +7379,11 @@ public partial class MainWindow : Window
         else
         {
             var currentMod = _updateService.CurrentVersion?.Ver;
-            foreach (var entry in entries.Values.OrderBy(e => e.Name))
+            // Active first → compatible-with-installed-version → newest → name
+            // (shared with the Mod Properties tab via OrderForDisplay).
+            var ordered = Models.TranslationCompat.OrderForDisplay(
+                entries.Values, _cachedTranslationIndex?.Translations, currentMod, activeId);
+            foreach (var entry in ordered)
             {
                 var item = BuildLanguageMenuItem(entry, installed, activeId, currentMod);
                 ActionPanelControl.MenuGameLanguage.Items.Add(item);
@@ -7688,13 +7475,18 @@ public partial class MainWindow : Window
         bool incompatible = Models.TranslationCompat.IsVersionBlocked(
             entry.CompatibleWith, currentModVersion);
         if (incompatible) header += "  ⚠";
+        // Positive counterpart: the translator declared this installed version → ✓ green.
+        bool compatible = !isActive && !incompatible
+            && Models.TranslationCompat.IsCompatible(entry.CompatibleWith, currentModVersion);
+        if (compatible) header += "  ✓";
 
         var item = new System.Windows.Controls.MenuItem
         {
             Header = header,
-            // Active = green; incompatible = amber warning; otherwise white. Always
-            // enabled — incompatibility is a warning the user can override, not a block.
-            Foreground = Brush(isActive ? "#9bd99b" : (incompatible ? "#E0B341" : "White")),
+            // Active / compatible = green; incompatible = amber warning; otherwise
+            // white (unknown). Always enabled — incompatibility is a warning the
+            // user can override, not a block.
+            Foreground = Brush(isActive || compatible ? "#9bd99b" : (incompatible ? "#E0B341" : "White")),
         };
         item.Click += (_, _) => ApplyTranslationAsync(entry);
         return item;

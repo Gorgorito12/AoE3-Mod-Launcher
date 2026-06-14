@@ -6,7 +6,7 @@
         Title="Launcher Settings"
         Height="600" Width="820"
         MinHeight="540" MinWidth="760"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
         AllowsTransparency="False"
@@ -407,7 +407,7 @@
                                        Margin="12,0,0,0"/>
                         </Grid>
 
-                        <Grid>
+                        <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
@@ -419,6 +419,25 @@
                                     Click="ClearTempButton_Click"/>
                             <TextBlock Grid.Column="1"
                                        x:Name="ClearTempHint"
+                                       Style="{StaticResource HintText}"
+                                       VerticalAlignment="Center"
+                                       Margin="12,0,0,0"/>
+                        </Grid>
+
+                        <!-- Open the per-user data folder (%LocalAppData%\AoE3ModLauncher)
+                             where config / logs / caches live. -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0"
+                                    x:Name="OpenDataFolderButton"
+                                    Style="{StaticResource PropertyActionButton}"
+                                    MinWidth="180"
+                                    Click="OpenDataFolderButton_Click"/>
+                            <TextBlock Grid.Column="1"
+                                       x:Name="OpenDataFolderHint"
                                        Style="{StaticResource HintText}"
                                        VerticalAlignment="Center"
                                        Margin="12,0,0,0"/>

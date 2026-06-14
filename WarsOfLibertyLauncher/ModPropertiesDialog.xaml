@@ -6,7 +6,7 @@
         Title="Mod properties"
         Height="640" Width="900"
         MinHeight="540" MinWidth="780"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
         AllowsTransparency="False"
@@ -549,6 +549,22 @@
                         <TextBlock x:Name="LblLanguageCurrent"
                                    Style="{StaticResource DialogFieldLabel}"
                                    Margin="0,0,0,6"/>
+                        <!-- Shown while the mod is installing/updating: the whole
+                             language list is locked (see SetModBusy). -->
+                        <Border x:Name="LanguageBusyHint"
+                                MaxWidth="520" HorizontalAlignment="Left"
+                                Margin="0,0,0,10"
+                                Padding="12,8"
+                                CornerRadius="6"
+                                Background="{DynamicResource BgPanel}"
+                                BorderBrush="{DynamicResource AccentBrush}"
+                                BorderThickness="1"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="LanguageBusyHintText"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       FontSize="{StaticResource FontSizeBody}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
                         <StackPanel x:Name="LanguageCardList" MaxWidth="520" HorizontalAlignment="Left"/>
                         <TextBlock x:Name="LanguageEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"

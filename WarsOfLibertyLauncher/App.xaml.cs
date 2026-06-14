@@ -100,6 +100,10 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // Create the per-user data dir + migrate a pre-existing next-to-exe config
+        // BEFORE anything reads config or writes the debug log (MainWindow's ctor).
+        Services.AppPaths.EnsureReady();
+
         EventManager.RegisterClassHandler(
             typeof(Window),
             FrameworkElement.LoadedEvent,

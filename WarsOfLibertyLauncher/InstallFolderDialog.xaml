@@ -63,6 +63,16 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,14"/>
 
+        <!-- First-run reminder: open the original game at least once
+             before installing (non-blocking, shown only when AoE3's
+             user-data folder is missing). -->
+        <TextBlock x:Name="FirstRunWarningText"
+                   FontSize="{StaticResource FontSizeCaption}"
+                   Foreground="#d4a04a"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,14"
+                   Visibility="Collapsed"/>
+
         <!-- Destination folder -->
         <TextBlock x:Name="LblFolder"
                    FontSize="{StaticResource FontSizeCaption}"

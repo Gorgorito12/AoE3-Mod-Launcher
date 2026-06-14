@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using WarsOfLibertyLauncher.Models;
 using Xunit;
 
@@ -39,5 +41,41 @@ public class TranslationCompatTests
         Assert.True(TranslationCompat.TargetModMatches("", "wol"));        // legacy pack → allowed
         Assert.True(TranslationCompat.TargetModMatches(null, "wol"));      // legacy → allowed
         Assert.False(TranslationCompat.TargetModMatches("wol", "improvement-mod")); // wrong mod
+    }
+
+    [Fact]
+    public void OrderForDisplay_CompatibleFirstThenNewest()
+    {
+        // registryOrder is newest-first (as GitHub /releases returns it).
+        var registry = new List<TranslationIndexEntry>
+        {
+            new() { Id = "es",     Name = "Español",       CompatibleWith = { "1.2.0c2" } }, // newest, INCOMPATIBLE
+            new() { Id = "es-419", Name = "Español (LatAm)", CompatibleWith = { "1.2.0d" } }, // older, COMPATIBLE
+            new() { Id = "fr",     Name = "Français",      CompatibleWith = { "1.2.0d" } }, // oldest, COMPATIBLE
+        };
+
+        var ordered = TranslationCompat.OrderForDisplay(
+            registry, registry, modVersion: "1.2.0d", activeId: "");
+        var ids = ordered.Select(e => e.Id).ToList();
+
+        // Compatible packs (es-419, fr) come before the incompatible one (es).
+        // Within compatible, newest-release-first → es-419 (rank 1) before fr (rank 2).
+        Assert.Equal(new[] { "es-419", "fr", "es" }, ids);
+    }
+
+    [Fact]
+    public void OrderForDisplay_ActivePackFloatsToTop()
+    {
+        var registry = new List<TranslationIndexEntry>
+        {
+            new() { Id = "es",     Name = "Español",       CompatibleWith = { "1.2.0d" } }, // compatible
+            new() { Id = "es-419", Name = "Español (LatAm)", CompatibleWith = { "1.2.0c2" } }, // incompatible but ACTIVE
+        };
+
+        var ordered = TranslationCompat.OrderForDisplay(
+            registry, registry, modVersion: "1.2.0d", activeId: "es-419");
+
+        // Active pack is first even though it's version-incompatible.
+        Assert.Equal("es-419", ordered[0].Id);
     }
 }

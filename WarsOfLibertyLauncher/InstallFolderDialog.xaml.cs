@@ -48,6 +48,36 @@ public partial class InstallFolderDialog : Window
 
         UpdateAoE3Display();
         UpdateDiskSpace();
+        UpdateFirstRunWarning();
+    }
+
+    /// <summary>
+    /// Shows a non-blocking reminder to open the original Age of Empires III
+    /// at least once before installing the mod. The mod overlays a full AoE3
+    /// clone, but the base game generates its per-user configuration files on
+    /// first launch — so installing before that first run can leave the mod
+    /// without those files. Heuristic: the absence of AoE3's user-data folder
+    /// (<c>Documents\My Games\Age of Empires 3</c>) suggests the game was never
+    /// run. This only warns; it never disables the Install button (the folder
+    /// can be missing for unrelated reasons, e.g. a moved profile).
+    /// </summary>
+    private void UpdateFirstRunWarning()
+    {
+        bool launchedBefore = false;
+        try
+        {
+            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (!string.IsNullOrEmpty(docs))
+                launchedBefore = Directory.Exists(
+                    Path.Combine(docs, "My Games", "Age of Empires 3"));
+        }
+        catch { }
+
+        if (!launchedBefore)
+            FirstRunWarningText.Text = Strings.Get("InstallGameNotLaunchedWarning");
+        FirstRunWarningText.Visibility = launchedBefore
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void ApplyLanguage()

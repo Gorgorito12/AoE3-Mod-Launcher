@@ -69,6 +69,11 @@ public partial class ModPropertiesDialog : Window
     private readonly Func<Task<IReadOnlyList<GitHubReleaseDownloader.ReleaseInfo>>>? _listVersions;
     private readonly Func<string, Task>? _installVersion;
 
+    /// <summary>True while the mod is installing/updating/repairing — locks the
+    /// whole language list (you must not swap data files mid-install). Driven by
+    /// MainWindow.SetBusy via <see cref="SetModBusy"/>.</summary>
+    private bool _modBusy;
+
     public ModPropertiesDialog(
         ModProfile profile,
         UpdateService service,
@@ -195,6 +200,7 @@ public partial class ModPropertiesDialog : Window
         LblLanguageDesc.Text = Strings.Get("ModPropLanguageDesc");
         RefreshTranslationsBtn.Content = Strings.Get("DlgLangRefreshButton");
         LblLanguageCurrent.Text = Strings.Get("ModPropLanguageCurrent");
+        LanguageBusyHintText.Text = Strings.Get("LanguageBusyHint");
         LanguageEmptyHint.Text = Strings.Get("ModPropNoTranslations");
 
         // The header close ✕ is now the shared controls:TitleBar's own
@@ -361,13 +367,18 @@ public partial class ModPropertiesDialog : Window
     {
         LanguageCardList.Children.Clear();
 
+        // While the mod is installing/updating, lock the whole list: show the
+        // banner and disable the Refresh button (cards render disabled below).
+        LanguageBusyHint.Visibility = _modBusy ? Visibility.Visible : Visibility.Collapsed;
+        RefreshTranslationsBtn.IsEnabled = !_modBusy;
+
         var activeId = _config.GetActiveState().ActiveTranslationId ?? "";
         var modVersion = _service.CurrentVersion?.Ver;
 
         // English (default) — always available.
         LanguageCardList.Children.Add(BuildLanguageCard(
             "🌐", Strings.Get("MenuLangEnglish"), "", null, "",
-            isActive: string.IsNullOrEmpty(activeId), blocked: false,
+            isActive: string.IsNullOrEmpty(activeId), blocked: false, compatible: false,
             onUse: () => _revertToEnglish?.Invoke()));
 
         var entries = new Dictionary<string, TranslationIndexEntry>(StringComparer.OrdinalIgnoreCase);
@@ -390,7 +401,11 @@ public partial class ModPropertiesDialog : Window
         }
         catch { /* probe failure is non-fatal */ }
 
-        foreach (var entry in entries.Values.OrderBy(e => e.Name))
+        // Active first → compatible-with-installed-version → newest → name
+        // (shared with the gear menu via TranslationCompat.OrderForDisplay).
+        var ordered = TranslationCompat.OrderForDisplay(
+            entries.Values, _translationIndex?.Translations, modVersion, activeId);
+        foreach (var entry in ordered)
         {
             bool isActive = string.Equals(entry.Id, activeId, StringComparison.OrdinalIgnoreCase);
             // Block on version grounds only when NOT the active pack (the active
@@ -398,10 +413,14 @@ public partial class ModPropertiesDialog : Window
             // word, so this is a pre-filter, not the sole authority.
             bool blocked = !isActive
                 && TranslationCompat.IsVersionBlocked(entry.CompatibleWith, modVersion);
+            // Positive counterpart: the translator declared THIS installed version,
+            // so affirm it (green ✓). "unknown" (empty declared list) gets neither.
+            bool compatible = !isActive
+                && TranslationCompat.IsCompatible(entry.CompatibleWith, modVersion);
             var captured = entry;
             LanguageCardList.Children.Add(BuildLanguageCard(
                 LanguageFlag(entry.Id), entry.Name, entry.Author, entry.CompatibleWith, entry.Version,
-                isActive, blocked, () => _applyTranslation?.Invoke(captured)));
+                isActive, blocked, compatible, () => _applyTranslation?.Invoke(captured)));
         }
 
         bool hasPacks = entries.Count > 0;
@@ -410,7 +429,7 @@ public partial class ModPropertiesDialog : Window
 
     private FrameworkElement BuildLanguageCard(string flag, string name, string author,
         IReadOnlyList<string>? compatibleWith, string packVersion,
-        bool isActive, bool blocked, Action onUse)
+        bool isActive, bool blocked, bool compatible, Action onUse)
     {
         var col = new StackPanel();
         var title = new TextBlock
@@ -440,17 +459,27 @@ public partial class ModPropertiesDialog : Window
                 Foreground = Res("ErrorBrush", "#E0708A"),
                 Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
             });
+        else if (compatible)
+            col.Children.Add(new TextBlock
+            {
+                Text = "✓ " + Strings.Get("LangCardCompatibleHint"), FontSize = 12,
+                Foreground = Res("SuccessBrush", "#9BD99B"),
+                Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
+            });
 
         // Status indicator (not a button anymore — the WHOLE card is the click
         // target, which is more forgiving than a small "Use" button). A version-
         // mismatched pack reads "Use anyway" in amber — a warning the user can
-        // override, NOT a block (the apply dialog confirms first).
+        // override, NOT a block (the apply dialog confirms first). While the mod
+        // is installing/updating (_modBusy) every card reads "🔒 Unavailable".
         var status = new TextBlock
         {
-            Text = isActive ? Strings.Get("LangCardActive")
+            Text = _modBusy ? "🔒 " + Strings.Get("LangCardUnavailableBusy")
+                : isActive ? Strings.Get("LangCardActive")
                 : blocked ? Strings.Get("LangCardUseAnyway") : Strings.Get("LangCardUse"),
             FontSize = 13, FontWeight = FontWeights.SemiBold,
-            Foreground = isActive ? Res("SuccessBrush", "#9BD99B")
+            Foreground = _modBusy ? Res("TextSecondary", "#9AA6B2")
+                : isActive ? Res("SuccessBrush", "#9BD99B")
                 : blocked ? Res("WarnBrush", "#E0B341") : Res("AccentBrush", "#C8A24A"),
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(10, 0, 0, 0),
@@ -466,8 +495,9 @@ public partial class ModPropertiesDialog : Window
 
         // A version-mismatched ("blocked") pack stays clickable: the user can apply
         // it under their own responsibility and the apply dialog confirms first.
-        // Only the already-active pack is non-clickable (nothing to do).
-        bool clickable = !isActive;
+        // The already-active pack is non-clickable (nothing to do); and while the
+        // mod is installing/updating (_modBusy) the WHOLE list is locked.
+        bool clickable = !isActive && !_modBusy;
         var border = new Border
         {
             Background = Res("BgPanel", "#1B2430"),
@@ -475,8 +505,9 @@ public partial class ModPropertiesDialog : Window
             BorderThickness = new Thickness(isActive ? 2 : 1),
             CornerRadius = new CornerRadius(6),
             Margin = new Thickness(0, 0, 0, 8),
-            // Slightly dimmed (not inert) so it reads as a caution, not disabled.
-            Opacity = blocked ? 0.85 : 1.0,
+            // Busy = clearly disabled (0.5); a version-mismatch caution = slightly
+            // dimmed (0.85, not inert); otherwise full.
+            Opacity = _modBusy ? 0.5 : (blocked ? 0.85 : 1.0),
             Child = grid,
         };
         if (!clickable) return border;
@@ -589,6 +620,18 @@ public partial class ModPropertiesDialog : Window
     /// Called by MainWindow once the apply/revert flow finishes.
     /// </summary>
     public void RefreshLanguageTab() => LoadLanguage();
+
+    /// <summary>
+    /// Lock / unlock the language list while the mod is installing or updating.
+    /// Called from MainWindow.SetBusy (real ops only, not the read-only check).
+    /// Rebuilds the cards so they render disabled + show the busy banner.
+    /// </summary>
+    public void SetModBusy(bool busy)
+    {
+        if (_modBusy == busy) return;
+        _modBusy = busy;
+        LoadLanguage();
+    }
 
     private async void RefreshTranslationsBtn_Click(object sender, RoutedEventArgs e)
     {

@@ -158,10 +158,13 @@ don't go looking for it.)
   the README and stale comments here.**
 
 - **Single-file publish deliberately omits `IncludeAllContentForSelfExtract`.**
-  Several code paths assume `AppContext.BaseDirectory` is the `.exe`'s own
-  folder (where `launcher-config.json` and the debug log live). Turning that
-  flag on would point it at a `%TEMP%` extract dir and lose user sessions. See
-  the long comment in `WarsOfLibertyLauncher.csproj`.
+  Turning it on would point `AppContext.BaseDirectory` at a `%TEMP%` extract dir.
+  **(Update: user data — config, log, snapshot, telemetry — now lives in
+  `%LocalAppData%\AoE3ModLauncher\` via `Services/AppPaths.cs`, NOT next to the
+  `.exe`, so it no longer depends on BaseDirectory; see the AppPaths bullet under
+  Runtime conventions.)** The flag stays omitted anyway — it's unnecessary and the
+  `%TEMP%` indirection is still undesirable. See the long comment in
+  `WarsOfLibertyLauncher.csproj`.
 
 - **Code signing is automatic but optional.** MSBuild `AfterBuild`/`AfterPublish`
   targets Authenticode-sign the binary with a self-signed `CN=Gorgorito` cert
@@ -652,7 +655,13 @@ don't go looking for it.)
   mod's files) and the post-update auto-revert-to-English (`ReconcileAfterUpdate`).
   Don't reintroduce `IsEnabled = !incompatible` on the menu item or
   `clickable = !blocked` on the card — incompatibility is a warning, the apply
-  dialog owns the confirmation.
+  dialog owns the confirmation. **Ordering of the language list is shared via
+  `TranslationCompat.OrderForDisplay`** (active pack → compatible-with-installed-
+  version → newest release → name), used by BOTH the Mod Properties Language tab
+  (`LoadLanguage`) and the gear menu (`PopulateGameLanguageMenu`) so they match —
+  "newest" is the pack id's position in the registry index (GitHub `/releases` is
+  newest-first). Don't revert either to a plain `OrderBy(e => e.Name)`. Pinned by
+  `TranslationCompatTests`.
 
 - **The translator-facing packager lives in Settings → Translations, NOT the
   Game-language gear submenu, and it's globalised across mods.** The packaging
@@ -1217,11 +1226,28 @@ model enforced by the catalog repo's CI. The JSON schema lives at
 
 ## Runtime conventions
 
-- **Files next to the `.exe`** resolve via `AppContext.BaseDirectory` (this is
-  why the single-file publish keeps content unextracted — see gotchas).
-  `LauncherConfig.Load()`/`Save()` is the only config accessor
-  (`launcher-config.json`); the debug log and XML snapshots land in the same
-  folder.
+- **Runtime-generated files live in `%LocalAppData%\AoE3ModLauncher\`, NOT next
+  to the `.exe` — centralized in `Services/AppPaths.cs`.** `AppPaths.DataDir` is
+  the per-user data dir (the same base `ModAssetCacheService`'s `mod-assets` cache
+  uses); `ConfigFile` / `LogFile` / `TelemetryFile` / `SnapshotFile(name)` resolve
+  the four generated files there. They USED to sit next to the `.exe` (via
+  `AppContext.BaseDirectory`), which cluttered whatever folder the user ran it from.
+  `App.OnStartup` calls `AppPaths.EnsureReady()` FIRST (before any config/log
+  access) — it creates the dir and does a one-time migration: if the new
+  `ConfigFile` doesn't exist but a legacy next-to-exe `launcher-config.json` does,
+  it COPIES it over (not move — a rollback to an older build still finds its
+  config). `LauncherConfig.Load()/Save()`, `DiagnosticLog` (log + `SaveSnapshot`),
+  `MultiplayerTelemetry`, `UninstallService.ResetLauncherConfig`, and MainWindow's
+  "View logs" all read through `AppPaths` now — don't reintroduce a raw
+  `AppContext.BaseDirectory` path for these. The user opens this folder via
+  **Launcher Settings → Maintenance → "Open data folder"**
+  (`OpenDataFolderButton`). The self-update still writes `.old` / `_new.exe` NEXT
+  to the running `.exe` (correct — that's the executable, not user data), and
+  decoupling the config from the exe location actually makes self-update more
+  robust (the new exe finds the config regardless). **Not an antivirus concern:**
+  writing benign data to `%LocalAppData%` is the standard Windows pattern and
+  doesn't touch the binary — unrelated to the single-file compression packer
+  heuristic.
 - **Logging:** call `DiagnosticLog.Write(...)` (or `WriteSection`). It's a
   non-blocking queued logger that resets at each launch and writes
   `launcher-debug.log`. Log messages are **always English** (they're for bug
@@ -1648,7 +1674,19 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   closed (host disconnect race, RoomLeft frame on the wire, etc.).
   All three dialogs are opened from their parents via `.Show()` (not
   `.ShowDialog()`) so the user can keep clicking the main window while
-  they're open. That has three implications: (1) **never set `DialogResult`
+  they're open. **They are also all OWNERLESS — none sets `Owner = MainWindow`,
+  and `WindowStartupLocation="CenterScreen"`.** This is load-bearing, not an
+  oversight: a `WindowStyle="None"` window that is BOTH owned AND
+  `ShowInTaskbar="True"` (WPF sets `WS_EX_APPWINDOW`) **minimizes its owner when
+  it's closed** — that was the "closing Settings/Properties minimizes the
+  launcher" bug. LobbyWindow was always ownerless (its own dedicated bullet);
+  LauncherSettings + ModProperties were switched to match (the construction sites
+  dropped `{ Owner = this }` and now call `dialog.Activate()` after `Show()` so the
+  window still comes to front on first open). The trade-off — they alt-tab
+  independently and the launcher can sit on top of them — is accepted (same as
+  LobbyWindow). **Don't re-add `Owner` to any of the three**, and don't set
+  `ShowInTaskbar="False"` to "fix" something (that reintroduces the desktop-stub
+  minimize bug). That has three further implications: (1) **never set `DialogResult`
   in these dialogs** — it throws `InvalidOperationException` when the
   window wasn't shown modally; use a custom field (`ChangesSaved` on
   LauncherSettings) or nothing at all. (2) Callers track each dialog in

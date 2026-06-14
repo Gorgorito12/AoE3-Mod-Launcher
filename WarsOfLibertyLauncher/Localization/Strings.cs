@@ -2792,6 +2792,16 @@ public static class Strings
             [LangEn] = "Removes leftover download/extract files from interrupted updates.",
             [LangEs] = "Elimina archivos sobrantes de descargas/extracciones interrumpidas.",
         },
+        ["DlgLauncherSettingsOpenDataFolder"] = new()
+        {
+            [LangEn] = "Open data folder",
+            [LangEs] = "Abrir carpeta de datos",
+        },
+        ["DlgLauncherSettingsOpenDataFolderHint"] = new()
+        {
+            [LangEn] = "Opens the launcher's data folder (config, logs, caches) — no longer next to the .exe.",
+            [LangEs] = "Abre la carpeta de datos del launcher (config, registros, cachés) — ya no junto al .exe.",
+        },
         ["DlgLauncherSettingsAssetsCleared"] = new()
         {
             [LangEn] = "Asset cache cleared ({0} files).",
@@ -3278,6 +3288,15 @@ public static class Strings
             [LangEn] = "✓ Age of Empires III detected ({0})",
             [LangEs] = "✓ Age of Empires III detectado ({0})",
         },
+        ["InstallGameNotLaunchedWarning"] = new()
+        {
+            [LangEn] = "⚠ We couldn't find Age of Empires III user data. " +
+                       "Open Age of Empires III: The Asian Dynasties at least once " +
+                       "before installing, so it generates its configuration files.",
+            [LangEs] = "⚠ No encontramos los datos de usuario de Age of Empires III. " +
+                       "Abre Age of Empires III: The Asian Dynasties al menos una vez " +
+                       "antes de instalar, para que genere sus archivos de configuración.",
+        },
         ["InstallAoe3NotDetected"] = new()
         {
             [LangEn] = "⚠ Age of Empires III was not detected automatically.\n" +
@@ -3756,10 +3775,21 @@ public static class Strings
         ["LangCardBlocked"] = new() { [LangEn] = "Other version", [LangEs] = "Otra versión" },
         ["LangCardUse"] = new() { [LangEn] = "Use", [LangEs] = "Usar" },
         ["LangCardUseAnyway"] = new() { [LangEn] = "Use anyway", [LangEs] = "Usar igual" },
+        ["LangCardUnavailableBusy"] = new() { [LangEn] = "Unavailable", [LangEs] = "No disponible" },
+        ["LangCardCompatibleHint"] = new()
+        {
+            [LangEn] = "Compatible with your installed mod version.",
+            [LangEs] = "Compatible con tu versión instalada del mod.",
+        },
         ["LangCardBlockedHint"] = new()
         {
-            [LangEn] = "⚠ Made for a different mod version. Some text may be wrong, missing, or in English. You can use it anyway.",
-            [LangEs] = "⚠ Hecha para otra versión del mod. Algunos textos pueden quedar incorrectos, faltantes o en inglés. Podés usarla igual.",
+            [LangEn] = "⚠ Made for a different mod version. Some text may be wrong, missing, or in English — and it can cause multiplayer sync problems (version mismatch / out-of-sync) with other players. Use it anyway at your own risk.",
+            [LangEs] = "⚠ Hecha para otra versión del mod. Algunos textos pueden quedar incorrectos, faltantes o en inglés, y puede causar problemas de sincronización en multijugador (versión distinta / desincronización) con otros jugadores. Usala igual bajo tu propia responsabilidad.",
+        },
+        ["LanguageBusyHint"] = new()
+        {
+            [LangEn] = "⏳ You can't change the language while the mod is installing or updating. Wait for it to finish.",
+            [LangEs] = "⏳ No podés cambiar el idioma mientras el mod se está instalando o actualizando. Esperá a que termine.",
         },
         ["TranslationRevertedBody"] = new()
         {
@@ -4577,8 +4607,8 @@ public static class Strings
         },
         ["DlgLangApplyCompatWarn"] = new()
         {
-            [LangEn] = "Made for mod {1}, but you have {0}. Some new strings may stay in English.",
-            [LangEs] = "Hecha para mod {1}, pero tenés {0}. Algunos strings nuevos pueden quedar en inglés.",
+            [LangEn] = "Made for mod {1}, but you have {0}. Some text may stay in English, and it can cause multiplayer sync problems (out-of-sync) with other players.",
+            [LangEs] = "Hecha para mod {1}, pero tenés {0}. Algunos textos pueden quedar en inglés y puede causar problemas de sincronización en multijugador (desincronización) con otros jugadores.",
         },
         ["DlgLangApplyDownloading"] = new()
         {
@@ -4618,10 +4648,12 @@ public static class Strings
         ["DlgLangIncompatibleBody"] = new()
         {
             [LangEn] = "This translation was made for a different version of the mod. " +
-                       "Some text may be wrong, missing, or stay in English. " +
+                       "Some text may be wrong, missing, or stay in English — and it can cause " +
+                       "MULTIPLAYER SYNC PROBLEMS (version mismatch / out-of-sync) with other players. " +
                        "You can use it anyway at your own risk.\n\nApply anyway?",
             [LangEs] = "Esta traducción se hizo para una versión diferente del mod. " +
-                       "Algunos textos pueden quedar incorrectos, faltantes o en inglés. " +
+                       "Algunos textos pueden quedar incorrectos, faltantes o en inglés, y puede causar " +
+                       "PROBLEMAS DE SINCRONIZACIÓN EN MULTIJUGADOR (versión distinta / desincronización) con otros jugadores. " +
                        "Podés usarla igual bajo tu propia responsabilidad.\n\n¿Aplicar igual?",
         },
         ["DlgLangApplyFailedTitle"] = new()

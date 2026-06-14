@@ -27,8 +27,7 @@ public static class MultiplayerTelemetry
     public static bool Enabled { get; set; } = true;
 
     private static readonly ConcurrentDictionary<string, long> Counters = new();
-    private static readonly string LogPath = Path.Combine(
-        AppContext.BaseDirectory, "multiplayer-events.log");
+    private static readonly string LogPath = AppPaths.TelemetryFile;
 
     /// <summary>Increment a counter by one. Cheap; safe to call from any thread.</summary>
     public static void Bump(string counter)

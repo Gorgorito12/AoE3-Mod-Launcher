@@ -17,8 +17,7 @@ namespace WarsOfLibertyLauncher.Services;
 /// </summary>
 public static class DiagnosticLog
 {
-    private static readonly string LogPath =
-        Path.Combine(AppContext.BaseDirectory, "launcher-debug.log");
+    private static readonly string LogPath = AppPaths.LogFile;
 
     private static readonly object FileLock = new();
     private static readonly ConcurrentQueue<string> Queue = new();
@@ -61,7 +60,7 @@ public static class DiagnosticLog
     {
         try
         {
-            var path = Path.Combine(AppContext.BaseDirectory, filename);
+            var path = AppPaths.SnapshotFile(filename);
             File.WriteAllText(path, content);
             Write($"Snapshot guardado: {filename}");
         }

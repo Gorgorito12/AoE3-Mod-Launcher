@@ -75,19 +75,15 @@ public sealed class ModRowState
 public partial class ModsBrowser : UserControl
 {
     // ------------------------------------------------------------------------
-    // Events. Same names as the pre-redesign control so MainWindow stays
-    // wired without changes; two new ones added for the catalog refresh
-    // + add-local-mod buttons.
+    // Events consumed by MainWindow. The old per-mod action events
+    // (Install/Update/Uninstall/Repair/Play/SwitchActiveRequested) were removed:
+    // those flows live on the Dashboard now (PLAY state machine + gear menu); the
+    // Workshop only browses, opens detail/website, toggles "my mods", refreshes
+    // the catalog and opens the publish wizard.
     // ------------------------------------------------------------------------
 
     public event EventHandler<ModProfile>? CardClicked;
-    public event EventHandler<ModProfile>? SwitchActiveRequested;
     public event EventHandler<string>? OpenWebsiteRequested;
-    public event EventHandler<ModProfile>? InstallRequested;
-    public event EventHandler<ModProfile>? UninstallRequested;
-    public event EventHandler<ModProfile>? UpdateRequested;
-    public event EventHandler<ModProfile>? PlayRequested;
-    public event EventHandler<ModProfile>? RepairRequested;
     public event EventHandler? PublishRequested;
     public event EventHandler? RefreshCatalogRequested;
     public event EventHandler? AddLocalModRequested;

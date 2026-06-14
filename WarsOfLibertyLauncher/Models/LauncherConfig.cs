@@ -673,7 +673,7 @@ public class LauncherConfig
 
     public static LauncherConfig Load()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, ConfigFileName);
+        var path = Services.AppPaths.ConfigFile;
         if (!File.Exists(path))
         {
             var defaults = new LauncherConfig();
@@ -780,7 +780,7 @@ public class LauncherConfig
 
     public void Save()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, ConfigFileName);
+        var path = Services.AppPaths.ConfigFile;
         var options = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(path, JsonSerializer.Serialize(this, options));
     }

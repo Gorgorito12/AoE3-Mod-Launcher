@@ -403,7 +403,7 @@ public class UninstallService
     {
         try
         {
-            var path = Path.Combine(AppContext.BaseDirectory, "launcher-config.json");
+            var path = AppPaths.ConfigFile;
             if (File.Exists(path)) File.Delete(path);
             return true;
         }
