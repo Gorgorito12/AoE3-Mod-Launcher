@@ -60,7 +60,6 @@ public partial class PublishModDialog : Window
         _stepHints  = new[] { Step1Hint,  Step2Hint,  Step3Hint,  Step4Hint,  Step5Hint,  Step6Hint  };
 
         CancelButton.Click += (_, _) => { DialogResult = false; Close(); };
-        CloseHeaderButton.Click += (_, _) => { DialogResult = false; Close(); };
         BackButton.Click += (_, _) => GoTo(_currentStep - 1);
         NextButton.Click += OnNextClicked;
 
@@ -79,7 +78,7 @@ public partial class PublishModDialog : Window
     // current language into every visible string before showing the dialog.
     // ------------------------------------------------------------------------
 
-    public string HeaderTitleText { get => HeaderTitle.Text; set => HeaderTitle.Text = value; }
+    public string HeaderTitleText { get => TitleBarControl.Title; set => TitleBarControl.Title = value; }
     public string CancelLabel { get => (string)(CancelButton.Content ?? ""); set => CancelButton.Content = value; }
     public string BackLabel { get => (string)(BackButton.Content ?? ""); set => BackButton.Content = value; }
     public string NextLabel { get; set; } = "Next";
@@ -654,7 +653,7 @@ public partial class PublishModDialog : Window
     // ------------------------------------------------------------------------
     private void ApplyDefaultLabels()
     {
-        HeaderTitle.Text = "Publish my mod";
+        TitleBarControl.Title = "Publish my mod";
         CancelButton.Content = "Cancel";
         BackButton.Content = "Back";
 

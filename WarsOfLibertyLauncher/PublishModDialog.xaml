@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Publish my mod"
         Width="760" Height="640"
         MinWidth="640" MinHeight="520"
@@ -18,14 +19,6 @@
          OS title bar. The App.OnStartup class handler installs the
          WM_GETMINMAXINFO (maximise-respects-taskbar) + rounded-corners hooks
          on every WindowStyle=None window, so no per-window interop here. -->
-    <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="40"
-                            ResizeBorderThickness="6"
-                            CornerRadius="0"
-                            GlassFrameThickness="0"
-                            UseAeroCaptionButtons="False"/>
-    </shell:WindowChrome.WindowChrome>
-
     <Window.Resources>
         <!-- Compact form chrome shared across every step. Keeps the wizard's
              form rows tight (40px target height) so all six steps fit in
@@ -59,36 +52,6 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
-        <!-- Title-bar close ✕. Same recipe as the other custom-chrome
-             dialogs (red hover). -->
-        <Style x:Key="DialogCloseButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Width" Value="46"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="4">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerAlert}"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </Window.Resources>
 
     <Grid>
@@ -98,34 +61,14 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
-                Background="{DynamicResource BgPanel}"
-                BorderBrush="{DynamicResource BorderSubtle}"
-                BorderThickness="0,0,0,1"
-                Padding="24,14,8,14">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock x:Name="HeaderTitle"
-                               Foreground="{DynamicResource TextPrimary}"
-                               FontSize="{StaticResource FontSizeHeading}"
-                               FontWeight="SemiBold"/>
-                    <TextBlock x:Name="HeaderStep"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               Margin="0,2,0,0"/>
-                </StackPanel>
-                <Button x:Name="CloseHeaderButton"
-                        Grid.Column="1"
-                        Style="{StaticResource DialogCloseButton}"
-                        Content="&#xE8BB;"
-                        VerticalAlignment="Top"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-            </Grid>
-        </Border>
+        <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl"
+                           ShowMinimize="False" ShowMaximize="True" ShowClose="True">
+            <TextBlock x:Name="HeaderStep"
+                       VerticalAlignment="Center"
+                       Margin="10,0,0,0"
+                       Foreground="{DynamicResource TextSecondary}"
+                       FontSize="{StaticResource FontSizeCaption}"/>
+        </controls:TitleBar>
 
         <ScrollViewer Grid.Row="1"
                       VerticalScrollBarVisibility="Auto"

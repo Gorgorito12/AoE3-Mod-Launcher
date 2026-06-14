@@ -46,6 +46,7 @@ public partial class GitHubLoginDialog : Window
         _session = session;
 
         Title = Strings.Get("MpSignInDialogTitle");
+        TitleBarControl.Title = Strings.Get("MpSignInDialogTitle");
         TitleText.Text = Strings.Get("MpSignInDialogTitle");
         Step1Text.Text = Strings.Get("MpSignInStep1");
         Step2Text.Text = Strings.Get("MpSignInStep2");

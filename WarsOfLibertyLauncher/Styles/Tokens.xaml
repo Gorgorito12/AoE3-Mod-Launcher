@@ -78,4 +78,58 @@
     <Thickness x:Key="BtnPadRoomy">18,8</Thickness>
     <Thickness x:Key="BtnPadCta">14,14</Thickness>
 
+    <!-- ============================================================
+         TITLE BAR — the SINGLE source of truth for the global custom
+         window chrome bar (Controls/TitleBar). Every window's title bar
+         height, its WindowChrome CaptionHeight (set centrally in
+         App.OnAnyWindowLoaded), and the min/max/close button geometry all
+         read these. Don't hardcode a bar height or button size anywhere
+         else — change it here once and every window follows.
+         ============================================================ -->
+    <!-- Bar height. Compact desktop caption. Sized to the MINIMUM that fits
+         the original 24px title centred without clipping — the title size wins,
+         the bar only grows enough to hold it (still far slimmer than the old
+         ~64px padded rows). CaptionHeight matches this so the whole bar stays
+         the native drag/double-click region. Single global knob — every
+         window's bar + WindowChrome caption follow it; never hardcode a height
+         per window. Independent of TitleBarTitleSize below. -->
+    <sys:Double x:Key="TitleBarHeight">36</sys:Double>
+    <!-- Caption-button footprint. Width is the classic 46px hit target;
+         height fills the bar so they read as one strip. -->
+    <sys:Double x:Key="TitleBarButtonWidth">46</sys:Double>
+    <!-- Segoe MDL2 glyph size for the min/max/restore/close icons. -->
+    <sys:Double x:Key="TitleBarGlyphSize">10</sys:Double>
+    <!-- Title text size — the original window-title size (was Heading 24 per
+         dialog before the global bar). Kept at 24 so titles stay as legible as
+         before; this is its OWN knob, independent of TitleBarHeight (shrinking
+         the bar must never shrink the title — the bar grows to fit instead). -->
+    <sys:Double x:Key="TitleBarTitleSize">24</sys:Double>
+    <!-- Left gutter before the icon/title; right side is flush with the
+         buttons. -->
+    <Thickness x:Key="TitleBarContentPadding">12,0,8,0</Thickness>
+
+    <!-- ============================================================
+         SIDEBAR NAV RAIL — the settings/properties dialogs' left tab rail
+         (SidebarNavButton). The rail column is `Width="Auto"` clamped to this
+         [min,max] so it sizes to the WIDEST nav item (icon + text + padding +
+         active stripe) instead of a hardcoded 200px that clipped long labels
+         like "CATÁLOGO DE MODS". Min keeps the prior visual footprint; max
+         stops a freakishly long label from eating the content area (the label
+         then ellipsises via SidebarNavLabel). Single source — both dialogs
+         read these, no per-dialog literal.
+         ============================================================ -->
+    <sys:Double x:Key="SidebarRailMinWidth">200</sys:Double>
+    <sys:Double x:Key="SidebarRailMaxWidth">340</sys:Double>
+    <!-- Nav-item text size (SidebarNavLabel). Its OWN knob, independent of the
+         normal body text (FontSizeBody) and of the rail width: the rail grows
+         to fit this, the text is never shrunk to fit the rail. 16 = the size
+         the SidebarNavButton style was already designed around. -->
+    <sys:Double x:Key="SidebarNavTextSize">16</sys:Double>
+
+    <!-- MainWindow top-tab text size (NavTabButton: LIBRARY/WORKSHOP/
+         MULTIPLAYER). Its OWN knob, independent of the title and the dialog-rail
+         nav. 20 = a touch larger than the old 18 so the main tabs read as the
+         primary navigation without being oversized. -->
+    <sys:Double x:Key="NavTabTextSize">14</sys:Double>
+
 </ResourceDictionary>

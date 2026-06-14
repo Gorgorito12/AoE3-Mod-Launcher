@@ -1,5 +1,162 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+                    xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls">
+
+    <!-- ============================================================
+         GLOBAL TITLE-BAR CAPTION BUTTONS — the SINGLE definition of the
+         minimize / maximize / restore / close buttons used by the global
+         Controls/TitleBar. These replace the five duplicated inline styles
+         that previously lived per-window (DialogCloseButton,
+         HeaderCloseButton, DialogCloseX, TitleBarChromeButton,
+         TitleBarButton/TitleBarCloseButton). Geometry comes from the
+         TitleBar* tokens (Tokens.xaml, merged first), colours from
+         Colors.xaml — nothing is hardcoded here.
+         ============================================================ -->
+
+    <!-- Minimize / maximize-restore. Flush full-height caption button:
+         transparent idle, gold tint on hover, stronger gold on press,
+         dimmed when disabled. Segoe MDL2 glyph set on Content by TitleBar. -->
+    <Style x:Key="TitleBarButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Width" Value="{StaticResource TitleBarButtonWidth}"/>
+        <Setter Property="Height" Value="{StaticResource TitleBarHeight}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+        <Setter Property="FontSize" Value="{StaticResource TitleBarGlyphSize}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border" Background="{TemplateBinding Background}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TintGoldHover}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="#33D8B66A"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Close. Same footprint; red fill on hover/press + white glyph. -->
+    <Style x:Key="TitleBarCloseButton" TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border" Background="{TemplateBinding Background}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerAlert}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerBrush}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================
+         GLOBAL TITLE BAR (controls:TitleBar) — the ONE template every
+         window's title bar uses. Implicit style (TargetType, no key) so it
+         applies to every TitleBar instance app-wide. Geometry from the
+         TitleBar* tokens; ContentPresenter hosts the per-window extra bar
+         content (brand button / version badge / subtitle). NO bottom border
+         (keeps MainWindow's bar fused with the nav strip). PART_* names are
+         contractually wired in TitleBar.OnApplyTemplate.
+         ============================================================ -->
+    <Style TargetType="{x:Type controls:TitleBar}">
+        <Setter Property="Background" Value="{DynamicResource BgSidebar}"/>
+        <Setter Property="Height" Value="{StaticResource TitleBarHeight}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type controls:TitleBar}">
+                    <!-- SnapsToDevicePixels + UseLayoutRounding are INHERITED, so
+                         they pin the bar's content (notably MainWindow's brand
+                         bitmap icon + wordmark) to whole device pixels. Without
+                         this the icon landed on a sub-pixel X at 125/150% DPI
+                         (gutter 18 DIP × 1.25 = 22.5 px) and rendered blurry. No
+                         transform / no text resize — pure pixel snapping. -->
+                    <Border Background="{TemplateBinding Background}"
+                            Height="{TemplateBinding Height}"
+                            SnapsToDevicePixels="True"
+                            UseLayoutRounding="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Left content: optional icon + title + the
+                                 control's Content (extra bar content). The
+                                 presenter is hit-test-visible so interactive
+                                 Content (e.g. MainWindow's brand button) works
+                                 instead of starting a window drag. -->
+                            <Grid Grid.Column="0" Margin="{StaticResource TitleBarContentPadding}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Image x:Name="PART_Icon" Grid.Column="0"
+                                       Width="20" Height="20"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"
+                                       Visibility="Collapsed"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <TextBlock x:Name="PART_Title" Grid.Column="1"
+                                           VerticalAlignment="Center"
+                                           FontFamily="{DynamicResource DisplayFont}"
+                                           FontSize="{StaticResource TitleBarTitleSize}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Visibility="Collapsed"/>
+                                <ContentPresenter Grid.Column="2"
+                                                  VerticalAlignment="Center"
+                                                  shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                            </Grid>
+
+                            <Button x:Name="PART_Min" Grid.Column="1"
+                                    Style="{StaticResource TitleBarButton}"
+                                    Content="&#xE921;"
+                                    shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                            <Button x:Name="PART_Max" Grid.Column="2"
+                                    Style="{StaticResource TitleBarButton}"
+                                    Content="&#xE922;"
+                                    shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                            <Button x:Name="PART_Close" Grid.Column="3"
+                                    Style="{StaticResource TitleBarCloseButton}"
+                                    Content="&#xE8BB;"
+                                    shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
     <!-- Dark tooltip with drop shadow. Replaces the OS pale-yellow rectangle. -->
     <Style TargetType="ToolTip">

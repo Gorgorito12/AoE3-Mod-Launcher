@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shell;
 
 namespace WarsOfLibertyLauncher;
 
@@ -140,9 +141,68 @@ public partial class App : System.Windows.Application
         // keep the native title bar.
         if (w.WindowStyle == WindowStyle.None)
         {
+            ApplyWindowChrome(w);
             InstallMaximizeFix(w);
             InstallRoundedCorners(w);
         }
+
+        // -- Close lingering transient menus when a dialog opens --
+        //
+        // The launcher's hand-built popups (brand dropdown, dashboard MODS
+        // switcher) are AllowsTransparency + StaysOpen=false, whose WPF
+        // auto-dismiss is unreliable when a non-modal Window steals activation
+        // — so they linger behind a freshly-opened dialog (the "open MODS,
+        // click the gear, the menu stays open" bug). Centralise the fix here
+        // rather than in every opener: when ANY secondary window appears or is
+        // re-activated, close the tracked popup. Loaded fires once per fresh
+        // dialog instance (e.g. ModPropertiesDialog is rebuilt each open) and
+        // covers the common case; the Activated subscription additionally
+        // covers single-instance dialogs reused via Activate() (LauncherSettings
+        // / Lobby), where Loaded won't fire again. MainWindow is EXCLUDED so
+        // its own activation never closes a popup that legitimately lives on it.
+        // Fully-qualified type name: inside App (derives from Application),
+        // bare `MainWindow` binds to the inherited Application.MainWindow
+        // PROPERTY, not our window type — so qualify to disambiguate.
+        if (w is not WarsOfLibertyLauncher.MainWindow)
+        {
+            Controls.ChromePopups.CloseOpen();
+            w.Activated += (_, _) => Controls.ChromePopups.CloseOpen();
+        }
+    }
+
+    // ==================================================================
+    // Global custom-chrome WindowChrome
+    // ==================================================================
+
+    /// <summary>
+    /// Apply the launcher's standard <see cref="WindowChrome"/> to a
+    /// WindowStyle=None window so each window no longer repeats the block.
+    /// CaptionHeight is bound to the single TitleBarHeight token so the
+    /// native caption region (drag / double-click-maximize / restore-on-drag)
+    /// always matches the global TitleBar's height; ResizeBorderThickness is
+    /// 6 for resizable windows (edge-drag) and 0 otherwise. Windows that
+    /// already declared a WindowChrome in XAML are left untouched, so this is
+    /// a safe additive default. No-op if the TitleBarHeight token is missing.
+    /// </summary>
+    private static void ApplyWindowChrome(Window w)
+    {
+        if (WindowChrome.GetWindowChrome(w) != null)
+            return;
+
+        double caption = 44;
+        if (Current?.TryFindResource("TitleBarHeight") is double h)
+            caption = h;
+
+        bool resizable = w.ResizeMode is ResizeMode.CanResize or ResizeMode.CanResizeWithGrip;
+
+        WindowChrome.SetWindowChrome(w, new WindowChrome
+        {
+            CaptionHeight = caption,
+            ResizeBorderThickness = new Thickness(resizable ? 6 : 0),
+            CornerRadius = new CornerRadius(0),
+            GlassFrameThickness = new Thickness(0),
+            UseAeroCaptionButtons = false,
+        });
     }
 
     // ==================================================================

@@ -14,18 +14,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
         TextOptions.TextHintingMode="Fixed">
-    <!-- Custom title bar: WindowStyle=None removes the Windows
-         default white chrome and lets us paint our own. WindowChrome
-         keeps the OS-level Windows niceties (snap, Aero Peek, drag-
-         to-edge, double-click-to-maximize) so we don't lose any
-         native behaviour, we just get to skin the surface. -->
-    <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="40"
-                            ResizeBorderThickness="6"
-                            GlassFrameThickness="0"
-                            CornerRadius="0"
-                            UseAeroCaptionButtons="False"/>
-    </shell:WindowChrome.WindowChrome>
+    <!-- WindowChrome (caption drag + edge-resize + snap/Aero) is applied
+         centrally in App.OnAnyWindowLoaded from the TitleBarHeight token; the
+         title bar itself is the shared controls:TitleBar below (Grid.Row=0). -->
 
     <Window.Resources>
         <!-- Dark-themed tooltip: matches the rest of the launcher's UI
@@ -301,74 +292,15 @@
             <Setter Property="Padding" Value="0,0,8,0"/>
         </Style>
 
-        <!-- ============================================================
-             Title-bar buttons (Min / Max / Close). Flat Win11-style
-             squares that match the launcher chrome. Min and Max
-             hover gold; Close hovers DangerAlert red (Windows
-             convention so a stray click reads as "destructive").
-             ============================================================ -->
-        <Style x:Key="TitleBarButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <!-- GHOST GOLD recipe — only the
-                                     glyph colour changes, lifting
-                                     from Secondary (dim grey-blue)
-                                     to FgHoverGold (warm cream).
-                                     No fill, no glow, same contract
-                                     as the brand button + nav strip
-                                     + sidebar navigation. -->
-                                <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Close (✕) — DESTRUCTIVE role, always red. Restored to
-             the Windows-convention DangerAlert fill after the global
-             white-everywhere pass dropped it (mistake — a destructive
-             action should never share its hover treatment with the
-             quiet glyphs next to it). Red fill + white glyph makes
-             a stray hover near the X read as "danger" instantly. -->
-        <Style x:Key="TitleBarCloseButton" TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerAlert}"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- The Min/Max/Close caption-button styles moved to the global
+             Styles/Chrome.xaml (TitleBarButton / TitleBarCloseButton),
+             consumed by the shared controls:TitleBar — no per-window copy. -->
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="40"/>   <!-- Custom title bar -->
-            <RowDefinition Height="56"/>   <!-- Horizontal nav strip (Steam-style) -->
+            <RowDefinition Height="Auto"/> <!-- Custom title bar (shared controls:TitleBar, height = TitleBarHeight token) -->
+            <RowDefinition Height="38"/>   <!-- Horizontal nav strip (Steam-style); compact, 14px main tabs -->
             <RowDefinition Height="*"/>    <!-- App content -->
         </Grid.RowDefinitions>
 
@@ -389,13 +321,10 @@
              surface. The seam below the nav tabs is the nav strip's
              OWN bottom border — that one stays, since it delimits
              chrome from content. -->
-        <Border Grid.Row="0"
-                Background="{DynamicResource BgSidebar}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+        <controls:TitleBar Grid.Row="0"
+                           ShowMinimize="True"
+                           ShowMaximize="True"
+                           ShowClose="True">
                 <!-- Title-bar brand button — clickable, opens the same
                      brand menu as the AOE3 LAUNCHER button in the nav
                      strip below. Steam-pattern: clicking the launcher
@@ -426,12 +355,16 @@
                      the same token the nav tabs lift to), pressed/open =
                      #FFFFFF pure white (open held while the brand popup lives
                      via Tag="open", set in BrandMenuButton_Click). -->
+                <!-- Brand block = the TitleBar's Content. No left Padding and no
+                     Grid.Column (dead from when it lived in MainWindow's own grid):
+                     it now sits flush at the TitleBar's content gutter
+                     (TitleBarContentPadding.Left = 18), the same left edge the nav
+                     tabs use, so brand + tabs are anchored to one consistent gutter. -->
                 <Button x:Name="TitleBarBrandButton"
-                        Grid.Column="0"
                         HorizontalAlignment="Left"
                         Background="Transparent"
                         BorderThickness="0"
-                        Padding="12,0"
+                        Padding="0"
                         Cursor="Hand"
                         Click="BrandMenuButton_Click"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
@@ -535,46 +468,7 @@
                                    Opacity="0.7"/>
                     </StackPanel>
                 </Button>
-                <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                    <Button x:Name="TitleBarMinimizeButton"
-                            Click="TitleBarMinimizeButton_Click"
-                            Width="46" Height="40"
-                            Style="{StaticResource TitleBarButton}"
-                            ToolTip="Minimize">
-                        <TextBlock Text="&#xE921;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="10"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                    </Button>
-                    <Button x:Name="TitleBarMaximizeButton"
-                            Click="TitleBarMaximizeButton_Click"
-                            Width="46" Height="40"
-                            Style="{StaticResource TitleBarButton}"
-                            ToolTip="Maximize / Restore">
-                        <TextBlock x:Name="TitleBarMaximizeGlyph"
-                                   Text="&#xE922;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="10"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                    </Button>
-                    <Button x:Name="TitleBarCloseButton"
-                            Click="TitleBarCloseButton_Click"
-                            Width="46" Height="40"
-                            Style="{StaticResource TitleBarCloseButton}"
-                            ToolTip="Close">
-                        <TextBlock Text="&#xE8BB;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="10"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
+        </controls:TitleBar>
 
         <!-- =============================================================
              HORIZONTAL NAVIGATION (Steam-style redesign). Replaces
@@ -604,7 +498,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="&#xE80F;"
                                    FontFamily="Segoe MDL2 Assets"
-                                   FontSize="18"
+                                   FontSize="16"
                                    Margin="0,0,10,0"
                                    VerticalAlignment="Center"/>
                         <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
@@ -616,7 +510,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="&#xE7C5;"
                                    FontFamily="Segoe MDL2 Assets"
-                                   FontSize="18"
+                                   FontSize="16"
                                    Margin="0,0,10,0"
                                    VerticalAlignment="Center"/>
                         <TextBlock x:Name="SidebarLabelCatalog" VerticalAlignment="Center"/>
@@ -628,7 +522,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="&#xE716;"
                                    FontFamily="Segoe MDL2 Assets"
-                                   FontSize="18"
+                                   FontSize="16"
                                    Margin="0,0,10,0"
                                    VerticalAlignment="Center"/>
                         <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>

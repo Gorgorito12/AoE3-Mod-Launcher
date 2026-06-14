@@ -2,14 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WarsOfLibertyLauncher"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Create a room"
         Width="520"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
-        AllowsTransparency="True"
         ResizeMode="NoResize"
-        Background="Transparent"
+        Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
     <Window.Resources>
         <!-- Resolves a ModProfile (the mod ComboBoxItem's Tag) to its icon
@@ -290,58 +290,26 @@
         </Style>
     </Window.Resources>
 
-    <!-- Outer chrome: rounded card with a 1 px border so the dialog
-         floats over the launcher backdrop instead of looking like a
-         plain rectangle. AllowsTransparency=True + WindowStyle=None
-         on the Window let us draw the chrome ourselves. -->
+    <!-- Outer chrome: opaque window surface. The 44 px global TitleBar +
+         WindowChrome drag + rounded corners are applied centrally in
+         App.OnAnyWindowLoaded; here we keep a thin 1 px frame. -->
     <Border Background="{DynamicResource BgBase}"
             BorderBrush="{DynamicResource MpDivider}"
             BorderThickness="1"
-            CornerRadius="8">
+            CornerRadius="0">
         <Grid Margin="0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>     <!-- Header strip -->
+                <RowDefinition Height="Auto"/>     <!-- Title bar -->
                 <RowDefinition Height="Auto"/>     <!-- Body -->
                 <RowDefinition Height="Auto"/>     <!-- Advanced details -->
                 <RowDefinition Height="Auto"/>     <!-- Buttons -->
             </Grid.RowDefinitions>
 
-            <!-- Header strip: brand square + title + close X.
-                 Mirrors the reference where the dialog header has
-                 a small blue icon followed by the title. -->
-            <Grid Grid.Row="0" Margin="22,20,16,18">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <Border Grid.Column="0"
-                        Width="36" Height="36"
-                        Background="{DynamicResource MpBlue}"
-                        CornerRadius="6"
-                        Margin="0,0,12,0"
-                        MouseLeftButtonDown="HeaderDrag_MouseDown">
-                    <TextBlock Text="✕"
-                               Foreground="White"
-                               FontSize="16"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"/>
-                </Border>
-                <TextBlock Grid.Column="1"
-                           x:Name="TitleText"
-                           Foreground="{DynamicResource TextPrimary}"
-                           FontSize="{StaticResource FontSizeHeading}"
-                           FontWeight="Bold"
-                           VerticalAlignment="Center"
-                           MouseLeftButtonDown="HeaderDrag_MouseDown"/>
-                <Button Grid.Column="2"
-                        x:Name="CloseXButton"
-                        Click="CancelButton_Click"
-                        Style="{StaticResource MpIconButton}"
-                        Content="✕"
-                        ToolTip="Close"/>
-            </Grid>
+            <controls:TitleBar Grid.Row="0"
+                               x:Name="TitleBarControl"
+                               ShowMinimize="False"
+                               ShowMaximize="False"
+                               ShowClose="True"/>
 
             <!-- Body. -->
             <StackPanel Grid.Row="1" Margin="22,0,22,4">

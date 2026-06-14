@@ -247,7 +247,7 @@ public partial class TranslationPackagerDialog : Window
     private void ApplyLanguage()
     {
         Title = Strings.Get("DlgPackagerTitle");
-        TitleText.Text = Strings.Get("DlgPackagerTitle");
+        TitleBarControl.Title = Strings.Get("DlgPackagerTitle");
         HeaderText.Text = Strings.Get("DlgPackagerHeader");
         DescriptionText.Text = Strings.Get("DlgPackagerDescription");
 

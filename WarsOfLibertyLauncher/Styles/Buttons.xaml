@@ -498,11 +498,12 @@
                             <Setter Property="Foreground" Value="#E6EEF8"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="active">
-                            <!-- Active: pure white text + bold + gold
-                                 right-rail underline. No background fill
-                                 (the AccentBrush stripe alone signals
-                                 "you are here", same contract as
-                                 NavTabButton's bottom underline). -->
+                            <!-- Active: pure white text + bold + gold right-rail
+                                 stripe (the original look). The rail column is
+                                 Width="Auto", so the bold active item can widen
+                                 the rail by a few px when the LONGEST label is
+                                 selected — an accepted minor trade-off for
+                                 keeping the original bold emphasis. -->
                             <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                             <Setter Property="Foreground" Value="#FFFFFF"/>
                             <Setter Property="FontWeight" Value="Bold"/>
@@ -511,6 +512,17 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- Text label inside a SidebarNavButton (the settings/properties rail).
+         Centralised so the rail's labels are consistent and — crucially for
+         the Width="Auto" rail clamped to SidebarRailMaxWidth — ellipsise
+         instead of clipping silently when a label is longer than the max.
+         The icon glyph next to it keeps its own inline size. -->
+    <Style x:Key="SidebarNavLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource SidebarNavTextSize}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
     </Style>
 
     <!-- Cinema-dashboard secondary action button. Used for the gear
@@ -593,15 +605,17 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <!-- 2px top padding compensates the 2px bottom underline so
-             the icon+label sit visually centered inside the cell.
-             Otherwise the content drifts slightly above centre. -->
-        <Setter Property="Padding" Value="22,2,22,0"/>
+        <!-- Left padding 12 = the header content gutter (TitleBarContentPadding.Left),
+             so the first tab's content lines up with the brand block above it and
+             both sit snug to the top-left corner. Right padding 22 spaces the tabs.
+             2px top padding compensates the 2px bottom underline so the icon+label
+             sit visually centered inside the cell. -->
+        <Setter Property="Padding" Value="12,2,22,0"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeTitle}"/>
+        <Setter Property="FontSize" Value="{StaticResource NavTabTextSize}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>

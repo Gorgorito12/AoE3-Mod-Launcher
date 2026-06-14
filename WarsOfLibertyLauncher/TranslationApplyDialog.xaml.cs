@@ -56,7 +56,7 @@ public partial class TranslationApplyDialog : Window
     private void ApplyLanguage()
     {
         Title = Strings.Get("DlgLangApplyTitle");
-        TitleBarText.Text = Strings.Get("DlgLangApplyTitle");
+        TitleBarControl.Title = Strings.Get("DlgLangApplyTitle");
         LblModVersions.Text = Strings.Get("DlgLangApplyModVersionsLabel");
         LblSize.Text = Strings.Get("DlgLangApplySizeLabel");
         ProgressLabelText.Text = Strings.Get("DlgLangApplyDownloading");
@@ -355,13 +355,6 @@ public partial class TranslationApplyDialog : Window
     /// <summary>Resolve a theme brush from the merged resource dictionaries.</summary>
     private System.Windows.Media.Brush Res(string key) =>
         (System.Windows.Media.Brush)FindResource(key);
-
-    /// <summary>Drag the window by its custom title bar (we removed the OS chrome).</summary>
-    private void HeaderDrag_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
-            DragMove();
-    }
 
     /// <summary>
     /// Two-letter language badge for the monogram chip ("es" → "ES",

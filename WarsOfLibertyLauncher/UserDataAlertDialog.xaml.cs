@@ -68,6 +68,7 @@ public partial class UserDataAlertDialog : Window
         _userDataFolderName = userDataFolderName ?? "";
 
         Title = Strings.Get("DlgUserDataAlertTitle");
+        TitleBarControl.Title = Strings.Get("DlgUserDataAlertTitle");
         HeaderText.Text = Strings.Format("DlgUserDataAlertHeader", _modDisplayName);
         DescriptionText.Text = Strings.Format("DlgUserDataAlertDescription", _modDisplayName);
         WarningTitleText.Text = Strings.Get("DlgUserDataAlertFoundLabel");

@@ -1,14 +1,23 @@
 <Window x:Class="WarsOfLibertyLauncher.InstallFolderDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Install"
         Width="560" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
         ResizeMode="NoResize"
         Background="{DynamicResource BgBase}"
         ShowInTaskbar="False">
 
-    <StackPanel Margin="24">
+  <Grid>
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl"
+                       ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
+    <StackPanel Grid.Row="1" Margin="24">
         <!-- Header -->
         <TextBlock x:Name="HeaderText"
                    FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
@@ -110,4 +119,5 @@
                     Click="OkButton_Click"/>
         </StackPanel>
     </StackPanel>
+  </Grid>
 </Window>

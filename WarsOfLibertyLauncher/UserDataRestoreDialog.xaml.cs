@@ -50,6 +50,7 @@ public partial class UserDataRestoreDialog : Window
         _userDataFolderName = userDataFolderName ?? "";
 
         Title = Strings.Get("DlgRestoreDialogTitle");
+        TitleBarControl.Title = Strings.Get("DlgRestoreDialogTitle");
         HeaderText.Text = Strings.Get("DlgRestoreDialogHeader");
         DescriptionText.Text = backups.Count == 1
             ? Strings.Get("DlgRestoreDialogDescriptionSingle")

@@ -41,7 +41,8 @@
       "Bash(Get-ChildItem -Depth 1)",
       "Bash(Select-Object Name)",
       "WebSearch",
-      "WebFetch(domain:signpath.org)"
+      "WebFetch(domain:signpath.org)",
+      "PowerShell(dotnet build *)"
     ]
   }
 }

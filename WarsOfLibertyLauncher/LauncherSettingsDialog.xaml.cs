@@ -96,7 +96,7 @@ public partial class LauncherSettingsDialog : Window
     private void ApplyLanguage()
     {
         Title = Strings.Get("DlgLauncherSettingsTitle");
-        TitleText.Text = Strings.Get("DlgLauncherSettingsTitle");
+        TitleBarControl.Title = Strings.Get("DlgLauncherSettingsTitle");
 
         // Sidebar tab labels. We reuse the original "Section*" strings
         // (uppercase: "GENERAL", "UPDATES", etc.) because they already

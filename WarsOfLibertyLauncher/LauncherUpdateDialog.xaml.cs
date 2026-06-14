@@ -31,6 +31,7 @@ public partial class LauncherUpdateDialog : Window
         _config = config;
 
         Title = Strings.Get("DlgLauncherUpdateTitle");
+        TitleBarControl.Title = Strings.Get("DlgLauncherUpdateTitle");
         HeaderText.Text = Strings.Get("DlgLauncherUpdateTitle");
         VersionInfoText.Text = Strings.Format(
             "DlgLauncherUpdateVersionInfo",

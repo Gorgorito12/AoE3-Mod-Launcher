@@ -62,6 +62,27 @@ public static class Strings
             [LangEn] = "{0} Launcher",
             [LangEs] = "{0} Launcher",
         },
+        // -------- Global title-bar caption-button tooltips --------
+        ["TitleBarMinimize"] = new()
+        {
+            [LangEn] = "Minimize",
+            [LangEs] = "Minimizar",
+        },
+        ["TitleBarMaximize"] = new()
+        {
+            [LangEn] = "Maximize",
+            [LangEs] = "Maximizar",
+        },
+        ["TitleBarRestore"] = new()
+        {
+            [LangEn] = "Restore",
+            [LangEs] = "Restaurar",
+        },
+        ["TitleBarClose"] = new()
+        {
+            [LangEn] = "Close",
+            [LangEs] = "Cerrar",
+        },
         // -------- Mod selector popup --------
         ["ModSelectorInstalled"] = new()
         {

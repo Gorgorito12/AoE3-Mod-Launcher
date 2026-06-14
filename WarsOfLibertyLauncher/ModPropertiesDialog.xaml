@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Mod properties"
         Height="640" Width="900"
         MinHeight="540" MinWidth="780"
@@ -10,6 +11,7 @@
         ResizeMode="CanResize"
         AllowsTransparency="False"
         Background="{DynamicResource BgBase}"
+        ShowInTaskbar="True"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
         TextOptions.TextHintingMode="Fixed">
@@ -37,23 +39,9 @@
           LANGUAGE    — Language combo with description
     -->
 
-    <!-- WindowChrome turns the top 40px of the window into a custom
-         drag area without painting a Windows-native caption bar. The
-         close button uses IsHitTestVisibleInChrome=True so clicks on
-         it dismiss the popup instead of starting a drag.
-         (Caption was 56 before the header was compacted to one row —
-         now the drag area ends exactly where the row ends so the
-         user can't accidentally start a drag below the close button.
-         ResizeBorderThickness=6 enables edge-drag resize even with
-         WindowStyle=None — paired with ResizeMode=CanResize above,
-         the user can stretch the dialog from any edge or corner.) -->
-    <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="40"
-                      ResizeBorderThickness="6"
-                      CornerRadius="0"
-                      GlassFrameThickness="0"
-                      UseAeroCaptionButtons="False"/>
-    </WindowChrome.WindowChrome>
+    <!-- WindowChrome (caption drag + edge-resize) is applied centrally in
+         App.OnAnyWindowLoaded from the TitleBarHeight token; the title bar is
+         the shared controls:TitleBar below. -->
 
     <Window.Resources>
         <!-- ============================================================
@@ -125,40 +113,8 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
-        <!-- Custom title-bar close button — same recipe as
-             TitleBarCloseButton in MainWindow.xaml: red DangerAlert
-             fill on hover (Windows convention), white glyph. Inline
-             template because the MainWindow style isn't visible to
-             this Window's namescope without exporting it to App
-             resources. -->
-        <Style x:Key="DialogCloseButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Width" Value="46"/>
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="4">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerAlert}"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- Title-bar close ✕ now lives in the shared controls:TitleBar
+             (Styles/Chrome.xaml TitleBarCloseButton) — no per-dialog style. -->
     </Window.Resources>
 
     <Grid>
@@ -168,71 +124,35 @@
         </Grid.RowDefinitions>
 
         <!-- =========================================================
-             HEADER — single compact row with mod name, version badge
-             and close button. Subtitle was removed (it said only
-             "Manage mod settings, files, backups and language" — pure
-             filler since the sidebar tabs already convey that). The
-             mod name shrank 22→15 px and the padding shrank 28,16 →
-             22,10 to give the content area ~55 px more vertical room.
+             HEADER — shared global title bar. Mod icon + name come from
+             TitleBar.TitleIcon / .Title (set in code-behind); the version
+             pill rides in BarContent (right-aligned). Close-only sheet.
              ========================================================= -->
-        <Border Grid.Row="0"
-                Background="{DynamicResource BgSidebar}"
-                BorderBrush="{DynamicResource BorderSecondary}"
-                BorderThickness="0,0,0,1"
-                Padding="22,10,8,10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center">
-                    <!-- Mod/game icon (cached catalog icon or built-in packed
-                         icon); collapsed in code-behind when there's none. -->
-                    <Border x:Name="HeaderIconHost"
-                            Width="24" Height="24"
-                            CornerRadius="5"
-                            Margin="0,0,10,0"
-                            VerticalAlignment="Center"
-                            Visibility="Collapsed"/>
-                    <TextBlock x:Name="HeaderTitleText"
-                               FontFamily="{DynamicResource DisplayFont}"
-                               FontSize="{StaticResource FontSizeHeading}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource AccentBrush}"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-
-                <Border x:Name="HeaderVersionBadge"
-                        Grid.Column="1"
-                        Style="{StaticResource DialogPillBadge}"
-                        Margin="0,0,12,0"
-                        Visibility="Collapsed">
-                    <TextBlock x:Name="HeaderVersionText"
-                               Foreground="{DynamicResource AccentBrush}"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               FontWeight="SemiBold"/>
-                </Border>
-
-                <Button x:Name="CloseBtn"
-                        Grid.Column="2"
-                        Style="{StaticResource DialogCloseButton}"
-                        Content="&#xE8BB;"
-                        VerticalAlignment="Center"
-                        Click="CloseBtn_Click"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-            </Grid>
-        </Border>
+        <controls:TitleBar Grid.Row="0"
+                           x:Name="TitleBarControl"
+                           ShowMinimize="True"
+                           ShowMaximize="True"
+                           ShowClose="True">
+            <Border x:Name="HeaderVersionBadge"
+                    Style="{StaticResource DialogPillBadge}"
+                    HorizontalAlignment="Right"
+                    Margin="0,0,8,0"
+                    Visibility="Collapsed">
+                <TextBlock x:Name="HeaderVersionText"
+                           Foreground="{DynamicResource AccentBrush}"
+                           FontSize="{StaticResource FontSizeCaption}"
+                           FontWeight="SemiBold"/>
+            </Border>
+        </controls:TitleBar>
 
         <!-- =========================================================
              TABS + CONTENT
              ========================================================= -->
         <Grid Grid.Row="1" x:Name="PropsContentRoot">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="Auto"
+                                  MinWidth="{StaticResource SidebarRailMinWidth}"
+                                  MaxWidth="{StaticResource SidebarRailMaxWidth}"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -252,8 +172,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabGeneralLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabLocalFilesBtn"
@@ -266,8 +185,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabLocalFilesLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabUserDataBtn"
@@ -280,8 +198,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabUserDataLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabLanguageBtn"
@@ -294,8 +211,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabLanguageLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>

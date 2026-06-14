@@ -435,6 +435,47 @@ don't go looking for it.)
   (settings, mod switch, gear) get the two-tone rim; the gold brand popup
   is the deliberate exception.
 
+- **Hand-built `Popup`s are coordinated centrally by `Controls/ChromePopups.cs`
+  — don't add per-handler close logic.** The launcher's code-behind transient
+  menus (the title-bar brand dropdown `BuildBrandPopup` and the dashboard MODS
+  switcher `DashboardChangeModButton_Click`) are `AllowsTransparency=true` +
+  `StaysOpen=false`, and WPF's auto-dismiss for that combo is **unreliable when a
+  non-modal Window steals activation** — so a popup lingered behind a freshly-
+  opened dialog (the reported "open MODS, click the gear, the menu stays open"
+  bug). `ChromePopups` enforces a single-open invariant app-wide: each popup calls
+  `ChromePopups.Track(popup)` once at construction (wires `Opened` = claim slot +
+  close the previously-tracked popup → mutual exclusion, and `Closed` = release
+  slot with a `ReferenceEquals` guard), and `ChromePopups.CloseOpen()` closes
+  whatever is open. The **close-on-dialog-open** hook lives in
+  `App.OnAnyWindowLoaded` (the same `Window.Loaded` class handler that does HiDPI
+  / rounded corners / maximize-fix): for any window that is **not `MainWindow`**
+  it calls `CloseOpen()` (covers a fresh dialog instance — `Loaded` fires per
+  open, e.g. `ModPropertiesDialog` is rebuilt each time) AND subscribes
+  `w.Activated += CloseOpen` (covers single-instance dialogs reused via
+  `Activate()`). `MainWindow` is **excluded on purpose** — its own activation must
+  never close a popup that legitimately lives on it (qualify the type as
+  `WarsOfLibertyLauncher.MainWindow` in `App`, since bare `MainWindow` binds to
+  the inherited `Application.MainWindow` property). WPF `ContextMenu`s (gear
+  `MoreButton`, `ModsBrowser` menus) are NOT tracked — they capture input and
+  auto-dismiss reliably on their own. A new hand-built popup only needs
+  `ChromePopups.Track(popup, ownerButton)` to inherit all of this.
+  **These openers are TOGGLES.** A re-click of the brand / MODS button should
+  CLOSE its popup, not reopen it — but a `StaysOpen=false` popup already
+  auto-dismisses on the mouse-down that re-clicks its own opener, so by the time
+  the button's `Click` fires the popup is gone and a naive "open on click" would
+  immediately reopen it (the "just reopens" flicker the user reported). So each
+  opener calls `ChromePopups.ConsumeToggleOff(btn)` at the TOP of its handler and
+  returns when it's `true` — `Track(popup, owner)` stamps the owner+tick on
+  `Closed`, and `ConsumeToggleOff` reports "a popup owned by this button was
+  dismissed within the last 300 ms" (i.e. this click is the toggle-off). For the
+  owner match to work, pass the SAME stable button instance to both `Track` and
+  `ConsumeToggleOff`. The **gear** is a toggle too but via a different path: it
+  opens a real Window (`ModPropertiesDialog`), not a popup, so
+  `DashboardSettingsButton_Click` simply does `if (_modPropertiesDialog != null)
+  { _modPropertiesDialog.Close(); return; }` before `OpenModPropertiesDialog`
+  (the dialog is non-modal, so the gear stays clickable behind it; `Close()`
+  raises `Closed` synchronously which nulls the field + refreshes the chrome).
+
 - **The cinema dashboard hero scales with the window — via one transform, not
   per-element font sizes.** The PlayView "Layer 4" Grid (title + description +
   version chip + action row + progress strip, `HeroContentGrid`) is scaled by
@@ -709,8 +750,9 @@ don't go looking for it.)
   and has **no `Owner`** (`OpenLobbyWindow` deliberately does NOT set one), so it
   gets its own taskbar entry next to the launcher, alt-tabs independently, can sit
   on another monitor, and is NOT hidden when the launcher minimizes. The title bar
-  has the full **minimise / maximise / close** trio (`MinimizeBtn` / `MaximizeBtn`
-  / `CloseHeaderBtn`); minimise is a plain `WindowState.Minimized`, which —
+  is the shared `Controls/TitleBar` (see its global bullet) with the full
+  **minimise / maximise / close** trio (`ShowMinimize`/`ShowMaximize`/`ShowClose`
+  all true); minimise is a plain `WindowState.Minimized`, which —
   *because* `ShowInTaskbar="True"` — goes to the **Windows taskbar button** (click
   it to restore), NOT a desktop stub. **`ShowInTaskbar="True"` is load-bearing:**
   the entire original "minimise pops a system menu" bug came from
@@ -1400,22 +1442,90 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   should remain square — setting both creates a ~1-2 px hit-test mismatch
   at the corners. Don't add per-XAML `CornerRadius` to the outer Border of
   any Window to fake this — DWM owns the outer shape now.
+- **The custom title bar is ONE global component — `Controls/TitleBar`. Don't
+  hand-roll a title bar per window.** Every launcher Window (all 16: MainWindow,
+  LobbyWindow, the settings/properties sheets, the install/update/translations/
+  maintenance/room dialogs — formerly some had a per-window dark bar and seven
+  used the white OS chrome) now drops a single `<controls:TitleBar .../>` into
+  `Grid.Row="0"` instead of building its own header. It is a **templated
+  `ContentControl`** (NOT a UserControl — a UserControl owns a namescope, so
+  naming elements inside consumer-supplied content throws MC3093; a ContentControl
+  hosts named content like a `Button` does). The template lives in
+  `Styles/Chrome.xaml` (implicit `Style TargetType="controls:TitleBar"`), the
+  caption-button styles (`TitleBarButton` / `TitleBarCloseButton`) are there too,
+  and ALL geometry — bar height, button size, glyph + title sizes, gutters — comes
+  from the `TitleBar*` tokens in `Styles/Tokens.xaml` (`TitleBarHeight=36` is the
+  single height knob; change it once and every window + the caption drag region
+  follow). **Bar height and title size are SEPARATE tokens** — `TitleBarTitleSize`
+  is 24 (the original window-title size, gold DisplayFont); shrinking the bar must
+  never shrink the title, so the height is sized to fit the 24px title centred
+  (~28px tall, fits within 36 with margin), not the other way around. (History: the title was briefly unified down to 18 to
+  compact the bar — that was wrong; restored to 24 and the bar grows to hold it.) Per-window config is **only** via DependencyProperties — `Title`,
+  `TitleIcon` (ImageSource), `Content` (extra bar content: MainWindow's brand
+  dropdown button, ModProperties' version badge, PublishMod/Radmin subtitle),
+  `ShowMinimize` / `ShowMaximize` / `ShowClose` — plus the window's own
+  `ResizeMode`/`SizeToContent`. **No window-name conditions anywhere.** Button
+  policy (property-driven, no name checks): **resizable non-modal** windows
+  (`MainWindow`, `LobbyWindow`, `LauncherSettingsDialog`, `ModPropertiesDialog`)
+  show **min+max+close** — and those must be `ShowInTaskbar="True"` so minimize
+  goes to a real taskbar button instead of the unstylable desktop stub (the same
+  reason `LobbyWindow` is True; `LauncherSettingsDialog` was flipped False→True
+  for this); **resizable modal wizards** (`PublishModDialog`,
+  `TranslationPackagerDialog`) show **max+close, NO minimize** (a modal must not
+  minimize away from its blocked owner); **NoResize / SizeToContent dialogs**
+  (`CreateLobbyDialog`, install/update/translations-apply/uninstall/user-data/
+  password/login, `RadminAssistantWindow`) are **close-only**. Maximize auto-hides
+  when the window can't actually maximize (NoResize/CanMinimize or
+  SizeToContent≠Manual), so a misconfig can't show a dead button. **WindowChrome is applied CENTRALLY**
+  in `App.OnAnyWindowLoaded` (`ApplyWindowChrome`) to every `WindowStyle=None`
+  window — CaptionHeight = the `TitleBarHeight` token (so the whole bar is the
+  native drag region), ResizeBorderThickness = 6 if resizable else 0 — so **no
+  window declares `<WindowChrome>` in XAML anymore**, and drag / double-click-
+  maximize / restore-on-drag / min-size / DPI / multi-monitor all come free and
+  native (no DragMove/OnStateChanged code per window). The buttons wire to
+  `SystemCommands.Minimize/Maximize/Restore/CloseWindow`; close = `Window.Close()`
+  so each window's `Closing`/`Closed` cleanup (LobbyWindow leave-room, settings
+  refresh, modal DialogResult=cancel) runs unchanged. Caption-button tooltips are
+  localized (`TitleBar*` keys in `Strings.cs`). A new window needs zero chrome
+  code: set `WindowStyle="None"`, add `<controls:TitleBar .../>` in Row 0, done.
+  **MainWindow header alignment + crispness:** the brand button is the TitleBar's
+  `Content` and carries NO own left `Padding` (and no stray `Grid.Column`), so it
+  sits flush at the TitleBar content gutter (`TitleBarContentPadding.Left` = 12);
+  the nav strip's `NavTabButton` uses **left** padding 12 to match (right padding
+  22 for spacing), so the brand and the LIBRARY/WORKSHOP/MULTIPLAYER tabs share
+  one consistent left gutter snug to the corner — don't reintroduce a per-button
+  left margin to "fix" alignment, keep the shared 12 gutter. The main tabs are sized via the dedicated
+  `NavTabTextSize` token (14 = `FontSizeBody`, Steam-like; icons 16) in a 38px nav
+  strip row (the title bar itself stays 36). **Crispness:** the TitleBar template root sets
+  `SnapsToDevicePixels="True"` + `UseLayoutRounding="True"` (both INHERITED) so the
+  brand's bitmap icon + wordmark pin to whole device pixels — without it the icon
+  landed on a sub-pixel X at 125/150% DPI (18 DIP × 1.25 = 22.5 px) and looked
+  blurry. The blur is NOT from any transform (the header is never scaled —
+  `UiScale.Attach` is hero-only, `Track` doesn't transform); don't "fix" it with
+  scaling or by shrinking text.
+  **Don't re-add a per-window `WindowChrome`, a per-window close/min/max style, or
+  an `OnStateChanged` glyph swap — the component owns all of it.** (The two
+  formerly-floating dialogs `CreateLobbyDialog` / `TranslationApplyDialog` were
+  de-transparency'd — `AllowsTransparency` removed, opaque `BgBase`, DWM rounds the
+  corners — so they're ordinary chrome windows like the rest.)
 - **Settings / Properties / Lobby dialogs share a non-modal + resizable
   + single-instance pattern.** `ModPropertiesDialog`, `LauncherSettingsDialog`
-  and `LobbyWindow` all pair a custom dark `WindowChrome`
-  (`WindowStyle="None"` + 30–40 px caption + 6 px `ResizeBorderThickness` for
-  edge-drag, recipe replicated as the `DialogCloseButton` local style).
-  Title-bar buttons diverge: `LauncherSettingsDialog` and
+  and `LobbyWindow` are all `WindowStyle="None"` + `ResizeMode="CanResize"`.
+  **(Chrome update: the title bar itself is now the shared `Controls/TitleBar`
+  component — WindowChrome is applied centrally and the old per-window
+  `DialogCloseButton`/`TitleBarChromeButton` styles + `OnStateChanged` glyph swap
+  are GONE; see the global TitleBar bullet above. The rest of this bullet — the
+  non-modal / single-instance / DialogResult lifecycle — still holds.)**
+  Title-bar buttons diverge via the TitleBar's `ShowMinimize`/`ShowMaximize`/
+  `ShowClose` DPs: `LauncherSettingsDialog` and
   `ModPropertiesDialog` show only the close ✕ (they're settings sheets —
   minimise/maximise would be unusual there), while `LobbyWindow` shows the full
-  **minimise / maximise / close** trio (`TitleBarChromeButton` neutral hover +
-  `DialogCloseButton` red hover) — it's a `ShowInTaskbar="True"`, ownerless,
+  **minimise / maximise / close** trio — it's a `ShowInTaskbar="True"`, ownerless,
   independent window (see its dedicated bullet above), so minimise goes to its
   own Windows taskbar button like any normal app window.
-  The maximise glyph swaps via `OnStateChanged` in code-behind (Segoe MDL2
-  `0xE922` ↔ `0xE923`); the App.OnStartup WM_GETMINMAXINFO hook handles
-  the maximise-respects-taskbar bound. `LobbyWindow` also uses a smaller
-  30 px caption + tighter padding because the rich room info lives in its own
+  The maximise glyph swap + the WM_GETMINMAXINFO maximise-respects-taskbar bound
+  are handled by the TitleBar component + the App.OnStartup hook respectively.
+  `LobbyWindow` keeps the rich room info in its own
   sub-header strip below the chrome: a `RoomTitleText` + `RoomMetaText`
   status/P2P meta line, then `PLAYERS` and `ROOM ID` stat blocks where the
   `ROOM ID` carries a `CopyRoomIdButton` (📋, flashes ✓ for ~1.4 s on copy —
@@ -1426,11 +1536,21 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   info card was renamed `ROOM & NETWORK INFO` → `ROOM INFO` and trimmed from
   four cells to `RoomInfoCard` = Mod + Password only (Connection duplicated the
   header's P2P status, Max players duplicated the PLAYERS stat); the card
-  collapses when neither field has data. The two settings dialogs keep the taller 40 px caption since
-  their title is the only thing in the chrome row. The two settings dialogs add a 200-px left rail of
-  `SidebarNavButton` buttons (from `Styles/Buttons.xaml`) and a
-  `SetActiveTab(button)` helper that toggles `Tag="active"` on the chosen
-  button while flipping `Visibility` on the matching content `StackPanel`;
+  collapses when neither field has data. The two settings dialogs use the shared
+  `controls:TitleBar` like everything else. They add an **auto-width** left rail of
+  `SidebarNavButton` buttons (from `Styles/Buttons.xaml`): the rail
+  `ColumnDefinition` is `Width="Auto"` clamped to the `SidebarRailMin/MaxWidth`
+  tokens, so WPF sizes it to the WIDEST nav item (this fixed "CATÁLOGO DE MODS"
+  clipping at the old hardcoded 200px). Label size is its OWN token
+  `SidebarNavTextSize` (16, the size the style was designed around — independent
+  of `FontSizeBody` and of the rail width: the rail grows to fit the text, the
+  text is never shrunk to fit the rail). The labels use the keyed
+  `SidebarNavLabel` style (`TextTrimming=CharacterEllipsis`) so a label past the
+  max ellipsises instead of clipping silently. The `Tag="active"` trigger is
+  white text + **bold** + gold stripe (the original emphasis); because the rail is
+  `Width="Auto"`, selecting the LONGEST label can widen the rail by a few px —
+  an accepted minor trade-off for keeping the bold. A `SetActiveTab(button)` helper toggles `Tag="active"` on the
+  chosen button while flipping `Visibility` on the matching content `StackPanel`;
   the gold right-rail accent is driven entirely by the style's
   `Tag="active"` trigger — no per-dialog colour code. Tab labels reuse the
   same uppercase section strings (`GENERAL`, `UPDATES`, etc.) the in-content

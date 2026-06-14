@@ -53,6 +53,7 @@ public partial class InstallFolderDialog : Window
     private void ApplyLanguage()
     {
         Title = Strings.Format("DlgPickInstallFolderTitle", _modDisplayName);
+        TitleBarControl.Title = Strings.Format("DlgPickInstallFolderTitle", _modDisplayName);
         HeaderText.Text = Strings.Get("DlgPickInstallFolderHeader");
         DescriptionText.Text = Strings.Format("DlgPickInstallFolderDescription", _modDisplayName);
         LblAoE3Folder.Text = Strings.Get("LblGamePath");

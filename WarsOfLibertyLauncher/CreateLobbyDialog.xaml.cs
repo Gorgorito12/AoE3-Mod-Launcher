@@ -79,7 +79,7 @@ public partial class CreateLobbyDialog : Window
         _lobbyMaxPlayers = lobbyMaxPlayers;
 
         Title = Strings.Get("MpCreateDialogTitle");
-        TitleText.Text = Strings.Get("MpCreateDialogTitle");
+        TitleBarControl.Title = Strings.Get("MpCreateDialogTitle");
         ModLabel.Text = Strings.Get("MpCreateDialogModLabel");
         // HashLabel is rendered next to the "Advanced details" toggle
         // and uses the localised "(mod fingerprint)" suffix from the
@@ -339,27 +339,6 @@ public partial class CreateLobbyDialog : Window
         var nowVisible = HashText.Visibility != Visibility.Visible;
         HashText.Visibility = nowVisible ? Visibility.Visible : Visibility.Collapsed;
         AdvancedCaret.Text = nowVisible ? "▾" : "▸";
-    }
-
-    /// <summary>
-    /// Window drag: with WindowStyle=None we lose the OS-provided
-    /// caption drag, so we forward MouseLeftButtonDown on the
-    /// header strip to DragMove(). Same trick MainWindow uses for
-    /// its custom title bar.
-    /// </summary>
-    private void HeaderDrag_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        try
-        {
-            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
-                DragMove();
-        }
-        catch
-        {
-            // DragMove throws when the mouse button is no longer
-            // pressed (race during DPI scaling, etc.). Swallow —
-            // the drag just doesn't happen.
-        }
     }
 }
 

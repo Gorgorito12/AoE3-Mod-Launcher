@@ -287,7 +287,7 @@ public partial class RadminAssistantWindow : Window
     private void ApplyStrings()
     {
         Title = Strings.Get("RadAsstWindowTitle");
-        HeaderTitleText.Text = Strings.Get("RadAsstHeaderTitle");
+        TitleBarControl.Title = Strings.Get("RadAsstHeaderTitle");
         HeaderSubtitleText.Text = Strings.Get("RadAsstHeaderSubtitle");
         Step1Title.Text = Strings.Get("RadAsstStep1Title");
         Step2Title.Text = Strings.Get("RadAsstStep2Title");
@@ -295,7 +295,6 @@ public partial class RadminAssistantWindow : Window
         Step4Title.Text = Strings.Get("RadAsstStep4Title");
         DontShowAgainCheck.Content = Strings.Get("RadAsstDontShowAgain");
         CloseBtn.Content = Strings.Get("RadAsstClose");
-        HeaderCloseBtn.ToolTip = Strings.Get("RadAsstClose");
         CopyNetworkBtn.ToolTip = Strings.Get("RadAsstCopyNetwork");
     }
 
@@ -341,6 +340,4 @@ public partial class RadminAssistantWindow : Window
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
-
-    private void HeaderCloseBtn_Click(object sender, RoutedEventArgs e) => Close();
 }

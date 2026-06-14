@@ -53,6 +53,7 @@ public partial class UninstallDialog : Window
     private void ApplyLanguage()
     {
         Title = Strings.Format("DlgUninstallTitle", _modDisplayName);
+        TitleBarControl.Title = Strings.Format("DlgUninstallTitle", _modDisplayName);
         HeaderText.Text = Strings.Format("DlgUninstallHeader", _modDisplayName);
         DescriptionText.Text = Strings.Format("DlgUninstallDescription", _modDisplayName);
         LblInstallPath.Text = Strings.Get("DlgUninstallInstallPathLabel");

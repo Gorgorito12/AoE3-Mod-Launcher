@@ -116,7 +116,7 @@ public partial class ModPropertiesDialog : Window
     private void ApplyStrings()
     {
         Title = Strings.Format("ModPropTitle", _profile.DisplayName ?? "");
-        HeaderTitleText.Text = _profile.DisplayName ?? "";
+        TitleBarControl.Title = _profile.DisplayName ?? "";
         // (The neutral subtitle that used to sit under HeaderTitleText
         // was removed when the header was compacted to a single row —
         // the sidebar tabs already communicate "this is where you
@@ -176,12 +176,8 @@ public partial class ModPropertiesDialog : Window
         LblLanguageCurrent.Text = Strings.Get("ModPropLanguageCurrent");
         LanguageEmptyHint.Text = Strings.Get("ModPropNoTranslations");
 
-        // CloseBtn is now the custom ✕ glyph in the header (Steam-style
-        // chrome) instead of a labelled footer button — its content is
-        // a Segoe MDL2 glyph set in XAML, so we skip rebinding it from
-        // Strings here. The ModPropClose string is kept in the
-        // dictionary for ToolTip / future use.
-        CloseBtn.ToolTip = Strings.Get("ModPropClose");
+        // The header close ✕ is now the shared controls:TitleBar's own
+        // button (localized tooltip handled inside TitleBar).
     }
 
     private void LoadGeneral()
@@ -189,16 +185,8 @@ public partial class ModPropertiesDialog : Window
         // Header mod/game icon (cached catalog icon.png or built-in packed
         // icon). Collapsed when the mod ships no icon — the title alone reads
         // fine then.
-        var headerIcon = LoadIconBrush(_profile);
-        if (headerIcon != null)
-        {
-            HeaderIconHost.Background = headerIcon;
-            HeaderIconHost.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            HeaderIconHost.Visibility = Visibility.Collapsed;
-        }
+        // The shared title bar shows the icon (collapses it when null).
+        TitleBarControl.TitleIcon = LoadIconBrush(_profile)?.ImageSource;
 
         ValName.Text = _profile.DisplayName ?? "";
         ValAuthor.Text = string.IsNullOrWhiteSpace(_profile.Author) ? "—" : _profile.Author;
@@ -747,8 +735,4 @@ public partial class ModPropertiesDialog : Window
         RefreshData();
     }
 
-    private void CloseBtn_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
-    }
 }

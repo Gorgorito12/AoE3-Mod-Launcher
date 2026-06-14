@@ -2,15 +2,16 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Launcher Settings"
         Height="600" Width="820"
-        MinHeight="540" MinWidth="720"
+        MinHeight="540" MinWidth="760"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="CanResize"
         AllowsTransparency="False"
         Background="{DynamicResource BgBase}"
-        ShowInTaskbar="False">
+        ShowInTaskbar="True">
 
     <!--
         Launcher-wide settings dialog. Layout refactored from "one long
@@ -37,19 +38,9 @@
         TabXxxBtn_Click handlers, copied verbatim from ModPropertiesDialog.
     -->
 
-    <!-- ResizeBorderThickness=6 enables edge-drag resize even though
-         WindowStyle=None hides the native chrome — paired with
-         ResizeMode=CanResize above, the user can stretch the dialog
-         from any edge or corner. CaptionHeight=40 still scopes the
-         drag area to the header row so the sidebar tabs stay
-         clickable instead of starting a drag on click. -->
-    <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="40"
-                      ResizeBorderThickness="6"
-                      CornerRadius="0"
-                      GlassFrameThickness="0"
-                      UseAeroCaptionButtons="False"/>
-    </WindowChrome.WindowChrome>
+    <!-- WindowChrome (caption drag area + edge-resize) is applied centrally
+         in App.OnAnyWindowLoaded from the global TitleBarHeight token; the
+         title bar itself is the shared controls:TitleBar below. -->
 
     <Window.Resources>
         <!-- Hairline divider between groups inside a tab panel. Same
@@ -83,37 +74,8 @@
             <Setter Property="Margin" Value="0,2,0,0"/>
         </Style>
 
-        <!-- Title-bar close ✕. Inline template instead of {StaticResource
-             DialogCloseButton} because that style is local to the
-             ModPropertiesDialog Window scope. -->
-        <Style x:Key="DialogCloseButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Width" Value="46"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="4">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerAlert}"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- Title-bar close ✕ now lives in the shared controls:TitleBar
+             (Styles/Chrome.xaml TitleBarCloseButton) — no per-dialog style. -->
     </Window.Resources>
 
     <Grid>
@@ -124,41 +86,22 @@
         </Grid.RowDefinitions>
 
         <!-- =========================================================
-             HEADER — compact single row: title + close.
+             HEADER — shared global title bar (close-only sheet).
              ========================================================= -->
-        <Border Grid.Row="0"
-                Background="{DynamicResource BgSidebar}"
-                BorderBrush="{DynamicResource BorderSecondary}"
-                BorderThickness="0,0,0,1"
-                Padding="22,10,8,10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0"
-                           x:Name="TitleText"
-                           FontFamily="{DynamicResource DisplayFont}"
-                           FontSize="{StaticResource FontSizeHeading}"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource AccentBrush}"
-                           VerticalAlignment="Center"/>
-                <Button x:Name="CloseHeaderBtn"
-                        Grid.Column="1"
-                        Style="{StaticResource DialogCloseButton}"
-                        Content="&#xE8BB;"
-                        VerticalAlignment="Center"
-                        Click="CancelButton_Click"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-            </Grid>
-        </Border>
+        <controls:TitleBar Grid.Row="0"
+                           x:Name="TitleBarControl"
+                           ShowMinimize="True"
+                           ShowMaximize="True"
+                           ShowClose="True"/>
 
         <!-- =========================================================
              SIDEBAR + TAB PANELS
              ========================================================= -->
         <Grid Grid.Row="1" x:Name="SettingsContentRoot">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="Auto"
+                                  MinWidth="{StaticResource SidebarRailMinWidth}"
+                                  MaxWidth="{StaticResource SidebarRailMaxWidth}"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -179,8 +122,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabGeneralLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabInterfaceBtn"
@@ -193,8 +135,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabInterfaceLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabUpdatesBtn"
@@ -207,8 +148,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabUpdatesLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabCatalogBtn"
@@ -221,8 +161,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabCatalogLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabTranslationsBtn"
@@ -235,8 +174,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabTranslationsLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabMaintenanceBtn"
@@ -249,8 +187,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabMaintenanceLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="TabPrivacyBtn"
@@ -263,8 +200,7 @@
                                        Margin="0,0,12,0"
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="TabPrivacyLabel"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
+                                       Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>

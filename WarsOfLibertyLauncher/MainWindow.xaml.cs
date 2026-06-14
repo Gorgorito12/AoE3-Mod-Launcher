@@ -130,11 +130,8 @@ public partial class MainWindow : Window
         ActionPanelControl.MenuViewLogs.Click += MenuViewLogs_Click;
         ActionPanelControl.UninstallMenuItem.Click += UninstallMenuItem_Click;
 
-        // Title-bar maximize/restore glyph stays in sync with the
-        // window state. Without this the button would always show
-        // "maximize" even after the user maximised the window.
-        StateChanged += (_, _) => SyncMaximizeGlyph();
-        Loaded += (_, _) => SyncMaximizeGlyph();
+        // Title-bar minimize/maximize/restore/close + the maximize-glyph
+        // sync are now owned by the shared controls:TitleBar in Row 0.
 
         // Window-size UI scaling (Controls/UiScale.cs). The hero keeps its OWN
         // render transform pinned bottom-left over its full-bleed background
@@ -3595,6 +3592,20 @@ public partial class MainWindow : Window
     /// </summary>
     private void DashboardSettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        // Toggle: the gear opens the per-mod Properties dialog, and
+        // clicking it AGAIN while that dialog is open closes it (the
+        // dialog is non-modal, so the gear stays clickable behind it).
+        // Without this the click fell straight through to
+        // OpenModPropertiesDialog, which closes the stale dialog and
+        // opens a fresh one — so the user saw the menu "just reopen"
+        // instead of closing. Close() raises Closed synchronously, whose
+        // handler nulls _modPropertiesDialog and refreshes the chrome.
+        if (_modPropertiesDialog != null)
+        {
+            _modPropertiesDialog.Close();
+            return;
+        }
+
         // Per user-redesign: gear opens the ModPropertiesDialog
         // directly. The previous SETTINGS popup (flat list of
         // maintenance/config actions) was folded into the dialog's
@@ -3613,6 +3624,12 @@ public partial class MainWindow : Window
     private void BrandMenuButton_Click(object sender, RoutedEventArgs e)
     {
         var btn = (System.Windows.Controls.Button)sender;
+
+        // Toggle: if this same click is the one that just dismissed the brand
+        // popup (StaysOpen=false auto-closes on the re-click), don't reopen it.
+        if (Controls.ChromePopups.ConsumeToggleOff(btn))
+            return;
+
         var popup = BuildBrandPopup(btn);
 
         // Light up the button for as long as the menu is showing: Tag
@@ -3732,6 +3749,9 @@ public partial class MainWindow : Window
                 System.Windows.Application.Current.Shutdown();
             }));
 
+        // Single-open invariant + close-on-dialog-open + toggle (see ChromePopups).
+        // Owner = the anchor button so a re-click toggles it off.
+        Controls.ChromePopups.Track(popup, anchor);
         return popup;
     }
 
@@ -3749,47 +3769,10 @@ public partial class MainWindow : Window
             MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    // -- Custom title bar handlers ------------------------------------------
-    //
-    // WindowStyle=None removed the Windows-default chrome (the white
-    // strip with min/max/close). We replaced it with a custom 32px
-    // title bar in BgSidebar so the whole window reads as one
-    // cohesive dark surface. WindowChrome (set in XAML) keeps Aero
-    // snap, double-click-to-maximize, drag-to-snap, etc. — but the
-    // min/max/close buttons are ours and have to wire WindowState.
+    // The custom title-bar min/max/close handlers + the maximize-glyph sync
+    // moved to the shared controls:TitleBar (Controls/TitleBar.xaml.cs); the
+    // brand button stays here as the bar's BarContent (BrandMenuButton_Click).
 
-    private void TitleBarMinimizeButton_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState.Minimized;
-    }
-
-    private void TitleBarMaximizeButton_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState == WindowState.Maximized
-            ? WindowState.Normal
-            : WindowState.Maximized;
-    }
-
-    private void TitleBarCloseButton_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
-    }
-
-    /// <summary>
-    /// Flip the maximize-button glyph between "Maximize" (square)
-    /// and "Restore" (overlapping squares) when the window state
-    /// changes. Hooked once in the constructor — see StateChanged
-    /// subscription. Glyph codepoints:
-    ///    = ChromeMaximize
-    ///    = ChromeRestore
-    /// </summary>
-    private void SyncMaximizeGlyph()
-    {
-        if (TitleBarMaximizeGlyph == null) return;
-        TitleBarMaximizeGlyph.Text = WindowState == WindowState.Maximized
-            ? ""
-            : "";
-    }
 
 
     // The dashboard hero's window-size scaling moved to the shared scaler
@@ -4168,6 +4151,11 @@ public partial class MainWindow : Window
     {
         var btn = (System.Windows.Controls.Button)sender;
 
+        // Toggle: if this same click is the one that just dismissed the MODS
+        // popup (StaysOpen=false auto-closes on the re-click), don't reopen it.
+        if (Controls.ChromePopups.ConsumeToggleOff(btn))
+            return;
+
         var popup = new System.Windows.Controls.Primitives.Popup
         {
             PlacementTarget = btn,
@@ -4182,6 +4170,12 @@ public partial class MainWindow : Window
             AllowsTransparency = true,
             PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
         };
+
+        // Single-open invariant + close-on-dialog-open + toggle (see ChromePopups):
+        // mutually exclusive with the brand popup, closed automatically when the
+        // gear (ModPropertiesDialog) or any other dialog opens, and re-clicking
+        // the MODS button (owner = btn) toggles it off instead of reopening.
+        Controls.ChromePopups.Track(popup, btn);
 
         // Two-tone "punched out" rim — same recipe as the gear
         // ContextMenu's template in ActionPanel.xaml: outer 1px
