@@ -775,6 +775,68 @@ don't go looking for it.)
   no elevation, no re-download. Don't reintroduce a path that lets a PNG reach a
   shortcut's IconLocation.
 
+- **A mod's detail panel has a screenshot/GIF gallery — and GIFs animate ONLY
+  there, not in the icon/banner/hero.** A catalog `mod.json` may declare a
+  `screenshots` array (`screenshot1..8.<ext>`, PNG/JPEG/**GIF**, ≤2 MB each, max
+  8 — see the catalog repo's `CLAUDE.md`/`mod.schema.json`). It flows
+  `ModCatalogManifest.Screenshots` → `ModCatalogEntry.ScreenshotUrls` (resolved
+  through the same anti-traversal `ResolveAssetUrl` as icon/banner) →
+  `ModProfile.ScreenshotUrls`, and is cached as `{modId}-shot-{i}{ext}`
+  (2 MB cap) by `ModAssetCacheService.GetScreenshotPathsAsync`. **It's lazy and
+  separate from the icon/banner fetch:** screenshots download only when the
+  detail panel opens (`MainWindow.EnsureScreenshotsAsync`, its OWN per-session
+  guard `_screenshotFetchAttempted`), never eagerly per card. The UI
+  (`ModsBrowser`: `DetailGalleryStrip` thumbnails + the big `DetailGalleryViewer`
+  Image) is **collapsed when the mod has no screenshots** (zero regression for
+  old manifests / built-ins). **GIF animation is confined to the large viewer
+  on purpose:** the viewer is a WPF `Image`, so a `.gif` animates via
+  `XamlAnimatedGif.AnimationBehavior.SetSourceUri` (the `XamlAnimatedGif` 2.3.2
+  package, Apache-2.0, managed-only); thumbnails stay static because
+  `TryLoadBitmap` decodes only frame 0. The banner/hero surfaces are
+  `ImageBrush`, which `XamlAnimatedGif` can't animate, so a GIF there would look
+  static anyway — hence the catalog schema forbids GIF outside `screenshots`.
+  `ClearGallery`/`SelectGalleryShot` stop the animation on a non-GIF shot and on
+  detail close. (Localized via the `WorkshopGalleryTitle` key, passed into
+  `ModsBrowser` as the `GalleryTitleText` property — `ModsBrowser` doesn't import
+  `Localization`, so strings reach it as properties set in `ApplyLanguage`.)
+
+- **The mod-asset cache is stale-while-revalidate: it reflects a catalog image
+  being DELETED or REPLACED, and it's offline-safe — don't revert it to
+  fetch-once.** Each cached asset has a sidecar `{modId}-{role}.meta` (JSON
+  `{ url, etag }`). `ModAssetCacheService` has two tracks: (1) the FAST path
+  (`GetIconPathAsync`/banner/hero/screenshots) — **no network** when the cached
+  file's URL matches; an empty/null URL means "removed from the catalog" → purge
+  the file + return null (UI falls to the monogram/gradient); a changed
+  URL/extension downloads. (2) the BACKGROUND path
+  (`RevalidateIconAsync`/banner/hero/screenshots) — a conditional GET
+  (`If-None-Match` with the stored ETag); a **304 is free**, a **200 means the
+  modder replaced the image under the SAME file name** → re-download in place and
+  return `changed:true`. `MainWindow.EnsureModAssetsAsync` runs both in order:
+  Phase 1 resolves every role from disk (reconciling a now-null URL too — the old
+  `isEmpty(LocalIconPath)` gate was removed so deletion is handled) and paints;
+  Phase 2 revalidates and, on a replacement, calls `InvalidateTileImageCache`
+  then repaints. **Two load-bearing invariants:** (a) **offline-safe — NEVER
+  delete a cached file on a network error.** The fast-path download is
+  download-FIRST, purge-stale-variants-AFTER a successful write (an existing user
+  with no `.meta` yet, or any failed/offline fetch, keeps serving the cached
+  image and self-heals the meta on the next online launch); the only deletes are
+  an explicit null URL (confirmed deletion) or a confirmed 200 replacement.
+  (b) **the bitmap loaders must `IgnoreImageCache`** — `TryLoadTileImage`
+  (MainWindow, plus its in-memory `s_tileImageCache` memo, invalidated by
+  `InvalidateTileImageCache`) and `TryLoadBitmap` (ModsBrowser) both set
+  `BitmapCreateOptions.IgnoreImageCache`, or a same-name replacement would repaint
+  WPF's stale per-URI cached bitmap. `BuildModCard` kicks `EnsureModAssetsAsync`
+  whenever the icon brush is null (not just when an `IconUrl` is present) so a mod
+  that dropped its ONLY image still purges the orphan. `PurgeRole`/`Clear` are
+  anchored to the exact `{modId}-{role}.` prefix (so `Clear("wol")` can't sweep
+  `wol-extra-*`); `GetScreenshotPathsAsync` purges surplus `shot-{i}` when a
+  gallery shrinks; and `ModRegistry.ApplyMerged`'s `ClearVanishedAssets` wipes a
+  community mod's assets when it leaves the catalog (built-ins/stock excluded).
+  **Known gap:** replacing a **GIF** shown in the large viewer goes through
+  `XamlAnimatedGif.SetSourceUri`, which has its own load path that
+  `IgnoreImageCache` doesn't cover, so a same-name GIF replacement can look stale
+  in the viewer until restart (thumbnails via `TryLoadBitmap` are fine).
+
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
   (`MultiplayerTab.xaml.cs`) fills it, and four duplications were stripped on

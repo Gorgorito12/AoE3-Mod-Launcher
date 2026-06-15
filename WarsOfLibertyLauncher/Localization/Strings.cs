@@ -1460,6 +1460,11 @@ public static class Strings
             [LangEn] = "Languages",
             [LangEs] = "Idiomas",
         },
+        ["WorkshopGalleryTitle"] = new()
+        {
+            [LangEn] = "Screenshots",
+            [LangEs] = "Capturas",
+        },
         ["ModsBrowserActionInstall"] = new()
         {
             [LangEn] = "Install mod",

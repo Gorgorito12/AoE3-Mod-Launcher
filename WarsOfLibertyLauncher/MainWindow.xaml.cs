@@ -105,6 +105,8 @@ public partial class MainWindow : Window
         // Dashboard (PLAY state machine + gear menu).
         ModsBrowserView.AddToCollectionRequested += ModsBrowserView_AddToCollectionRequested;
         ModsBrowserView.RemoveFromCollectionRequested += ModsBrowserView_RemoveFromCollectionRequested;
+        // Lazily fetch a mod's gallery screenshots when its detail panel opens.
+        ModsBrowserView.ScreenshotRequester = p => _ = EnsureScreenshotsAsync(p);
         // (RightClicked subscription removed — right-click on Workshop
         // rows no longer does anything. Per-mod admin actions live in
         // the dashboard gear button now.)
@@ -545,9 +547,14 @@ public partial class MainWindow : Window
         //      DisplayName) — handled below in the else branch.
         // For community mods that have an IconUrl but haven't been cached
         // yet, we kick off the download here so the next render swaps the
-        // monogram for the real icon.
+        // monogram for the real icon. We also kick it when there's NO icon
+        // brush at all (no IconUrl): EnsureModAssetsAsync then reconciles the
+        // cache — purging a now-orphaned file if the catalog dropped this mod's
+        // only image (URL→null path purges with no network). Mods whose icon is
+        // already painted (iconBrush != null) skip it; the per-session guard
+        // keeps this to one call per mod regardless.
         var iconBrush = TryLoadTileImage(ResolveModIcon(profile));
-        if (iconBrush == null && !string.IsNullOrEmpty(profile.IconUrl))
+        if (iconBrush == null)
             _ = EnsureModAssetsAsync(profile);
         UIElement iconChild;
         System.Windows.Media.Brush iconBg;
@@ -1107,6 +1114,12 @@ public partial class MainWindow : Window
                 var bmp = new System.Windows.Media.Imaging.BitmapImage();
                 bmp.BeginInit();
                 bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                // IgnoreImageCache: WPF caches decoded bitmaps by URI across the
+                // app. Without this, a catalog image REPLACED under the same file
+                // name (same on-disk path, new bytes) would repaint the stale
+                // bitmap. We invalidate s_tileImageCache too (see
+                // InvalidateTileImageCache); this covers WPF's own per-URI cache.
+                bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
                 bmp.UriSource = sourceUri;
                 bmp.EndInit();
                 source = bmp;
@@ -1129,6 +1142,19 @@ public partial class MainWindow : Window
             s_tileImageCache[uri] = null;
             return null;
         }
+    }
+
+    /// <summary>
+    /// Drops the memoized brush for <paramref name="path"/> so the next
+    /// <see cref="TryLoadTileImage"/> re-decodes from disk. Called when the
+    /// background revalidation detects a catalog image was replaced under the
+    /// same file name — the on-disk bytes changed but the path (cache key) did
+    /// not, so the memo would otherwise serve the stale brush forever.
+    /// </summary>
+    private static void InvalidateTileImageCache(string? path)
+    {
+        if (!string.IsNullOrEmpty(path))
+            s_tileImageCache.Remove(path);
     }
 
     // ------------------------------------------------------------------------
@@ -1666,6 +1692,7 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailUpdateMechLabel = Strings.Get("ModsBrowserDetailUpdates");
         ModsBrowserView.DetailWebsiteLabel = Strings.Get("ModsBrowserDetailWebsite");
         ModsBrowserView.DetailLanguagesLabel = Strings.Get("ModsBrowserDetailLanguages");
+        ModsBrowserView.GalleryTitleText = Strings.Get("WorkshopGalleryTitle");
         ModsBrowserView.DetailInstallLabel = Strings.Get("ModsBrowserActionInstall");
         ModsBrowserView.DetailUpdateLabel = Strings.Get("ModsBrowserActionUpdate");
         ModsBrowserView.DetailPlayLabel = Strings.Get("ModsBrowserActionPlay");
@@ -2515,6 +2542,14 @@ public partial class MainWindow : Window
     private readonly HashSet<string> _assetFetchAttempted = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Per-session guard so a mod's gallery screenshots are fetched at most once
+    /// (the detail panel can re-open many times). Separate from
+    /// <see cref="_assetFetchAttempted"/> so opening a detail doesn't block the
+    /// icon/banner fetch and vice-versa.
+    /// </summary>
+    private readonly HashSet<string> _screenshotFetchAttempted = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Profile ids whose shortcut icons we've already tried to heal this
     /// session. Older installs wrote a <c>.png</c> path into the desktop /
     /// Start Menu <c>.lnk</c> IconLocation (which Windows can't render — it
@@ -2567,46 +2602,27 @@ public partial class MainWindow : Window
         if (!_assetFetchAttempted.Add(profile.Id)) return;
 
         var cache = new ModAssetCacheService();
-        bool changed = false;
 
+        // --- Phase 1: fast resolve from disk (no network on a warm cache) ----
+        // Reconcile EVERY role against the CURRENT url — including a null url,
+        // which means the catalog removed that image: GetXPathAsync purges the
+        // cached file and returns null, so the stale image disappears (the UI
+        // falls back to the monogram / gradient). A changed extension/URL
+        // re-downloads; an unchanged warm cache returns instantly with no net.
+        bool changed = false;
         try
         {
-            if (string.IsNullOrEmpty(profile.LocalIconPath)
-                && !string.IsNullOrEmpty(profile.IconUrl))
-            {
-                var path = await cache.GetIconPathAsync(profile.Id, profile.IconUrl);
-                if (!string.IsNullOrEmpty(path))
-                {
-                    profile.LocalIconPath = path;
-                    changed = true;
-                }
-            }
+            var icon = await cache.GetIconPathAsync(profile.Id, profile.IconUrl);
+            if (!PathEquals(icon, profile.LocalIconPath)) { profile.LocalIconPath = icon; changed = true; }
 
-            if (string.IsNullOrEmpty(profile.LocalBannerPath)
-                && !string.IsNullOrEmpty(profile.BannerUrl))
-            {
-                var path = await cache.GetBannerPathAsync(profile.Id, profile.BannerUrl);
-                if (!string.IsNullOrEmpty(path))
-                {
-                    profile.LocalBannerPath = path;
-                    changed = true;
-                }
-            }
+            var banner = await cache.GetBannerPathAsync(profile.Id, profile.BannerUrl);
+            if (!PathEquals(banner, profile.LocalBannerPath)) { profile.LocalBannerPath = banner; changed = true; }
 
-            // Hero image — the large 1920×1080 dashboard background. Same
-            // lifecycle as the banner: lazily fetched, cached locally.
-            // When present, RefreshActiveModBanner prefers it over the
-            // (smaller, 1200×300) banner for the dashboard surface.
-            if (string.IsNullOrEmpty(profile.LocalHeroImagePath)
-                && !string.IsNullOrEmpty(profile.HeroImageUrl))
-            {
-                var path = await cache.GetHeroImagePathAsync(profile.Id, profile.HeroImageUrl);
-                if (!string.IsNullOrEmpty(path))
-                {
-                    profile.LocalHeroImagePath = path;
-                    changed = true;
-                }
-            }
+            // Hero image — the large 1920×1080 dashboard background. When
+            // present, RefreshActiveModBanner prefers it over the (smaller,
+            // 1200×300) banner for the dashboard surface.
+            var hero = await cache.GetHeroImagePathAsync(profile.Id, profile.HeroImageUrl);
+            if (!PathEquals(hero, profile.LocalHeroImagePath)) { profile.LocalHeroImagePath = hero; changed = true; }
         }
         catch (Exception ex)
         {
@@ -2616,19 +2632,100 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!changed) return;
-
-        // Bring the new assets to the screen. We may not be on the UI
+        // Bring the resolved assets to the screen. We may not be on the UI
         // thread (the await above hops off), so go through the dispatcher.
-        // Refreshing the cards re-runs BuildModCard for every profile,
-        // including the one whose icon just landed; refreshing the active
-        // banner is only needed if the just-fetched mod is the active one.
-        await Dispatcher.InvokeAsync(() =>
+        if (changed)
+            await Dispatcher.InvokeAsync(() => RepaintModAssets(profile));
+
+        // --- Phase 2: background revalidation (replacement detection) --------
+        // Conditional GETs (If-None-Match). A 304 / offline error is a no-op;
+        // only a 200 — the modder replaced an image under the SAME file name —
+        // flips a role's bool. The on-disk path is unchanged, so we must drop
+        // the in-memory bitmap memo (InvalidateTileImageCache) before repainting
+        // or the stale brush would be served. Never blocks the Phase-1 paint.
+        try
         {
-            RefreshModCards();
-            if (string.Equals(_updateService.Profile.Id, profile.Id, StringComparison.OrdinalIgnoreCase))
-                RefreshActiveModBanner();
-        });
+            bool replaced = false;
+
+            if (await cache.RevalidateIconAsync(profile.Id, profile.IconUrl))
+            { InvalidateTileImageCache(profile.LocalIconPath); replaced = true; }
+
+            if (await cache.RevalidateBannerAsync(profile.Id, profile.BannerUrl))
+            { InvalidateTileImageCache(profile.LocalBannerPath); replaced = true; }
+
+            if (await cache.RevalidateHeroAsync(profile.Id, profile.HeroImageUrl))
+            { InvalidateTileImageCache(profile.LocalHeroImagePath); replaced = true; }
+
+            if (replaced)
+                await Dispatcher.InvokeAsync(() => RepaintModAssets(profile));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"EnsureModAssets revalidate '{profile.Id}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Re-renders the surfaces that show a mod's icon/banner/hero after an
+    /// asset lands or changes. Must run on the UI thread. Refreshing the cards
+    /// re-runs BuildModCard for every profile; the active banner only needs a
+    /// refresh when the affected mod is the active one.
+    /// </summary>
+    private void RepaintModAssets(ModProfile profile)
+    {
+        RefreshModCards();
+        if (string.Equals(_updateService.Profile.Id, profile.Id, StringComparison.OrdinalIgnoreCase))
+            RefreshActiveModBanner();
+    }
+
+    /// <summary>Ordinal-insensitive path compare treating null and "" as equal.</summary>
+    private static bool PathEquals(string? a, string? b)
+        => string.Equals(a ?? string.Empty, b ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Lazily downloads a mod's gallery screenshots (only when its detail panel
+    /// is opened — they're not needed for the card grid) and re-renders the
+    /// gallery once they land. Separate from <see cref="EnsureModAssetsAsync"/>
+    /// (its own per-session guard) so it never blocks the icon/banner fetch and
+    /// isn't run eagerly for every card. Best-effort: failures are swallowed.
+    /// </summary>
+    private async Task EnsureScreenshotsAsync(ModProfile profile)
+    {
+        if (string.IsNullOrEmpty(profile.Id)) return;
+        // No early-return on an empty set: an emptied gallery still needs the
+        // call so GetScreenshotPathsAsync purges the now-orphaned shot files.
+        if (!_screenshotFetchAttempted.Add(profile.Id)) return;
+
+        var cache = new ModAssetCacheService();
+
+        // Phase 1: resolve the current set from disk (purges surplus shots if
+        // the gallery shrank; an empty/absent url list purges them all).
+        List<string> paths;
+        try
+        {
+            paths = await cache.GetScreenshotPathsAsync(profile.Id, profile.ScreenshotUrls);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"EnsureScreenshots '{profile.Id}': {ex.Message}");
+            return;
+        }
+        profile.LocalScreenshotPaths = paths;
+        // RefreshGallery is a no-op unless this profile is still selected.
+        await Dispatcher.InvokeAsync(() => ModsBrowserView.RefreshGallery(profile));
+
+        // Phase 2: background revalidation — repaint the strip if any shot was
+        // replaced under the same name (TryLoadBitmap now ignores WPF's per-URI
+        // cache, so RefreshGallery re-decodes the new bytes from disk).
+        try
+        {
+            if (await cache.RevalidateScreenshotsAsync(profile.Id, profile.ScreenshotUrls))
+                await Dispatcher.InvokeAsync(() => ModsBrowserView.RefreshGallery(profile));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"EnsureScreenshots revalidate '{profile.Id}': {ex.Message}");
+        }
     }
 
     /// <summary>

@@ -117,6 +117,13 @@ public partial class ModsBrowser : UserControl
     private string _uiLanguage = "";
     private Func<ModProfile, ModRowState>? _stateProvider;
 
+    /// <summary>
+    /// Asked by the detail panel to lazily fetch a mod's gallery screenshots
+    /// (MainWindow wires this to <c>EnsureScreenshotsAsync</c>). When the
+    /// download finishes, MainWindow calls <see cref="RefreshGallery"/>.
+    /// </summary>
+    public Action<ModProfile>? ScreenshotRequester { get; set; }
+
     private ModProfile? _selectedProfile;
     private readonly Dictionary<string, Border> _rowsByProfileId = new(StringComparer.OrdinalIgnoreCase);
 
@@ -289,6 +296,7 @@ public partial class ModsBrowser : UserControl
     public string DetailWebsiteLabel { get; set; } = "Website";
     public string DetailLanguagesLabel { get; set; } = "Languages";
     public string DetailFeaturesTitleText { get; set; } = "Features";
+    public string GalleryTitleText { get; set; } = "Screenshots";
 
     /// <summary>
     /// Replaces the visible list. <paramref name="stateProvider"/> is
@@ -791,6 +799,12 @@ public partial class ModsBrowser : UserControl
         BuildDetailMeta(profile, state);
         BuildDetailLanguages(profile);
         BuildDetailActions(profile, state);
+
+        // Gallery: render whatever is already cached, then kick the lazy fetch
+        // (MainWindow re-calls RefreshGallery when the download lands).
+        BuildGallery(profile);
+        ScreenshotRequester?.Invoke(profile);
+
         HighlightSelectedRow();
     }
 
@@ -799,6 +813,88 @@ public partial class ModsBrowser : UserControl
         _selectedProfile = null;
         DetailEmptyPanel.Visibility = Visibility.Visible;
         DetailContent.Visibility = Visibility.Collapsed;
+        ClearGallery();
+    }
+
+    // ------------------------------------------------------------------------
+    // Screenshot / GIF gallery (detail panel).
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Re-render the gallery for <paramref name="profile"/> if it is still the
+    /// selected one. Called by MainWindow once the lazy screenshot download
+    /// completes (the user may have clicked away in the meantime).
+    /// </summary>
+    public void RefreshGallery(ModProfile profile)
+    {
+        if (ReferenceEquals(profile, _selectedProfile))
+            BuildGallery(profile);
+    }
+
+    /// <summary>
+    /// Builds the thumbnail strip + large viewer from the mod's cached
+    /// screenshot paths. Hides the whole section when the mod ships none.
+    /// </summary>
+    private void BuildGallery(ModProfile profile)
+    {
+        ClearGallery();
+        var paths = profile.LocalScreenshotPaths;
+        if (paths is null || paths.Count == 0)
+            return;
+
+        DetailGallerySection.Visibility = Visibility.Visible;
+        DetailGalleryTitle.Text = GalleryTitleText;
+
+        foreach (var path in paths)
+        {
+            var thumb = new Border
+            {
+                Width = 96,
+                Height = 54,
+                Margin = new Thickness(0, 0, 6, 0),
+                CornerRadius = new CornerRadius(4),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Tag = path,
+                // Thumbnails are static (a GIF decodes only its first frame here);
+                // only the large viewer animates (see SelectGalleryShot).
+                Background = new ImageBrush(TryLoadBitmap(path)) { Stretch = Stretch.UniformToFill },
+            };
+            thumb.MouseLeftButtonUp += (_, _) =>
+            {
+                if (thumb.Tag is string p) SelectGalleryShot(p);
+            };
+            DetailGalleryStrip.Children.Add(thumb);
+        }
+
+        SelectGalleryShot(paths[0]);
+    }
+
+    /// <summary>
+    /// Shows one screenshot in the large viewer. A <c>.gif</c> is animated via
+    /// XamlAnimatedGif (off its cached local path); everything else is a static
+    /// bitmap. The thumbnails stay static either way.
+    /// </summary>
+    private void SelectGalleryShot(string path)
+    {
+        if (path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase))
+        {
+            DetailGalleryViewer.Source = null;   // drop any static bitmap first
+            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DetailGalleryViewer, new Uri(path));
+        }
+        else
+        {
+            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DetailGalleryViewer, null); // stop a prior gif
+            DetailGalleryViewer.Source = TryLoadBitmap(path);
+        }
+    }
+
+    private void ClearGallery()
+    {
+        // Stop/release any running gif animation before tearing the strip down.
+        XamlAnimatedGif.AnimationBehavior.SetSourceUri(DetailGalleryViewer, null);
+        DetailGallerySection.Visibility = Visibility.Collapsed;
+        DetailGalleryStrip.Children.Clear();
+        DetailGalleryViewer.Source = null;
     }
 
     private void PaintDetailBadge(ModRowStatus s)
@@ -1048,6 +1144,10 @@ public partial class ModsBrowser : UserControl
             var bmp = new BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;
+            // IgnoreImageCache so a screenshot/icon REPLACED under the same file
+            // name (same path, new bytes) re-decodes from disk instead of
+            // serving WPF's stale per-URI cached bitmap.
+            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
             bmp.UriSource = new Uri(path, UriKind.Absolute);
             bmp.EndInit();
             bmp.Freeze();

@@ -249,15 +249,60 @@ public static class ModRegistry
             }
         }
 
+        List<ModProfile>? previous;
         lock (_runtimeLock)
         {
+            previous = _runtime;
             _runtime = merged;
         }
+
+        // Reclaim disk for community mods that dropped out of the catalog since
+        // the previous merge. Built-ins and the stock game never drop, so their
+        // cached assets are never touched.
+        if (previous != null)
+            ClearVanishedAssets(previous, merged);
 
         DiagnosticLog.Write(
             $"ModRegistry: refresh complete — {_builtIn.Count} built-in + " +
             $"{merged.Count - _builtIn.Count} community = {merged.Count} total.");
         return merged;
+    }
+
+    /// <summary>
+    /// Deletes the on-disk asset cache (icon/banner/hero/screenshots) for any
+    /// community mod present in <paramref name="previous"/> but absent from
+    /// <paramref name="current"/> — i.e. removed from the catalog. Best-effort;
+    /// a leftover asset on disk is harmless, so all failures are swallowed.
+    /// Built-ins and the stock game are excluded (they never leave the list).
+    /// </summary>
+    private static void ClearVanishedAssets(
+        IReadOnlyList<ModProfile> previous, IReadOnlyList<ModProfile> current)
+    {
+        try
+        {
+            var live = new HashSet<string>(
+                current.Select(p => p.Id), StringComparer.OrdinalIgnoreCase);
+            var vanished = previous
+                .Where(p => !string.IsNullOrEmpty(p.Id)
+                            && !p.IsStockGame
+                            && !IsBuiltIn(p.Id)
+                            && !live.Contains(p.Id))
+                .Select(p => p.Id)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (vanished.Count == 0) return;
+
+            var cache = new ModAssetCacheService();
+            foreach (var id in vanished)
+            {
+                cache.Clear(id);
+                DiagnosticLog.Write($"ModRegistry: cleared cached assets for vanished mod '{id}'.");
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModRegistry: clear vanished assets failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -328,6 +373,7 @@ public static class ModRegistry
             IconUrl = entry.IconUrl,
             BannerUrl = entry.BannerUrl,
             HeroImageUrl = entry.HeroImageUrl,
+            ScreenshotUrls = entry.ScreenshotUrls ?? new(),
             InstallType = installType,
             DefaultInstallFolder = m.Install.DefaultFolder ?? "",
             InstallProbeFile = m.Install.ProbeFile ?? "",

@@ -161,6 +161,13 @@ public class ModCatalogService
                     IconUrl = ResolveAssetUrl(repo, item.Name, manifest.Icon),
                     BannerUrl = ResolveAssetUrl(repo, item.Name, manifest.Banner),
                     HeroImageUrl = ResolveAssetUrl(repo, item.Name, manifest.HeroImage),
+                    // Resolve each screenshot filename; the same path-traversal guard
+                    // in ResolveAssetUrl drops anything unsafe (returns null → filtered).
+                    ScreenshotUrls = (manifest.Screenshots ?? new())
+                        .Select(f => ResolveAssetUrl(repo, item.Name, f))
+                        .Where(u => u != null)
+                        .Select(u => u!)
+                        .ToList(),
                 };
                 entries.Add(entry);
                 DiagnosticLog.Write(
@@ -349,4 +356,11 @@ public class ModCatalogEntry
     /// full-bleed dashboard.
     /// </summary>
     public string? HeroImageUrl { get; set; }
+
+    /// <summary>
+    /// Absolute URLs of the gallery screenshots/GIFs, in declaration order.
+    /// Empty when the manifest ships none. Path-traversal-unsafe filenames are
+    /// dropped by <see cref="ModCatalogService"/> during resolution.
+    /// </summary>
+    public List<string> ScreenshotUrls { get; set; } = new();
 }

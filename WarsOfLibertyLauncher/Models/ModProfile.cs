@@ -223,6 +223,20 @@ public class ModProfile
     /// </summary>
     public string? LocalHeroImagePath { get; set; }
 
+    /// <summary>
+    /// Remote URLs of the gallery screenshots/GIFs (in declaration order),
+    /// shown in the Workshop detail panel. Empty when the mod ships none.
+    /// </summary>
+    public List<string> ScreenshotUrls { get; set; } = new();
+
+    /// <summary>
+    /// Local file paths of the cached screenshots, in the same order as
+    /// <see cref="ScreenshotUrls"/>. Populated lazily when the detail panel for
+    /// this mod is opened (see <c>MainWindow.EnsureScreenshotsAsync</c>); empty
+    /// until then. Mutable on purpose, like <see cref="LocalIconPath"/>.
+    /// </summary>
+    public List<string> LocalScreenshotPaths { get; set; } = new();
+
     /// <summary>How the mod's files relate to the AoE3 install folder.</summary>
     public ModInstallType InstallType { get; set; } = ModInstallType.IsolatedFolder;
 

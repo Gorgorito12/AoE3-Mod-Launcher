@@ -363,6 +363,33 @@
                                            TextWrapping="Wrap"
                                            Margin="0,0,0,16"/>
 
+                                <!-- Screenshot/GIF gallery: large viewer + a
+                                     horizontal strip of clickable thumbnails.
+                                     The whole section is hidden by code-behind
+                                     when the mod ships no screenshots. -->
+                                <StackPanel x:Name="DetailGallerySection"
+                                            Margin="0,0,0,16"
+                                            Visibility="Collapsed">
+                                    <TextBlock x:Name="DetailGalleryTitle"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               FontSize="{StaticResource FontSizeCaption}"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,6"/>
+                                    <Border Background="{DynamicResource BgPanel}"
+                                            CornerRadius="{StaticResource RadiusMd}"
+                                            Height="260"
+                                            Margin="0,0,0,8">
+                                        <Image x:Name="DetailGalleryViewer"
+                                               Stretch="Uniform"
+                                               Margin="6"/>
+                                    </Border>
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Disabled">
+                                        <StackPanel x:Name="DetailGalleryStrip"
+                                                    Orientation="Horizontal"/>
+                                    </ScrollViewer>
+                                </StackPanel>
+
                                 <!-- Metadata two-column grid. Each row is
                                      created in code-behind so empty fields
                                      can be skipped — keeps the panel from

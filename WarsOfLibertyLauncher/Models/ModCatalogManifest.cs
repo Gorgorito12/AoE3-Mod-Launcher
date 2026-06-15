@@ -67,6 +67,15 @@ public class ModCatalogManifest
     public string? HeroImage { get; set; }
 
     /// <summary>
+    /// Optional gallery of screenshots/GIFs shown in the Workshop detail panel.
+    /// Bare filenames in the same folder as <c>mod.json</c> (same resolution
+    /// scheme as <see cref="Icon"/>). Animated GIFs are allowed here only. The
+    /// launcher caps the count and each file's size on download.
+    /// </summary>
+    [JsonPropertyName("screenshots")]
+    public List<string>? Screenshots { get; set; }
+
+    /// <summary>
     /// Per-language descriptions (keyed by ISO 639-1: "en", "es", …).
     /// The launcher picks the user's UI language with a fallback to "en".
     /// </summary>

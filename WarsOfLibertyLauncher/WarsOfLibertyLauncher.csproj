@@ -122,6 +122,11 @@
          user closes the window with "Minimize to tray" enabled in the
          Launcher Settings dialog. -->
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+    <!-- Animates GIFs in the Workshop gallery viewer. WPF's BitmapImage only
+         decodes a GIF's first frame; XamlAnimatedGif (Apache-2.0, managed-only,
+         no native libs) attaches to an Image control to play it. Bundles into
+         the self-contained single-file exe and is signed at the artifact level. -->
+    <PackageReference Include="XamlAnimatedGif" Version="2.3.2" />
   </ItemGroup>
 
   <ItemGroup>
