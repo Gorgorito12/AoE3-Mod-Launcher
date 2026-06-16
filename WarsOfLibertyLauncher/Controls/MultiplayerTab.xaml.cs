@@ -145,6 +145,13 @@ public partial class MultiplayerTab : UserControl
         public required string UserId { get; init; }
         public string Login { get; set; } = "";
         public bool Ready { get; set; }
+        /// <summary>Peer's Radmin VPN IP (26.x), from room_state / member_net.
+        /// Null until they report it (at match launch). Used to ICMP-ping them
+        /// for the in-game per-player ping column.</summary>
+        public string? RadminIp { get; set; }
+        /// <summary>Last measured ICMP RTT to <see cref="RadminIp"/> in ms;
+        /// -1 = unknown / no answer / no IP yet.</summary>
+        public int PingMs { get; set; } = -1;
     }
 
     // -------- Lobby window (replaces the old in-tab popup) ----------
@@ -179,6 +186,26 @@ public partial class MultiplayerTab : UserControl
 
     private enum MatchPhase { Lobby, Starting, InGame }
     private MatchPhase _matchPhase = MatchPhase.Lobby;
+
+    /// <summary>
+    /// Abort grace window (ms) AFTER AoE3 launches. Within it, ANY member can
+    /// abort the match for everyone (covers a bad/desynced start while the map
+    /// loads). After it, "leave" only removes yourself. Must stay ≤ the backend's
+    /// own window (COUNTDOWN_MS + 60s) — the server is authoritative; this just
+    /// flips the button UX so the user isn't offered an abort the server rejects.
+    /// </summary>
+    private const long AbortWindowMs = 60_000;
+
+    /// <summary>
+    /// True while aborting the match for everyone is still allowed: the whole
+    /// countdown (Starting), plus the first <see cref="AbortWindowMs"/> after
+    /// launch (InGame). Measured off the local launch tick — the same moment the
+    /// server measures from once the synchronised countdown fires.
+    /// </summary>
+    private bool WithinAbortWindow =>
+        _matchPhase == MatchPhase.Starting
+        || (_matchPhase == MatchPhase.InGame
+            && (Environment.TickCount64 - _matchTimerStartTicks) < AbortWindowMs);
 
     /// <summary>
     /// AoE3 process spawned when the countdown completed. Cached so
@@ -1048,6 +1075,12 @@ public partial class MultiplayerTab : UserControl
                     case "member_ready":
                         HandleMemberReady(e.Json);
                         break;
+                    case "host_changed":
+                        HandleHostChanged(e.Json);
+                        break;
+                    case "member_net":
+                        HandleMemberNet(e.Json);
+                        break;
                     case "game_countdown":
                     {
                         // Host pressed Start — server broadcasts the
@@ -1094,8 +1127,8 @@ public partial class MultiplayerTab : UserControl
                         var reason = e.Json.TryGetProperty("reason", out var r)
                             ? (r.GetString() ?? "host_cancelled")
                             : "host_cancelled";
-                        AppendChatSystem(reason == "host_cancelled"
-                            ? Strings.Get("MpChatHostCancelled")
+                        AppendChatSystem(reason is "host_cancelled" or "aborted"
+                            ? Strings.Get("MpChatGameAborted")
                             : Strings.Format("MpChatGameCancelledReason", reason));
                         // Kill local AoE3 if running and exit the
                         // InGame phase. We don't send a follow-up
@@ -1118,7 +1151,12 @@ public partial class MultiplayerTab : UserControl
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? c.GetString() : "";
                         var msg = e.Json.TryGetProperty("message", out var m) ? m.GetString() : "";
-                        AppendChatSystem($"[{code}] {msg}");
+                        // The abort grace window closed — surface a friendly,
+                        // localized note instead of the raw English server text.
+                        if (code == "grace_window_closed")
+                            AppendChatSystem(Strings.Get("MpChatAbortWindowClosed"));
+                        else
+                            AppendChatSystem($"[{code}] {msg}");
                         break;
                     // "pong" intentionally swallowed.
                 }
@@ -1157,6 +1195,7 @@ public partial class MultiplayerTab : UserControl
                 // user id for legacy rooms that don't carry it yet.
                 Login = memberLogin,
                 Ready = kv.Value.Ready,
+                RadminIp = kv.Value.RadminIp,
             };
         }
 
@@ -1278,6 +1317,41 @@ public partial class MultiplayerTab : UserControl
         if (_roomMembers.TryGetValue(userId, out var entry))
             entry.Ready = ready;
         RenderRoomMembers();
+    }
+
+    /// <summary>
+    /// The host left and the server handed the lobby to the next member
+    /// (GameRanger-style migration). Update who we think the host is, re-evaluate
+    /// our own host-only controls, and re-render the roster's HOST badge.
+    /// </summary>
+    private void HandleHostChanged(JsonElement json)
+    {
+        var newHost = json.TryGetProperty("new_host_user_id", out var h) ? h.GetString() : null;
+        if (string.IsNullOrEmpty(newHost)) return;
+        var newLogin = json.TryGetProperty("new_host_login", out var l) ? (l.GetString() ?? "") : "";
+
+        _roomHostUserId = newHost;
+        _isHostInCurrentRoom = !string.IsNullOrEmpty(_session?.CurrentUser?.Id)
+            && string.Equals(_roomHostUserId, _session!.CurrentUser!.Id, StringComparison.Ordinal);
+
+        if (string.IsNullOrEmpty(newLogin) && _roomMembers.TryGetValue(newHost, out var e))
+            newLogin = e.Login;
+        AppendChatSystem(Strings.Format("MpChatHostChanged",
+            string.IsNullOrEmpty(newLogin) ? newHost : newLogin));
+
+        RenderRoomMembers();   // host-first order + HOST badge
+        RenderRoomPanel();     // re-evaluates host-only controls (Start, etc.)
+    }
+
+    /// <summary>A peer reported (or changed) its Radmin IP — store it so the
+    /// in-game ping prober can ICMP them.</summary>
+    private void HandleMemberNet(JsonElement json)
+    {
+        var userId = json.TryGetProperty("user_id", out var u) ? u.GetString() : null;
+        if (string.IsNullOrEmpty(userId)) return;
+        var ip = json.TryGetProperty("radmin_ip", out var r) ? r.GetString() : null;
+        if (_roomMembers.TryGetValue(userId, out var entry))
+            entry.RadminIp = ip;
     }
 
     /// <summary>
@@ -4456,9 +4530,11 @@ public partial class MultiplayerTab : UserControl
             _lobbyWindow!.StartButton.Content = "▶  " + Strings.Get("MpRoomStart");
         }
 
-        // In-game cancel caption differs for host vs joiner.
-        _lobbyWindow!.InGameCancelButton.Content = _isHostInCurrentRoom
-            ? Strings.Get("MpInGameCancelHost")
+        // In-game cancel caption: "Abort match" (for everyone) while the grace
+        // window is open, else "Leave" (just you). RefreshInGamePanel re-applies
+        // this each tick so it flips when the window elapses mid-match.
+        _lobbyWindow!.InGameCancelButton.Content = WithinAbortWindow
+            ? Strings.Get("MpInGameAbort")
             : Strings.Get("MpInGameLeave");
     }
 
@@ -4532,7 +4608,9 @@ public partial class MultiplayerTab : UserControl
     private async void CancelCountdownByUser()
     {
         if (_matchPhase != MatchPhase.Starting) return;
-        await EndMatchAsync(_isHostInCurrentRoom ? "host_cancelled" : "joiner_left");
+        // During the countdown ANY member may abort for everyone (we're inside
+        // the grace window). The server validates and broadcasts game_cancelled.
+        await EndMatchAsync("aborted", sendCancel: true);
     }
 
     /// <summary>
@@ -4553,6 +4631,12 @@ public partial class MultiplayerTab : UserControl
         var baseline = RadminVpnService.GetAdapterBytes();
         _matchBaselineBytes = baseline.HasValue ? baseline.Value.sent + baseline.Value.received : -1;
         _connectionPingMs = -1;
+
+        // Report our Radmin IP so peers can ping us (the per-player ping column).
+        // Done at LAUNCH, not join: at join time the user often isn't on the VPN
+        // yet (AdapterIp null). Re-checked each tick in case they connect later.
+        _lastReportedRadminIp = null;
+        MaybeReportRadminIp();
 
         if (_lobbyWindow != null)
             _lobbyWindow!.InGameRoomText.Text = _session?.CurrentLobbyTitle ?? _session?.CurrentLobbyId ?? "";
@@ -4631,6 +4715,15 @@ public partial class MultiplayerTab : UserControl
             : _connectionPingMs < 200 ? "MpPingMedium"
             : "MpStatusOffline");
         KickConnectionPing();
+        // Keep reporting our Radmin IP (user may have joined the VPN after launch)
+        // and refresh the per-peer pings for the rows below.
+        MaybeReportRadminIp();
+        KickPeerPings();
+        // Flip the cancel button from "Abort match" to "Leave" the moment the
+        // grace window elapses mid-match (no phase transition fires for that).
+        _lobbyWindow!.InGameCancelButton.Content = WithinAbortWindow
+            ? Strings.Get("MpInGameAbort")
+            : Strings.Get("MpInGameLeave");
 
         // Mode badge.
         _lobbyWindow!.InGameModeText.Text = Strings.Get(bridgeReady
@@ -4663,7 +4756,9 @@ public partial class MultiplayerTab : UserControl
             _lobbyWindow!.InGamePeersPanel.Children.Add(BuildInGamePeerRow(
                 login: member.Login,
                 state: bridgeReady ? "Virtual LAN" : "Connecting…",
-                rttMs: 0,
+                // Real per-peer ICMP RTT to their Radmin IP (-1 until they
+                // report it / answer; the row shows "…" then).
+                rttMs: member.PingMs,
                 bytesIn: 0,
                 bytesOut: 0,
                 isSelf: false));
@@ -4734,6 +4829,72 @@ public partial class MultiplayerTab : UserControl
         return -1;
     }
 
+    // -------- Per-peer ping (in-game) -------------------------------
+
+    /// <summary>Our last-reported Radmin IP, so we don't re-send an unchanged one.</summary>
+    private string? _lastReportedRadminIp;
+    private bool _peerPingInFlight;
+
+    /// <summary>
+    /// Report our current Radmin VPN IP (26.x) to the room so peers can ping us,
+    /// but only when it's known AND changed since last time. Cheap no-op when the
+    /// user isn't on Radmin yet (AdapterIp null) or hasn't changed.
+    /// </summary>
+    private void MaybeReportRadminIp()
+    {
+        var ip = RadminVpnService.GetStatus().AdapterIp;
+        if (string.IsNullOrEmpty(ip) || string.Equals(ip, _lastReportedRadminIp, StringComparison.Ordinal))
+            return;
+        var sock = _session?.RoomSocket;
+        if (sock == null) return;
+        _lastReportedRadminIp = ip;
+        _ = sock.SendSetRadminIpAsync(ip);
+    }
+
+    /// <summary>
+    /// Fire-and-forget refresh of every peer's ICMP RTT to their Radmin IP, in
+    /// parallel (so N timeouts don't serialise into N seconds). Stores the result
+    /// on each <see cref="RoomMemberEntry.PingMs"/>; the next RefreshInGamePanel
+    /// paints it. Guarded so a fast tick can't stack overlapping probe rounds.
+    /// </summary>
+    private async void KickPeerPings()
+    {
+        if (_peerPingInFlight) return;
+        _peerPingInFlight = true;
+        try
+        {
+            var myId = _session?.CurrentUser?.Id;
+            var targets = _roomMembers.Values
+                .Where(m => !string.IsNullOrEmpty(m.RadminIp)
+                            && (myId == null || !string.Equals(m.UserId, myId, StringComparison.Ordinal)))
+                .ToList();
+            await Task.WhenAll(targets.Select(async m => m.PingMs = await PingPeerAsync(m.RadminIp!)));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.KickPeerPings: {ex.Message}");
+        }
+        finally
+        {
+            _peerPingInFlight = false;
+        }
+    }
+
+    /// <summary>ICMP RTT (ms) to a peer's Radmin IP, or -1 on timeout/error.
+    /// Same shape as <see cref="PingInternetRttMsAsync"/> but a single host.</summary>
+    private static async Task<int> PingPeerAsync(string ip)
+    {
+        try
+        {
+            using var ping = new System.Net.NetworkInformation.Ping();
+            var reply = await ping.SendPingAsync(ip, 1000).ConfigureAwait(false);
+            if (reply.Status == System.Net.NetworkInformation.IPStatus.Success)
+                return (int)reply.RoundtripTime;
+        }
+        catch { /* unreachable / not on VPN yet → -1 */ }
+        return -1;
+    }
+
     /// <summary>
     /// Repaint the lobby header's CONNECTION stat from the cached
     /// <see cref="_connectionPingMs"/> (your internet latency, not a
@@ -4793,10 +4954,18 @@ public partial class MultiplayerTab : UserControl
         Grid.SetColumn(stateTb, 1);
         row.Children.Add(stateTb);
 
+        // Colour the per-peer RTT by health (same thresholds as CONNECTION) so a
+        // laggy player stands out at a glance — green <80ms / amber <200 / red.
+        var rttBrush = (isSelf || rttMs < 0)
+            ? (Brush)Application.Current.FindResource("TextSecondary")
+            : (Brush)Application.Current.FindResource(
+                rttMs < 80 ? "MpStatusOnline"
+                : rttMs < 200 ? "MpPingMedium"
+                : "MpStatusOffline");
         var rttTb = new TextBlock
         {
-            Text = isSelf ? "—" : (rttMs > 0 ? $"{(int)rttMs} ms" : "…"),
-            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            Text = isSelf ? "—" : (rttMs >= 0 ? $"{(int)rttMs} ms" : "…"),
+            Foreground = rttBrush,
             FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
             FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -4841,16 +5010,19 @@ public partial class MultiplayerTab : UserControl
         // the lobby window open to host the overlay — it always is here
         // (this button lives in that window), but guard anyway.
         if (_lobbyWindow == null) return;
+        // Within the grace window → "abort for everyone" (any member); after it →
+        // "leave" (just you). The server is the final authority on the window.
+        bool canAbort = WithinAbortWindow;
         bool confirmed = await MpAlertOverlay.ConfirmAsync(
             _lobbyWindow.LobbyRootGrid,
-            _isHostInCurrentRoom ? Strings.Get("MpConfirmCancelHostTitle") : Strings.Get("MpConfirmLeaveTitle"),
-            _isHostInCurrentRoom ? Strings.Get("MpConfirmCancelHostBody") : Strings.Get("MpConfirmLeaveBody"),
-            _isHostInCurrentRoom ? Strings.Get("MpConfirmCancelHostYes") : Strings.Get("MpConfirmLeaveYes"),
+            canAbort ? Strings.Get("MpConfirmAbortTitle") : Strings.Get("MpConfirmLeaveTitle"),
+            canAbort ? Strings.Get("MpConfirmAbortBody") : Strings.Get("MpConfirmLeaveBody"),
+            canAbort ? Strings.Get("MpConfirmAbortYes") : Strings.Get("MpConfirmLeaveYes"),
             Strings.Get("MpAlertCancel"),
             danger: true);
         if (!confirmed) return;
 
-        await EndMatchAsync(_isHostInCurrentRoom ? "host_cancelled" : "joiner_left");
+        await EndMatchAsync(canAbort ? "aborted" : "left", sendCancel: canAbort);
     }
 
     /// <summary>
@@ -4859,7 +5031,7 @@ public partial class MultiplayerTab : UserControl
     /// Worker to broadcast game_cancelled. Idempotent — calling
     /// twice (e.g. host cancel + window-close confirm) is safe.
     /// </summary>
-    private async Task EndMatchAsync(string reason)
+    private async Task EndMatchAsync(string reason, bool sendCancel)
     {
         try
         {
@@ -4881,7 +5053,11 @@ public partial class MultiplayerTab : UserControl
             ExitInGamePhase();
         }
 
-        if (_isHostInCurrentRoom && _session?.RoomSocket != null)
+        // sendCancel = "abort for everyone" (within the grace window). The server
+        // re-checks the window and broadcasts game_cancelled, or replies
+        // grace_window_closed if we raced past it — either way we've already left
+        // locally, so a late race just means the others keep playing.
+        if (sendCancel && _session?.RoomSocket != null)
         {
             try { await _session.RoomSocket.SendCancelGameAsync(reason); }
             catch (Exception ex)
@@ -4889,7 +5065,7 @@ public partial class MultiplayerTab : UserControl
                 DiagnosticLog.Write($"MultiplayerTab.EndMatch: SendCancelGameAsync — {ex.Message}");
             }
         }
-        AppendChatSystem(_isHostInCurrentRoom
+        AppendChatSystem(sendCancel
             ? Strings.Get("MpChatYouCancelled")
             : Strings.Get("MpChatYouLeftGame"));
     }
@@ -4916,7 +5092,8 @@ public partial class MultiplayerTab : UserControl
             : "AoE3 is running. Closing the launcher will terminate it. Continue?";
         var r = MessageBox.Show(msg, "Multiplayer", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (r != MessageBoxResult.Yes) return false;
-        await EndMatchAsync("launcher_closed");
+        // Closing within the grace window aborts for everyone; after it, only we drop.
+        await EndMatchAsync("launcher_closed", sendCancel: WithinAbortWindow);
         return true;
     }
 

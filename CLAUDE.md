@@ -411,10 +411,15 @@ don't go looking for it.)
   the Windows tray uses HICON natively — switching the tray to the
   PNG would either fail or render worse. The brand-button Image is the
   only in-app surface that uses the PNG; everywhere else still uses
-  the .ico. The PNG Image also sets `DecodePixelWidth=64` to cap the
-  in-memory copy at ~16 KB (vs ~256 KB for the full 256) — still
-  comfortable headroom over 100/125/150/200% DPI render sizes
-  (20/25/30/40 physical px).
+  the .ico. The PNG Image sets `DecodePixelWidth=256` (the native frame
+  size) so the only resample is the renderer's single HighQuality bicubic
+  downscale to the 20-40 physical px render size. An earlier `=64` cap
+  pre-shrank in the decoder, so a non-integer 64→40 second downscale
+  *softened* the icon at some DPIs (reported as "se ve en baja
+  resolución"); decoding native keeps it crisp. Costs ~256 KB RAM vs
+  ~16 KB — trivial, and the right trade for a sharp brand mark. The Image
+  stays 20x20 (sharper, NOT bigger — the user explicitly didn't want it
+  enlarged). Don't drop it back to 64 to "save memory".
 
 - **Popup menus use a TWO-TONE "punched-out" rim — don't reduce it back to a
   single border.** The gear ContextMenu + its cascading submenu
@@ -808,10 +813,21 @@ don't go looking for it.)
   file's URL matches; an empty/null URL means "removed from the catalog" → purge
   the file + return null (UI falls to the monogram/gradient); a changed
   URL/extension downloads. (2) the BACKGROUND path
-  (`RevalidateIconAsync`/banner/hero/screenshots) — a conditional GET
-  (`If-None-Match` with the stored ETag); a **304 is free**, a **200 means the
-  modder replaced the image under the SAME file name** → re-download in place and
-  return `changed:true`. `MainWindow.EnsureModAssetsAsync` runs both in order:
+  (`RevalidateIconAsync`/banner/hero/screenshots, returning a
+  `RevalidateOutcome`) — a conditional GET (`If-None-Match` with the stored
+  ETag); a **304 is free** (`Unchanged`), a **200 means the modder replaced the
+  image under the SAME file name** (`Replaced`) → re-download in place, a
+  **404/410 means the file was DELETED at the source** (`Removed`) → purge.
+  **The 404 case is load-bearing and easy to miss:** deleting `mods/wol/hero.jpg`
+  from the repo does NOT null the URL — WoL's `HeroImageUrl` is a *hardcoded*
+  built-in (`ModRegistry`), and even for a community mod the `mod.json` usually
+  still declares `heroImage` after the file is gone — so the only signal is the
+  asset URL returning 404. A 404 is treated as deletion (definitive: a successful
+  connection saying "gone"; throttling returns 403/429, offline throws), in BOTH
+  the fast path (covers a PRE-meta cached file with no `.meta` to revalidate) and
+  the revalidation path (covers a meta'd cache); 5xx/transient/offline always
+  keep the cached copy. On `Removed`, `EnsureModAssetsAsync` nulls the
+  `Local*Path` so the UI drops to the fallback. `MainWindow.EnsureModAssetsAsync` runs both in order:
   Phase 1 resolves every role from disk (reconciling a now-null URL too — the old
   `isEmpty(LocalIconPath)` gate was removed so deletion is handled) and paints;
   Phase 2 revalidates and, on a replacement, calls `InvalidateTileImageCache`
@@ -836,6 +852,37 @@ don't go looking for it.)
   `XamlAnimatedGif.SetSourceUri`, which has its own load path that
   `IgnoreImageCache` doesn't cover, so a same-name GIF replacement can look stale
   in the viewer until restart (thumbnails via `TryLoadBitmap` are fine).
+
+- **Catalog + image edits show up WITHOUT a restart — three triggers, gated by
+  `CheckUpdatesOnStartup`.** The catalog is cache-first with a 24h TTL and was
+  historically fetched only once at startup; image revalidation ran once per mod
+  per session (the `_assetFetchAttempted`/`_screenshotFetchAttempted` guards
+  never cleared). So a maintainer editing the catalog couldn't see changes
+  without relaunching. Now: (1) `ModRegistry.RefreshFromCatalogAsync` takes
+  `bool force` — `force:true` skips BOTH the fresh and stale cache branches and
+  re-fetches online now (used to bypass the 24h TTL). (2)
+  `MainWindow.RevalidateVisibleAssetsAsync(activeOnly)` clears the fetch guards
+  and re-invokes `EnsureModAssetsAsync` per profile so its Phase-2 conditional
+  GETs re-run (detect 404→purge / 200→replace and repaint) — it must call
+  `EnsureModAssetsAsync` directly, NOT via `RefreshModCards`, because
+  `BuildModCard` only kicks the fetch when a card's icon is unloaded. Three
+  triggers: the **Workshop "Actualizar" button** (`force:true` + revalidate ALL
+  mods, **unconditional** — explicit user action); **window `Activated`**
+  (throttle 60s, revalidate all + a forced catalog refresh if ≥5 min stale); a
+  **5-min `DispatcherTimer`** (revalidate only the ACTIVE mod each tick to
+  minimize GETs; force a catalog re-fetch every 3rd tick ≈15 min). **The two
+  AUTOMATIC triggers (timer + focus) early-return / don't start when
+  `CheckUpdatesOnStartup` is false** — that setting means "metered / be silent",
+  so they must not generate background traffic; only the manual button ignores
+  it. **Quota math is load-bearing:** image revalidation hits `raw` (ETag 304,
+  not rate-limited) so it's cheap and frequent; the catalog manifest fetch is one
+  `api.github.com/.../contents/mods` call (**60/h per IP**), so a single shared
+  throttle `_lastCatalogRefreshUtc` (≥5 min, seeded after the startup fetch so the
+  first focus doesn't re-force) keeps forced re-fetches to ≈4-12/h. `5 min`
+  aligns with `raw`'s CDN cache (~5 min to propagate a delete/replace), so polling
+  faster wouldn't surface changes sooner. "Limpiar caché de iconos" in Launcher
+  Settings now fires an `AssetsCleared` callback → `RevalidateVisibleAssetsAsync`
+  so cleared images re-download live instead of staying monograms until restart.
 
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
@@ -916,12 +963,24 @@ don't go looking for it.)
   **your** internet latency, **not** a per-rival ping, so it's identical across all
   browser rows. (We deliberately dropped the earlier Radmin seed-peer ping: it
   needed a specific peer online AND you already on the VPN, so it usually showed
-  "—".) The per-peer rows' RTT/bytes columns stay placeholders (`…` / `↑0 B`) **on
-  purpose** — the launcher can't map a room member (Discord login) to a Radmin IP
-  (see the multiplayer-reality bullet: Radmin holds the peer list internally and
-  never surfaces it), so true per-player ping/bytes needs the **backend** to put
-  each peer's Radmin IP in `room_state`. Don't wire fake per-peer numbers to fill
-  that gap.
+  "—".) **The in-game per-peer RTT column is now REAL (not a placeholder).** It
+  used to be `…` because the launcher couldn't map a Discord login to a Radmin IP.
+  That's solved end-to-end: each launcher reports its own Radmin IP (26.x) via the
+  `set_radmin_ip` WS frame at `EnterInGamePhase` (NOT at join — the user often
+  isn't on the VPN yet then; re-sent each tick if it changes, `MaybeReportRadminIp`);
+  the backend stores it on the room member and broadcasts `member_net` + includes
+  it in `room_state.members[x].radminIp`; `HandleMemberNet`/`HandleRoomState` save
+  it on `RoomMemberEntry.RadminIp`; and `KickPeerPings` (off the 1s in-game tick,
+  parallel, guarded by `_peerPingInFlight`) ICMP-pings every peer's Radmin IP via
+  `PingPeerAsync` (a single-host clone of `PingInternetRttMsAsync`), storing the RTT
+  on `RoomMemberEntry.PingMs`. `BuildInGamePeerRow` colours it green/amber/red on
+  the same thresholds as CONNECTION so a laggy player stands out; a peer with no
+  reported IP / no answer still shows `…` (PingMs −1). The bytes column stays a
+  placeholder (`↑0 B`) — per-peer byte counters would need true per-flow
+  accounting Radmin doesn't expose; the whole-adapter TRAFFIC stat covers it. The
+  Radmin IP is validated server-side against `26.x` (a client can't inject an
+  arbitrary host for everyone to ping), and it's only shared among that room's
+  members — the same IP they already use to actually play (`+OverrideAddress`).
 
 - **The rooms browser auto-refreshes its LIST on a quiet diff — separate from the
   PING timer above.** New / closed rooms now appear without pressing *Actualizar*:
@@ -1406,11 +1465,48 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   the `InGame*` x:Names are preserved so `RefreshInGamePanel` needs no
   change. Don't move it back out to a top-level full-content cover — that
   re-hides the chat and breaks the "chat siempre accesible" rule.
-  **(4) Countdown duration is 10 s (floored).** `game_countdown`'s handler
-  does `durationMs = Math.Max(10000, durationMs)` and both offline-host
+  **(4) Countdown duration is 10 s, agreed by BOTH ends.** `game_countdown`'s
+  handler does `durationMs = Math.Max(10000, durationMs)` and both offline-host
   fallbacks call `StartCountdown(10000)`; the chat-line's XAML default
-  `CountdownNumber` is "10" to match the first paint before the tick timer
-  arms. Bump all four together if you change it.
+  `CountdownNumber` is "10". The **backend's `LobbyRoom.COUNTDOWN_MS` is now also
+  10000** (was 3000 — they MUST agree, because the abort-grace window below is
+  measured off the same Start moment). Bump all together if you change it.
+- **Host migration + abort-grace window — the lobby outlives its creator, and
+  aborting a launched match is time-boxed.** Two coupled multiplayer rules added
+  together; backend = `wol-launcher-lobby-node` (`src/lobbies/LobbyRoom.ts`,
+  `rest.ts`), launcher = this repo — **they ship and deploy together** (new WS
+  frames). Old clients ignore the new frames; a new launcher tolerates an old
+  backend (degrades to no migration).
+  **(a) Host migration (GameRanger-style).** When the host leaves, the backend no
+  longer closes the lobby — it hands it to the next member by **JOIN ORDER ∩ LIVE
+  (attached) socket** and only closes when nobody live remains. BOTH leave paths
+  do it: REST `/leave` and the abrupt `ws.on('close')` (the crash/alt-F4 path that
+  never hits `/leave`). CRITICAL: picking by `lobby_members.joined_at` ALONE would
+  migrate to a **ghost** — abrupt closes don't sync the DB, so the table keeps rows
+  for crashed players; you MUST intersect with the live `attached` set. The close
+  path now also does the bookkeeping `/leave` used to (delete the leaver's row +
+  recompute `current_players`) for ANYONE — a leftover row blocks that user's "1
+  active lobby" guard and leaves `current_players` stuck (lobby reads full).
+  `reassignHost` commits the DB `host_user_id` BEFORE broadcasting `host_changed`
+  and is idempotent (guards `hostUserId === leavingUserId`) so the two paths racing
+  is safe. Launcher: `HandleHostChanged` updates `_roomHostUserId` /
+  `_isHostInCurrentRoom`, `RenderRoomPanel` (Lobby phase) hands the new host the
+  Start button, chat shows `MpChatHostChanged`. Pinned by
+  `scripts/test-host-migration.ts` (3-socket, abrupt-close, asserts no ghost).
+  **(b) Abort-grace window.** Cancelling a match is **no longer host-only**: ANY
+  member can abort for EVERYONE, but ONLY within the grace window — the countdown
+  (`Starting`) plus **60 s after launch**. Server-authoritative: `handleCancelGame`
+  checks `Date.now() - startedAtMs < COUNTDOWN_MS + 60000` (`startedAtMs` is
+  in-memory from `handleStart`, NOT the DB `started_at`, to compare on one clock
+  without date parsing); past it → `grace_window_closed`. Launcher mirrors the UX
+  off `WithinAbortWindow` (local 60 s from `_matchTimerStartTicks`): the in-game
+  button flips `MpInGameAbort` ("Abort match", any member) ↔ `MpInGameLeave`
+  ("Leave", just you) each 1 s tick, and `EndMatchAsync(reason, sendCancel)` only
+  sends `cancel_game` when within the window. Rationale (vs Voobly/GameRanger):
+  the room migrates and the match continues for those who stay, so a host who is
+  losing must NOT be able to kill everyone's game — abort is time-boxed to the
+  start (a bad/desynced launch). To restrict abort to host-only later, it's a
+  one-line guard in `handleCancelGame`.
 - **Multiplayer alerts are themed in-window cards, NOT `MessageBox` — via
   the `MpAlertOverlay` helper.** `Controls/MpAlertOverlay.cs` is a static
   helper that injects a scrim + a centred card (MpSurface fill, two-tone

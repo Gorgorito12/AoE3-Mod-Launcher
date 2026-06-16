@@ -59,6 +59,18 @@ public partial class MainWindow : Window
     private bool _isGameRunning;
     private DispatcherTimer? _gameMonitorTimer;
 
+    // --- Live catalog/asset refresh (so a catalog edit shows up without a
+    // restart). The periodic timer revalidates the active mod's images every
+    // 5 min (cheap raw ETag GETs); window focus + the Workshop "Actualizar"
+    // button revalidate ALL mods; the catalog manifest re-fetch (one rate-
+    // limited GitHub API call) is throttled to ≥5 min so polling can't burn
+    // the 60/h budget. See RevalidateVisibleAssetsAsync.
+    private DispatcherTimer? _catalogPollTimer;
+    private int _pollTickCount;
+    private DateTime _lastFocusRevalidateUtc = DateTime.MinValue;
+    private DateTime _lastCatalogRefreshUtc = DateTime.MinValue;
+    private bool _revalidateInFlight;
+
     /// <summary>
     /// Current install phase. Drives both the breadcrumb visual and the
     /// speed-label text (so "5 MB/s" gets prefixed with "Download" during
@@ -378,6 +390,11 @@ public partial class MainWindow : Window
                 // returned the same set (RefreshModCards just rebuilds
                 // the panel from ModRegistry.All which is idempotent).
                 RefreshModCards();
+
+                // Seed the catalog-refresh throttle: the startup fetch just ran,
+                // so the first window focus shouldn't immediately FORCE another
+                // (redundant) API fetch — wait the normal 5 min from here.
+                _lastCatalogRefreshUtc = DateTime.UtcNow;
             }
             else
             {
@@ -422,6 +439,115 @@ public partial class MainWindow : Window
                 await ApplyAsync();
             }
         };
+
+        // Live refresh — bring catalog edits in without a restart (user-chosen
+        // "Ambos": periodic + on-focus + manual button).
+        //
+        // BOTH automatic triggers honour CheckUpdatesOnStartup: a user who turned
+        // background checks off (metered connection / wants the launcher silent)
+        // must NOT get continuous GitHub traffic. The manual "Actualizar" button
+        // stays unconditional — an explicit action is always allowed.
+        //
+        // On focus: the user typically alt-tabs back to the launcher right after
+        // editing the repo, so this is the most natural trigger. Throttled to
+        // 60s so rapid focus changes (incl. closing a child dialog) don't spam
+        // the network; a forced catalog re-fetch piggybacks only when ≥5 min
+        // since the last one (API budget).
+        Activated += async (_, _) =>
+        {
+            if (!_config.CheckUpdatesOnStartup) return;
+            if ((DateTime.UtcNow - _lastFocusRevalidateUtc) < TimeSpan.FromSeconds(60))
+                return;
+            _lastFocusRevalidateUtc = DateTime.UtcNow;
+            await MaybeForceCatalogRefreshAsync();
+            await RevalidateVisibleAssetsAsync(activeOnly: false);
+        };
+
+        // Periodic: 5 min aligns with raw.githubusercontent's CDN cache, so
+        // polling faster wouldn't see changes any sooner. Each tick revalidates
+        // only the ACTIVE mod's images (cheap); every 3rd tick (~15 min) also
+        // forces a catalog manifest re-fetch.
+        if (_config.CheckUpdatesOnStartup)
+        {
+            _catalogPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
+            _catalogPollTimer.Tick += async (_, _) =>
+            {
+                _pollTickCount++;
+                if (_pollTickCount % 3 == 0)
+                    await MaybeForceCatalogRefreshAsync();
+                await RevalidateVisibleAssetsAsync(activeOnly: true);
+            };
+            _catalogPollTimer.Start();
+        }
+    }
+
+    /// <summary>
+    /// Forces a catalog manifest re-fetch (skipping the 24h TTL) IF at least
+    /// 5 minutes have passed since the last forced fetch — a single shared
+    /// throttle so the focus handler and the periodic timer can't double up and
+    /// blow the GitHub API budget (60/h per IP). Re-renders the cards on change.
+    /// </summary>
+    private bool _catalogRefreshInFlight;
+    private async Task MaybeForceCatalogRefreshAsync()
+    {
+        // The throttle check and its set straddle an await, so a timer tick and
+        // a focus event could both pass it and fire two FetchAsync calls. The
+        // in-flight flag (set before any await) makes it single-shot.
+        if (_catalogRefreshInFlight) return;
+        if ((DateTime.UtcNow - _lastCatalogRefreshUtc) < TimeSpan.FromMinutes(5))
+            return;
+        _catalogRefreshInFlight = true;
+        try
+        {
+            await RefreshCatalogAsync(force: true);   // updates _lastCatalogRefreshUtc
+            RefreshModCards();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MaybeForceCatalogRefresh: {ex.Message}");
+        }
+        finally
+        {
+            _catalogRefreshInFlight = false;
+        }
+    }
+
+    /// <summary>
+    /// Re-runs the lazy asset fetch/revalidation so a catalog image change
+    /// (replaced 200 / deleted 404) is reflected without a restart. Clears the
+    /// per-session fetch guards and re-invokes <see cref="EnsureModAssetsAsync"/>
+    /// (its Phase-2 conditional GETs do the detection + repaint). Calling
+    /// RefreshModCards alone wouldn't work — BuildModCard only kicks the fetch
+    /// when a card's icon is unloaded. <paramref name="activeOnly"/> limits the
+    /// periodic timer to the dashboard mod (fewer background GETs); focus/button
+    /// pass false to cover the Workshop grid too. Reentrancy-guarded.
+    /// </summary>
+    private async Task RevalidateVisibleAssetsAsync(bool activeOnly)
+    {
+        if (_revalidateInFlight) return;
+        _revalidateInFlight = true;
+        try
+        {
+            _assetFetchAttempted.Clear();
+            _screenshotFetchAttempted.Clear();
+            if (activeOnly)
+            {
+                await EnsureModAssetsAsync(_updateService.Profile);
+            }
+            else
+            {
+                foreach (var p in ModRegistry.All)
+                    await EnsureModAssetsAsync(p);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RevalidateVisibleAssets: {ex.Message}");
+        }
+        finally
+        {
+            _revalidateInFlight = false;
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -1190,6 +1316,11 @@ public partial class MainWindow : Window
         // brings it to front on first open.
         var dialog = new LauncherSettingsDialog(_config);
         _launcherSettingsDialog = dialog;
+
+        // "Limpiar caché de iconos" wipes mod-assets\ but the window stays open;
+        // re-download the images live so the user doesn't see monograms until a
+        // restart. activeOnly:false covers the Workshop grid too.
+        dialog.AssetsCleared = () => _ = RevalidateVisibleAssetsAsync(activeOnly: false);
 
         // Closed (fires for Save, Cancel, ✕, Esc, and Alt+F4) is the
         // single rendezvous point for post-dialog refresh. ChangesSaved
@@ -2637,26 +2768,43 @@ public partial class MainWindow : Window
         if (changed)
             await Dispatcher.InvokeAsync(() => RepaintModAssets(profile));
 
-        // --- Phase 2: background revalidation (replacement detection) --------
-        // Conditional GETs (If-None-Match). A 304 / offline error is a no-op;
-        // only a 200 — the modder replaced an image under the SAME file name —
-        // flips a role's bool. The on-disk path is unchanged, so we must drop
-        // the in-memory bitmap memo (InvalidateTileImageCache) before repainting
-        // or the stale brush would be served. Never blocks the Phase-1 paint.
+        // --- Phase 2: background revalidation (replacement / deletion) -------
+        // Conditional GETs (If-None-Match). 304 / offline error = no-op (cached
+        // copy kept). A 200 means the image was REPLACED under the same name; a
+        // 404/410 means the file was DELETED at the source while the manifest
+        // (or a hardcoded built-in URL) still references it. For BOTH we drop the
+        // in-memory bitmap memo (the on-disk path didn't change) before
+        // repainting; for a deletion we also null the local path so the UI falls
+        // back to the monogram/gradient. Never blocks the Phase-1 paint.
         try
         {
-            bool replaced = false;
+            bool revalidated = false;
 
-            if (await cache.RevalidateIconAsync(profile.Id, profile.IconUrl))
-            { InvalidateTileImageCache(profile.LocalIconPath); replaced = true; }
+            var icon = await cache.RevalidateIconAsync(profile.Id, profile.IconUrl);
+            if (icon != RevalidateOutcome.Unchanged)
+            {
+                InvalidateTileImageCache(profile.LocalIconPath);
+                if (icon == RevalidateOutcome.Removed) profile.LocalIconPath = null;
+                revalidated = true;
+            }
 
-            if (await cache.RevalidateBannerAsync(profile.Id, profile.BannerUrl))
-            { InvalidateTileImageCache(profile.LocalBannerPath); replaced = true; }
+            var banner = await cache.RevalidateBannerAsync(profile.Id, profile.BannerUrl);
+            if (banner != RevalidateOutcome.Unchanged)
+            {
+                InvalidateTileImageCache(profile.LocalBannerPath);
+                if (banner == RevalidateOutcome.Removed) profile.LocalBannerPath = null;
+                revalidated = true;
+            }
 
-            if (await cache.RevalidateHeroAsync(profile.Id, profile.HeroImageUrl))
-            { InvalidateTileImageCache(profile.LocalHeroImagePath); replaced = true; }
+            var hero = await cache.RevalidateHeroAsync(profile.Id, profile.HeroImageUrl);
+            if (hero != RevalidateOutcome.Unchanged)
+            {
+                InvalidateTileImageCache(profile.LocalHeroImagePath);
+                if (hero == RevalidateOutcome.Removed) profile.LocalHeroImagePath = null;
+                revalidated = true;
+            }
 
-            if (replaced)
+            if (revalidated)
                 await Dispatcher.InvokeAsync(() => RepaintModAssets(profile));
         }
         catch (Exception ex)
@@ -2714,13 +2862,19 @@ public partial class MainWindow : Window
         // RefreshGallery is a no-op unless this profile is still selected.
         await Dispatcher.InvokeAsync(() => ModsBrowserView.RefreshGallery(profile));
 
-        // Phase 2: background revalidation — repaint the strip if any shot was
-        // replaced under the same name (TryLoadBitmap now ignores WPF's per-URI
-        // cache, so RefreshGallery re-decodes the new bytes from disk).
+        // Phase 2: background revalidation — refresh the strip if any shot was
+        // replaced (same name, new bytes — TryLoadBitmap now ignores WPF's
+        // per-URI cache so RefreshGallery re-decodes from disk) or removed (404:
+        // file deleted at the source). A removed shot was purged from disk, so
+        // drop it from the path list by an existence filter before repainting.
         try
         {
             if (await cache.RevalidateScreenshotsAsync(profile.Id, profile.ScreenshotUrls))
+            {
+                profile.LocalScreenshotPaths =
+                    profile.LocalScreenshotPaths.Where(System.IO.File.Exists).ToList();
                 await Dispatcher.InvokeAsync(() => ModsBrowserView.RefreshGallery(profile));
+            }
         }
         catch (Exception ex)
         {
@@ -2804,7 +2958,11 @@ public partial class MainWindow : Window
     {
         try
         {
-            await RefreshCatalogAsync();
+            // Manual "Actualizar" = a deliberate, immediate refresh: FORCE the
+            // catalog re-fetch (skip the 24h TTL) and revalidate every mod's
+            // images, so the user sees catalog edits right away.
+            await RefreshCatalogAsync(force: true);
+            await RevalidateVisibleAssetsAsync(activeOnly: false);
         }
         catch (Exception ex)
         {
@@ -7669,7 +7827,7 @@ public partial class MainWindow : Window
     /// always falls back to the built-in mods, so this method never
     /// throws and never blocks the UI on a bad network.
     /// </summary>
-    private async Task RefreshCatalogAsync()
+    private async Task RefreshCatalogAsync(bool force = false)
     {
         const string defaultRepo = "Gorgorito12/aoe3-mods-catalog";
 
@@ -7682,7 +7840,9 @@ public partial class MainWindow : Window
         else
             repo = raw;
 
-        await ModRegistry.RefreshFromCatalogAsync(repo);
+        await ModRegistry.RefreshFromCatalogAsync(repo, force: force);
+        if (force)
+            _lastCatalogRefreshUtc = DateTime.UtcNow;
     }
 
     /// <summary>

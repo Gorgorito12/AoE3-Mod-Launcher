@@ -11,6 +11,19 @@ using System.Threading.Tasks;
 namespace WarsOfLibertyLauncher.Services;
 
 /// <summary>
+/// Result of a background asset revalidation.
+/// </summary>
+public enum RevalidateOutcome
+{
+    /// <summary>304 / transient error — the cached file is kept as-is.</summary>
+    Unchanged,
+    /// <summary>200 — the image was replaced under the same name; file rewritten.</summary>
+    Replaced,
+    /// <summary>404/410 — the asset was deleted at the source; cached file purged.</summary>
+    Removed,
+}
+
+/// <summary>
 /// Caches mod-icon / banner / hero / screenshot images on disk so the launcher
 /// only downloads them once. Lives under
 /// <c>%LocalAppData%\AoE3ModLauncher\mod-assets\</c> — per-user and outside
@@ -109,30 +122,33 @@ public class ModAssetCacheService
     // -- Background path: conditional revalidation (replacement detection) ---
 
     /// <summary>
-    /// Conditionally revalidates the mod's icon against the catalog. Returns
-    /// <c>true</c> only if the remote image was REPLACED (HTTP 200 to a
-    /// conditional GET) and the on-disk file was rewritten — the caller should
-    /// then invalidate any in-memory bitmap cache for the path and repaint.
-    /// 304 / network error / missing file → <c>false</c> (cached copy kept).
-    /// Cheap: a 304 carries no body. Offline-safe: never deletes on error.
+    /// Conditionally revalidates the mod's icon against the catalog.
+    /// <see cref="RevalidateOutcome.Replaced"/> when the remote image was
+    /// replaced under the same name (HTTP 200) — caller invalidates any bitmap
+    /// memo and repaints. <see cref="RevalidateOutcome.Removed"/> when the asset
+    /// was deleted at the source (404/410, e.g. the modder deleted the file but
+    /// the manifest still references it) — the cached file is purged and the
+    /// caller should null its local path. <see cref="RevalidateOutcome.Unchanged"/>
+    /// on 304 / transient error / missing file (cached copy kept — offline-safe).
+    /// A 304 carries no body, so the common case is cheap.
     /// </summary>
-    public Task<bool> RevalidateIconAsync(
+    public Task<RevalidateOutcome> RevalidateIconAsync(
         string modId, string? remoteUrl, CancellationToken ct = default)
         => RevalidateAsync(modId, "icon", remoteUrl, ct);
 
     /// <summary>Same as <see cref="RevalidateIconAsync"/> for the banner.</summary>
-    public Task<bool> RevalidateBannerAsync(
+    public Task<RevalidateOutcome> RevalidateBannerAsync(
         string modId, string? remoteUrl, CancellationToken ct = default)
         => RevalidateAsync(modId, "banner", remoteUrl, ct);
 
     /// <summary>Same as <see cref="RevalidateIconAsync"/> for the hero image.</summary>
-    public Task<bool> RevalidateHeroAsync(
+    public Task<RevalidateOutcome> RevalidateHeroAsync(
         string modId, string? remoteUrl, CancellationToken ct = default)
         => RevalidateAsync(modId, "hero", remoteUrl, ct);
 
     /// <summary>
     /// Conditionally revalidates every gallery screenshot. Returns <c>true</c>
-    /// if ANY shot was replaced (so the caller repaints the whole strip).
+    /// if ANY shot was replaced OR removed (so the caller refreshes the strip).
     /// </summary>
     public async Task<bool> RevalidateScreenshotsAsync(
         string modId, IReadOnlyList<string>? remoteUrls, CancellationToken ct = default)
@@ -144,7 +160,7 @@ public class ModAssetCacheService
         for (int i = 0; i < count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            if (await RevalidateAsync(modId, $"shot-{i}", remoteUrls[i], ct))
+            if (await RevalidateAsync(modId, $"shot-{i}", remoteUrls[i], ct) != RevalidateOutcome.Unchanged)
                 any = true;
         }
         return any;
@@ -213,8 +229,24 @@ public class ModAssetCacheService
             using var req = new HttpRequestMessage(HttpMethod.Get, remoteUrl);
             using var response = await Http.SendAsync(
                 req, HttpCompletionOption.ResponseHeadersRead, ct);
+            // 404/410: the asset doesn't exist at the source — e.g. the modder
+            // deleted the file while the manifest (or a hardcoded built-in URL)
+            // still references it, so the URL never goes null. Definitive (a
+            // successful connection saying "gone", not a transient/offline
+            // error), so purge any stale cached copy and report "no asset". This
+            // is what lets a deletion reflect even for a PRE-meta cached file
+            // (the meta-based revalidation path can't see it).
+            if (response.StatusCode == HttpStatusCode.NotFound
+                || response.StatusCode == HttpStatusCode.Gone)
+            {
+                PurgeRole(modId, role);
+                DiagnosticLog.Write(
+                    $"ModAssetCache: GET {remoteUrl} -> {(int)response.StatusCode} — asset missing, purged");
+                return null;
+            }
             if (!response.IsSuccessStatusCode)
             {
+                // Transient (5xx / throttle): keep whatever we have, offline-safe.
                 DiagnosticLog.Write(
                     $"ModAssetCache: GET {remoteUrl} -> {(int)response.StatusCode}");
                 return File.Exists(localPath) ? localPath : null;
@@ -239,21 +271,21 @@ public class ModAssetCacheService
         }
     }
 
-    private async Task<bool> RevalidateAsync(
+    private async Task<RevalidateOutcome> RevalidateAsync(
         string modId, string role, string? remoteUrl, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(modId) || string.IsNullOrWhiteSpace(remoteUrl))
-            return false;
+            return RevalidateOutcome.Unchanged;
 
         var (localPath, metaPath) = PathsFor(modId, role, remoteUrl);
 
         // Only revalidate something we already have cached for this exact URL.
         // A missing file or a changed URL is GetAssetAsync's domain, not ours.
         if (!File.Exists(localPath))
-            return false;
+            return RevalidateOutcome.Unchanged;
         var meta = ReadMeta(metaPath);
         if (meta is null || !string.Equals(meta.Value.url, remoteUrl, StringComparison.Ordinal))
-            return false;
+            return RevalidateOutcome.Unchanged;
 
         try
         {
@@ -266,28 +298,47 @@ public class ModAssetCacheService
 
             // Unchanged — the common case, body-less and cheap.
             if (response.StatusCode == HttpStatusCode.NotModified)
-                return false;
-            // Anything non-success: keep the cached copy (offline-safe).
+                return RevalidateOutcome.Unchanged;
+
+            // 404/410 — the asset was DELETED at the source. This is the case
+            // where the modder deleted e.g. hero.jpg from the repo but the
+            // manifest (or a hardcoded built-in URL) still references it, so the
+            // URL never goes null and the deletion can only be seen here. A 404
+            // is definitive for a known path (rate-limits return 403/429, not
+            // 404), so it's safe to treat as removal: purge the cached copy and
+            // report it so the UI drops the stale image.
+            if (response.StatusCode == HttpStatusCode.NotFound
+                || response.StatusCode == HttpStatusCode.Gone)
+            {
+                PurgeRole(modId, role);
+                DiagnosticLog.Write(
+                    $"ModAssetCache: revalidate {remoteUrl} -> {(int)response.StatusCode} — asset deleted, purged");
+                return RevalidateOutcome.Removed;
+            }
+
+            // Any other non-success (5xx, throttling): keep the cached copy
+            // (offline-safe — never delete on a transient error).
             if (!response.IsSuccessStatusCode)
             {
                 DiagnosticLog.Write(
                     $"ModAssetCache: revalidate {remoteUrl} -> {(int)response.StatusCode} (kept cache)");
-                return false;
+                return RevalidateOutcome.Unchanged;
             }
 
             // 200 → the modder replaced the image under the same name. Rewrite
             // the file in place and report the change so the UI repaints.
-            return await WriteResponseAsync(response, role, localPath, metaPath, remoteUrl, ct);
+            return await WriteResponseAsync(response, role, localPath, metaPath, remoteUrl, ct)
+                ? RevalidateOutcome.Replaced : RevalidateOutcome.Unchanged;
         }
         catch (OperationCanceledException)
         {
-            return false;
+            return RevalidateOutcome.Unchanged;
         }
         catch (Exception ex)
         {
             // Net hiccup: keep the cached image, never delete it.
             DiagnosticLog.Write($"ModAssetCache: revalidate {remoteUrl} failed: {ex.Message}");
-            return false;
+            return RevalidateOutcome.Unchanged;
         }
     }
 

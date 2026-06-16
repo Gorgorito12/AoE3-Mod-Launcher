@@ -123,6 +123,15 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     public Task SendCancelGameAsync(string reason = "host_cancelled", CancellationToken ct = default) =>
         SendAsync(new { type = "cancel_game", reason }, ct);
 
+    /// <summary>
+    /// Report our Radmin VPN IP (26.x) so the server can put it in
+    /// <c>room_state</c> / broadcast <c>member_net</c>, letting every peer
+    /// ICMP-ping us for the in-game per-player ping column. Sent once we're
+    /// actually on the VPN (at match launch), re-sent if it changes.
+    /// </summary>
+    public Task SendSetRadminIpAsync(string ip, CancellationToken ct = default) =>
+        SendAsync(new { type = "set_radmin_ip", ip }, ct);
+
     // (Pre-n2n: a SendGameRelayAsync helper here tunneled UDP packets
     //  through the lobby WS when peer-to-peer hole-punching failed.
     //  With n2n the supernode handles all relaying transparently at

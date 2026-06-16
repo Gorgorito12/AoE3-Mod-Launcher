@@ -49,6 +49,13 @@ public partial class LauncherSettingsDialog : Window
     public bool ChangesSaved { get; private set; }
 
     /// <summary>
+    /// Invoked right after the user clears the icon/asset cache, so the (still
+    /// open, non-modal) launcher can re-download the images live instead of
+    /// requiring a restart. Set by the caller; null = no live refresh.
+    /// </summary>
+    public Action? AssetsCleared { get; set; }
+
+    /// <summary>
     /// Regex for a valid "owner/repo" GitHub identifier. Mirrors the
     /// pattern used by mod.schema.json for the same field — so the
     /// dialog's UX feels consistent with what the catalog accepts.
@@ -675,6 +682,10 @@ public partial class LauncherSettingsDialog : Window
                 ? Strings.Get("DlgLauncherSettingsNothingToClean")
                 : Strings.Format("DlgLauncherSettingsAssetsCleared", deleted);
             SetHint(ClearAssetsHint, msg, success: true);
+            // Re-download live: the launcher window stays open (non-modal), so
+            // ask it to revalidate now instead of leaving monograms until restart.
+            if (deleted > 0)
+                AssetsCleared?.Invoke();
         }
         catch (Exception ex)
         {

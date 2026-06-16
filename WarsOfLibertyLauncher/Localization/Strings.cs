@@ -2345,6 +2345,46 @@ public static class Strings
             [LangEn] = "↩  Leave game",
             [LangEs] = "↩  Salir de la partida",
         },
+        // Abort-for-everyone button (shown instead of Leave during the grace window).
+        ["MpInGameAbort"] = new()
+        {
+            [LangEn] = "✕  Abort match",
+            [LangEs] = "✕  Abortar partida",
+        },
+        // Host migration (GameRanger-style): the host left and the lobby passed on.
+        ["MpChatHostChanged"] = new()
+        {
+            [LangEn] = "{0} is now the host.",
+            [LangEs] = "Ahora {0} es el anfitrión.",
+        },
+        // Shown when a member tries to abort after the grace window has passed.
+        ["MpChatAbortWindowClosed"] = new()
+        {
+            [LangEn] = "The abort window has passed — leaving only removes you, the others keep playing.",
+            [LangEs] = "Ya pasó la ventana para abortar; al salir solo te retiras vos y los demás siguen jugando.",
+        },
+        // Match aborted by some member within the grace window (was host-only before).
+        ["MpChatGameAborted"] = new()
+        {
+            [LangEn] = "The match was aborted. Returning to lobby.",
+            [LangEs] = "La partida fue abortada. Volviendo a la sala.",
+        },
+        // Abort confirmation card (within the grace window).
+        ["MpConfirmAbortTitle"] = new()
+        {
+            [LangEn] = "Abort the match?",
+            [LangEs] = "¿Abortar la partida?",
+        },
+        ["MpConfirmAbortBody"] = new()
+        {
+            [LangEn] = "This ends the match for EVERYONE — only possible in the first moments after launch (e.g. a bad/desynced start).",
+            [LangEs] = "Esto termina la partida para TODOS — solo es posible en los primeros instantes tras lanzar (p. ej. un arranque mal/desincronizado).",
+        },
+        ["MpConfirmAbortYes"] = new()
+        {
+            [LangEn] = "Abort for everyone",
+            [LangEs] = "Abortar para todos",
+        },
 
         // ---- Themed in-lobby alert cards (MpAlertOverlay) — replace the
         //      old OS MessageBox prompts on the multiplayer surfaces. ----
@@ -2740,10 +2780,14 @@ public static class Strings
             [LangEn] = "Cache cleared.",
             [LangEs] = "Caché eliminada.",
         },
+        // Named for the tool it holds (the translation PACKAGER), not
+        // "Translations" — the generic word made users think this is where the
+        // launcher's display language is changed (that's GENERAL → "Launcher
+        // language"). The content header still reads "Translator tools".
         ["DlgLauncherSettingsSectionTranslations"] = new()
         {
-            [LangEn] = "TRANSLATIONS",
-            [LangEs] = "TRADUCCIONES",
+            [LangEn] = "PACKAGER",
+            [LangEs] = "EMPAQUETADOR",
         },
         ["DlgLauncherSettingsTranslationsHeader"] = new()
         {

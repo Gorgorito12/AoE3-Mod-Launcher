@@ -386,6 +386,36 @@ public class WsRoomMemberFlags
     /// provider-agnostic.</summary>
     [JsonPropertyName("login")]
     public string Login { get; set; } = "";
+
+    /// <summary>The member's Radmin VPN IP (26.x.x.x), reported via
+    /// <c>set_radmin_ip</c> once they're actually on the VPN. Lets every peer
+    /// ICMP-ping every other peer for the in-game per-player ping column. Null
+    /// until reported. camelCase JSON key — it rides inside the room-state
+    /// member object alongside ready/login (which are also bare names), unlike
+    /// the snake_case top-level frames.</summary>
+    [JsonPropertyName("radminIp")]
+    public string? RadminIp { get; set; }
+}
+
+/// <summary>Server→client: the host left and the lobby was handed to the next
+/// member (GameRanger-style migration).</summary>
+public class WsHostChanged
+{
+    [JsonPropertyName("new_host_user_id")]
+    public string NewHostUserId { get; set; } = "";
+
+    [JsonPropertyName("new_host_login")]
+    public string NewHostLogin { get; set; } = "";
+}
+
+/// <summary>Server→client: a peer reported (or changed) its Radmin IP.</summary>
+public class WsMemberNet
+{
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = "";
+
+    [JsonPropertyName("radmin_ip")]
+    public string? RadminIp { get; set; }
 }
 
 /// <summary>Initial snapshot sent by the DO when our hello succeeds.</summary>

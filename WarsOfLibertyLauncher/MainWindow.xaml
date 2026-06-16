@@ -420,17 +420,21 @@
                              size, which lands crisp at every DPI (the global
                              UseLayoutRounding + Display formatting from
                              App.OnStartup pin it to integer device pixels).
-                             DecodePixelWidth=64 caps the in-memory copy
-                             (~16 KB vs ~256 KB for the full 256) while still
-                             leaving comfortable headroom over 100/125/150/200%
-                             DPI render sizes (20/25/30/40 physical px). -->
+                             DecodePixelWidth=256 decodes the NATIVE frame so the
+                             only resample is the renderer's single HighQuality
+                             bicubic downscale (256 → 20-40 physical px). The
+                             earlier 64 cap pre-shrank in the decoder first, so a
+                             non-integer 64→40 second downscale softened the icon;
+                             decoding native keeps it sharp. Costs ~256 KB RAM
+                             instead of ~16 KB — trivial, and worth it for a crisp
+                             brand mark. (Size stays 20x20: sharper, not bigger.) -->
                         <Image Width="20" Height="20"
                                Margin="0,0,10,0"
                                VerticalAlignment="Center"
                                RenderOptions.BitmapScalingMode="HighQuality">
                             <Image.Source>
                                 <BitmapImage UriSource="pack://application:,,,/AppIcon.png"
-                                             DecodePixelWidth="64"
+                                             DecodePixelWidth="256"
                                              CacheOption="OnLoad"/>
                             </Image.Source>
                             <!-- Illuminate with the text. The icon is a

@@ -135,7 +135,7 @@ public static class ModRegistry
     /// don't want their launcher reaching out to GitHub.
     /// </param>
     public static async Task<IReadOnlyList<ModProfile>> RefreshFromCatalogAsync(
-        string? repo, CancellationToken ct = default)
+        string? repo, CancellationToken ct = default, bool force = false)
     {
         if (string.IsNullOrWhiteSpace(repo))
         {
@@ -159,8 +159,14 @@ public static class ModRegistry
         // user doesn't have to wait for the refresh; if it lands while
         // they're still in the app the in-memory runtime list is updated
         // too, so a subsequent RefreshModCards call picks up any new entries.
+        //
+        // force=true skips BOTH cache branches and re-fetches online now — used
+        // by the manual "Actualizar" button and the periodic/focus refresh so a
+        // catalog edit shows up without waiting for the 24h TTL. The online
+        // fetch is one GitHub API call (rate-limited 60/h per IP), so callers
+        // throttle how often they force.
 
-        var cache = service.LoadFromCache(repo);
+        var cache = force ? null : service.LoadFromCache(repo);
         if (cache != null && service.IsFresh(cache))
         {
             DiagnosticLog.Write(
