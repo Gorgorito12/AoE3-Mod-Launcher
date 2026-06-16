@@ -136,6 +136,15 @@ resolves `icon: "icon.png"` to
 `https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/<your-id>/icon.png`
 and caches them on disk (`ModAssetCacheService`).
 
+The cache is **stale-while-revalidate**: if you **replace** an icon/banner
+(same filename, new bytes), launchers pick up the new image on their next
+refresh (a conditional `ETag` request detects the change) — they don't keep
+the old one forever. If you **delete** an asset from the catalog, the cached
+copy is purged (a `404` is treated as a definitive removal). So editing your
+artwork in the catalog repo is enough; users don't need to clear anything by
+hand. (Cached files are only kept on a transient network error, never on a
+clean `404`.)
+
 ### 3.3. Multilingual descriptions
 
 ```json

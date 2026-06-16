@@ -144,9 +144,29 @@ traffic.
   Worker — configs that still point at the old Worker URL are auto-healed on
   load.
 - **Real-time room state** over WebSocket — chat / ready / member-join /
-  game-started frames stream from the room, with auto-reconnect so a brief
+  game-started frames stream from the room, plus `host_changed` (migration),
+  `member_net` (per-peer Radmin IP) and `kicked`, with auto-reconnect so a brief
   network hiccup doesn't drop the player from the lobby. The lobby opens in its
   **own independent window** with its own Windows taskbar button.
+- **Host migration (GameRanger-style)** — if the host leaves (or crashes), the
+  room is **not** torn down: it passes to the next member by join order, then the
+  next, until nobody is left (only then does it close). The new host can start /
+  cancel / kick like the original. Migration is backend-authoritative and skips
+  "ghost" members whose socket already died, so it never hands the room to a
+  player who isn't really there.
+- **Per-player ping in-game** — the in-game overlay shows a **real** round-trip
+  time to each peer (green / amber / red), not a placeholder. Each client reports
+  its Radmin VPN IP over the lobby WebSocket at match launch; the server
+  broadcasts it (`member_net`) and every client ICMP-pings the others, so you can
+  spot who's lagging.
+- **Match abort window** — for the first **~60 seconds** after launch, **any**
+  member (not just the host) can abort the match for everyone — the safety valve
+  for a bad / desynced start. After the window closes the match is left alone
+  (a host who is merely losing can't kill everyone's game).
+- **Kick** — the host can expel a member from the room (with a confirmation
+  prompt). It's a **simple kick**: the player can re-join later; there's no ban
+  list. Closing the kicked player's socket reuses the normal leave path, so every
+  other roster updates itself.
 - **Global chat** — a process-wide WebSocket channel (`/global/ws`) shown beside
   the rooms list: a presence count, message history, and server-side anti-spam
   (per-minute cap + slow-mode + auto-timeout on repeated strikes).
@@ -282,10 +302,14 @@ for what users will see and how to handle Smart App Control.
 │     Players click Multiplayer -> LAN once; the host         │
 │     shows up as a normal LAN game.                          │
 ├─────────────────────────────────────────────────────────────┤
-│  7. In-game overlay tracks match time + Radmin              │
-│     adapter traffic + your internet ping. (Match            │
-│     history / ELO + replay upload are scaffolded,           │
-│     not yet wired.)                                          │
+│  7. In-game overlay tracks match time + Radmin adapter      │
+│     traffic + a REAL per-player ping (each client reports   │
+│     its Radmin IP, peers ICMP-ping each other). The host    │
+│     can kick a member; if the host leaves, the room         │
+│     migrates to the next joiner. For ~60 s after launch     │
+│     any member can abort a bad start for everyone. (Match   │
+│     history / ELO + replay upload are scaffolded, not yet   │
+│     wired.)                                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -561,6 +585,13 @@ Shipped:
 - **Mod-fingerprint gating** — rooms carry the SHA-256 of the three
   critical AoE3 files; mismatched joins are rejected so no one lands in
   an unplayable game.
+- **Live room control** — **host migration** (the room passes to the next
+  joiner if the host leaves, GameRanger-style), a **match abort window**
+  (any member can abort a bad start for ~60 s after launch) and **kick**
+  (the host can expel a member, simple/re-joinable).
+- **Per-peer connection stats** — the in-game overlay shows a real
+  per-player ping: each client reports its Radmin IP over the lobby
+  socket (`member_net`) and peers ICMP-ping each other.
 - **Detect-only stock game** — the unmodded AoE3: The Asian Dynasties
   (`aoe3-tad`) is detected and launchable (single-player + Radmin
   multiplayer) without ever being modified.
@@ -582,9 +613,9 @@ Next up:
   ELO ladder, replay browser) still need to call them.
 - **More mod profiles** — extend the catalog with other AoE3
   total-conversion mods.
-- **Per-peer connection stats** — true per-player ping / bytes needs the
-  backend to surface each peer's Radmin IP in `room_state` (the launcher
-  can't map a Discord login to a Radmin IP on its own).
+- **Per-peer byte counters** — the in-game per-player *ping* is live, but
+  the bytes column is still a placeholder; true per-flow counters would
+  need traffic accounting the launcher doesn't collect yet.
 
 ---
 

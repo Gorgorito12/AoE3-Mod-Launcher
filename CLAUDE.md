@@ -668,13 +668,17 @@ don't go looking for it.)
   newest-first). Don't revert either to a plain `OrderBy(e => e.Name)`. Pinned by
   `TranslationCompatTests`.
 
-- **The translator-facing packager lives in Settings → Translations, NOT the
+- **The translator-facing packager lives in Settings → Packager tab, NOT the
   Game-language gear submenu, and it's globalised across mods.** The packaging
   dialog (`TranslationPackagerDialog`) used to be a `MenuItem` ("📦 Empaquetar
   mi traducción…") in the ActionPanel's `MenuGameLanguage` gear submenu and was
   hard-coded to the launcher's *active* mod — so packaging a Spanish pack for
   Improvement Mod while WoL was active forced a mod-switch first. The entry
-  point moved to **LauncherSettings → TRADUCCIONES** tab, a thin sidebar tab
+  point moved to the **LauncherSettings → PACKAGER / EMPAQUETADOR** tab
+  (`DlgLauncherSettingsSectionTranslations` — kept that key name for git-blame
+  continuity even though the label is no longer "TRADUCCIONES"). It was renamed
+  from "TRADUCCIONES" because users read that as a launcher-language switch; the
+  tab only builds translation `.zip`s. It's a thin sidebar tab
   (icon `\xF2B7`) holding a header + description + "📦 Abrir empaquetador de
   traducciones" button that opens the dialog modally. The dialog's first form
   field is now a **"Mod a traducir" combo** populated from `ModRegistry.All`
