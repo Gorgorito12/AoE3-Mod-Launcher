@@ -1081,6 +1081,9 @@ public partial class MultiplayerTab : UserControl
                     case "member_net":
                         HandleMemberNet(e.Json);
                         break;
+                    case "kicked":
+                        HandleKicked();
+                        break;
                     case "game_countdown":
                     {
                         // Host pressed Start — server broadcasts the
@@ -1343,6 +1346,21 @@ public partial class MultiplayerTab : UserControl
         RenderRoomPanel();     // re-evaluates host-only controls (Start, etc.)
     }
 
+    /// <summary>
+    /// The host kicked us. Close the lobby window (which fires the normal
+    /// leave-room cleanup + disposes the socket, so there's no reconnect loop
+    /// after the server closes ours) and show a notice on the tab.
+    /// </summary>
+    private void HandleKicked()
+    {
+        CloseLobbyWindow();
+        _ = MpAlertOverlay.NoticeAsync(
+            TabRootGrid,
+            Strings.Get("MpKickedTitle"),
+            Strings.Get("MpKickedBody"),
+            Strings.Get("MpAlertOk"));
+    }
+
     /// <summary>A peer reported (or changed) its Radmin IP — store it so the
     /// in-game ping prober can ICMP them.</summary>
     private void HandleMemberNet(JsonElement json)
@@ -1566,10 +1584,56 @@ public partial class MultiplayerTab : UserControl
                 Brushes.Transparent,
                 (Brush)Application.Current.FindResource("MpPingGood")));
         }
+
+        // Kick button — host-only, never on the host's OWN row. The button
+        // tracks _isHostInCurrentRoom, which host migration keeps current, so it
+        // appears for whoever currently holds the room.
+        if (_isHostInCurrentRoom && !isMe && !isHost)
+        {
+            var kickBtn = new Button
+            {
+                Content = "✕",
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                Margin = new Thickness(6, 0, 0, 0),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(1),
+                BorderBrush = (Brush)Application.Current.FindResource("MpStatusOffline"),
+                Foreground = (Brush)Application.Current.FindResource("MpStatusOffline"),
+                FontWeight = FontWeights.Bold,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = Strings.Format("MpConfirmKickBody", m.Login),
+            };
+            var targetId = m.UserId;
+            var targetLogin = m.Login;
+            kickBtn.Click += async (_, _) => await KickMemberAsync(targetId, targetLogin);
+            badges.Children.Add(kickBtn);
+        }
         grid.Children.Add(WithColumn(badges, 3));
 
         row.Child = grid;
         return row;
+    }
+
+    /// <summary>
+    /// Host action: confirm, then ask the server to kick a member. The roster
+    /// re-renders on its own when the resulting member_left frame arrives.
+    /// </summary>
+    private async Task KickMemberAsync(string userId, string login)
+    {
+        if (_lobbyWindow == null || _session?.RoomSocket == null) return;
+        bool confirmed = await MpAlertOverlay.ConfirmAsync(
+            _lobbyWindow.LobbyRootGrid,
+            Strings.Get("MpConfirmKickTitle"),
+            Strings.Format("MpConfirmKickBody", login),
+            Strings.Get("MpConfirmKickYes"),
+            Strings.Get("MpAlertCancel"),
+            danger: true);
+        if (!confirmed) return;
+        try { await _session.RoomSocket.SendKickAsync(userId); }
+        catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.KickMember: {ex.Message}"); }
     }
 
     /// <summary>Helper: assigns a Grid.Column without verbosity at call sites.</summary>

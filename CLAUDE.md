@@ -1507,6 +1507,17 @@ model enforced by the catalog repo's CI. The JSON schema lives at
   losing must NOT be able to kill everyone's game — abort is time-boxed to the
   start (a bad/desynced launch). To restrict abort to host-only later, it's a
   one-line guard in `handleCancelGame`.
+  **(c) Kick.** The host can expel a member: `kick { user_id }` (host-only,
+  validated in `LobbyRoom.handleKick`) sends the target a `kicked` frame then
+  closes its socket — the existing `ws.on('close')` cleanup drops it from the
+  roster for everyone (no new removal logic). **Simple kick, no ban list**: the
+  target may re-join (to block re-join, add a per-room `Set<userId>` checked in
+  `rest.ts` join). Launcher: a host-only ✕ button per roster row (`BuildMemberRow`,
+  hidden on the host's own row, tracks `_isHostInCurrentRoom` so host migration
+  keeps it correct) → confirm via `MpAlertOverlay` → `SendKickAsync`; the kicked
+  client's `HandleKicked` closes the lobby window (disposing the socket, so no
+  reconnect loop) and shows an `MpKicked*` notice. Pinned by the kick case in
+  `scripts/test-host-migration.ts`.
 - **Multiplayer alerts are themed in-window cards, NOT `MessageBox` — via
   the `MpAlertOverlay` helper.** `Controls/MpAlertOverlay.cs` is a static
   helper that injects a scrim + a centred card (MpSurface fill, two-tone

@@ -2351,6 +2351,33 @@ public static class Strings
             [LangEn] = "✕  Abort match",
             [LangEs] = "✕  Abortar partida",
         },
+        // Kick a player from the room (host-only).
+        ["MpConfirmKickTitle"] = new()
+        {
+            [LangEn] = "Kick player?",
+            [LangEs] = "¿Expulsar jugador?",
+        },
+        ["MpConfirmKickBody"] = new()
+        {
+            [LangEn] = "Kick {0} from the room?",
+            [LangEs] = "¿Expulsar a {0} de la sala?",
+        },
+        ["MpConfirmKickYes"] = new()
+        {
+            [LangEn] = "Kick",
+            [LangEs] = "Expulsar",
+        },
+        // Shown to the player who was kicked.
+        ["MpKickedTitle"] = new()
+        {
+            [LangEn] = "You were kicked",
+            [LangEs] = "Te expulsaron",
+        },
+        ["MpKickedBody"] = new()
+        {
+            [LangEn] = "The host kicked you from the room.",
+            [LangEs] = "El anfitrión te expulsó de la sala.",
+        },
         // Host migration (GameRanger-style): the host left and the lobby passed on.
         ["MpChatHostChanged"] = new()
         {

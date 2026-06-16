@@ -132,6 +132,14 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     public Task SendSetRadminIpAsync(string ip, CancellationToken ct = default) =>
         SendAsync(new { type = "set_radmin_ip", ip }, ct);
 
+    /// <summary>
+    /// Host-only: ask the server to kick a member. The server validates we're
+    /// the host, tells the target it was kicked, and closes its socket (the
+    /// normal disconnect path then drops it from the roster for everyone).
+    /// </summary>
+    public Task SendKickAsync(string userId, CancellationToken ct = default) =>
+        SendAsync(new { type = "kick", user_id = userId }, ct);
+
     // (Pre-n2n: a SendGameRelayAsync helper here tunneled UDP packets
     //  through the lobby WS when peer-to-peer hole-punching failed.
     //  With n2n the supernode handles all relaying transparently at
