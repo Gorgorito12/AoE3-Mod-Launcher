@@ -3648,46 +3648,6 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Small rounded status badge for a room card: the single most-relevant
-    /// state — "In game" (locked), "Full", or "Waiting" — coloured to match.
-    /// </summary>
-    private Border BuildRoomBadge(bool inGame, bool isFull)
-    {
-        string label;
-        Brush fg;
-        if (inGame)
-        {
-            label = Strings.Get("MpRoomStatusInGame");
-            fg = (Brush)Application.Current.FindResource("MpStatusInGame");
-        }
-        else if (isFull)
-        {
-            label = Strings.Get("MpRoomFull");
-            fg = (Brush)Application.Current.FindResource("MpPingMedium");
-        }
-        else
-        {
-            label = Strings.Get("MpRoomStatusWaiting");
-            fg = (Brush)Application.Current.FindResource("MpStatusWaiting");
-        }
-        return new Border
-        {
-            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
-            BorderBrush = fg,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(8, 2, 8, 2),
-            Child = new TextBlock
-            {
-                Text = label,
-                Foreground = fg,
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                FontWeight = FontWeights.SemiBold,
-            },
-        };
-    }
-
-    /// <summary>
     /// Refresh the "last updated" label in the rooms header from
     /// <see cref="_lastRoomsRenderedAt"/>. Called after each successful
     /// /lobbies fetch and ticked by the rooms ping timer so the relative

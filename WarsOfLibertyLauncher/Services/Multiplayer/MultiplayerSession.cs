@@ -37,8 +37,6 @@ public sealed class MultiplayerSession : IAsyncDisposable
         SigningIn,
         /// <summary>We have a valid token and the cached user.</summary>
         SignedIn,
-        /// <summary>The last call returned 401 — caller should re-sign-in.</summary>
-        TokenRejected,
     }
 
     public enum LobbyStatus

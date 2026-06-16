@@ -1055,10 +1055,9 @@ don't go looking for it.)
 
   Status shows in the ESTADO column as a dot + label (`BuildStatusCell`):
   `Esperando` (waiting) or `En partida` (in game), localised via
-  `MpRoomStatusWaiting` / `MpRoomStatusInGame`. (`BuildRoomBadge` exists but is
-  currently **UNUSED** — leftover from the reverted card design, the inverse of
-  what an earlier doc revision claimed; the disabled "In game" / "Full" action
-  button is the actual join block.) The header also carries an
+  `MpRoomStatusWaiting` / `MpRoomStatusInGame`. (The disabled "In game" / "Full"
+  action button — not a separate badge — is the actual join block; an unused
+  `BuildRoomBadge` leftover from the reverted card design was removed.) The header also carries an
   `Actualizado hace X` timestamp (`RoomsUpdatedText` / `UpdateRoomsUpdatedLabel`,
   ticked by `_roomsPingTimer`), and the empty state is now localized
   (`MpRoomsEmptyTitle` / `MpRoomsEmptyBody` — they used to be hardcoded English).

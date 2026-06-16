@@ -2296,11 +2296,6 @@ public static class Strings
         // their own code-behind paths and re-applied on language switch.
         ["MpCountdownLabel"] = new() { [LangEn] = "Starting in", [LangEs] = "Comienza en" },
         ["MpCountdownGo"] = new() { [LangEn] = "Go", [LangEs] = "¡Ya!" },
-        ["MpCountdownHint"] = new()
-        {
-            [LangEn] = "AoE3 will open automatically — keep the launcher running.",
-            [LangEs] = "AoE3 se abrirá automáticamente — mantén el launcher abierto.",
-        },
         ["MpCountdownCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
         ["MpInGameTitle"] = new() { [LangEn] = "GAME IN PROGRESS", [LangEs] = "PARTIDA EN CURSO" },
         ["MpInGameMatchTimeHeader"] = new() { [LangEn] = "MATCH TIME", [LangEs] = "TIEMPO DE PARTIDA" },
