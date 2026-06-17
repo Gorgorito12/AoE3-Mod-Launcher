@@ -723,6 +723,41 @@ public class LauncherConfig
     public string ModsCatalogRepo { get; set; } = "";
 
     /// <summary>
+    /// URL of the central notification feed — a small JSON manifest published by
+    /// the self-hosted notifier service (a second Oracle VM, separate from the
+    /// lobby backend) that polls GitHub ONCE for everyone and reports each mod's
+    /// latest version + published translation keys. The launcher reads it with a
+    /// single cheap REST call (ETag/304) instead of the per-mod GitHub polling in
+    /// <c>SweepInstalledModsForNotificationsAsync</c>, sparing the unauthenticated
+    /// 60 req/h-per-IP budget. The launcher still does the version/translation
+    /// DIFF and the dedup locally, so the feed only changes the data SOURCE.
+    ///
+    /// Three values are meaningful (same convention as <see cref="ModsCatalogRepo"/>):
+    /// <list type="bullet">
+    ///   <item><c>""</c> (empty, default) — use the launcher's built-in default
+    ///     feed URL.</item>
+    ///   <item><c>"none"</c> — opt-out: don't contact the notifier; fall back to
+    ///     the per-mod GitHub checks for everyone.</item>
+    ///   <item>any URL — use that endpoint (forks, mirrors, local test servers).</item>
+    /// </list>
+    /// If the feed is unreachable or returns bad JSON the launcher ALWAYS falls
+    /// back to the direct-GitHub checks, so the notifier is never a single point
+    /// of failure.
+    /// </summary>
+    [JsonPropertyName("notificationFeedUrl")]
+    public string NotificationFeedUrl { get; set; } = "";
+
+    /// <summary>
+    /// ETag from the last successful notification-feed fetch. Sent back as
+    /// If-None-Match so the notifier can answer 304 Not Modified when nothing
+    /// changed — the launcher then serves its on-disk feed cache without
+    /// re-downloading. Opaque value — never parsed, just echoed. Mirrors
+    /// <see cref="LauncherUpdateETag"/>.
+    /// </summary>
+    [JsonPropertyName("notificationFeedETag")]
+    public string NotificationFeedETag { get; set; } = "";
+
+    /// <summary>
     /// LEGACY — see <see cref="ModInstallPath"/>. Migrated to
     /// <see cref="ModState.ActiveTranslationId"/> for the WoL profile on
     /// first load.

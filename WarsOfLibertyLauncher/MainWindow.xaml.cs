@@ -8140,6 +8140,34 @@ public partial class MainWindow : Window
     {
         if (!_config.CheckUpdatesOnStartup) return;
 
+        // Try the central notification feed ONCE. When it answers (200 fresh or
+        // 304-from-cache) it carries every mod's latest version + translation keys,
+        // so a single cheap REST call replaces the per-mod GitHub checks below for
+        // ALL installed mods. Only a genuine failure (network / bad JSON / no cache
+        // on a 304) leaves `feed == null` → we fall back to the direct-GitHub path,
+        // so the notifier is never a single point of failure.
+        NotificationFeed? feed = null;
+        var feedUrl = ResolveNotificationFeedUrl();
+        if (feedUrl != null)
+        {
+            try
+            {
+                var fetch = await new NotificationFeedService()
+                    .FetchAsync(feedUrl, _config.NotificationFeedETag);
+                if (!string.IsNullOrEmpty(fetch.ETag)
+                    && !string.Equals(fetch.ETag, _config.NotificationFeedETag, StringComparison.Ordinal))
+                {
+                    _config.NotificationFeedETag = fetch.ETag;
+                    PersistConfigInBackground();
+                }
+                feed = fetch.Feed;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Notif sweep feed fetch failed: {ex.Message}");
+            }
+        }
+
         var activeId = _updateService.Profile.Id;
         foreach (var profile in ModRegistry.All)
         {
@@ -8148,6 +8176,21 @@ public partial class MainWindow : Window
             var state = _config.GetState(profile.Id);
             if (string.IsNullOrEmpty(state.InstallPath)) continue;   // not installed
 
+            // --- Fast path: data from the central feed (no GitHub traffic) ---
+            if (feed != null)
+            {
+                try
+                {
+                    await Dispatcher.InvokeAsync(() => ApplyFeedToMod(profile, state, feed));
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Notif sweep feed-apply failed for '{profile.Id}': {ex.Message}");
+                }
+                continue;
+            }
+
+            // --- Fallback: per-mod GitHub checks (feed unavailable) ---
             // One UI-free service per mod, reused for the version + translations-repo checks.
             var svc = new UpdateService(_config, profile);
 
@@ -8183,6 +8226,85 @@ public partial class MainWindow : Window
             {
                 DiagnosticLog.Write($"Notif sweep translation-check failed for '{profile.Id}': {ex.Message}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Resolves the notification-feed URL from config. Empty → the launcher's
+    /// built-in default; <c>"none"</c> → opt-out (returns null, caller falls back
+    /// to the per-mod GitHub checks); any other value → that URL. Mirrors
+    /// <see cref="RefreshCatalogAsync"/>'s repo resolution.
+    /// </summary>
+    private string? ResolveNotificationFeedUrl()
+    {
+        const string defaultUrl = "https://wol-notify.duckdns.org/manifest";
+        var raw = _config.NotificationFeedUrl;
+        if (string.IsNullOrEmpty(raw)) return defaultUrl;
+        if (string.Equals(raw, "none", StringComparison.OrdinalIgnoreCase)) return null;
+        return raw;
+    }
+
+    /// <summary>
+    /// Applies one mod's central-feed entry: raises a deduped "update available"
+    /// item when the feed's latest version differs from the locally-cached
+    /// installed version (<see cref="ModState.LastKnownVersion"/>), and diffs the
+    /// feed's translation keys against the per-mod baseline. Reuses the exact same
+    /// <see cref="MaybeNotifyUpdateAvailable"/> + dedup paths as the GitHub
+    /// fallback — only the data source differs. Must run on the UI thread (touches
+    /// the bound notification collection).
+    /// </summary>
+    private void ApplyFeedToMod(ModProfile profile, ModState state, NotificationFeed feed)
+    {
+        if (!feed.Mods.TryGetValue(profile.Id, out var entry) || entry == null) return;
+
+        // Update availability. We only know the installed version from the cache;
+        // an empty LastKnownVersion (never detected) is "unknown" and must NOT bell
+        // — mirrors MaybeNotifyUpdateAvailable's versionKnown gate (a fresh/unknown
+        // install is not an "update"). The server can't compute pending-patch
+        // counts, so pass 0: the version-difference check carries the signal.
+        var installed = state.LastKnownVersion;
+        bool versionKnown = !string.IsNullOrEmpty(installed);
+        var pinned = state.PinnedVersion;
+        bool paused = !string.IsNullOrEmpty(pinned)
+            && string.Equals(pinned, installed, StringComparison.OrdinalIgnoreCase);
+        MaybeNotifyUpdateAvailable(profile, installed, entry.LatestVersion, 0, versionKnown, paused);
+
+        NotifyNewTranslationKeys(profile, entry.Translations);
+    }
+
+    /// <summary>
+    /// Feed-sourced sibling of <see cref="NotifyNewTranslations"/>: the central feed
+    /// gives only the dedup KEYS (the GitHub release tag, falling back to
+    /// <c>id@version</c> — identical to <c>NotifyNewTranslations</c>'s <c>KeyOf</c>),
+    /// so dedup stays consistent across the feed and GitHub paths. Seeds the baseline
+    /// silently on the first fetch for a mod; afterwards bells each genuinely-new key.
+    /// A readable label / navigable id is derived best-effort from the key (the active
+    /// mod still gets the richer language-name path via <see cref="RefreshTranslationIndexAsync"/>).
+    /// </summary>
+    private void NotifyNewTranslationKeys(ModProfile profile, IReadOnlyList<string>? keys)
+    {
+        if (keys == null || keys.Count == 0) return;
+        var distinct = keys.Where(k => !string.IsNullOrWhiteSpace(k)).Distinct().ToList();
+        if (distinct.Count == 0) return;
+
+        var state = _config.GetState(profile.Id);
+        if (state.NotifiedTranslationKeys.Count == 0)
+        {
+            // First time we see this mod's translations — establish the baseline
+            // quietly so only future packs bell (same rule as NotifyNewTranslations).
+            state.NotifiedTranslationKeys.AddRange(distinct);
+            PersistConfigInBackground();
+            return;
+        }
+
+        foreach (var key in distinct)
+        {
+            var atIdx = key.IndexOf('@');
+            var label = atIdx > 0 ? key.Substring(0, atIdx) : key;
+            _notifications.RaiseNewTranslation(
+                profile.Id, key, label,
+                Strings.Get("NotifNewTranslationTitle"),
+                Strings.Format("NotifNewTranslationBody", profile.DisplayName, label));
         }
     }
 
