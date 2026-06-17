@@ -257,6 +257,15 @@ uninstaller uses that to clean up.
 
 ## 5. Update mechanisms (`update.mechanism`)
 
+> **Notifications are automatic — you don't configure anything.** Once your mod is
+> in the catalog with `update` filled in (and, optionally, `translations`), the
+> launcher's notification bell tells **every** user when you ship a new version or a
+> new translation. You don't touch any server or notification setting: a small
+> central service reads your `mod.json` from the catalog and figures out your latest
+> version (from your GitHub releases for `GitHubReleases`, or your `UpdateInfo.xml`
+> for `WolPatcher`) and your published translations (from your `translations.repo`).
+> Publish to the catalog and you're done — see §6 for how a version bump ships.
+
 Decision tree:
 
 ```
