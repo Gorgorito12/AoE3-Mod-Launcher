@@ -104,6 +104,7 @@ public class TranslationRegistryService
                         Size = zipAsset.Size,
                         Description = manifest.Description,
                         TargetMod = manifest.TargetMod,
+                        ReleaseTag = release.TagName ?? "",
                     });
                     DiagnosticLog.Write(
                         $"  release '{release.TagName}': loaded '{manifest.Id}' v{manifest.Version}");

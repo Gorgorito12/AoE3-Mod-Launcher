@@ -1122,4 +1122,126 @@
         <Setter Property="CornerRadius" Value="{StaticResource DiscRadiusXxl}"/>
     </Style>
 
+    <!-- ============================================================
+         NOTIFICATION BELL PANEL — header link buttons + list rows.
+         Used by the Steam-style notification popup in MainWindow.
+         ============================================================ -->
+
+    <!-- Small text "link" button for the panel header (Mark all read / Clear). -->
+    <Style x:Key="NotifLinkButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Notification BELL button (title bar). Steam-style: a filled, rounded,
+         inset tile so it reads as a clear hit-target instead of a faint glyph.
+         Gold tile = both the launcher's accent AND a "notifications/attention"
+         colour; dark glyph for max contrast. Hover lifts to the brighter gold,
+         press to the deep gold. The red unread badge (in MainWindow) sits on
+         top of this tile. -->
+    <Style x:Key="NotificationBellButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Width" Value="48"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <!-- Dark blue-grey tile (a touch darker than the bar): filled at
+                         rest, a bit lighter on hover, lighter still while pressed or
+                         while the panel is open (Tag=open). The bell (a Path in the
+                         content) is translucent white with a thin black outline. -->
+                    <Border x:Name="border"
+                            Background="#283844"
+                            CornerRadius="6"
+                            Margin="0,3"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="#2E4150"/>
+                        </Trigger>
+                        <Trigger Property="Tag" Value="open">
+                            <Setter TargetName="border" Property="Background" Value="#3C5468"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="#3C5468"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Clean tooltip for the notification bell (the default WPF tooltip
+         inherits the theme's light Foreground over a pale background → an
+         unreadable "black box"). Dark readable card, rounded, small. -->
+    <Style x:Key="NotifToolTipStyle" TargetType="ToolTip">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{DynamicResource BgBase}"
+                            BorderBrush="{DynamicResource MpDivider}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="8,4">
+                        <ContentPresenter TextElement.Foreground="{DynamicResource TextPrimary}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Full-width clickable notification row: transparent idle, subtle tint
+         on hover (so the whole row reads as a hit-target). -->
+    <Style x:Key="NotifRowButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border" Background="{TemplateBinding Background}">
+                        <ContentPresenter HorizontalAlignment="Stretch"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpSurfaceAlt}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

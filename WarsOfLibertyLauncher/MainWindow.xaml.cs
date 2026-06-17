@@ -20,6 +20,27 @@ public partial class MainWindow : Window
     // the chosen profile so we don't have to restart the whole process.
     private UpdateService _updateService;
     private readonly InstallerService _installerService;
+    // Steam-style notification bell backing store. Constructed once per run
+    // from the loaded config (persisted history) and fed by the update /
+    // translation detection hooks. Wired to the tray toast + bell pulse.
+    private NotificationCenter _notifications = null!;
+    // True while the cursor is over the bell — drives the white "illuminate".
+    private bool _bellHover;
+    // Frozen brushes for the bell fill by state (resting soft white, lit white,
+    // and one per notification kind — same colours as the panel's row icons).
+    private static readonly System.Windows.Media.Brush _bellSoftWhite = Frozen("#99FFFFFF");
+    private static readonly System.Windows.Media.Brush _bellWhite = Frozen("#FFFFFF");
+    private static readonly System.Windows.Media.Brush _bellBlue = Frozen("#5AA9E6");   // UpdateAvailable
+    private static readonly System.Windows.Media.Brush _bellGreen = Frozen("#62C462");  // UpdateFinished
+    private static readonly System.Windows.Media.Brush _bellGold = Frozen("#D8B66A");   // NewTranslation
+
+    private static System.Windows.Media.Brush Frozen(string hex)
+    {
+        var b = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+        b.Freeze();
+        return b;
+    }
     /// <summary>
     /// v1.0 multiplayer state. Constructed once per launcher run and
     /// attached to the Multiplayer tab UserControl. Disposed on window
@@ -216,6 +237,36 @@ public partial class MainWindow : Window
         _updateService = new UpdateService(_config, activeProfile);
         _installerService = new InstallerService();
 
+        // Notification bell (Steam-style). Seeds its history from the persisted
+        // config, refreshes the badge on any change, fires the one-shot pulse
+        // when a new item arrives, and routes new items to the tray toast
+        // (which itself no-ops when the user is already looking at the window).
+        _notifications = new NotificationCenter(_config);
+        _notifications.Changed += (_, _) => Dispatcher.Invoke(RefreshNotificationBadge);
+        _notifications.ItemAdded += (_, _) => Dispatcher.Invoke(PulseNotificationBell);
+        _notifications.ToastRequested += (title, body) => Dispatcher.Invoke(() => ShowToast(title, body));
+        NotificationList.ItemsSource = _notifications.Items;
+        // The popup is StaysOpen=True (never auto-closes) so the bell can be a
+        // reliable click-toggle. We close it ourselves on an outside click or
+        // when the window loses focus; those handlers are attached only while
+        // it's open. Tag="open" drives the pressed-gold tint on the button.
+        NotificationPopup.Opened += (_, _) =>
+        {
+            NotificationBellButton.Tag = "open";
+            PreviewMouseDown += CloseNotifOnOutsideClick;
+            Deactivated += CloseNotifOnDeactivate;
+            RefreshBellColor();
+        };
+        NotificationPopup.Closed += (_, _) =>
+        {
+            NotificationBellButton.Tag = null;
+            PreviewMouseDown -= CloseNotifOnOutsideClick;
+            Deactivated -= CloseNotifOnDeactivate;
+            RefreshBellColor();
+        };
+        RefreshNotificationLabels();
+        RefreshNotificationBadge();
+
         // v1.0 multiplayer. The session restores a saved JWT from config
         // if it's still valid; otherwise it stays in SignedOut and the
         // Multiplayer tab shows the sign-in gate. The hashing callback
@@ -395,6 +446,12 @@ public partial class MainWindow : Window
                 // so the first window focus shouldn't immediately FORCE another
                 // (redundant) API fetch — wait the normal 5 min from here.
                 _lastCatalogRefreshUtc = DateTime.UtcNow;
+
+                // Fire-and-forget: sweep the OTHER installed mods for update /
+                // new-translation notifications once at startup (the active mod
+                // is already covered by CheckAsync / RefreshTranslationIndexAsync
+                // above). Background so it never delays first paint.
+                _ = SweepInstalledModsForNotificationsAsync();
             }
             else
             {
@@ -476,6 +533,11 @@ public partial class MainWindow : Window
                 if (_pollTickCount % 3 == 0)
                     await MaybeForceCatalogRefreshAsync();
                 await RevalidateVisibleAssetsAsync(activeOnly: true);
+                // Every 6th tick (~30 min): sweep the OTHER installed mods for
+                // update / new-translation notifications. Throttled well below
+                // the image revalidation so it stays within the GitHub API budget.
+                if (_pollTickCount % 6 == 0)
+                    await SweepInstalledModsForNotificationsAsync();
             };
             _catalogPollTimer.Start();
         }
@@ -1660,6 +1722,181 @@ public partial class MainWindow : Window
         TrayMenuExit.Header = WarsOfLibertyLauncher.Localization.Strings.Get("TrayMenuExit");
     }
 
+    // ------------------------------------------------------------------------
+    // Notification bell (Steam-style). The backing store is _notifications
+    // (Services/NotificationCenter); these methods own the UI: badge, one-shot
+    // pulse, dropdown panel, and click navigation.
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Refresh the red unread badge + the panel's empty-state from the current
+    /// notification state. Cheap; called on every <c>Changed</c>.
+    /// </summary>
+    private void RefreshNotificationBadge()
+    {
+        // Small unread indicator dot — shown whenever there's anything unread
+        // (no count number; the panel carries the detail).
+        NotificationDot.Visibility =
+            _notifications.UnreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        NotificationEmptyText.Visibility =
+            _notifications.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RefreshBellColor();
+    }
+
+    /// <summary>
+    /// Colour the bell by state: hover OR panel-open → illuminate to white; else
+    /// if there's an unread item → tint by the most-recent unread kind
+    /// (blue=update available, green=update finished, gold=new translation);
+    /// else a resting soft white. Driven entirely from code (not style triggers)
+    /// so a local Fill can't get out-priced by a hover trigger.
+    /// </summary>
+    private void RefreshBellColor()
+    {
+        bool lit = _bellHover || NotificationPopup.IsOpen;
+        var unread = _notifications.Items.FirstOrDefault(i => !i.Read);
+        NotificationBellGlyph.Fill =
+            lit ? _bellWhite
+            : unread != null ? KindBrush(unread.Kind)
+            : _bellSoftWhite;
+    }
+
+    private static System.Windows.Media.Brush KindBrush(NotificationKind kind) => kind switch
+    {
+        NotificationKind.UpdateAvailable => _bellBlue,
+        NotificationKind.UpdateFinished => _bellGreen,
+        NotificationKind.NewTranslation => _bellGold,
+        _ => _bellSoftWhite,
+    };
+
+    private void NotificationBell_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _bellHover = true;
+        RefreshBellColor();
+    }
+
+    private void NotificationBell_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _bellHover = false;
+        RefreshBellColor();
+    }
+
+    /// <summary>Localised labels for the bell tooltip + panel chrome.</summary>
+    private void RefreshNotificationLabels()
+    {
+        NotifToolTip.Content = Strings.Get("NotifBellTooltip");
+        NotificationPanelTitle.Text = Strings.Get("NotifPanelTitle");
+        NotificationMarkAllRead.Content = Strings.Get("NotifMarkAllRead");
+        NotificationClearAll.Content = Strings.Get("NotifClearAll");
+        NotificationEmptyText.Text = Strings.Get("NotifEmpty");
+    }
+
+    /// <summary>
+    /// One-shot attention pulse: a short bell "shake" played exactly once when a
+    /// new notification arrives. No looping — the badge carries the persistent
+    /// unread state; this is just the moment-of-arrival cue.
+    /// </summary>
+    private void PulseNotificationBell()
+    {
+        var shake = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames
+        {
+            Duration = TimeSpan.FromMilliseconds(1300),
+            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+        };
+        void Key(double angle, double ms) => shake.KeyFrames.Add(
+            new System.Windows.Media.Animation.EasingDoubleKeyFrame(
+                angle, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms))));
+        Key(0, 0); Key(-18, 90); Key(15, 220); Key(-11, 360);
+        Key(7, 500); Key(-4, 640); Key(0, 800);
+        NotificationBellRotate.BeginAnimation(
+            System.Windows.Media.RotateTransform.AngleProperty, shake);
+    }
+
+    private void NotificationBell_Click(object sender, RoutedEventArgs e)
+    {
+        // Clean toggle. The popup is StaysOpen=True (it never auto-closes), so
+        // IsOpen always reflects reality here: 2nd click closes, 3rd reopens.
+        // Outside clicks / window deactivation are handled in
+        // CloseNotifOnOutsideClick / CloseNotifOnDeactivate (attached while open).
+        bool open = !NotificationPopup.IsOpen;
+        NotificationPopup.IsOpen = open;
+        // Opening the panel clears the unread badge (the items stay in history).
+        if (open) _notifications.MarkAllRead();
+    }
+
+    /// <summary>
+    /// Closes the notification panel on a mouse-down anywhere outside it. The
+    /// bell button itself is excluded so its own Click handler owns the toggle
+    /// (otherwise the close here + the reopen there would fight). Clicks inside
+    /// the panel don't reach this handler — the popup is its own visual tree.
+    /// </summary>
+    private void CloseNotifOnOutsideClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (IsWithin(e.OriginalSource as DependencyObject, NotificationBellButton))
+            return;
+        NotificationPopup.IsOpen = false;
+    }
+
+    private void CloseNotifOnDeactivate(object? sender, EventArgs e)
+        => NotificationPopup.IsOpen = false;
+
+    /// <summary>True if <paramref name="node"/> is <paramref name="ancestor"/> or a visual descendant of it.</summary>
+    private static bool IsWithin(DependencyObject? node, DependencyObject ancestor)
+    {
+        while (node != null)
+        {
+            if (ReferenceEquals(node, ancestor)) return true;
+            node = System.Windows.Media.VisualTreeHelper.GetParent(node);
+        }
+        return false;
+    }
+
+    private void NotificationMarkAllRead_Click(object sender, RoutedEventArgs e)
+        => _notifications.MarkAllRead();
+
+    private void NotificationClearAll_Click(object sender, RoutedEventArgs e)
+    {
+        _notifications.Clear();
+        NotificationPopup.IsOpen = false;
+    }
+
+    private void NotificationItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not NotificationItem item) return;
+        NotificationPopup.IsOpen = false;
+        _notifications.MarkRead(item);
+        NavigateToNotification(item);
+    }
+
+    /// <summary>
+    /// Click navigation for a notification: switch to its mod and surface the
+    /// relevant UI (Library for updates, the translations menu for a new pack).
+    /// </summary>
+    private void NavigateToNotification(NotificationItem item)
+    {
+        var profile = ModRegistry.Find(item.ModId);
+        if (profile == null) return;
+
+        // Switch to the mod if it isn't already active (LoadModProfile is a
+        // no-op-ish when already on it, but guard to avoid a needless reload).
+        if (!string.Equals(_updateService.Profile.Id, profile.Id, StringComparison.OrdinalIgnoreCase))
+            LoadModProfile(profile);
+
+        // Bring the Library (dashboard) tab forward — it carries the PLAY /
+        // UPDATE button the user wants to reach.
+        SwitchTopTab(TopTab.Play);
+
+        if (item.Kind == NotificationKind.NewTranslation)
+        {
+            // Open the game-language menu where community translations are
+            // applied. Deferred so the mod switch / tab change settle first.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { ActionPanelControl.MenuGameLanguage.IsSubmenuOpen = true; }
+                catch (Exception ex) { DiagnosticLog.Write($"Open translations menu failed: {ex.Message}"); }
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+    }
+
     private void TrayIcon_DoubleClick(object sender, RoutedEventArgs e)
         => ShowFromTray();
 
@@ -1864,6 +2101,7 @@ public partial class MainWindow : Window
         // when the tray icon is hidden; ContextMenu lives on the XAML
         // element regardless of Visibility.
         RefreshTrayLabels();
+        RefreshNotificationLabels();
         // Re-paint the primary button under the new locale: SetPrimaryAction
         // pulls each label from Strings, so calling it with the current
         // action key picks up the translated text.
@@ -5427,6 +5665,38 @@ public partial class MainWindow : Window
             SetPrimaryAction(PrimaryAction.Update);
             ResetProgressUI();
         }
+
+        // Notification bell: raise an "update available" item for the ACTIVE mod
+        // when a newer version exists and the user hasn't pinned it. Deduped per
+        // (mod, latest-version) inside NotificationCenter, so re-checks are quiet.
+        // Skipped while pinned (updatePaused) or when the version is unknown
+        // (CurrentVersion null = fresh install, not an update).
+        MaybeNotifyUpdateAvailable(
+            _updateService.Profile, result.CurrentVersion?.Ver, result.LatestVersion?.Ver,
+            _pendingDownloads.Count, versionKnown, updatePaused);
+    }
+
+    /// <summary>
+    /// Raise an "update available" notification (deduped) when a mod has a newer
+    /// version the launcher can surface. Shared by the active-mod check
+    /// (<see cref="ApplyCheckResult"/>) and the background sweep of other
+    /// installed mods. No-op while pinned or when the installed version is unknown.
+    /// </summary>
+    private void MaybeNotifyUpdateAvailable(
+        ModProfile profile, string? currentVer, string? latestVer,
+        int pendingCount, bool versionKnown, bool updatePaused)
+    {
+        if (!versionKnown || updatePaused) return;
+        bool hasNewer = !string.IsNullOrEmpty(latestVer)
+            && !string.Equals(currentVer, latestVer, StringComparison.OrdinalIgnoreCase);
+        bool canApply = pendingCount > 0;
+        if (!hasNewer && !canApply) return;
+        var ver = latestVer ?? "";
+        _notifications.RaiseUpdateAvailable(
+            profile.Id, ver,
+            Strings.Get("NotifUpdateAvailableTitle"),
+            Strings.Format("NotifUpdateAvailableBody", profile.DisplayName,
+                string.IsNullOrEmpty(ver) ? "?" : ver));
     }
 
     // ------------------------------------------------------------------------
@@ -6908,13 +7178,18 @@ public partial class MainWindow : Window
             ShowProgressCompleted("ProgressTitleCompleted",
                 Strings.Format("ProgressUpdating", fromVersion, toVersion));
 
-            // Tray notification — only fires if the user is away from the
-            // launcher (window hidden/minimised/inactive). If they're
-            // watching, ShowProgressCompleted above already painted the
-            // "Update complete" state in the sidebar.
-            ShowToast(
-                Strings.Get("ToastUpdateCompleteTitle"),
-                Strings.Format("ToastUpdateCompleteBody", _updateService.Profile.DisplayName));
+            // Notification bell + tray toast for "update finished". Routed
+            // through the NotificationCenter so it lands in the bell history
+            // AND (via ToastRequested → ShowToast) raises the same tray balloon
+            // it used to — which itself only fires when the user is away from
+            // the launcher. Replaces the previous direct ShowToast so the user
+            // never gets two toasts for one completed update.
+            _notifications.RaiseUpdateFinished(
+                _updateService.Profile.Id, toVersion,
+                Strings.Get("NotifUpdateFinishedTitle"),
+                Strings.Format("NotifUpdateFinishedBody",
+                    _updateService.Profile.DisplayName,
+                    string.IsNullOrEmpty(toVersion) ? "?" : toVersion));
 
             // If the post-update reconcile reverted an incompatible translation,
             // tell the user instead of silently switching them to English.
@@ -7789,6 +8064,11 @@ public partial class MainWindow : Window
 
             _cachedTranslationIndex = index;
 
+            // Notification bell: surface translations that appeared since the
+            // user's baseline for this mod.
+            if (index != null)
+                NotifyNewTranslations(_updateService.Profile, index);
+
             if (reportStatus)
             {
                 if (_cachedTranslationIndex == null)
@@ -7803,6 +8083,106 @@ public partial class MainWindow : Window
             DiagnosticLog.Write($"Translation index refresh error: {ex.Message}");
             if (reportStatus)
                 SetStatus(Strings.Get("StatusLangIndexUnavailable"));
+        }
+    }
+
+    /// <summary>
+    /// Diff a mod's freshly-fetched translation index against the user's
+    /// per-mod baseline and bell each genuinely-new pack. On the FIRST fetch
+    /// for a mod (empty baseline) we seed silently — otherwise a user with a
+    /// catalog full of existing translations would be flooded on first launch.
+    /// After the baseline exists, only packs that appear later bell.
+    /// </summary>
+    private void NotifyNewTranslations(ModProfile profile, TranslationIndex index)
+    {
+        var entries = index?.Translations;
+        if (entries == null || entries.Count == 0) return;
+
+        var state = _config.GetState(profile.Id);
+        // Dedup by the RELEASE identity (its tag), not the manifest's internal
+        // version: a maintainer who publishes a new release without bumping the
+        // version field should still alert. Falls back to id@version if a release
+        // somehow has no tag.
+        string KeyOf(TranslationIndexEntry t) =>
+            !string.IsNullOrWhiteSpace(t.ReleaseTag) ? t.ReleaseTag : $"{t.Id}@{t.Version}";
+        var keys = entries.Select(KeyOf).Distinct().ToList();
+
+        if (state.NotifiedTranslationKeys.Count == 0)
+        {
+            // First time we see this mod's translations — establish the baseline
+            // quietly so only future packs bell.
+            state.NotifiedTranslationKeys.AddRange(keys);
+            PersistConfigInBackground();
+            return;
+        }
+
+        foreach (var t in entries)
+        {
+            var key = KeyOf(t);
+            var label = !string.IsNullOrWhiteSpace(t.Name) ? t.Name : t.Language;
+            _notifications.RaiseNewTranslation(
+                profile.Id, key, t.Id,
+                Strings.Get("NotifNewTranslationTitle"),
+                Strings.Format("NotifNewTranslationBody", profile.DisplayName, label));
+        }
+    }
+
+    /// <summary>
+    /// Background sweep over INSTALLED mods other than the active one, checking
+    /// each for an available update and a new translation, raising deduped
+    /// notification-bell items. The active mod is already covered live by
+    /// <see cref="ApplyCheckResult"/> / <see cref="RefreshTranslationIndexAsync"/>,
+    /// so it's skipped here. Sequential + best-effort to stay within the GitHub
+    /// API budget; gated by the same <c>CheckUpdatesOnStartup</c> opt-out as the
+    /// rest of the launcher's outbound checks.
+    /// </summary>
+    private async Task SweepInstalledModsForNotificationsAsync()
+    {
+        if (!_config.CheckUpdatesOnStartup) return;
+
+        var activeId = _updateService.Profile.Id;
+        foreach (var profile in ModRegistry.All)
+        {
+            if (profile.IsStockGame) continue;
+            if (string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase)) continue;
+            var state = _config.GetState(profile.Id);
+            if (string.IsNullOrEmpty(state.InstallPath)) continue;   // not installed
+
+            // One UI-free service per mod, reused for the version + translations-repo checks.
+            var svc = new UpdateService(_config, profile);
+
+            // --- Update check for this mod (off the UI thread) ---
+            try
+            {
+                var result = await svc.CheckAsync();
+                bool versionKnown = result.CurrentVersion != null;
+                var pinned = state.PinnedVersion;
+                bool paused = !string.IsNullOrEmpty(pinned)
+                    && string.Equals(pinned, result.CurrentVersion?.Ver, StringComparison.OrdinalIgnoreCase);
+                await Dispatcher.InvokeAsync(() => MaybeNotifyUpdateAvailable(
+                    profile, result.CurrentVersion?.Ver, result.LatestVersion?.Ver,
+                    result.PendingDownloads?.Count ?? 0, versionKnown, paused));
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Notif sweep update-check failed for '{profile.Id}': {ex.Message}");
+            }
+
+            // --- New-translation check for this mod ---
+            try
+            {
+                var repo = svc.EffectiveTranslationsRepo();
+                if (!string.IsNullOrWhiteSpace(repo))
+                {
+                    var index = await new TranslationRegistryService().FetchFromReleasesAsync(repo);
+                    if (index != null)
+                        await Dispatcher.InvokeAsync(() => NotifyNewTranslations(profile, index));
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Notif sweep translation-check failed for '{profile.Id}': {ex.Message}");
+            }
         }
     }
 

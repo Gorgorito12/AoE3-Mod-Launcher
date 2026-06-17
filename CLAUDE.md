@@ -888,6 +888,37 @@ don't go looking for it.)
   Settings now fires an `AssetsCleared` callback → `RevalidateVisibleAssetsAsync`
   so cleared images re-download live instead of staying monograms until restart.
 
+- **The notification bell (Steam-style) is a persistent, deduped history fed by
+  detection hooks — NOT a second toast pipeline.** `Services/NotificationCenter.cs`
+  is the UI-free backing store (testable: `NotificationCenterTests`): owns the
+  `ObservableCollection<NotificationItem>` the bell panel binds to, mirrors it into
+  `LauncherConfig.Notifications` (persisted, capped at `MaxItems=50`), exposes
+  `UnreadCount` + `Changed`/`ItemAdded`/`ToastRequested` events, and applies the
+  per-kind dedup. Three kinds (`NotificationKind`): **UpdateAvailable**,
+  **UpdateFinished**, **NewTranslation**. **Dedup survives the 50-cap** via per-mod
+  `ModState` fields — `NotifiedUpdateVersion` (one bell per (mod, latest-version))
+  and `NotifiedTranslationKeys` (`id@version` set) — NOT the visible list, so an old
+  item rolling off never re-bells. The bell UI lives in `MainWindow.xaml` **overlaid
+  on `Grid.Row=0`** (title bar, right-aligned, `Margin=0,0,138,0` to clear the 3×46px
+  caption buttons, `IsHitTestVisibleInChrome=True` like the brand button) — a
+  `TitleBarButton` with a Segoe MDL2 bell (`\xEA8F`) + a red count badge; a `Popup`
+  holds the panel (`MpSurface` card, `NotifRowButton`/`NotifLinkButton` styles).
+  **Indicator: static red badge with the count; a one-shot ~1.3s `RotateTransform`
+  shake (`PulseNotificationBell`) fires only on `ItemAdded`, never looping.** Opening
+  the panel `MarkAllRead()`s (badge → 0, items stay). Click → `NavigateToNotification`
+  (`LoadModProfile` + `SwitchTopTab(TopTab.Play)`; NewTranslation also opens
+  `MenuGameLanguage`). **Detection hooks**: update-available in `ApplyCheckResult`
+  (`MaybeNotifyUpdateAvailable`, skips pinned / unknown-version); update-finished
+  REPLACES the old direct `ShowToast` in `ApplyAsync`'s success block (so one toast,
+  not two — the toast now rides `ToastRequested → ShowToast`); new-translation in
+  `RefreshTranslationIndexAsync` (`NotifyNewTranslations`, **seeds a silent baseline
+  on first fetch** so a full catalog doesn't flood on first launch). **All installed
+  mods**, not just the active one: `SweepInstalledModsForNotificationsAsync` runs
+  `new UpdateService(_config, profile).CheckAsync()` + translations fetch for each
+  installed non-active, non-stock mod — sequential, gated by `CheckUpdatesOnStartup`,
+  fired once at startup + every 6th `_catalogPollTimer` tick (~30 min) to respect the
+  GitHub API budget.
+
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
   (`MultiplayerTab.xaml.cs`) fills it, and four duplications were stripped on

@@ -2752,6 +2752,63 @@ public static class Strings
             [LangEn] = "Exit",
             [LangEs] = "Salir",
         },
+
+        // --- Notification bell (Steam-style) ---
+        ["NotifBellTooltip"] = new()
+        {
+            [LangEn] = "Notifications",
+            [LangEs] = "Notificaciones",
+        },
+        ["NotifPanelTitle"] = new()
+        {
+            [LangEn] = "Notifications",
+            [LangEs] = "Notificaciones",
+        },
+        ["NotifMarkAllRead"] = new()
+        {
+            [LangEn] = "Mark all read",
+            [LangEs] = "Marcar todo leído",
+        },
+        ["NotifClearAll"] = new()
+        {
+            [LangEn] = "Clear",
+            [LangEs] = "Borrar",
+        },
+        ["NotifEmpty"] = new()
+        {
+            [LangEn] = "No notifications",
+            [LangEs] = "Sin notificaciones",
+        },
+        ["NotifUpdateAvailableTitle"] = new()
+        {
+            [LangEn] = "Update available",
+            [LangEs] = "Actualización disponible",
+        },
+        ["NotifUpdateAvailableBody"] = new()
+        {
+            [LangEn] = "{0} {1} is available to download.",
+            [LangEs] = "{0} {1} está disponible para descargar.",
+        },
+        ["NotifUpdateFinishedTitle"] = new()
+        {
+            [LangEn] = "Update complete",
+            [LangEs] = "Actualización completada",
+        },
+        ["NotifUpdateFinishedBody"] = new()
+        {
+            [LangEn] = "{0} was updated to {1}.",
+            [LangEs] = "{0} se actualizó a {1}.",
+        },
+        ["NotifNewTranslationTitle"] = new()
+        {
+            [LangEn] = "New translation",
+            [LangEs] = "Nueva traducción",
+        },
+        ["NotifNewTranslationBody"] = new()
+        {
+            [LangEn] = "A new translation is available for {0}: {1}.",
+            [LangEs] = "Hay una nueva traducción para {0}: {1}.",
+        },
         ["DlgLauncherSettingsAutoCheck"] = new()
         {
             [LangEn] = "Check for updates on startup",

@@ -134,6 +134,14 @@ public class TranslationIndexEntry
     /// <summary>Mod id this pack targets. See <see cref="TranslationManifest.TargetMod"/>.</summary>
     [JsonPropertyName("targetMod")]
     public string TargetMod { get; set; } = "";
+
+    /// <summary>
+    /// GitHub release tag this entry came from (set by the registry, NOT from the
+    /// manifest). Used as the notification dedup key so a NEW release alerts even
+    /// when the maintainer didn't bump the manifest's internal <see cref="Version"/>.
+    /// </summary>
+    [JsonIgnore]
+    public string ReleaseTag { get; set; } = "";
 }
 
 /// <summary>

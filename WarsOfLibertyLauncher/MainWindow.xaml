@@ -482,6 +482,216 @@
         </controls:TitleBar>
 
         <!-- =============================================================
+             NOTIFICATION BELL (Steam-style). Overlaid on the title bar
+             (Grid.Row=0), right-aligned and inset by the width of the 3
+             caption buttons (ButtonWidth 46 × 3 = 138) so it sits just to
+             their left. IsHitTestVisibleInChrome=True so the window-drag
+             handler doesn't swallow the click (same recipe as the brand
+             button above). Badge + one-shot pulse are driven from code.
+             ============================================================= -->
+        <Grid Grid.Row="0"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Stretch"
+              Margin="0,0,148,0"
+              Panel.ZIndex="10"
+              shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Button x:Name="NotificationBellButton"
+                    Click="NotificationBell_Click"
+                    MouseEnter="NotificationBell_MouseEnter"
+                    MouseLeave="NotificationBell_MouseLeave"
+                    VerticalAlignment="Stretch"
+                    ToolTipService.InitialShowDelay="500"
+                    ToolTipService.ShowDuration="5000"
+                    Style="{StaticResource NotificationBellButton}">
+                <Button.ToolTip>
+                    <ToolTip x:Name="NotifToolTip"
+                             Style="{StaticResource NotifToolTipStyle}"
+                             Content="Notificaciones"/>
+                </Button.ToolTip>
+                <Grid Width="24" Height="24">
+                    <!-- Bell drawn as a SOLID vector path (gold) rather than a
+                         Segoe MDL2 glyph (which renders as an outline). The pulse
+                         animation (PulseNotificationBell) rotates NotificationBellRotate. -->
+                    <Path x:Name="NotificationBellGlyph"
+                          Fill="#99FFFFFF"
+                          Stroke="Black"
+                          StrokeThickness="0.6"
+                          StrokeLineJoin="Round"
+                          Stretch="Uniform"
+                          Width="16" Height="16"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          RenderTransformOrigin="0.5,0.15"
+                          Data="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z">
+                        <Path.RenderTransform>
+                            <RotateTransform x:Name="NotificationBellRotate" Angle="0"/>
+                        </Path.RenderTransform>
+                    </Path>
+                    <!-- Small unread indicator dot (7px), top-right corner. Thin
+                         dark ring separates it from the bell / bar. -->
+                    <Ellipse x:Name="NotificationDot"
+                             Width="7" Height="7"
+                             Fill="#E5484D"
+                             Stroke="{DynamicResource BgBase}"
+                             StrokeThickness="1"
+                             HorizontalAlignment="Right"
+                             VerticalAlignment="Top"
+                             Margin="0,0,-1,0"
+                             Visibility="Collapsed"/>
+                </Grid>
+            </Button>
+
+            <!-- Dropdown panel. Right-aligned under the bell (HorizontalOffset
+                 shifts the 360-wide card left so its right edge lands near the
+                 bell). Items + empty-state visibility are wired in code-behind. -->
+            <Popup x:Name="NotificationPopup"
+                   PlacementTarget="{Binding ElementName=NotificationBellButton}"
+                   Placement="Bottom"
+                   StaysOpen="True"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   HorizontalOffset="-316"
+                   VerticalOffset="2">
+                <Border Width="360"
+                        Background="{DynamicResource MpSurface}"
+                        BorderBrush="{DynamicResource MpDivider}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Margin="8"
+                        SnapsToDevicePixels="True">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="3" Opacity="0.5"/>
+                    </Border.Effect>
+                    <DockPanel LastChildFill="True">
+                        <!-- Header -->
+                        <Grid DockPanel.Dock="Top" Margin="14,12,10,8">
+                            <TextBlock x:Name="NotificationPanelTitle"
+                                       Text="Notifications"
+                                       Foreground="{DynamicResource TextPrimary}"
+                                       FontFamily="{DynamicResource DisplayFont}"
+                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center">
+                                <Button x:Name="NotificationMarkAllRead"
+                                        Click="NotificationMarkAllRead_Click"
+                                        Content="Mark all read"
+                                        Style="{StaticResource NotifLinkButton}"/>
+                                <TextBlock Text="·"
+                                           Foreground="{DynamicResource MpDivider}"
+                                           Margin="6,0"
+                                           VerticalAlignment="Center"/>
+                                <Button x:Name="NotificationClearAll"
+                                        Click="NotificationClearAll_Click"
+                                        Content="Clear"
+                                        Style="{StaticResource NotifLinkButton}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border DockPanel.Dock="Top"
+                                Height="1"
+                                Background="{DynamicResource MpDivider}"/>
+
+                        <!-- Empty state -->
+                        <TextBlock x:Name="NotificationEmptyText"
+                                   DockPanel.Dock="Top"
+                                   Text="No notifications"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,28,0,30"
+                                   Visibility="Collapsed"/>
+
+                        <!-- Items -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      MaxHeight="380">
+                            <ItemsControl x:Name="NotificationList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Tag="{Binding}"
+                                                Click="NotificationItem_Click"
+                                                HorizontalContentAlignment="Stretch"
+                                                Style="{StaticResource NotifRowButton}">
+                                            <Grid Margin="14,9,12,9">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <!-- Kind glyph -->
+                                                <TextBlock Grid.Column="0"
+                                                           VerticalAlignment="Top"
+                                                           Margin="0,1,10,0"
+                                                           FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="16"
+                                                           Foreground="{DynamicResource TextSecondary}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="&#xEA8F;"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="UpdateAvailable">
+                                                                    <Setter Property="Text" Value="&#xE896;"/>
+                                                                    <Setter Property="Foreground" Value="#5AA9E6"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="UpdateFinished">
+                                                                    <Setter Property="Text" Value="&#xE930;"/>
+                                                                    <Setter Property="Foreground" Value="#62C462"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="NewTranslation">
+                                                                    <Setter Property="Text" Value="&#xF2B7;"/>
+                                                                    <Setter Property="Foreground" Value="#D8B66A"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <!-- Title + body + time -->
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               Foreground="{DynamicResource TextPrimary}"
+                                                               FontWeight="SemiBold"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Body}"
+                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               FontSize="12"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,1,0,0"/>
+                                                    <TextBlock Text="{Binding CreatedLocal, StringFormat='{}{0:dd MMM, HH:mm}'}"
+                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               FontSize="11"
+                                                               Opacity="0.7"
+                                                               Margin="0,3,0,0"/>
+                                                </StackPanel>
+                                                <!-- Unread dot -->
+                                                <Ellipse Grid.Column="2"
+                                                         Width="8" Height="8"
+                                                         Margin="8,4,0,0"
+                                                         VerticalAlignment="Top"
+                                                         Fill="#E5484D">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Read}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Hidden"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Popup>
+        </Grid>
+
+        <!-- =============================================================
              HORIZONTAL NAVIGATION (Steam-style redesign). Replaces
              the old 240px vertical sidebar. Three content tabs only
              — the brand dropdown (Launcher settings / About / Exit)

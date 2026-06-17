@@ -119,6 +119,85 @@ public class ModState
     /// </summary>
     [JsonPropertyName("pinnedVersion")]
     public string PinnedVersion { get; set; } = "";
+
+    /// <summary>
+    /// Latest "available version" for which the notification bell has ALREADY
+    /// raised an "update available" item. Dedup key for the notification center:
+    /// we only bell a given (mod, latest-version) pair once, even after the
+    /// visible notification list rolls past its 50-item cap. Empty until the
+    /// first "update available" notification for this mod.
+    /// </summary>
+    [JsonPropertyName("notifiedUpdateVersion")]
+    public string NotifiedUpdateVersion { get; set; } = "";
+
+    /// <summary>
+    /// Translation entries (keyed <c>id@version</c>) for which the notification
+    /// bell has already raised a "new translation" item. Dedup set so a freshly
+    /// published translation only bells once per mod, surviving the 50-item cap
+    /// of the visible notification list.
+    /// </summary>
+    [JsonPropertyName("notifiedTranslationKeys")]
+    public List<string> NotifiedTranslationKeys { get; set; } = new();
+}
+
+/// <summary>
+/// Kind of a <see cref="NotificationItem"/> shown in the bell panel. Serialized
+/// as a string so adding a value later doesn't shift existing JSON, and so a
+/// config written by a newer launcher degrades gracefully on an older one.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum NotificationKind
+{
+    /// <summary>A newer version of a mod is available to download.</summary>
+    UpdateAvailable,
+    /// <summary>A mod update finished applying successfully.</summary>
+    UpdateFinished,
+    /// <summary>A new community translation was published for a mod.</summary>
+    NewTranslation,
+}
+
+/// <summary>
+/// One entry in the Steam-style notification bell. Persisted in
+/// <see cref="LauncherConfig.Notifications"/> so the history survives launcher
+/// restarts until the user clears it. Created by <see cref="Services.NotificationCenter"/>.
+/// </summary>
+public class NotificationItem
+{
+    /// <summary>Stable id (GUID string) — used as the list key and for removal.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    [JsonPropertyName("kind")]
+    public NotificationKind Kind { get; set; }
+
+    /// <summary>Mod profile id this notification is about (drives click navigation).</summary>
+    [JsonPropertyName("modId")]
+    public string ModId { get; set; } = "";
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = "";
+
+    [JsonPropertyName("body")]
+    public string Body { get; set; } = "";
+
+    /// <summary>UTC timestamp the notification was raised (for "hace X" labels + ordering).</summary>
+    [JsonPropertyName("createdAtUtc")]
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    [JsonPropertyName("read")]
+    public bool Read { get; set; }
+
+    /// <summary>Local-time projection of <see cref="CreatedAtUtc"/> for display binding.</summary>
+    [JsonIgnore]
+    public DateTime CreatedLocal => CreatedAtUtc.ToLocalTime();
+
+    /// <summary>
+    /// Optional navigation payload (e.g. a translation id for
+    /// <see cref="NotificationKind.NewTranslation"/>). Null/empty for kinds that
+    /// only need <see cref="ModId"/>.
+    /// </summary>
+    [JsonPropertyName("targetId")]
+    public string? TargetId { get; set; }
 }
 
 /// <summary>
@@ -668,6 +747,15 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("multiplayer")]
     public MultiplayerConfig Multiplayer { get; set; } = new();
+
+    /// <summary>
+    /// Persisted history of the notification-bell items (newest-relevant kept,
+    /// trimmed to the most recent ~50 by <see cref="Services.NotificationCenter"/>).
+    /// Empty on a fresh config; older configs without this key deserialize to an
+    /// empty list, so no migration is needed.
+    /// </summary>
+    [JsonPropertyName("notifications")]
+    public List<NotificationItem> Notifications { get; set; } = new();
 
     private const string ConfigFileName = "launcher-config.json";
 
