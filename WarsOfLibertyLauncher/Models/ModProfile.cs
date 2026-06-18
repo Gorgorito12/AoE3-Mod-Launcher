@@ -224,6 +224,21 @@ public class ModProfile
     public string? LocalHeroImagePath { get; set; }
 
     /// <summary>
+    /// Remote URLs of the ROTATING dashboard heroes (in declaration order).
+    /// When this has 2+ entries the dashboard cycles them with a crossfade;
+    /// takes precedence over the single <see cref="HeroImageUrl"/>. Empty when
+    /// the mod uses only a single hero (or none).
+    /// </summary>
+    public List<string> HeroImageUrls { get; set; } = new();
+
+    /// <summary>
+    /// Local file paths of the cached rotating heroes, in the same order as
+    /// <see cref="HeroImageUrls"/>. Populated by <c>MainWindow.EnsureModAssetsAsync</c>;
+    /// empty until then. Mutable on purpose, like <see cref="LocalIconPath"/>.
+    /// </summary>
+    public List<string> LocalHeroImagePaths { get; set; } = new();
+
+    /// <summary>
     /// Remote URLs of the gallery screenshots/GIFs (in declaration order),
     /// shown in the Workshop detail panel. Empty when the mod ships none.
     /// </summary>

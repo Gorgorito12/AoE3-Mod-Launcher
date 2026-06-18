@@ -365,15 +365,30 @@ don't go looking for it.)
   slice off top/bottom — disliked the crop. Stretch-to-fill (accept the
   distortion) was the explicit ask. Other historical rejects: a blur fill
   **with a dark scrim** read as "black borders"; `AlignmentY=Top` only moved
-  the crop to the bottom. **Implementation gotcha:** the cached brush from
-  `TryLoadTileImage` is `UniformToFill` and **SHARED** with the icon/tile
-  paths, so the dashboard builds its OWN `ImageBrush` with `Stretch.Fill` from
-  the same already-decoded `ImageSource` (no second decode) in
-  `RefreshActiveMod` — **don't change `TryLoadTileImage`'s stretch globally**
-  or every mod icon distorts. Fallback when a profile ships no hero is a
-  neutral dark gradient, same method. There is **no `DashboardHeroImage`
-  overlay** — don't reintroduce one, and don't add a dark scrim back
-  (→ "black borders" again).
+  the crop to the bottom. **Implementation gotcha:** the hero brush is now
+  built by `MainWindow.BuildHeroFillBrush` (NOT the shared `TryLoadTileImage`,
+  whose cached brush is `UniformToFill` and SHARED with the icon/tile paths —
+  don't change its stretch globally or every mod icon distorts). `BuildHeroFillBrush`
+  makes a fresh `Stretch.Fill` `ImageBrush` with `IgnoreImageCache` and a
+  **decode cap** (`HeroDecodeWidth=2560`, applied only when the source is wider,
+  so 1080p/1440p decode native and a 4K hero downscales — `HighQuality` scaling
+  on the host Borders keeps it crisp; keeps a 4K hero off ~33 MB of RAM).
+  Fallback when a profile ships no hero is a neutral dark gradient. **There are
+  now TWO stacked Border layers** (`DashboardBgFill` = base, `DashboardBgFillB`
+  = crossfade overlay, opacity 0 at rest), BEFORE the dim-gradient Rectangles —
+  both owned by `ApplyDashboardHero`. This is the **rotating-hero** feature: a
+  catalog `mod.json` may declare `heroImages` (2–6, each 16:9/≤8 MB, cached as
+  `{modId}-hero-{i}` by `ModAssetCacheService.GetHeroImagePathsAsync`); with ≥2
+  the dashboard cycles them every `HeroRotateSeconds` (7) by painting the next
+  into `DashboardBgFillB` and fading its opacity in, then snapping the base. The
+  `_heroRotateTimer` runs ONLY while `PlayView.IsVisible` (see
+  `UpdateHeroRotationTimer`, hooked to `PlayView.IsVisibleChanged`) and is reset
+  on every `RefreshActiveModBanner` (mod switch). A single `heroImage` (or none)
+  never starts the timer — byte-for-byte the old static behaviour. Effective
+  list = `LocalHeroImagePaths` (rotating) → single `LocalHeroImagePath` →
+  `LocalBannerPath` → gradient. **Don't add a dark scrim back** (→ "black
+  borders" again), and keep `DashboardBgFillB` BEFORE the readability gradients
+  or the overlay covers them.
 
 - **The title-bar brand button's hover illumination has a WPF-precedence
   trap — we hit it as a bug twice.** `TitleBarBrandButton` ("AoE3 Mod
@@ -786,12 +801,12 @@ don't go looking for it.)
 
 - **A mod's detail panel has a screenshot/GIF gallery — and GIFs animate ONLY
   there, not in the icon/banner/hero.** A catalog `mod.json` may declare a
-  `screenshots` array (`screenshot1..8.<ext>`, PNG/JPEG/**GIF**, ≤2 MB each, max
+  `screenshots` array (`screenshot1..8.<ext>`, PNG/JPEG/**GIF**, ≤8 MB each, max
   8 — see the catalog repo's `CLAUDE.md`/`mod.schema.json`). It flows
   `ModCatalogManifest.Screenshots` → `ModCatalogEntry.ScreenshotUrls` (resolved
   through the same anti-traversal `ResolveAssetUrl` as icon/banner) →
   `ModProfile.ScreenshotUrls`, and is cached as `{modId}-shot-{i}{ext}`
-  (2 MB cap) by `ModAssetCacheService.GetScreenshotPathsAsync`. **It's lazy and
+  (8 MB cap) by `ModAssetCacheService.GetScreenshotPathsAsync`. **It's lazy and
   separate from the icon/banner fetch:** screenshots download only when the
   detail panel opens (`MainWindow.EnsureScreenshotsAsync`, its OWN per-session
   guard `_screenshotFetchAttempted`), never eagerly per card. The UI

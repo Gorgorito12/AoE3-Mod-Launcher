@@ -59,12 +59,21 @@ public class ModCatalogManifest
     /// behind the title + PLAY button). Same resolution scheme as
     /// <see cref="Icon"/> / <see cref="Banner"/> — bare filename, the
     /// launcher splices it onto the raw GitHub URL. Specs: 1920x1080
-    /// PNG/JPG, ≤ 2 MB. Important subject should sit in the right half
-    /// of the image because the left half is covered by the title and
-    /// the PLAY button.
+    /// PNG/JPG, ≤ 8 MB (16:9, up to 4K). Important subject should sit in the
+    /// right half of the image because the left half is covered by the title
+    /// and the PLAY button.
     /// </summary>
     [JsonPropertyName("heroImage")]
     public string? HeroImage { get; set; }
+
+    /// <summary>
+    /// Optional ROTATING dashboard heroes (bare filenames, same scheme as
+    /// <see cref="HeroImage"/>). When 2+ are listed the dashboard cycles them
+    /// with a crossfade; takes precedence over <see cref="HeroImage"/>. Each
+    /// follows the single-hero spec (16:9, ≤ 8 MB). Capped on download.
+    /// </summary>
+    [JsonPropertyName("heroImages")]
+    public List<string>? HeroImages { get; set; }
 
     /// <summary>
     /// Optional gallery of screenshots/GIFs shown in the Workshop detail panel.

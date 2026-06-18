@@ -173,6 +173,9 @@ public partial class MainWindow : Window
         // even though the window itself never resized.
         UiScale.Attach(HeroContentGrid, PlayView, 1500, 760,
             UiScale.Kind.Render, new System.Windows.Point(0, 1));
+        // Drive the rotating-hero crossfade only while the dashboard is actually
+        // on screen — stop the timer when another tab is shown, resume on return.
+        PlayView.IsVisibleChanged += (_, __) => UpdateHeroRotationTimer();
         // Publish the general content factor (reference = the default content
         // footprint, so a default-sized window resolves to 1.0) for the code-
         // built brand / mod-switch popups, which live in their own top-level
@@ -2533,6 +2536,183 @@ public partial class MainWindow : Window
         }
     }
 
+    // -- Rotating dashboard hero (crossfade) ---------------------------------
+    //
+    // The dashboard background is two stacked Borders: DashboardBgFill (base,
+    // always opaque) and DashboardBgFillB (overlay, opacity 0 at rest). To
+    // advance, we paint the next hero into the overlay and fade it in; when the
+    // fade completes we copy that brush onto the base and snap the overlay back
+    // to 0 with no flicker. A single mod with one hero (or none) never starts
+    // the timer — byte-for-byte the old static behaviour.
+    private const int HeroRotateSeconds = 7;
+    private const double HeroCrossfadeSeconds = 1.1;
+    private const int HeroDecodeWidth = 2560;   // cap 4K heroes so RAM stays bounded
+    private System.Windows.Threading.DispatcherTimer? _heroRotateTimer;
+    private List<string> _heroRotateList = new();
+    private int _heroRotateIndex;
+
+    /// <summary>
+    /// Resolves the active mod's effective hero list and paints the dashboard
+    /// background. Rotating heroes (<see cref="ModProfile.LocalHeroImagePaths"/>)
+    /// win; else the single hero; else the banner; else a neutral gradient. With
+    /// 2+ heroes it (re)starts the crossfade rotation.
+    /// </summary>
+    private void ApplyDashboardHero(ModProfile profile)
+    {
+        if (DashboardBgFill == null) return;
+
+        // Stop any in-flight rotation/animation before repainting (mod switch).
+        StopHeroRotation();
+
+        var heroes = new List<string>();
+        if (profile.LocalHeroImagePaths is { Count: > 0 })
+            heroes.AddRange(profile.LocalHeroImagePaths.Where(p => !string.IsNullOrWhiteSpace(p)));
+        if (heroes.Count == 0 && !string.IsNullOrWhiteSpace(profile.LocalHeroImagePath))
+            heroes.Add(profile.LocalHeroImagePath!);
+        if (heroes.Count == 0 && !string.IsNullOrWhiteSpace(profile.LocalBannerPath))
+            heroes.Add(profile.LocalBannerPath!);
+
+        // Paint the first frame (or the gradient fallback) on the base layer.
+        var first = heroes.Count > 0 ? BuildHeroFillBrush(heroes[0]) : null;
+        DashboardBgFill.Background = (System.Windows.Media.Brush?)first ?? BuildNeutralHeroGradient();
+        if (DashboardBgFillB != null)
+        {
+            DashboardBgFillB.BeginAnimation(System.Windows.UIElement.OpacityProperty, null);
+            DashboardBgFillB.Opacity = 0;
+            DashboardBgFillB.Background = null;
+        }
+
+        // Rotate only when there are 2+ real heroes AND the overlay layer exists.
+        _heroRotateList = (first != null && heroes.Count >= 2 && DashboardBgFillB != null)
+            ? heroes
+            : new List<string>();
+        _heroRotateIndex = 0;
+        UpdateHeroRotationTimer();
+    }
+
+    /// <summary>Starts the rotation timer when eligible (2+ heroes, dashboard visible); stops it otherwise.</summary>
+    private void UpdateHeroRotationTimer()
+    {
+        bool eligible = _heroRotateList.Count >= 2 && PlayView != null && PlayView.IsVisible;
+        if (eligible)
+        {
+            if (_heroRotateTimer == null)
+            {
+                _heroRotateTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(HeroRotateSeconds),
+                };
+                _heroRotateTimer.Tick += HeroRotateTimer_Tick;
+            }
+            if (!_heroRotateTimer.IsEnabled) _heroRotateTimer.Start();
+        }
+        else
+        {
+            _heroRotateTimer?.Stop();
+        }
+    }
+
+    /// <summary>Stops the rotation and clears the list (used on mod switch / no-hero).</summary>
+    private void StopHeroRotation()
+    {
+        _heroRotateTimer?.Stop();
+        _heroRotateList = new List<string>();
+        _heroRotateIndex = 0;
+    }
+
+    private void HeroRotateTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_heroRotateList.Count < 2 || DashboardBgFill == null || DashboardBgFillB == null)
+        {
+            _heroRotateTimer?.Stop();
+            return;
+        }
+
+        _heroRotateIndex = (_heroRotateIndex + 1) % _heroRotateList.Count;
+        var next = BuildHeroFillBrush(_heroRotateList[_heroRotateIndex]);
+        if (next == null) return;   // skip a bad frame; try again next tick
+
+        DashboardBgFillB.Background = next;
+        var fade = new System.Windows.Media.Animation.DoubleAnimation(
+            0.0, 1.0, TimeSpan.FromSeconds(HeroCrossfadeSeconds));
+        fade.Completed += (_, __) =>
+        {
+            // Snap the base to the new image, then hide the overlay with no flicker.
+            DashboardBgFill.Background = next;
+            DashboardBgFillB.BeginAnimation(System.Windows.UIElement.OpacityProperty, null);
+            DashboardBgFillB.Opacity = 0;
+        };
+        DashboardBgFillB.BeginAnimation(System.Windows.UIElement.OpacityProperty, fade);
+    }
+
+    /// <summary>Builds a Stretch.Fill hero brush with a decode cap (4K → bounded RAM, crisp downscale).</summary>
+    private static System.Windows.Media.ImageBrush? BuildHeroFillBrush(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri)) return null;
+        try
+        {
+            var sourceUri = new Uri(uri, UriKind.RelativeOrAbsolute);
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            // IgnoreImageCache so a same-name catalog replacement repaints (mirrors
+            // TryLoadTileImage). Only cap the decode when the source is wider than
+            // the cap, so a 1080p/1440p hero decodes native (no upscale); a 4K hero
+            // downscales to HeroDecodeWidth. HighQuality scaling (set on the host
+            // Borders in XAML) keeps the result crisp.
+            bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+            var nativeWidth = TryGetImageWidth(uri);
+            if (nativeWidth is int w && w > HeroDecodeWidth
+                && !uri.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
+                bmp.DecodePixelWidth = HeroDecodeWidth;
+            bmp.UriSource = sourceUri;
+            bmp.EndInit();
+            if (bmp.CanFreeze) bmp.Freeze();
+            var brush = new System.Windows.Media.ImageBrush(bmp)
+            {
+                Stretch = System.Windows.Media.Stretch.Fill,
+            };
+            if (brush.CanFreeze) brush.Freeze();
+            return brush;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Hero image load failed for '{uri}': {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Cheap metadata-only read of an on-disk image's pixel width (null for pack:// or on error).</summary>
+    private static int? TryGetImageWidth(string uri)
+    {
+        try
+        {
+            if (uri.StartsWith("pack:", StringComparison.OrdinalIgnoreCase)) return null;
+            using var fs = System.IO.File.OpenRead(uri);
+            var frame = System.Windows.Media.Imaging.BitmapFrame.Create(
+                fs,
+                System.Windows.Media.Imaging.BitmapCreateOptions.DelayCreation,
+                System.Windows.Media.Imaging.BitmapCacheOption.None);
+            return frame.PixelWidth;
+        }
+        catch { return null; }
+    }
+
+    private System.Windows.Media.Brush BuildNeutralHeroGradient()
+    {
+        var neutralGradient = new System.Windows.Media.LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(1, 1),
+        };
+        neutralGradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+            ((System.Windows.Media.SolidColorBrush)Brush("#131313")).Color, 0));
+        neutralGradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+            ((System.Windows.Media.SolidColorBrush)Brush("#201f1f")).Color, 1));
+        neutralGradient.Freeze();
+        return neutralGradient;
+    }
+
     /// <summary>
     /// Paints the active mod's banner area at the top of the left sidebar.
     /// Resolution order: cached community banner (1200×300) → built-in
@@ -2597,42 +2777,7 @@ public partial class MainWindow : Window
         // BannerImage (the mod's .ico) is deliberately NOT used here
         // because a 256×256 square icon stretched to a 1920-wide panel
         // looks heavily distorted.
-        if (DashboardBgFill != null)
-        {
-            var cinemaBanner =
-                TryLoadTileImage(profile.LocalHeroImagePath)
-                ?? TryLoadTileImage(profile.LocalBannerPath);
-            if (cinemaBanner != null)
-            {
-                // Single-layer hero stretched Stretch.Fill so it covers the
-                // whole panel edge-to-edge with NO side bands AND NO crop —
-                // the maintainer accepts the aspect-ratio distortion in a
-                // non-16:9 window as the lesser evil. A fresh ImageBrush is
-                // required because the cached brush from TryLoadTileImage is
-                // UniformToFill and SHARED with the icon/tile paths; reuse its
-                // already-decoded ImageSource so there's no second decode.
-                var heroFill = new System.Windows.Media.ImageBrush(cinemaBanner.ImageSource)
-                {
-                    Stretch = System.Windows.Media.Stretch.Fill,
-                };
-                if (heroFill.CanFreeze) heroFill.Freeze();
-                DashboardBgFill.Background = heroFill;
-            }
-            else
-            {
-                var neutralGradient = new System.Windows.Media.LinearGradientBrush
-                {
-                    StartPoint = new System.Windows.Point(0, 0),
-                    EndPoint = new System.Windows.Point(1, 1),
-                };
-                neutralGradient.GradientStops.Add(new System.Windows.Media.GradientStop(
-                    ((System.Windows.Media.SolidColorBrush)Brush("#131313")).Color, 0));
-                neutralGradient.GradientStops.Add(new System.Windows.Media.GradientStop(
-                    ((System.Windows.Media.SolidColorBrush)Brush("#201f1f")).Color, 1));
-                neutralGradient.Freeze();
-                DashboardBgFill.Background = neutralGradient;
-            }
-        }
+        ApplyDashboardHero(profile);
         if (DashboardTitleText != null)
         {
             // Stack a "Game: Subtitle"-style name onto two lines in the hero
@@ -2992,6 +3137,13 @@ public partial class MainWindow : Window
             // 1200×300) banner for the dashboard surface.
             var hero = await cache.GetHeroImagePathAsync(profile.Id, profile.HeroImageUrl);
             if (!PathEquals(hero, profile.LocalHeroImagePath)) { profile.LocalHeroImagePath = hero; changed = true; }
+
+            // Rotating heroes — when the catalog declares heroImages, fetch the
+            // whole set (cached as hero-{i}); the dashboard cycles them with a
+            // crossfade. An empty list purges any previously-cached set.
+            var heroPaths = await cache.GetHeroImagePathsAsync(profile.Id, profile.HeroImageUrls);
+            if (!profile.LocalHeroImagePaths.SequenceEqual(heroPaths))
+            { profile.LocalHeroImagePaths = heroPaths; changed = true; }
         }
         catch (Exception ex)
         {
@@ -3039,6 +3191,18 @@ public partial class MainWindow : Window
             {
                 InvalidateTileImageCache(profile.LocalHeroImagePath);
                 if (hero == RevalidateOutcome.Removed) profile.LocalHeroImagePath = null;
+                revalidated = true;
+            }
+
+            // Rotating heroes — a replacement (200) re-decodes on the next repaint
+            // (BuildHeroFillBrush ignores WPF's cache); a deletion (404) purged the
+            // file, so drop the now-missing paths from the rotation list.
+            if (profile.HeroImageUrls.Count > 0
+                && await cache.RevalidateHeroesAsync(profile.Id, profile.HeroImageUrls))
+            {
+                foreach (var p in profile.LocalHeroImagePaths) InvalidateTileImageCache(p);
+                profile.LocalHeroImagePaths =
+                    profile.LocalHeroImagePaths.Where(System.IO.File.Exists).ToList();
                 revalidated = true;
             }
 

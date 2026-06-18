@@ -379,6 +379,7 @@ public static class ModRegistry
             IconUrl = entry.IconUrl,
             BannerUrl = entry.BannerUrl,
             HeroImageUrl = entry.HeroImageUrl,
+            HeroImageUrls = entry.HeroImageUrls ?? new(),
             ScreenshotUrls = entry.ScreenshotUrls ?? new(),
             InstallType = installType,
             DefaultInstallFolder = m.Install.DefaultFolder ?? "",

@@ -675,8 +675,8 @@ public partial class PublishModDialog : Window
         LblAuthor.Text = "Author (optional)"; HintAuthor.Text = "Your name or your team's. Example: Napoleonic Team";
         LblSubtitle.Text = "Subtitle (optional)"; HintSubtitle.Text = "Short tagline under the title. Example: Napoleonic Wars, 1789–1815";
         LblAccent.Text = "Accent colour (optional)"; HintAccent.Text = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher.";
-        LblIcon.Text = "Icon filename (optional)"; HintIcon.Text = "icon.png — 256x256, PNG with alpha, ≤100 KB.";
-        LblBanner.Text = "Banner filename (optional)"; HintBanner.Text = "banner.png/.jpg — 1200x300, ≤500 KB.";
+        LblIcon.Text = "Icon filename (optional)"; HintIcon.Text = "icon.png — square (1:1), 256–1024 px, PNG with alpha, ≤1 MB.";
+        LblBanner.Text = "Banner filename (optional)"; HintBanner.Text = "banner.png/.jpg — 4:1, 1200–4800 px wide, ≤2 MB.";
         LblInstallType.Text = "Install type"; HintInstallType.Text = "IsolatedFolder = own folder (recommended for most mods). InPlaceOverlay = on top of AoE3.";
         LblDefaultFolder.Text = "Default install folder"; HintDefaultFolder.Text = "Folder name suggested when installing. Example: Napoleonic Era";
         LblProbeFile.Text = "Probe file"; HintProbeFile.Text = "A file that confirms the mod is installed. Example: data\\napoleonic.xml";

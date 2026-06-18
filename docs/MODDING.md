@@ -128,8 +128,13 @@ with the real constraints the schema enforces.
 | Field | Constraints | Physical specs |
 |---|---|---|
 | `accentColor` | `^#[0-9a-fA-F]{6}$` | Card border, badges, and the synthetic banner gradient when no banner is supplied. |
-| `icon` | filename ending in `.png` | **256 × 256 px, PNG with alpha, ≤ 100 KB.** Validated in CI; a 257×257 fails. |
-| `banner` | filename `.png/.jpg/.jpeg` | **1200 × 300 px, ≤ 500 KB.** |
+| `icon` | filename ending in `.png` | **Square (1:1), width 256–1024 px, PNG with alpha, ≤ 1 MB.** Validated in CI by aspect + width range (a non-square fails). |
+| `banner` | filename `.png/.jpg/.jpeg` | **4:1 aspect, width 1200–4800 px** (e.g. 1200×300, 2400×600, 4800×1200), **≤ 2 MB.** |
+| `heroImage` | filename `.png/.jpg/.jpeg` | **16:9 aspect, width 1920–3840 px (1080p up to 4K), ≤ 8 MB** (use JPEG for 4K — a 4K PNG can be 10 MB+). Dashboard background; keep the subject in the **right half** (left is covered by the title + PLAY button). |
+| `heroImages` | array of filenames | **Rotating dashboard heroes (2–6).** Each follows the `heroImage` spec. When 2+ are listed the dashboard cycles them with a crossfade (~7 s each); takes precedence over `heroImage`. |
+| `screenshots` | array of filenames `.png/.jpg/.jpeg/.gif` | **Workshop gallery (max 8). No fixed dimensions, ≤ 8 MB each.** Animated GIFs allowed **here only**. |
+
+> Dimensions are validated by **aspect ratio + a width range**, not a single exact size — so any resolution up to 4K passes as long as the shape is right.
 
 The files live in `mods/<your-id>/` next to `mod.json`. The launcher
 resolves `icon: "icon.png"` to
@@ -608,8 +613,8 @@ will see your mod automatically when their cache expires
 | `ajv: id should match pattern "^[a-z]…"` | `id` has uppercase, spaces or odd characters | Use only `a-z0-9-`, must start with a letter |
 | `ajv: install.type should be one of …` | Typo in the enum (e.g. `"isolated"`) | `IsolatedFolder` or `InPlaceOverlay`, case-sensitive |
 | `ajv: additionalProperties` | You added a field the schema doesn't know | Remove it, or propose adding it to the schema in a separate PR |
-| `validate_images: icon 257x257` | Icon isn't exactly 256×256 | Resize; CI doesn't tolerate ±1 px |
-| `validate_images: banner.png > 500 KB` | Banner is over 500 KB | Compress (TinyPNG or equivalent) |
+| `validate_images: icon … aspect …` | Icon isn't square or is outside 256–1024 px | Make it 1:1 within the width range |
+| `validate_images: … exceeds limit` | Image is over its weight cap (icon 1 MB / banner 2 MB / hero & screenshots 8 MB) | Compress, or use JPEG for 4K |
 | PR marked **invalid** | You touched something outside `/mods/<your-id>/`, or more than one mod at once | One PR per mod. Schema changes go in a separate PR |
 | PR not auto-merging even though you only changed `displayName` | First-time submission — always tier 3 for safety | Wait for the maintainer; later cosmetic PRs auto-merge |
 | Launcher doesn't show my mod after merge | 24 h cache hasn't expired yet | Delete `%LocalAppData%\AoE3ModLauncher\catalog-cache.json` to force a refresh |

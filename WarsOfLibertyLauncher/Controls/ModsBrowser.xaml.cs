@@ -857,7 +857,7 @@ public partial class ModsBrowser : UserControl
                 Tag = path,
                 // Thumbnails are static (a GIF decodes only its first frame here);
                 // only the large viewer animates (see SelectGalleryShot).
-                Background = new ImageBrush(TryLoadBitmap(path)) { Stretch = Stretch.UniformToFill },
+                Background = new ImageBrush(TryLoadBitmap(path, decodeWidth: 480)) { Stretch = Stretch.UniformToFill },
             };
             thumb.MouseLeftButtonUp += (_, _) =>
             {
@@ -884,7 +884,7 @@ public partial class ModsBrowser : UserControl
         else
         {
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DetailGalleryViewer, null); // stop a prior gif
-            DetailGalleryViewer.Source = TryLoadBitmap(path);
+            DetailGalleryViewer.Source = TryLoadBitmap(path, decodeWidth: 1920);
         }
     }
 
@@ -1131,7 +1131,7 @@ public partial class ModsBrowser : UserControl
         return br;
     }
 
-    private static BitmapImage? TryLoadBitmap(string? path)
+    private static BitmapImage? TryLoadBitmap(string? path, int decodeWidth = 0)
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
         // Accept both on-disk cache files (catalog icon.png) and pack:// URIs
@@ -1148,6 +1148,12 @@ public partial class ModsBrowser : UserControl
             // name (same path, new bytes) re-decodes from disk instead of
             // serving WPF's stale per-URI cached bitmap.
             bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            // Cap the decode width so a 4K screenshot doesn't sit in RAM at full
+            // ~33 MB — thumbnails need ~480, the big viewer ~1920. 0 = no cap
+            // (icons/banners are already small). Skipped for .gif so the animated
+            // viewer (XamlAnimatedGif) gets the original frames.
+            if (decodeWidth > 0 && !path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase))
+                bmp.DecodePixelWidth = decodeWidth;
             bmp.UriSource = new Uri(path, UriKind.Absolute);
             bmp.EndInit();
             bmp.Freeze();

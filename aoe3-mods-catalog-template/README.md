@@ -78,7 +78,7 @@ Create `.github/CODEOWNERS`:
 ### 6. Add `CONTRIBUTING.md` for modders
 A short doc telling them:
 - The folder structure (`mods/<id>/{mod.json, icon.png, banner.png}`)
-- The image specs (256×256 PNG ≤100 KB; 1200×300 PNG/JPG ≤500 KB)
+- The image specs (icon: 1:1, 256–1024 px PNG ≤1 MB; banner: 4:1, 1200–4800 px PNG/JPG ≤2 MB; hero: 16:9, 1920–3840 px PNG/JPG ≤8 MB; screenshots ≤8 MB). Dimensions validate by aspect + width range, so any size up to 4K passes.
 - The schema URL to point their editor at
 - That cosmetic and release-bump PRs auto-merge
 

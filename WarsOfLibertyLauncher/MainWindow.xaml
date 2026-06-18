@@ -792,9 +792,19 @@
                      the old two-layer blurred-margin design (read as side
                      bands, "franjas") and a UniformToFill cover (disliked the
                      top/bottom crop). Fallback when no hero is a neutral dark
-                     gradient, also set in RefreshActiveMod. -->
+                     gradient, also set in RefreshActiveMod.
+                     HighQuality scaling keeps 4K heroes crisp when decoded down.
+                     DashboardBgFill is the BASE; DashboardBgFillB is the crossfade
+                     overlay (opacity 0 at rest) for the rotating-hero feature —
+                     ApplyDashboardHero owns both. Keep B right here, BEFORE the
+                     dim gradients, or the overlay would cover the readability
+                     scrims. -->
                 <Border x:Name="DashboardBgFill"
+                        RenderOptions.BitmapScalingMode="HighQuality"
                         Background="{DynamicResource BgPanelAlt}"/>
+                <Border x:Name="DashboardBgFillB"
+                        RenderOptions.BitmapScalingMode="HighQuality"
+                        Opacity="0"/>
 
                 <!-- Layer 2: vertical gradient — transparent at top,
                      opaque at bottom — so the title/desc/buttons at the

@@ -59,6 +59,9 @@ public class ModAssetCacheService
     /// <summary>Highest screenshot index the gallery supports (schema maxItems).</summary>
     private const int MaxShots = 8;
 
+    /// <summary>Max rotating dashboard heroes (must match the catalog's MAX_HEROES).</summary>
+    private const int MaxHeroes = 6;
+
     /// <summary>Folder where cached assets live. Created lazily on first write.</summary>
     public static string CacheDir { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -86,6 +89,38 @@ public class ModAssetCacheService
     public Task<string?> GetHeroImagePathAsync(
         string modId, string? remoteUrl, CancellationToken ct = default)
         => GetAssetAsync(modId, "hero", remoteUrl, ct);
+
+    /// <summary>
+    /// Downloads (and caches) the rotating dashboard heroes for a mod and returns
+    /// the local paths in order. Each file is named <c>{modId}-hero-{index}{ext}</c>
+    /// (distinct from the single <c>{modId}-hero</c>). Mirrors
+    /// <see cref="GetScreenshotPathsAsync"/>: best-effort, surplus
+    /// <c>hero-{i}</c> beyond the new count is purged, a null/empty list purges
+    /// the whole rotating set.
+    /// </summary>
+    public async Task<List<string>> GetHeroImagePathsAsync(
+        string modId, IReadOnlyList<string>? remoteUrls, CancellationToken ct = default)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(modId))
+            return result;
+        if (remoteUrls is null || remoteUrls.Count == 0)
+        {
+            PurgeHeroesFrom(modId, 0);
+            return result;
+        }
+        int count = Math.Min(remoteUrls.Count, MaxHeroes);
+        for (int i = 0; i < count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var path = await GetAssetAsync(modId, $"hero-{i}", remoteUrls[i], ct);
+            if (path is not null)
+                result.Add(path);
+        }
+        // Drop heroes the rotation no longer declares (shrunk set).
+        PurgeHeroesFrom(modId, count);
+        return result;
+    }
 
     /// <summary>
     /// Downloads (and caches) the gallery screenshots/GIFs for a mod and returns
@@ -147,6 +182,27 @@ public class ModAssetCacheService
         => RevalidateAsync(modId, "hero", remoteUrl, ct);
 
     /// <summary>
+    /// Conditionally revalidates every rotating hero. Returns <c>true</c> if ANY
+    /// hero was replaced OR removed (so the caller repaints the rotation).
+    /// Mirrors <see cref="RevalidateScreenshotsAsync"/>.
+    /// </summary>
+    public async Task<bool> RevalidateHeroesAsync(
+        string modId, IReadOnlyList<string>? remoteUrls, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(modId) || remoteUrls is null)
+            return false;
+        bool any = false;
+        int count = Math.Min(remoteUrls.Count, MaxHeroes);
+        for (int i = 0; i < count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (await RevalidateAsync(modId, $"hero-{i}", remoteUrls[i], ct) != RevalidateOutcome.Unchanged)
+                any = true;
+        }
+        return any;
+    }
+
+    /// <summary>
     /// Conditionally revalidates every gallery screenshot. Returns <c>true</c>
     /// if ANY shot was replaced OR removed (so the caller refreshes the strip).
     /// </summary>
@@ -181,6 +237,7 @@ public class ModAssetCacheService
         PurgeRole(modId, "icon");
         PurgeRole(modId, "banner");
         PurgeRole(modId, "hero");
+        PurgeHeroesFrom(modId, 0);
         PurgeShotsFrom(modId, 0);
     }
 
@@ -406,10 +463,17 @@ public class ModAssetCacheService
 
     private static long MaxBytesFor(string role) => role switch
     {
-        "hero" => 2L * 1024 * 1024,   // 2 MB — hero images
+        // Hero(s) and screenshots allow up to 4K source images (≤8 MB; modders
+        // are told to use JPEG for 4K since a 4K PNG can be 10 MB+). These caps
+        // MUST be ≥ the catalog CI's (validate_images.py) so an image the CI
+        // approved is never silently dropped here at runtime.
+        "hero" => 8L * 1024 * 1024,   // 8 MB — single dashboard hero
+        _ when role.StartsWith("hero-", StringComparison.Ordinal)
+               => 8L * 1024 * 1024,   // 8 MB — rotating dashboard heroes
         _ when role.StartsWith("shot-", StringComparison.Ordinal)
-               => 2L * 1024 * 1024,   // 2 MB — gallery screenshots / GIFs
-        _      => 1L * 1024 * 1024,   // 1 MB — icon + banner with headroom
+               => 8L * 1024 * 1024,   // 8 MB — gallery screenshots / GIFs
+        "banner" => 2L * 1024 * 1024, // 2 MB — Workshop card banner (up to 4:1 4800px)
+        _        => 1L * 1024 * 1024, // 1 MB — icon (up to 1024×1024)
     };
 
     /// <summary>
@@ -450,6 +514,12 @@ public class ModAssetCacheService
             PurgeRole(modId, $"shot-{i}");
     }
 
+    private static void PurgeHeroesFrom(string modId, int startIndex)
+    {
+        for (int i = startIndex; i < MaxHeroes; i++)
+            PurgeRole(modId, $"hero-{i}");
+    }
+
     private static (string url, string? etag)? ReadMeta(string metaPath)
     {
         try
@@ -487,9 +557,10 @@ public class ModAssetCacheService
     {
         var client = new HttpClient
         {
-            // Mod assets are tiny (a few hundred KB at most). Don't make the
-            // user wait minutes if GitHub is unhealthy.
-            Timeout = TimeSpan.FromSeconds(20),
+            // Mod assets are small, but a 4K hero/screenshot can reach ~8 MB,
+            // so allow a bit more headroom on slow links without making the user
+            // wait minutes if GitHub is unhealthy.
+            Timeout = TimeSpan.FromSeconds(30),
         };
         client.DefaultRequestHeaders.Add("User-Agent", "WarsOfLibertyLauncher");
         return client;
