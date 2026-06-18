@@ -104,6 +104,25 @@ The launcher **never deletes** user data — the worst it does is rename a folde
 - A built-in **Translation Packager** dialog helps translators build their
   own `.zip` from a folder of translated files.
 
+### Notification feed
+The launcher's "update available" / "new translation" bells are fed by a small
+**central notification feed** instead of every client polling GitHub per installed
+mod. A tiny self-hosted Node + Fastify service polls GitHub **once for everyone**
+and publishes a JSON manifest (each mod's latest version + translation keys) that
+the launcher reads with a single cheap `ETag` / `304` request. The launcher still
+does the version/translation **diff and dedup locally** — the feed only moves the
+fetch off each client.
+
+- **Deployed & live** at `https://wol-notify.duckdns.org/manifest` on its **own**
+  Oracle Cloud VM, **separate** from the lobby backend, fronted by DuckDNS +
+  Let's Encrypt. Sources and the full deploy runbook are in the companion
+  **`notifier-server`** repo (`github.com/Gorgorito12/notifier-server`).
+- **Never a single point of failure** — if the feed is down, unreachable, or
+  returns bad JSON, the launcher automatically falls back to polling GitHub
+  directly, exactly as before. The feed URL is configurable
+  (`notificationFeedUrl` in `launcher-config.json`; `"none"` opts out), defaulting
+  to the built-in endpoint above.
+
 ### Self-update
 The launcher checks GitHub Releases for a newer version on startup. Updates are
 **tag-based** (no need to bump assembly versions to publish a release) — the

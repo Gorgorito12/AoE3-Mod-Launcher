@@ -919,6 +919,31 @@ don't go looking for it.)
   fired once at startup + every 6th `_catalogPollTimer` tick (~30 min) to respect the
   GitHub API budget.
 
+- **The notification sweep above can read a CENTRAL FEED instead of polling
+  GitHub per-mod — `Services/NotificationFeedService.cs`, served by a SEPARATE,
+  now-deployed Oracle VM.** `SweepInstalledModsForNotificationsAsync` first tries a
+  single cheap `GET /manifest` (ETag/304) against the **notifier feed** — a tiny
+  Node/Fastify service that polls GitHub ONCE for everyone and publishes each mod's
+  `latestVersion` + translation keys — and only falls back to the per-mod
+  `UpdateService.CheckAsync()` + translation fetch when the feed is unreachable or
+  returns bad JSON, so **the feed is never a single point of failure**. The launcher
+  still does the version/translation diff + dedup LOCALLY (the feed reports
+  availability only). The URL comes from `ResolveNotificationFeedUrl()`
+  (`MainWindow.xaml.cs`): `LauncherConfig.NotificationFeedUrl` defaults to `""` →
+  the **hardcoded built-in `https://wol-notify.duckdns.org/manifest`**; `"none"`
+  opts out (always GitHub); any URL overrides. `NotificationFeedETag` is echoed as
+  `If-None-Match` for the 304. **Infra:** the feed runs on its **OWN free Oracle VM**
+  (public IP `129.213.160.55`, systemd `notifier`, nginx + Let's Encrypt),
+  **deliberately separate** from the lobby backend (`wol-lobby.duckdns.org`) — same
+  split rationale as that backend. Sources + the tested deploy runbook live in the
+  **companion `notifier-server` repo** (`github.com/Gorgorito12/notifier-server`,
+  its `DEPLOY.md`); it auto-discovers tracked mods from the same catalog
+  (`Gorgorito12/aoe3-mods-catalog`), so the launcher's default just works with no
+  config. (The manifest shape is a CONTRACT with `NotificationFeed` /
+  `NotificationFeedMod`: adding fields is safe, renaming/removing `mods` /
+  `latestVersion` / `translations` silently breaks every client → coordinate across
+  both repos.)
+
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
   (`MultiplayerTab.xaml.cs`) fills it, and four duplications were stripped on
