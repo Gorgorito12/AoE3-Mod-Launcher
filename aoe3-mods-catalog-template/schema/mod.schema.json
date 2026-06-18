@@ -53,12 +53,12 @@
     "heroImage": {
       "type": "string",
       "pattern": "^[a-zA-Z0-9_-]+\\.(png|jpg|jpeg)$",
-      "description": "Filename of the large dashboard background painted behind the title + PLAY button. Specs: 16:9 aspect, width 1920-3840 px (1080p up to 4K), PNG/JPG, <= 8 MB (use JPEG for 4K). Keep the important subject in the RIGHT half. For multiple rotating heroes, use heroImages."
+      "description": "Filename of the large dashboard background painted behind the title + PLAY button. Specs: 16:9 aspect, width 1920-3840 px (1080p up to 4K), PNG/JPG, <= 5 MB (use JPEG for 4K). Keep the important subject in the RIGHT half. For multiple rotating heroes, use heroImages."
     },
     "heroImages": {
       "type": "array",
       "maxItems": 6,
-      "description": "Optional gallery of dashboard hero backgrounds that ROTATE with a crossfade (~7 s each) when 2 or more are listed. Each follows the same spec as heroImage (16:9, width 1920-3840 px, PNG/JPG, <= 8 MB each). Takes precedence over heroImage.",
+      "description": "Optional gallery of dashboard hero backgrounds that ROTATE with a crossfade (~7 s each) when 2 or more are listed. Each follows the same spec as heroImage (16:9, width 1920-3840 px, PNG/JPG, <= 5 MB each). Takes precedence over heroImage.",
       "items": {
         "type": "string",
         "pattern": "^[a-zA-Z0-9_-]+\\.(png|jpg|jpeg)$"
@@ -67,7 +67,7 @@
     "screenshots": {
       "type": "array",
       "maxItems": 8,
-      "description": "Optional gallery of screenshots/GIFs shown in the Workshop detail panel. Bare filenames in the same folder as mod.json. Animated GIFs allowed HERE ONLY. No fixed dimensions; each file <= 8 MB.",
+      "description": "Optional gallery of screenshots/GIFs shown in the Workshop detail panel. Bare filenames in the same folder as mod.json. Animated GIFs allowed HERE ONLY. No fixed dimensions; each file <= 5 MB.",
       "items": {
         "type": "string",
         "pattern": "^[a-zA-Z0-9_-]+\\.(png|jpg|jpeg|gif)$"

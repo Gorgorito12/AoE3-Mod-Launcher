@@ -463,15 +463,16 @@ public class ModAssetCacheService
 
     private static long MaxBytesFor(string role) => role switch
     {
-        // Hero(s) and screenshots allow up to 4K source images (≤8 MB; modders
-        // are told to use JPEG for 4K since a 4K PNG can be 10 MB+). These caps
-        // MUST be ≥ the catalog CI's (validate_images.py) so an image the CI
-        // approved is never silently dropped here at runtime.
-        "hero" => 8L * 1024 * 1024,   // 8 MB — single dashboard hero
+        // Hero(s) and screenshots allow up to 4K source images (≤5 MB; modders
+        // are told to use JPEG for 4K since a 4K JPEG fits well under this and a
+        // 4K PNG can be 10 MB+). These caps MUST be ≥ the catalog CI's
+        // (validate_images.py) so an image the CI approved is never silently
+        // dropped here at runtime.
+        "hero" => 5L * 1024 * 1024,   // 5 MB — single dashboard hero
         _ when role.StartsWith("hero-", StringComparison.Ordinal)
-               => 8L * 1024 * 1024,   // 8 MB — rotating dashboard heroes
+               => 5L * 1024 * 1024,   // 5 MB — rotating dashboard heroes
         _ when role.StartsWith("shot-", StringComparison.Ordinal)
-               => 8L * 1024 * 1024,   // 8 MB — gallery screenshots / GIFs
+               => 5L * 1024 * 1024,   // 5 MB — gallery screenshots / GIFs
         "banner" => 2L * 1024 * 1024, // 2 MB — Workshop card banner (up to 4:1 4800px)
         _        => 1L * 1024 * 1024, // 1 MB — icon (up to 1024×1024)
     };
@@ -557,7 +558,7 @@ public class ModAssetCacheService
     {
         var client = new HttpClient
         {
-            // Mod assets are small, but a 4K hero/screenshot can reach ~8 MB,
+            // Mod assets are small, but a 4K hero/screenshot can reach ~5 MB,
             // so allow a bit more headroom on slow links without making the user
             // wait minutes if GitHub is unhealthy.
             Timeout = TimeSpan.FromSeconds(30),

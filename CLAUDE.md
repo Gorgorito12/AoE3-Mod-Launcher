@@ -377,7 +377,7 @@ don't go looking for it.)
   now TWO stacked Border layers** (`DashboardBgFill` = base, `DashboardBgFillB`
   = crossfade overlay, opacity 0 at rest), BEFORE the dim-gradient Rectangles —
   both owned by `ApplyDashboardHero`. This is the **rotating-hero** feature: a
-  catalog `mod.json` may declare `heroImages` (2–6, each 16:9/≤8 MB, cached as
+  catalog `mod.json` may declare `heroImages` (2–6, each 16:9/≤5 MB, cached as
   `{modId}-hero-{i}` by `ModAssetCacheService.GetHeroImagePathsAsync`); with ≥2
   the dashboard cycles them every `HeroRotateSeconds` (7) by painting the next
   into `DashboardBgFillB` and fading its opacity in, then snapping the base. The
@@ -801,12 +801,12 @@ don't go looking for it.)
 
 - **A mod's detail panel has a screenshot/GIF gallery — and GIFs animate ONLY
   there, not in the icon/banner/hero.** A catalog `mod.json` may declare a
-  `screenshots` array (`screenshot1..8.<ext>`, PNG/JPEG/**GIF**, ≤8 MB each, max
+  `screenshots` array (`screenshot1..8.<ext>`, PNG/JPEG/**GIF**, ≤5 MB each, max
   8 — see the catalog repo's `CLAUDE.md`/`mod.schema.json`). It flows
   `ModCatalogManifest.Screenshots` → `ModCatalogEntry.ScreenshotUrls` (resolved
   through the same anti-traversal `ResolveAssetUrl` as icon/banner) →
   `ModProfile.ScreenshotUrls`, and is cached as `{modId}-shot-{i}{ext}`
-  (8 MB cap) by `ModAssetCacheService.GetScreenshotPathsAsync`. **It's lazy and
+  (5 MB cap) by `ModAssetCacheService.GetScreenshotPathsAsync`. **It's lazy and
   separate from the icon/banner fetch:** screenshots download only when the
   detail panel opens (`MainWindow.EnsureScreenshotsAsync`, its OWN per-session
   guard `_screenshotFetchAttempted`), never eagerly per card. The UI
