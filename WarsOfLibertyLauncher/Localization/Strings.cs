@@ -4621,6 +4621,11 @@ public static class Strings
             [LangEn] = "Package created",
             [LangEs] = "Paquete creado",
         },
+        ["DlgPackagerResultFolderPath"] = new()
+        {
+            [LangEn] = "📁 Ready to commit: {0}",
+            [LangEs] = "📁 Listo para commitear: {0}",
+        },
         ["DlgPackagerResultPath"] = new()
         {
             [LangEn] = "📦 {0} ({1})",

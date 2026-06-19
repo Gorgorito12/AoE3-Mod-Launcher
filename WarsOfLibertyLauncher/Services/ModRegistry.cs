@@ -558,10 +558,9 @@ public static class ModRegistry
             {
                 // Legacy release-published packs (kept for dual mode).
                 Repo = "papillo12/translations",
-                // New folder-published packs (translations/<id>/ on main). Point
-                // this at the dedicated translations repo once it exists; until
-                // then it's empty and only the legacy releases above are read.
-                FolderRepo = "",
+                // New folder-published packs (translations/<id>/ on main) in the
+                // dedicated translations repo. Read alongside the legacy releases.
+                FolderRepo = "Gorgorito12/translations",
                 CoveredFiles = new List<string>
                 {
                     @"data\stringtabley.xml",

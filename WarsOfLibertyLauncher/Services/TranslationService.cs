@@ -468,7 +468,8 @@ public class TranslationService
         string? ZipPath,
         long ZipSize,
         string? JsonPath,
-        string? ErrorMessage);
+        string? ErrorMessage,
+        string? FolderPath = null);
 
     /// <summary>
     /// Builds a translation pack from a folder of translated XML files plus
@@ -683,26 +684,41 @@ public class TranslationService
                 }
             }
 
-            // ---- Also write translation.json as a sibling next to the zip ----
-            // This is the file the launcher's registry service reads directly
-            // when listing GitHub releases — the translator uploads both
-            // wol-<id>.zip AND translation.json as separate assets, and the
-            // launcher discovers the pack with no central index needed.
+            // ---- Assemble a ready-to-commit translations/<id>/ folder ----
+            // The new publication path is "commit files to main": the launcher
+            // discovers packs by listing translations/<id>/ and reading the
+            // translation.json + <zip> inside. So we build that folder next to
+            // the chosen zip with BOTH files in it — the translator just drags
+            // the translations/ folder into their repo. (The standalone zip at
+            // OutputZipPath stays for the legacy "upload as release assets" path
+            // and for the Open-folder button.)
+            string? folderPath = null;
             string? siblingJsonPath = null;
             try
             {
                 var outputDir = Path.GetDirectoryName(inputs.OutputZipPath);
                 if (!string.IsNullOrEmpty(outputDir))
                 {
-                    siblingJsonPath = Path.Combine(outputDir, TranslationManifest.ManifestFileName);
+                    folderPath = Path.Combine(outputDir, "translations", manifest.Id);
+                    Directory.CreateDirectory(folderPath);
+                    // The manifest INSIDE the folder is the canonical one the
+                    // launcher reads; siblingJsonPath points at it for the result panel.
+                    siblingJsonPath = Path.Combine(folderPath, TranslationManifest.ManifestFileName);
                     File.WriteAllText(siblingJsonPath, manifestJson);
+                    // Copy the zip in under its own name (manifest.Zip already
+                    // records that name → raw URL = translations/<id>/<zip>).
+                    File.Copy(
+                        inputs.OutputZipPath,
+                        Path.Combine(folderPath, Path.GetFileName(inputs.OutputZipPath)),
+                        overwrite: true);
                 }
             }
             catch (Exception ex)
             {
-                // Non-fatal: the zip was created successfully; the translator
-                // can still extract translation.json from it manually.
-                DiagnosticLog.Write($"Export: could not write sibling translation.json: {ex.Message}");
+                // Non-fatal: the zip was created successfully; the translator can
+                // still extract translation.json from it and lay out the folder.
+                DiagnosticLog.Write($"Export: could not assemble translations/ folder: {ex.Message}");
+                folderPath = null;
                 siblingJsonPath = null;
             }
 
@@ -710,9 +726,10 @@ public class TranslationService
 
             DiagnosticLog.Write(
                 $"Export: created '{inputs.OutputZipPath}' " +
-                $"({filesIncluded} files, {zipSize} bytes) for translation '{manifest.Id}' v{manifest.Version}.");
+                $"({filesIncluded} files, {zipSize} bytes) for translation '{manifest.Id}' v{manifest.Version}; " +
+                $"folder='{folderPath}'.");
 
-            return new ExportResult(true, inputs.OutputZipPath, zipSize, siblingJsonPath, null);
+            return new ExportResult(true, inputs.OutputZipPath, zipSize, siblingJsonPath, null, folderPath);
         }
         catch (Exception ex)
         {

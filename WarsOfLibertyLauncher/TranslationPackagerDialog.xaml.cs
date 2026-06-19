@@ -452,13 +452,22 @@ public partial class TranslationPackagerDialog : Window
             }
 
             // ---- Show the result panel ----
-            _generatedZipPath = result.ZipPath;
+            // Point "Open folder" at the ready-to-commit translations/<id>/ folder
+            // when we built one (the new path); else fall back to the loose zip.
+            _generatedZipPath = !string.IsNullOrEmpty(result.FolderPath)
+                ? result.FolderPath
+                : result.ZipPath;
             ResultHeaderText.Text = Strings.Get("DlgPackagerResultHeader");
 
-            // Show both files the translator now has on disk: the .zip
-            // (translation pack) and the sibling translation.json — both
-            // need to be uploaded as assets to a GitHub release.
-            var pathLines = Strings.Format("DlgPackagerResultPath",
+            // Lead with the ready-to-commit folder (the recommended path); the
+            // standalone zip + its translation.json are listed underneath for the
+            // legacy "upload as release assets" route.
+            var pathLines = "";
+            if (!string.IsNullOrEmpty(result.FolderPath))
+            {
+                pathLines += Strings.Format("DlgPackagerResultFolderPath", result.FolderPath) + "\n";
+            }
+            pathLines += Strings.Format("DlgPackagerResultPath",
                 result.ZipPath, FormatBytes(result.ZipSize));
             if (!string.IsNullOrEmpty(result.JsonPath))
             {
@@ -504,13 +513,15 @@ public partial class TranslationPackagerDialog : Window
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(_generatedZipPath)) return;
-        // Open Explorer with the zip selected
+        // Open the translations/<id>/ folder directly when we built one; for a
+        // plain file path, open Explorer with the file selected.
         try
         {
+            bool isDir = System.IO.Directory.Exists(_generatedZipPath);
             Process.Start(new ProcessStartInfo
             {
                 FileName = "explorer.exe",
-                Arguments = $"/select,\"{_generatedZipPath}\"",
+                Arguments = isDir ? $"\"{_generatedZipPath}\"" : $"/select,\"{_generatedZipPath}\"",
                 UseShellExecute = true,
             });
         }
