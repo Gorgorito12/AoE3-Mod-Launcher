@@ -133,89 +133,135 @@ public class TranslationRegistryService
         }
     }
 
+    private static readonly System.Text.RegularExpressions.Regex TranslationManifestPathRegex =
+        new(@"^translations/([^/]+)(?:/([^/]+))?/translation\.json$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>
-    /// Discovers translations published as FILES on a repo's <c>main</c> branch:
-    /// each pack lives in <c>translations/&lt;id&gt;/</c> with a
-    /// <c>translation.json</c> + its <c>.zip</c>. Lists the folder via the GitHub
-    /// Contents API (1 call) and reads each manifest via the raw CDN (not
-    /// rate-limited). The dedup key is <c>id@contentHash</c> (no release tags),
-    /// so an improved pack (different bytes) re-notifies automatically. A repo
-    /// with no <c>translations/</c> folder returns an empty index (not an error).
+    /// Discovers translations published as FILES on a repo's <c>main</c> branch.
+    /// Each pack lives in <c>translations/&lt;id&gt;/translation.json</c> (single
+    /// version) OR keeps a HISTORY under
+    /// <c>translations/&lt;id&gt;/&lt;version&gt;/translation.json</c> (subfolder
+    /// per version). The whole tree is fetched in ONE call (the Git Trees API,
+    /// recursive) and each manifest is read via the raw CDN (not rate-limited).
+    /// Versions are grouped per id into a single <see cref="TranslationIndexEntry"/>
+    /// whose top-level fields describe the NEWEST version (so the menu / dedup /
+    /// notification stay unchanged) and whose <see cref="TranslationIndexEntry.Versions"/>
+    /// lists the history (newest first, capped). The dedup key is
+    /// <c>id@contentHash</c> of the newest. A repo with no <c>translations/</c>
+    /// returns an empty index (not an error).
     /// </summary>
     public async Task<TranslationIndex?> FetchFromRepoFolderAsync(
         string repo, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(repo)) return null;
 
-        var apiUrl = $"https://api.github.com/repos/{repo}/contents/translations";
-        DiagnosticLog.Write($"Fetching translation folder from: {apiUrl}");
+        var apiUrl = $"https://api.github.com/repos/{repo}/git/trees/main?recursive=1";
+        DiagnosticLog.Write($"Fetching translation tree from: {apiUrl}");
 
-        List<GitHubContent>? items;
+        GitHubTree? tree;
         try
         {
-            items = await Http.GetFromJsonAsync<List<GitHubContent>>(apiUrl, ct);
+            tree = await Http.GetFromJsonAsync<GitHubTree>(apiUrl, ct);
         }
         catch (HttpRequestException ex)
         {
-            // 404 = the repo has no translations/ folder yet → empty, not a failure.
-            DiagnosticLog.Write($"Translation folder listing unavailable ({repo}): {ex.Message}");
+            // 404 = the repo/branch has no tree we can read → empty, not a failure.
+            DiagnosticLog.Write($"Translation tree unavailable ({repo}): {ex.Message}");
             return new TranslationIndex { Translations = new List<TranslationIndexEntry>() };
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"Translation folder fetch failed ({repo}): {ex.Message}");
+            DiagnosticLog.Write($"Translation tree fetch failed ({repo}): {ex.Message}");
             return null;
         }
 
-        var entries = new List<TranslationIndexEntry>();
-        foreach (var item in items ?? new List<GitHubContent>())
+        if (tree?.Tree == null)
+            return new TranslationIndex { Translations = new List<TranslationIndexEntry>() };
+        if (tree.Truncated)
+            DiagnosticLog.Write($"  WARNING: tree for {repo} was truncated — some packs may be missed.");
+
+        // Group every translation.json path by language id.
+        var pathsByLang = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in tree.Tree)
         {
-            ct.ThrowIfCancellationRequested();
-            if (!string.Equals(item.Type, "dir", StringComparison.OrdinalIgnoreCase)) continue;
-            var folder = item.Name;
-            if (string.IsNullOrWhiteSpace(folder)) continue;
-
-            var manifestUrl = $"https://raw.githubusercontent.com/{repo}/main/translations/{folder}/translation.json";
-            try
-            {
-                var manifestJson = await Http.GetStringAsync(manifestUrl, ct);
-                var manifest = JsonSerializer.Deserialize<TranslationManifest>(manifestJson);
-                if (manifest == null || string.IsNullOrEmpty(manifest.Id))
-                {
-                    DiagnosticLog.Write($"  folder '{folder}': bad manifest — skipped");
-                    continue;
-                }
-
-                var zipName = !string.IsNullOrWhiteSpace(manifest.Zip) ? manifest.Zip! : $"{manifest.Id}.zip";
-                var zipUrl = $"https://raw.githubusercontent.com/{repo}/main/translations/{folder}/{zipName}";
-                var contentHash = !string.IsNullOrWhiteSpace(manifest.ContentHash)
-                    ? manifest.ContentHash!
-                    : TranslationCompat.ComputeContentHash(manifest.Files);
-
-                entries.Add(new TranslationIndexEntry
-                {
-                    Id = manifest.Id,
-                    Name = manifest.Name,
-                    Language = string.IsNullOrEmpty(manifest.Language) ? manifest.Id : manifest.Language,
-                    Author = manifest.Author,
-                    Version = manifest.Version,
-                    CompatibleWith = manifest.CompatibleWith,
-                    DownloadUrl = zipUrl,
-                    Size = 0,
-                    Description = manifest.Description,
-                    TargetMod = manifest.TargetMod,
-                    ContentHash = contentHash,
-                    FromFolder = true,
-                });
-                DiagnosticLog.Write($"  folder '{folder}': loaded '{manifest.Id}' (contentHash {contentHash})");
-            }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write($"  folder '{folder}': could not read manifest — {ex.Message}");
-            }
+            if (!string.Equals(node.Type, "blob", StringComparison.Ordinal)) continue;
+            var m = TranslationManifestPathRegex.Match(node.Path ?? "");
+            if (!m.Success) continue;
+            var lang = m.Groups[1].Value;
+            if (!pathsByLang.TryGetValue(lang, out var list)) { list = new(); pathsByLang[lang] = list; }
+            list.Add(node.Path!);
         }
 
-        DiagnosticLog.Write($"Translation folder scanned: {entries.Count} valid entries.");
+        var entries = new List<TranslationIndexEntry>();
+        foreach (var (lang, paths) in pathsByLang)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Read each version's manifest (raw CDN), pairing it with the
+            // TranslationVersion we build from it.
+            var pairs = new List<(TranslationVersion ver, TranslationManifest manifest)>();
+            foreach (var path in paths)
+            {
+                try
+                {
+                    var manifestJson = await Http.GetStringAsync(
+                        $"https://raw.githubusercontent.com/{repo}/main/{path}", ct);
+                    var manifest = JsonSerializer.Deserialize<TranslationManifest>(manifestJson);
+                    if (manifest == null || string.IsNullOrEmpty(manifest.Id))
+                    {
+                        DiagnosticLog.Write($"  '{path}': bad manifest — skipped");
+                        continue;
+                    }
+                    // Folder holding this manifest (translations/<lang>[/<version>]).
+                    var dir = path.Substring(0, path.LastIndexOf('/'));
+                    var zipName = !string.IsNullOrWhiteSpace(manifest.Zip) ? manifest.Zip! : $"{manifest.Id}.zip";
+                    var contentHash = !string.IsNullOrWhiteSpace(manifest.ContentHash)
+                        ? manifest.ContentHash!
+                        : TranslationCompat.ComputeContentHash(manifest.Files);
+                    pairs.Add((new TranslationVersion
+                    {
+                        Version = manifest.Version,
+                        DownloadUrl = $"https://raw.githubusercontent.com/{repo}/main/{dir}/{zipName}",
+                        ContentHash = contentHash,
+                        CompatibleWith = manifest.CompatibleWith,
+                        Date = manifest.Date ?? "",
+                        Size = 0,
+                    }, manifest));
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"  '{path}': could not read manifest — {ex.Message}");
+                }
+            }
+            if (pairs.Count == 0) continue;
+
+            // Newest-first + cap. The newest drives the entry's top-level fields.
+            var versions = TranslationCompat.OrderVersions(pairs.Select(p => p.ver));
+            var newestVer = versions[0];
+            var newestManifest = pairs.First(p => ReferenceEquals(p.ver, newestVer)).manifest;
+
+            entries.Add(new TranslationIndexEntry
+            {
+                Id = newestManifest.Id,
+                Name = newestManifest.Name,
+                Language = string.IsNullOrEmpty(newestManifest.Language) ? newestManifest.Id : newestManifest.Language,
+                Author = newestManifest.Author,
+                Version = newestVer.Version,
+                CompatibleWith = newestVer.CompatibleWith,
+                DownloadUrl = newestVer.DownloadUrl,
+                Size = newestVer.Size,
+                Description = newestManifest.Description,
+                TargetMod = newestManifest.TargetMod,
+                ContentHash = newestVer.ContentHash,
+                FromFolder = true,
+                Versions = versions,
+            });
+            DiagnosticLog.Write(
+                $"  '{lang}': {versions.Count} version(s), newest v{newestVer.Version} ({newestVer.ContentHash}).");
+        }
+
+        DiagnosticLog.Write($"Translation tree scanned: {entries.Count} translation(s).");
         return new TranslationIndex { Translations = entries };
     }
 
@@ -251,12 +297,21 @@ public class TranslationRegistryService
 
     // Minimal DTOs for the GitHub Releases API response. Only the fields we
     // actually need — the API returns ~30 more we don't care about.
-    private class GitHubContent
+    private class GitHubTree
     {
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = "";
+        [JsonPropertyName("tree")]
+        public List<GitHubTreeNode>? Tree { get; set; }
 
-        /// <summary>"dir" or "file".</summary>
+        [JsonPropertyName("truncated")]
+        public bool Truncated { get; set; }
+    }
+
+    private class GitHubTreeNode
+    {
+        [JsonPropertyName("path")]
+        public string Path { get; set; } = "";
+
+        /// <summary>"blob" (file) or "tree" (directory).</summary>
         [JsonPropertyName("type")]
         public string Type { get; set; } = "";
     }

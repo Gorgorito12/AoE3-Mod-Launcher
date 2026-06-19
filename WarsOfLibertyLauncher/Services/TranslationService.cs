@@ -397,6 +397,7 @@ public class TranslationService
                 var notice = new TranslationRevertNotice(
                     manifest.Id, manifest.Name, manifest.CompatibleWith, newModVersion);
                 state.ActiveTranslationId = "";
+                state.ActiveTranslationVersion = "";
                 config.Save();
                 DiagnosticLog.Write(
                     $"Translation '{manifest.Id}' incompatible with new mod version; reverted to English.");
@@ -632,8 +633,11 @@ public class TranslationService
                 // recipe the launcher + notifier recompute, so all three agree.
                 ContentHash = TranslationCompat.ComputeContentHash(manifestFiles),
                 // The zip's filename, so a folder-published manifest can point the
-                // launcher at translations/<id>/<zip> on raw CDN.
+                // launcher at translations/<id>/<version>/<zip> on raw CDN.
                 Zip = Path.GetFileName(inputs.OutputZipPath),
+                // Build timestamp — orders the version history (newest first)
+                // reliably without parsing arbitrary version strings.
+                Date = DateTime.UtcNow.ToString("o"),
             };
 
             // Serialize the manifest once — same bytes go into the zip AND
@@ -699,7 +703,11 @@ public class TranslationService
                 var outputDir = Path.GetDirectoryName(inputs.OutputZipPath);
                 if (!string.IsNullOrEmpty(outputDir))
                 {
-                    folderPath = Path.Combine(outputDir, "translations", manifest.Id);
+                    // translations/<id>/<version>/ — one subfolder per version so a
+                    // history accumulates append-only (the translator commits the
+                    // new subfolder; old versions are never touched).
+                    var versionSeg = SafeFolderSegment(manifest.Version);
+                    folderPath = Path.Combine(outputDir, "translations", manifest.Id, versionSeg);
                     Directory.CreateDirectory(folderPath);
                     // The manifest INSIDE the folder is the canonical one the
                     // launcher reads; siblingJsonPath points at it for the result panel.
@@ -740,6 +748,16 @@ public class TranslationService
 
     private static ExportResult ExportFail(string err) =>
         new(false, null, 0, null, err);
+
+    /// <summary>Turns a version string into a safe folder name (invalid chars → '-').</summary>
+    private static string SafeFolderSegment(string? version)
+    {
+        var v = (version ?? "").Trim();
+        if (string.IsNullOrEmpty(v)) v = "1.0";
+        foreach (var c in Path.GetInvalidFileNameChars())
+            v = v.Replace(c, '-');
+        return v.Replace(' ', '-');
+    }
 
     private static TranslationManifest ReadManifestFromZip(string zipPath)
     {

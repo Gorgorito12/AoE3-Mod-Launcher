@@ -273,14 +273,18 @@ uninstaller uses that to clean up.
 > §6 for how a version bump ships.
 
 > **Publishing a translation (the simple way).** Use the launcher's **Settings →
-> Packager** to build a pack; it produces a `translation.json` + a `.zip`. Then
-> just **commit both files to `translations/<id>/` on the `main` branch** of your
-> `translations.folderRepo` (push or open a PR) — no GitHub release, no separate
-> asset upload. The launcher discovers folder packs via the Contents API and keys
-> them by a **content hash** baked into `translation.json`, so an **improved** pack
-> (re-export with new files, commit over the old one) automatically re-notifies
-> users — you don't bump any version or tag. Releases on `translations.repo` still
-> work too (dual mode), so existing packs keep showing while you migrate.
+> Packager** to build a pack; it produces a ready
+> `translations/<id>/<version>/` folder. Then **commit that folder on the `main`
+> branch** of your `translations.folderRepo` (push or open a PR) — no GitHub
+> release, no separate asset upload. The launcher discovers folder packs via the
+> Git Trees API and keys them by a **content hash** baked into `translation.json`.
+> Each export is a **new version subfolder**, so a history accumulates append-only:
+> the launcher groups versions of one language into a single menu entry with a
+> **version picker** (latest 10), uses the newest for the menu/notification, and
+> lets users roll back to an older one. (Committing over a single
+> `translations/<id>/translation.json` also works if you want one live version.)
+> Releases on `translations.repo` still work too (dual mode), so existing packs
+> keep showing while you migrate.
 
 Decision tree:
 

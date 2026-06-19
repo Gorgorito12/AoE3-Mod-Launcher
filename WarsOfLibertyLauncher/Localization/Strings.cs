@@ -3903,6 +3903,9 @@ public static class Strings
         ["LangCardBlocked"] = new() { [LangEn] = "Other version", [LangEs] = "Otra versión" },
         ["LangCardUse"] = new() { [LangEn] = "Use", [LangEs] = "Usar" },
         ["LangCardUseAnyway"] = new() { [LangEn] = "Use anyway", [LangEs] = "Usar igual" },
+        ["LangCardApplyVersion"] = new() { [LangEn] = "Apply this version", [LangEs] = "Aplicar esta versión" },
+        ["LangCardVerNewest"] = new() { [LangEn] = "newest", [LangEs] = "más nueva" },
+        ["LangCardVerActive"] = new() { [LangEn] = "in use", [LangEs] = "en uso" },
         ["LangCardUnavailableBusy"] = new() { [LangEn] = "Unavailable", [LangEs] = "No disponible" },
         ["LangCardCompatibleHint"] = new()
         {
@@ -4639,19 +4642,22 @@ public static class Strings
         ["DlgPackagerResultInstructions"] = new()
         {
             [LangEn] = "ⓘ How to publish (pick one):\n" +
-                       "• Folder (recommended): in github.com/{0}, put BOTH files in " +
-                       "translations/{1}/ (translation.json + the .zip) and commit — push " +
-                       "to main or open a PR.\n" +
-                       "• Release (legacy): create a release and upload BOTH files as assets.\n" +
-                       "Either way, players see the new translation the next time the " +
-                       "launcher refreshes its list.",
+                       "• Folder (recommended): commit the translations/ folder shown above " +
+                       "to github.com/{0} (push to main or open a PR). It's the ready " +
+                       "translations/<id>/<version>/ layout, so each export adds a new " +
+                       "version to the history — old ones stay.\n" +
+                       "• Release (legacy): create a release and upload the .zip + " +
+                       "translation.json as assets.\n" +
+                       "Either way, players see it the next time the launcher refreshes its list.",
             [LangEs] = "ⓘ Cómo publicar (elegí una):\n" +
-                       "• Carpeta (recomendado): en github.com/{0}, poné AMBOS archivos en " +
-                       "translations/{1}/ (translation.json + el .zip) y commiteá — push a " +
-                       "main o abrí un PR.\n" +
-                       "• Release (legacy): creá una release y subí AMBOS archivos como assets.\n" +
-                       "En cualquier caso, los jugadores verán la traducción la próxima vez " +
-                       "que el launcher refresque la lista.",
+                       "• Carpeta (recomendado): commiteá la carpeta translations/ de arriba " +
+                       "a github.com/{0} (push a main o abrí un PR). Ya viene con el layout " +
+                       "translations/<id>/<version>/, así cada export agrega una versión " +
+                       "nueva al historial — las viejas quedan.\n" +
+                       "• Release (legacy): creá una release y subí el .zip + " +
+                       "translation.json como assets.\n" +
+                       "En cualquier caso, los jugadores la verán la próxima vez que el " +
+                       "launcher refresque la lista.",
         },
         ["DlgPackagerFieldDescription"] = new()
         {

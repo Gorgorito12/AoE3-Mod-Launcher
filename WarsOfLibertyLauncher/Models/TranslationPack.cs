@@ -88,6 +88,15 @@ public class TranslationManifest
     public string? ContentHash { get; set; }
 
     /// <summary>
+    /// ISO-8601 UTC timestamp the packager stamped when this version was built.
+    /// Used to order a translation's version history (newest first) reliably
+    /// without parsing arbitrary <see cref="Version"/> strings. Optional: when
+    /// absent, consumers fall back to the version-subfolder name.
+    /// </summary>
+    [JsonPropertyName("date")]
+    public string? Date { get; set; }
+
+    /// <summary>
     /// Filename of the pack's <c>.zip</c> in the SAME folder as this manifest
     /// (folder-published packs). Lets the launcher build the raw-CDN download URL.
     /// Optional: defaults to <c>{id}.zip</c> when absent.
@@ -109,6 +118,23 @@ public class TranslationManifest
     public string TargetMod { get; set; } = "";
 
     public const string ManifestFileName = "translation.json";
+}
+
+/// <summary>
+/// One historical version of a folder-published translation pack (one
+/// <c>translations/&lt;id&gt;/&lt;version&gt;/</c> subfolder). The launcher lists
+/// these in a per-translation version picker so the user can apply an older
+/// version (e.g. one that matches their installed mod version).
+/// </summary>
+public class TranslationVersion
+{
+    public string Version { get; set; } = "";
+    public string DownloadUrl { get; set; } = "";
+    public string ContentHash { get; set; } = "";
+    public List<string> CompatibleWith { get; set; } = new();
+    /// <summary>ISO-8601 UTC build timestamp (for newest-first ordering); may be empty.</summary>
+    public string Date { get; set; } = "";
+    public long Size { get; set; }
 }
 
 /// <summary>
@@ -178,6 +204,18 @@ public class TranslationIndexEntry
     /// (vs a GitHub release). Folder packs win over release packs on id collision.</summary>
     [JsonIgnore]
     public bool FromFolder { get; set; }
+
+    /// <summary>
+    /// Version history for a folder-published pack, NEWEST FIRST. The first
+    /// element mirrors this entry's top-level fields (which always describe the
+    /// newest version, so the menu / dedup / notification stay unchanged). Has
+    /// 0 or 1 elements for single-version packs (release packs, or a flat folder
+    /// pack); 2+ when the repo ships <c>translations/&lt;id&gt;/&lt;version&gt;/</c>
+    /// subfolders. The Properties → Language tab shows a version picker when this
+    /// has 2+.
+    /// </summary>
+    [JsonIgnore]
+    public List<TranslationVersion> Versions { get; set; } = new();
 }
 
 /// <summary>
@@ -219,6 +257,27 @@ public static class TranslationCompat
     public static bool IsVersionBlocked(IReadOnlyCollection<string>? compatibleWith, string? modVersion)
         => compatibleWith != null && compatibleWith.Count > 0
            && !IsCompatible(compatibleWith, modVersion);
+
+    /// <summary>Max versions shown in a translation's history picker (newest kept).</summary>
+    public const int MaxTranslationVersions = 10;
+
+    /// <summary>
+    /// Orders a translation's versions NEWEST FIRST — by <c>date</c> (ISO-8601, so
+    /// ordinal-descending string compare is chronological) when present, falling
+    /// back to the version string. Caps the result to
+    /// <see cref="MaxTranslationVersions"/> so a long history doesn't make an
+    /// unwieldy combo (older ones stay in git, just not listed).
+    /// </summary>
+    public static List<TranslationVersion> OrderVersions(IEnumerable<TranslationVersion>? versions)
+    {
+        if (versions == null) return new();
+        return versions
+            .Where(v => v != null)
+            .OrderByDescending(v => v.Date ?? "", StringComparer.Ordinal)
+            .ThenByDescending(v => v.Version ?? "", StringComparer.OrdinalIgnoreCase)
+            .Take(MaxTranslationVersions)
+            .ToList();
+    }
 
     /// <summary>
     /// Deterministic content fingerprint of a pack, derived ONLY from its files'

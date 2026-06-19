@@ -373,6 +373,7 @@ public partial class ModPropertiesDialog : Window
         RefreshTranslationsBtn.IsEnabled = !_modBusy;
 
         var activeId = _config.GetActiveState().ActiveTranslationId ?? "";
+        var activeVersion = _config.GetActiveState().ActiveTranslationVersion ?? "";
         var modVersion = _service.CurrentVersion?.Ver;
 
         // English (default) — always available.
@@ -418,9 +419,21 @@ public partial class ModPropertiesDialog : Window
             bool compatible = !isActive
                 && TranslationCompat.IsCompatible(entry.CompatibleWith, modVersion);
             var captured = entry;
-            LanguageCardList.Children.Add(BuildLanguageCard(
-                LanguageFlag(entry.Id), entry.Name, entry.Author, entry.CompatibleWith, entry.Version,
-                isActive, blocked, compatible, () => _applyTranslation?.Invoke(captured)));
+            // Folder pack with a version HISTORY → a card with a version picker
+            // (the user can apply an older version). Otherwise the classic
+            // whole-card-click button.
+            if (captured.Versions is { Count: > 1 })
+            {
+                LanguageCardList.Children.Add(BuildVersionedLanguageCard(
+                    captured, isActive, activeVersion, modVersion,
+                    v => ApplyChosenVersion(captured, v)));
+            }
+            else
+            {
+                LanguageCardList.Children.Add(BuildLanguageCard(
+                    LanguageFlag(entry.Id), entry.Name, entry.Author, entry.CompatibleWith, entry.Version,
+                    isActive, blocked, compatible, () => _applyTranslation?.Invoke(captured)));
+            }
         }
 
         bool hasPacks = entries.Count > 0;
@@ -534,6 +547,145 @@ public partial class ModPropertiesDialog : Window
         return button;
     }
 
+    /// <summary>
+    /// A language card for a folder pack that keeps a VERSION HISTORY: a version
+    /// combo + an Apply button (mirrors the GitHubReleases version picker). Unlike
+    /// the single-version card, the whole card is NOT a click target (it holds
+    /// interactive controls); applying uses the selected version. The for-mod /
+    /// compatibility hint + Apply label re-compute on each combo selection.
+    /// </summary>
+    private FrameworkElement BuildVersionedLanguageCard(
+        TranslationIndexEntry entry, bool isActive, string activeVersion,
+        string? modVersion, Action<TranslationVersion> onUseVersion)
+    {
+        var versions = entry.Versions;
+
+        var col = new StackPanel();
+        col.Children.Add(new TextBlock
+        {
+            Text = $"{LanguageFlag(entry.Id)}  {entry.Name}"
+                   + (string.IsNullOrWhiteSpace(entry.Author) ? "" : $"    ·  {entry.Author}"),
+            FontSize = 15, FontWeight = FontWeights.SemiBold,
+            Foreground = Res("TextPrimary", "#E6EEF8"), TextWrapping = TextWrapping.Wrap,
+        });
+
+        var subLine = new TextBlock
+        {
+            FontSize = 12, Foreground = Res("TextSecondary", "#9AA6B2"),
+            Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
+        };
+        col.Children.Add(subLine);
+        var hint = new TextBlock
+        {
+            FontSize = 12, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
+        };
+        col.Children.Add(hint);
+
+        var combo = new System.Windows.Controls.ComboBox
+        {
+            MinWidth = 200, VerticalAlignment = VerticalAlignment.Center,
+            IsEnabled = !_modBusy, Margin = new Thickness(0, 8, 0, 0),
+        };
+        int compatIdx = -1, activeIdx = -1;
+        for (int i = 0; i < versions.Count; i++)
+        {
+            var v = versions[i];
+            var tags = new List<string>();
+            if (i == 0) tags.Add(Strings.Get("LangCardVerNewest"));
+            if (isActive && !string.IsNullOrEmpty(activeVersion)
+                && string.Equals(v.Version, activeVersion, StringComparison.OrdinalIgnoreCase))
+            { tags.Add(Strings.Get("LangCardVerActive")); activeIdx = i; }
+            if (compatIdx < 0 && TranslationCompat.IsCompatible(v.CompatibleWith, modVersion)) compatIdx = i;
+            var label = tags.Count > 0 ? $"{v.Version}  —  {string.Join(", ", tags)}" : v.Version;
+            combo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = label, Tag = v });
+        }
+
+        var applyBtn = new Button
+        {
+            Style = (Style)FindResource("PropertyActionButton"),
+            Margin = new Thickness(10, 8, 0, 0),
+            MinWidth = 150, VerticalAlignment = VerticalAlignment.Center,
+            IsEnabled = !_modBusy,
+        };
+
+        void Refresh()
+        {
+            var v = (combo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as TranslationVersion
+                    ?? versions[0];
+            bool blocked = TranslationCompat.IsVersionBlocked(v.CompatibleWith, modVersion);
+            bool compat = TranslationCompat.IsCompatible(v.CompatibleWith, modVersion);
+
+            var parts = new List<string>();
+            if (v.CompatibleWith is { Count: > 0 })
+                parts.Add(Strings.Format("LangCardForMod", string.Join(", ", v.CompatibleWith)));
+            if (!string.IsNullOrWhiteSpace(v.Version))
+                parts.Add(Strings.Format("LangCardPackVer", v.Version));
+            subLine.Text = string.Join("       ", parts);
+            subLine.Visibility = parts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            if (blocked) { hint.Text = Strings.Get("LangCardBlockedHint"); hint.Foreground = Res("ErrorBrush", "#E0708A"); }
+            else if (compat) { hint.Text = "✓ " + Strings.Get("LangCardCompatibleHint"); hint.Foreground = Res("SuccessBrush", "#9BD99B"); }
+            else hint.Text = "";
+            hint.Visibility = string.IsNullOrEmpty(hint.Text) ? Visibility.Collapsed : Visibility.Visible;
+
+            applyBtn.Content = _modBusy ? "🔒 " + Strings.Get("LangCardUnavailableBusy")
+                : blocked ? Strings.Get("LangCardUseAnyway")
+                : Strings.Get("LangCardApplyVersion");
+        }
+
+        combo.SelectionChanged += (_, _) => Refresh();
+        // Default: the active version → first compatible-with-installed-mod → newest.
+        combo.SelectedIndex = activeIdx >= 0 ? activeIdx : (compatIdx >= 0 ? compatIdx : 0);
+        Refresh();
+
+        applyBtn.Click += (_, _) =>
+        {
+            if (_modBusy) return;
+            if ((combo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag is TranslationVersion v)
+                onUseVersion(v);
+        };
+
+        var row = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+        row.Children.Add(combo);
+        row.Children.Add(applyBtn);
+        col.Children.Add(row);
+
+        var grid = new Grid { Margin = new Thickness(12, 10, 12, 10) };
+        grid.Children.Add(col);
+
+        return new Border
+        {
+            Background = Res("BgPanel", "#1B2430"),
+            BorderBrush = isActive ? Res("AccentBrush", "#C8A24A") : Res("BorderSubtle", "#2C313A"),
+            BorderThickness = new Thickness(isActive ? 2 : 1),
+            CornerRadius = new CornerRadius(6),
+            Margin = new Thickness(0, 0, 0, 8),
+            Opacity = _modBusy ? 0.5 : 1.0,
+            Child = grid,
+        };
+    }
+
+    /// <summary>Applies a chosen version of a folder pack through the shared apply
+    /// callback by cloning the entry with that version's URL / hashes / compat.</summary>
+    private void ApplyChosenVersion(TranslationIndexEntry entry, TranslationVersion v)
+    {
+        _applyTranslation?.Invoke(new TranslationIndexEntry
+        {
+            Id = entry.Id,
+            Name = entry.Name,
+            Language = entry.Language,
+            Author = entry.Author,
+            Version = v.Version,
+            CompatibleWith = v.CompatibleWith,
+            DownloadUrl = v.DownloadUrl,
+            Size = v.Size,
+            Description = entry.Description,
+            TargetMod = entry.TargetMod,
+            ContentHash = v.ContentHash,
+            FromFolder = entry.FromFolder,
+        });
+    }
+
     private Brush Res(string key, string fallbackHex)
     {
         if (TryFindResource(key) is Brush b) return b;
@@ -576,6 +728,10 @@ public partial class ModPropertiesDialog : Window
     private void TabLocalFilesBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabLocalFilesBtn);
     private void TabUserDataBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUserDataBtn);
     private void TabLanguageBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabLanguageBtn);
+
+    /// <summary>Opens the dialog directly on the Language tab (used by the
+    /// "new translation" notification so a click lands where packs are applied).</summary>
+    public void ShowLanguageTab() => SetActiveTab(TabLanguageBtn);
 
     // -- Action handlers ----------------------------------------------------
     //

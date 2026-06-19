@@ -96,6 +96,36 @@ public class TranslationCompatTests
     }
 
     [Fact]
+    public void OrderVersions_NewestFirstByDateThenVersion_CappedAt10()
+    {
+        var versions = new List<TranslationVersion>
+        {
+            new() { Version = "1.0", Date = "2026-01-01T00:00:00Z" },
+            new() { Version = "1.2", Date = "2026-03-01T00:00:00Z" },
+            new() { Version = "1.1", Date = "2026-02-01T00:00:00Z" },
+        };
+        var ordered = TranslationCompat.OrderVersions(versions);
+        Assert.Equal(new[] { "1.2", "1.1", "1.0" }, ordered.Select(v => v.Version).ToArray());
+
+        // No date → fall back to version-string desc.
+        var noDate = new List<TranslationVersion>
+        {
+            new() { Version = "1.1" }, new() { Version = "1.3" }, new() { Version = "1.2" },
+        };
+        Assert.Equal(new[] { "1.3", "1.2", "1.1" },
+            TranslationCompat.OrderVersions(noDate).Select(v => v.Version).ToArray());
+
+        // Cap at MaxTranslationVersions (10): keep the 10 newest by date.
+        var many = new List<TranslationVersion>();
+        for (int i = 0; i < 15; i++)
+            many.Add(new TranslationVersion { Version = $"v{i:00}", Date = $"2026-01-{i + 1:00}T00:00:00Z" });
+        var capped = TranslationCompat.OrderVersions(many);
+        Assert.Equal(TranslationCompat.MaxTranslationVersions, capped.Count);
+        Assert.Equal("v14", capped[0].Version);   // newest date
+        Assert.Equal("v05", capped[^1].Version);   // 10th newest (14..5)
+    }
+
+    [Fact]
     public void ComputeContentHash_StableAndContentSensitive()
     {
         var files = new List<TranslationFile>

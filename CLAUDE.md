@@ -663,13 +663,30 @@ don't go looking for it.)
   legacy GitHub releases — keyed by content hash, not a release tag.** Publishing
   via release assets (upload `translation.json` + `.zip`) was clunky, so packs can
   now be **committed as files** under `translations/<id>/` (a `translation.json` +
-  its `.zip`) on a dedicated repo's main branch. `TranslationRegistryService` has
+  its `.zip`) on a dedicated repo's main branch. **Each translation also keeps a
+  VERSION HISTORY:** versions live in `translations/<id>/<version>/` subfolders;
+  `FetchFromRepoFolderAsync` reads the whole repo tree in ONE call (the **Git Trees
+  API**, recursive), regex-matches `translations/<lang>(/<version>)?/translation.json`,
+  groups by `<lang>`, reads each manifest via raw CDN, and builds **one
+  `TranslationIndexEntry` per language** whose top-level fields = the NEWEST version
+  (so the menu / dedup / notification are unchanged) plus a
+  `Versions[]` list (newest-first, `TranslationCompat.OrderVersions`: by `date`
+  desc then version, capped at `MaxTranslationVersions`=10). `translation.json`
+  gained a `date` (packager-stamped) for reliable ordering; a flat
+  `translations/<id>/translation.json` (no version subfolder) is read as a single
+  version (back-compat). `TranslationRegistryService` has
   three entry points: `FetchFromReleasesAsync` (legacy, unchanged),
-  `FetchFromRepoFolderAsync` (lists `translations/` via the GitHub **Contents
-  API** + reads each manifest via raw CDN, exactly like `ModCatalogService` lists
-  `/mods`), and `FetchAsync(folderRepo, releasesRepo)` which runs **both** and
+  `FetchFromRepoFolderAsync` (the tree-API folder scan above), and
+  `FetchAsync(folderRepo, releasesRepo)` which runs **both** and
   merges by id with **folder packs winning** (and sorted first, so they rank as
-  "newest" in `OrderForDisplay`). The repos come from the profile's
+  "newest" in `OrderForDisplay`). **UI:** the Properties → Language tab shows a
+  **version picker** (combo + Apply, mirroring the GitHubReleases version picker)
+  for any pack with `Versions.Count > 1` (`ModPropertiesDialog.BuildVersionedLanguageCard`);
+  applying a non-newest version clones the entry with that version's
+  URL/hash/compat (`ApplyChosenVersion`). The applied version is remembered in
+  `ModState.ActiveTranslationVersion` (cleared on revert-to-English). The gear
+  menu stays single-entry (newest). The notifier mirrors the tree-API scan and
+  emits the **newest** version's `id@contentHash` (one bell per new version). The repos come from the profile's
   `Translations.FolderRepo` (new) + `.Repo` (legacy), resolved by
   `EffectiveTranslationsFolderRepo()` + `EffectiveTranslationsRepo()`; the catalog
   `mod.json` `translations` block gained a `folderRepo` field. **The dedup /

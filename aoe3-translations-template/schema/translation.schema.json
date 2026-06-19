@@ -55,6 +55,10 @@
       "type": "string",
       "description": "Filename of the pack's .zip in the SAME folder as this manifest, so the launcher can build the raw-CDN download URL. Defaults to <id>.zip."
     },
+    "date": {
+      "type": "string",
+      "description": "ISO-8601 UTC build timestamp (the packager stamps it). Orders a translation's version history newest-first; for the layout translations/<id>/<version>/, the newest version is what the menu/notification use."
+    },
     "description": {
       "type": "string",
       "description": "Optional free-form description / changelog shown in the apply dialog."

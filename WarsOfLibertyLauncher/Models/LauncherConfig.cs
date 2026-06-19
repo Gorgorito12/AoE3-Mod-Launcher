@@ -87,6 +87,15 @@ public class ModState
     public string ActiveTranslationId { get; set; } = "";
 
     /// <summary>
+    /// Which VERSION of the active translation (<see cref="ActiveTranslationId"/>)
+    /// is applied, for folder packs that keep a version history. Empty for
+    /// single-version packs or English. Lets the Language tab's version picker
+    /// pre-select and mark the applied version.
+    /// </summary>
+    [JsonPropertyName("activeTranslationVersion")]
+    public string ActiveTranslationVersion { get; set; } = "";
+
+    /// <summary>
     /// Last mod version we detected, stored so the UI can show "Installed"
     /// with the right version number immediately after the user switches to
     /// this mod, without waiting for the async CheckAsync MD5-and-XML pass

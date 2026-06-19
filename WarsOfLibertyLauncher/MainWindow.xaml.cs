@@ -1890,14 +1890,19 @@ public partial class MainWindow : Window
 
         if (item.Kind == NotificationKind.NewTranslation)
         {
-            // Open the game-language menu where community translations are
-            // applied. Deferred so the mod switch / tab change settle first.
-            Dispatcher.BeginInvoke(new Action(() =>
+            // Open Mod Properties on the Language tab — the reliable "change
+            // translation" surface (the full pack list with Apply). This replaces
+            // the old attempt to force the gear ContextMenu's submenu open, which
+            // did nothing because the parent menu was closed.
+            try
             {
-                try { ActionPanelControl.MenuGameLanguage.IsSubmenuOpen = true; }
-                catch (Exception ex) { DiagnosticLog.Write($"Open translations menu failed: {ex.Message}"); }
-            }), System.Windows.Threading.DispatcherPriority.Background);
+                OpenModPropertiesDialog(profile);
+                _modPropertiesDialog?.ShowLanguageTab();
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"Open translations tab failed: {ex.Message}"); }
         }
+        // UpdateAvailable / UpdateFinished: landing on the Library/dashboard tab
+        // above is the right target — the UPDATE / PLAY CTA lives right there.
     }
 
     private void TrayIcon_DoubleClick(object sender, RoutedEventArgs e)
@@ -8561,6 +8566,9 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true && dialog.AppliedSuccessfully)
         {
             _config.GetActiveState().ActiveTranslationId = entry.Id;
+            // Remember WHICH version was applied (folder packs with a history);
+            // empty for single-version packs. Drives the version picker's active mark.
+            _config.GetActiveState().ActiveTranslationVersion = entry.Version ?? "";
             _config.Save();
             SetStatus(Strings.Format("StatusLangApplied", entry.Name));
             // Rebuild the cards so the just-applied pack shows as active without
@@ -8584,6 +8592,7 @@ public partial class MainWindow : Window
         if (translations.RevertToOriginal())
         {
             activeState.ActiveTranslationId = "";
+            activeState.ActiveTranslationVersion = "";
             _config.Save();
             SetStatus(Strings.Get("StatusLangRevertedToEnglish"));
             _modPropertiesDialog?.RefreshLanguageTab();
