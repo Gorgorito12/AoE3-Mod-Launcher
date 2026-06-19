@@ -269,8 +269,17 @@ public class ModCatalogWolSettings
 
 public class ModCatalogTranslations
 {
+    /// <summary>owner/repo whose RELEASES host translation packs (legacy path).</summary>
     [JsonPropertyName("repo")]
     public string Repo { get; set; } = "";
+
+    /// <summary>
+    /// Optional owner/repo hosting translations as FILES under
+    /// <c>translations/&lt;id&gt;/</c> on main (the new path). The launcher reads
+    /// both this folder and <see cref="Repo"/>'s releases (dual mode).
+    /// </summary>
+    [JsonPropertyName("folderRepo")]
+    public string? FolderRepo { get; set; }
 
     [JsonPropertyName("coveredFiles")]
     public List<string>? CoveredFiles { get; set; }

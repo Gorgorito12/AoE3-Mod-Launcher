@@ -8220,10 +8220,13 @@ public partial class MainWindow : Window
         try
         {
             TranslationIndex? index = null;
-            var repo = _updateService.EffectiveTranslationsRepo();
-            if (!string.IsNullOrWhiteSpace(repo))
+            var releasesRepo = _updateService.EffectiveTranslationsRepo();
+            var folderRepo = _updateService.EffectiveTranslationsFolderRepo();
+            if (!string.IsNullOrWhiteSpace(releasesRepo) || !string.IsNullOrWhiteSpace(folderRepo))
             {
-                index = await registry.FetchFromReleasesAsync(repo);
+                // Dual mode: folder-published packs (translations/<id>/ on main)
+                // merged with legacy release-published packs.
+                index = await registry.FetchAsync(folderRepo, releasesRepo);
             }
 
             _cachedTranslationIndex = index;
@@ -8263,13 +8266,10 @@ public partial class MainWindow : Window
         if (entries == null || entries.Count == 0) return;
 
         var state = _config.GetState(profile.Id);
-        // Dedup by the RELEASE identity (its tag), not the manifest's internal
-        // version: a maintainer who publishes a new release without bumping the
-        // version field should still alert. Falls back to id@version if a release
-        // somehow has no tag.
-        string KeyOf(TranslationIndexEntry t) =>
-            !string.IsNullOrWhiteSpace(t.ReleaseTag) ? t.ReleaseTag : $"{t.Id}@{t.Version}";
-        var keys = entries.Select(KeyOf).Distinct().ToList();
+        // Dedup key is centralized in TranslationCompat.KeyOf: release tag
+        // (release packs) → id@contentHash (folder packs) → id@version (legacy).
+        // A folder pack with changed bytes yields a new contentHash → re-bells.
+        var keys = entries.Select(Models.TranslationCompat.KeyOf).Distinct().ToList();
 
         if (state.NotifiedTranslationKeys.Count == 0)
         {
@@ -8282,7 +8282,7 @@ public partial class MainWindow : Window
 
         foreach (var t in entries)
         {
-            var key = KeyOf(t);
+            var key = Models.TranslationCompat.KeyOf(t);
             var label = !string.IsNullOrWhiteSpace(t.Name) ? t.Name : t.Language;
             _notifications.RaiseNewTranslation(
                 profile.Id, key, t.Id,
@@ -8378,10 +8378,11 @@ public partial class MainWindow : Window
             // --- New-translation check for this mod ---
             try
             {
-                var repo = svc.EffectiveTranslationsRepo();
-                if (!string.IsNullOrWhiteSpace(repo))
+                var relRepo = svc.EffectiveTranslationsRepo();
+                var folderRepo = svc.EffectiveTranslationsFolderRepo();
+                if (!string.IsNullOrWhiteSpace(relRepo) || !string.IsNullOrWhiteSpace(folderRepo))
                 {
-                    var index = await new TranslationRegistryService().FetchFromReleasesAsync(repo);
+                    var index = await new TranslationRegistryService().FetchAsync(folderRepo, relRepo);
                     if (index != null)
                         await Dispatcher.InvokeAsync(() => NotifyNewTranslations(profile, index));
                 }

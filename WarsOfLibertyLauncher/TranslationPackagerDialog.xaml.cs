@@ -468,9 +468,13 @@ public partial class TranslationPackagerDialog : Window
 
             // Point the translator at the SELECTED mod's translations repo, not a
             // hardcoded one — otherwise non-WoL packs get the wrong upload target.
-            var repo = _selectedProfile?.Translations?.Repo;
-            if (string.IsNullOrWhiteSpace(repo)) repo = _config.TranslationsRepo;
-            ResultInstructionsText.Text = Strings.Format("DlgPackagerResultInstructions", repo);
+            // Prefer the folder repo (the new commit-to-main path); fall back to the
+            // legacy releases repo / global override.
+            var publishRepo = _selectedProfile?.Translations?.FolderRepo;
+            if (string.IsNullOrWhiteSpace(publishRepo)) publishRepo = _selectedProfile?.Translations?.Repo;
+            if (string.IsNullOrWhiteSpace(publishRepo)) publishRepo = _config.TranslationsRepo;
+            var packId = string.IsNullOrWhiteSpace(IdBox.Text) ? "<id>" : IdBox.Text.Trim();
+            ResultInstructionsText.Text = Strings.Format("DlgPackagerResultInstructions", publishRepo, packId);
 
             // Build a "this is how players will see it" preview that mirrors
             // BuildLanguageMenuItem in MainWindow.xaml.cs — gives the translator

@@ -78,4 +78,51 @@ public class TranslationCompatTests
         // Active pack is first even though it's version-incompatible.
         Assert.Equal("es-419", ordered[0].Id);
     }
+
+    [Fact]
+    public void KeyOf_CascadesReleaseTagThenContentHashThenVersion()
+    {
+        // Release pack → the release tag wins.
+        Assert.Equal("v1.2.0-es",
+            TranslationCompat.KeyOf(new TranslationIndexEntry
+            { Id = "es", Version = "1.0", ContentHash = "abc", ReleaseTag = "v1.2.0-es" }));
+        // Folder pack (no tag) → id@contentHash.
+        Assert.Equal("es@deadbeef0badf00d",
+            TranslationCompat.KeyOf(new TranslationIndexEntry
+            { Id = "es", Version = "1.0", ContentHash = "deadbeef0badf00d" }));
+        // Legacy (no tag, no hash) → id@version.
+        Assert.Equal("es@1.0",
+            TranslationCompat.KeyOf(new TranslationIndexEntry { Id = "es", Version = "1.0" }));
+    }
+
+    [Fact]
+    public void ComputeContentHash_StableAndContentSensitive()
+    {
+        var files = new List<TranslationFile>
+        {
+            new() { Path = "data/stringtabley.xml", TranslatedHash = "abc" },
+            new() { Path = "data/unithelpstringsy.xml", TranslatedHash = "def" },
+        };
+        // File ORDER must not matter (sorted by path internally).
+        var reordered = new List<TranslationFile> { files[1], files[0] };
+        Assert.Equal(
+            TranslationCompat.ComputeContentHash(files),
+            TranslationCompat.ComputeContentHash(reordered));
+
+        // 16 lowercase-hex chars, and pinned to the value the notifier (Node) also
+        // computes for this exact input — guards the cross-impl dedup contract.
+        var hash = TranslationCompat.ComputeContentHash(files);
+        Assert.Equal(16, hash.Length);
+        Assert.Equal("67426f0ebcfec85f", hash);
+
+        // A changed translated-hash (improved pack) yields a DIFFERENT key.
+        var improved = new List<TranslationFile>
+        {
+            new() { Path = "data/stringtabley.xml", TranslatedHash = "abc" },
+            new() { Path = "data/unithelpstringsy.xml", TranslatedHash = "XYZ" },
+        };
+        Assert.NotEqual(
+            TranslationCompat.ComputeContentHash(files),
+            TranslationCompat.ComputeContentHash(improved));
+    }
 }

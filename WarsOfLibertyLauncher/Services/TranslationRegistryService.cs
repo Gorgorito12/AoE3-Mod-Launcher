@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -132,8 +133,134 @@ public class TranslationRegistryService
         }
     }
 
+    /// <summary>
+    /// Discovers translations published as FILES on a repo's <c>main</c> branch:
+    /// each pack lives in <c>translations/&lt;id&gt;/</c> with a
+    /// <c>translation.json</c> + its <c>.zip</c>. Lists the folder via the GitHub
+    /// Contents API (1 call) and reads each manifest via the raw CDN (not
+    /// rate-limited). The dedup key is <c>id@contentHash</c> (no release tags),
+    /// so an improved pack (different bytes) re-notifies automatically. A repo
+    /// with no <c>translations/</c> folder returns an empty index (not an error).
+    /// </summary>
+    public async Task<TranslationIndex?> FetchFromRepoFolderAsync(
+        string repo, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(repo)) return null;
+
+        var apiUrl = $"https://api.github.com/repos/{repo}/contents/translations";
+        DiagnosticLog.Write($"Fetching translation folder from: {apiUrl}");
+
+        List<GitHubContent>? items;
+        try
+        {
+            items = await Http.GetFromJsonAsync<List<GitHubContent>>(apiUrl, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            // 404 = the repo has no translations/ folder yet → empty, not a failure.
+            DiagnosticLog.Write($"Translation folder listing unavailable ({repo}): {ex.Message}");
+            return new TranslationIndex { Translations = new List<TranslationIndexEntry>() };
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Translation folder fetch failed ({repo}): {ex.Message}");
+            return null;
+        }
+
+        var entries = new List<TranslationIndexEntry>();
+        foreach (var item in items ?? new List<GitHubContent>())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!string.Equals(item.Type, "dir", StringComparison.OrdinalIgnoreCase)) continue;
+            var folder = item.Name;
+            if (string.IsNullOrWhiteSpace(folder)) continue;
+
+            var manifestUrl = $"https://raw.githubusercontent.com/{repo}/main/translations/{folder}/translation.json";
+            try
+            {
+                var manifestJson = await Http.GetStringAsync(manifestUrl, ct);
+                var manifest = JsonSerializer.Deserialize<TranslationManifest>(manifestJson);
+                if (manifest == null || string.IsNullOrEmpty(manifest.Id))
+                {
+                    DiagnosticLog.Write($"  folder '{folder}': bad manifest — skipped");
+                    continue;
+                }
+
+                var zipName = !string.IsNullOrWhiteSpace(manifest.Zip) ? manifest.Zip! : $"{manifest.Id}.zip";
+                var zipUrl = $"https://raw.githubusercontent.com/{repo}/main/translations/{folder}/{zipName}";
+                var contentHash = !string.IsNullOrWhiteSpace(manifest.ContentHash)
+                    ? manifest.ContentHash!
+                    : TranslationCompat.ComputeContentHash(manifest.Files);
+
+                entries.Add(new TranslationIndexEntry
+                {
+                    Id = manifest.Id,
+                    Name = manifest.Name,
+                    Language = string.IsNullOrEmpty(manifest.Language) ? manifest.Id : manifest.Language,
+                    Author = manifest.Author,
+                    Version = manifest.Version,
+                    CompatibleWith = manifest.CompatibleWith,
+                    DownloadUrl = zipUrl,
+                    Size = 0,
+                    Description = manifest.Description,
+                    TargetMod = manifest.TargetMod,
+                    ContentHash = contentHash,
+                    FromFolder = true,
+                });
+                DiagnosticLog.Write($"  folder '{folder}': loaded '{manifest.Id}' (contentHash {contentHash})");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"  folder '{folder}': could not read manifest — {ex.Message}");
+            }
+        }
+
+        DiagnosticLog.Write($"Translation folder scanned: {entries.Count} valid entries.");
+        return new TranslationIndex { Translations = entries };
+    }
+
+    /// <summary>
+    /// Combined discovery (DUAL MODE): folder-published packs from
+    /// <paramref name="folderRepo"/> + legacy release-published packs from
+    /// <paramref name="releasesRepo"/>, merged by id with FOLDER packs winning.
+    /// Folder packs are listed first so they rank as "newest" in
+    /// <see cref="TranslationCompat.OrderForDisplay"/>. Returns null only when
+    /// both sources are unreachable; an empty-but-reachable source contributes []
+    /// rather than failing the whole index.
+    /// </summary>
+    public async Task<TranslationIndex?> FetchAsync(
+        string? folderRepo, string? releasesRepo, CancellationToken ct = default)
+    {
+        TranslationIndex? folder = null, releases = null;
+        if (!string.IsNullOrWhiteSpace(folderRepo))
+            folder = await FetchFromRepoFolderAsync(folderRepo!, ct);
+        if (!string.IsNullOrWhiteSpace(releasesRepo))
+            releases = await FetchFromReleasesAsync(releasesRepo!, ct);
+
+        if (folder == null && releases == null) return null;
+
+        var folderEntries = folder?.Translations ?? new List<TranslationIndexEntry>();
+        var releaseEntries = releases?.Translations ?? new List<TranslationIndexEntry>();
+        var folderIds = new HashSet<string>(
+            folderEntries.Select(e => e.Id), StringComparer.OrdinalIgnoreCase);
+
+        var combined = new List<TranslationIndexEntry>(folderEntries);
+        combined.AddRange(releaseEntries.Where(e => !folderIds.Contains(e.Id)));
+        return new TranslationIndex { Translations = combined };
+    }
+
     // Minimal DTOs for the GitHub Releases API response. Only the fields we
     // actually need — the API returns ~30 more we don't care about.
+    private class GitHubContent
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+
+        /// <summary>"dir" or "file".</summary>
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = "";
+    }
+
     private class GitHubRelease
     {
         [JsonPropertyName("tag_name")]

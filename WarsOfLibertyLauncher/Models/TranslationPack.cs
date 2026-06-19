@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace WarsOfLibertyLauncher.Models;
@@ -74,6 +76,25 @@ public class TranslationManifest
     [JsonPropertyName("files")]
     public List<TranslationFile> Files { get; set; } = new();
 
+    /// <summary>
+    /// Content fingerprint written by the packager, derived from the files'
+    /// <see cref="TranslationFile.TranslatedHash"/> via
+    /// <see cref="TranslationCompat.ComputeContentHash"/>. Drives the folder-pack
+    /// dedup key (<c>id@contentHash</c>) so an IMPROVED pack (different bytes)
+    /// re-notifies without bumping <see cref="Version"/> or relying on a release
+    /// tag. Optional: consumers recompute it from <see cref="Files"/> when absent.
+    /// </summary>
+    [JsonPropertyName("contentHash")]
+    public string? ContentHash { get; set; }
+
+    /// <summary>
+    /// Filename of the pack's <c>.zip</c> in the SAME folder as this manifest
+    /// (folder-published packs). Lets the launcher build the raw-CDN download URL.
+    /// Optional: defaults to <c>{id}.zip</c> when absent.
+    /// </summary>
+    [JsonPropertyName("zip")]
+    public string? Zip { get; set; }
+
     /// <summary>Optional free-form description shown in the confirmation dialog.</summary>
     [JsonPropertyName("description")]
     public string? Description { get; set; }
@@ -139,9 +160,24 @@ public class TranslationIndexEntry
     /// GitHub release tag this entry came from (set by the registry, NOT from the
     /// manifest). Used as the notification dedup key so a NEW release alerts even
     /// when the maintainer didn't bump the manifest's internal <see cref="Version"/>.
+    /// Empty for folder-published packs (those key off <see cref="ContentHash"/>).
     /// </summary>
     [JsonIgnore]
     public string ReleaseTag { get; set; } = "";
+
+    /// <summary>
+    /// Content fingerprint for folder-published packs (the manifest's
+    /// <c>contentHash</c>, or recomputed from the files). Drives the
+    /// <c>id@contentHash</c> dedup key when there's no release tag. Empty for
+    /// release-published packs.
+    /// </summary>
+    [JsonIgnore]
+    public string ContentHash { get; set; } = "";
+
+    /// <summary>True when this entry came from a repo <c>translations/</c> folder
+    /// (vs a GitHub release). Folder packs win over release packs on id collision.</summary>
+    [JsonIgnore]
+    public bool FromFolder { get; set; }
 }
 
 /// <summary>
@@ -183,6 +219,41 @@ public static class TranslationCompat
     public static bool IsVersionBlocked(IReadOnlyCollection<string>? compatibleWith, string? modVersion)
         => compatibleWith != null && compatibleWith.Count > 0
            && !IsCompatible(compatibleWith, modVersion);
+
+    /// <summary>
+    /// Deterministic content fingerprint of a pack, derived ONLY from its files'
+    /// translated-hashes (sorted by path) so the launcher, the packager and the
+    /// notifier all compute the SAME value from the same <c>translation.json</c>.
+    /// Recipe (must stay identical across all three): sort files by path (ordinal),
+    /// join "<c>path\ntranslatedHash</c>" with "\n", SHA-256 the UTF-8 bytes, take
+    /// the first 16 lowercase-hex chars. A pack with changed bytes yields a new
+    /// hash → a new <c>id@contentHash</c> key → a fresh "new translation" bell.
+    /// </summary>
+    public static string ComputeContentHash(IEnumerable<TranslationFile>? files)
+    {
+        var ordered = (files ?? Enumerable.Empty<TranslationFile>())
+            .Where(f => f != null)
+            .OrderBy(f => f.Path ?? "", StringComparer.Ordinal);
+        var payload = string.Join("\n",
+            ordered.Select(f => (f.Path ?? "") + "\n" + (f.TranslatedHash ?? "")));
+        using var sha = SHA256.Create();
+        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToHexString(bytes).ToLowerInvariant().Substring(0, 16);
+    }
+
+    /// <summary>
+    /// The dedup / notification key for a translation entry. Cascade:
+    /// release tag (release-published packs) → <c>id@contentHash</c>
+    /// (folder-published packs) → <c>id@version</c> (legacy fallback). MUST match
+    /// the key the notifier emits for the same pack.
+    /// </summary>
+    public static string KeyOf(TranslationIndexEntry e)
+    {
+        if (e == null) return "";
+        if (!string.IsNullOrWhiteSpace(e.ReleaseTag)) return e.ReleaseTag;
+        if (!string.IsNullOrWhiteSpace(e.ContentHash)) return $"{e.Id}@{e.ContentHash}";
+        return $"{e.Id}@{e.Version}";
+    }
 
     /// <summary>
     /// Target-mod guard: allowed when the pack names no target mod

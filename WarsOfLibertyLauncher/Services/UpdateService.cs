@@ -218,6 +218,18 @@ public class UpdateService
             : profileRepo!;
     }
 
+    /// <summary>
+    /// The repo that hosts folder-published translations (files under
+    /// <c>translations/&lt;id&gt;/</c> on main) for the active profile, or empty
+    /// when the profile doesn't participate or declares no folder repo. Read
+    /// alongside <see cref="EffectiveTranslationsRepo"/> for dual-mode discovery.
+    /// </summary>
+    public string EffectiveTranslationsFolderRepo()
+    {
+        if (_profile.Translations == null) return "";
+        return _profile.Translations.FolderRepo ?? "";
+    }
+
     /// <summary>True while a download is paused.</summary>
     public bool IsPaused
     {

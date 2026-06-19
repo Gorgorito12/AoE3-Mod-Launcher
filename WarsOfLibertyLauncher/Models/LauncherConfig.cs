@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using WarsOfLibertyLauncher.Services;
@@ -161,7 +163,7 @@ public enum NotificationKind
 /// <see cref="LauncherConfig.Notifications"/> so the history survives launcher
 /// restarts until the user clears it. Created by <see cref="Services.NotificationCenter"/>.
 /// </summary>
-public class NotificationItem
+public class NotificationItem : INotifyPropertyChanged
 {
     /// <summary>Stable id (GUID string) — used as the list key and for removal.</summary>
     [JsonPropertyName("id")]
@@ -184,8 +186,18 @@ public class NotificationItem
     [JsonPropertyName("createdAtUtc")]
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Whether the user has seen this item. Drives the per-row unread dot via a
+    /// WPF DataTrigger, so the setter MUST raise <see cref="PropertyChanged"/> —
+    /// without it the dot never hides when <c>MarkAllRead</c> flips the flag.
+    /// </summary>
+    private bool _read;
     [JsonPropertyName("read")]
-    public bool Read { get; set; }
+    public bool Read
+    {
+        get => _read;
+        set { if (_read != value) { _read = value; OnPropertyChanged(); } }
+    }
 
     /// <summary>Local-time projection of <see cref="CreatedAtUtc"/> for display binding.</summary>
     [JsonIgnore]
@@ -198,6 +210,10 @@ public class NotificationItem
     /// </summary>
     [JsonPropertyName("targetId")]
     public string? TargetId { get; set; }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
 /// <summary>

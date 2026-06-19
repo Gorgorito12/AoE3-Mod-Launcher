@@ -659,6 +659,36 @@ don't go looking for it.)
   (`launcher-debug.log` shows "Translation releases scanned: N valid entries") —
   the index was just being discarded without re-fetching.
 
+- **Translations are discovered in DUAL MODE: a `translations/` FOLDER on main +
+  legacy GitHub releases — keyed by content hash, not a release tag.** Publishing
+  via release assets (upload `translation.json` + `.zip`) was clunky, so packs can
+  now be **committed as files** under `translations/<id>/` (a `translation.json` +
+  its `.zip`) on a dedicated repo's main branch. `TranslationRegistryService` has
+  three entry points: `FetchFromReleasesAsync` (legacy, unchanged),
+  `FetchFromRepoFolderAsync` (lists `translations/` via the GitHub **Contents
+  API** + reads each manifest via raw CDN, exactly like `ModCatalogService` lists
+  `/mods`), and `FetchAsync(folderRepo, releasesRepo)` which runs **both** and
+  merges by id with **folder packs winning** (and sorted first, so they rank as
+  "newest" in `OrderForDisplay`). The repos come from the profile's
+  `Translations.FolderRepo` (new) + `.Repo` (legacy), resolved by
+  `EffectiveTranslationsFolderRepo()` + `EffectiveTranslationsRepo()`; the catalog
+  `mod.json` `translations` block gained a `folderRepo` field. **The dedup /
+  notification key is centralized in `TranslationCompat.KeyOf`:** release tag →
+  `id@contentHash` (folder packs) → `id@version` (legacy). `contentHash` is the
+  manifest's field (written by the packager) or recomputed from the files'
+  `translatedHash` via `TranslationCompat.ComputeContentHash` — sort files by
+  path, join `path\ntranslatedHash` with `\n`, SHA-256, first 16 hex. **An
+  IMPROVED pack (changed bytes) yields a new hash → a fresh "new translation"
+  bell with NO release tag and NO manual version bump** — this is what replaces
+  the release-tag "newness" signal for folder packs. The recipe MUST stay
+  byte-identical to the notifier's `computeContentHash` (notifier emits the same
+  `id@contentHash`); pinned by `TranslationCompatTests` (cross-impl value
+  `67426f0ebcfec85f`). The packager (`TranslationService.ExportPackageAsync`)
+  writes `contentHash` + `zip` (the zip filename) into the manifest and the
+  Packager dialog's publish instructions now describe the folder path first
+  (release stays as the legacy alternative). Don't reintroduce an inline `KeyOf`
+  in `MainWindow` — use `TranslationCompat.KeyOf`.
+
 - **A version-mismatched translation WARNS, it does NOT block — don't re-disable
   it.** A pack whose `compatibleWith` list doesn't include the installed mod
   version (`TranslationCompat.IsVersionBlocked`, `Models/TranslationPack.cs`) is

@@ -443,6 +443,7 @@ public static class ModRegistry
             profile.Translations = new TranslationsSettings
             {
                 Repo = m.Translations.Repo,
+                FolderRepo = m.Translations.FolderRepo ?? "",
                 CoveredFiles = m.Translations.CoveredFiles ?? new List<string>(),
             };
         }
@@ -555,7 +556,12 @@ public static class ModRegistry
             },
             Translations = new TranslationsSettings
             {
+                // Legacy release-published packs (kept for dual mode).
                 Repo = "papillo12/translations",
+                // New folder-published packs (translations/<id>/ on main). Point
+                // this at the dedicated translations repo once it exists; until
+                // then it's empty and only the legacy releases above are read.
+                FolderRepo = "",
                 CoveredFiles = new List<string>
                 {
                     @"data\stringtabley.xml",

@@ -92,10 +92,20 @@ public class WolPatcherSettings
 public class TranslationsSettings
 {
     /// <summary>
-    /// GitHub repository (format <c>owner/repo</c>) whose releases each
-    /// host a <c>translation.json</c> + <c>.zip</c> pair.
+    /// GitHub repository (format <c>owner/repo</c>) whose RELEASES each host a
+    /// <c>translation.json</c> + <c>.zip</c> pair (the legacy publication path).
     /// </summary>
     public string Repo { get; set; } = "";
+
+    /// <summary>
+    /// Optional GitHub repository (format <c>owner/repo</c>) that hosts
+    /// translations as FILES on its <c>main</c> branch under
+    /// <c>translations/&lt;id&gt;/</c> (the new, simpler publication path). When
+    /// set, the launcher reads BOTH this folder AND <see cref="Repo"/>'s releases
+    /// (dual mode), with folder packs winning on id collision. Falls back to
+    /// <see cref="Repo"/> when empty.
+    /// </summary>
+    public string FolderRepo { get; set; } = "";
 
     /// <summary>
     /// Files (relative to the install root) that translation packs are

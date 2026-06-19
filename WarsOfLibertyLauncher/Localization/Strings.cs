@@ -4633,18 +4633,20 @@ public static class Strings
         },
         ["DlgPackagerResultInstructions"] = new()
         {
-            [LangEn] = "ⓘ How to publish:\n" +
-                       "1. Go to github.com/{0} and create a new release.\n" +
-                       "2. Upload BOTH files above as assets on that release: the .zip " +
-                       "and translation.json (keep that exact filename).\n" +
-                       "3. Done — players will see the new translation in their launcher " +
-                       "menu the next time it refreshes the list.",
-            [LangEs] = "ⓘ Cómo publicar:\n" +
-                       "1. Andá a github.com/{0} y creá una nueva release.\n" +
-                       "2. Subí AMBOS archivos de arriba como assets de esa release: el .zip " +
-                       "y translation.json (mantené ese nombre exacto).\n" +
-                       "3. Listo — los jugadores verán la nueva traducción en su launcher " +
-                       "la próxima vez que refresque la lista.",
+            [LangEn] = "ⓘ How to publish (pick one):\n" +
+                       "• Folder (recommended): in github.com/{0}, put BOTH files in " +
+                       "translations/{1}/ (translation.json + the .zip) and commit — push " +
+                       "to main or open a PR.\n" +
+                       "• Release (legacy): create a release and upload BOTH files as assets.\n" +
+                       "Either way, players see the new translation the next time the " +
+                       "launcher refreshes its list.",
+            [LangEs] = "ⓘ Cómo publicar (elegí una):\n" +
+                       "• Carpeta (recomendado): en github.com/{0}, poné AMBOS archivos en " +
+                       "translations/{1}/ (translation.json + el .zip) y commiteá — push a " +
+                       "main o abrí un PR.\n" +
+                       "• Release (legacy): creá una release y subí AMBOS archivos como assets.\n" +
+                       "En cualquier caso, los jugadores verán la traducción la próxima vez " +
+                       "que el launcher refresque la lista.",
         },
         ["DlgPackagerFieldDescription"] = new()
         {

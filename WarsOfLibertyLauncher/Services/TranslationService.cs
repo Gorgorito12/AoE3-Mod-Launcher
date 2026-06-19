@@ -626,6 +626,13 @@ public class TranslationService
                 Files = manifestFiles,
                 Description = string.IsNullOrWhiteSpace(inputs.Description) ? null : inputs.Description.Trim(),
                 TargetMod = inputs.TargetMod?.Trim() ?? "",
+                // Content fingerprint (folder publication): a changed pack yields a
+                // new hash → the launcher re-notifies without a release tag. Same
+                // recipe the launcher + notifier recompute, so all three agree.
+                ContentHash = TranslationCompat.ComputeContentHash(manifestFiles),
+                // The zip's filename, so a folder-published manifest can point the
+                // launcher at translations/<id>/<zip> on raw CDN.
+                Zip = Path.GetFileName(inputs.OutputZipPath),
             };
 
             // Serialize the manifest once — same bytes go into the zip AND

@@ -207,7 +207,7 @@ max per language.
 | `approvedReleaseTag` | Approved release tag for `GitHubReleases`. Bumping this is the normal way to ship a new version (auto-merge, §6). |
 | `installProductGuid` | Stable Add/Remove Programs key (`HKLM\…\Uninstall\<here>`). If you have a pre-existing installer with its own GUID, put it here to stay compatible. Otherwise omit and the launcher derives `<id>_launcher`. |
 | `userDataFolder` | Folder name under `Documents\My Games\<here>\` where your mod stores saves/replays. When set, the launcher enables the pre-install backup prompt and exposes "Open / Create backup / Restore backup" in the gear menu. Omit if your mod reuses vanilla AoE3's user-data folder. |
-| `translations` | `{ "repo": "owner/repo", "coveredFiles": [...] }` so the launcher lists community translations published as releases in that repo. Only meaningful if your mod uses the same overlay scheme as WoL (files under `data\`). |
+| `translations` | `{ "repo": "owner/repo", "folderRepo": "owner/repo", "coveredFiles": [...] }` so the launcher lists community translations. `folderRepo` hosts packs as **files** under `translations/<id>/` on main (recommended); `repo` hosts them as **releases** (legacy). The launcher reads BOTH (dual mode). Only meaningful if your mod uses the same overlay scheme as WoL (files under `data\`). See §8.x below. |
 
 ---
 
@@ -268,8 +268,19 @@ uninstaller uses that to clean up.
 > new translation. You don't touch any server or notification setting: a small
 > central service reads your `mod.json` from the catalog and figures out your latest
 > version (from your GitHub releases for `GitHubReleases`, or your `UpdateInfo.xml`
-> for `WolPatcher`) and your published translations (from your `translations.repo`).
-> Publish to the catalog and you're done — see §6 for how a version bump ships.
+> for `WolPatcher`) and your published translations (from your `translations.repo`
+> **and** `translations.folderRepo`). Publish to the catalog and you're done — see
+> §6 for how a version bump ships.
+
+> **Publishing a translation (the simple way).** Use the launcher's **Settings →
+> Packager** to build a pack; it produces a `translation.json` + a `.zip`. Then
+> just **commit both files to `translations/<id>/` on the `main` branch** of your
+> `translations.folderRepo` (push or open a PR) — no GitHub release, no separate
+> asset upload. The launcher discovers folder packs via the Contents API and keys
+> them by a **content hash** baked into `translation.json`, so an **improved** pack
+> (re-export with new files, commit over the old one) automatically re-notifies
+> users — you don't bump any version or tag. Releases on `translations.repo` still
+> work too (dual mode), so existing packs keep showing while you migrate.
 
 Decision tree:
 
