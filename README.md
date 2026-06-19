@@ -55,7 +55,14 @@ the mods use — but **never installs, updates, or uninstalls the base game**
 - Mod selector switches the active profile on the fly; the rest of the UI
   re-skins itself to match.
 
-### Stock base game (detect-only)
+### Mod presentation (icons, hero, gallery)
+- Each mod brings its own art from the catalog: icon, Workshop banner, a
+  full-bleed **dashboard hero**, and a screenshot/GIF gallery.
+- **Rotating hero** — a mod can ship several hero images (`heroImages`); the
+  dashboard cycles through them with an automatic crossfade.
+- **High-res art** — images are validated by aspect ratio + a width range (not a
+  fixed size), so mod art up to **4K** is supported (see `docs/MODDING.md` for the
+  specs). Heroes/screenshots decode size-capped so 4K stays light on memory.
 - The unmodded **Age of Empires III: The Asian Dynasties** appears as a
   built-in `aoe3-tad` profile. The launcher only **detects and launches** it —
   single-player, or the same Radmin multiplayer the mods use. It never
@@ -97,12 +104,21 @@ shows an alert offering to:
 The launcher **never deletes** user data — the worst it does is rename a folder.
 
 ### Community translations
-- Optional language packs published as GitHub releases, picked up
-  automatically by the launcher.
+- Optional language packs the launcher discovers automatically. The recommended
+  way to publish is by **committing files to a folder** in a translations repo —
+  `translations/<id>/<version>/` on `main` — no GitHub release and no separate
+  upload. (Legacy packs published as **GitHub releases** still work too; the
+  launcher reads **both** sources.)
+- **Version history**: each language keeps its versions as subfolders, so the
+  Properties → Language tab shows a **version picker** — a player can roll back to
+  an older translation (e.g. one that matches their installed mod version). The
+  launcher flags incompatible versions but lets you apply them anyway.
 - Apply a translation with one click; the launcher backs up the originals
   before overwriting and offers a "restore originals" button to undo.
-- A built-in **Translation Packager** dialog helps translators build their
-  own `.zip` from a folder of translated files.
+- A built-in **Translation Packager** (Settings → Packager) builds a ready
+  `translations/<id>/<version>/` folder from a translator's files — they just
+  commit it. A content-hash baked into each pack means an improved version
+  re-notifies players automatically, with no version/tag bookkeeping.
 
 ### Notification feed
 The launcher's "update available" / "new translation" bells are fed by a small

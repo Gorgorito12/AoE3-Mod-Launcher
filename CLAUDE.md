@@ -18,7 +18,10 @@ user's own legally-owned copy). See the `IsStockGame` gotcha below.
 
 The repo also contains `aoe3-mods-catalog-template/` (a template for the
 separate community mod-catalog GitHub repo, with `mod.schema.json` and PR
-auto-merge Actions) and `docs/MODDING.md` (mod-authoring guide).
+auto-merge Actions), `aoe3-translations-template/` (the matching template for a
+community **translations** repo, with `translation.schema.json` + a README
+documenting the `translations/<id>/<version>/` folder/version-history layout), and
+`docs/MODDING.md` (mod-authoring guide).
 
 ## Platform constraint (read first)
 
