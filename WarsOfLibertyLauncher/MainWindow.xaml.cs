@@ -469,14 +469,13 @@ public partial class MainWindow : Window
                 _ = Task.Run(InstallerService.TryCleanupTemp);
                 _ = Task.Run(NativeInstallService.TryCleanupTemp);
 
-                // One-time cleanup for existing installs that were
-                // produced by an older launcher build. Those left
-                // stale .xml.xmb files (and a few mojibake dev
-                // leftovers) in data\ which caused LAN "version
-                // mismatch" errors with peers who installed via
-                // the original WoL installer. Idempotent — on a
-                // clean install this finds nothing and logs a
-                // single "install is clean" line.
+                // Startup parity hook. RemoveStaleBuildArtifacts is now a
+                // no-op (the launcher keeps the payload byte-faithful and
+                // strips nothing); the call is kept as the single home for
+                // the "strip nothing" policy. It used to strip "stale"
+                // files here, but every one of them is also present in a
+                // canonical original-installer install, so stripping them
+                // diverged us from peers — the same lesson as the .xml.xmb bug.
                 var activeProfile = _updateService.Profile;
                 var activeInstall = _updateService.InstallPath;
                 if (!string.IsNullOrEmpty(activeInstall))

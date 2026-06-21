@@ -209,21 +209,38 @@ don't go looking for it.)
   through `NativeInstallService`. (Its old companion `InstallProgressMonitor` was
   removed once nothing referenced it.)
 
-- **`NativeInstallService.RemoveStaleBuildArtifacts` (WoL only) strips inert dev
-  junk after install *and* every update — but it deliberately does NOT touch
-  `.xml.xmb` anymore.** It removes `.bak`, stray `.rar` under `art\`,
-  `art\WoL\interns\`, `(enhanced).wav` under `Sound\WoL\`, and `cópia`/extensionless
-  `data\tactics\` orphans — files absent from a canonical install with no sim/sync
-  role. It USED to also delete every `.xml.xmb` on a "LAN-hash parity" theory ("peers
-  installed via the original installer have no `.xmb`, they regenerate from `.xml`, so
-  we match them by deleting ours"). Reverse-engineering the canonical distribution
-  (Inno installer + Java updater) proved that inverted: the official build SHIPS the
-  `.xml.xmb` and never deletes or regenerates them. AoE3 hashes the `.xmb` for its LAN
-  version match, so deleting ours made the launcher the odd one out (the engine
-  regenerates a fresh `.xmb` on first launch whose bytes can differ from a peer's
-  shipped one) → version-mismatch / OOS vs the community. Keep every `.xml.xmb`
-  exactly as the payload ships it; only the junk sweeps are load-bearing. Pinned by
-  `WarsOfLibertyLauncher.Tests/InstallParityTests`.
+- **`NativeInstallService.RemoveStaleBuildArtifacts` is now a deliberate NO-OP — the
+  launcher installs the WoL payload byte-faithfully and strips NOTHING.** It used to
+  delete "dev-leftover junk" (`.bak`, stray `.rar` under `art\`, `(enhanced).wav` under
+  `Sound\WoL\`, `cópia`/extensionless `data\tactics\` orphans) AND the whole
+  `art\WoL\interns\` subtree AND, earlier still, every `.xml.xmb`. Every one of those
+  removals turned out to be the SAME bug repeated: an on-disk diff of a launcher install
+  vs a clean canonical 1.2.0d install (Inno installer + Java updater → what an
+  original-installer peer actually has) showed the canonical **ships all of them**, and
+  the `WolPayload.zip` snapshot **contains all of them** (e.g. 986 `interns` entries in
+  the zip's central directory). So every sweep made the launcher the odd one out vs the
+  community — the classic inversion. Two parts of the saga:
+  (1) **`.xml.xmb`**: AoE3 hashes them for its LAN version match; the official build
+  ships them and never regenerates, so deleting ours → version-mismatch / OOS.
+  (2) **`art\WoL\interns\`** (~981 files, ~177 MB): the GAME REFERENCES it —
+  `data\protoy.xml` 97×, `data\techtreey.xml` 50× (plus `data\abilities\powers.xml`)
+  point at unit models (`.gr2`), icons/portraits (`.ddt`) there (e.g. Outlaw units
+  Cuchillero/Gavillero/Malevo, zipa_dh batidor/ordenanza/aduanero) — so deleting it
+  left those units with missing art.
+  The remaining `.bak`/`.rar`/`(enhanced).wav`/`data\tactics` files are inert (no
+  proto/techtree references them) so removing them never broke gameplay, BUT they are
+  STILL present in a canonical peer's install, so stripping them still diverged the
+  file set. The maintainer's explicit call: **be 100% byte-faithful — keep everything
+  the payload ships.** Sim/MP was never at risk (the 209 `.xml.xmb` + 158 `data\*.xml`
+  are byte-identical between launcher and canonical, no OOS); the goal is a launcher
+  install that is an exact **superset** of a canonical one (canonical's full file set +
+  the launcher's own 12 bookkeeping/payload extras: `install-manifest.json`, the
+  `translations\_originals\` backups, `etc\*_delete.lst`, `sarna.xml`). The method is
+  **kept as a documented no-op** (not deleted) because it's still invoked from three
+  call sites — install (`InstallAsync` Phase 5b), post-update (`UpdateService`), and
+  startup self-heal (`MainWindow`) — and is the single home for the "strip nothing"
+  policy if it ever needs to change. Pinned by
+  `WarsOfLibertyLauncher.Tests/InstallParityTests` (`RemoveStaleBuildArtifacts_IsNoOp_KeepsEveryFile`).
 
 - **Patch `deleteList`s are install-RELATIVE paths, NOT URLs — and the snapshot
   install bypasses them, so the payload must be pre-cleaned.** Each `<download>` in

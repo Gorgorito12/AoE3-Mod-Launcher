@@ -276,14 +276,12 @@ public class NativeInstallService
             catch (Exception ex) { DiagnosticLog.Write($"Translations snapshot failed: {ex.Message}"); }
         }
 
-        // ---- Phase 5b: Remove dev-leftover junk from the payload ----
-        // Strips files that ship in WolPayload.zip but are absent from a
-        // canonical setup+updater install (.bak, "cópia" duplicates,
-        // art\WoL\interns\, loose .rar, "(enhanced)" .wav). It does NOT
-        // touch .xml.xmb: the canonical distribution ships those and never
-        // deletes/regenerates them, and AoE3 hashes them for its LAN
-        // version match — so we keep them exactly as shipped to stay
-        // byte-faithful to the community (see RemoveStaleBuildArtifacts).
+        // ---- Phase 5b: (no-op) byte-faithful install ----
+        // We install the WolPayload.zip exactly as shipped and strip nothing.
+        // Everything that used to be swept here (.bak, "cópia" duplicates,
+        // loose .rar, "(enhanced)" .wav, AND art\WoL\interns\) is also present
+        // in a canonical setup+updater install, so removing any of it diverged
+        // the launcher from original-installer peers — see RemoveStaleBuildArtifacts.
         RemoveStaleBuildArtifacts(profile, destinationFolder);
 
         // ---- Phase 6: Post-install integrity dump ----
@@ -301,288 +299,39 @@ public class NativeInstallService
     }
 
     /// <summary>
-    /// Strip dev-leftover files that ship in the WoL payload zip but are
-    /// absent from a canonical setup+updater install, so the launcher's
-    /// file set matches what original-installer peers have.
+    /// Historically stripped "dev-leftover" files from the WoL payload after
+    /// install/update so the launcher's file set would match original-installer
+    /// peers. It is now a DELIBERATE NO-OP: the launcher installs the payload
+    /// byte-faithfully and strips nothing.
     ///
-    /// <para><b>We deliberately do NOT touch <c>.xml.xmb</c>.</b> The
-    /// canonical distribution (Inno installer + Java updater) ships these
-    /// precompiled files and never deletes or regenerates them — verified
-    /// by reverse-engineering both. AoE3 hashes the <c>.xmb</c> for its LAN
-    /// version match; deleting ours made the launcher the odd one out,
-    /// because AoE3 regenerates a fresh <c>.xmb</c> on first launch whose
-    /// bytes can differ from a peer's shipped one → version-mismatch / OOS
-    /// against the community. So every <c>.xml.xmb</c> is left exactly as
-    /// the payload ships it.</para>
+    /// <para>Every file this method used to remove — <c>.bak</c> backups, loose
+    /// <c>.rar</c> under <c>art\</c>, "(enhanced)" <c>.wav</c> duplicates,
+    /// <c>data\tactics\</c> copies/orphans, AND the whole <c>art\WoL\interns\</c>
+    /// subtree — turned out to be PRESENT in a canonical setup+updater 1.2.0d
+    /// install (verified by an on-disk diff: the launcher install was missing
+    /// exactly these files and nothing else). <c>interns</c> is even referenced
+    /// by <c>protoy.xml</c> (97×) and <c>techtreey.xml</c> (50×) for unit models
+    /// and icons, so stripping it broke unit art. Removing any of these diverged
+    /// the launcher from the community's file set — the exact same inversion as
+    /// the old <c>.xml.xmb</c> deletion bug. The payload == canonical content, so
+    /// the faithful thing is to keep everything exactly as shipped (incl. every
+    /// <c>.xml.xmb</c>).</para>
     ///
-    /// What we DO strip — dev leftovers with no gameplay or sync role,
-    /// confirmed absent from a canonical install: <c>.bak</c> backups,
-    /// Portuguese "cópia" duplicates (mojibake "c¢pia"/"cã³pia"),
-    /// extensionless orphans under <c>data\tactics\</c>, the
-    /// <c>art\WoL\interns\</c> dev scratch folder, loose <c>.rar</c> under
-    /// <c>art\</c>, and "(enhanced)" <c>.wav</c> duplicates under
-    /// <c>Sound\WoL\</c>. None of these participate in AoE3's simulation
-    /// sync, so removing them is safe and keeps the install lean.
-    ///
-    /// Only runs for the WoL profile; other mods aren't affected.
-    /// Idempotent — re-running on an already-clean folder is a no-op.
+    /// <para>Kept as a documented no-op (rather than deleted) because it is
+    /// invoked from three places — install, post-update, and startup self-heal —
+    /// and is the single home for the "strip nothing" policy if it ever needs to
+    /// change. A unit test pins that it removes no file.</para>
     /// </summary>
     public static void RemoveStaleBuildArtifacts(ModProfile profile, string destinationFolder)
     {
-        // Currently only the WoL payload is known to ship stale
-        // precompiled .xmb files. Other mods that route through this
-        // pipeline (Improvement Mod, future ones) might legitimately
-        // need their own .xmb files — keep them as-is.
-        if (!string.Equals(profile.Id, ModRegistry.WolId, StringComparison.OrdinalIgnoreCase))
-            return;
-
-        var dataFolder = Path.Combine(destinationFolder, "data");
-        if (!Directory.Exists(dataFolder)) return;
-
-        int removedJunk = 0;
-        long bytesFreed = 0;
-
-        // .xml.xmb files are deliberately LEFT IN PLACE. The canonical
-        // install (Inno installer + Java updater) ships them and never
-        // deletes/regenerates them; AoE3 hashes the .xmb for its LAN
-        // version match, so stripping ours would make the launcher the
-        // odd one out vs the community (engine-regenerated .xmb can differ
-        // byte-wise from the shipped one) → version-mismatch / OOS. We only
-        // strip dev junk with no sim/sync role below.
-
-        // 1) Strip .bak files (XML backups left behind by editor
-        //    tools) and known dev-leftover file names. Be defensive
-        //    with the EnumerateFiles call — corrupt filenames have
-        //    been known to throw here on Windows.
-        try
-        {
-            foreach (var bak in Directory.EnumerateFiles(dataFolder, "*.bak", SearchOption.AllDirectories))
-            {
-                try
-                {
-                    var len = new FileInfo(bak).Length;
-                    File.Delete(bak);
-                    removedJunk++;
-                    bytesFreed += len;
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write($"  RemoveStaleBuildArtifacts: could not delete '{bak}': {ex.Message}");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"RemoveStaleBuildArtifacts: enumerating .bak in '{dataFolder}' failed: {ex.Message}");
-        }
-
-        // 3) Named-file blacklist — observed only-in-launcher files
-        //    that aren't part of the canonical install. Hard-coded
-        //    here because they have no common pattern. We also use
-        //    fuzzy detection below for the cases where the exact
-        //    filename has mojibake characters that don't survive a
-        //    source-file → .exe round-trip cleanly.
-        string[] devLeftovers = new[]
-        {
-            // Bayonet conscript tactics — typo in filename
-            // ("consripto" vs "conscripto"); not referenced from
-            // any techtree we checked.
-            @"data\tactics\musketbayonetconsripto.tactics",
-        };
-        foreach (var rel in devLeftovers)
-        {
-            var full = Path.Combine(destinationFolder, rel);
-            if (!File.Exists(full)) continue;
-            try
-            {
-                var len = new FileInfo(full).Length;
-                File.Delete(full);
-                removedJunk++;
-                bytesFreed += len;
-            }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write($"  RemoveStaleBuildArtifacts: could not delete '{rel}': {ex.Message}");
-            }
-        }
-
-        // 4) Fuzzy detection inside data\tactics\ — catches the
-        //    Portuguese "cópia" duplicates (mojibake-encoded as
-        //    "C¢pia"/"CÃ³pia") and orphan files without any
-        //    extension. Using a pattern scan instead of hardcoded
-        //    paths because the non-ASCII characters in the filenames
-        //    don't survive cleanly through the source file → CLR
-        //    string → Win32 file-system roundtrip — File.Exists on a
-        //    hardcoded path matches the wrong bytes. Globbing the
-        //    folder reads the actual on-disk names so we don't care
-        //    about encoding.
-        var tacticsFolder = Path.Combine(destinationFolder, "data", "tactics");
-        if (Directory.Exists(tacticsFolder))
-        {
-            try
-            {
-                foreach (var f in Directory.EnumerateFiles(tacticsFolder, "*",
-                             SearchOption.TopDirectoryOnly))
-                {
-                    var name = Path.GetFileName(f);
-
-                    // Pattern A: " - C{something}pia.tactics" — the
-                    // Portuguese "cópia" duplicates regardless of how
-                    // the non-ASCII byte renders. Anchored to .tactics
-                    // so we don't accidentally match a legitimate
-                    // tactic that happens to contain "pia".
-                    bool isCopiaDuplicate =
-                        name.IndexOf(" - C", StringComparison.OrdinalIgnoreCase) >= 0
-                        && name.EndsWith("pia.tactics", StringComparison.OrdinalIgnoreCase);
-
-                    // Pattern B: any file in data\tactics\ with no
-                    // extension at all. Legitimate tactics always end
-                    // in .tactics — anything else is an orphan from a
-                    // dev machine's accidental save.
-                    bool hasNoExtension = string.IsNullOrEmpty(Path.GetExtension(f));
-
-                    if (!isCopiaDuplicate && !hasNoExtension) continue;
-
-                    try
-                    {
-                        var len = new FileInfo(f).Length;
-                        File.Delete(f);
-                        removedJunk++;
-                        bytesFreed += len;
-                    }
-                    catch (Exception ex)
-                    {
-                        DiagnosticLog.Write(
-                            $"  RemoveStaleBuildArtifacts: could not delete '{name}': {ex.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write(
-                    $"RemoveStaleBuildArtifacts: enumerating data\\tactics failed: {ex.Message}");
-            }
-        }
-
-        // 5) Heavier dev-leftover sweeps observed in the WoL payload
-        //    but absent from a setup+updater install. Each sweep is
-        //    surgical (specific subtree + specific file pattern) so
-        //    we don't risk deleting legitimate game assets via a
-        //    too-broad glob.
-        //
-        //    a) art\WoL\interns\* — internal dev scratch folder. The
-        //       canonical install has no such folder; the payload zip
-        //       included it from someone's working copy. ~hundreds of
-        //       .ddt files that AoE3 still ends up hashing, which
-        //       causes multiplayer desync vs peers without them.
-        //
-        //    b) art\**\*.rar — uncompressed archive files. A legit
-        //       WoL install never ships .rar inside art\ (assets are
-        //       loose .ddt / .tga / .xml). The payload happens to
-        //       contain an unextracted "DLC.rar" which is dead weight
-        //       at best, sync-breaker at worst.
-        //
-        //    c) Sound\WoL\**\*(enhanced)*.wav — "enhanced" variants
-        //       of base sounds. Duplicates the .wav of the same name
-        //       without the "(enhanced)" suffix. The canonical
-        //       install only keeps the non-suffixed version.
-        var artFolder = Path.Combine(destinationFolder, "art");
-        if (Directory.Exists(artFolder))
-        {
-            // a) Whole-subtree removal of art\WoL\interns\
-            var internsFolder = Path.Combine(artFolder, "WoL", "interns");
-            if (Directory.Exists(internsFolder))
-            {
-                try
-                {
-                    long internsBytes = 0;
-                    int internsFiles = 0;
-                    foreach (var f in Directory.EnumerateFiles(internsFolder, "*", SearchOption.AllDirectories))
-                    {
-                        try { internsBytes += new FileInfo(f).Length; internsFiles++; }
-                        catch { /* ignore size probe failures */ }
-                    }
-                    Directory.Delete(internsFolder, recursive: true);
-                    removedJunk += internsFiles;
-                    bytesFreed += internsBytes;
-                    DiagnosticLog.Write(
-                        $"  RemoveStaleBuildArtifacts: removed art\\WoL\\interns\\ ({internsFiles} files, {FormatBytes(internsBytes)})");
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write(
-                        $"  RemoveStaleBuildArtifacts: could not remove art\\WoL\\interns: {ex.Message}");
-                }
-            }
-
-            // b) Loose .rar inside art\ — never legitimate.
-            try
-            {
-                foreach (var rar in Directory.EnumerateFiles(artFolder, "*.rar", SearchOption.AllDirectories))
-                {
-                    try
-                    {
-                        var len = new FileInfo(rar).Length;
-                        File.Delete(rar);
-                        removedJunk++;
-                        bytesFreed += len;
-                    }
-                    catch (Exception ex)
-                    {
-                        DiagnosticLog.Write(
-                            $"  RemoveStaleBuildArtifacts: could not delete '{rar}': {ex.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write(
-                    $"RemoveStaleBuildArtifacts: enumerating *.rar under art\\ failed: {ex.Message}");
-            }
-        }
-
-        // c) "(enhanced)" wav duplicates under Sound\WoL\
-        var soundWol = Path.Combine(destinationFolder, "Sound", "WoL");
-        if (Directory.Exists(soundWol))
-        {
-            try
-            {
-                foreach (var wav in Directory.EnumerateFiles(soundWol, "*.wav", SearchOption.AllDirectories))
-                {
-                    var name = Path.GetFileName(wav);
-                    if (name.IndexOf("(enhanced)", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    try
-                    {
-                        var len = new FileInfo(wav).Length;
-                        File.Delete(wav);
-                        removedJunk++;
-                        bytesFreed += len;
-                    }
-                    catch (Exception ex)
-                    {
-                        DiagnosticLog.Write(
-                            $"  RemoveStaleBuildArtifacts: could not delete '{name}': {ex.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write(
-                    $"RemoveStaleBuildArtifacts: enumerating Sound\\WoL\\ failed: {ex.Message}");
-            }
-        }
-
-        if (removedJunk > 0)
-        {
+        // Intentionally does nothing — see the summary. The launcher keeps the
+        // WoL payload byte-faithful to a canonical setup+updater install; it
+        // strips nothing (every file once swept here is also present in a
+        // canonical peer's install, so removing any of it diverged us from the
+        // community — the same inversion as the old .xml.xmb deletion bug).
+        if (string.Equals(profile.Id, ModRegistry.WolId, StringComparison.OrdinalIgnoreCase))
             DiagnosticLog.Write(
-                $"RemoveStaleBuildArtifacts ({profile.Id}): " +
-                $"removed {removedJunk} dev-leftover/junk files " +
-                $"({FormatBytes(bytesFreed)} freed). .xml.xmb files kept as shipped.");
-        }
-        else
-        {
-            DiagnosticLog.Write($"RemoveStaleBuildArtifacts ({profile.Id}): no stale artifacts found (install is clean).");
-        }
+                $"RemoveStaleBuildArtifacts ({profile.Id}): no-op — byte-faithful install, nothing stripped.");
     }
 
     /// <summary>

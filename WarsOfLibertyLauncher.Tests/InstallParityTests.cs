@@ -11,10 +11,13 @@ namespace WarsOfLibertyLauncher.Tests;
 /// Regression tests that pin the launcher's WoL install to the OFFICIAL file
 /// set, so it stays byte-faithful to original-installer peers (the OOS / LAN
 /// version-mismatch root causes we diagnosed):
-///   * <see cref="NativeInstallService.RemoveStaleBuildArtifacts"/> must KEEP
-///     every <c>.xml.xmb</c> — the canonical install ships them and AoE3 hashes
-///     them for its LAN version match — while still stripping inert dev junk
-///     (<c>.bak</c>). Deleting the .xmb made launcher installs the odd one out.
+///   * <see cref="NativeInstallService.RemoveStaleBuildArtifacts"/> must be a
+///     NO-OP: it removes NOTHING. Every file it once stripped (<c>.bak</c>,
+///     loose <c>.rar</c>, "(enhanced)" <c>.wav</c>, <c>data\tactics\</c>
+///     copies/orphans, the <c>art\WoL\interns\</c> subtree) — and every
+///     <c>.xml.xmb</c> — is PRESENT in a canonical setup+updater install, so
+///     removing any of it diverged the launcher from peers. <c>interns</c> is
+///     even referenced by <c>protoy.xml</c>/<c>techtreey.xml</c> for unit art.
 ///   * A patch's <c>deleteList</c> is an install-RELATIVE path to a file the
 ///     patch ships (<c>etc\..._delete.lst</c>), NOT a URL. It must be read
 ///     locally and applied so a patch's "delete this file" instruction is
@@ -55,22 +58,43 @@ public class InstallParityTests : IDisposable
     }
 
     [Fact]
-    public void RemoveStaleBuildArtifacts_KeepsXmlXmb_ButStripsBak()
+    public void RemoveStaleBuildArtifacts_IsNoOp_KeepsEveryFile()
     {
+        // The launcher installs the WoL payload byte-faithfully and strips
+        // NOTHING. Every file below — .xml.xmb, real data, .bak backups,
+        // loose .rar, "(enhanced)" .wav, data\tactics copies/orphans, and the
+        // art\WoL\interns\ subtree — is also present in a canonical
+        // setup+updater install, so removing any of it diverged the launcher
+        // from original-installer peers (the .xml.xmb / interns saga). This
+        // test fails loudly if a future change re-introduces any sweep.
         var install = NewTempDir();
-        Write(install, @"data\randomnames.xml.xmb");   // precompiled — MUST survive
-        Write(install, @"data\proto\stuff.xml.xmb");   // nested .xml.xmb — MUST survive
-        Write(install, @"data\techtreey.xml.bak");     // editor backup — must go
-        Write(install, @"data\protoy.xml");            // real data — MUST survive
+        Write(install, @"data\randomnames.xml.xmb");
+        Write(install, @"data\protoy.xml");
+        Write(install, @"data\techtreey.xml.bak");
+        Write(install, @"data\tactics\firepit - copia.tactics");
+        Write(install, @"data\tactics\spypishtaco");               // extensionless orphan
+        Write(install, @"art\WoL\interns\zupay\units\Outlaw\Cuchillero\Cuchillero.xml");
+        Write(install, @"art\ui\logos\watermarky.rar");
+        Write(install, @"Sound\WoL\chile\bacamartero\Attack 1 (enhanced).wav");
 
         NativeInstallService.RemoveStaleBuildArtifacts(WolProfile(), install);
 
-        Assert.True(File.Exists(Path.Combine(install, @"data\randomnames.xml.xmb")),
-            ".xml.xmb must be kept (parity with the official build's LAN hash).");
-        Assert.True(File.Exists(Path.Combine(install, @"data\proto\stuff.xml.xmb")));
-        Assert.True(File.Exists(Path.Combine(install, @"data\protoy.xml")));
-        Assert.False(File.Exists(Path.Combine(install, @"data\techtreey.xml.bak")),
-            ".bak backups are inert dev junk and should still be stripped.");
+        // Nothing was removed: every written file still exists.
+        foreach (var rel in new[]
+        {
+            @"data\randomnames.xml.xmb",
+            @"data\protoy.xml",
+            @"data\techtreey.xml.bak",
+            @"data\tactics\firepit - copia.tactics",
+            @"data\tactics\spypishtaco",
+            @"art\WoL\interns\zupay\units\Outlaw\Cuchillero\Cuchillero.xml",
+            @"art\ui\logos\watermarky.rar",
+            @"Sound\WoL\chile\bacamartero\Attack 1 (enhanced).wav",
+        })
+        {
+            Assert.True(File.Exists(Path.Combine(install, rel)),
+                $"byte-faithful install must keep every payload file; '{rel}' was removed.");
+        }
     }
 
     [Fact]
