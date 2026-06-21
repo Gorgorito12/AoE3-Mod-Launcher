@@ -172,6 +172,7 @@ public class NativeInstallService
         IProgress<ModOverlayProgress>? overlayProgress = null,
         string[]? payloadSha256 = null,
         IEnumerable<string>? extraExcludedSubtrees = null,
+        string? installLabel = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install Start ({profile.DisplayName}) ===");
@@ -258,13 +259,13 @@ public class NativeInstallService
         // ---- Phase 5: Finalize (shortcuts, registry, manifest) ----
         phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
-        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder);
+        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder, installLabel);
 
         statusProgress?.Report("Writing registry entries...");
-        WriteRegistryEntries(profile, version, destinationFolder);
+        WriteRegistryEntries(profile, version, destinationFolder, installLabel);
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath, clonedAoe3: true,
-            shortcuts, startMenuFolder, overlayFiles, overlayNetNew);
+            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel);
 
         // Translation snapshot is WoL-specific (it relies on the WoL-style
         // <c>data\stringtabley.xml</c> and <c>unithelpstringsy.xml</c> layout
@@ -462,6 +463,7 @@ public class NativeInstallService
         IProgress<ExtractProgress>? extractProgress = null,
         IProgress<ModOverlayProgress>? overlayProgress = null,
         string[]? payloadSha256 = null,
+        string? installLabel = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install (mod-only) Start ({profile.DisplayName}) ===");
@@ -508,11 +510,11 @@ public class NativeInstallService
         // ---- Phase 4: Finalize ----
         phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
-        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder);
-        WriteRegistryEntries(profile, version, destinationFolder);
+        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder, installLabel);
+        WriteRegistryEntries(profile, version, destinationFolder, installLabel);
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
-            shortcuts, startMenuFolder, overlayFiles, overlayNetNew);
+            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel);
 
         // Translation snapshot only applies to mods that opt into the WoL-
         // style translation overlay system (CoveredFiles non-empty).
@@ -1146,8 +1148,31 @@ public class NativeInstallService
     /// paths of the shortcuts created (so the install manifest can record
     /// them for later cleanup).
     /// </summary>
+    /// <summary>
+    /// Display name for an install's shortcuts / Add-Remove entry. Extra copies
+    /// (non-empty <paramref name="installLabel"/>) are suffixed so a second copy
+    /// doesn't overwrite the first's shortcut / uninstall entry; the primary
+    /// install (null/empty label) keeps the canonical name — zero change for
+    /// single-install users.
+    /// </summary>
+    private static string AppNameFor(ModProfile profile, string? installLabel)
+        => string.IsNullOrWhiteSpace(installLabel)
+            ? profile.DisplayName
+            : installLabel!.Trim();
+
+    /// <summary>
+    /// Add/Remove-Programs product GUID for an install. Extra copies derive a
+    /// per-install GUID from the label so each copy has its OWN uninstall entry
+    /// and removing one never wipes another's. Primary keeps the profile's GUID.
+    /// </summary>
+    private static string ProductGuidFor(ModProfile profile, string? installLabel)
+        => string.IsNullOrWhiteSpace(installLabel)
+            ? profile.EffectiveProductGuid
+            : $"{profile.EffectiveProductGuid}_{SanitizeForFileName(installLabel!.Trim())}";
+
     private static List<string> CreateShortcuts(
-        ModProfile profile, string installFolder, out string? startMenuFolder)
+        ModProfile profile, string installFolder, out string? startMenuFolder,
+        string? installLabel = null)
     {
         var created = new List<string>();
         startMenuFolder = null;
@@ -1164,7 +1189,7 @@ public class NativeInstallService
 
             string? iconPath = FindShortcutIcon(installFolder, profile);
 
-            var appName = profile.DisplayName;
+            var appName = AppNameFor(profile, installLabel);
             var description = $"{appName} - Age of Empires III Mod";
 
             // Desktop shortcut
@@ -1357,7 +1382,8 @@ public class NativeInstallService
         List<string> shortcuts,
         string? startMenuFolder,
         List<string>? overlayFiles = null,
-        List<string>? overlayNetNew = null)
+        List<string>? overlayNetNew = null,
+        string? installLabel = null)
     {
         try
         {
@@ -1366,8 +1392,8 @@ public class NativeInstallService
             var manifest = new InstallManifest
             {
                 ModId = profile.Id,
-                ProductGuid = profile.EffectiveProductGuid,
-                AppName = profile.DisplayName,
+                ProductGuid = ProductGuidFor(profile, installLabel),
+                AppName = AppNameFor(profile, installLabel),
                 Publisher = string.IsNullOrEmpty(profile.Author) ? DefaultPublisher : profile.Author,
                 Version = version,
                 InstallPath = installFolder,
@@ -1434,15 +1460,15 @@ public class NativeInstallService
     /// constants here.
     /// </summary>
     private static void WriteRegistryEntries(
-        ModProfile profile, string version, string installFolder)
+        ModProfile profile, string version, string installFolder, string? installLabel = null)
     {
         try
         {
             // Write to HKLM (requires admin) first, fall back to HKCU.
-            if (!TryWriteRegistryTo(Registry.LocalMachine, profile, version, installFolder))
+            if (!TryWriteRegistryTo(Registry.LocalMachine, profile, version, installFolder, installLabel))
             {
                 DiagnosticLog.Write("HKLM write failed (no admin); trying HKCU...");
-                TryWriteRegistryTo(Registry.CurrentUser, profile, version, installFolder);
+                TryWriteRegistryTo(Registry.CurrentUser, profile, version, installFolder, installLabel);
             }
         }
         catch (Exception ex)
@@ -1452,16 +1478,17 @@ public class NativeInstallService
     }
 
     private static bool TryWriteRegistryTo(
-        RegistryKey root, ModProfile profile, string version, string installFolder)
+        RegistryKey root, ModProfile profile, string version, string installFolder,
+        string? installLabel = null)
     {
         try
         {
             var keyPath =
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + profile.EffectiveProductGuid;
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + ProductGuidFor(profile, installLabel);
             using var key = root.CreateSubKey(keyPath, writable: true);
             if (key == null) return false;
 
-            key.SetValue("DisplayName", profile.DisplayName);
+            key.SetValue("DisplayName", AppNameFor(profile, installLabel));
             key.SetValue("Inno Setup: App Path", installFolder);
             key.SetValue("Path", installFolder);
             key.SetValue("InstallLocation", installFolder);

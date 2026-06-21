@@ -64,6 +64,39 @@ public class MultiplayerConfig
 }
 
 /// <summary>
+/// One INACTIVE installation of a mod (the ACTIVE one lives in the flat fields
+/// of <see cref="ModState"/>). A mod may have several copies in different
+/// folders; the active copy plus this list make up the full set. Carries the
+/// per-INSTALL state — per-MOD state (latest-version cache, notification dedup)
+/// stays on <see cref="ModState"/>.
+/// </summary>
+public class ModInstall
+{
+    /// <summary>Stable id — the switch key and the per-install productGuid seed.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    /// <summary>User-facing label ("Principal", "Prueba"…). Empty => derive from the folder name.</summary>
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = "";
+
+    [JsonPropertyName("installPath")]
+    public string InstallPath { get; set; } = "";
+
+    [JsonPropertyName("lastKnownVersion")]
+    public string LastKnownVersion { get; set; } = "";
+
+    [JsonPropertyName("pinnedVersion")]
+    public string PinnedVersion { get; set; } = "";
+
+    [JsonPropertyName("activeTranslationId")]
+    public string ActiveTranslationId { get; set; } = "";
+
+    [JsonPropertyName("activeTranslationVersion")]
+    public string ActiveTranslationVersion { get; set; } = "";
+}
+
+/// <summary>
 /// Per-mod state that has to survive launcher restarts AND has to be kept
 /// separate per profile. Stored under <see cref="LauncherConfig.Mods"/>
 /// keyed by mod id so switching between mods doesn't cross-contaminate
@@ -149,6 +182,104 @@ public class ModState
     /// </summary>
     [JsonPropertyName("notifiedTranslationKeys")]
     public List<string> NotifiedTranslationKeys { get; set; } = new();
+
+    // ---- Multi-install support ----
+    // The flat fields above ARE the ACTIVE install. INACTIVE copies of the same
+    // mod (a second folder, a test copy, a different version) live in
+    // <see cref="OtherInstalls"/>. Switching the active install swaps an entry
+    // of OtherInstalls with the flat fields (see SnapshotActive/AdoptInstall).
+    // An empty OtherInstalls == the legacy single-install shape, so every
+    // existing reader and old build keeps working with ZERO migration. The
+    // stock game never participates (stripped in NormalizeInstalls).
+
+    /// <summary>
+    /// Stable id of the ACTIVE install. Empty on a legacy single-install config
+    /// (the flat fields are simply "the install"); assigned a GUID once the mod
+    /// gains a second copy, so the active one can be referenced after it later
+    /// rotates into <see cref="OtherInstalls"/>.
+    /// </summary>
+    [JsonPropertyName("activeInstallId")]
+    public string ActiveInstallId { get; set; } = "";
+
+    /// <summary>User-facing label of the active install ("Principal", "Prueba"…).
+    /// Empty => the UI derives one from the folder name.</summary>
+    [JsonPropertyName("activeInstallLabel")]
+    public string ActiveInstallLabel { get; set; } = "";
+
+    /// <summary>
+    /// The mod's INACTIVE installs (the active one is the flat fields above).
+    /// Empty for single-install users — round-trips and readers behave exactly
+    /// as before. Populated by "install another copy" / adopt.
+    /// </summary>
+    [JsonPropertyName("otherInstalls")]
+    public List<ModInstall> OtherInstalls { get; set; } = new();
+
+    /// <summary>True when this mod has more than one registered install.</summary>
+    [JsonIgnore]
+    public bool HasMultipleInstalls => OtherInstalls.Count > 0;
+
+    /// <summary>
+    /// Snapshot the ACTIVE install (the flat fields) as a <see cref="ModInstall"/>,
+    /// used when rotating it into <see cref="OtherInstalls"/> on a switch. Mints a
+    /// stable id if the active install doesn't have one yet.
+    /// </summary>
+    public ModInstall SnapshotActive() => new()
+    {
+        Id = string.IsNullOrEmpty(ActiveInstallId) ? Guid.NewGuid().ToString("N") : ActiveInstallId,
+        Label = ActiveInstallLabel,
+        InstallPath = InstallPath,
+        LastKnownVersion = LastKnownVersion,
+        PinnedVersion = PinnedVersion,
+        ActiveTranslationId = ActiveTranslationId,
+        ActiveTranslationVersion = ActiveTranslationVersion,
+    };
+
+    /// <summary>
+    /// Copy a stored install INTO the flat fields (make it the active one).
+    /// Per-mod fields (<see cref="LastKnownLatestVersion"/>, notification dedup)
+    /// are left untouched — they are not per-install.
+    /// </summary>
+    public void AdoptInstall(ModInstall slot)
+    {
+        ActiveInstallId = slot.Id;
+        ActiveInstallLabel = slot.Label;
+        InstallPath = slot.InstallPath;
+        LastKnownVersion = slot.LastKnownVersion;
+        PinnedVersion = slot.PinnedVersion;
+        ActiveTranslationId = slot.ActiveTranslationId;
+        ActiveTranslationVersion = slot.ActiveTranslationVersion;
+    }
+
+    /// <summary>Every registered install path for this mod (active + others),
+    /// non-empty only. Used by the sibling-exclusion list so a new clone of one
+    /// copy never scoops up another.</summary>
+    public IEnumerable<string> AllInstallPaths()
+    {
+        if (!string.IsNullOrEmpty(InstallPath)) yield return InstallPath;
+        foreach (var o in OtherInstalls)
+            if (!string.IsNullOrEmpty(o.InstallPath)) yield return o.InstallPath;
+    }
+
+    /// <summary>
+    /// Idempotent post-load normalization. A NO-OP for single-install configs
+    /// (the common case, <see cref="OtherInstalls"/> empty): it only assigns a
+    /// stable <see cref="ActiveInstallId"/> when the mod actually has extra
+    /// copies but the active one lost its id (e.g. a hand-edited config). When
+    /// <paramref name="isStock"/>, strips any multi-install state entirely — the
+    /// detect-only base game must never carry copies.
+    /// </summary>
+    public void NormalizeInstalls(bool isStock)
+    {
+        if (isStock)
+        {
+            OtherInstalls.Clear();
+            ActiveInstallId = "";
+            ActiveInstallLabel = "";
+            return;
+        }
+        if (OtherInstalls.Count > 0 && string.IsNullOrEmpty(ActiveInstallId))
+            ActiveInstallId = Guid.NewGuid().ToString("N");
+    }
 }
 
 /// <summary>
@@ -395,9 +526,30 @@ public class LauncherConfig
             // "sibling mod" that could be scooped into another install.
             if (p.IsStockGame)
                 continue;
-            var path = GetState(p.Id).InstallPath;
-            if (!string.IsNullOrEmpty(path))
-                paths.Add(path);
+            // Enumerate ALL of the sibling mod's copies (active install + its
+            // other copies), not just the active one, so a clone never scoops a
+            // non-active copy of a sibling mod into the new folder.
+            paths.AddRange(GetState(p.Id).AllInstallPaths());
+        }
+        return paths;
+    }
+
+    /// <summary>
+    /// Every registered install path across ALL non-stock mods (each mod's active
+    /// install + its other copies). Used when installing an ADDITIONAL copy of a
+    /// mod: the new clone must exclude every existing mod install — INCLUDING this
+    /// mod's own other copies — so it doesn't scoop one into the fresh folder.
+    /// (The plain <see cref="GetSiblingInstallPaths"/> excludes the whole current
+    /// mod, which is right for a first/normal install but wrong for an extra copy.)
+    /// The stock game is skipped for the same reason as above.
+    /// </summary>
+    public IReadOnlyList<string> GetAllInstallPaths()
+    {
+        var paths = new List<string>();
+        foreach (var p in ModRegistry.All)
+        {
+            if (p.IsStockGame) continue;
+            paths.AddRange(GetState(p.Id).AllInstallPaths());
         }
         return paths;
     }
@@ -837,6 +989,7 @@ public class LauncherConfig
         cfg.Multiplayer ??= new MultiplayerConfig();
         cfg.MigrateLegacyState();
         cfg.MigrateLobbyBaseUrl();
+        cfg.NormalizeModInstalls();
         return cfg;
     }
 
@@ -924,6 +1077,21 @@ public class LauncherConfig
         DiagnosticLog.Write(
             $"Migrated legacy mod state into Mods[\"{wolId}\"]: " +
             $"installPath='{ModInstallPath}', activeTranslationId='{ActiveTranslationId}'.");
+    }
+
+    /// <summary>
+    /// Normalize the multi-install shape of every mod after load. Idempotent and
+    /// a NO-OP for single-install configs. The stock game is stripped of any
+    /// multi-install state. Runs after <see cref="MigrateLegacyState"/> so the
+    /// legacy flat fields are already folded into <see cref="Mods"/>.
+    /// </summary>
+    private void NormalizeModInstalls()
+    {
+        foreach (var kv in Mods)
+        {
+            var profile = ModRegistry.Find(kv.Key);
+            kv.Value.NormalizeInstalls(isStock: profile?.IsStockGame ?? false);
+        }
     }
 
     public void Save()

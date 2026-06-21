@@ -430,6 +430,10 @@
                                     Margin="6,0,0,0"
                                     Click="RepairBtn_Click"/>
                         </UniformGrid>
+                        <Button x:Name="InstallAnotherCopyBtn"
+                                Style="{StaticResource PropertyActionButton}"
+                                Margin="0,8,0,0"
+                                Click="InstallAnotherCopyBtn_Click"/>
 
                         <Border Style="{StaticResource DialogDivider}"/>
 

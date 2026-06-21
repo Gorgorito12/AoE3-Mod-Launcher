@@ -156,6 +156,7 @@ public partial class MainWindow : Window
         ActionPanelControl.MenuRestoreUserData.Click += MenuRestoreUserData_Click;
         ActionPanelControl.MenuCheckForUpdates.Click += MenuCheckForUpdates_Click;
         ActionPanelControl.MenuRepairInstall.Click += MenuRepairInstall_Click;
+        ActionPanelControl.MenuInstallAnotherCopy.Click += MenuInstallAnotherCopy_Click;
         ActionPanelControl.MenuVerifyFiles.Click += MenuVerifyFiles_Click;
         ActionPanelControl.MenuViewLogs.Click += MenuViewLogs_Click;
         ActionPanelControl.UninstallMenuItem.Click += UninstallMenuItem_Click;
@@ -1085,77 +1086,61 @@ public partial class MainWindow : Window
             catch (Exception ex) { DiagnosticLog.Write($"Async config save after mod switch failed: {ex.Message}"); }
         });
 
-        // Fresh service bound to the new profile. Per-mod state in
-        // _config.Mods[target.Id] keeps the install path / translation
-        // separate from any previously active mod. The constructor does a
-        // synchronous fast-path lookup of the cached install path, so
-        // _updateService.InstallPath is already populated by the time we
-        // get here for mods seen in a previous session.
+        // Rebuild the active service + refresh all UI for the now-active profile.
+        // (Shared with the install-switch path below.)
+        await ReloadActiveServiceAsync(isModSwitch: true);
+    }
+
+    /// <summary>
+    /// Rebuilds <see cref="_updateService"/> for the currently-active mod/install
+    /// and refreshes every UI surface that depends on it, then runs the async
+    /// <see cref="CheckAsync"/> re-detection. Shared by <see cref="LoadModProfile"/>
+    /// (mod switch) and <see cref="SwitchActiveInstallAsync"/> (install switch
+    /// within the same mod). Callers MUST set <c>_config.ActiveModId</c> /
+    /// the active install + clear <c>_config.GameExecutable</c> + persist BEFORE
+    /// calling — this only rebuilds and repaints.
+    ///
+    /// <paramref name="isModSwitch"/> distinguishes the two: a MOD switch resets
+    /// and re-fetches the translation index (it's per-mod), while an INSTALL
+    /// switch keeps it (the index doesn't change) and only re-applies the
+    /// language menu (the active translation is per-install).
+    /// </summary>
+    private async Task ReloadActiveServiceAsync(bool isModSwitch)
+    {
+        var target = _config.GetActiveProfile();
+
+        // Fresh service bound to the active profile + install. The constructor
+        // does a synchronous fast-path lookup of the cached install path, so
+        // _updateService.InstallPath is already populated for installs seen in a
+        // previous session.
         _updateService = new UpdateService(_config, target);
         UpdateAccentResources(target);
 
-        // Reset session caches that were tied to the old mod.
+        // Reset session caches tied to the previous service.
         _pendingDownloads = new();
-        // Trust the synchronous cache check the UpdateService constructor
-        // just did. Avoids the "Not installed (red) → Installed (green)"
-        // flicker every time the user switches to a previously-detected
-        // mod. CheckAsync runs right after and refines the rest (current
-        // version, pending updates, etc.); if the install was uninstalled
-        // out-of-band between sessions, CheckAsync will clear this flag.
+        // Trust the synchronous cache check the constructor just did (avoids the
+        // "Not installed → Installed" flicker). CheckAsync refines the rest.
         _modIsInstalled = !string.IsNullOrEmpty(_updateService.InstallPath);
         _warnedAboutBrokenInstall = false;
-        _cachedTranslationIndex = null;
+        // The translation INDEX is per-mod: reset it only on a mod switch. An
+        // install switch keeps the same mod's index (re-fetching would be wasted
+        // work and could clear a just-fetched list).
+        if (isModSwitch)
+            _cachedTranslationIndex = null;
 
-        // Repaint static UI under the new profile (title, subtitle, accent).
-        // Only the mod-specific subset of ApplyLanguage runs here — the rest
-        // (language-only labels, tray strings, section headers) didn't
-        // change so re-touching ~40 controls every switch was wasted work.
         RefreshActiveModUi();
-        // In-place highlight swap on the existing tiles instead of a full
-        // rebuild (which re-runs per-tile disk probes and image loads).
-        // The post-CheckAsync rebuild below still does the full pass once
-        // the manifest fetch finishes, so any state-text drift gets fixed.
         UpdateActiveModHighlight();
         ResetProgressUI();
-
-        // Sync the primary button (Play / Install / Update / Stop) with the
-        // new profile's install state. ApplyLanguage above repaints it but
-        // uses the cached _primaryAction from the PREVIOUS profile, which
-        // means switching from a not-installed mod to an installed one (or
-        // vice-versa) would otherwise show the wrong label until CheckAsync
-        // finishes. UpdateGameUI reads _modIsInstalled (just refreshed from
-        // the cached install path) and picks the right action.
         UpdateGameUI();
-        // Refresh the StatusCard (state badge, version rows) synchronously
-        // from cached values so the user sees the new mod's status right
-        // after the click, not 1-2 seconds later when CheckAsync's network
-        // call returns. Cheap now that the AoE3 detection inside is
-        // memoised; before, this would have re-scanned every drive on
-        // every switch.
         RefreshIdlePanel();
 
-        // Re-detect install path + version + pending updates for the new
-        // profile. CheckAsync already short-circuits for non-WolPatcher
-        // profiles, so this is fast for IM and full-fat for WoL.
+        // Re-detect install path + version + pending updates.
         await CheckAsync();
-
-        // CheckAsync may have corrected the install path or version we
-        // initially rendered from cache (e.g. detected a stale "\bin"
-        // pointer and cleared it). Re-render the tile row so the secondary
-        // state text ("Installed · vX" / "Not installed") matches the
-        // freshly-detected reality of the active profile.
         RefreshModCards();
 
-        // The translation index was reset above, so re-fetch it for the new
-        // profile the same way startup does (gated on CheckUpdatesOnStartup so
-        // metered/offline users make no surprise network calls). Without this,
-        // switching mods left _cachedTranslationIndex null with no re-fetch on
-        // this path, so the gear menu / Mod Properties lost every remote
-        // translation — that's why WoL's community Spanish pack vanished after
-        // a mod switch. EffectiveTranslationsRepo now returns "" for mods that
-        // don't participate (e.g. the stock base game), so this correctly
-        // fetches WoL's packs for WoL and nothing for the stock game.
-        if (_config.CheckUpdatesOnStartup)
+        // Mod switch: re-fetch the per-mod translation index (gated like startup
+        // so metered/offline users make no surprise network calls).
+        if (isModSwitch && _config.CheckUpdatesOnStartup)
         {
             try { await RefreshTranslationIndexAsync(); }
             catch (Exception ex)
@@ -1164,13 +1149,80 @@ public partial class MainWindow : Window
             }
         }
 
-        // Repopulate the gear menu's translation list from the new profile
-        // (active-translation indicator + locally-installed packs are per-mod).
+        // Repopulate the gear menu's translation list. The active-translation
+        // indicator is per-INSTALL, so this runs for BOTH switch kinds.
         try { PopulateGameLanguageMenu(); }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"PopulateGameLanguageMenu after switch failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Switches the active mod to a DIFFERENT registered install (a second copy
+    /// in another folder) without restarting. Modelled on <see cref="LoadModProfile"/>:
+    /// swaps the chosen <see cref="ModInstall"/> with the active flat fields,
+    /// clears the global exe cache (both copies resolve the same exe name),
+    /// persists, and rebuilds the service. No-op if the id is already active or
+    /// unknown.
+    /// </summary>
+    private async Task SwitchActiveInstallAsync(string installId)
+    {
+        if (string.IsNullOrEmpty(installId)) return;
+
+        // Same guards as a mod switch — a real operation or a running game blocks it.
+        if (_isBusy && !_isCheckOnly)
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgModSwitchBusyBody"),
+                Strings.Get("DlgModSwitchBlockedTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (_isGameRunning)
+        {
+            MessageBox.Show(this,
+                Strings.Get("DlgModSwitchGameRunningBody"),
+                Strings.Get("DlgModSwitchBlockedTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var state = _config.GetActiveState();
+        if (string.Equals(state.ActiveInstallId, installId, StringComparison.OrdinalIgnoreCase))
+            return; // already active
+
+        var target = state.OtherInstalls
+            .FirstOrDefault(i => string.Equals(i.Id, installId, StringComparison.OrdinalIgnoreCase));
+        if (target == null)
+        {
+            DiagnosticLog.Write(
+                $"SwitchActiveInstallAsync: unknown install id '{installId}' for '{_config.ActiveModId}'.");
+            return;
+        }
+
+        if (_isCheckOnly)
+        {
+            try { _cts?.Cancel(); } catch { /* already disposed — ignore */ }
+        }
+
+        DiagnosticLog.Write(
+            $"Switching active install for '{_config.ActiveModId}': '{state.InstallPath}' -> '{target.InstallPath}'");
+
+        // Rotate the current active install into OtherInstalls and adopt the target.
+        var previousActive = state.SnapshotActive();
+        state.OtherInstalls.Remove(target);
+        state.OtherInstalls.Add(previousActive);
+        state.AdoptInstall(target);
+
+        // Two copies of the SAME mod resolve the same exe name, so the global exe
+        // cache must be cleared or PLAY could open the other copy (same trap as a
+        // mod switch).
+        _config.GameExecutable = "";
+        try { _config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Config save after install switch failed: {ex.Message}"); }
+
+        await ReloadActiveServiceAsync(isModSwitch: false);
     }
 
     /// <summary>
@@ -2135,6 +2187,7 @@ public partial class MainWindow : Window
         ActionPanelControl.MenuCheckForUpdates.Header = Strings.Get("MenuCheckForUpdates");
         ActionPanelControl.MenuGameLanguage.Header = Strings.Get("MenuGameLanguage");
         ActionPanelControl.MenuRepairInstall.Header = Strings.Get("MenuRepairInstall");
+        ActionPanelControl.MenuInstallAnotherCopy.Header = Strings.Get("MenuInstallAnotherCopy");
         ActionPanelControl.MenuVerifyFiles.Header = Strings.Get("MenuVerifyFiles");
         ActionPanelControl.MenuViewLogs.Header = Strings.Get("MenuViewLogs");
 
@@ -3491,6 +3544,7 @@ public partial class MainWindow : Window
             revertToEnglish: () => RevertToEnglish(),
             openVerify: () => RaiseMenuClick(ActionPanelControl.MenuVerifyFiles),
             openRepair: () => RaiseMenuClick(ActionPanelControl.MenuRepairInstall),
+            installAnotherCopy: () => { _ = InstallAsync(addNewSlot: true); },
             // 8 new callbacks — folded in from the old SETTINGS popup.
             // Each one wraps a RaiseMenuClick on the legacy
             // ActionPanelControl menu item so the actual flows
@@ -4831,7 +4885,128 @@ public partial class MainWindow : Window
             stack.Children.Add(item);
         }
 
+        // ---- Multi-install: quick-switch between copies of the active mod ----
+        AppendInstallCopiesToModPopup(stack, popup);
+
         popup.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Friendly label for an install copy: its explicit user label, else the
+    /// install folder's leaf name.
+    /// </summary>
+    private static string CopyDisplayLabel(string? label, string? installPath)
+    {
+        if (!string.IsNullOrWhiteSpace(label)) return label!.Trim();
+        var leaf = Path.GetFileName((installPath ?? "").TrimEnd('\\', '/'));
+        return string.IsNullOrEmpty(leaf) ? (installPath ?? "") : leaf;
+    }
+
+    /// <summary>
+    /// Appends a "switch active copy" section to the MODS popup when the active
+    /// mod has more than one registered install. One row per copy (active marked
+    /// with a check); clicking an inactive copy switches to it via
+    /// <see cref="SwitchActiveInstallAsync"/>.
+    /// </summary>
+    private void AppendInstallCopiesToModPopup(
+        System.Windows.Controls.StackPanel stack,
+        System.Windows.Controls.Primitives.Popup popup)
+    {
+        var state = _config.GetActiveState();
+        if (!state.HasMultipleInstalls) return;
+
+        stack.Children.Add(new System.Windows.Controls.Border
+        {
+            Height = 1,
+            Background = (System.Windows.Media.Brush)FindResource("MpDivider"),
+            Margin = new Thickness(8, 8, 8, 6),
+        });
+        stack.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = Strings.Get("InstallCopiesHeader"),
+            FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
+            FontSize = (double)FindResource("FontSizeCaption"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            Margin = new Thickness(8, 2, 8, 6),
+        });
+
+        var rows = new List<(string Id, string Label, string Path, bool IsActive)>
+        {
+            (state.ActiveInstallId,
+             CopyDisplayLabel(state.ActiveInstallLabel, state.InstallPath),
+             state.InstallPath, true),
+        };
+        foreach (var o in state.OtherInstalls)
+            rows.Add((o.Id, CopyDisplayLabel(o.Label, o.InstallPath), o.InstallPath, false));
+
+        foreach (var row in rows)
+        {
+            bool isAct = row.IsActive;
+            var btn = new System.Windows.Controls.Button
+            {
+                Style = (Style)FindResource("SidebarSecondaryButton"),
+                Margin = new Thickness(0, 2, 0, 2),
+                Padding = new Thickness(12, 8, 12, 8),
+                Background = isAct
+                    ? (System.Windows.Media.Brush)FindResource("TintGoldHover")
+                    : System.Windows.Media.Brushes.Transparent,
+                Content = new System.Windows.Controls.StackPanel
+                {
+                    Orientation = System.Windows.Controls.Orientation.Horizontal,
+                    Children =
+                    {
+                        new System.Windows.Controls.TextBlock
+                        {
+                            Text = isAct ? "" : "", // CheckMark / Folder
+                            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                            FontSize = 12,
+                            Width = 18,
+                            Margin = new Thickness(0, 0, 10, 0),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Foreground = isAct
+                                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                        },
+                        new System.Windows.Controls.StackPanel
+                        {
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Children =
+                            {
+                                new System.Windows.Controls.TextBlock
+                                {
+                                    Text = row.Label,
+                                    FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
+                                    FontSize = (double)FindResource("FontSizeBody"),
+                                    FontWeight = isAct ? FontWeights.Bold : FontWeights.Medium,
+                                    Foreground = isAct
+                                        ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                                        : (System.Windows.Media.Brush)FindResource("SecondaryFixed"),
+                                    TextTrimming = TextTrimming.CharacterEllipsis,
+                                },
+                                new System.Windows.Controls.TextBlock
+                                {
+                                    Text = row.Path,
+                                    FontSize = (double)FindResource("FontSizeCaption"),
+                                    Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                                    Opacity = 0.85,
+                                    Margin = new Thickness(0, 1, 0, 0),
+                                    TextTrimming = TextTrimming.CharacterEllipsis,
+                                    MaxWidth = 280,
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+            var id = row.Id;
+            btn.Click += async (_, _) =>
+            {
+                popup.IsOpen = false;
+                if (!isAct) await SwitchActiveInstallAsync(id);
+            };
+            stack.Children.Add(btn);
+        }
     }
 
     /// <summary>
@@ -5615,7 +5790,15 @@ public partial class MainWindow : Window
 
     private void ApplyCheckResult(UpdateService.CheckResult result)
     {
-        InstallPathText.Text = _updateService.InstallPath ?? "(not detected)";
+        // When the mod has more than one registered copy, prefix the active
+        // install's path with its label so the user always sees WHICH copy is
+        // active (e.g. "[Wars of Liberty (2)]  C:\…"). Single-install shows just
+        // the path, exactly as before.
+        var activeSt = _config.GetActiveState();
+        InstallPathText.Text =
+            activeSt.HasMultipleInstalls && !string.IsNullOrEmpty(_updateService.InstallPath)
+                ? $"[{CopyDisplayLabel(activeSt.ActiveInstallLabel, _updateService.InstallPath)}]  {_updateService.InstallPath}"
+                : (_updateService.InstallPath ?? "(not detected)");
 
         _modIsInstalled = result.IsValidInstall;
 
@@ -6279,6 +6462,18 @@ public partial class MainWindow : Window
     // is new — under "Avanzado".
     // ------------------------------------------------------------------------
 
+    /// <summary>
+    /// Gear-menu "Install another copy…": installs an ADDITIONAL isolated copy of
+    /// the active mod into a new folder (a second install the launcher tracks and
+    /// can switch between), instead of overwriting the existing one.
+    /// </summary>
+    private async void MenuInstallAnotherCopy_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy) return;
+        if (_updateService.Profile.IsStockGame) return;
+        await InstallAsync(addNewSlot: true);
+    }
+
     private async void MenuRepairInstall_Click(object sender, RoutedEventArgs e)
     {
         if (_isBusy) return;
@@ -6705,7 +6900,32 @@ public partial class MainWindow : Window
     /// When null we default to <see cref="_updateService"/>, which keeps
     /// every existing call site behaving exactly as before.
     /// </param>
-    private async Task InstallAsync(UpdateService? targetService = null)
+    /// <summary>
+    /// Returns a NEW install folder that collides with neither an
+    /// already-registered copy nor an existing on-disk folder, appending
+    /// " (2)", " (3)", … to <paramref name="baseFolder"/> as needed. Used to
+    /// suggest a destination for an additional copy.
+    /// </summary>
+    private static string MakeUniqueInstallFolder(string baseFolder, IEnumerable<string> existing)
+    {
+        var bas = baseFolder.TrimEnd('\\', '/');
+        var taken = new HashSet<string>(
+            existing.Select(p => p.TrimEnd('\\', '/')), StringComparer.OrdinalIgnoreCase);
+        string candidate = bas;
+        int n = 2;
+        while (taken.Contains(candidate) || Directory.Exists(candidate))
+            candidate = $"{bas} ({n++})";
+        return candidate;
+    }
+
+    /// <param name="addNewSlot">
+    /// When true, install an ADDITIONAL copy of an already-installed mod into a
+    /// new folder instead of overwriting the existing one: suggests a
+    /// collision-free folder, always clones (isolated copy, even for
+    /// InPlaceOverlay mods), disambiguates shortcuts/registry per-install, and
+    /// on completion rotates the previous active install into OtherInstalls.
+    /// </param>
+    private async Task InstallAsync(UpdateService? targetService = null, bool addNewSlot = false)
     {
         if (_isBusy) return;
 
@@ -6757,7 +6977,22 @@ public partial class MainWindow : Window
         // unrelated mod installs.
         // The user can still override the suggested folder in the dialog.
         string suggestedFolder;
-        if (profile.InstallType == ModInstallType.InPlaceOverlay)
+        if (addNewSlot)
+        {
+            // An ADDITIONAL copy is ALWAYS an isolated clone in a NEW folder —
+            // even for InPlaceOverlay mods, since two overlays can't share one
+            // AoE3 folder. Base the suggestion on the IsolatedFolder convention
+            // (a mod-named subfolder of AoE3) and make it collision-free against
+            // every already-registered copy and any existing folder on disk.
+            string baseFolder = !string.IsNullOrEmpty(aoe3SourcePath)
+                ? Path.Combine(aoe3SourcePath, profile.DisplayName)
+                : (string.IsNullOrEmpty(profile.DefaultInstallFolder)
+                    ? profile.DisplayName
+                    : profile.DefaultInstallFolder);
+            suggestedFolder = MakeUniqueInstallFolder(
+                baseFolder, _config.GetState(profile.Id).AllInstallPaths());
+        }
+        else if (profile.InstallType == ModInstallType.InPlaceOverlay)
         {
             suggestedFolder = aoe3SourcePath
                 ?? (string.IsNullOrEmpty(profile.DefaultInstallFolder)
@@ -6834,6 +7069,31 @@ public partial class MainWindow : Window
 
         var installFolder = dialog.SelectedFolder;
         aoe3SourcePath = dialog.Aoe3SourcePath; // may have been inferred
+
+        // For an additional copy: guard against picking a folder that is ALREADY
+        // a registered copy of this mod (would reinstall over it / desync slots).
+        // (Adopting an unregistered real install is a Fase 4 follow-up.)
+        if (addNewSlot)
+        {
+            var st = _config.GetState(profile.Id);
+            bool already = st.AllInstallPaths().Any(p =>
+                string.Equals(p.TrimEnd('\\', '/'), installFolder.TrimEnd('\\', '/'),
+                    StringComparison.OrdinalIgnoreCase));
+            if (already)
+            {
+                MessageBox.Show(this,
+                    Strings.Format("DlgInstallCopyExistsBody", installFolder),
+                    Strings.Get("DlgInstallCopyExistsTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+        }
+
+        // Per-install discriminator for shortcuts / registry (the folder leaf).
+        // null for a normal/first install → canonical names, zero change.
+        string? installLabel = addNewSlot
+            ? Path.GetFileName(installFolder.TrimEnd('\\', '/'))
+            : null;
 
         // ---- Permission check ----
         // Locations like C:\Program Files (x86)\... need admin to write to.
@@ -7085,6 +7345,7 @@ public partial class MainWindow : Window
                             overlayProgress,
                             payloadSha256: payloadSha256,
                             extraExcludedSubtrees: siblingExcludes,
+                            installLabel: installLabel,
                             ct: _cts.Token);
                     }
                     else
@@ -7101,6 +7362,7 @@ public partial class MainWindow : Window
                             extractProgress,
                             overlayProgress,
                             payloadSha256: payloadSha256,
+                            installLabel: installLabel,
                             ct: _cts.Token);
                     }
                     break; // success — exit retry loop
@@ -7158,6 +7420,23 @@ public partial class MainWindow : Window
             // makes the StatusCard render "Installed v1.5" on next launch
             // without waiting for a manifest fetch.
             var installState = _config.GetState(profile.Id);
+            if (addNewSlot
+                && !string.IsNullOrEmpty(installState.InstallPath)
+                && !string.Equals(installState.InstallPath.TrimEnd('\\', '/'),
+                                  installFolder.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+            {
+                // Additional copy: rotate the current active install into
+                // OtherInstalls and make the NEW folder the active one.
+                installState.OtherInstalls.Add(installState.SnapshotActive());
+                installState.ActiveInstallId = Guid.NewGuid().ToString("N");
+                installState.ActiveInstallLabel = Path.GetFileName(installFolder.TrimEnd('\\', '/'));
+                // A fresh copy carries no pin / active translation from the old active.
+                installState.PinnedVersion = "";
+                installState.ActiveTranslationId = "";
+                installState.ActiveTranslationVersion = "";
+                // New active copy in a different folder → clear the global exe cache.
+                _config.GameExecutable = "";
+            }
             installState.InstallPath = installFolder;
             if (!string.IsNullOrEmpty(installVersion))
                 installState.LastKnownVersion = installVersion;
@@ -7917,6 +8196,11 @@ public partial class MainWindow : Window
             _updateService.Profile.UpdateMechanism == ModUpdateMechanism.WolPatcher
             || _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases;
         ActionPanelControl.MenuRepairInstall.IsEnabled = !_isBusy && _modIsInstalled && launcherCanInstall;
+        // "Install another copy" — available once the mod is installed, for any
+        // installable (non-stock) mod. Installs an isolated clone in a new folder.
+        ActionPanelControl.MenuInstallAnotherCopy.IsEnabled =
+            !_isBusy && _modIsInstalled && launcherCanInstall
+            && !_updateService.Profile.IsStockGame;
 
         // Verify is now profile-aware: it only enforces the WoL-specific
         // markers when the active mod actually uses the WolPatcher pipeline;
@@ -8808,10 +9092,27 @@ public partial class MainWindow : Window
             var result = await uninstaller.UninstallAsync(
                 _updateService.Profile, plan, dialog.Options, progress);
 
-            // Clear the saved path so re-detection runs from scratch
+            // After removing the ACTIVE copy: if the mod has OTHER registered
+            // copies, promote the first to active (the uninstall only removed the
+            // active copy's folder/overlay; the other copies on disk are intact).
+            // Otherwise clear the saved path so re-detection runs from scratch.
+            // A full config reset (ResetConfig) skips promotion — the user asked
+            // to wipe everything.
             if (dialog.Options.ResetConfig || result.Success)
             {
-                _config.GetActiveState().InstallPath = "";
+                var st = _config.GetActiveState();
+                if (result.Success && !dialog.Options.ResetConfig && st.OtherInstalls.Count > 0)
+                {
+                    var next = st.OtherInstalls[0];
+                    st.OtherInstalls.RemoveAt(0);
+                    st.AdoptInstall(next); // promote a remaining copy to active
+                    DiagnosticLog.Write(
+                        $"Uninstall: promoted remaining copy '{next.InstallPath}' to active.");
+                }
+                else
+                {
+                    st.InstallPath = "";
+                }
                 _config.GameExecutable = "";
                 _config.Save();
             }

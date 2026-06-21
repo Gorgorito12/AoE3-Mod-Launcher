@@ -94,7 +94,30 @@ public class UninstallService
             return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
         }
 
-        // Count files / dirs for the dialog summary
+        // SAFETY: only a launcher-made CLONE may be blanket-deleted. An IN-PLACE
+        // overlay (e.g. Improvement Mod laid over the user's real AoE3) lives in
+        // the user's own Age of Empires III folder — recursively deleting it
+        // would wipe their base game. This generalizes the IsStockGame guard
+        // above to "any in-place install over the user's AoE3". The signal is the
+        // manifest's ClonedAoe3 flag; without a manifest, fall back to "is this
+        // path one of the user's detected AoE3 roots?". For an in-place install
+        // we switch to OVERLAY-ONLY removal (delete only the mod's net-new files
+        // via the manifest, never the folder).
+        var manifest = InstallManifest.TryLoad(installPath);
+        bool overlayOnly = manifest != null
+            ? !manifest.ClonedAoe3
+            : IsUserAoe3Root(installPath);
+
+        if (overlayOnly)
+        {
+            int overlayCount = manifest?.OverlayNetNew.Count ?? 0;
+            DiagnosticLog.Write(
+                $"Uninstall Plan: '{installPath}' is an IN-PLACE install (clonedAoe3=false / AoE3 root) — " +
+                $"overlay-only removal of {overlayCount} net-new file(s); the base game folder is kept.");
+            return new UninstallPlan(UninstallMode.Valid, installPath, overlayCount, 0, OverlayOnly: true);
+        }
+
+        // Count files / dirs for the dialog summary (full clone → blanket delete).
         int fileCount = 0, dirCount = 0;
         try
         {
@@ -104,6 +127,27 @@ public class UninstallService
         catch { /* counts are best-effort, not load-bearing */ }
 
         return new UninstallPlan(UninstallMode.Valid, installPath, fileCount, dirCount);
+    }
+
+    /// <summary>True when <paramref name="path"/> is one of the user's detected
+    /// AoE3 install roots (its game folder or mod root) — i.e. NOT a
+    /// launcher-made clone. The no-manifest fallback for the in-place safety
+    /// guard; conservative (protect on doubt — refusing to blanket-delete a real
+    /// AoE3 is far safer than the reverse).</summary>
+    private static bool IsUserAoe3Root(string path)
+    {
+        var norm = path.TrimEnd('\\', '/');
+        try
+        {
+            foreach (var inst in AoE3Detector.FindAll())
+            {
+                if (string.Equals(inst.GameFolder?.TrimEnd('\\', '/'), norm, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(inst.ModRoot?.TrimEnd('\\', '/'), norm, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        catch { /* detection best-effort; default to NOT-AoE3 (allow normal flow) */ }
+        return false;
     }
 
     /// <summary>
@@ -163,11 +207,20 @@ public class UninstallService
             shortcutsDeleted = DeleteShortcuts(profile, plan.InstallPath, errors);
         }
 
-        // ---- Phase 2: delete the install folder, recursively ----
+        // ---- Phase 2: remove mod files ----
         if (options.DeleteModFiles)
         {
-            (filesDeleted, dirsDeleted) =
-                DeleteInstallFolder(plan.InstallPath, plan.FileCount, progress, ct, errors);
+            if (plan.OverlayOnly)
+            {
+                // In-place overlay over the user's real AoE3: remove ONLY the
+                // mod's net-new files via the manifest; never the folder.
+                (filesDeleted, dirsDeleted) = DeleteOverlayFiles(plan.InstallPath, errors);
+            }
+            else
+            {
+                (filesDeleted, dirsDeleted) =
+                    DeleteInstallFolder(plan.InstallPath, plan.FileCount, progress, ct, errors);
+            }
         }
 
         // ---- Phase 3: registry ----
@@ -295,6 +348,56 @@ public class UninstallService
         }
 
         return (filesDeleted, dirsDeleted);
+    }
+
+    /// <summary>
+    /// Overlay-only removal for an IN-PLACE install (over the user's real AoE3):
+    /// delete ONLY the mod's net-new overlay files (from the manifest), plus the
+    /// launcher's own manifest. NEVER deletes directories or the install folder —
+    /// the surrounding base game must survive. Files that shadowed a base-game
+    /// file are intentionally left (the original bytes were overwritten without a
+    /// backup — same residual as a version-picker downgrade).
+    /// </summary>
+    private static (int FilesDeleted, int DirsDeleted) DeleteOverlayFiles(
+        string installPath, List<string> errors)
+    {
+        int filesDeleted = 0;
+        var manifest = InstallManifest.TryLoad(installPath);
+        if (manifest == null)
+        {
+            DiagnosticLog.Write(
+                $"Uninstall (overlay-only): no manifest at '{installPath}' — nothing safe to remove.");
+            return (0, 0);
+        }
+
+        foreach (var rel in manifest.OverlayNetNew)
+        {
+            var full = Path.Combine(installPath, rel.Replace('/', Path.DirectorySeparatorChar));
+            try
+            {
+                if (File.Exists(full))
+                {
+                    File.SetAttributes(full, FileAttributes.Normal);
+                    File.Delete(full);
+                    filesDeleted++;
+                }
+            }
+            catch (Exception ex) { errors.Add($"{full}: {ex.Message}"); }
+        }
+
+        // The manifest itself is the launcher's bookkeeping, not part of the
+        // overlay payload — remove it so the folder no longer reads as installed.
+        try
+        {
+            var m = InstallManifest.GetManifestPath(installPath);
+            if (File.Exists(m)) { File.Delete(m); filesDeleted++; }
+        }
+        catch (Exception ex) { errors.Add($"manifest: {ex.Message}"); }
+
+        DiagnosticLog.Write(
+            $"Uninstall (overlay-only): removed {filesDeleted} mod file(s) from '{installPath}', " +
+            "kept the base game intact.");
+        return (filesDeleted, 0);
     }
 
     // -------------------------------------------------------------------------
@@ -444,4 +547,5 @@ public record UninstallPlan(
     UninstallMode Mode,
     string InstallPath,
     int FileCount,
-    int DirectoryCount);
+    int DirectoryCount,
+    bool OverlayOnly = false);

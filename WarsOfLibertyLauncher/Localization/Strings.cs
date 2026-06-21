@@ -3590,6 +3590,32 @@ public static class Strings
                        "tienes Age of Empires III (típicamente tu biblioteca de Steam).",
         },
 
+        // -------- Install: additional copy --------
+        ["DlgInstallCopyExistsTitle"] = new()
+        {
+            [LangEn] = "Copy already there",
+            [LangEs] = "Ya hay una copia ahí",
+        },
+        ["DlgInstallCopyExistsBody"] = new()
+        {
+            [LangEn] = "There's already a registered copy of this mod at:\n{0}\n\n" +
+                       "Pick a different folder for the new copy, or switch to the existing " +
+                       "one from Mod Properties.",
+            [LangEs] = "Ya hay una copia registrada de este mod en:\n{0}\n\n" +
+                       "Elegí otra carpeta para la copia nueva, o cambiá a la existente " +
+                       "desde Propiedades del mod.",
+        },
+        ["MenuInstallAnotherCopy"] = new()
+        {
+            [LangEn] = "Install another copy…",
+            [LangEs] = "Instalar otra copia…",
+        },
+        ["InstallCopiesHeader"] = new()
+        {
+            [LangEn] = "Installed copies",
+            [LangEs] = "Copias instaladas",
+        },
+
         // -------- Elevation (UAC) --------
         ["DlgElevationRequiredTitle"] = new()
         {

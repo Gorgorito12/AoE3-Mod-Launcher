@@ -666,11 +666,26 @@ public class UpdateService
             {
                 return state.InstallPath.TrimEnd('\\', '/');
             }
-            // Cache is stale or pointing at vanilla AoE3 — wipe it so the
-            // tile-side ProbeInstalledState and the next session both arrive
-            // here with a clean slate. Versions stay (they're a separate
-            // axis); the install-path miss alone is enough to force a fresh
-            // detection.
+            // NO-HIJACK: when the mod has MULTIPLE registered installs, the
+            // active slot's path is authoritative. If it's temporarily missing
+            // (drive unplugged, folder moved/renamed), DON'T wipe it and DON'T
+            // disk-scan to adopt a sibling copy or a random subfolder — that would
+            // silently repoint a registered slot at another copy. Keep the path;
+            // the caller reports it as "missing on disk" until it returns. Only
+            // single-install configs self-heal via the wipe + disk-scan below.
+            if (state.HasMultipleInstalls)
+            {
+                DiagnosticLog.Write(
+                    $"ResolveInstallPath: active install for '{_profile.Id}' not present at " +
+                    $"'{state.InstallPath}' but the mod has registered copies — keeping the slot " +
+                    "(no wipe, no disk-scan).");
+                return state.InstallPath.TrimEnd('\\', '/');
+            }
+
+            // Single-install: cache is stale or pointing at vanilla AoE3 — wipe it
+            // so the tile-side ProbeInstalledState and the next session both arrive
+            // here with a clean slate. Versions stay (they're a separate axis); the
+            // install-path miss alone is enough to force a fresh detection.
             DiagnosticLog.Write(
                 $"ResolveInstallPath: rejecting stale cache for '{_profile.Id}': '{state.InstallPath}' " +
                 "(failed probe-file or content-marker check). Clearing.");

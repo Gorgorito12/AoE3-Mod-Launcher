@@ -44,6 +44,7 @@ public partial class ModPropertiesDialog : Window
     private readonly Action _revertToEnglish;
     private readonly Action _openVerify;
     private readonly Action _openRepair;
+    private readonly Action? _installAnotherCopy;
 
     // New callbacks (8) folded in from the SETTINGS popup. Each one
     // wraps a RaiseMenuClick on the legacy ActionPanelControl menu
@@ -95,7 +96,8 @@ public partial class ModPropertiesDialog : Window
         Func<Task<TranslationIndex?>>? refreshTranslations = null,
         Action? onUpdatePolicyChanged = null,
         Func<Task<IReadOnlyList<GitHubReleaseDownloader.ReleaseInfo>>>? listVersions = null,
-        Func<string, Task>? installVersion = null)
+        Func<string, Task>? installVersion = null,
+        Action? installAnotherCopy = null)
     {
         _profile = profile;
         _service = service;
@@ -118,6 +120,7 @@ public partial class ModPropertiesDialog : Window
         _onUpdatePolicyChanged = onUpdatePolicyChanged;
         _listVersions = listVersions;
         _installVersion = installVersion;
+        _installAnotherCopy = installAnotherCopy;
 
         InitializeComponent();
         ApplyStrings();
@@ -175,6 +178,7 @@ public partial class ModPropertiesDialog : Window
         LblMaintenanceSection.Text = Strings.Get("ModPropMaintenanceSection");
         VerifyBtn.Content = Strings.Get("ModContextVerify");
         RepairBtn.Content = Strings.Get("ModContextRepair");
+        InstallAnotherCopyBtn.Content = Strings.Get("MenuInstallAnotherCopy");
         LblDiagnosticsSection.Text = Strings.Get("ModPropDiagnostics");
         ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
         LblDangerZone.Text = Strings.Get("ModPropDangerZone");
@@ -327,6 +331,7 @@ public partial class ModPropertiesDialog : Window
         ChangeAoE3FolderBtn.IsEnabled = true;
         VerifyBtn.IsEnabled = installed;
         RepairBtn.IsEnabled = installed;
+        InstallAnotherCopyBtn.IsEnabled = installed;
         ViewLogsBtn.IsEnabled = true;          // Logs are always available.
         UninstallBtn.IsEnabled = installed;
 
@@ -340,8 +345,10 @@ public partial class ModPropertiesDialog : Window
             LblMaintenanceSection.Visibility = Visibility.Collapsed;
             VerifyBtn.Visibility = Visibility.Collapsed;
             RepairBtn.Visibility = Visibility.Collapsed;
+            InstallAnotherCopyBtn.Visibility = Visibility.Collapsed;
             VerifyBtn.IsEnabled = false;
             RepairBtn.IsEnabled = false;
+            InstallAnotherCopyBtn.IsEnabled = false;
 
             LblDangerZone.Visibility = Visibility.Collapsed;
             LblDangerZoneDesc.Visibility = Visibility.Collapsed;
@@ -1080,6 +1087,14 @@ public partial class ModPropertiesDialog : Window
     {
         Close();
         _openRepair?.Invoke();
+    }
+
+    private void InstallAnotherCopyBtn_Click(object sender, RoutedEventArgs e)
+    {
+        // Closes like Repair — the install progress runs on the main window,
+        // which a non-modal Properties window would otherwise cover.
+        Close();
+        _installAnotherCopy?.Invoke();
     }
 
     private void ViewLogsBtn_Click(object sender, RoutedEventArgs e)
