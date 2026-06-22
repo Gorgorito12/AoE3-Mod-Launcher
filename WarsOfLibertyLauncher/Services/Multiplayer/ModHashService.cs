@@ -25,6 +25,13 @@ public record ModFileHash(string RelativePath, string Sha256, long SizeBytes);
 /// The combined hash is what the launcher actually compares before
 /// allowing a join; the per-file list exists so the join dialog can show
 /// exactly which files differ when the check fails.
+///
+/// The fingerprint is LOCALIZATION-INVARIANT: files covered by a community
+/// translation (e.g. <c>data\stringtabley.xml</c>) are hashed from the canonical
+/// English snapshot in <c>translations\_originals\</c>, not the live (possibly
+/// translated) file. String tables don't affect the simulation, so a translated
+/// and an English install on the same build still match — see the comment in
+/// <see cref="ModHashService.FingerprintAsync(Models.ModProfile,string,System.Collections.Generic.IEnumerable{string},System.Threading.CancellationToken)"/>.
 /// </summary>
 public record ModFingerprint(
     string ModId,
@@ -105,11 +112,25 @@ public static class ModHashService
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // Localization must NOT change the fingerprint. Applying a community
+        // translation overwrites a covered file (e.g. data\stringtabley.xml), which
+        // is one of the probed files — so two players on the same build but
+        // different languages would otherwise produce different CombinedHashes and
+        // be wrongly rejected at the lobby gate. String tables don't affect the
+        // simulation, so that's a FALSE mismatch. We hash the canonical English
+        // snapshot (translations\_originals\) for covered files instead of the live
+        // file, exactly like UpdateService.DetectCurrentVersionAsync does for
+        // version detection. No-op for English (snapshot == live); protoy/techtree
+        // have no snapshot so they keep hashing the live file (a real OOS still
+        // mismatches); falls back to the live file when no snapshot exists; and host
+        // and joiner compute it the same way, so the comparison stays symmetric.
+        var translations = new TranslationService(installRoot, profile.Translations?.CoveredFiles);
+
         var results = new List<ModFileHash>(normalised.Count);
         foreach (var rel in normalised)
         {
             ct.ThrowIfCancellationRequested();
-            var absolute = Path.Combine(installRoot, rel);
+            var absolute = translations.ResolveHashableFile(rel);
             var (sha, size) = await HashFileAsync(absolute, ct);
             results.Add(new ModFileHash(rel, sha, size));
         }

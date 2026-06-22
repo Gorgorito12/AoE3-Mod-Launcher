@@ -750,6 +750,31 @@ don't go looking for it.)
   newest-first). Don't revert either to a plain `OrderBy(e => e.Name)`. Pinned by
   `TranslationCompatTests`.
 
+- **The multiplayer fingerprint is LOCALIZATION-INVARIANT — applying a translation
+  must NOT lock a player out of English lobbies.** `ModHashService` gates the lobby
+  join on the SHA-256 of three files (`data\protoy.xml`, `techtreey.xml`,
+  `stringtabley.xml`). But `stringtabley.xml` is exactly what a community translation
+  overwrites, so hashing the LIVE file made a Spanish install and an English one on
+  the same build produce different `CombinedHash`es → the lobby wrongly rejected the
+  join ("apliqué español y no puedo jugar con peers en inglés"). String tables don't
+  affect the simulation, so that's a FALSE mismatch. The fix: `FingerprintAsync`
+  hashes the canonical English snapshot (`translations\_originals\`) for covered files
+  via `TranslationService.ResolveHashableFile`, **exactly like
+  `UpdateService.DetectCurrentVersionAsync` already does** for version detection. It's
+  read-side only (the live files stay translated, so the player keeps their language
+  IN multiplayer): no-op for English (snapshot == live); `protoy`/`techtreey` have no
+  snapshot so they keep hashing the live file (a real OOS still mismatches); falls back
+  to the live file when no snapshot exists; host and joiner compute it identically →
+  symmetric. Pinned by `WarsOfLibertyLauncher.Tests/ModHashServiceTests`. **CAVEAT (not
+  yet smoke-tested):** this fixes the LAUNCHER's lobby gate. AoE3 community evidence
+  (CRC/version-mismatch and OOS are blamed on `proto`/`techtree`, and vanilla AoE3's
+  cross-language MP works) indicates `age3y.exe`'s own LAN version match is centered on
+  the simulation files, NOT the string tables — so the engine almost certainly does NOT
+  independently block a translated player. Confirm with a Windows LAN smoke test (host
+  EN + joiner ES on the same WoL build); the exact coverage of AoE3's CRC isn't publicly
+  documented. If the engine DID gate on `stringtabley`, the fallback would be to swap the
+  English file in only for the MP launch (which would sacrifice the in-game language).
+
 - **The translator-facing packager lives in Settings → Packager tab, NOT the
   Game-language gear submenu, and it's globalised across mods.** The packaging
   dialog (`TranslationPackagerDialog`) used to be a `MenuItem` ("📦 Empaquetar
