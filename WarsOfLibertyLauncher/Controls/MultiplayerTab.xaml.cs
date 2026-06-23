@@ -4303,19 +4303,25 @@ public partial class MultiplayerTab : UserControl
         // local-LAN play (e.g. two laptops on the same router with no
         // Radmin) keeps working unmodified.
         //
-        // Syntax notes:
-        //   * AoE3 cvars all use `+` prefix (`+noIntroCinematics`,
-        //     `+disableESOProfile`, etc.) — the tutorial's no-prefix
-        //     `OverrideAddress=...` was parsed as a positional argument
-        //     and silently ignored, leaving AoE3 to auto-pick whatever
-        //     adapter IP it found first.
-        //   * Cvar assignments use space, not `=` (`+OverrideAddress
-        //     26.x.x.x`, not `+OverrideAddress=26.x.x.x`). The engine
-        //     treats `+name value` as "set cvar to value".
+        // Syntax — DO NOT "fix" this back to `+OverrideAddress`. This has
+        // flip-flopped twice already and the `+` form is the BROKEN one,
+        // confirmed by a real in-game capture (the lobby's "Dirección IP"
+        // showed 192.168.56.1 — a VirtualBox host-only adapter — instead of
+        // the 26.x Radmin IP). The form age3y.exe actually honours is the
+        // community tutorial's literal `OverrideAddress="<ip>"`: NO `+`
+        // prefix, an `=` assignment, and the IP in double quotes. The
+        // string reaches the game's command line verbatim (single Arguments
+        // string, UseShellExecute=false), exactly like the shortcut Target.
+        //   * `+OverrideAddress <ip>` is silently ignored — OverrideAddress
+        //     is NOT a `+`-prefixed console cvar (those are a different
+        //     mechanism), so the engine drops it and auto-picks whatever
+        //     adapter IP it finds first (the VirtualBox NIC, here).
+        //   * The skip-intro switches above (`+noIntroCinematics`, etc.)
+        //     legitimately ARE `+` cvars and stay prefixed — they work.
         var radmin = RadminVpnService.GetStatus();
         if (radmin.IsServiceRunning && !string.IsNullOrEmpty(radmin.AdapterIp))
         {
-            sb.Append(" +OverrideAddress ").Append(radmin.AdapterIp);
+            sb.Append(" OverrideAddress=\"").Append(radmin.AdapterIp).Append('"');
         }
 
         return sb.ToString();
