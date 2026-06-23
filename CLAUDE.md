@@ -832,7 +832,7 @@ don't go looking for it.)
   `ModHashService` then fingerprints the same TAD data files
   (`protoy/techtreey/stringtabley.xml`), so two stock players on the same game
   version match and can share a lobby. The host launch appends
-  `+OverrideAddress` exactly like the mods. Like WoL, the entry is mirrored in
+  `OverrideAddress="<ip>"` exactly like the mods. Like WoL, the entry is mirrored in
   the catalog repo (`mods/aoe3-tad/mod.json`) for the public listing, but the
   built-in **shadows** it at runtime (built-in wins on id collision).
 
@@ -1147,7 +1147,7 @@ don't go looking for it.)
   accounting Radmin doesn't expose; the whole-adapter TRAFFIC stat covers it. The
   Radmin IP is validated server-side against `26.x` (a client can't inject an
   arbitrary host for everyone to ping), and it's only shared among that room's
-  members — the same IP they already use to actually play (`+OverrideAddress`).
+  members — the same IP they already use to actually play (`OverrideAddress="<ip>"`).
 
 - **The rooms browser auto-refreshes its LIST on a quiet diff — separate from the
   PING timer above.** New / closed rooms now appear without pressing *Actualizar*:
@@ -1482,7 +1482,7 @@ engine** and the UI binds to it.
    self-hosted Node/Fastify backend (`wol-lobby.duckdns.org`) for lobbies + chat,
    gated by a mod fingerprint (`ModHashService`) → players join a shared **Radmin
    VPN** network manually for the actual LAN; the host's game launch appends
-   `+OverrideAddress <radmin-ip>` plus skip-intro flags. Match-history/ELO and
+   `OverrideAddress="<radmin-ip>"` plus skip-intro flags. Match-history/ELO and
    replay upload are scaffolded but not wired.
 
 ### Multi-mod profile system

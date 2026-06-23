@@ -219,7 +219,7 @@ traffic.
   stock-game players on the same game version match the same way and can share
   a lobby.
 - **Auto skip-intro on launch** — when the host starts the match, AoE3 is
-  spawned with `+OverrideAddress <host-radmin-ip>` plus skip-intro flags, so
+  spawned with `OverrideAddress="<host-radmin-ip>"` plus skip-intro flags, so
   players reach the menu quickly, then click Multiplayer → LAN once and the
   game is there.
 - **Match history / ELO and replay upload are scaffolded but not yet wired** —
@@ -333,7 +333,7 @@ for what users will see and how to handle Smart App Control.
 ├─────────────────────────────────────────────────────────────┤
 │  6. Host presses Start -> game_started broadcast ->         │
 │     every client launches age3y.exe with skip-intro         │
-│     flags + +OverrideAddress <host-radmin-ip>.              │
+│     flags + OverrideAddress="<host-radmin-ip>".             │
 │     Players click Multiplayer -> LAN once; the host         │
 │     shows up as a normal LAN game.                          │
 ├─────────────────────────────────────────────────────────────┤
