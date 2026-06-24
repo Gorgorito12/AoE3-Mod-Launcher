@@ -1406,6 +1406,7 @@ public class NativeInstallService
                 StartMenuFolder = startMenuFolder,
                 OverlayFiles = overlayFiles ?? new(),
                 OverlayNetNew = overlayNetNew ?? new(),
+                KeyFileHashes = ComputeKeyFileHashes(installFolder),
             };
             manifest.Save();
             DiagnosticLog.Write(
@@ -1416,6 +1417,42 @@ public class NativeInstallService
         {
             DiagnosticLog.Write($"Manifest write failed (non-fatal): {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// MD5s (lowercase hex) of the three version-key data files the launcher
+    /// just laid down, keyed by forward-slash install-relative path. Lets the
+    /// launcher recognize its OWN byte-faithful payload as an intact install
+    /// even though those bytes don't MD5-match any UpdateInfo.xml version. No
+    /// translation is applied at install time, so these are the canonical
+    /// (English) hashes — the same the detector compares against later.
+    /// </summary>
+    private static Dictionary<string, string> ComputeKeyFileHashes(string installFolder)
+    {
+        var result = new Dictionary<string, string>();
+        string[] keyRel =
+        {
+            UpdateService.ProtoRelativePath,
+            UpdateService.TechRelativePath,
+            UpdateService.StrRelativePath,
+        };
+        using var md5 = System.Security.Cryptography.MD5.Create();
+        foreach (var rel in keyRel)
+        {
+            var full = Path.Combine(installFolder, rel);
+            if (!File.Exists(full)) continue;
+            try
+            {
+                using var fs = File.OpenRead(full);
+                var hex = Convert.ToHexString(md5.ComputeHash(fs)).ToLowerInvariant();
+                result[rel.Replace('\\', '/')] = hex;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Baseline hash failed for {rel}: {ex.Message}");
+            }
+        }
+        return result;
     }
 
     /// <summary>

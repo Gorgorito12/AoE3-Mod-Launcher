@@ -5569,6 +5569,16 @@ public partial class MainWindow : Window
             InvalidateActiveModCheckCache();
             await CheckAsync();
         }
+        // A plain Repair (asUpdate == false) must also refresh the UI so the
+        // CTA reflects the now-recognized install — the asUpdate branch above
+        // already did this for updates. With manifest-baseline recognition a
+        // successful repair flips CurrentVersion from null to a real value, so
+        // the primary action moves off the stale "Install".
+        else if (updated)
+        {
+            InvalidateActiveModCheckCache();
+            await CheckAsync();
+        }
     }
 
     /// <summary>
@@ -5644,6 +5654,11 @@ public partial class MainWindow : Window
         }
     }
 
+    // The launcher update found at startup, stashed so the title-bar pill's
+    // click handler can open the download dialog without re-checking. Null when
+    // no update is available.
+    private LauncherUpdateService.UpdateCheckResult? _pendingLauncherUpdate;
+
     private Task CheckForLauncherUpdateAsync()
     {
         try
@@ -5659,40 +5674,102 @@ public partial class MainWindow : Window
 
     private async Task CheckForLauncherUpdateInnerAsync()
     {
+        // skippedTag is intentionally empty: the persistent "skip this version"
+        // suppression was removed. Users were hitting Cancel on the auto-modal
+        // and then never being reminded (SkippedLauncherTag silenced the tag
+        // forever), so they stayed on old versions. Now an available update
+        // surfaces a persistent, non-invasive PILL in the title bar that
+        // reminds on EVERY launch until the user actually updates. The SemVer
+        // guard inside EvaluateUpdate still gates "remote strictly newer than
+        // installed", so this never offers a same/older version. Passing ""
+        // also recovers users who previously dismissed (their stale persisted
+        // SkippedLauncherTag is no longer read).
         var result = await LauncherUpdateService.CheckAsync(
             lastInstalledTag: _config.LastInstalledLauncherTag,
-            skippedTag: _config.SkippedLauncherTag,
+            skippedTag: "",
             cachedETag: _config.LauncherUpdateETag);
 
-        // Persist the ETag from this check (changed or not) so the next check can
-        // go conditional and short-circuit on 304. Only write when we actually
-        // got one back, to avoid clobbering a good cached value on a failure.
-        if (!string.IsNullOrEmpty(result.ResponseETag) &&
-            !string.Equals(result.ResponseETag, _config.LauncherUpdateETag, StringComparison.Ordinal))
+        if (!result.UpdateAvailable)
         {
-            _config.LauncherUpdateETag = result.ResponseETag;
+            // No update pending (or a rollback below the installed version):
+            // cache the ETag so subsequent launches short-circuit on 304 and
+            // spare the unauthenticated GitHub rate-limit. Only write when we
+            // got one back, to avoid clobbering a good cached value on failure.
+            if (!string.IsNullOrEmpty(result.ResponseETag) &&
+                !string.Equals(result.ResponseETag, _config.LauncherUpdateETag, StringComparison.Ordinal))
+            {
+                _config.LauncherUpdateETag = result.ResponseETag;
+                _config.Save();
+            }
+            _pendingLauncherUpdate = null;
+            LauncherUpdatePill.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // An update IS pending. Do NOT cache the ETag — a cached ETag makes the
+        // NEXT launch receive 304 Not Modified, which CheckAsync reports as
+        // NoUpdate, which would HIDE the pill even though the user never updated
+        // (the "appeared once then never again" bug). Clearing it forces a full
+        // (non-conditional) check each launch WHILE an update is pending, so the
+        // pill reliably reappears every time and we always hold the full payload
+        // for the download dialog. Once the user updates, UpdateAvailable becomes
+        // false on its own and the branch above resumes 304-caching.
+        if (!string.IsNullOrEmpty(_config.LauncherUpdateETag))
+        {
+            _config.LauncherUpdateETag = "";
             _config.Save();
         }
 
-        if (!result.UpdateAvailable) return;
+        // Surface the persistent pill instead of popping a modal. The user
+        // opens the dialog when ready via LauncherUpdatePill_Click.
+        _pendingLauncherUpdate = result;
+        LauncherUpdatePill.Content = Strings.Format("LauncherUpdatePill", result.LatestVersion);
+        LauncherUpdatePill.ToolTip = Strings.Get("LauncherUpdatePillTooltip");
+        LauncherUpdatePill.Visibility = Visibility.Visible;
+        PulseLauncherUpdatePill();
+        DiagnosticLog.Write($"Launcher update {result.RemoteTag} available — showing persistent pill.");
+    }
 
-        // Pass the config to the dialog so it can persist the new tag right
-        // before relaunching (avoids a brief race where the new binary boots
-        // and re-checks before this process has saved).
-        var dialog = new LauncherUpdateDialog(result, _config) { Owner = this };
-        var accepted = dialog.ShowDialog();
+    /// <summary>
+    /// Opens the launcher self-update dialog when the user clicks the title-bar
+    /// pill. Accepting downloads + relaunches (the dialog owns that, persisting
+    /// LastInstalledLauncherTag); cancelling just closes the dialog and leaves
+    /// the pill visible on purpose — no persistent skip, so the reminder returns
+    /// next launch until the user updates.
+    /// </summary>
+    private void LauncherUpdatePill_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingLauncherUpdate == null) return;
+        var dialog = new LauncherUpdateDialog(_pendingLauncherUpdate, _config) { Owner = this };
+        dialog.ShowDialog();
+    }
 
-        // If the user dismissed the update (closed it or clicked "Later"),
-        // remember this tag so we don't keep prompting until a different
-        // tag appears on GitHub.
-        if (accepted != true)
+    /// <summary>
+    /// Gentle scale "breath" on the update pill to draw the eye when it appears.
+    /// Repeats a FEW times then stops — deliberately bounded so it nudges without
+    /// harassing: the pulse occupies the first ~700 ms of each ~3.6 s cycle (long
+    /// idle gap between breaths), repeated 3×, then settles. Mirrors
+    /// <see cref="PulseNotificationBell"/> but scales instead of rotating.
+    /// </summary>
+    private void PulseLauncherUpdatePill()
+    {
+        var pulse = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames
         {
-            _config.SkippedLauncherTag = result.RemoteTag;
-            _config.Save();
-            DiagnosticLog.Write($"User dismissed launcher update {result.RemoteTag}; saved as skipped.");
-        }
-        // If accepted, the dialog already saved LastInstalledLauncherTag and
-        // launched the new binary — nothing else to do.
+            // One cycle = a short double-pulse, then a long hold at rest.
+            Duration = TimeSpan.FromMilliseconds(3600),
+            // Three gentle breaths spaced out, then stop (not an endless loop).
+            RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(3),
+            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+        };
+        void Key(double scale, double ms) => pulse.KeyFrames.Add(
+            new System.Windows.Media.Animation.EasingDoubleKeyFrame(
+                scale, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms))));
+        Key(1.0, 0); Key(1.08, 160); Key(1.0, 340); Key(1.05, 500); Key(1.0, 680);
+        Key(1.0, 3600); // long idle gap before the next breath
+        LauncherUpdatePillScale.BeginAnimation(
+            System.Windows.Media.ScaleTransform.ScaleXProperty, pulse);
+        LauncherUpdatePillScale.BeginAnimation(
+            System.Windows.Media.ScaleTransform.ScaleYProperty, pulse.Clone());
     }
 
     private async Task CheckAsync()
@@ -6937,6 +7014,11 @@ public partial class MainWindow : Window
         var service = targetService ?? _updateService;
         var profile = service.Profile;
 
+        // Tracks whether the install verified clean — gates the post-install
+        // auto-continue-into-update ("todo corrido") below so it never fires
+        // after a failed / incomplete install.
+        bool installSucceeded = false;
+
         var payload = await ResolvePayloadUrlsAsync(service);
         if (payload == null) return;
         var payloadUrls = payload.Urls;
@@ -7453,6 +7535,7 @@ public partial class MainWindow : Window
             int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
             if (totalProblems == 0)
             {
+                installSucceeded = true;
                 SetStatus(Strings.Format(
                     "StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
                 ShowProgressCompleted("ProgressTitleCompleted",
@@ -7508,6 +7591,38 @@ public partial class MainWindow : Window
         // Re-check to detect the freshly installed mod
         InvalidateActiveModCheckCache();
         await CheckAsync();
+
+        // "Todo corrido": if the freshly-installed payload landed BEHIND the
+        // latest version, continue straight into the update flow instead of
+        // leaving the user to click Update separately. No-op in the normal
+        // case — the byte-faithful payload is already the latest, so the
+        // recheck finds nothing pending and this returns immediately.
+        if (installSucceeded)
+            await MaybeAutoContinueUpdateAfterInstall();
+    }
+
+    /// <summary>
+    /// After a fresh install, auto-runs the update flow when the installed
+    /// payload is recognized but still behind the latest version. Gated so it
+    /// only fires for a WolPatcher install that is valid, version-recognized,
+    /// has pending patches, and isn't pinned — otherwise it's a no-op. Keeps
+    /// install→update a single continuous flow without a second user click.
+    /// </summary>
+    private async Task MaybeAutoContinueUpdateAfterInstall()
+    {
+        if (!_checkResultCache.TryGetValue(_updateService.Profile.Id, out var result))
+            return;
+        if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
+            return;
+        if (!result.IsValidInstall) return;
+        if (result.CurrentVersion == null) return;       // unrecognized → don't auto-act
+        if (result.PendingDownloads.Count == 0) return;  // already at latest
+        if (IsUpdatePausedByPin(result)) return;         // user pinned this version
+
+        DiagnosticLog.Write(
+            $"Auto-continue: fresh install at {result.CurrentVersion.Ver} has " +
+            $"{result.PendingDownloads.Count} pending patch(es) → running update.");
+        await ApplyUpdateWithElevationCheckAsync();
     }
 
     /// <summary>
