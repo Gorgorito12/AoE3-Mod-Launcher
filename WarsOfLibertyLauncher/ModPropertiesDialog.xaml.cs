@@ -58,6 +58,7 @@ public partial class ModPropertiesDialog : Window
     private readonly Action _createBackup;
     private readonly Action _restoreBackup;
     private readonly Action _viewLogs;
+    private readonly Action _shareDiagnostics;
     private readonly Action _uninstall;
 
     /// <summary>Invoked after the user pins/unpins "stay on this version" so the
@@ -92,6 +93,7 @@ public partial class ModPropertiesDialog : Window
         Action createBackup,
         Action restoreBackup,
         Action viewLogs,
+        Action shareDiagnostics,
         Action uninstall,
         Func<Task<TranslationIndex?>>? refreshTranslations = null,
         Action? onUpdatePolicyChanged = null,
@@ -115,6 +117,7 @@ public partial class ModPropertiesDialog : Window
         _createBackup = createBackup;
         _restoreBackup = restoreBackup;
         _viewLogs = viewLogs;
+        _shareDiagnostics = shareDiagnostics;
         _uninstall = uninstall;
         _refreshTranslations = refreshTranslations;
         _onUpdatePolicyChanged = onUpdatePolicyChanged;
@@ -181,6 +184,7 @@ public partial class ModPropertiesDialog : Window
         InstallAnotherCopyBtn.Content = Strings.Get("MenuInstallAnotherCopy");
         LblDiagnosticsSection.Text = Strings.Get("ModPropDiagnostics");
         ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
+        ShareDiagnosticsBtn.Content = Strings.Get("ModPropShareDiagnostics");
         LblDangerZone.Text = Strings.Get("ModPropDangerZone");
         LblDangerZoneDesc.Text = Strings.Get("ModPropDangerZoneDesc");
         UninstallBtn.Content = Strings.Get("ModPropUninstall");
@@ -333,6 +337,7 @@ public partial class ModPropertiesDialog : Window
         RepairBtn.IsEnabled = installed;
         InstallAnotherCopyBtn.IsEnabled = installed;
         ViewLogsBtn.IsEnabled = true;          // Logs are always available.
+        ShareDiagnosticsBtn.IsEnabled = true;  // Bundle is always available.
         UninstallBtn.IsEnabled = installed;
 
         // Stock Age of Empires III is detect-only: the launcher never
@@ -1101,6 +1106,13 @@ public partial class ModPropertiesDialog : Window
     {
         // Opens the log in the external viewer — no covering window, keep open.
         _viewLogs?.Invoke();
+    }
+
+    private void ShareDiagnosticsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        // Bundles the diagnostic files to the Desktop and reveals them in Explorer
+        // — no covering window, so keep the dialog open.
+        _shareDiagnostics?.Invoke();
     }
 
     private void UninstallBtn_Click(object sender, RoutedEventArgs e)

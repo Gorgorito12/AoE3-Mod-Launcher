@@ -421,6 +421,11 @@ public class UpdateService
         string fromVersion = CurrentVersion?.Ver ?? "?";
         string toVersion = LatestVersion?.Ver ?? "?";
 
+        // Accumulates the install-relative paths every patch in this session wrote
+        // (created + overwritten), so the post-update step can re-fingerprint
+        // exactly what changed and keep a patched install verifiable.
+        var touchedByPatches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         for (int i = 0; i < downloads.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
@@ -529,9 +534,10 @@ public class UpdateService
                 Report(p.BytesRead, p.BytesTotal);
             });
 
-            await _archive.ExtractTarXzWithBackupAsync(
+            var touched = await _archive.ExtractTarXzWithBackupAsync(
                 archivePath, InstallPath, backupDir,
                 extractStatus, extractByteProgress, ct);
+            foreach (var t in touched) touchedByPatches.Add(t);
 
             // ---- 5. Apply delete list ----
             // The official UpdateInfo.xml gives deleteList as an install-
@@ -630,6 +636,43 @@ public class UpdateService
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Post-update RemoveStaleBuildArtifacts failed (non-fatal): {ex.Message}");
+        }
+
+        // Refresh (don't discard) the manifest's per-file fingerprints so a
+        // PATCHED install stays verifiable archive-by-archive — a patched WoL is
+        // the normal state, and the old "clear" left it on the weak spot-check.
+        // Re-fingerprint exactly what the patches touched (ArchiveService returned
+        // the written set), merge into the existing overlay hashes, prune deleted
+        // files, and recompute the curated engine hashes. MUST run AFTER the
+        // translation reconcile above so the _originals snapshot is fresh (covered
+        // files are hashed via the snapshot, localization-invariant). Non-fatal.
+        try
+        {
+            var manifest = InstallManifest.TryLoad(InstallPath);
+            if (manifest != null && touchedByPatches.Count > 0)
+            {
+                // Report a moving count so the end-of-update re-fingerprint pass
+                // (minutes on a multi-GB install) never looks frozen at 100%.
+                var rehashProgress = new Progress<VerifyService.VerifyProgress>(p =>
+                {
+                    if (p.Total > 0)
+                        status?.Report(Strings.Format("StatusRevalidating", p.Done, p.Total));
+                });
+                var (overlay, engine) = NativeInstallService.RecaptureHashes(
+                    InstallPath, touchedByPatches, manifest.OverlayFiles,
+                    _profile.Translations?.CoveredFiles, rehashProgress, ct);
+                foreach (var kv in overlay) manifest.FileHashes[kv.Key] = kv.Value;
+                manifest.FileHashes = NativeInstallService.PruneMissingHashes(InstallPath, manifest.FileHashes);
+                manifest.EngineFileHashes = engine;
+                manifest.Save();
+                DiagnosticLog.Write(
+                    $"Post-update: refreshed manifest hashes — {manifest.FileHashes.Count} overlay, " +
+                    $"{engine.Count} engine ({touchedByPatches.Count} files touched).");
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Post-update hash refresh failed (non-fatal): {ex.Message}");
         }
 
         status?.Report(Strings.Get("StatusAllDone"));

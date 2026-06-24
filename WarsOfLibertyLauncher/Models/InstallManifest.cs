@@ -151,6 +151,42 @@ public class InstallManifest
     [JsonPropertyName("startMenuFolder")]
     public string? StartMenuFolder { get; set; }
 
+    /// <summary>
+    /// Per-file integrity fingerprints (size + SHA-256) for every overlay
+    /// file the launcher laid down, keyed by install-relative path with
+    /// forward slashes (same convention as <see cref="OverlayFiles"/>).
+    /// Lets the launcher detect the EXACT set of damaged/missing files during
+    /// Verify / Repair instead of a blind spot-check, and lets Repair re-copy
+    /// only the damaged files. Scoped to the mod overlay (not the cloned AoE3
+    /// base, which the mod payload can't repair anyway).
+    ///
+    /// Captured at copy time, BEFORE any translation is applied, so these are
+    /// the canonical/English hashes — consistent with <see cref="KeyFileHashes"/>
+    /// and with the multiplayer fingerprint, both of which hash the
+    /// <c>translations\_originals\</c> snapshot for covered files.
+    ///
+    /// Empty for manifests written by builds before per-file hashing existed;
+    /// the verifier then degrades to the legacy structural spot-check rather
+    /// than treating every file as unverifiable.
+    /// </summary>
+    [JsonPropertyName("fileHashes")]
+    public Dictionary<string, FileFingerprint> FileHashes { get; set; } = new();
+
+    /// <summary>
+    /// Integrity fingerprints (size + SHA-256) of a small curated set of AoE3
+    /// base ENGINE files (e.g. <c>RockallDLL.dll</c>) plus the version-key data
+    /// files, keyed by install-relative path with forward slashes. Separate from
+    /// <see cref="FileHashes"/> on purpose: engine files come from the cloned base
+    /// game, NOT the mod payload, so a damaged engine file is NOT repairable by
+    /// the granular re-copy (which only restores overlay files from the payload).
+    /// Verifying them flags "reinstall the base game" rather than routing into a
+    /// futile ~4 GB payload re-download. Captured at install/repair and refreshed
+    /// after each patch (engine files a patch modifies go stale otherwise).
+    /// Empty for manifests written before engine coverage existed.
+    /// </summary>
+    [JsonPropertyName("engineFileHashes")]
+    public Dictionary<string, FileFingerprint> EngineFileHashes { get; set; } = new();
+
     public static string GetManifestPath(string installPath) =>
         Path.Combine(installPath, FileName);
 
@@ -192,5 +228,30 @@ public class InstallManifest
         var path = GetManifestPath(InstallPath);
         var options = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(path, JsonSerializer.Serialize(this, options));
+    }
+}
+
+/// <summary>
+/// Integrity fingerprint of a single installed file: its byte length and
+/// SHA-256 (lowercase hex). Size is checked first during verification (a
+/// truncated file is the most common corruption and is free to detect),
+/// then the hash confirms the bytes. A parameterless constructor is kept so
+/// System.Text.Json round-trips the value without constructor-matching
+/// subtleties.
+/// </summary>
+public sealed class FileFingerprint
+{
+    [JsonPropertyName("size")]
+    public long Size { get; set; }
+
+    [JsonPropertyName("sha256")]
+    public string Sha256 { get; set; } = "";
+
+    public FileFingerprint() { }
+
+    public FileFingerprint(long size, string sha256)
+    {
+        Size = size;
+        Sha256 = sha256;
     }
 }

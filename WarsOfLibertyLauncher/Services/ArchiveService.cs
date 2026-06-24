@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SharpCompress.Common;
@@ -37,7 +38,13 @@ public class ArchiveService
     /// Extract a .tar.xz archive into <paramref name="destinationFolder"/>, with
     /// safety backups in <paramref name="backupFolder"/>.
     /// </summary>
-    public Task ExtractTarXzWithBackupAsync(
+    /// <returns>
+    /// The install-relative paths (forward slashes) every entry this patch WROTE
+    /// — the union of newly-created and overwritten files. The update flow uses
+    /// it to re-fingerprint exactly what the patch touched (so a patched install
+    /// stays verifiable). On rollback/cancel an exception is thrown instead.
+    /// </returns>
+    public Task<IReadOnlyList<string>> ExtractTarXzWithBackupAsync(
         string archivePath,
         string destinationFolder,
         string backupFolder,
@@ -45,7 +52,7 @@ public class ArchiveService
         IProgress<ArchiveExtractProgress>? extractProgress = null,
         CancellationToken ct = default)
     {
-        return Task.Run(() =>
+        return Task.Run<IReadOnlyList<string>>(() =>
         {
             Directory.CreateDirectory(destinationFolder);
             Directory.CreateDirectory(backupFolder);
@@ -125,6 +132,13 @@ public class ArchiveService
                         EntriesDone: entriesDone,
                         CurrentFile: entryPath));
                 }
+
+                // Success: report exactly which files this patch wrote
+                // (created + overwritten), forward-slash, de-duplicated.
+                var touched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var p in created) touched.Add(p.Replace('\\', '/'));
+                foreach (var p in backedUp) touched.Add(p.Replace('\\', '/'));
+                return (IReadOnlyList<string>)touched.ToList();
             }
             catch (Exception)
             {

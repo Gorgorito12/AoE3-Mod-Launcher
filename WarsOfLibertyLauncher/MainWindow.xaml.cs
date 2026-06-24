@@ -10,6 +10,9 @@ using System.Windows.Threading;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
+// The verify result now lives in the testable VerifyService; alias keeps the
+// many existing `VerifyResult` references in this file unchanged.
+using VerifyResult = WarsOfLibertyLauncher.Services.VerifyService.VerifyResult;
 
 namespace WarsOfLibertyLauncher;
 
@@ -3567,6 +3570,7 @@ public partial class MainWindow : Window
             createBackup: () => RaiseMenuClick(ActionPanelControl.MenuCreateBackupNow),
             restoreBackup: () => RaiseMenuClick(ActionPanelControl.MenuRestoreUserData),
             viewLogs: () => RaiseMenuClick(ActionPanelControl.MenuViewLogs),
+            shareDiagnostics: () => ShareDiagnostics(),
             uninstall: () => RaiseMenuClick(ActionPanelControl.UninstallMenuItem),
             refreshTranslations: async () =>
             {
@@ -5315,12 +5319,15 @@ public partial class MainWindow : Window
 
         if (_isBusy) return;
 
-        // Verification is short and has no per-file progress reporter, so the
-        // panel runs in indeterminate mode while VerifyInstallation does its
-        // sweep. The end state turns into Completed (green) when clean or
-        // Error (red) when missing/corrupt files were found, with the Retry
-        // button wired to RepairInstallAsync — no MessageBox detour anymore.
+        // The deep (hash) pass can take minutes on a multi-GB install, so Verify
+        // is now CANCELLABLE and shows live per-file progress (current file,
+        // speed, ETA). The panel turns Completed (green) when clean or Error (red)
+        // with the Retry button wired to RepairInstallAsync. Pause makes no sense
+        // for a read-only scan, so its button is hidden for this operation.
         SetBusy(true);
+        _cts = new CancellationTokenSource();
+        ShowDownloadControls(true);
+        ProgressPanelControl.PauseButton.Visibility = Visibility.Collapsed;
         StartProgressPanel(
             ProgressOperation.Verify,
             title: Strings.Format("ProgressTitleVerifying", _updateService.Profile.DisplayName),
@@ -5335,8 +5342,40 @@ public partial class MainWindow : Window
         try
         {
             var verifyProfile = _updateService.Profile;
+            var speed = new SpeedTracker();
+            // Per-file hashing reports real progress; the first tick flips the bars
+            // to determinate. Old installs (no FileHashes) emit no ticks and stay
+            // indeterminate for the quick structural spot-check.
+            var verifyProgress = new Progress<VerifyService.VerifyProgress>(p =>
+            {
+                if (p.Total <= 0) return;
+                ProgressPanelControl.PatchProgress.IsIndeterminate = false;
+                ProgressPanelControl.OverallProgress.IsIndeterminate = false;
+                double pct = 100.0 * p.Done / p.Total;
+                ProgressPanelControl.PatchProgress.Value = pct;
+                ProgressPanelControl.OverallProgress.Value = pct;
+                if (!string.IsNullOrEmpty(p.CurrentFile))
+                    ProgressPanelControl.LblCurrentPatch.Text = p.CurrentFile;
+                if (p.BytesTotal > 0)
+                {
+                    speed.Sample(p.BytesDone);
+                    ProgressPanelControl.PatchBytesText.Text =
+                        $"{FormatBytes(p.BytesDone)} / {FormatBytes(p.BytesTotal)}";
+                    var eta = speed.EstimateTimeRemaining(p.BytesTotal - p.BytesDone);
+                    ProgressPanelControl.EtaText.Text = eta.HasValue
+                        ? Strings.Format("ProgressEta", FormatDuration(eta.Value)) : "";
+                    ProgressPanelControl.SpeedText.Text = speed.BytesPerSecond > 0
+                        ? Strings.Format("ProgressSpeed", FormatBytes((long)speed.BytesPerSecond)) : "";
+                }
+                else
+                {
+                    ProgressPanelControl.PatchBytesText.Text = $"{p.Done} / {p.Total}";
+                }
+            });
+            var token = _cts.Token;
             var result = await Task.Run(
-                () => VerifyInstallation(_updateService.InstallPath, verifyProfile));
+                () => VerifyInstallation(_updateService.InstallPath, verifyProfile,
+                    verifyProgress, hashPass: true, token), token);
             ProgressPanelControl.PatchProgress.IsIndeterminate = false;
             ProgressPanelControl.OverallProgress.IsIndeterminate = false;
             ProgressPanelControl.PatchProgress.Value = 100;
@@ -5353,7 +5392,7 @@ public partial class MainWindow : Window
             // Build a report
             var problems = new List<string>();
             problems.AddRange(result.MissingItems.Select(m => $"[missing] {m}"));
-            problems.AddRange(result.CorruptItems.Select(c => $"[empty] {c}"));
+            problems.AddRange(result.CorruptItems.Select(c => $"[corrupt] {c}"));
             int totalProblems = result.MissingItems.Count + result.CorruptItems.Count;
 
             SetStatus(Strings.Format("StatusVerifyMissing", totalProblems,
@@ -5365,6 +5404,11 @@ public partial class MainWindow : Window
             // which is exactly what the old MessageBox offered.
             ShowProgressError(Strings.Format("DlgVerifyRepairBody", totalProblems));
         }
+        catch (OperationCanceledException)
+        {
+            SetStatus(Strings.Get("StatusCancelledUpdate"));
+            ShowProgressCancelled();
+        }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Verify failed: {ex}");
@@ -5373,6 +5417,9 @@ public partial class MainWindow : Window
         finally
         {
             SetBusy(false);
+            ShowDownloadControls(false);
+            // Restore the Pause button for future download operations.
+            ProgressPanelControl.PauseButton.Visibility = Visibility.Visible;
         }
     }
 
@@ -5456,29 +5503,117 @@ public partial class MainWindow : Window
                 ProgressPanelControl.LblCurrentPatch.Text = s;
             });
 
-            // Mod-only install on top of existing (overwrites damaged files).
-            // Repair re-stamps the manifest with the version we just verified.
-            // No phase reporter here — repair doesn't show the breadcrumb.
-            await nativeInstaller.InstallModOnlyAsync(
-                _updateService.Profile,
-                ResolveInstallVersion(overrideTag: targetReleaseTag),
-                payloadUrls,
-                installPath,
-                dlProgress,
-                statusProgress,
-                phaseProgress: null,
-                extractProgress: null,
-                overlayProgress: null,
-                payloadSha256: payloadSha256,
-                ct: _cts.Token);
+            // Choose the repair strategy. A PLAIN repair (not an update, not a
+            // version switch) verifies first and re-copies ONLY the damaged files
+            // — when the manifest carries per-file hashes. An update / version
+            // switch lays down a DIFFERENT version, so the manifest hashes describe
+            // the old build and can't classify "damage"; those keep the full
+            // re-overlay. Installs from older builds (no FileHashes) also fall
+            // back to the full re-overlay.
+            bool granular = !asUpdate && targetReleaseTag == null;
+            var preManifest = granular ? InstallManifest.TryLoad(installPath) : null;
+            // When the granular branch runs, the exact damaged set we repaired —
+            // used to re-verify ONLY those files (cheap) instead of re-hashing the
+            // whole overlay. Null → full-overlay branch ran → structural recheck.
+            List<string>? granularDamaged = null;
+
+            if (granular && VerifyService.HasFileHashes(preManifest))
+            {
+                // ---- Verify first: find the exact damaged/missing set ----
+                ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarVerify");
+                var coveredFiles = _updateService.Profile.Translations?.CoveredFiles;
+                var verifyProgress = new Progress<VerifyService.VerifyProgress>(t =>
+                {
+                    if (t.Total > 0)
+                    {
+                        ProgressPanelControl.PatchProgress.Value = 100.0 * t.Done / t.Total;
+                        ProgressPanelControl.OverallProgress.Value = (100.0 * t.Done / t.Total) * 0.2;
+                        ProgressPanelControl.PatchBytesText.Text = $"{t.Done} / {t.Total}";
+                    }
+                });
+                SetStatus(Strings.Get("StatusVerifying"));
+                var pre = await Task.Run(() => VerifyService.VerifyAgainstManifest(
+                    installPath, preManifest!, coveredFiles, verifyProgress, _cts.Token));
+                var damaged = pre.MissingItems.Concat(pre.CorruptItems)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+                if (damaged.Count == 0)
+                {
+                    // Intact — skip the multi-GB download entirely.
+                    var okMsg = Strings.Format("StatusRepairNothing", pre.TotalFilesChecked);
+                    SetStatus(okMsg);
+                    ShowProgressCompleted("ProgressTitleCompleted", okMsg);
+                    return;
+                }
+
+                // ---- Repair only the damaged files (full ZIP download, selective copy) ----
+                SetStatus(Strings.Format("StatusRepairingFiles", damaged.Count));
+                ProgressPanelControl.LblCurrentPatch.Text =
+                    Strings.Format("StatusRepairingFiles", damaged.Count);
+                await nativeInstaller.RepairFilesAsync(
+                    _updateService.Profile,
+                    payloadUrls,
+                    installPath,
+                    damaged,
+                    dlProgress,
+                    statusProgress,
+                    phaseProgress: null,
+                    extractProgress: null,
+                    overlayProgress: null,
+                    payloadSha256: payloadSha256,
+                    ct: _cts.Token);
+                granularDamaged = damaged;   // recheck only these (cheap + precise)
+            }
+            else
+            {
+                // Mod-only install on top of existing (overwrites all overlay files).
+                // Repair re-stamps the manifest with the version we just verified.
+                // No phase reporter here — repair doesn't show the breadcrumb.
+                await nativeInstaller.InstallModOnlyAsync(
+                    _updateService.Profile,
+                    ResolveInstallVersion(overrideTag: targetReleaseTag),
+                    payloadUrls,
+                    installPath,
+                    dlProgress,
+                    statusProgress,
+                    phaseProgress: null,
+                    extractProgress: null,
+                    overlayProgress: null,
+                    payloadSha256: payloadSha256,
+                    ct: _cts.Token);
+            }
+
+            // Re-verify. Show it's still working (don't flash 100% as "done").
+            SetStatus(Strings.Get("StatusVerifying"));
+            ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("StatusVerifying");
+            var recheckProfile = _updateService.Profile;
+            VerifyResult recheck;
+            if (granularDamaged != null)
+            {
+                // Granular branch: re-hash ONLY the files we repaired (cheap +
+                // precise) by verifying a manifest subset against the damaged set.
+                var full = InstallManifest.TryLoad(installPath);
+                var subset = new InstallManifest();
+                if (full != null)
+                    foreach (var rel in granularDamaged)
+                        if (full.FileHashes.TryGetValue(rel, out var fp))
+                            subset.FileHashes[rel] = fp;
+                var coveredFiles = recheckProfile.Translations?.CoveredFiles;
+                recheck = await Task.Run(() => VerifyService.VerifyAgainstManifest(
+                    installPath, subset, coveredFiles, progress: null, _cts.Token));
+            }
+            else
+            {
+                // Full-overlay branch: structural recheck only (hashPass:false) —
+                // we just laid the bytes whose hashes we wrote, so a full re-hash
+                // (minutes on a multi-GB install) proves nothing and looked frozen.
+                recheck = await Task.Run(() =>
+                    VerifyInstallation(installPath, recheckProfile, hashProgress: null, hashPass: false));
+            }
 
             ProgressPanelControl.PatchProgress.Value = 100;
             ProgressPanelControl.OverallProgress.Value = 100;
 
-            // Re-verify (profile passed so non-WoL repairs don't get false
-            // positives on the WoL-specific markers).
-            var recheckProfile = _updateService.Profile;
-            var recheck = await Task.Run(() => VerifyInstallation(installPath, recheckProfile));
             if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
             {
                 // Persist the version we just laid down. For GitHubReleases this
@@ -5578,6 +5713,21 @@ public partial class MainWindow : Window
         {
             InvalidateActiveModCheckCache();
             await CheckAsync();
+
+            // Auto-continue: a WolPatcher repair re-lays the base payload, which
+            // can leave the install behind the latest version (the base is a
+            // snapshot + incremental patches). Rather than make the user notice
+            // "Update available" and click it, chain straight into the update
+            // flow — the same entry point the Update button uses for pending
+            // patches. No loop risk: applying the patches reaches the latest
+            // version and clears _pendingDownloads; GitHubReleases repairs lay
+            // the full version so they have none.
+            if (_pendingDownloads.Count > 0 && !_isBusy)
+            {
+                if (!EnsureGameNotRunning()) return;
+                SetStatus(Strings.Get("StatusContinuingUpdate"));
+                await ApplyUpdateWithElevationCheckAsync();
+            }
         }
     }
 
@@ -5703,6 +5853,7 @@ public partial class MainWindow : Window
             }
             _pendingLauncherUpdate = null;
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
+            StopLauncherUpdatePillPulse();
             return;
         }
 
@@ -5745,10 +5896,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Gentle scale "breath" on the update pill to draw the eye when it appears.
-    /// Repeats a FEW times then stops — deliberately bounded so it nudges without
-    /// harassing: the pulse occupies the first ~700 ms of each ~3.6 s cycle (long
-    /// idle gap between breaths), repeated 3×, then settles. Mirrors
+    /// Gentle scale "breath" on the update pill to draw the eye. LOOPS while the
+    /// pill is shown: a short double-pulse occupies the first ~700 ms of each
+    /// ~3.6 s cycle (long idle gap between breaths), repeated forever. The bounded
+    /// 3× version "fired once at startup then settled forever", so a user who
+    /// looked at the pill later only ever saw it static — it read as broken. The
+    /// long idle gap keeps it a nudge, not a harassment. Stopped on hide via
+    /// <see cref="StopLauncherUpdatePillPulse"/>. Mirrors
     /// <see cref="PulseNotificationBell"/> but scales instead of rotating.
     /// </summary>
     private void PulseLauncherUpdatePill()
@@ -5757,9 +5911,9 @@ public partial class MainWindow : Window
         {
             // One cycle = a short double-pulse, then a long hold at rest.
             Duration = TimeSpan.FromMilliseconds(3600),
-            // Three gentle breaths spaced out, then stop (not an endless loop).
-            RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(3),
-            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+            // Breathe forever (gently) so it's visible whenever the user looks; the
+            // long idle gap below keeps each cycle mostly at rest. Stopped on hide.
+            RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
         };
         void Key(double scale, double ms) => pulse.KeyFrames.Add(
             new System.Windows.Media.Animation.EasingDoubleKeyFrame(
@@ -5770,6 +5924,18 @@ public partial class MainWindow : Window
             System.Windows.Media.ScaleTransform.ScaleXProperty, pulse);
         LauncherUpdatePillScale.BeginAnimation(
             System.Windows.Media.ScaleTransform.ScaleYProperty, pulse.Clone());
+    }
+
+    /// <summary>
+    /// Stops the looping pill breath and returns the scale to its 1.0 base. Called
+    /// when the pill is hidden so no animation clock lingers on a Collapsed element.
+    /// </summary>
+    private void StopLauncherUpdatePillPulse()
+    {
+        LauncherUpdatePillScale.BeginAnimation(
+            System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+        LauncherUpdatePillScale.BeginAnimation(
+            System.Windows.Media.ScaleTransform.ScaleYProperty, null);
     }
 
     private async Task CheckAsync()
@@ -6595,6 +6761,57 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Bundles the diagnostic files into a single .zip, ASKING the user where to
+    /// save it (a Save dialog pre-filled with a timestamped name + Desktop), then
+    /// opens Explorer with it pre-selected — so a user reporting a bug can attach
+    /// ONE file instead of hunting for the log under %LocalAppData%. The bundle
+    /// excludes the config (Discord token) — see <see cref="DiagnosticLog.ExportBundle"/>.
+    /// </summary>
+    private void ShareDiagnostics()
+    {
+        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        if (string.IsNullOrEmpty(desktop)) desktop = AppPaths.DataDir;
+
+        var picker = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = Strings.Get("ModPropShareDiagnosticsSaveTitle"),
+            Filter = "ZIP archive (*.zip)|*.zip",
+            DefaultExt = ".zip",
+            FileName = $"WoL-diagnostico-{DateTime.Now:yyyyMMdd-HHmmss}.zip",
+            InitialDirectory = desktop,
+        };
+
+        // Owner = the Properties dialog if it's open (so the Save box doesn't sit
+        // behind it), else the main window.
+        Window owner = _modPropertiesDialog ?? (Window)this;
+        if (picker.ShowDialog(owner) != true) return;   // user cancelled — do nothing
+        var zipPath = picker.FileName;
+
+        try
+        {
+            DiagnosticLog.ExportBundle(zipPath);
+
+            // Reveal the freshly-created zip selected in Explorer (ready to drag
+            // into Discord / attach). /select expects a quoted absolute path.
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{zipPath}\"",
+                UseShellExecute = true,
+            });
+            DiagnosticLog.Write($"Diagnostics bundle written to '{zipPath}'.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Share diagnostics failed: {ex.Message}");
+            MessageBox.Show(owner,
+                Strings.Format("ModPropShareDiagnosticsFailed", ex.Message),
+                Strings.Get("ModPropShareDiagnostics"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     // ------------------------------------------------------------------------
     // Progress panel "tone" (colour theme per operation type). The compact
     // sidebar panel keeps its layout but swaps borders + accents based on
@@ -6677,12 +6894,6 @@ public partial class MainWindow : Window
     // Install verification
     // ------------------------------------------------------------------------
 
-    /// <summary>Result of a verification scan.</summary>
-    private record VerifyResult(
-        List<string> MissingItems,
-        List<string> CorruptItems,
-        int TotalFilesChecked);
-
     /// <summary>
     /// Deep verification of the mod installation.
     /// Checks critical folders, files, and looks for zero-byte files that
@@ -6703,7 +6914,11 @@ public partial class MainWindow : Window
     /// positives (those folders don't exist in e.g. an Improvement Mod
     /// install on top of vanilla AoE3).
     /// </summary>
-    private static VerifyResult VerifyInstallation(string installPath, ModProfile profile)
+    private static VerifyResult VerifyInstallation(
+        string installPath, ModProfile profile,
+        IProgress<VerifyService.VerifyProgress>? hashProgress = null,
+        bool hashPass = true,
+        CancellationToken ct = default)
     {
         var missing = new List<string>();
         var corrupt = new List<string>();
@@ -6814,30 +7029,85 @@ public partial class MainWindow : Window
             }
         }
 
-        // --- Generic: spot-check zero-byte content files (random sample) ---
-        // Applies to every mod — a content file at 0 bytes is almost always
-        // a broken download/extract regardless of which mod produced it.
-        try
+        // --- Per-file integrity pass (the real check) ---
+        // When the manifest carries per-file size+SHA-256 fingerprints (installs
+        // from this build onward), verify EVERY overlay file against them — the
+        // exact damaged/missing set, which Repair then re-copies selectively.
+        // Older installs have no FileHashes, so fall back to the legacy random
+        // spot-check below rather than reporting everything as unverifiable.
+        //
+        // hashPass is the cost gate: the full pass re-reads the entire overlay
+        // (multi-GB for WoL → minutes), so it runs ONLY for the explicit "Verify
+        // files" action. AUTOMATIC post-install / post-repair rechecks pass
+        // hashPass:false and use the fast structural + spot-check layer instead —
+        // hashing files we JUST laid down (whose hashes we just wrote) proves
+        // nothing and was making the operation look frozen at 100%.
+        var manifest = InstallManifest.TryLoad(installPath);
+        if (hashPass && VerifyService.HasFileHashes(manifest))
         {
-            var allFiles = Directory.GetFiles(installPath, "*", SearchOption.AllDirectories);
-            totalChecked += Math.Min(allFiles.Length, 200);
-            var sample = allFiles.Length > 200
-                ? allFiles.OrderBy(_ => Guid.NewGuid()).Take(200)
-                : allFiles.AsEnumerable();
+            var hashRes = VerifyService.VerifyAgainstManifest(
+                installPath, manifest!, profile.Translations?.CoveredFiles, hashProgress, ct);
+            // Don't double-count files the structural layer already flagged.
+            foreach (var m in hashRes.MissingItems)
+                if (!missing.Contains(m)) missing.Add(m);
+            foreach (var c in hashRes.CorruptItems)
+                if (!corrupt.Contains(c)) corrupt.Add(c);
+            totalChecked += hashRes.TotalFilesChecked;
 
-            foreach (var file in sample)
+            // Base-engine files (SEPARATE map): a damaged engine file is NOT
+            // repairable from the mod payload, so it's reported with a distinct
+            // "reinstall the base game" suffix and is deliberately kept OUT of the
+            // missing/corrupt sets that the Repair retry feeds to RepairFilesAsync.
+            if (VerifyService.HasEngineHashes(manifest))
             {
-                var info = new FileInfo(file);
-                // Skip known-empty files like markers, but flag actual content files
-                if (info.Length == 0 && !info.Name.StartsWith(".")
-                    && info.Extension is ".bar" or ".xml" or ".xmb" or ".dll" or ".exe" or ".ddt")
+                var engineDamaged = VerifyService.VerifyEngineFiles(
+                    installPath, manifest!, profile.Translations?.CoveredFiles, ct);
+                foreach (var rel in engineDamaged)
+                    corrupt.Add(rel + Strings.Get("VerifyEngineSuffix"));
+                totalChecked += manifest!.EngineFileHashes.Count;
+            }
+
+            // Unexpected/leftover files — diagnostic only (logged, not flagged):
+            // a patched install legitimately gains untracked files, so surfacing
+            // them as problems would be noise. Capped.
+            try
+            {
+                var extras = VerifyService.FindUnexpectedFiles(installPath, manifest!);
+                if (extras.Count > 0)
                 {
-                    var rel = Path.GetRelativePath(installPath, file);
-                    corrupt.Add(rel);
+                    DiagnosticLog.Write($"Verify: {extras.Count} unexpected/untracked file(s) (first 50):");
+                    foreach (var x in extras.Take(50)) DiagnosticLog.Write($"  [extra] {x}");
                 }
             }
+            catch { /* diagnostic only */ }
         }
-        catch { /* non-fatal */ }
+        else
+        {
+            // --- Legacy fallback: spot-check zero-byte content files (random sample) ---
+            // A content file at 0 bytes is almost always a broken download/extract
+            // regardless of which mod produced it.
+            try
+            {
+                var allFiles = Directory.GetFiles(installPath, "*", SearchOption.AllDirectories);
+                totalChecked += Math.Min(allFiles.Length, 200);
+                var sample = allFiles.Length > 200
+                    ? allFiles.OrderBy(_ => Guid.NewGuid()).Take(200)
+                    : allFiles.AsEnumerable();
+
+                foreach (var file in sample)
+                {
+                    var info = new FileInfo(file);
+                    // Skip known-empty files like markers, but flag actual content files
+                    if (info.Length == 0 && !info.Name.StartsWith(".")
+                        && info.Extension is ".bar" or ".xml" or ".xmb" or ".dll" or ".exe" or ".ddt")
+                    {
+                        var rel = Path.GetRelativePath(installPath, file);
+                        corrupt.Add(rel);
+                    }
+                }
+            }
+            catch { /* non-fatal */ }
+        }
 
         return new VerifyResult(missing, corrupt, totalChecked);
     }
@@ -7530,8 +7800,11 @@ public partial class MainWindow : Window
             // (art\zulushield\, .bar archives, sound\, AI3\) when the active
             // profile uses the WolPatcher mechanism. Non-WoL mods get the
             // generic layer only, so no false positives.
+            // Automatic post-install recheck: structural only (hashPass:false).
+            // The full hash pass would re-read the multi-GB overlay we just wrote
+            // for no gain; the explicit "Verify files" action is where it belongs.
             var verifyResult = await Task.Run(
-                () => VerifyInstallation(installFolder, profile));
+                () => VerifyInstallation(installFolder, profile, hashProgress: null, hashPass: false));
             int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
             if (totalProblems == 0)
             {
