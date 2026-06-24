@@ -367,6 +367,7 @@
                      it now sits flush at the TitleBar's content gutter
                      (TitleBarContentPadding.Left = 18), the same left edge the nav
                      tabs use, so brand + tabs are anchored to one consistent gutter. -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch">
                 <Button x:Name="TitleBarBrandButton"
                         HorizontalAlignment="Left"
                         Background="Transparent"
@@ -479,6 +480,62 @@
                                    Opacity="0.7"/>
                     </StackPanel>
                 </Button>
+                <!-- Persistent, non-invasive launcher self-update reminder.
+                     Replaces the old auto-modal that got permanently silenced
+                     on Cancel (SkippedLauncherTag). Shown whenever a newer
+                     launcher version exists; stays visible on EVERY launch until
+                     the user updates (no permanent dismiss). Click opens the
+                     existing download/restart dialog. Gold pill with dark text
+                     for contrast; pulses once per session (LauncherUpdatePillScale).
+                     Self-contained template so the global Button style doesn't
+                     flatten the pill look. IsHitTestVisibleInChrome=True so the
+                     window-drag handler doesn't swallow the click. Text + tooltip
+                     are localized from code-behind. -->
+                <Button x:Name="LauncherUpdatePill"
+                        Visibility="Collapsed"
+                        Cursor="Hand"
+                        VerticalAlignment="Center"
+                        Margin="14,0,0,0"
+                        FontFamily="{DynamicResource BodyFont}"
+                        FontSize="{StaticResource FontSizeCaption}"
+                        Click="LauncherUpdatePill_Click"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                        RenderTransformOrigin="0.5,0.5">
+                    <Button.RenderTransform>
+                        <ScaleTransform x:Name="LauncherUpdatePillScale" ScaleX="1" ScaleY="1"/>
+                    </Button.RenderTransform>
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <!-- The text comes from the Button's Content (set in
+                                 code-behind) via the ContentPresenter — x:Name'd
+                                 elements inside a ControlTemplate live in their own
+                                 namescope and aren't reachable from code-behind, so
+                                 we drive the label through Content instead. -->
+                            <Border x:Name="pillBorder"
+                                    Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="{StaticResource RadiusMd}"
+                                    Padding="10,3">
+                                <StackPanel Orientation="Horizontal"
+                                            VerticalAlignment="Center"
+                                            TextElement.Foreground="#1A1A1A"
+                                            TextElement.FontWeight="SemiBold">
+                                    <TextBlock Text="&#xE777;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,6,0"/>
+                                    <ContentPresenter VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="pillBorder" Property="Opacity" Value="0.88"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                </StackPanel>
         </controls:TitleBar>
 
         <!-- =============================================================

@@ -4046,6 +4046,19 @@ public static class Strings
             [LangEn] = "Launcher update available",
             [LangEs] = "Actualización del launcher disponible",
         },
+        // Persistent title-bar pill that reminds the user a launcher update is
+        // available on every launch (non-invasive replacement for the old
+        // auto-modal). {0} = the available version/tag.
+        ["LauncherUpdatePill"] = new()
+        {
+            [LangEn] = "Update {0}",
+            [LangEs] = "Actualizar {0}",
+        },
+        ["LauncherUpdatePillTooltip"] = new()
+        {
+            [LangEn] = "A new launcher version is available — click to update.",
+            [LangEs] = "Hay una nueva versión del launcher — haz clic para actualizar.",
+        },
         ["DlgLauncherUpdateVersionInfo"] = new()
         {
             [LangEn] = "A new version of the launcher is available — " +

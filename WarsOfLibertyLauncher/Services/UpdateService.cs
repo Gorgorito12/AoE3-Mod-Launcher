@@ -884,24 +884,120 @@ public class UpdateService
         if (match != null)
         {
             DiagnosticLog.Write($"Match: version {match.Ver}, MinReqDownload={match.MinReqDownload}");
+            return match;
         }
-        else
+
+        DiagnosticLog.Write("No exact match. Per-version comparison:");
+        foreach (var v in knownVersions)
         {
-            DiagnosticLog.Write("No exact match. Per-version comparison:");
-            foreach (var v in knownVersions)
+            bool p = string.Equals(v.ProtoMd5, protoMd5, StringComparison.OrdinalIgnoreCase);
+            bool t = string.Equals(v.TechMd5, techMd5, StringComparison.OrdinalIgnoreCase);
+            bool s = string.Equals(v.StrMd5, strMd5, StringComparison.OrdinalIgnoreCase);
+            if (p || t || s)
             {
-                bool p = string.Equals(v.ProtoMd5, protoMd5, StringComparison.OrdinalIgnoreCase);
-                bool t = string.Equals(v.TechMd5, techMd5, StringComparison.OrdinalIgnoreCase);
-                bool s = string.Equals(v.StrMd5, strMd5, StringComparison.OrdinalIgnoreCase);
-                if (p || t || s)
-                {
-                    DiagnosticLog.Write(
-                        $"  v{v.Ver}: proto={(p ? "OK" : "X")} tech={(t ? "OK" : "X")} str={(s ? "OK" : "X")}");
-                }
+                DiagnosticLog.Write(
+                    $"  v{v.Ver}: proto={(p ? "OK" : "X")} tech={(t ? "OK" : "X")} str={(s ? "OK" : "X")}");
             }
         }
 
-        return match;
+        // No UpdateInfo MD5 match. The launcher's own byte-faithful payload
+        // never matches any UpdateInfo version (it's a faithful copy of a
+        // canonical install, whose data bytes differ from what UpdateInfo
+        // records), so recognize it via the install-manifest the launcher
+        // stamped at install/repair time.
+        return RecognizeFromManifest(installPath, knownVersions, protoMd5, techMd5, strMd5);
+    }
+
+    /// <summary>
+    /// Recognizes a launcher byte-faithful install that doesn't MD5-match any
+    /// UpdateInfo version, using the install-manifest stamped at install/repair
+    /// time. Returns a <see cref="VersionInfo"/> carrying the right
+    /// <see cref="VersionInfo.MinReqDownload"/> (so pending-downloads compute
+    /// correctly), or null when the install can't be trusted.
+    /// </summary>
+    private static VersionInfo? RecognizeFromManifest(
+        string installPath,
+        List<VersionInfo> knownVersions,
+        string liveProto, string liveTech, string liveStr)
+    {
+        var manifest = InstallManifest.TryLoad(installPath);
+        return RecognizeFromManifestData(manifest, knownVersions, liveProto, liveTech, liveStr);
+    }
+
+    /// <summary>
+    /// Pure (no I/O) core of <see cref="RecognizeFromManifest"/> — exposed
+    /// internal for testing. Decides whether to trust the manifest as the
+    /// install's identity given the live key-file hashes.
+    /// </summary>
+    internal static VersionInfo? RecognizeFromManifestData(
+        InstallManifest? manifest,
+        List<VersionInfo> knownVersions,
+        string liveProto, string liveTech, string liveStr)
+    {
+        if (manifest == null || string.IsNullOrEmpty(manifest.Version))
+            return null;  // no manifest / pre-versioning manifest → genuinely unknown
+
+        static bool Eq(string a, string b) =>
+            string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        string? H(string rel) =>
+            manifest.KeyFileHashes.TryGetValue(rel.Replace('\\', '/'), out var v) ? v : null;
+
+        var bProto = H(ProtoRelativePath);
+        var bTech = H(TechRelativePath);
+        var bStr = H(StrRelativePath);
+        bool hasBaseline = !string.IsNullOrEmpty(bProto)
+            && !string.IsNullOrEmpty(bTech)
+            && !string.IsNullOrEmpty(bStr);
+
+        if (hasBaseline)
+        {
+            // Baseline path: the recorded hashes must match the live files,
+            // otherwise the install drifted from what the launcher laid down
+            // (corruption / external edit) and we must NOT claim it's intact.
+            bool intact = Eq(bProto!, liveProto) && Eq(bTech!, liveTech) && Eq(bStr!, liveStr);
+            if (!intact)
+            {
+                DiagnosticLog.Write(
+                    "Manifest baseline present but live files drifted — not trusting it.");
+                return null;
+            }
+            DiagnosticLog.Write($"Recognized via manifest baseline: version {manifest.Version}");
+        }
+        else
+        {
+            // Migration path for installs written before baseline recording:
+            // trust the recorded Version. The caller only reaches here when the
+            // install is valid (IsProfileInstalled + marker gate already
+            // passed), so this can't mask a missing/partial install. The next
+            // Repair re-stamps a real baseline and self-heals.
+            DiagnosticLog.Write(
+                $"No manifest baseline (pre-baseline manifest); trusting recorded version {manifest.Version}.");
+        }
+
+        return ResolveVersionInfo(manifest.Version, knownVersions);
+    }
+
+    /// <summary>
+    /// Resolves a recognized version string to a <see cref="VersionInfo"/>
+    /// carrying the correct <see cref="VersionInfo.MinReqDownload"/>. If the
+    /// string matches a known UpdateInfo version by Ver, return that entry (so
+    /// any genuinely-pending patch still chains). If it isn't known (payload
+    /// newer than every UpdateInfo entry), synthesize one with
+    /// MinReqDownload=0 → "at latest, nothing pending".
+    /// </summary>
+    internal static VersionInfo ResolveVersionInfo(string version, List<VersionInfo> knownVersions)
+    {
+        var known = knownVersions.FirstOrDefault(
+            v => string.Equals(v.Ver, version, StringComparison.OrdinalIgnoreCase));
+        if (known != null)
+        {
+            DiagnosticLog.Write(
+                $"Resolved '{version}' to known version (MinReqDownload={known.MinReqDownload}).");
+            return known;
+        }
+        DiagnosticLog.Write(
+            $"Version '{version}' not in UpdateInfo; treating as latest (MinReqDownload=0).");
+        return new VersionInfo { Ver = version, MinReqDownload = 0 };
     }
 
     /// <summary>

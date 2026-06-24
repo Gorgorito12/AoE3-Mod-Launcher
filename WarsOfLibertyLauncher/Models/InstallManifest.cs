@@ -61,6 +61,21 @@ public class InstallManifest
     [JsonPropertyName("version")]
     public string Version { get; set; } = "";
 
+    /// <summary>
+    /// MD5 (lowercase hex) of the key data files the launcher laid down at
+    /// install/repair time, keyed by install-relative path with forward
+    /// slashes (e.g. "data/protoy.xml"). Recorded so the launcher can
+    /// recognize its OWN byte-faithful payload — which does not MD5-match any
+    /// UpdateInfo.xml version — as an intact install at <see cref="Version"/>.
+    /// Empty for manifests written by builds before baseline recording
+    /// existed; the detector then falls back to trusting <see cref="Version"/>.
+    /// At install time no translation is applied yet, so these are the
+    /// canonical/English hashes — consistent with the detector, which hashes
+    /// the <c>translations\_originals\</c> snapshot when a pack is active.
+    /// </summary>
+    [JsonPropertyName("keyFileHashes")]
+    public Dictionary<string, string> KeyFileHashes { get; set; } = new();
+
     /// <summary>Absolute install path (where the manifest lives).</summary>
     [JsonPropertyName("installPath")]
     public string InstallPath { get; set; } = "";
