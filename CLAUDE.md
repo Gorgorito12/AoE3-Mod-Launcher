@@ -58,6 +58,18 @@ All commands run from `WarsOfLibertyLauncher/`.
   packer FP; the self-signed `CN=Gorgorito` cert does not.
 - `--update-now` is a launch argument that auto-resumes the update flow elevated
   (used after a UAC relaunch).
+- **`build-release.ps1 -Version` accepts a WoL-style LETTER suffix and splits it
+  across two assembly attributes — release builds MUST pass `-Version`.** The
+  input is `MAJOR.MINOR.PATCH[LETTER]` validated by the regex
+  `^\d+\.\d+\.\d+[A-Za-z]?$` (so `1.0.5`, `1.0.5a`, even multi-letter `1.0.5abc`).
+  Because `System.Version` is integers-only, the script publishes the **numeric
+  core** (`1.0.5a` → `1.0.5`) into `-p:Version` / `-p:FileVersion` /
+  `-p:AssemblyVersion`, and the **full string with the letter** into
+  `-p:InformationalVersion` (`1.0.5a`). The self-updater reads that informational
+  attribute (`LauncherUpdateService.CurrentInformationalTag`) to recognise its own
+  letter-versioned binary — see the self-update bullet. So a release with a letter
+  suffix that ships only the numeric AssemblyVersion (or omits `-Version`
+  entirely) breaks both the "don't update backwards" guard and self-recognition.
 - Two publish scripts exist: `WarsOfLibertyLauncher/build-release.ps1` is the
   canonical one (cleans, publishes, signs, verifies the signature, prints
   SHA-256). The root `publish.ps1` is now a thin **wrapper** around it — it
@@ -103,7 +115,14 @@ dependency** — the first test pins `LauncherConfig.GetSiblingInstallPaths` (th
 stock-game sibling-exclusion regression in the install-gate gotcha below). Run:
 `dotnet test WarsOfLibertyLauncher.Tests` (Windows-only). Coverage is
 deliberately small; **add a test when you fix a pure-logic bug** rather than
-chasing UI coverage.
+chasing UI coverage. Beyond the install-gate test, the suite now pins:
+`VerifyServiceTests` (per-file overlay/engine verification, covered-file
+snapshot hashing, deterministic ordering — see the file-verify gotcha),
+`ManifestRecognitionTests` (`UpdateService.RecognizeFromManifestData` baseline
+vs migration paths + `ResolveVersionInfo` — see the manifest-recognition
+gotcha), `DiagnosticLogTests` (`ExportBundle` includes `*.log`/`*snapshot*`,
+**excludes the config**, overwrites a stale zip), and `LauncherUpdateServiceTests`
+(letter-version comparison + the informational-tag self-recognition fallback).
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -262,7 +281,10 @@ don't go looking for it.)
   `etc\*_delete.lst` to the final snapshot: ~11 of those entries (e.g.
   `data\tactics\*.tactics` like `sarna`/`batidor`) were re-added by a later patch and ARE
   present in the canonical build, so a blind sweep would wrongly delete them → new OOS.
-  Pinned by `WarsOfLibertyLauncher.Tests/InstallParityTests`.
+  Pinned by `WarsOfLibertyLauncher.Tests/InstallParityTests`. (When a patch's
+  delete-list DOES remove files during incremental patching, the manifest's per-file
+  hashes for them must be pruned — `PruneMissingHashes`; see the manifest-recognition
+  bullet.)
 
 - **The full-clone install has an integrity GATE — `InstallAsync` aborts loudly
   if the AoE3 clone copied 0 files, and `GetSiblingInstallPaths` MUST skip the
@@ -308,6 +330,88 @@ don't go looking for it.)
   only extracts its OWN CRC32-verified `.tar.xz`, so the malicious-archive vector
   doesn't apply; the suppress is targeted so NuGet audit still flags any future
   vuln.)
+
+- **"Verify files" is a real per-file integrity pass (`Services/VerifyService.cs`),
+  and Repair is GRANULAR — it re-copies only the damaged files, never the whole
+  overlay. Two rules are load-bearing: overlay-vs-engine separation, and
+  covered-file snapshot hashing.** Installs from this build forward stamp per-file
+  fingerprints into the manifest (see the `InstallManifest` bullet), so verify can
+  name the exact damaged files instead of a blind spot-check, and repair can fix
+  just those. `VerifyService` is static + testable (`VerifyServiceTests`) and
+  **VERIFY-ONLY** — the repair lives in `MainWindow`. Its API: `VerifyAgainstManifest`
+  (the overlay map, hashed in parallel ≤4 threads, **size-first then SHA-256**,
+  results sorted `Ordinal` so the parallel order is deterministic) and
+  `VerifyEngineFiles` (a SEPARATE list), plus shared helpers
+  `HasFileHashes`/`HasEngineHashes`/`BuildCoveredSet`/`OriginalsFolderOf`/
+  `ResolveHashTarget`/`ComputeFingerprintOf` (also used by
+  `NativeInstallService.RecaptureHashes`). Results are records
+  `VerifyResult(MissingItems, CorruptItems, TotalFilesChecked)` +
+  `VerifyProgress(Done, Total, CurrentFile, BytesDone, BytesTotal)`.
+  **(1) Overlay vs engine is a hard split.** Overlay files (the mod payload) are
+  repairable by re-copying from the payload ZIP; base-game **engine** files (cloned
+  from AoE3 — the curated `EngineCandidates`: the 3 `data\` version-key files +
+  `RockallDLL.dll`/`binkw32.dll`/`granny2.dll`/`deformerdlly.dll`) are NOT — a
+  corrupt engine file is reported with the `VerifyEngineSuffix` ("reinstall AoE3")
+  string and is **never** routed into the repair set. `ComputeEngineHashes` skips
+  any overlay-owned file so a file is never in both maps; don't merge them, or a
+  corrupt WoL data file would be mislabelled an unrepairable engine file.
+  **(2) Covered files verify against the English snapshot, not the live file.**
+  Translation overlays (e.g. `data\stringtabley.xml`) are hashed against the
+  `translations\_originals\` snapshot via `ResolveHashTarget` — the SAME
+  canonical-English read-side trick `ModHashService` and version detection use —
+  so an applied translation doesn't false-flag as corrupt; with no snapshot the
+  file's existence is confirmed but the hash is skipped (not counted in
+  `TotalFilesChecked`). **Repair (`MainWindow.RepairInstallAsync`) picks a path:**
+  the **granular** branch (a plain Repair — not an update, not a version switch —
+  when `HasFileHashes`) verifies first, then calls
+  `NativeInstallService.RepairFilesAsync` with only the damaged set and re-verifies
+  **only those** files (cheap + precise); the **full re-overlay** branch (update,
+  version switch, or an old manifest with no `FileHashes`) lays the whole version
+  via `InstallModOnlyAsync` and does a structural recheck only — a per-file hash
+  pass over a multi-GB freshly-written install would re-read everything and look
+  frozen. `RepairFilesAsync` still downloads the full ZIP (the host has no per-file
+  URLs) but **writes only the damaged files and does NOT rewrite the manifest**
+  (same install set + version; only bytes restored). The gear "Verify files" item
+  is now **cancellable** with live progress (current file, bytes, speed via
+  `SpeedTracker`, ETA), disabled for `IsStockGame`; an old install with no
+  `FileHashes` emits no per-file ticks and degrades to the legacy structural
+  spot-check. Strings: `StatusRevalidating`, `StatusRepairingFiles`,
+  `StatusRepairNothing`, `VerifyEngineSuffix`.
+
+- **The install manifest now carries hashes, and `UpdateService` recognises the
+  launcher's own byte-faithful payload FROM the manifest — keep the three maps in
+  sync, and re-fingerprint after every patch (after the snapshot, after deletions).**
+  `Models/InstallManifest.cs` gained three install-relative (forward-slash) maps
+  plus a `FileFingerprint{size, sha256}` class: `KeyFileHashes` (Dict→**MD5** hex of
+  the 3 `data\` version-key files), `FileHashes` (Dict→`FileFingerprint`, the overlay
+  per-file SHA-256), and `EngineFileHashes` (Dict→`FileFingerprint`, the engine files
+  — separate on purpose, see the verify bullet). Overlay hashes are captured **during
+  the copy** in `CopyPayloadToDestinationAsync` (canonical **pre-translation** bytes,
+  consistent with what verify compares against the `_originals` snapshot); `WriteManifest`
+  gained a `fileHashes` param, prunes it, and splits it into overlay vs engine. All
+  three are empty on manifests written before this feature — verify/recognition degrade
+  gracefully. **Why `KeyFileHashes` exists:** the launcher installs a byte-faithful
+  copy of a canonical install, whose `data\` bytes never MD5-match any `UpdateInfo.xml`
+  version, so the old MD5-vs-UpdateInfo detection couldn't identify a launcher install.
+  `UpdateService.DetectInstalledVersion` now falls through to `RecognizeFromManifest`
+  → the pure, testable `RecognizeFromManifestData` (`ManifestRecognitionTests`): the
+  **baseline path** trusts the manifest's recorded `Version` **only if the 3 live MD5s
+  still match `KeyFileHashes`** (drift → returns null, don't trust it); the **migration
+  path** trusts a pre-baseline manifest's `Version` outright (the next Repair re-stamps
+  a real baseline). `ResolveVersionInfo` maps the recognised version to its
+  `MinReqDownload`, synthesising one with `MinReqDownload=0` when the payload is newer
+  than every known `UpdateInfo` entry (nothing pending). **Two invariants you must not
+  break:** (a) **re-fingerprint after a patch** — `UpdateService.ApplyUpdatesAsync`
+  tracks the files each `.tar.xz` touched (via `ArchiveService.ExtractTarXzWithBackupAsync`,
+  which now RETURNS the created+overwritten set) and, **after** the translation snapshot
+  refresh (so covered files hash `_originals`) and the delete-list, calls
+  `NativeInstallService.RecaptureHashes` → merges into `FileHashes`, `PruneMissingHashes`,
+  recomputes `EngineFileHashes`, saves. It's wrapped non-fatal (try/catch +
+  `DiagnosticLog`) — a patched install is the normal WoL state and must stay verifiable.
+  (b) **`PruneMissingHashes` is mandatory after any deletion** (delete-list,
+  `ApplyUpdateDeletions`): a fingerprint left for a deleted file makes verify report a
+  false "missing" and granular Repair **resurrect** a file the pipeline intentionally
+  stripped — inverting the strip. (See also the byte-faithful + delete-list bullets.)
 
 - **Install detection is by CONTENT, never by folder name —
   `InstallProbeFile` + an optional `InstallMarker`, unified in
@@ -1371,6 +1475,31 @@ don't go looking for it.)
   empty). **Publishing contract:** ship a SemVer-tagged release with the signed
   `Aoe3ModLauncher.exe` asset and paste the `SHA256:` line from
   `build-release.ps1` into the release notes (or rely on GitHub's `digest`).
+  **(5) Letter versions (WoL-style: `v1.0.5a` < `v1.0.5b` < `v1.0.6`) are now
+  understood, and a manually-downloaded binary recognises itself.** `TryParseSemVer`
+  parses a trailing letter suffix into a base-26 rank (`LetterRank`: no letter = 0,
+  `a`=1…`z`=26, `aa`=27) packed into `Version.Revision`, so `1.0.5 < 1.0.5a < 1.0.5b
+  < 1.0.6` compares with plain numeric `Version` ordering — change `LetterRank` and
+  you change the whole comparison. `EvaluateUpdate` gained a `currentInformationalTag`
+  param and its **effective-current** priority is now `saved tag → informational tag
+  → numeric AssemblyVersion`. The informational tag comes from the new
+  `CurrentInformationalTag` (reads `AssemblyInformationalVersionAttribute`, strips
+  SourceLink `+commit` metadata, never null — falls back to
+  `FormatVersionTag(CurrentVersion)`), which `build-release.ps1` stamps with the full
+  letter string (the numeric AssemblyVersion can't hold the letter). This closed the
+  letter-suffix twin of the empty-saved-tag bug: a freshly-downloaded `v1.0.5a` with
+  no saved tag used to offer to "update" to `v1.0.5a` (its AssemblyVersion read
+  `1.0.5`); reading the informational tag lets it recognise itself. Pinned by the
+  letter-version cases in `LauncherUpdateServiceTests`.
+  **(6) The update prompt is now a persistent non-modal PILL, not an auto-modal.**
+  The old flow auto-popped a modal on startup and `Cancel` saved `SkippedLauncherTag`,
+  permanently silencing it. Instead `LauncherUpdatePill` (`MainWindow.xaml`, a gold
+  pill in the title bar, `IsHitTestVisibleInChrome` so the drag handler doesn't eat
+  the click) is shown on **every** launch a newer version exists — no permanent
+  dismiss — pulses once per session (`PulseLauncherUpdatePill` /
+  `StopLauncherUpdatePillPulse`) and on click (`LauncherUpdatePill_Click`) opens the
+  existing download/restart dialog. Strings `LauncherUpdatePill` /
+  `LauncherUpdatePillTooltip`.
 
 ## Architecture
 
@@ -1387,13 +1516,16 @@ engine** and the UI binds to it.
   under Runtime conventions for the contract.
 - **`Models/`** — plain schema/DTO types: `LauncherConfig` (`launcher-config.json`,
   lives next to the `.exe`), `UpdateInfo` (`UpdateInfo.xml` schema),
-  `InstallManifest` (`install-manifest.json`, drives uninstall), `ModProfile` /
-  catalog types, and `Models/Multiplayer/` wire types.
+  `InstallManifest` (`install-manifest.json`, drives uninstall — and now also
+  carries the `KeyFileHashes`/`FileHashes`/`EngineFileHashes` + `FileFingerprint`
+  integrity data for verify/repair/version-recognition; see that gotcha),
+  `ModProfile` / catalog types, and `Models/Multiplayer/` wire types.
 - **`Services/`** — install pipeline (`NativeInstallService`, `InstallerService`,
   `FolderCloneService`), update orchestration (`UpdateService`,
   `UpdateInfoService`, `ArchiveService`, `DownloadService`), detection
   (`AoE3Detector`, `RegistryService`), hashing
-  (`HashService` = MD5 + CRC32 + SHA-256), self-update (`LauncherUpdateService`),
+  (`HashService` = MD5 + CRC32 + SHA-256), per-file install verification
+  (`VerifyService`), self-update (`LauncherUpdateService`),
   Radmin VPN assist (`RadminVpnService` = registry + NIC probe,
   `RadminLogService` = `service.log` parser for network membership,
   `RadminAssistantService` = stage classifier the overlay binds to),
@@ -1452,7 +1584,12 @@ engine** and the UI binds to it.
 
 1. **Install** — detect AoE3 → download multi-part payload ZIP → clone AoE3 into
    a standalone mod folder → flatten Steam-layout `bin\` into root → overlay mod
-   files → shortcuts + uninstall registry entries + `install-manifest.json`.
+   files (capturing per-file SHA-256 fingerprints during the copy) → shortcuts +
+   uninstall registry entries + `install-manifest.json` (with the hash maps). After
+   a fresh install that's recognised but behind the latest version,
+   `MaybeAutoContinueUpdateAfterInstall` auto-continues into the update flow
+   (`WolPatcher` only, valid install, pending patches, not pinned) so install→update
+   is one click (`StatusContinuingUpdate`).
    **`InstallFolderDialog` hard-requires an AoE3 source: the OK/"Install" button
    stays disabled until `Aoe3SourcePath` is set** (auto-detected, picked via the
    in-dialog AoE3 Browse button, or *inferred live* when the chosen destination
@@ -1476,8 +1613,12 @@ engine** and the UI binds to it.
    install — see the `IsStockGame` gotcha).
 2. **Update** — 100% compatible with the original Java updater: fetch
    `UpdateInfo.xml`, MD5 three key files (`data/protoy.xml`, `techtreey.xml`,
-   `stringtabley.xml`) to identify the installed version, then download `.tar.xz`
-   patches (resume + mirror fallback), CRC32-verify, back up, and extract.
+   `stringtabley.xml`) to identify the installed version (falling back to the
+   install manifest's baseline when the byte-faithful payload matches no UpdateInfo
+   version — see the manifest-recognition gotcha), then download `.tar.xz`
+   patches (resume + mirror fallback), CRC32-verify, back up, and extract — then
+   re-fingerprint the touched files into the manifest so the patched install stays
+   verifiable.
 3. **Multiplayer** — Discord sign-in (JWT cached in config) → REST/WebSocket to a
    self-hosted Node/Fastify backend (`wol-lobby.duckdns.org`) for lobbies + chat,
    gated by a mod fingerprint (`ModHashService`) → players join a shared **Radmin
@@ -1538,7 +1679,17 @@ model enforced by the catalog repo's CI. The JSON schema lives at
 - **Logging:** call `DiagnosticLog.Write(...)` (or `WriteSection`). It's a
   non-blocking queued logger that resets at each launch and writes
   `launcher-debug.log`. Log messages are **always English** (they're for bug
-  reports), even though the UI is localized. Separately, `MultiplayerTelemetry`
+  reports), even though the UI is localized. **Bug-report bundle:**
+  `DiagnosticLog.ExportBundle(zipPath)` zips the shareable diagnostics — every
+  top-level `*.log` and `*snapshot*` file in `AppPaths.DataDir`, copied to a temp
+  **staging** folder first (so a concurrent log write can't corrupt the zip) — and
+  it **NEVER includes `launcher-config.json`** (it holds the Discord session token;
+  this privacy exclusion is load-bearing — `AppPaths.ConfigFileName` was made
+  `internal` precisely so ExportBundle can name and skip it). The user triggers it
+  from ModProperties' **"📤 Share diagnostics"** button (`shareDiagnostics`
+  callback → `MainWindow.ShareDiagnostics`: Save dialog defaulting to the Desktop
+  → `ExportBundle` → reveal in Explorer, ready to drag into Discord). Strings
+  `ModPropShareDiagnostics*`. Separately, `MultiplayerTelemetry`
   appends a plaintext `multiplayer-events.log` next to the `.exe`. It is now
   **opt-in and OFF by default** (`LauncherConfig.MultiplayerTelemetryEnabled`,
   wired to `MultiplayerTelemetry.Enabled` in `MainWindow`'s ctor at startup and
