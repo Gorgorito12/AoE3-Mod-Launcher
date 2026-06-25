@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -78,6 +80,64 @@ public static class DiagnosticLog
     public static void Flush()
     {
         WriteBatch();
+    }
+
+    /// <summary>
+    /// Bundles the diagnostic files into a single <c>.zip</c> at
+    /// <paramref name="destinationZipPath"/> so a user can attach ONE file when
+    /// reporting a bug. Includes the top-level <c>*.log</c> (launcher-debug.log,
+    /// multiplayer-events.log) and <c>*snapshot*</c> files from
+    /// <paramref name="sourceDir"/> (defaults to <see cref="AppPaths.DataDir"/>).
+    ///
+    /// DELIBERATELY EXCLUDES <c>launcher-config.json</c>: it holds the cached
+    /// Discord session token, which must not leave the user's machine in a shared
+    /// bundle. Subfolders (e.g. <c>mod-assets\</c>) are not included.
+    ///
+    /// Files are copied to a temp staging folder first (not zipped from their live
+    /// path) so an in-flight log write can't race the archive. Returns the zip
+    /// path; throws on failure so the caller can surface it.
+    /// </summary>
+    public static string ExportBundle(string destinationZipPath, string? sourceDir = null)
+    {
+        Flush();
+        var src = sourceDir ?? AppPaths.DataDir;
+        var staging = Path.Combine(Path.GetTempPath(), "wol-diag-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            Directory.CreateDirectory(staging);
+
+            if (Directory.Exists(src))
+            {
+                foreach (var file in Directory.EnumerateFiles(src, "*", SearchOption.TopDirectoryOnly))
+                {
+                    var name = Path.GetFileName(file);
+                    bool include =
+                        name.EndsWith(".log", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("snapshot", StringComparison.OrdinalIgnoreCase);
+                    // Never ship the config — it carries the Discord session token.
+                    if (name.Equals(AppPaths.ConfigFileName, StringComparison.OrdinalIgnoreCase))
+                        include = false;
+                    if (!include) continue;
+
+                    try { File.Copy(file, Path.Combine(staging, name), overwrite: true); }
+                    catch { /* skip a file we couldn't read; bundle the rest */ }
+                }
+            }
+
+            var destDir = Path.GetDirectoryName(destinationZipPath);
+            if (!string.IsNullOrEmpty(destDir)) Directory.CreateDirectory(destDir);
+            if (File.Exists(destinationZipPath)) File.Delete(destinationZipPath);
+
+            ZipFile.CreateFromDirectory(staging, destinationZipPath, CompressionLevel.Optimal,
+                includeBaseDirectory: false);
+            return destinationZipPath;
+        }
+        finally
+        {
+            try { if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true); }
+            catch { /* best-effort cleanup */ }
+        }
     }
 
     private static async Task DrainerLoop()

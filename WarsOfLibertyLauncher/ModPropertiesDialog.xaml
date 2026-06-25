@@ -445,6 +445,12 @@
                                 HorizontalAlignment="Left"
                                 MinWidth="220"
                                 Click="ViewLogsBtn_Click"/>
+                        <Button x:Name="ShareDiagnosticsBtn"
+                                Style="{StaticResource PropertyActionButton}"
+                                HorizontalAlignment="Left"
+                                MinWidth="220"
+                                Margin="0,6,0,0"
+                                Click="ShareDiagnosticsBtn_Click"/>
 
                         <Border Style="{StaticResource DialogDivider}"/>
 

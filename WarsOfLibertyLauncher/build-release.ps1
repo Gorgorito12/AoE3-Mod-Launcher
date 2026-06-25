@@ -21,9 +21,13 @@
 
 .PARAMETER Version
     Optional. Overrides the <Version> baked into WarsOfLibertyLauncher.csproj
-    for this build only — it is NOT written back to disk. Must be a SemVer
-    string like "0.7.0" or "1.0.0-rc1". When omitted, the build uses
-    whatever <Version> the csproj declares.
+    for this build only — it is NOT written back to disk. Format:
+    MAJOR.MINOR.PATCH with an OPTIONAL WoL-style letter suffix, e.g. "1.0.5" or
+    "1.0.5a". The letter is split off for stamping: the numeric core
+    ("1.0.5") becomes AssemblyVersion/FileVersion (System.Version is numeric-only)
+    and the FULL string ("1.0.5a") becomes InformationalVersion, which the
+    self-updater reads so a binary recognises its own letter version. When omitted,
+    the build uses whatever <Version> the csproj declares.
 
     The version flows into:
       * Assembly metadata (file properties shown by right-click → Properties
@@ -133,7 +137,26 @@ if (Test-Path $publishRoot) {
 # only appears when the caller passed one. Using -p:Version on the dotnet
 # command line takes precedence over the csproj for this build only —
 # the file on disk is not modified.
-$publishLabel = if ($Version) { "$Configuration | $Runtime | v$Version" } else { "$Configuration | $Runtime" }
+# Version handling. A WoL-style LETTER suffix ("1.0.5a") is allowed, but
+# AssemblyVersion/FileVersion are System.Version (integers only) and can't hold
+# the letter — so we SPLIT: the numeric core ("1.0.5") feeds -p:Version (whence
+# AssemblyVersion/FileVersion), and the FULL string ("1.0.5a") feeds
+# -p:InformationalVersion, which the self-updater reads for self-recognition.
+$VersionNumeric = $null
+$VersionFull = $null
+if ($Version) {
+    if ($Version -notmatch '^\d+\.\d+\.\d+[A-Za-z]?$') {
+        Write-Host ''
+        Write-Host "ERROR: -Version must look like 1.0.5 or 1.0.5a (MAJOR.MINOR.PATCH + optional letter)." -ForegroundColor Red
+        Write-Host "       Got: '$Version'" -ForegroundColor Red
+        Write-Host ''
+        exit 1
+    }
+    $VersionFull = $Version
+    $VersionNumeric = ($Version -replace '[A-Za-z]+$', '')   # strip trailing letter
+}
+
+$publishLabel = if ($VersionFull) { "$Configuration | $Runtime | v$VersionFull" } else { "$Configuration | $Runtime" }
 Write-Host "Publishing ($publishLabel, single-file, self-contained)..." -ForegroundColor Cyan
 
 $publishArgs = @(
@@ -146,8 +169,13 @@ $publishArgs = @(
     '-o', $publishRoot,
     '-nologo'
 )
-if ($Version) {
-    $publishArgs += "-p:Version=$Version"
+if ($VersionFull) {
+    # Numeric core → AssemblyVersion/FileVersion (must be numeric); full string
+    # (with letter) → InformationalVersion (drives the self-update tag/recognition).
+    $publishArgs += "-p:Version=$VersionNumeric"
+    $publishArgs += "-p:FileVersion=$VersionNumeric"
+    $publishArgs += "-p:AssemblyVersion=$VersionNumeric"
+    $publishArgs += "-p:InformationalVersion=$VersionFull"
 }
 
 & dotnet @publishArgs

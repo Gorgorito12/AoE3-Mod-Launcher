@@ -1028,6 +1028,21 @@ public static class Strings
             [LangEn] = "View logs",
             [LangEs] = "Ver registros",
         },
+        ["ModPropShareDiagnostics"] = new()
+        {
+            [LangEn] = "📤 Share diagnostics",
+            [LangEs] = "📤 Compartir diagnóstico",
+        },
+        ["ModPropShareDiagnosticsSaveTitle"] = new()
+        {
+            [LangEn] = "Save diagnostic file",
+            [LangEs] = "Guardar archivo de diagnóstico",
+        },
+        ["ModPropShareDiagnosticsFailed"] = new()
+        {
+            [LangEn] = "Could not create the diagnostics file: {0}",
+            [LangEs] = "No se pudo crear el archivo de diagnóstico: {0}",
+        },
         ["ModPropDangerZone"] = new()
         {
             [LangEn] = "DANGER ZONE",
@@ -3075,6 +3090,21 @@ public static class Strings
             [LangEn] = "{0} update(s) available ({1} total).",
             [LangEs] = "{0} actualización(es) disponible(s) ({1} total).",
         },
+        ["StatusContinuingUpdate"] = new()
+        {
+            [LangEn] = "Repair done — continuing with the pending update…",
+            [LangEs] = "Reparación lista — continuando con la actualización pendiente…",
+        },
+        ["VerifyEngineSuffix"] = new()
+        {
+            [LangEn] = " (base game engine file — reinstall AoE3)",
+            [LangEs] = " (archivo del motor del juego base — reinstala AoE3)",
+        },
+        ["StatusRevalidating"] = new()
+        {
+            [LangEn] = "Re-verifying files ({0}/{1})…",
+            [LangEs] = "Re-verificando archivos ({0}/{1})…",
+        },
         // {0} = mod display name.
         ["StatusInstallNotFound"] = new()
         {
@@ -3838,6 +3868,16 @@ public static class Strings
         {
             [LangEn] = "⚠ {0} problem(s) found: {1}",
             [LangEs] = "⚠ {0} problema(s) encontrado(s): {1}",
+        },
+        ["StatusRepairNothing"] = new()
+        {
+            [LangEn] = "✓ Installation intact — nothing to repair ({0} files verified).",
+            [LangEs] = "✓ Instalación íntegra — nada que reparar ({0} archivos verificados).",
+        },
+        ["StatusRepairingFiles"] = new()
+        {
+            [LangEn] = "Repairing {0} damaged file(s)…",
+            [LangEs] = "Reparando {0} archivo(s) dañado(s)…",
         },
         ["StatusInstallSuccessVerified"] = new()
         {

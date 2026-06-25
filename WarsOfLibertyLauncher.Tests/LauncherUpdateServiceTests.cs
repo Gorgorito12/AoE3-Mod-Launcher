@@ -34,6 +34,19 @@ public class LauncherUpdateServiceTests
     // A non-SemVer saved tag keeps prompt-on-difference (never silently miss one).
     [InlineData("weird",  "0.9.9.0", null,     "v1.0.0", true)]
     [InlineData("weird",  "0.9.9.0", null,     "weird",  false)]
+    // --- WoL-style LETTER suffix support ---
+    // Letter release is newer than the plain patch → offer.
+    [InlineData("v1.0.5",  "1.0.5.0", null,    "v1.0.5a", true)]
+    // Same letter tag installed → no offer (equality).
+    [InlineData("v1.0.5a", "1.0.5.0", null,    "v1.0.5a", false)]
+    // Next patch is newer than a letter release → offer.
+    [InlineData("v1.0.5a", "1.0.5.0", null,    "v1.0.6",  true)]
+    // Letter-vs-letter ordering: b > a installed → offer.
+    [InlineData("v1.0.5a", "1.0.5.0", null,    "v1.0.5b", true)]
+    // Downgrade guard now WORKS for letters: remote a < installed b → no offer.
+    [InlineData("v1.0.5b", "1.0.5.0", null,    "v1.0.5a", false)]
+    // Downgrade guard: plain patch is OLDER than the letter release → no offer.
+    [InlineData("v1.0.5a", "1.0.5.0", null,    "v1.0.5",  false)]
     public void EvaluateUpdate_OfferDecision(
         string lastInstalledTag, string asmVersion, string? skippedTag,
         string remoteTag, bool expectedOffer)
@@ -64,6 +77,34 @@ public class LauncherUpdateServiceTests
 
         Assert.True(offer);
         Assert.Equal("v0.6.0", currentLabel); // honest current version, not "—"
+    }
+
+    [Fact]
+    public void EvaluateUpdate_LetterBinaryNoSavedTag_RecognisedViaInformationalTag()
+    {
+        // A manually-downloaded "1.0.5a" binary: AssemblyVersion is numeric 1.0.5
+        // (the letter can't live there), but InformationalVersion carries "v1.0.5a".
+        // With the informational tag as the effective-current fallback, the remote
+        // "v1.0.5a" must NOT be offered as an update to itself.
+        var (offer, currentLabel) = LauncherUpdateService.EvaluateUpdate(
+            lastInstalledTag: "", assemblyVersion: new Version(1, 0, 5, 0),
+            skippedTag: null, remoteTag: "v1.0.5a", currentInformationalTag: "v1.0.5a");
+
+        Assert.False(offer);
+        Assert.Equal("v1.0.5a", currentLabel);
+    }
+
+    [Fact]
+    public void EvaluateUpdate_LetterBinaryNoSavedTag_WithoutInformational_WouldOfferItself()
+    {
+        // Without the informational fallback, the numeric AssemblyVersion (1.0.5)
+        // can't represent the letter, so the same-version "v1.0.5a" reads as newer
+        // and gets offered — this is exactly why the informational tag exists.
+        var (offer, _) = LauncherUpdateService.EvaluateUpdate(
+            lastInstalledTag: "", assemblyVersion: new Version(1, 0, 5, 0),
+            skippedTag: null, remoteTag: "v1.0.5a");
+
+        Assert.True(offer);
     }
 
     [Theory]

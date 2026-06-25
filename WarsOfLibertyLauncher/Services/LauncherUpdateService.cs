@@ -63,6 +63,35 @@ public class LauncherUpdateService
         Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
 
     /// <summary>
+    /// The running binary's INFORMATIONAL version as a release tag — this is the
+    /// one that can carry a WoL-style letter suffix ("v1.0.5a"), because the
+    /// numeric <see cref="CurrentVersion"/> (AssemblyVersion) physically cannot
+    /// (System.Version is integers-only). build-release.ps1 stamps
+    /// <c>InformationalVersion=1.0.5a</c> while AssemblyVersion stays "1.0.5.0".
+    /// Used as the self-recognition fallback for a binary with no saved tag (a
+    /// manual download) so it doesn't offer an "update" to the very letter version
+    /// it already is. Falls back to <see cref="FormatVersionTag(Version)"/> when no
+    /// informational version is stamped (or it's just the numeric one).
+    /// </summary>
+    public static string CurrentInformationalTag
+    {
+        get
+        {
+            var raw = Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (string.IsNullOrWhiteSpace(raw)) return FormatVersionTag(CurrentVersion);
+
+            // Strip SourceLink build metadata ("1.0.5a+abc123" → "1.0.5a").
+            var plus = raw.IndexOf('+');
+            if (plus >= 0) raw = raw[..plus];
+            raw = raw.Trim();
+            if (raw.Length == 0) return FormatVersionTag(CurrentVersion);
+
+            return raw.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? raw : "v" + raw;
+        }
+    }
+
+    /// <summary>
     /// Queries GitHub for the latest release. Update detection is tag-based:
     /// the launcher considers an update available when GitHub's latest release
     /// tag differs from <paramref name="lastInstalledTag"/> (and isn't the tag
@@ -134,7 +163,8 @@ public class LauncherUpdateService
             // version already running. Distinct reasons (already-on-latest,
             // dismissed, not-newer) all fold into a single not-offered branch.
             var (offer, currentLabel) =
-                EvaluateUpdate(lastInstalledTag, CurrentVersion, skippedTag, remoteTag);
+                EvaluateUpdate(lastInstalledTag, CurrentVersion, skippedTag, remoteTag,
+                    CurrentInformationalTag);
             if (!offer)
             {
                 DiagnosticLog.Write(
@@ -426,11 +456,16 @@ public class LauncherUpdateService
     /// touching the network.
     /// </summary>
     public static (bool offer, string currentLabel) EvaluateUpdate(
-        string? lastInstalledTag, Version assemblyVersion, string? skippedTag, string remoteTag)
+        string? lastInstalledTag, Version assemblyVersion, string? skippedTag, string remoteTag,
+        string? currentInformationalTag = null)
     {
-        var effective = string.IsNullOrEmpty(lastInstalledTag)
-            ? FormatVersionTag(assemblyVersion)
-            : lastInstalledTag!;
+        // Effective-current = saved tag (authoritative) → else the informational
+        // tag (can carry a letter, e.g. "v1.0.5a") → else the numeric AssemblyVersion.
+        var effective = !string.IsNullOrEmpty(lastInstalledTag)
+            ? lastInstalledTag!
+            : (!string.IsNullOrWhiteSpace(currentInformationalTag)
+                ? currentInformationalTag!
+                : FormatVersionTag(assemblyVersion));
 
         // Already on this tag, or the user dismissed it via "Later".
         if (string.Equals(remoteTag, effective, StringComparison.OrdinalIgnoreCase) ||
@@ -454,9 +489,13 @@ public class LauncherUpdateService
     /// <summary>
     /// Parses a release tag into a comparable <see cref="Version"/>. Tolerates a
     /// leading "v"/"V" and a trailing pre-release/build suffix ("-rc1", "+commit"),
-    /// comparing on the numeric "major.minor.patch[.build]" core only. Returns
-    /// false for empty or non-numeric tags so callers can fall back to
-    /// tag-difference behaviour rather than mis-ordering them.
+    /// and a WoL-style LETTER suffix on the patch ("1.0.5a", "1.0.15d"). The letter
+    /// is packed into the <see cref="Version.Revision"/> component (a→1, b→2, …, and
+    /// "aa"→27 for the unlikely 2-letter case) so the existing numeric comparison
+    /// orders <c>1.0.5 &lt; 1.0.5a &lt; 1.0.5b &lt; 1.0.6</c> with no extra logic.
+    /// No letter yields revision 0 (so a plain "1.0.5" is "1.0.5.0", consistently
+    /// BELOW "1.0.5a"). Returns false for empty or non-numeric tags so callers can
+    /// fall back to tag-difference behaviour rather than mis-ordering them.
     /// </summary>
     private static bool TryParseSemVer(string? tag, out Version version)
     {
@@ -468,7 +507,40 @@ public class LauncherUpdateService
         var cut = core.IndexOfAny(new[] { '-', '+' });
         if (cut >= 0) core = core[..cut];
 
-        return Version.TryParse(core, out version!);
+        // Split a trailing letter suffix off the numeric core ("1.0.5a" → "1.0.5" + "a").
+        int letterStart = core.Length;
+        while (letterStart > 0 && char.IsAsciiLetter(core[letterStart - 1]))
+            letterStart--;
+        var numeric = core[..letterStart];
+        var letters = core[letterStart..];
+
+        if (!Version.TryParse(numeric, out var baseVer) || baseVer == null)
+            return false;
+
+        int letterRank = LetterRank(letters);
+        version = new Version(
+            Math.Max(0, baseVer.Major),
+            Math.Max(0, baseVer.Minor),
+            Math.Max(0, baseVer.Build),
+            letterRank);
+        return true;
+    }
+
+    /// <summary>
+    /// Ordinal rank of a lowercase letter suffix: "" → 0, "a" → 1 … "z" → 26,
+    /// "aa" → 27 (base-26). Used to pack the WoL-style patch letter into the
+    /// version's Revision so versions sort naturally.
+    /// </summary>
+    private static int LetterRank(string letters)
+    {
+        if (string.IsNullOrEmpty(letters)) return 0;
+        int rank = 0;
+        foreach (var ch in letters.ToLowerInvariant())
+        {
+            if (ch < 'a' || ch > 'z') return 0;   // unexpected → treat as no suffix
+            rank = rank * 26 + (ch - 'a' + 1);
+        }
+        return rank;
     }
 
     private static GitHubAsset? FindExeAsset(GitHubRelease release)

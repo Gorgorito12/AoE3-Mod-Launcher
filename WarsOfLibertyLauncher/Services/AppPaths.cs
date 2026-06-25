@@ -30,7 +30,7 @@ public static class AppPaths
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "AoE3ModLauncher");
 
-    private const string ConfigFileName = "launcher-config.json";
+    internal const string ConfigFileName = "launcher-config.json";
 
     /// <summary>Full path to <c>launcher-config.json</c> in the data directory.</summary>
     public static string ConfigFile => Path.Combine(DataDir, ConfigFileName);

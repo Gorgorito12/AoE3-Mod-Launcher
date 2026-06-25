@@ -265,7 +265,8 @@ public class NativeInstallService
         WriteRegistryEntries(profile, version, destinationFolder, installLabel);
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath, clonedAoe3: true,
-            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel);
+            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel,
+            overlayCapture.Hashes);
 
         // Translation snapshot is WoL-specific (it relies on the WoL-style
         // <c>data\stringtabley.xml</c> and <c>unithelpstringsy.xml</c> layout
@@ -514,7 +515,8 @@ public class NativeInstallService
         WriteRegistryEntries(profile, version, destinationFolder, installLabel);
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
-            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel);
+            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel,
+            overlayCapture.Hashes);
 
         // Translation snapshot only applies to mods that opt into the WoL-
         // style translation overlay system (CoveredFiles non-empty).
@@ -526,6 +528,99 @@ public class NativeInstallService
 
         phaseProgress?.Report(InstallPhase.Complete);
         DiagnosticLog.Write($"=== Native Install (mod-only) Complete ({profile.DisplayName}) ===");
+    }
+
+    /// <summary>Outcome of a granular repair: how many files were re-copied and
+    /// which damaged paths the payload didn't ship (so couldn't be repaired).</summary>
+    public sealed record RepairResult(int Repaired, List<string> Unrepairable);
+
+    /// <summary>
+    /// Granular repair: re-copies ONLY the listed damaged/missing overlay files
+    /// from the payload, instead of re-overlaying the entire mod. The ZIP is
+    /// still downloaded in full (the host has no per-file URLs), but the
+    /// destination write is limited to the damaged set — so a one-file fix
+    /// doesn't rewrite gigabytes of healthy files. The manifest is intentionally
+    /// NOT rewritten: the install set and version are unchanged, only damaged
+    /// bytes are restored to what the manifest already fingerprints.
+    /// </summary>
+    public async Task<RepairResult> RepairFilesAsync(
+        ModProfile profile,
+        string[] payloadZipUrls,
+        string destinationFolder,
+        IReadOnlyCollection<string> damagedRelPaths,
+        IProgress<DownloadProgress>? downloadProgress = null,
+        IProgress<string>? statusProgress = null,
+        IProgress<InstallPhase>? phaseProgress = null,
+        IProgress<ExtractProgress>? extractProgress = null,
+        IProgress<ModOverlayProgress>? overlayProgress = null,
+        string[]? payloadSha256 = null,
+        CancellationToken ct = default)
+    {
+        DiagnosticLog.Write($"=== Granular Repair Start ({profile.DisplayName}) ===");
+        DiagnosticLog.Write($"  Damaged files to repair: {damagedRelPaths.Count}");
+
+        // ---- Phase 1: Download (full ZIP — host has no per-file URLs) ----
+        phaseProgress?.Report(InstallPhase.Download);
+        statusProgress?.Report($"Downloading {profile.DisplayName} files...");
+        var zipPath = await DownloadAndConcatenatePartsAsync(
+            payloadZipUrls, payloadSha256, downloadProgress, statusProgress, ct);
+
+        // ---- Phase 2: Extract ----
+        phaseProgress?.Report(InstallPhase.Extract);
+        statusProgress?.Report("Extracting mod files...");
+        var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
+
+        // ---- Phase 3: Copy ONLY the damaged files ----
+        phaseProgress?.Report(InstallPhase.ModOverlay);
+        var damaged = new List<string>(damagedRelPaths);
+        var unrepairable = new List<string>();
+
+        var result = await Task.Run(() =>
+        {
+            int repaired = 0;
+            int total = damaged.Count;
+            int done = 0;
+            foreach (var rel in damaged)
+            {
+                ct.ThrowIfCancellationRequested();
+                while (Pause && !ct.IsCancellationRequested)
+                    Thread.Sleep(200);
+
+                done++;
+                var relNative = rel.Replace('/', Path.DirectorySeparatorChar);
+                var srcFile = Path.Combine(extractedFolder, relNative);
+                var destPath = Path.Combine(destinationFolder, relNative);
+
+                if (!File.Exists(srcFile))
+                {
+                    // The payload for this version doesn't ship this file — nothing
+                    // to restore it from. Surfaced so the caller can report it.
+                    DiagnosticLog.Write($"Repair: payload has no '{rel}' — cannot restore.");
+                    unrepairable.Add(rel);
+                    continue;
+                }
+
+                var destDir = Path.GetDirectoryName(destPath);
+                if (!string.IsNullOrEmpty(destDir))
+                    Directory.CreateDirectory(destDir);
+
+                File.Copy(srcFile, destPath, overwrite: true);
+                repaired++;
+
+                if (done == 1 || done % 25 == 0 || done == total)
+                {
+                    statusProgress?.Report($"Repairing files ({done}/{total})...");
+                    overlayProgress?.Report(new ModOverlayProgress(done, total, done, total));
+                }
+            }
+            return new RepairResult(repaired, unrepairable);
+        }, ct);
+
+        phaseProgress?.Report(InstallPhase.Complete);
+        DiagnosticLog.Write(
+            $"=== Granular Repair Complete: {result.Repaired} repaired, " +
+            $"{result.Unrepairable.Count} unrepairable ({profile.DisplayName}) ===");
+        return result;
     }
 
     // =========================================================================
@@ -883,8 +978,15 @@ public class NativeInstallService
     /// the subset that did NOT already exist at copy time — on a fresh install
     /// (clone present) that means "net-new vs the base game"; on a re-overlay
     /// the sticky classifier reconciles it against the previous manifest.
+    /// <see cref="Hashes"/> carries the size+SHA-256 fingerprint of each overlay
+    /// file (keyed by the same forward-slash relative path), captured while
+    /// copying so Verify/Repair can detect the exact damaged set. It is a
+    /// separate init-only member so the two-arg shape used by tests keeps working.
     /// </summary>
-    public sealed record OverlayCaptureResult(List<string> AllFiles, List<string> FreshOnDisk);
+    public sealed record OverlayCaptureResult(List<string> AllFiles, List<string> FreshOnDisk)
+    {
+        public Dictionary<string, FileFingerprint> Hashes { get; init; } = new();
+    }
 
     internal async Task<OverlayCaptureResult> CopyPayloadToDestinationAsync(
         string extractedFolder,
@@ -914,6 +1016,14 @@ public class NativeInstallService
             var allFiles = new List<string>(total);
             var freshOnDisk = new List<string>();
 
+            // Per-file integrity fingerprints (size + SHA-256), captured here so
+            // Verify/Repair can pinpoint the exact damaged set later. Hashing the
+            // freshly-extracted source (OS cache hot) avoids a second read of the
+            // destination. Pre-translation by construction: the overlay copy runs
+            // before any translation pack is applied, so these are canonical bytes.
+            var hashes = new Dictionary<string, FileFingerprint>(total, StringComparer.OrdinalIgnoreCase);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+
             DiagnosticLog.Write($"Copying {total} mod overlay files to destination...");
 
             foreach (var srcFile in files)
@@ -938,6 +1048,23 @@ public class NativeInstallService
 
                 long srcSize = 0;
                 try { srcSize = new FileInfo(srcFile).Length; } catch { }
+
+                // Fingerprint the source bytes before/while copying. Best-effort:
+                // an unreadable file just drops out of FileHashes (Verify then
+                // skips it rather than false-flagging it).
+                try
+                {
+                    using var fs = new FileStream(srcFile, FileMode.Open, FileAccess.Read,
+                        FileShare.Read, bufferSize: 1024 * 1024, useAsync: false);
+                    var digest = sha.ComputeHash(fs);
+                    hashes[relForward] = new FileFingerprint(
+                        srcSize, Convert.ToHexString(digest).ToLowerInvariant());
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Overlay hash failed for {relForward}: {ex.Message}");
+                }
+
                 File.Copy(srcFile, destPath, overwrite: true);
                 bytesDone += srcSize;
 
@@ -950,7 +1077,7 @@ public class NativeInstallService
 
             DiagnosticLog.Write(
                 $"Mod overlay copy complete: {done} files ({freshOnDisk.Count} net-new on disk).");
-            return new OverlayCaptureResult(allFiles, freshOnDisk);
+            return new OverlayCaptureResult(allFiles, freshOnDisk) { Hashes = hashes };
         }, ct);
     }
 
@@ -986,6 +1113,127 @@ public class NativeInstallService
             if (isNetNew) netNew.Add(path);
         }
         return (capture.AllFiles, netNew);
+    }
+
+    /// <summary>
+    /// Drops every <paramref name="fileHashes"/> entry whose file no longer
+    /// exists under <paramref name="installFolder"/>. The overlay copy
+    /// fingerprints EVERY extracted file, but later passes
+    /// (<see cref="StripDeleteListArtifact"/>, <see cref="ApplyUpdateDeletions"/>)
+    /// remove the payload's instruction artifact (<c>delete.lst</c>) and net-new
+    /// files a new release stopped shipping. A fingerprint left for one of those
+    /// deleted files would make Verify report a false "missing" and granular
+    /// Repair copy it back from the payload — resurrecting a file the pipeline
+    /// intentionally stripped. Returns a new dict (case-insensitive keys).
+    /// </summary>
+    internal static Dictionary<string, FileFingerprint> PruneMissingHashes(
+        string installFolder, Dictionary<string, FileFingerprint>? fileHashes)
+    {
+        var result = new Dictionary<string, FileFingerprint>(StringComparer.OrdinalIgnoreCase);
+        if (fileHashes == null) return result;
+        foreach (var (rel, fp) in fileHashes)
+        {
+            var full = Path.Combine(installFolder, rel.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(full)) result[rel] = fp;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Size + SHA-256 of the curated base-engine files present under
+    /// <paramref name="installFolder"/> (<see cref="VerifyService.EngineCandidates"/>,
+    /// hash-if-present). Captured at install/repair time when the live files are
+    /// canonical English (pre-translation), so the stored hash matches what
+    /// <see cref="VerifyService.VerifyEngineFiles"/> compares (it resolves covered
+    /// files to the <c>_originals</c> snapshot, which holds the same English bytes).
+    /// </summary>
+    private static Dictionary<string, FileFingerprint> ComputeEngineHashes(
+        string installFolder, IEnumerable<string> overlayKeys)
+    {
+        // A file that ships in the MOD PAYLOAD (overlay) is repairable by the
+        // granular re-copy, so it belongs to FileHashes ONLY — never duplicate it
+        // into the engine map, or a corrupt WoL data file (overlay) would also be
+        // reported as a non-repairable "reinstall AoE3" engine file. For WoL the
+        // three data files are overlay-owned; for an overlay-on-vanilla mod
+        // (Improvement Mod) they come from the cloned base, aren't overlay, and so
+        // correctly land in the engine bucket.
+        var overlaySet = new HashSet<string>(overlayKeys, StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, FileFingerprint>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rel in VerifyService.EngineCandidates)
+        {
+            if (overlaySet.Contains(rel)) continue;   // overlay-owned → not an engine file here
+            var full = Path.Combine(installFolder, rel.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(full)) continue;
+            try { result[rel] = VerifyService.ComputeFingerprintOf(full); }
+            catch (Exception ex) { DiagnosticLog.Write($"Engine hash failed for {rel}: {ex.Message}"); }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Re-fingerprints a set of files AFTER a patch run, partitioning them into
+    /// overlay (repairable from the payload) and base-engine (curated, not
+    /// repairable). Used by <see cref="UpdateService.ApplyUpdatesAsync"/> to keep
+    /// the manifest's hashes valid on a patched install instead of discarding them
+    /// (a patched WoL is the normal state — discarding left it on the weak
+    /// spot-check). Covered files are hashed via the <c>_originals</c> snapshot
+    /// (localization-invariant), so this MUST run after the snapshot is refreshed.
+    /// Parallel; skips files that no longer exist or can't be compared.
+    /// </summary>
+    public static (Dictionary<string, FileFingerprint> Overlay, Dictionary<string, FileFingerprint> Engine)
+        RecaptureHashes(
+            string installPath,
+            IEnumerable<string> touchedRelPaths,
+            IReadOnlyCollection<string> overlayRelPaths,
+            IReadOnlyList<string>? coveredFiles,
+            IProgress<VerifyService.VerifyProgress>? progress = null,
+            CancellationToken ct = default)
+    {
+        var coveredSet = VerifyService.BuildCoveredSet(coveredFiles);
+        var originals = VerifyService.OriginalsFolderOf(installPath);
+        var overlaySet = new HashSet<string>(overlayRelPaths, StringComparer.OrdinalIgnoreCase);
+        var engineSet = new HashSet<string>(VerifyService.EngineCandidates, StringComparer.OrdinalIgnoreCase);
+
+        var overlay = new System.Collections.Concurrent.ConcurrentDictionary<string, FileFingerprint>(
+            StringComparer.OrdinalIgnoreCase);
+        var engine = new System.Collections.Concurrent.ConcurrentDictionary<string, FileFingerprint>(
+            StringComparer.OrdinalIgnoreCase);
+
+        // The touched set defines what the patch changed; engine candidates are
+        // always refreshed too (a patch may modify a base DLL not in the overlay).
+        var toHash = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in touchedRelPaths) toHash.Add(p.Replace('\\', '/'));
+        foreach (var p in VerifyService.EngineCandidates) toHash.Add(p);
+
+        var options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 4),
+            CancellationToken = ct,
+        };
+        int total = toHash.Count;
+        int done = 0;
+
+        Parallel.ForEach(toHash, options, rel =>
+        {
+            int myDone = Interlocked.Increment(ref done);
+            if (progress != null && (myDone == 1 || myDone % 32 == 0 || myDone == total))
+                progress.Report(new VerifyService.VerifyProgress(myDone, total, rel, 0, 0));
+
+            var target = VerifyService.ResolveHashTarget(installPath, rel, coveredSet, originals);
+            if (target == null || !File.Exists(target)) return;
+            FileFingerprint fp;
+            try { fp = VerifyService.ComputeFingerprintOf(target); }
+            catch { return; }
+
+            // Partition: overlay-owned files are repairable (FileHashes); an engine
+            // candidate that is NOT overlay-owned is base (EngineFileHashes). A file
+            // is never put in both — see ComputeEngineHashes for why.
+            if (overlaySet.Contains(rel)) overlay[rel] = fp;
+            else if (engineSet.Contains(rel)) engine[rel] = fp;
+        });
+
+        return (new Dictionary<string, FileFingerprint>(overlay, StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, FileFingerprint>(engine, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>File a re-overlay ships to request explicit deletions.</summary>
@@ -1383,11 +1631,18 @@ public class NativeInstallService
         string? startMenuFolder,
         List<string>? overlayFiles = null,
         List<string>? overlayNetNew = null,
-        string? installLabel = null)
+        string? installLabel = null,
+        Dictionary<string, FileFingerprint>? fileHashes = null)
     {
         try
         {
             var (files, dirs) = EnumerateInstalledItems(installFolder);
+
+            // Keep FileHashes consistent with what's actually on disk (see
+            // PruneMissingHashes): later passes strip delete.lst / net-new drops,
+            // and a stale entry would make Verify report a false "missing" and
+            // granular Repair resurrect the file.
+            var prunedHashes = PruneMissingHashes(installFolder, fileHashes);
 
             var manifest = new InstallManifest
             {
@@ -1407,11 +1662,14 @@ public class NativeInstallService
                 OverlayFiles = overlayFiles ?? new(),
                 OverlayNetNew = overlayNetNew ?? new(),
                 KeyFileHashes = ComputeKeyFileHashes(installFolder),
+                FileHashes = prunedHashes ?? new(),
+                EngineFileHashes = ComputeEngineHashes(installFolder, (prunedHashes ?? new()).Keys),
             };
             manifest.Save();
             DiagnosticLog.Write(
                 $"Install manifest written: {files.Count} files, {dirs.Count} dirs, " +
-                $"{manifest.OverlayFiles.Count} overlay ({manifest.OverlayNetNew.Count} net-new).");
+                $"{manifest.OverlayFiles.Count} overlay ({manifest.OverlayNetNew.Count} net-new), " +
+                $"{manifest.FileHashes.Count} hashed.");
         }
         catch (Exception ex)
         {
