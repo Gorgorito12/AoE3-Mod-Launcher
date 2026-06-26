@@ -5472,6 +5472,14 @@ public partial class MainWindow : Window
         try
         {
             var speed = new SpeedTracker();
+
+            // Phase weights so the OverallProgress bar advances through extract +
+            // overlay instead of freezing at the end of the download. Mirrors the
+            // scheme InstallAsync uses (DL/Extract/Overlay), summing to 100%.
+            const double weightDownload = 60;
+            const double weightExtract  = 20;
+            const double weightOverlay  = 20;
+
             var dlProgress = new Progress<DownloadProgress>(p =>
             {
                 speed.Sample(p.BytesReceived);
@@ -5479,7 +5487,7 @@ public partial class MainWindow : Window
                 {
                     var eta = speed.EstimateTimeRemaining(p.TotalBytes - p.BytesReceived);
                     ProgressPanelControl.PatchProgress.Value = p.Percentage;
-                    ProgressPanelControl.OverallProgress.Value = p.Percentage * 0.6;
+                    ProgressPanelControl.OverallProgress.Value = (p.Percentage / 100.0) * weightDownload;
                     ProgressPanelControl.PatchBytesText.Text = $"{p.Percentage:0.0}%";
                     ProgressPanelControl.OverallBytesText.Text = $"{FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes)}";
                     ProgressPanelControl.EtaText.Text = eta.HasValue
@@ -5491,7 +5499,7 @@ public partial class MainWindow : Window
                     ProgressPanelControl.PatchBytesText.Text = FormatBytes(p.BytesReceived);
                 }
                 ProgressPanelControl.SpeedText.Text = speed.BytesPerSecond > 0
-                    ? Strings.Format("ProgressSpeed", FormatBytes((long)speed.BytesPerSecond))
+                    ? Strings.Format("ProgressSpeedDownload", FormatBytes((long)speed.BytesPerSecond))
                     : "";
                 ProgressPanelControl.LblCurrentPatch.Text = Strings.Format(
                     "StatusDownloadingInstaller", _updateService.Profile.DisplayName);
@@ -5503,23 +5511,74 @@ public partial class MainWindow : Window
                 ProgressPanelControl.LblCurrentPatch.Text = s;
             });
 
-            // Choose the repair strategy. A PLAIN repair (not an update, not a
-            // version switch) verifies first and re-copies ONLY the damaged files
-            // — when the manifest carries per-file hashes. An update / version
-            // switch lays down a DIFFERENT version, so the manifest hashes describe
-            // the old build and can't classify "damage"; those keep the full
-            // re-overlay. Installs from older builds (no FileHashes) also fall
-            // back to the full re-overlay.
-            bool granular = !asUpdate && targetReleaseTag == null;
-            var preManifest = granular ? InstallManifest.TryLoad(installPath) : null;
-            // When the granular branch runs, the exact damaged set we repaired —
-            // used to re-verify ONLY those files (cheap) instead of re-hashing the
-            // whole overlay. Null → full-overlay branch ran → structural recheck.
-            List<string>? granularDamaged = null;
-
-            if (granular && VerifyService.HasFileHashes(preManifest))
+            // Extract progress — advances the bar (60→80%) while the payload ZIP
+            // is decompressed, so Repair no longer looks frozen during extraction.
+            var extractProgress = new Progress<NativeInstallService.ExtractProgress>(p =>
             {
-                // ---- Verify first: find the exact damaged/missing set ----
+                speed.Sample(p.BytesDone);
+                double pct = p.BytesTotal > 0
+                    ? (double)p.BytesDone / p.BytesTotal * 100.0
+                    : (p.EntriesTotal > 0 ? (double)p.EntriesDone / p.EntriesTotal * 100.0 : 0);
+                ProgressPanelControl.PatchProgress.Value = pct;
+                ProgressPanelControl.OverallProgress.Value = weightDownload + (pct / 100.0) * weightExtract;
+                ProgressPanelControl.PatchBytesText.Text = $"{p.EntriesDone}/{p.EntriesTotal} files";
+                ProgressPanelControl.OverallBytesText.Text = $"{ProgressPanelControl.OverallProgress.Value:0}%";
+                ProgressPanelControl.LblCurrentPatch.Text = Strings.Format("StatusExtractingPayload", p.EntriesDone, p.EntriesTotal);
+                ProgressPanelControl.SpeedText.Text = speed.BytesPerSecond > 0
+                    ? Strings.Format("ProgressSpeedExtract", FormatBytes((long)speed.BytesPerSecond))
+                    : "";
+                ProgressPanelControl.EtaText.Text = "";
+            });
+
+            // Overlay progress — advances the bar (80→100%) while the mod files
+            // are copied on top (full re-overlay) or the damaged set is restored.
+            var overlayProgress = new Progress<NativeInstallService.ModOverlayProgress>(p =>
+            {
+                speed.Sample(p.BytesDone);
+                double pct = p.BytesTotal > 0
+                    ? (double)p.BytesDone / p.BytesTotal * 100.0
+                    : (p.FilesTotal > 0 ? (double)p.FilesDone / p.FilesTotal * 100.0 : 0);
+                ProgressPanelControl.PatchProgress.Value = pct;
+                ProgressPanelControl.OverallProgress.Value =
+                    weightDownload + weightExtract + (pct / 100.0) * weightOverlay;
+                ProgressPanelControl.PatchBytesText.Text = $"{p.FilesDone}/{p.FilesTotal} files";
+                ProgressPanelControl.OverallBytesText.Text = $"{ProgressPanelControl.OverallProgress.Value:0}%";
+                ProgressPanelControl.LblCurrentPatch.Text = Strings.Format("StatusInstallingMod", p.FilesDone, p.FilesTotal);
+                ProgressPanelControl.SpeedText.Text = speed.BytesPerSecond > 0
+                    ? Strings.Format("ProgressSpeedCopy", FormatBytes((long)speed.BytesPerSecond))
+                    : "";
+                ProgressPanelControl.EtaText.Text = "";
+            });
+
+            // Phase changes: reset the speed tracker at each boundary so the
+            // extract/overlay speed isn't polluted by the download's byte history.
+            var phaseProgress = new Progress<InstallPhase>(_ =>
+            {
+                speed.Reset();
+                ProgressPanelControl.SpeedText.Text = "";
+                ProgressPanelControl.EtaText.Text = "";
+            });
+
+            // Choose the repair strategy. A PLAIN repair (not an update, not a
+            // version switch) VERIFIES FIRST: if the overlay is intact it skips the
+            // multi-GB download (but still auto-continues into any pending updates
+            // below); if anything is damaged it re-lays the WHOLE mod overlay (NOT a
+            // granular per-file copy) so the install is restored to a complete,
+            // known-good state. An update / version switch — and an old install
+            // with no manifest FileHashes — go straight to the full re-overlay.
+            // NOTE: this only covers the mod OVERLAY; base-game engine files
+            // (cloned from AoE3) aren't in the verify set and aren't re-laid here.
+            bool plainRepair = !asUpdate && targetReleaseTag == null;
+            var preManifest = plainRepair ? InstallManifest.TryLoad(installPath) : null;
+            // True when verify found no damage: we skip the download/re-overlay AND
+            // the structural recheck (the verify we just ran is the proof), but we
+            // still fall through to the pending-update continuation below.
+            bool intact = false;
+            int intactFilesChecked = 0;
+
+            if (plainRepair && VerifyService.HasFileHashes(preManifest))
+            {
+                // ---- Verify first: is anything damaged? ----
                 ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarVerify");
                 var coveredFiles = _updateService.Profile.Translations?.CoveredFiles;
                 var verifyProgress = new Progress<VerifyService.VerifyProgress>(t =>
@@ -5539,36 +5598,36 @@ public partial class MainWindow : Window
 
                 if (damaged.Count == 0)
                 {
-                    // Intact — skip the multi-GB download entirely.
-                    var okMsg = Strings.Format("StatusRepairNothing", pre.TotalFilesChecked);
-                    SetStatus(okMsg);
-                    ShowProgressCompleted("ProgressTitleCompleted", okMsg);
-                    return;
+                    // Intact — skip the multi-GB download. Don't return: fall through
+                    // so the pending-update continuation below still runs.
+                    intact = true;
+                    intactFilesChecked = pre.TotalFilesChecked;
+                    SetStatus(Strings.Format("StatusRepairNothing", pre.TotalFilesChecked));
                 }
-
-                // ---- Repair only the damaged files (full ZIP download, selective copy) ----
-                SetStatus(Strings.Format("StatusRepairingFiles", damaged.Count));
-                ProgressPanelControl.LblCurrentPatch.Text =
-                    Strings.Format("StatusRepairingFiles", damaged.Count);
-                await nativeInstaller.RepairFilesAsync(
-                    _updateService.Profile,
-                    payloadUrls,
-                    installPath,
-                    damaged,
-                    dlProgress,
-                    statusProgress,
-                    phaseProgress: null,
-                    extractProgress: null,
-                    overlayProgress: null,
-                    payloadSha256: payloadSha256,
-                    ct: _cts.Token);
-                granularDamaged = damaged;   // recheck only these (cheap + precise)
+                else
+                {
+                    // Damaged — re-lay the WHOLE overlay (not just the damaged set).
+                    SetStatus(Strings.Format("StatusRepairingFiles", damaged.Count));
+                    ProgressPanelControl.LblCurrentPatch.Text =
+                        Strings.Format("StatusRepairingFiles", damaged.Count);
+                    await nativeInstaller.InstallModOnlyAsync(
+                        _updateService.Profile,
+                        ResolveInstallVersion(overrideTag: targetReleaseTag),
+                        payloadUrls,
+                        installPath,
+                        dlProgress,
+                        statusProgress,
+                        phaseProgress,
+                        extractProgress,
+                        overlayProgress,
+                        payloadSha256: payloadSha256,
+                        ct: _cts.Token);
+                }
             }
             else
             {
                 // Mod-only install on top of existing (overwrites all overlay files).
                 // Repair re-stamps the manifest with the version we just verified.
-                // No phase reporter here — repair doesn't show the breadcrumb.
                 await nativeInstaller.InstallModOnlyAsync(
                     _updateService.Profile,
                     ResolveInstallVersion(overrideTag: targetReleaseTag),
@@ -5576,34 +5635,25 @@ public partial class MainWindow : Window
                     installPath,
                     dlProgress,
                     statusProgress,
-                    phaseProgress: null,
-                    extractProgress: null,
-                    overlayProgress: null,
+                    phaseProgress,
+                    extractProgress,
+                    overlayProgress,
                     payloadSha256: payloadSha256,
                     ct: _cts.Token);
             }
 
-            // Re-verify. Show it's still working (don't flash 100% as "done").
-            SetStatus(Strings.Get("StatusVerifying"));
-            ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("StatusVerifying");
             var recheckProfile = _updateService.Profile;
             VerifyResult recheck;
-            if (granularDamaged != null)
+            if (intact)
             {
-                // Granular branch: re-hash ONLY the files we repaired (cheap +
-                // precise) by verifying a manifest subset against the damaged set.
-                var full = InstallManifest.TryLoad(installPath);
-                var subset = new InstallManifest();
-                if (full != null)
-                    foreach (var rel in granularDamaged)
-                        if (full.FileHashes.TryGetValue(rel, out var fp))
-                            subset.FileHashes[rel] = fp;
-                var coveredFiles = recheckProfile.Translations?.CoveredFiles;
-                recheck = await Task.Run(() => VerifyService.VerifyAgainstManifest(
-                    installPath, subset, coveredFiles, progress: null, _cts.Token));
+                // Nothing was re-laid; the verify we just ran is the proof it's good.
+                recheck = new VerifyResult(new List<string>(), new List<string>(), 0);
             }
             else
             {
+                // Re-verify. Show it's still working (don't flash 100% as "done").
+                SetStatus(Strings.Get("StatusVerifying"));
+                ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("StatusVerifying");
                 // Full-overlay branch: structural recheck only (hashPass:false) —
                 // we just laid the bytes whose hashes we wrote, so a full re-hash
                 // (minutes on a multi-GB install) proves nothing and looked frozen.
@@ -5640,7 +5690,11 @@ public partial class MainWindow : Window
                 _config.Save();
                 updated = true;
 
-                var okMsg = Strings.Get(asUpdate ? "StatusUpdateSuccess" : "StatusRepairSuccess");
+                // Intact (nothing was re-laid) → "nothing to repair"; otherwise the
+                // usual update/repair-success line.
+                var okMsg = intact
+                    ? Strings.Format("StatusRepairNothing", intactFilesChecked)
+                    : Strings.Get(asUpdate ? "StatusUpdateSuccess" : "StatusRepairSuccess");
                 SetStatus(okMsg);
                 // Repair: the user could already play before; no need to
                 // surface PLAY on completion (sidebar already has PLAY).
@@ -7057,7 +7111,7 @@ public partial class MainWindow : Window
             // Base-engine files (SEPARATE map): a damaged engine file is NOT
             // repairable from the mod payload, so it's reported with a distinct
             // "reinstall the base game" suffix and is deliberately kept OUT of the
-            // missing/corrupt sets that the Repair retry feeds to RepairFilesAsync.
+            // missing/corrupt overlay sets that drive the Repair re-overlay.
             if (VerifyService.HasEngineHashes(manifest))
             {
                 var engineDamaged = VerifyService.VerifyEngineFiles(

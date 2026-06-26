@@ -332,12 +332,13 @@ don't go looking for it.)
   vuln.)
 
 - **"Verify files" is a real per-file integrity pass (`Services/VerifyService.cs`),
-  and Repair is GRANULAR — it re-copies only the damaged files, never the whole
-  overlay. Two rules are load-bearing: overlay-vs-engine separation, and
+  and Repair VERIFIES FIRST then re-lays the WHOLE mod overlay when anything is
+  damaged (it is NOT granular — that was reverted; see "picks a path" below). Two
+  rules are load-bearing: overlay-vs-engine separation, and
   covered-file snapshot hashing.** Installs from this build forward stamp per-file
   fingerprints into the manifest (see the `InstallManifest` bullet), so verify can
-  name the exact damaged files instead of a blind spot-check, and repair can fix
-  just those. `VerifyService` is static + testable (`VerifyServiceTests`) and
+  name the exact damaged files instead of a blind spot-check (and decide whether a
+  repair needs to run at all). `VerifyService` is static + testable (`VerifyServiceTests`) and
   **VERIFY-ONLY** — the repair lives in `MainWindow`. Its API: `VerifyAgainstManifest`
   (the overlay map, hashed in parallel ≤4 threads, **size-first then SHA-256**,
   results sorted `Ordinal` so the parallel order is deterministic) and
@@ -361,22 +362,59 @@ don't go looking for it.)
   canonical-English read-side trick `ModHashService` and version detection use —
   so an applied translation doesn't false-flag as corrupt; with no snapshot the
   file's existence is confirmed but the hash is skipped (not counted in
-  `TotalFilesChecked`). **Repair (`MainWindow.RepairInstallAsync`) picks a path:**
-  the **granular** branch (a plain Repair — not an update, not a version switch —
-  when `HasFileHashes`) verifies first, then calls
-  `NativeInstallService.RepairFilesAsync` with only the damaged set and re-verifies
-  **only those** files (cheap + precise); the **full re-overlay** branch (update,
-  version switch, or an old manifest with no `FileHashes`) lays the whole version
-  via `InstallModOnlyAsync` and does a structural recheck only — a per-file hash
-  pass over a multi-GB freshly-written install would re-read everything and look
-  frozen. `RepairFilesAsync` still downloads the full ZIP (the host has no per-file
-  URLs) but **writes only the damaged files and does NOT rewrite the manifest**
-  (same install set + version; only bytes restored). The gear "Verify files" item
-  is now **cancellable** with live progress (current file, bytes, speed via
+  `TotalFilesChecked`). **Repair (`MainWindow.RepairInstallAsync`) picks a path
+  (the maintainer's explicit model: "reinstale todo junto con las
+  actualizaciones"):** a PLAIN repair (not an update, not a version switch, manifest
+  `HasFileHashes`) **verifies first**, then — **(a) intact** (no damaged/missing
+  files): SKIP the multi-GB download entirely (don't re-lay), show
+  `StatusRepairNothing`, but **don't `return`** — fall through so the pending-update
+  continuation still runs; **(b) damaged**: re-lay the **WHOLE** overlay via
+  `InstallModOnlyAsync` (NOT a granular per-file copy — the old granular branch and
+  `NativeInstallService.RepairFilesAsync` were REMOVED) and do a STRUCTURAL recheck
+  only (`hashPass:false` — a per-file hash over a multi-GB freshly-written install
+  re-reads everything and looks frozen). The **full re-overlay** is also the path for
+  an update, a version switch, or an old manifest with no `FileHashes`.
+  `InstallModOnlyAsync` downloads the full ZIP (the host has no per-file URLs),
+  **rewrites the manifest**, and runs `ApplyUpdateDeletions` (GitHubReleases) / the
+  delete-list strip. **Updates ride along automatically:** because a plain repair
+  keeps `asUpdate == false`, BOTH the intact and re-overlay paths land in the
+  post-`finally` `else if (updated)` branch → `CheckAsync()` →
+  `if (_pendingDownloads.Count > 0) ApplyUpdateWithElevationCheckAsync()`, so a WoL
+  repair that re-laid the base snapshot (or an intact-but-behind install) continues
+  straight into the pending patches. **Scope caveat:** verify + repair cover only the
+  mod OVERLAY — base-game **engine** files (the AoE3 clone) are NOT in the verify set
+  and are NOT re-laid by repair (no AoE3 re-clone), so an install broken ONLY by a
+  corrupt engine file verifies as intact and skips; a corrupt engine file surfaced by
+  an explicit "Verify files" still reports `VerifyEngineSuffix` ("reinstall AoE3") and
+  is never repairable here. The gear "Verify files" item
+  is **cancellable** with live progress (current file, bytes, speed via
   `SpeedTracker`, ETA), disabled for `IsStockGame`; an old install with no
   `FileHashes` emits no per-file ticks and degrades to the legacy structural
   spot-check. Strings: `StatusRevalidating`, `StatusRepairingFiles`,
   `StatusRepairNothing`, `VerifyEngineSuffix`.
+  **Repair's progress UI MUST mirror `InstallAsync`'s — two ways it drifted and
+  both froze/confused the dashboard strip.** `RepairInstallAsync` reports through
+  the SAME `ProgressPanelControl` the dashboard hero strip mirrors
+  (`SyncDashboardProgressFromLegacyPanel`: `OverallProgress` →
+  `DashboardProgressBar`/`DashboardProgressPercent`, `SpeedText` →
+  `DashboardProgressSpeed` under the static "VELOCIDAD" header). (1) It used to
+  pass `extractProgress: null` + `overlayProgress: null` to the repair install
+  calls and tie the download to a literal `p.Percentage * 0.6`, so
+  the bar **froze at ~60 %** through extraction + overlay even though
+  `ExtractPayloadAsync` / `CopyPayloadToDestinationAsync` already report progress
+  (passing `null` just discarded it). Fix: define phase weights (DL 60 / Extract
+  20 / Overlay 20) and real `extractProgress`/`overlayProgress`/`phaseProgress`
+  handlers, exactly like `InstallAsync` (~7610-7640). The `phaseProgress` (even a
+  minimal one that just `speed.Reset()`s + clears Speed/Eta) is load-bearing — its
+  shared `SpeedTracker` would otherwise carry the download's byte history into the
+  extract speed. (2) Those handlers must set `SpeedText` with the **phase-aware**
+  keys (`ProgressSpeedDownload` 📡 / `ProgressSpeedExtract` 📦 / `ProgressSpeedCopy`
+  💾 — the same mapping `SpeedLabelKeyForPhase` gives install), NOT the generic
+  `ProgressSpeed` ("Velocidad: X/s"); otherwise the dashboard's VELOCIDAD field
+  reads a bare speed and the user can't tell it's extracting (install "says it's
+  doing something" precisely because it shows "📦 Extracción: X/s"). Repair knows
+  each handler's phase statically, so it hardcodes the key per handler rather than
+  threading `_currentInstallPhase` (install-flow state).
 
 - **The install manifest now carries hashes, and `UpdateService` recognises the
   launcher's own byte-faithful payload FROM the manifest — keep the three maps in
