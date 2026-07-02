@@ -123,4 +123,57 @@ public class NotificationCenterTests
         Assert.Equal(2, center.Items.Count);
         Assert.Equal("new", center.Items[0].Title); // newest first
     }
+
+    [Fact]
+    public void LauncherUpdate_DedupesByTag()
+    {
+        var center = NewCenter(out _);
+
+        Assert.True(center.RaiseLauncherUpdate("v1.0.6", "t", "b"));
+        Assert.False(center.RaiseLauncherUpdate("v1.0.6", "t", "b")); // same tag
+        Assert.True(center.RaiseLauncherUpdate("v1.0.7", "t", "b"));   // new tag → bells
+        Assert.Equal(2, center.Items.Count(i => i.Kind == NotificationKind.LauncherUpdate));
+    }
+
+    [Fact]
+    public void Connectivity_DedupesConsecutiveSameState()
+    {
+        var center = NewCenter(out _);
+
+        Assert.True(center.RaiseConnectivity(offline: true, "off", "b"));
+        Assert.False(center.RaiseConnectivity(offline: true, "off", "b")); // same state, no spam
+        Assert.True(center.RaiseConnectivity(offline: false, "on", "b"));   // flip → bells
+        Assert.True(center.RaiseConnectivity(offline: true, "off", "b"));   // flip back → bells
+        Assert.Equal(3, center.Items.Count(i => i.Kind == NotificationKind.Connectivity));
+    }
+
+    [Fact]
+    public void NewMod_DedupesById()
+    {
+        var center = NewCenter(out _);
+
+        Assert.True(center.RaiseNewMod("napoleonic-era", "t", "b"));
+        Assert.False(center.RaiseNewMod("napoleonic-era", "t", "b")); // same id
+        Assert.True(center.RaiseNewMod("colonial-wars", "t", "b"));
+        Assert.Equal(2, center.Items.Count(i => i.Kind == NotificationKind.NewMod));
+    }
+
+    [Fact]
+    public void SeedCatalogBaseline_SuppressesExisting_ThenBellsOnlyNew()
+    {
+        var center = NewCenter(out var config);
+
+        // First fetch: baseline the whole existing catalog silently → nothing bells.
+        Assert.True(center.SeedCatalogBaseline(new[] { "wol", "aoe3-tad", "improvement-mod" }));
+        Assert.Empty(center.Items);
+        Assert.True(config.CatalogBaselineSeeded);
+
+        // Baseline is one-shot.
+        Assert.False(center.SeedCatalogBaseline(new[] { "another" }));
+
+        // A pre-existing id doesn't bell; a genuinely-new one does.
+        Assert.False(center.RaiseNewMod("improvement-mod", "t", "b"));
+        Assert.True(center.RaiseNewMod("napoleonic-era", "t", "b"));
+        Assert.Single(center.Items, i => i.Kind == NotificationKind.NewMod);
+    }
 }

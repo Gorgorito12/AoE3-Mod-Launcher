@@ -506,7 +506,9 @@ public class LauncherUpdateService
     /// BELOW "1.0.5a"). Returns false for empty or non-numeric tags so callers can
     /// fall back to tag-difference behaviour rather than mis-ordering them.
     /// </summary>
-    private static bool TryParseSemVer(string? tag, out Version version)
+    // internal (not private) so the notification "update finished" reconciliation
+    // can reuse the same "X.Y.Z[letter]" ordering for mod versions (e.g. 1.2.0c/1.2.0d).
+    internal static bool TryParseSemVer(string? tag, out Version version)
     {
         version = new Version(0, 0);
         if (string.IsNullOrWhiteSpace(tag)) return false;

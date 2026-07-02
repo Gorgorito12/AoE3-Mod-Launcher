@@ -133,6 +133,92 @@ public sealed class NotificationCenter
         });
     }
 
+    /// <summary>
+    /// "Launcher update available" — a newer version of the launcher itself.
+    /// Deduped on the release tag via <see cref="LauncherConfig.NotifiedLauncherTag"/>
+    /// so a given version only bells once (the gold self-update pill is a separate
+    /// surface). Not tied to a mod, so <see cref="NotificationItem.ModId"/> is empty.
+    /// </summary>
+    public bool RaiseLauncherUpdate(string tag, string title, string body)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return false;
+        if (string.Equals(_config.NotifiedLauncherTag, tag, StringComparison.OrdinalIgnoreCase))
+            return false;
+        _config.NotifiedLauncherTag = tag;
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.LauncherUpdate,
+            Title = title,
+            Body = body,
+            TargetId = tag,
+        });
+    }
+
+    private bool? _lastConnectivityOffline;
+
+    /// <summary>
+    /// "Offline" / "Back online" — a connectivity transition. Deduped against the
+    /// last connectivity state RAISED so a flaky network doesn't spam the bell (only
+    /// an actual flip bells). The state is per-session (not persisted); the caller
+    /// only invokes this on an actual <c>OfflineChanged</c> transition, never on the
+    /// initial online state at startup.
+    /// </summary>
+    public bool RaiseConnectivity(bool offline, string title, string body)
+    {
+        if (_lastConnectivityOffline == offline) return false;
+        _lastConnectivityOffline = offline;
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.Connectivity,
+            Title = title,
+            Body = body,
+            TargetId = offline ? "offline" : "online",
+        });
+    }
+
+    /// <summary>
+    /// "New mod in the catalog" — a community mod id not seen before. Deduped via
+    /// <see cref="LauncherConfig.NotifiedCatalogModIds"/>. Call
+    /// <see cref="SeedCatalogBaseline"/> once before the first diff so the whole
+    /// existing catalog doesn't bell on first launch.
+    /// </summary>
+    public bool RaiseNewMod(string modId, string title, string body)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return false;
+        if (_config.NotifiedCatalogModIds.Contains(modId, StringComparer.OrdinalIgnoreCase))
+            return false;
+        _config.NotifiedCatalogModIds.Add(modId);
+        if (_config.NotifiedCatalogModIds.Count > 500)
+            _config.NotifiedCatalogModIds.RemoveRange(0, _config.NotifiedCatalogModIds.Count - 500);
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.NewMod,
+            ModId = modId,
+            Title = title,
+            Body = body,
+            TargetId = modId,
+        });
+    }
+
+    /// <summary>
+    /// One-time SILENT baseline of the catalog "new mod" dedup set — records every
+    /// currently-known mod id as already-notified WITHOUT belling, so the first-ever
+    /// catalog fetch doesn't flood the bell with every existing mod. No-op after the
+    /// first call (guarded by <see cref="LauncherConfig.CatalogBaselineSeeded"/>).
+    /// Returns true if it seeded this call.
+    /// </summary>
+    public bool SeedCatalogBaseline(IEnumerable<string> modIds)
+    {
+        if (_config.CatalogBaselineSeeded) return false;
+        foreach (var id in modIds)
+            if (!string.IsNullOrWhiteSpace(id)
+                && !_config.NotifiedCatalogModIds.Contains(id, StringComparer.OrdinalIgnoreCase))
+                _config.NotifiedCatalogModIds.Add(id);
+        _config.CatalogBaselineSeeded = true;
+        Persist();
+        return true;
+    }
+
     // --------------------------------------------------------------- mutators
 
     /// <summary>Marks every item read (badge → 0).</summary>

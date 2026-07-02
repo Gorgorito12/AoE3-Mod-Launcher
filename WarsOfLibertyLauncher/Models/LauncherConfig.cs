@@ -175,6 +175,18 @@ public class ModState
     public string NotifiedUpdateVersion { get; set; } = "";
 
     /// <summary>
+    /// Installed version for which the bell has ALREADY raised (or baselined) an
+    /// "update finished" item. Startup reconciliation compares the freshly-detected
+    /// installed version against this: empty → seed a silent baseline (no bell);
+    /// a newer value → the mod was updated (possibly by an elevated/other-profile
+    /// process that couldn't write THIS user's bell), so raise "update finished"
+    /// here in the user's own session. Idempotent with the direct raise in
+    /// <c>ApplyAsync</c> (that dedups on the visible list).
+    /// </summary>
+    [JsonPropertyName("notifiedInstalledVersion")]
+    public string NotifiedInstalledVersion { get; set; } = "";
+
+    /// <summary>
     /// Translation entries (keyed <c>id@version</c>) for which the notification
     /// bell has already raised a "new translation" item. Dedup set so a freshly
     /// published translation only bells once per mod, surviving the 50-item cap
@@ -296,6 +308,12 @@ public enum NotificationKind
     UpdateFinished,
     /// <summary>A new community translation was published for a mod.</summary>
     NewTranslation,
+    /// <summary>A newer version of the LAUNCHER itself is available.</summary>
+    LauncherUpdate,
+    /// <summary>Connectivity changed — went offline, or came back online.</summary>
+    Connectivity,
+    /// <summary>A new community mod appeared in the Workshop catalog.</summary>
+    NewMod,
 }
 
 /// <summary>
@@ -968,6 +986,33 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("notifications")]
     public List<NotificationItem> Notifications { get; set; } = new();
+
+    /// <summary>
+    /// Launcher release tag for which the bell has ALREADY raised a
+    /// "launcher update available" item. Dedup key so a given launcher version
+    /// only bells once (the gold self-update pill is separate). Empty until the
+    /// first launcher-update notification.
+    /// </summary>
+    [JsonPropertyName("notifiedLauncherTag")]
+    public string NotifiedLauncherTag { get; set; } = "";
+
+    /// <summary>
+    /// Catalog mod ids for which the bell has ALREADY raised a "new mod" item.
+    /// Seeded silently on the first catalog fetch (so the whole existing catalog
+    /// doesn't flood the bell on first launch); afterwards only genuinely-new ids
+    /// bell. <see cref="CatalogBaselineSeeded"/> distinguishes "empty because first
+    /// run" from "empty because no mods".
+    /// </summary>
+    [JsonPropertyName("notifiedCatalogModIds")]
+    public List<string> NotifiedCatalogModIds { get; set; } = new();
+
+    /// <summary>
+    /// True once the catalog "new mod" baseline has been seeded (see
+    /// <see cref="NotifiedCatalogModIds"/>). Prevents the first-ever catalog fetch
+    /// from belling every existing mod.
+    /// </summary>
+    [JsonPropertyName("catalogBaselineSeeded")]
+    public bool CatalogBaselineSeeded { get; set; }
 
     private const string ConfigFileName = "launcher-config.json";
 

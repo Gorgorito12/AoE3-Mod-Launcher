@@ -262,6 +262,12 @@ public partial class MainWindow : Window
             NotificationBellButton.Tag = "open";
             PreviewMouseDown += CloseNotifOnOutsideClick;
             Deactivated += CloseNotifOnDeactivate;
+            // A WPF Popup renders in its own HWND and only computes placement when
+            // it opens — it does NOT follow the owner window on drag/resize. Attach
+            // these while open so the panel stays glued to the bell as the window
+            // moves; detached on close.
+            LocationChanged += RepositionNotifPopup;
+            SizeChanged += RepositionNotifPopup;
             RefreshBellColor();
         };
         NotificationPopup.Closed += (_, _) =>
@@ -269,6 +275,8 @@ public partial class MainWindow : Window
             NotificationBellButton.Tag = null;
             PreviewMouseDown -= CloseNotifOnOutsideClick;
             Deactivated -= CloseNotifOnDeactivate;
+            LocationChanged -= RepositionNotifPopup;
+            SizeChanged -= RepositionNotifPopup;
             RefreshBellColor();
         };
         RefreshNotificationLabels();
@@ -516,6 +524,14 @@ public partial class MainWindow : Window
                     });
                 }
             }
+            // --update-now (elevated relaunch) must apply the pending update even when
+            // the user turned startup checks off — otherwise CheckAsync never ran, so
+            // _pendingDownloads is empty and the elevated apply silently no-ops. Run a
+            // one-off check here so the pending list is populated (matches the intent
+            // of the "honoured regardless" comment on the CheckUpdatesOnStartup gate).
+            if (autoUpdate && _modIsInstalled && !_config.CheckUpdatesOnStartup)
+                await CheckAsync();
+
             if (autoUpdate && _modIsInstalled && _pendingDownloads.Count > 0)
             {
                 await ApplyAsync();
@@ -1949,8 +1965,31 @@ public partial class MainWindow : Window
     /// </summary>
     private void NavigateToNotification(NotificationItem item)
     {
+        // Launcher-update: not tied to a mod — open the self-update dialog directly.
+        if (item.Kind == NotificationKind.LauncherUpdate)
+        {
+            try { LauncherUpdatePill_Click(this, new RoutedEventArgs()); }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → launcher update failed: {ex.Message}"); }
+            return;
+        }
+        // Connectivity: informational only — nothing to navigate to.
+        if (item.Kind == NotificationKind.Connectivity)
+            return;
+
         var profile = ModRegistry.Find(item.ModId);
         if (profile == null) return;
+
+        // New mod in the catalog: open the Workshop with its detail panel.
+        if (item.Kind == NotificationKind.NewMod)
+        {
+            try
+            {
+                SwitchTopTab(TopTab.Mods);
+                ModsBrowserView?.ShowDetail(profile);
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → new mod detail failed: {ex.Message}"); }
+            return;
+        }
 
         // Switch to the mod if it isn't already active (LoadModProfile is a
         // no-op-ish when already on it, but guard to avoid a needless reload).
@@ -1976,6 +2015,70 @@ public partial class MainWindow : Window
         }
         // UpdateAvailable / UpdateFinished: landing on the Library/dashboard tab
         // above is the right target — the UPDATE / PLAY CTA lives right there.
+    }
+
+    /// <summary>
+    /// Keeps the notification popup glued to the bell while the window is dragged or
+    /// resized. A WPF Popup computes its placement only when it opens and doesn't
+    /// track the owner window, so we nudge its offset to force a placement recompute
+    /// against <c>NotificationBellButton</c>. Attached only while the popup is open.
+    /// </summary>
+    private void RepositionNotifPopup(object? sender, EventArgs e)
+    {
+        if (NotificationPopup == null || !NotificationPopup.IsOpen) return;
+        var o = NotificationPopup.HorizontalOffset;
+        NotificationPopup.HorizontalOffset = o + 1;
+        NotificationPopup.HorizontalOffset = o;
+    }
+
+    /// <summary>
+    /// Startup/refresh reconciliation for the "update finished" bell (called from
+    /// ApplyCheckResult). Seeds a SILENT baseline the first time we see a version for
+    /// this install; on a version ADVANCE since the last recorded value, raises the
+    /// bell in the user's own session (idempotent with ApplyAsync's direct raise,
+    /// which dedups on the visible list); then records the new version. Offline/
+    /// degraded results are ignored.
+    /// </summary>
+    private void ReconcileUpdateFinishedNotification(UpdateService.CheckResult result)
+    {
+        if (result.Degraded || !result.IsValidInstall) return;
+        var detected = result.CurrentVersion?.Ver;
+        if (string.IsNullOrEmpty(detected)) return;
+
+        var state = _config.GetState(_updateService.Profile.Id);
+        var baseline = state.NotifiedInstalledVersion;
+        if (string.IsNullOrEmpty(baseline))
+        {
+            state.NotifiedInstalledVersion = detected;     // silent baseline, no bell
+            try { _config.Save(); } catch { /* best-effort */ }
+            return;
+        }
+        if (string.Equals(baseline, detected, StringComparison.OrdinalIgnoreCase)) return;
+
+        if (IsVersionAdvance(baseline, detected))
+        {
+            _notifications.RaiseUpdateFinished(
+                _updateService.Profile.Id, detected,
+                Strings.Get("NotifUpdateFinishedTitle"),
+                Strings.Format("NotifUpdateFinishedBody",
+                    _updateService.Profile.DisplayName, detected));
+        }
+        state.NotifiedInstalledVersion = detected;
+        try { _config.Save(); } catch { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// True when <paramref name="to"/> is newer than <paramref name="from"/> using the
+    /// shared "X.Y.Z[letter]" ordering (<see cref="LauncherUpdateService.TryParseSemVer"/>).
+    /// If either doesn't parse, any change counts as an advance — better a rare wrong
+    /// "finished" than silence after a real update.
+    /// </summary>
+    private static bool IsVersionAdvance(string from, string to)
+    {
+        if (LauncherUpdateService.TryParseSemVer(from, out var a)
+            && LauncherUpdateService.TryParseSemVer(to, out var b))
+            return b > a;
+        return !string.Equals(from, to, StringComparison.OrdinalIgnoreCase);
     }
 
     private void TrayIcon_DoubleClick(object sender, RoutedEventArgs e)
@@ -5861,6 +5964,12 @@ public partial class MainWindow : Window
         LauncherUpdatePill.ToolTip = Strings.Get("LauncherUpdatePillTooltip");
         LauncherUpdatePill.Visibility = Visibility.Visible;
         PulseLauncherUpdatePill();
+        // Also surface it in the bell (deduped per tag) so it's discoverable from the
+        // notification history, not just the pill. Click → the self-update dialog.
+        _notifications.RaiseLauncherUpdate(
+            result.RemoteTag,
+            Strings.Get("NotifLauncherUpdateTitle"),
+            Strings.Format("NotifLauncherUpdateBody", result.LatestVersion));
         DiagnosticLog.Write($"Launcher update {result.RemoteTag} available — showing persistent pill.");
     }
 
@@ -6032,6 +6141,13 @@ public partial class MainWindow : Window
                 : (_updateService.InstallPath ?? "(not detected)");
 
         _modIsInstalled = result.IsValidInstall;
+
+        // Backstop for the "update finished" bell: if the detected installed version
+        // advanced since we last recorded it, raise it here in the USER's own session
+        // (covers an elevated / other-profile apply that couldn't write this user's
+        // bell, and install/repair paths that don't go through ApplyAsync). Idempotent
+        // with the direct raise in ApplyAsync. Skipped for offline/degraded results.
+        ReconcileUpdateFinishedNotification(result);
 
         // Once the mod is confirmed installed, make sure its desktop / Start
         // Menu shortcut points at a real .ico. Older installs wrote the cached
@@ -8385,7 +8501,15 @@ public partial class MainWindow : Window
             Dispatcher.BeginInvoke(new Action(OnConnectivityChanged));
             return;
         }
-        ApplyOfflineModeUi(ConnectivityState.IsOffline);
+        bool offline = ConnectivityState.IsOffline;
+        ApplyOfflineModeUi(offline);
+        // Bell item on the connectivity flip. RaiseConnectivity dedups consecutive
+        // same-state so a flaky network doesn't spam the history. This only fires from
+        // an actual OfflineChanged transition (never the initial online state).
+        _notifications.RaiseConnectivity(
+            offline,
+            Strings.Get(offline ? "NotifOfflineTitle" : "NotifOnlineTitle"),
+            Strings.Get(offline ? "NotifOfflineBody" : "NotifOnlineBody"));
     }
 
     /// <summary>
@@ -9239,8 +9363,42 @@ public partial class MainWindow : Window
             repo = raw;
 
         await ModRegistry.RefreshFromCatalogAsync(repo, force: force);
+        MaybeNotifyNewMods();
         if (force)
             _lastCatalogRefreshUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Raises a bell item for each community mod that has newly appeared in the
+    /// catalog since the last refresh. The FIRST fetch silently baselines every
+    /// currently-known mod (so the whole existing catalog doesn't flood the bell);
+    /// afterwards only genuinely-new ids bell. The detect-only stock game is excluded;
+    /// the WoL built-in is caught by the first-run baseline. Never throws.
+    /// </summary>
+    private void MaybeNotifyNewMods()
+    {
+        try
+        {
+            // Community mods only (IsBuiltIn excludes both WoL and the stock aoe3-tad).
+            var community = ModRegistry.All.Where(p => !ModRegistry.IsBuiltIn(p.Id)).ToList();
+            // Skip on a failed/empty catalog fetch (only built-ins present). Seeding the
+            // baseline now would make EVERY community mod bell as "new" once the real
+            // catalog loads later — wait until the catalog actually returned mods.
+            if (community.Count == 0) return;
+            // First real fetch → silently baseline the whole existing catalog; nothing bells.
+            if (_notifications.SeedCatalogBaseline(community.Select(p => p.Id))) return;
+            foreach (var p in community)
+            {
+                _notifications.RaiseNewMod(
+                    p.Id,
+                    Strings.Get("NotifNewModTitle"),
+                    Strings.Format("NotifNewModBody", p.DisplayName));
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"New-mod notification sweep failed: {ex.Message}");
+        }
     }
 
     /// <summary>

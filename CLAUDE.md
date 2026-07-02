@@ -719,9 +719,9 @@ Two cheap gates beyond a green build:
   `ModState` keyed by mod id and selected by `activeModId`; the flat
   `modInstallPath` / `gameExecutable` / `activeTranslationId` fields are LEGACY,
   migrated into `mods[...]` on `Load()` (which also rewrites a retired
-  `multiplayer.lobbyBaseUrl` and clears the session token). The README's flat
-  config example is out of date. `Save()` is non-atomic and runs from background
-  threads.
+  `multiplayer.lobbyBaseUrl` and clears the session token). The config schema +
+  example live in `docs/CONFIGURATION.md` (per-mod dict, not the legacy flat
+  fields). `Save()` is non-atomic and runs from background threads.
 
 - **`ModState.PinnedVersion` pauses update PROMPTS, it never auto-updates — and it
   self-corrects when stale.** Empty (default) = follow the latest, normal
@@ -1250,6 +1250,40 @@ Two cheap gates beyond a green build:
   installed non-active, non-stock mod — sequential, gated by `CheckUpdatesOnStartup`,
   fired once at startup + every 6th `_catalogPollTimer` tick (~30 min) to respect the
   GitHub API budget.
+  **The bell has SIX kinds and its own reliability + UX rules (added later):**
+  (1) **Three extra `NotificationKind`s** beyond the original three — `LauncherUpdate`
+  (raised in `CheckForLauncherUpdateInnerAsync` alongside the gold self-update pill,
+  deduped by `LauncherConfig.NotifiedLauncherTag`; click → the self-update dialog),
+  `Connectivity` (raised in `MainWindow.OnConnectivityChanged` on a real offline/online
+  flip, deduped by `NotificationCenter._lastConnectivityOffline` so a flaky network
+  doesn't spam; never fired for the initial online state), and `NewMod` (raised in
+  `RefreshCatalogAsync → MaybeNotifyNewMods` for a community mod that newly appears in
+  the catalog, deduped by `LauncherConfig.NotifiedCatalogModIds`; click → Workshop +
+  `ModsBrowser.ShowDetail`). Each has a per-kind icon `DataTrigger` in the
+  `NotificationList` template and en/es `Notif*` strings. **`MaybeNotifyNewMods` MUST
+  seed a SILENT baseline on the first catalog fetch** (`SeedCatalogBaseline`, guarded by
+  `LauncherConfig.CatalogBaselineSeeded`) or the whole existing catalog floods the bell
+  on first launch — same pattern as the translation baseline; the stock game is excluded
+  and the WoL built-in is caught by the baseline. (2) **"Update finished" is raised in
+  TWO places** — the direct raise in `ApplyAsync`'s success block AND a **startup
+  reconciliation** (`MainWindow.ReconcileUpdateFinishedNotification`, called from
+  `ApplyCheckResult`): it compares the freshly-detected installed version against the
+  per-mod `ModState.NotifiedInstalledVersion` (silent baseline the first time, bell only
+  on a version ADVANCE via `LauncherUpdateService.TryParseSemVer` — now `internal` for
+  reuse — else on any change). This is the backstop for the real bug: the WoL update
+  usually applies in an ELEVATED `--update-now` relaunch, which persists the direct
+  notification to the ELEVATING account's `%LocalAppData%` (a different admin's profile),
+  so the user's normal session never saw it; the reconciliation re-raises it in the
+  user's own session/config. Idempotent with the direct raise (that dedups on the visible
+  list). Also, `--update-now` now runs `CheckAsync` even when `CheckUpdatesOnStartup` is
+  off, so `_pendingDownloads` is populated and the elevated apply actually happens.
+  Pinned by `NotificationCenterTests`. (3) **The bell POPUP follows the window.** A WPF
+  `Popup` renders in its own HWND and only computes placement on open, so it didn't move
+  when the window was dragged. `MainWindow` attaches `LocationChanged`/`SizeChanged →
+  RepositionNotifPopup` (nudges `HorizontalOffset` to force a placement recompute against
+  `NotificationBellButton`) ONLY while the popup is open, in the same `Opened`/`Closed`
+  hooks that attach the outside-click/deactivate close handlers — don't move that wiring
+  out of the open-scoped block.
 
 - **The notification sweep above can read a CENTRAL FEED instead of polling
   GitHub per-mod — `Services/NotificationFeedService.cs`, served by a SEPARATE,
@@ -1701,7 +1735,7 @@ engine** and the UI binds to it.
   are pictographic, not typographic. **Don't tokenize a hero element or an
   icon-glyph, and don't hardcode a FontSize on ordinary text.**
 
-### Three core flows (detailed diagrams in README.md)
+### Three core flows (detailed diagrams in docs/ARCHITECTURE.md)
 
 1. **Install** — detect AoE3 → download multi-part payload ZIP → clone AoE3 into
    a standalone mod folder → flatten Steam-layout `bin\` into root → overlay mod

@@ -2467,6 +2467,49 @@ public static class Strings
             [LangEn] = "{0} was updated to {1}.",
             [LangEs] = "{0} se actualizó a {1}.",
         },
+        // ---- Bell: launcher self-update ----
+        ["NotifLauncherUpdateTitle"] = new()
+        {
+            [LangEn] = "Launcher update available",
+            [LangEs] = "Actualización del launcher",
+        },
+        ["NotifLauncherUpdateBody"] = new()
+        {
+            [LangEn] = "Version {0} of the launcher is available. Click to update.",
+            [LangEs] = "La versión {0} del launcher está disponible. Haz clic para actualizar.",
+        },
+        // ---- Bell: connectivity ----
+        ["NotifOfflineTitle"] = new()
+        {
+            [LangEn] = "You're offline",
+            [LangEs] = "Sin conexión",
+        },
+        ["NotifOfflineBody"] = new()
+        {
+            [LangEn] = "Installed mods stay playable; online features are paused until you reconnect.",
+            [LangEs] = "Los mods instalados siguen jugables; las funciones en línea se pausan hasta reconectar.",
+        },
+        ["NotifOnlineTitle"] = new()
+        {
+            [LangEn] = "Back online",
+            [LangEs] = "Conexión restaurada",
+        },
+        ["NotifOnlineBody"] = new()
+        {
+            [LangEn] = "Online features are available again.",
+            [LangEs] = "Las funciones en línea vuelven a estar disponibles.",
+        },
+        // ---- Bell: new mod in the catalog ----
+        ["NotifNewModTitle"] = new()
+        {
+            [LangEn] = "New mod available",
+            [LangEs] = "Nuevo mod disponible",
+        },
+        ["NotifNewModBody"] = new()
+        {
+            [LangEn] = "{0} was just added to the Workshop.",
+            [LangEs] = "{0} se acaba de añadir al Workshop.",
+        },
         ["NotifNewTranslationTitle"] = new()
         {
             [LangEn] = "New translation",

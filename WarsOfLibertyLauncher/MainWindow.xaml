@@ -757,6 +757,18 @@
                                                                     <Setter Property="Text" Value="&#xF2B7;"/>
                                                                     <Setter Property="Foreground" Value="#D8B66A"/>
                                                                 </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="LauncherUpdate">
+                                                                    <Setter Property="Text" Value="&#xE777;"/>
+                                                                    <Setter Property="Foreground" Value="#D4A04A"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="Connectivity">
+                                                                    <Setter Property="Text" Value="&#xE774;"/>
+                                                                    <Setter Property="Foreground" Value="#8AA0B4"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="NewMod">
+                                                                    <Setter Property="Text" Value="&#xE710;"/>
+                                                                    <Setter Property="Foreground" Value="#B48AD8"/>
+                                                                </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </TextBlock.Style>
