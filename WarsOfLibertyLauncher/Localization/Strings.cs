@@ -99,11 +99,6 @@ public static class Strings
             [LangEn] = "Not installed",
             [LangEs] = "No instalado",
         },
-        ["ModTileTooltipActive"] = new()
-        {
-            [LangEn] = "Currently active",
-            [LangEs] = "Activo actualmente",
-        },
         // -------- Mod-switch blocking dialogs --------
         ["DlgModSwitchBlockedTitle"] = new()
         {
@@ -238,11 +233,6 @@ public static class Strings
         // current status when no operation is running: Ready / Update
         // available / Not installed / AoE3 missing. Header label sits
         // above the icon + title row.
-        ["IdleHeader"] = new()
-        {
-            [LangEn] = "MOD STATUS",
-            [LangEs] = "ESTADO DEL MOD",
-        },
         // -------- New StatusCard rows (top of sidebar) --------
         ["StatusCardCurrentVersion"] = new()
         {
@@ -277,22 +267,12 @@ public static class Strings
             [LangEn] = "Ready for operations",
             [LangEs] = "Listo para operaciones",
         },
-        ["IdleStateReady"] = new()
-        {
-            [LangEn] = "Ready to play",
-            [LangEs] = "Listo para jugar",
-        },
         ["IdleStateUpdateAvailable"] = new()
         {
             [LangEn] = "Update available",
             [LangEs] = "Actualización disponible",
         },
         // {0} = mod display name (e.g. "Wars of Liberty").
-        ["IdleStateNotInstalled"] = new()
-        {
-            [LangEn] = "{0} is not installed",
-            [LangEs] = "{0} no está instalado",
-        },
         ["IdleStateUnknownVersion"] = new()
         {
             [LangEn] = "Version not recognised",
@@ -304,27 +284,7 @@ public static class Strings
             [LangEs] = "Age of Empires III no encontrado",
         },
         // {0} = mod display name, {1} = installed version.
-        ["IdleSubtitleReady"] = new()
-        {
-            [LangEn] = "{0} v{1}",
-            [LangEs] = "{0} v{1}",
-        },
-        ["IdleSubtitleNotInstalled"] = new()
-        {
-            [LangEn] = "Click Install to get started.",
-            [LangEs] = "Apretá Instalar para empezar.",
-        },
         // {0} = current version, {1} = latest version.
-        ["IdleSubtitleUpdateAvailable"] = new()
-        {
-            [LangEn] = "v{0} → v{1}",
-            [LangEs] = "v{0} → v{1}",
-        },
-        ["IdleSubtitleGameMissing"] = new()
-        {
-            [LangEn] = "We need the game's location to play.",
-            [LangEs] = "Necesitamos la ubicación del juego para poder jugar.",
-        },
         // Inline button shown in the panel's idle state when AoE3 isn't
         // detected — replaces the old "..." button in the game footer.
         ["BtnFindAoE3"] = new()
@@ -447,20 +407,10 @@ public static class Strings
             [LangEn] = "Launcher",
             [LangEs] = "Launcher",
         },
-        ["ModPath"] = new()
-        {
-            [LangEn] = "MOD PATH",
-            [LangEs] = "RUTA DEL MOD",
-        },
         ["ChangePathButton"] = new()
         {
             [LangEn] = "Change...",
             [LangEs] = "Cambiar...",
-        },
-        ["BrowseModButton"] = new()
-        {
-            [LangEn] = "Browse...",
-            [LangEs] = "Examinar...",
         },
 
         // -------- Uninstall --------
@@ -468,11 +418,6 @@ public static class Strings
         {
             [LangEn] = "Uninstall",
             [LangEs] = "Desinstalar",
-        },
-        ["BtnMore"] = new()
-        {
-            [LangEn] = "⋯",
-            [LangEs] = "⋯",
         },
         ["MenuUninstall"] = new()
         {
@@ -585,11 +530,6 @@ public static class Strings
             [LangEn] = "Update",
             [LangEs] = "Actualizar",
         },
-        ["BtnVerify"] = new()
-        {
-            [LangEn] = "Verify files",
-            [LangEs] = "Verificar archivos",
-        },
         ["BtnConfig"] = new()
         {
             [LangEn] = "Settings",
@@ -629,11 +569,6 @@ public static class Strings
         },
 
         // -------- Launcher Settings dialog (Tier 1) --------
-        ["BtnLauncherSettings"] = new()
-        {
-            [LangEn] = "Launcher",
-            [LangEs] = "Launcher",
-        },
         ["DlgLauncherSettingsTitle"] = new()
         {
             [LangEn] = "Launcher Settings",
@@ -708,21 +643,6 @@ public static class Strings
             [LangEn] = "MULTIPLAYER",
             [LangEs] = "MULTIJUGADOR",
         },
-        ["SidebarSupport"] = new()
-        {
-            [LangEn] = "SUPPORT",
-            [LangEs] = "AYUDA",
-        },
-        ["SidebarWiki"] = new()
-        {
-            [LangEn] = "WIKI",
-            [LangEs] = "WIKI",
-        },
-        ["TopTabSettings"] = new()
-        {
-            [LangEn] = "SETTINGS",
-            [LangEs] = "AJUSTES",
-        },
         // "MODS" pill below the cinema-dashboard PLAY button. Opens
         // a popup with the mods the user added via the Workshop
         // (built-in profiles are always included).
@@ -734,11 +654,6 @@ public static class Strings
         // Header caption for the cinema-dashboard gear popup (the
         // redesigned per-mod settings menu that replaced the legacy
         // WPF ContextMenu with a MODS-style popup + sub-views).
-        ["SettingsMenuTitle"] = new()
-        {
-            [LangEn] = "SETTINGS",
-            [LangEs] = "AJUSTES",
-        },
         // Steam-style brand menu — opens when the user clicks the
         // "AOE3 LAUNCHER" wordmark in the top-left of the sidebar.
         // Holds launcher-wide actions (settings dialog, about, exit)
@@ -794,16 +709,6 @@ public static class Strings
         // ContextMenu with Play / Manage submenu / Favorite toggle
         // / Properties — mirrors the per-game context menu Steam
         // surfaces in its library list.
-        ["ModContextPlay"] = new()
-        {
-            [LangEn] = "Play",
-            [LangEs] = "Jugar",
-        },
-        ["ModContextManage"] = new()
-        {
-            [LangEn] = "Manage",
-            [LangEs] = "Administrar",
-        },
         ["ModContextRepair"] = new()
         {
             [LangEn] = "Repair install",
@@ -813,31 +718,6 @@ public static class Strings
         {
             [LangEn] = "Verify files",
             [LangEs] = "Verificar archivos",
-        },
-        ["ModContextUninstall"] = new()
-        {
-            [LangEn] = "Uninstall…",
-            [LangEs] = "Desinstalar…",
-        },
-        ["ModContextOpenFolder"] = new()
-        {
-            [LangEn] = "Open mod folder",
-            [LangEs] = "Abrir carpeta del mod",
-        },
-        ["ModContextFavoriteAdd"] = new()
-        {
-            [LangEn] = "Add to Favorites",
-            [LangEs] = "Añadir a Favoritos",
-        },
-        ["ModContextFavoriteRemove"] = new()
-        {
-            [LangEn] = "Remove from Favorites",
-            [LangEs] = "Quitar de Favoritos",
-        },
-        ["ModContextProperties"] = new()
-        {
-            [LangEn] = "Properties…",
-            [LangEs] = "Propiedades…",
         },
         // ModPropertiesDialog labels (Fase 3b).
         ["ModPropTitle"] = new()
@@ -880,20 +760,10 @@ public static class Strings
             [LangEn] = "Website",
             [LangEs] = "Sitio web",
         },
-        ["ModPropInstallPath"] = new()
-        {
-            [LangEn] = "Install path",
-            [LangEs] = "Ruta de instalación",
-        },
         ["ModPropOpenFolder"] = new()
         {
             [LangEn] = "Open folder",
             [LangEs] = "Abrir carpeta",
-        },
-        ["ModPropClose"] = new()
-        {
-            [LangEn] = "Close",
-            [LangEs] = "Cerrar",
         },
         ["ModPropNotInstalled"] = new()
         {
@@ -1150,107 +1020,17 @@ public static class Strings
         // user drills into Paths / User data / Game language from
         // the top-level settings popup. Lowercase "›" separator is
         // added by the popup builder, not stored in the strings.
-        ["SettingsCrumbPaths"] = new()
-        {
-            [LangEn] = "PATHS",
-            [LangEs] = "RUTAS",
-        },
-        ["SettingsCrumbUserData"] = new()
-        {
-            [LangEn] = "USER DATA",
-            [LangEs] = "DATOS DE USUARIO",
-        },
-        ["SettingsCrumbLanguage"] = new()
-        {
-            [LangEn] = "LANGUAGE",
-            [LangEs] = "IDIOMA",
-        },
         // Top-level "Administrar" wrapper — see SETTINGS popup
         // redesign. Opens a sub-popup with all the maintenance
         // and configuration actions that used to live at the top
         // level. Keeps the gear popup itself minimal (2 entries
         // only: Administrar + Propiedades).
-        ["SettingsAdministrar"] = new()
-        {
-            [LangEn] = "Manage",
-            [LangEs] = "Administrar",
-        },
-        ["SettingsAdministrarSubtitle"] = new()
-        {
-            [LangEn] = "Paths, updates, repair, language…",
-            [LangEs] = "Rutas, actualizaciones, reparar, idioma…",
-        },
-        ["SettingsCrumbAdministrar"] = new()
-        {
-            [LangEn] = "MANAGE",
-            [LangEs] = "ADMINISTRAR",
-        },
-        ["SettingsProperties"] = new()
-        {
-            [LangEn] = "Properties…",
-            [LangEs] = "Propiedades…",
-        },
-        ["SettingsPropertiesSubtitle"] = new()
-        {
-            [LangEn] = "Detailed info, files, language",
-            [LangEs] = "Información detallada, archivos, idioma",
-        },
         // Back-arrow row at the top of each sub-view.
-        ["SettingsBack"] = new()
-        {
-            [LangEn] = "Back",
-            [LangEs] = "Volver",
-        },
         // Per-row subtitles — small cool-grey line below the main
         // label so each settings entry feels self-explanatory instead
         // of "what does this even open?" These get rendered by the
         // popup row builder when the caller passes a non-empty value.
-        ["SettingsSubtitleManagePaths"] = new()
-        {
-            [LangEn] = "AoE3 folder, mod folder…",
-            [LangEs] = "Carpeta de AoE3, carpeta del mod…",
-        },
-        ["SettingsSubtitleUserData"] = new()
-        {
-            [LangEn] = "Backups and saves",
-            [LangEs] = "Respaldos y partidas",
-        },
-        ["SettingsSubtitleGameLanguage"] = new()
-        {
-            [LangEn] = "Change game text language",
-            [LangEs] = "Cambiar el idioma de los textos",
-        },
-        ["SettingsSubtitleCheckUpdates"] = new()
-        {
-            [LangEn] = "Look for a newer mod version",
-            [LangEs] = "Buscar una nueva versión del mod",
-        },
-        ["SettingsSubtitleRepair"] = new()
-        {
-            [LangEn] = "Fix corrupted files",
-            [LangEs] = "Arreglar archivos dañados",
-        },
-        ["SettingsSubtitleVerify"] = new()
-        {
-            [LangEn] = "Validate mod installation",
-            [LangEs] = "Validar la instalación del mod",
-        },
-        ["SettingsSubtitleViewLogs"] = new()
-        {
-            [LangEn] = "Launcher diagnostics",
-            [LangEs] = "Diagnóstico del launcher",
-        },
-        ["SettingsSubtitleUninstall"] = new()
-        {
-            [LangEn] = "Remove this mod from disk",
-            [LangEs] = "Eliminar este mod del disco",
-        },
         // Paths sub-popup subtitles.
-        ["SettingsSubtitleOpenAoE3Folder"] = new()
-        {
-            [LangEn] = "Show in File Explorer",
-            [LangEs] = "Mostrar en el Explorador",
-        },
         // "Open mod folder" — new entry under Paths that opens
         // the active mod's install path in Explorer. Distinct from
         // "Open AoE3 folder" (which opens the base game's folder).
@@ -1259,37 +1039,7 @@ public static class Strings
             [LangEn] = "Open mod folder",
             [LangEs] = "Abrir carpeta del mod",
         },
-        ["SettingsSubtitleOpenModFolder"] = new()
-        {
-            [LangEn] = "Show this mod's install folder",
-            [LangEs] = "Mostrar la carpeta de instalación del mod",
-        },
-        ["SettingsSubtitleChangeModFolder"] = new()
-        {
-            [LangEn] = "Pick where the mod is installed",
-            [LangEs] = "Elegir dónde está instalado el mod",
-        },
-        ["SettingsSubtitleChangeAoE3Folder"] = new()
-        {
-            [LangEn] = "Pick the AoE3 install path",
-            [LangEs] = "Elegir la ruta de AoE3",
-        },
         // User-data sub-popup subtitles.
-        ["SettingsSubtitleOpenUserDataFolder"] = new()
-        {
-            [LangEn] = "Show in File Explorer",
-            [LangEs] = "Mostrar en el Explorador",
-        },
-        ["SettingsSubtitleCreateBackup"] = new()
-        {
-            [LangEn] = "Save current settings and games",
-            [LangEs] = "Guardar partidas y configuración",
-        },
-        ["SettingsSubtitleRestoreUserData"] = new()
-        {
-            [LangEn] = "Load from a previous backup",
-            [LangEs] = "Cargar desde un respaldo",
-        },
         // ====================================================================
         // Catalog redesign (post-v0.9): two-column layout strings.
         // ====================================================================
@@ -1882,11 +1632,6 @@ public static class Strings
             [LangEn] = "Website must start with http:// or https://.",
             [LangEs] = "El sitio web debe empezar con http:// o https://.",
         },
-        ["MultiplayerComingSoon"] = new()
-        {
-            [LangEn] = "Multiplayer lobby — coming in v1.0.\nA Voobly-style room browser for AoE3 mods.",
-            [LangEs] = "Sala multijugador — llega en v1.0.\nUn buscador de partidas estilo Voobly para mods de AoE3.",
-        },
         // -------- Multiplayer (v1.0) --------
         ["MpSubtabRooms"] = new() { [LangEn] = "Rooms", [LangEs] = "Salas" },
         ["MpSubtabFriends"] = new() { [LangEn] = "Friends", [LangEs] = "Amigos" },
@@ -1941,16 +1686,6 @@ public static class Strings
         // the network name spelled out + a copy button + numbered
         // steps so the manual flow is as low-friction as possible.
         // {0} = own IP
-        ["MpRadminConnectedTitle"] = new()
-        {
-            [LangEn] = "Radmin VPN is running",
-            [LangEs] = "Radmin VPN está corriendo",
-        },
-        ["MpRadminConnectedBody"] = new()
-        {
-            [LangEn] = "Your IP: {0}. To play AoE3 online, make sure you're in this Radmin network:",
-            [LangEs] = "Tu IP: {0}. Para jugar AoE3 online, asegúrate de estar en esta red de Radmin:",
-        },
         // Compact one-line variant used by MultiplayerTab once Radmin is
         // running: the network-name copier and numbered steps are hidden
         // (the RadminAssistantWindow already covers that flow), so the
@@ -1963,11 +1698,6 @@ public static class Strings
 
         // Button next to the network-name TextBox. Briefly flashes to
         // "Copied!" after the click so the user sees the action worked.
-        ["MpRadminCopyNameButton"] = new()
-        {
-            [LangEn] = "Copy name",
-            [LangEs] = "Copiar nombre",
-        },
         ["MpRadminCopiedToast"] = new()
         {
             [LangEn] = "✓ Copied!",
@@ -1977,11 +1707,6 @@ public static class Strings
         // Numbered steps shown under the network-name copier when in
         // the Connected state. Kept short — the user reads them while
         // alt-tabbing to Radmin, not as a tutorial.
-        ["MpRadminInstructions"] = new()
-        {
-            [LangEn] = "1. In Radmin, click \"Join network\" → \"Gaming\" tab\n2. Paste the name (Ctrl+V) → click \"Join\"",
-            [LangEs] = "1. En Radmin, clic \"Unirse a la red\" → pestaña \"Red de gaming\"\n2. Pega el nombre (Ctrl+V) → clic \"Unirse\"",
-        },
         ["MpSignInTitle"] = new()
         {
             [LangEn] = "Sign in to play online",
@@ -2163,31 +1888,6 @@ public static class Strings
         // Compact banner — single-line replacement in MultiplayerTab.
         // Mirrors the assistant's stage labels so the user sees the
         // same vocabulary in the small banner and the full overlay.
-        ["RadAsstBannerNotInstalled"] = new()
-        {
-            [LangEn] = "Radmin: ● not installed",
-            [LangEs] = "Radmin: ● no instalado",
-        },
-        ["RadAsstBannerNotRunning"] = new()
-        {
-            [LangEn] = "Radmin: ● not running",
-            [LangEs] = "Radmin: ● no iniciado",
-        },
-        ["RadAsstBannerLoggedIn"] = new()
-        {
-            [LangEn] = "Radmin: ● signed in (verify network join)",
-            [LangEs] = "Radmin: ● sesión iniciada (verifica unión a la red)",
-        },
-        ["RadAsstBannerInNetwork"] = new()
-        {
-            [LangEn] = "Radmin: ✓ in AoE3 network",
-            [LangEs] = "Radmin: ✓ en red AoE3",
-        },
-        ["RadAsstBannerOpenAndCopy"] = new()
-        {
-            [LangEn] = "Open + copy",
-            [LangEs] = "Abrir + copiar",
-        },
         ["RadAsstBannerShowSteps"] = new()
         {
             [LangEn] = "Show steps",
@@ -2226,7 +1926,6 @@ public static class Strings
         ["MpRoomsLoading"] = new() { [LangEn] = "Loading rooms…", [LangEs] = "Cargando salas…" },
         ["MpRoomsSectionTitle"] = new() { [LangEn] = "Active rooms", [LangEs] = "Salas activas" },
         ["MpGlobalChatTitle"] = new() { [LangEn] = "Global chat", [LangEs] = "Chat global" },
-        ["MpGlobalChatChannel"] = new() { [LangEn] = "General channel", [LangEs] = "Canal general" },
         ["MpGlobalChatPresence"] = new() { [LangEn] = "{0} connected", [LangEs] = "{0} conectados" },
         ["MpGlobalChatPlaceholder"] = new() { [LangEn] = "Write a message…", [LangEs] = "Escribe un mensaje…" },
         ["MpGlobalChatSend"] = new() { [LangEn] = "Send", [LangEs] = "Enviar" },
@@ -2243,7 +1942,6 @@ public static class Strings
         ["MpRoomFull"] = new() { [LangEn] = "Full", [LangEs] = "Llena" },
         ["MpRoomStatusWaiting"] = new() { [LangEn] = "Waiting", [LangEs] = "Esperando" },
         // Room cards (BuildRoomCard) + empty state + "last updated" header.
-        ["MpRoomCardHost"] = new() { [LangEn] = "Host: {0}", [LangEs] = "Anfitrión: {0}" },
         ["MpRoomModNotInstalled"] = new() { [LangEn] = "Mod not installed", [LangEs] = "Mod no instalado" },
         ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms available right now", [LangEs] = "No hay salas disponibles ahora" },
         ["MpRoomsEmptyBody"] = new() { [LangEn] = "Be the first to create one and start a game!", [LangEs] = "¡Sé el primero en crear una y empezar a jugar!" },
@@ -2345,11 +2043,6 @@ public static class Strings
         },
         // Cancel / Leave button in the in-game overlay — caption differs
         // for host vs joiner (set in ApplyMatchPhaseUi).
-        ["MpInGameCancelHost"] = new()
-        {
-            [LangEn] = "⚠  Cancel game (host)",
-            [LangEs] = "⚠  Cancelar partida (anfitrión)",
-        },
         ["MpInGameLeave"] = new()
         {
             [LangEn] = "↩  Leave game",
@@ -2428,21 +2121,6 @@ public static class Strings
         ["MpAlertOk"] = new() { [LangEn] = "OK", [LangEs] = "Entendido" },
         ["MpAlertCancel"] = new() { [LangEn] = "No", [LangEs] = "No" },
         // Cancel-the-game confirm (host) — the one from the screenshot.
-        ["MpConfirmCancelHostTitle"] = new()
-        {
-            [LangEn] = "Cancel the game for everyone?",
-            [LangEs] = "¿Cancelar la partida para todos?",
-        },
-        ["MpConfirmCancelHostBody"] = new()
-        {
-            [LangEn] = "All players will be disconnected and the room returns to the lobby.",
-            [LangEs] = "Se desconectará a todos los jugadores y la sala volverá al lobby.",
-        },
-        ["MpConfirmCancelHostYes"] = new()
-        {
-            [LangEn] = "Yes, cancel",
-            [LangEs] = "Sí, cancelar",
-        },
         // Leave-the-game confirm (joiner) — only this player drops out.
         ["MpConfirmLeaveTitle"] = new()
         {
@@ -2546,11 +2224,6 @@ public static class Strings
         {
             [LangEn] = "The game has started.",
             [LangEs] = "La partida empezó.",
-        },
-        ["MpChatHostCancelled"] = new()
-        {
-            [LangEn] = "Host cancelled the game. Returning to lobby.",
-            [LangEs] = "El anfitrión canceló la partida. Volviendo a la sala.",
         },
         ["MpChatGameCancelledReason"] = new()
         {
@@ -2719,8 +2392,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsTelemetryHint"] = new()
         {
-            [LangEn] = "Writes a local multiplayer-events.log next to the launcher with plain event counters (sign-ins, lobby joins, error codes). No network, no third parties — it never leaves your PC. Helps diagnose multiplayer issues if you share it in a bug report.",
-            [LangEs] = "Escribe un multiplayer-events.log local junto al launcher con contadores de eventos (inicios de sesión, entradas a salas, códigos de error). Sin red ni terceros: nunca sale de tu PC. Ayuda a diagnosticar problemas de multijugador si lo adjuntas a un reporte.",
+            [LangEn] = "Writes a local multiplayer-events.log in the launcher's data folder (%LocalAppData%\\AoE3ModLauncher) with plain event counters (sign-ins, lobby joins, error codes). No network, no third parties — it never leaves your PC. Helps diagnose multiplayer issues if you share it in a bug report.",
+            [LangEs] = "Escribe un multiplayer-events.log local en la carpeta de datos del launcher (%LocalAppData%\\AoE3ModLauncher) con contadores de eventos (inicios de sesión, entradas a salas, códigos de error). Sin red ni terceros: nunca sale de tu PC. Ayuda a diagnosticar problemas de multijugador si lo adjuntas a un reporte.",
         },
         ["DlgLauncherSettingsViewPrivacy"] = new()
         {
@@ -2731,26 +2404,6 @@ public static class Strings
         {
             [LangEn] = "Opens PRIVACY.md on GitHub in your browser.",
             [LangEs] = "Abre PRIVACY.md en GitHub en tu navegador.",
-        },
-        ["ToastUpdateCompleteTitle"] = new()
-        {
-            [LangEn] = "Update complete",
-            [LangEs] = "Actualización completada",
-        },
-        ["ToastUpdateCompleteBody"] = new()
-        {
-            [LangEn] = "{0} is now up to date.",
-            [LangEs] = "{0} está actualizado.",
-        },
-        ["ToastInstallCompleteTitle"] = new()
-        {
-            [LangEn] = "Install complete",
-            [LangEs] = "Instalación completada",
-        },
-        ["ToastInstallCompleteBody"] = new()
-        {
-            [LangEn] = "{0} is ready to play.",
-            [LangEs] = "{0} está listo para jugar.",
         },
         ["TrayTooltip"] = new()
         {
@@ -2980,11 +2633,6 @@ public static class Strings
             [LangEn] = "Open folder",
             [LangEs] = "Abrir carpeta",
         },
-        ["BtnRepair"] = new()
-        {
-            [LangEn] = "Repair install",
-            [LangEs] = "Reparar instalación",
-        },
         ["BtnUninstall"] = new()
         {
             [LangEn] = "Uninstall",
@@ -3066,11 +2714,6 @@ public static class Strings
         },
 
         // -------- Status: idle / ready --------
-        ["StatusReady"] = new()
-        {
-            [LangEn] = "Ready.",
-            [LangEs] = "Listo.",
-        },
         ["StatusUpToDate"] = new()
         {
             [LangEn] = "Up to date. Version {0}. Ready to play!",
@@ -3131,13 +2774,6 @@ public static class Strings
             [LangEs] = "Re-verificando archivos ({0}/{1})…",
         },
         // {0} = mod display name.
-        ["StatusInstallNotFound"] = new()
-        {
-            [LangEn] = "{0} was not auto-detected. " +
-                       "Use the \"Change...\" button to select the folder manually.",
-            [LangEs] = "No se detectó automáticamente {0}. " +
-                       "Usa el botón \"Cambiar...\" para indicar manualmente la carpeta.",
-        },
 
         // -------- Status: in progress --------
         // {0} = active mod's display name (e.g. "Wars of Liberty",
@@ -3273,21 +2909,6 @@ public static class Strings
             [LangEn] = "✓ Verifying: {0}/s",
             [LangEs] = "✓ Verificando: {0}/s",
         },
-        ["ProgressUpdatingLabel"] = new()
-        {
-            [LangEn] = "UPDATING",
-            [LangEs] = "ACTUALIZANDO",
-        },
-        ["ProgressPatchCounter"] = new()
-        {
-            [LangEn] = "PATCH {0}/{1}",
-            [LangEs] = "PARCHE {0}/{1}",
-        },
-        ["ProgressEtaTotal"] = new()
-        {
-            [LangEn] = "⏱ {0} total",
-            [LangEs] = "⏱ {0} total",
-        },
         ["StatusExtractingPayload"] = new()
         {
             [LangEn] = "📦 Extracting mod files ({0}/{1})...",
@@ -3310,48 +2931,8 @@ public static class Strings
         },
 
         // -------- Phase breadcrumb step labels --------
-        ["InstallStepDownload"] = new()
-        {
-            [LangEn] = "DOWNLOAD",
-            [LangEs] = "DESCARGA",
-        },
-        ["InstallStepExtract"] = new()
-        {
-            [LangEn] = "EXTRACT",
-            [LangEs] = "EXTRACCIÓN",
-        },
-        ["InstallStepClone"] = new()
-        {
-            [LangEn] = "CLONE",
-            [LangEs] = "CLONAR",
-        },
-        ["InstallStepMod"] = new()
-        {
-            [LangEn] = "MOD",
-            [LangEs] = "MOD",
-        },
-        ["InstallStepFinalize"] = new()
-        {
-            [LangEn] = "FINALIZE",
-            [LangEs] = "FINALIZAR",
-        },
 
         // -------- Update breadcrumb step labels --------
-        ["UpdateStepDownload"] = new()
-        {
-            [LangEn] = "DOWNLOAD",
-            [LangEs] = "DESCARGA",
-        },
-        ["UpdateStepVerify"] = new()
-        {
-            [LangEn] = "VERIFY",
-            [LangEs] = "VERIFICAR",
-        },
-        ["UpdateStepApply"] = new()
-        {
-            [LangEn] = "APPLY",
-            [LangEs] = "APLICAR",
-        },
 
         // Subtitle of the header during update — shown under "Updating X → Y"
         ["ProgressPatchSubtitle"] = new()
@@ -3402,11 +2983,6 @@ public static class Strings
         {
             [LangEn] = "Could not start the game",
             [LangEs] = "Error al iniciar el juego",
-        },
-        ["DlgUpdateErrorTitle"] = new()
-        {
-            [LangEn] = "Update error",
-            [LangEs] = "Error en actualización",
         },
 
         // -------- Errors (also surface in dialogs) --------
@@ -3461,16 +3037,6 @@ public static class Strings
         },
 
         // -------- Integrated install panel --------
-        ["InstallPanelTitle"] = new()
-        {
-            [LangEn] = "Install Wars of Liberty",
-            [LangEs] = "Instalar Wars of Liberty",
-        },
-        ["InstallAoe3Detected"] = new()
-        {
-            [LangEn] = "✓ Age of Empires III detected ({0})",
-            [LangEs] = "✓ Age of Empires III detectado ({0})",
-        },
         ["InstallGameNotLaunchedWarning"] = new()
         {
             [LangEn] = "⚠ We couldn't find Age of Empires III user data. " +
@@ -3499,11 +3065,6 @@ public static class Strings
             [LangEn] = "Select your Age of Empires III folder above to enable installation.",
             [LangEs] = "Selecciona tu carpeta de Age of Empires III arriba para poder instalar.",
         },
-        ["InstallFolderLabel"] = new()
-        {
-            [LangEn] = "Destination folder:",
-            [LangEs] = "Carpeta destino:",
-        },
         ["InstallDiskSpace"] = new()
         {
             [LangEn] = "Available disk space: {0} on {1}",
@@ -3516,21 +3077,6 @@ public static class Strings
         {
             [LangEn] = "📥 Downloading {0} installer...",
             [LangEs] = "📥 Descargando instalador de {0}...",
-        },
-        ["StatusExtractingInstaller"] = new()
-        {
-            [LangEn] = "Extracting installer files...",
-            [LangEs] = "Extrayendo archivos del instalador...",
-        },
-        ["StatusLaunchingInstaller"] = new()
-        {
-            [LangEn] = "Installer running. Follow the on-screen wizard to choose where to install.",
-            [LangEs] = "Instalador en ejecución. Sigue el asistente en pantalla para elegir dónde instalar.",
-        },
-        ["DlgInstallTitle"] = new()
-        {
-            [LangEn] = "Install Wars of Liberty",
-            [LangEs] = "Instalar Wars of Liberty",
         },
         // {0} = mod display name (e.g. "Wars of Liberty", "Improvement Mod").
         ["DlgPickInstallFolderTitle"] = new()
@@ -3587,41 +3133,8 @@ public static class Strings
             [LangEn] = "This folder is reserved by Windows. Please choose a different location.",
             [LangEs] = "Esta carpeta está reservada por Windows. Por favor elige otra ubicación.",
         },
-        ["WarnInstallFolderSameAsAoe3"] = new()
-        {
-            [LangEn] = "The selected folder is the AoE3 source folder itself. " +
-                       "Please choose a different destination — the mod must be installed in a separate folder.",
-            [LangEs] = "La carpeta seleccionada es la misma carpeta de AoE3. " +
-                       "Por favor elige un destino distinto — el mod debe instalarse en una carpeta aparte.",
-        },
-        ["StatusDetectingAoe3"] = new()
-        {
-            [LangEn] = "Detecting Age of Empires III installation...",
-            [LangEs] = "Detectando instalación de Age of Empires III...",
-        },
 
         // -------- AoE3 detection warnings --------
-        ["DlgFolderNotInAoE3Title"] = new()
-        {
-            [LangEn] = "This folder is not inside Age of Empires III",
-            [LangEs] = "Esta carpeta no está dentro de Age of Empires III",
-        },
-        ["DlgFolderNotInAoE3Body"] = new()
-        {
-            [LangEn] = "The chosen folder doesn't appear to be inside an Age of Empires III " +
-                       "installation:\n\n{0}\n\n" +
-                       "Wars of Liberty is a mod for AoE3 — the game engine only loads the mod " +
-                       "files when they sit inside the AoE3 folder. If you install elsewhere, " +
-                       "the files will copy successfully but the game won't actually use them.\n\n" +
-                       "Click OK to install here anyway, or Cancel to choose a different folder.",
-            [LangEs] = "La carpeta elegida no parece estar dentro de una instalación de " +
-                       "Age of Empires III:\n\n{0}\n\n" +
-                       "Wars of Liberty es un mod para AoE3 — el motor del juego solo carga los " +
-                       "archivos del mod cuando están dentro de la carpeta de AoE3. Si lo instalas " +
-                       "en otro lugar, los archivos se copiarán pero el juego no los usará.\n\n" +
-                       "Haz click en Aceptar para instalar aquí de todos modos, o Cancelar para " +
-                       "elegir otra carpeta.",
-        },
         ["DlgBrokenInstallTitle"] = new()
         {
             // {0} = mod display name.
@@ -3700,141 +3213,12 @@ public static class Strings
         },
 
         // -------- AoE3 detection / clone flow --------
-        ["BtnContinue"] = new()
-        {
-            [LangEn] = "CONTINUE",
-            [LangEs] = "CONTINUAR",
-        },
-        ["DlgAoe3PickerTitle"] = new()
-        {
-            [LangEn] = "Choose Age of Empires III source",
-            [LangEs] = "Elige la fuente de Age of Empires III",
-        },
-        ["DlgAoe3PickerHeader"] = new()
-        {
-            [LangEn] = "Select the AoE3 installation to copy from",
-            [LangEs] = "Selecciona la instalación de AoE3 que se copiará",
-        },
-        ["DlgAoe3PickerDescription"] = new()
-        {
-            [LangEn] = "Wars of Liberty is installed alongside a copy of Age of Empires III: " +
-                       "The Asian Dynasties so it works without affecting your Steam/GOG install. " +
-                       "Pick the source below or browse to a folder manually.",
-            [LangEs] = "Wars of Liberty se instala junto con una copia de Age of Empires III: " +
-                       "The Asian Dynasties para que funcione sin afectar tu instalación de Steam/GOG. " +
-                       "Elige la fuente abajo o navega manualmente a una carpeta.",
-        },
-        ["DlgAoe3PickerBrowse"] = new()
-        {
-            [LangEn] = "Browse for AoE3 folder...",
-            [LangEs] = "Buscar carpeta de AoE3...",
-        },
-        ["AoeSourceManual"] = new()
-        {
-            [LangEn] = "Manual",
-            [LangEs] = "Manual",
-        },
-        ["WarnNotValidAoe3"] = new()
-        {
-            [LangEn] = "That folder doesn't look like a valid AoE3: The Asian Dynasties install. " +
-                       "It must contain bin\\age3y.exe, bin\\RockallDLL.dll and data\\protoy.xml.",
-            [LangEs] = "Esa carpeta no parece una instalación válida de AoE3: The Asian Dynasties. " +
-                       "Debe contener bin\\age3y.exe, bin\\RockallDLL.dll y data\\protoy.xml.",
-        },
 
         // -------- AoE3 not found --------
-        ["DlgAoe3NotFoundTitle"] = new()
-        {
-            [LangEn] = "Age of Empires III not found",
-            [LangEs] = "No se encontró Age of Empires III",
-        },
-        ["DlgAoe3NotFoundBody"] = new()
-        {
-            [LangEn] = "The launcher couldn't find Age of Empires III: The Asian Dynasties on your " +
-                       "computer.\n\nWars of Liberty needs an existing AoE3:TAD installation to copy " +
-                       "from (the original AoE3, not the Definitive Edition).\n\n" +
-                       "If you have AoE3 installed in a non-standard location, click Browse... to " +
-                       "point to it manually.",
-            [LangEs] = "El launcher no pudo encontrar Age of Empires III: The Asian Dynasties en tu " +
-                       "computadora.\n\nWars of Liberty necesita una instalación existente de AoE3:TAD " +
-                       "para copiar (el AoE3 original, no la Definitive Edition).\n\n" +
-                       "Si tienes AoE3 instalado en una ubicación no estándar, haz click en Buscar... " +
-                       "para indicarla manualmente.",
-        },
 
         // -------- Disk space confirmation --------
-        ["DlgConfirmCopyTitle"] = new()
-        {
-            [LangEn] = "About to install in a new directory",
-            [LangEs] = "Instalación en un nuevo directorio",
-        },
-        ["DlgConfirmCopyBody"] = new()
-        {
-            [LangEn] = "Wars of Liberty will be installed in a new directory.\n\n" +
-                       "The launcher will now copy your Age of Empires III installation " +
-                       "into the \"Wars of Liberty\" folder, and then apply the mod on top.\n\n" +
-                       "This keeps your original AoE3 install untouched, but takes more time " +
-                       "and additional disk space.\n\n" +
-                       "  • AoE3 source: {0}\n" +
-                       "  • Copy size: ~{1}\n" +
-                       "  • Wars of Liberty folder: {2}\n" +
-                       "  • Free space available: {3}\n\n" +
-                       "Do you wish to proceed?",
-            [LangEs] = "Wars of Liberty se instalará en un nuevo directorio.\n\n" +
-                       "El launcher copiará tu instalación de Age of Empires III dentro de " +
-                       "la carpeta \"Wars of Liberty\" y luego aplicará el mod sobre esa copia.\n\n" +
-                       "Esto deja tu instalación original de AoE3 intacta, pero requiere más " +
-                       "tiempo y espacio en disco.\n\n" +
-                       "  • Fuente AoE3: {0}\n" +
-                       "  • Tamaño de la copia: ~{1}\n" +
-                       "  • Carpeta Wars of Liberty: {2}\n" +
-                       "  • Espacio libre disponible: {3}\n\n" +
-                       "¿Quieres continuar?",
-        },
-        ["DlgNotEnoughSpaceTitle"] = new()
-        {
-            [LangEn] = "Not enough disk space",
-            [LangEs] = "No hay espacio suficiente en disco",
-        },
-        ["DlgNotEnoughSpaceBody"] = new()
-        {
-            [LangEn] = "The selected destination has only {0} free, but the install needs about {1}. " +
-                       "Free up space or choose a different destination.",
-            [LangEs] = "El destino seleccionado tiene solo {0} libres, pero la instalación necesita " +
-                       "unos {1}. Libera espacio o elige otro destino.",
-        },
 
         // -------- Clone progress --------
-        ["StatusCopyingAoe3"] = new()
-        {
-            [LangEn] = "Copying Age of Empires III...",
-            [LangEs] = "Copiando Age of Empires III...",
-        },
-        ["StatusCopyingFile"] = new()
-        {
-            [LangEn] = "Copying: {0}",
-            [LangEs] = "Copiando: {0}",
-        },
-        ["StatusInstallingFiles"] = new()
-        {
-            [LangEn] = "Installing files: {0:0.0}% ({1} files copied)",
-            [LangEs] = "Instalando archivos: {0:0.0}% ({1} archivos copiados)",
-        },
-        ["StatusFinishingInstall"] = new()
-        {
-            [LangEn] = "Finishing installation (registry, shortcuts)...",
-            [LangEs] = "Finalizando instalación (registro, accesos directos)...",
-        },
-        ["StatusInstallSuccess"] = new()
-        {
-            [LangEn] = "Wars of Liberty installed successfully.",
-            [LangEs] = "Wars of Liberty se instaló correctamente.",
-        },
-        ["StatusInstallFailed"] = new()
-        {
-            [LangEn] = "Installer exited with code {0}. The installation may not be complete.",
-            [LangEs] = "El instalador terminó con código {0}. Es posible que la instalación no se haya completado.",
-        },
         ["StatusInstallIncomplete"] = new()
         {
             [LangEn] = "Installation finished but {0} item(s) may be missing. Check the log for details.",
@@ -3909,11 +3293,6 @@ public static class Strings
             [LangEn] = "✓ Wars of Liberty installed and verified ({0} items checked).",
             [LangEs] = "✓ Wars of Liberty instalado y verificado ({0} elementos revisados).",
         },
-        ["DlgVerifyRepairTitle"] = new()
-        {
-            [LangEn] = "Repair installation?",
-            [LangEs] = "¿Reparar instalación?",
-        },
         ["DlgVerifyRepairBody"] = new()
         {
             [LangEn] = "Found {0} problem(s) in the installation.\n\n" +
@@ -3924,11 +3303,6 @@ public static class Strings
                        "¿Deseas repararla? Esto volverá a descargar los archivos del mod " +
                        "y sobrescribirá los archivos dañados o faltantes.\n\n" +
                        "Los archivos del juego AoE3 NO se verán afectados.",
-        },
-        ["StatusRepairing"] = new()
-        {
-            [LangEn] = "Repairing installation...",
-            [LangEs] = "Reparando instalación...",
         },
         ["StatusRepairSuccess"] = new()
         {
@@ -3991,7 +3365,6 @@ public static class Strings
         ["LangCardForMod"] = new() { [LangEn] = "For mod {0}", [LangEs] = "Para el mod {0}" },
         ["LangCardPackVer"] = new() { [LangEn] = "Pack v{0}", [LangEs] = "Pack v{0}" },
         ["LangCardActive"] = new() { [LangEn] = "In use ✓", [LangEs] = "En uso ✓" },
-        ["LangCardBlocked"] = new() { [LangEn] = "Other version", [LangEs] = "Otra versión" },
         ["LangCardUse"] = new() { [LangEn] = "Use", [LangEs] = "Usar" },
         ["LangCardUseAnyway"] = new() { [LangEn] = "Use anyway", [LangEs] = "Usar igual" },
         ["LangCardApplyVersion"] = new() { [LangEn] = "Apply this version", [LangEs] = "Aplicar esta versión" },
@@ -4053,56 +3426,6 @@ public static class Strings
             [LangEs] = "No hay una URL de instalador configurada.\n\n" +
                        "Haz click en Aceptar para abrir el sitio oficial de Wars of Liberty " +
                        "y descargar el instalador manualmente.",
-        },
-        ["DlgInstallConfirmTitle"] = new()
-        {
-            [LangEn] = "Install Wars of Liberty",
-            [LangEs] = "Instalar Wars of Liberty",
-        },
-        ["DlgInstallConfirmBody"] = new()
-        {
-            [LangEn] = "The launcher will:\n" +
-                       "  1. Download the official installer (~2.7 GB)\n" +
-                       "  2. Ask where to install\n" +
-                       "  3. Install Wars of Liberty silently\n\n" +
-                       "Windows will ask for administrator permission. Continue?",
-            [LangEs] = "El launcher hará lo siguiente:\n" +
-                       "  1. Descargar el instalador oficial (~2.7 GB)\n" +
-                       "  2. Preguntar dónde instalar\n" +
-                       "  3. Instalar Wars of Liberty en silencio\n\n" +
-                       "Windows pedirá permiso de administrador. ¿Continuar?",
-        },
-        ["DlgInstallNativeConfirmBody"] = new()
-        {
-            [LangEn] = "The mod will be installed to:\n  {0}\n\n" +
-                       "AoE3 source: {1}\n\n" +
-                       "This will copy Age of Empires III and Wars of Liberty files " +
-                       "to the destination folder. Continue?",
-            [LangEs] = "El mod se instalará en:\n  {0}\n\n" +
-                       "Origen de AoE3: {1}\n\n" +
-                       "Se copiarán los archivos de Age of Empires III y Wars of Liberty " +
-                       "a la carpeta destino. ¿Continuar?",
-        },
-        ["DlgNoAoe3DetectedTitle"] = new()
-        {
-            [LangEn] = "AoE3 not found",
-            [LangEs] = "AoE3 no encontrado",
-        },
-        ["DlgNoAoe3DetectedBody"] = new()
-        {
-            [LangEn] = "Age of Empires III was not detected on this computer.\n\n" +
-                       "The mod will be installed WITHOUT copying AoE3 files. " +
-                       "You will need to have AoE3: The Asian Dynasties already " +
-                       "in the destination folder for the mod to work.\n\nContinue anyway?",
-            [LangEs] = "No se detectó Age of Empires III en este computador.\n\n" +
-                       "El mod se instalará SIN copiar archivos de AoE3. " +
-                       "Necesitarás tener AoE3: The Asian Dynasties ya instalado " +
-                       "en la carpeta destino para que el mod funcione.\n\n¿Continuar de todas formas?",
-        },
-        ["ErrInstallerExeNotFound"] = new()
-        {
-            [LangEn] = "Could not locate the installer .exe inside the downloaded ZIP.",
-            [LangEs] = "No se pudo encontrar el .exe del instalador dentro del ZIP descargado.",
         },
 
         // -------- Launcher self-update --------
@@ -4202,11 +3525,6 @@ public static class Strings
         {
             [LangEn] = "CLOSE",
             [LangEs] = "CERRAR",
-        },
-        ["StatusDownloadingLauncherUpdate"] = new()
-        {
-            [LangEn] = "Downloading launcher update...",
-            [LangEs] = "Descargando actualización del launcher...",
         },
 
         // -------- User-data alert (Documents\<mod>\) --------
@@ -4715,13 +4033,6 @@ public static class Strings
             [LangEn] = "Specify at least one compatible mod version.",
             [LangEs] = "Indicá al menos una versión del mod compatible.",
         },
-        ["DlgPackagerErrorNoSnapshotBody"] = new()
-        {
-            [LangEn] = "Cannot package: the launcher hasn't snapshotted the original " +
-                       "English files yet. Run an install or update first to generate it.",
-            [LangEs] = "No se puede empaquetar: el launcher aún no tiene un respaldo " +
-                       "del original en inglés. Ejecutá una instalación o actualización primero.",
-        },
         // Result
         ["DlgPackagerResultHeader"] = new()
         {
@@ -4800,16 +4111,6 @@ public static class Strings
             [LangEn] = "Translation list is currently unavailable.",
             [LangEs] = "La lista de traducciones no está disponible.",
         },
-        ["StatusLangDownloading"] = new()
-        {
-            [LangEn] = "Downloading {0} translation pack...",
-            [LangEs] = "Descargando paquete de traducción {0}...",
-        },
-        ["StatusLangApplying"] = new()
-        {
-            [LangEn] = "Applying {0} translation...",
-            [LangEs] = "Aplicando traducción {0}...",
-        },
         ["StatusLangApplied"] = new()
         {
             [LangEn] = "✓ {0} translation applied.",
@@ -4885,11 +4186,6 @@ public static class Strings
             [LangEn] = "Could not apply the translation:\n\n{0}",
             [LangEs] = "No se pudo aplicar la traducción:\n\n{0}",
         },
-        ["DlgLangIncompatibleTitle"] = new()
-        {
-            [LangEn] = "Translation may not be fully compatible",
-            [LangEs] = "La traducción puede no ser totalmente compatible",
-        },
         ["DlgLangIncompatibleBody"] = new()
         {
             [LangEn] = "This translation was made for a different version of the mod. " +
@@ -4931,16 +4227,6 @@ public static class Strings
             [LangEn] = "Manage folders, user data, and run health checks",
             [LangEs] = "Gestionar carpetas, datos de usuario y revisar el estado del mod",
         },
-        ["TooltipMenuFolders"] = new()
-        {
-            [LangEn] = "Open folders or change where Wars of Liberty and Age of Empires III are installed",
-            [LangEs] = "Abrir o cambiar las carpetas de Wars of Liberty y Age of Empires III",
-        },
-        ["TooltipMenuOpenModFolder"] = new()
-        {
-            [LangEn] = "Open the Wars of Liberty install folder in Windows Explorer",
-            [LangEs] = "Abrir la carpeta del mod en el Explorador de Windows",
-        },
         ["TooltipMenuOpenAoE3Folder"] = new()
         {
             [LangEn] = "Open the Age of Empires III install folder in Windows Explorer",
@@ -4956,11 +4242,6 @@ public static class Strings
         {
             [LangEn] = "Manually point the launcher at Age of Empires III if it wasn't detected",
             [LangEs] = "Indicar manualmente dónde está Age of Empires III si no se detectó",
-        },
-        ["TooltipMenuUserData"] = new()
-        {
-            [LangEn] = "Manage your saved games and backups in Documents\\My Games",
-            [LangEs] = "Gestiona tus partidas guardadas y respaldos en Documents\\My Games",
         },
         ["TooltipMenuOpenUserDataFolder"] = new()
         {
@@ -4998,13 +4279,6 @@ public static class Strings
             [LangEs] = "Carpeta no encontrada",
         },
         // {0} = mod display name (appears twice).
-        ["DlgOpenFolderNotFoundBody"] = new()
-        {
-            [LangEn] = "The {0} install folder is not detected. " +
-                       "Use 'Select {0} folder' to point the launcher at it.",
-            [LangEs] = "No se detectó la carpeta de {0}. " +
-                       "Usa 'Seleccionar carpeta de {0}' para indicar dónde está.",
-        },
         ["DlgOpenAoE3NotFoundBody"] = new()
         {
             [LangEn] = "Age of Empires III is not detected. " +
@@ -5042,11 +4316,6 @@ public static class Strings
             [LangEs] = "No se encontró 'age3y.exe' en la carpeta seleccionada.\n\n" +
                        "Selecciona la carpeta de instalación de Age of Empires III " +
                        "(la que contiene age3y.exe o tiene una subcarpeta 'bin' con él).",
-        },
-        ["StatusAoE3NotDetected"] = new()
-        {
-            [LangEn] = "Age of Empires III not detected. Click the button to select its folder.",
-            [LangEs] = "Age of Empires III no detectado. Haz clic en el botón para seleccionar su carpeta.",
         },
         ["StatusAoE3Configured"] = new()
         {

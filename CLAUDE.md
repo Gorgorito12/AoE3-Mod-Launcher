@@ -139,9 +139,6 @@ Two cheap gates beyond a green build:
   (missing base game), so a real install needs an actual AoE3 + payload download;
   the integrity gate (below) is the in-process backstop.
 
-(`CONTRIBUTING.md` links a `docs/ROADMAP.md#smoke-test` that no longer exists —
-don't go looking for it.)
-
 ## Important gotchas
 
 - **AssemblyName ≠ RootNamespace, on purpose.** The shipped binary is
@@ -223,12 +220,12 @@ don't go looking for it.)
   against duplicate-attribute build errors if vendored native code is re-added.
 
 - **`NativeInstallService` is the only live install path** (download multi-part
-  ZIP → clone → flatten → overlay). `InstallerService` is a **vestige** of a legacy
-  Inno-Setup flow (run a setup `.exe` silently): its Inno-Setup methods are dead
-  code — the UI only still calls its `TryCleanupTemp` (temp-dir sweep) and reads
-  its `IsPaused` pause flag. Don't wire the Inno methods back in; do install work
-  through `NativeInstallService`. (Its old companion `InstallProgressMonitor` was
-  removed once nothing referenced it.)
+  ZIP → clone → flatten → overlay). `InstallerService` is a **thin vestige** of a
+  legacy Inno-Setup flow (run a setup `.exe` silently): its Inno-Setup methods have
+  been **removed** — the class now holds only `TryCleanupTemp` (temp-dir sweep) +
+  `IsPaused` (pause flag) + `TempDirectory`, which are all the UI still uses. Don't
+  reintroduce the Inno methods; do install work through `NativeInstallService`. (Its
+  old companion `InstallProgressMonitor` was removed once nothing referenced it.)
 
 - **`NativeInstallService.RemoveStaleBuildArtifacts` is now a deliberate NO-OP — the
   launcher installs the WoL payload byte-faithfully and strips NOTHING.** It used to
@@ -860,6 +857,33 @@ don't go looking for it.)
   (the reverse bug). The dashboard `GameLauncher.Launch` keeps `trustConfigCache`
   at its default `true` (it launches the active mod, so the cache is correct and
   worth persisting). Don't drop the `false` on the MP path.
+
+- **The game is launched RE-PARENTED under `explorer.exe`, not as a child of the
+  launcher — don't "simplify" it back to a plain `Process.Start`.** Windows Task
+  Manager's "End task" force-terminates the target's whole **process tree**, so a
+  game launched as a normal child of the launcher gets killed when the user force-
+  closes the launcher that way (reported bug: "closing the launcher via Task
+  Manager also killed discord.exe" — a process-tree cascade; the launcher has NO
+  code that touches Discord — no Job Objects, no `discord://`, no RPC — so the only
+  fix vector is making launched processes break out of the launcher's tree).
+  `Services/DetachedProcessLauncher.StartReparented` uses
+  `CreateProcess` + `PROC_THREAD_ATTRIBUTE_PARENT_PROCESS` (via a
+  `STARTUPINFOEX` attribute list) pointing at `explorer.exe` in the current session,
+  so the game becomes explorer's child — outside the launcher's tree — and survives
+  an "End task" on the launcher. Both `GameLauncher.Launch` (dashboard, fire-and-
+  forget) and `GameLauncher.LaunchAndWatch` (MP in-lobby) use it. **Two load-bearing
+  rules:** (1) it's **fail-safe** — `StartReparented` returns `-1` (never throws)
+  when re-parenting isn't possible (no explorer, insufficient rights, interop
+  failure), and BOTH callers **fall back** to the original `Process.Start` path, so
+  launching the game can never fail because of this hardening; (2) `LaunchAndWatch`
+  still needs the `Exited` callback + a `Process` handle (for the cancel/leave
+  `Kill(entireProcessTree:true)`), so after the re-parented spawn it opens the new
+  pid via `Process.GetProcessById(pid)` + `EnableRaisingEvents` — `Process.Exited`
+  fires for any process you hold a handle to, not only children. The game keeps the
+  launcher's token/env/desktop (only the tree parent is explorer), so elevation and
+  the window show unchanged. Pinned by
+  `WarsOfLibertyLauncher.Tests/DetachedProcessLauncherTests` (interop launches
+  without throwing; returns a valid pid or the `-1` fallback).
 
 - **Community translations are PROFILE-scoped, and the index is re-fetched on
   mod switch.** Two coupled rules: (1) `UpdateService.EffectiveTranslationsRepo()`

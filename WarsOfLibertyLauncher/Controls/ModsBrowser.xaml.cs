@@ -1088,13 +1088,6 @@ public partial class ModsBrowser : UserControl
         DetailMoreButton.Visibility = Visibility.Collapsed;
     }
 
-    private void OnDetailMoreClick(object sender, RoutedEventArgs e)
-    {
-        if (DetailMoreButton.ContextMenu is null) return;
-        DetailMoreButton.ContextMenu.PlacementTarget = DetailMoreButton;
-        DetailMoreButton.ContextMenu.IsOpen = true;
-    }
-
     // ------------------------------------------------------------------------
     // Helpers.
     // ------------------------------------------------------------------------

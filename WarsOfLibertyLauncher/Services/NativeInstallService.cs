@@ -738,7 +738,7 @@ public class NativeInstallService
                 // Zip-slip defence: reject entries whose resolved path would
                 // escape extractFolder (a crafted "..\..\foo" entry). The
                 // launcher runs elevated, so an unguarded payload could write
-                // anywhere on disk. Mirrors ArchiveService.ExtractZipWithBackupAsync.
+                // anywhere on disk.
                 var destPath = Path.GetFullPath(Path.Combine(extractFolder, entry.FullName));
                 var extractRoot = Path.GetFullPath(extractFolder)
                     .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;

@@ -12,7 +12,8 @@ translations/
   <id>/                       # id = the language pack (es, es-419, fr, …)
     <version>/                # one subfolder per version (1.2, 1.1, …)
       translation.json        # the manifest (contentHash + zip + date)
-      <id>.zip                # the translated files
+      <zip>                   # the translated files (name from the manifest's
+                              # "zip" field; the packager defaults to <id>.zip)
 schema/
   translation.schema.json     # the translation.json format (for editors / CI)
 ```

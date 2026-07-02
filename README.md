@@ -33,13 +33,19 @@ the mods use — but **never installs, updates, or uninstalls the base game**
   the mod overlay, creates shortcuts and registry entries. Works for Steam,
   GOG, and retail layouts.
 - **Resumable downloads** — HTTP Range requests, 30-minute per-file timeout,
-  primary URL + SourceForge fallback. No more "timeout" errors on slow
-  connections like the Java updater.
+  primary URL + mirror fallback (the `UpdateInfo.xml` manifest falls back to a
+  SourceForge alt URL; the payload parts download from GitHub). No more
+  "timeout" errors on slow connections like the Java updater.
 - **CRC32 verification** of every patch before applying.
 - **Backup before overwrite** — patches first move existing files to a backup
   folder, so a failed update doesn't leave the install broken.
-- **Verify & Repair** — scans the install for missing/corrupt files and offers
-  to re-download.
+- **Verify & Repair** — a real per-file integrity pass: every overlay file is
+  checked (size first, then SHA-256) against the fingerprints stamped into
+  `install-manifest.json` at install time, so damaged files are named exactly.
+  Base-game **engine** files are verified separately and reported as
+  "reinstall AoE3" (the launcher can't repair what it didn't ship). Repair
+  verifies first and, only when something is actually damaged, re-lays the
+  whole mod overlay — an intact install skips the multi-GB download entirely.
 - **Uninstall** — a recursive delete of the mod's install folder, gated by a
   probe/manifest check that the target really is a mod install. AoE3's base
   files stay safe because an `IsolatedFolder` mod (the default) is a separate
@@ -54,6 +60,10 @@ the mods use — but **never installs, updates, or uninstalls the base game**
   catalog repo (the Workshop tab); built-in entries win on id collisions.
 - Mod selector switches the active profile on the fly; the rest of the UI
   re-skins itself to match.
+- **Multiple copies per mod** — a mod can have several installs registered at
+  once (e.g. two WoL folders on different versions); Mod Properties lets you
+  register another copy and switch which one is active, and every install /
+  update / repair flow operates on the active copy only.
 
 ### Mod presentation (icons, hero, gallery)
 - Each mod brings its own art from the catalog: icon, Workshop banner, a
@@ -66,17 +76,21 @@ the mods use — but **never installs, updates, or uninstalls the base game**
 - The unmodded **Age of Empires III: The Asian Dynasties** appears as a
   built-in `aoe3-tad` profile. The launcher only **detects and launches** it —
   single-player, or the same Radmin multiplayer the mods use. It never
-  installs, updates, or uninstalls the base game (every install / uninstall /
-  repair / verify path is hard-guarded against `IsStockGame`), because that's
-  your own legally-owned copy.
+  installs, updates, or uninstalls the base game: uninstall is hard-refused by
+  `UninstallService.Plan`, the repair/verify menu items early-return for
+  `IsStockGame`, and installing simply isn't offered for a detect-only
+  profile — because that's your own legally-owned copy.
 
 ### Path detection
 - 3-level fallback for finding existing mod installs:
   1. Saved path from `launcher-config.json`
   2. Windows registry (Inno Setup uninstall key)
-  3. Disk scan across common drives (C:, D:, E:) for `age3y.exe`
+  3. Content scan of the folders around the detected AoE3 root (the root
+     itself, its `bin\`, and sibling folders) — installs are recognised by
+     their **content** (probe file + marker), never by folder name
 - Equivalent fallback for AoE3: registry → walk up from mod folder → scan
-  for Steam, GOG, and Microsoft Games install paths.
+  for Steam, GOG, and Microsoft Games install paths across **all fixed
+  drives** (`DriveInfo.GetDrives()`, not a hardcoded drive list).
 - Manual override via the Settings menu when auto-detection fails.
 
 ### Settings menu (gear icon)
@@ -102,6 +116,19 @@ shows an alert offering to:
 - **Ignore** — proceeds at the user's own risk.
 
 The launcher **never deletes** user data — the worst it does is rename a folder.
+
+### Offline mode
+Installed mods stay **playable with no internet**. Launch and install detection
+are 100 % local, and the update check degrades gracefully when the network is
+unreachable — it renders PLAY from the locally-known install state instead of
+erroring out, for **every** mod type. Connectivity is **observed, never
+probed**: the launcher flips to offline only when a real network call it was
+already making fails (so a corporate proxy or the Radmin VPN adapter can't
+false-flag an online user), and flips back on the next successful call. While
+offline, a **"Sin conexión" chip** appears in the title bar (click it to
+retry), and online-only controls — update checks, Workshop refresh,
+multiplayer — grey out with a tooltip; PLAY and all local actions keep
+working.
 
 ### Community translations
 - Optional language packs the launcher discovers automatically. The recommended
@@ -227,9 +254,9 @@ traffic.
   endpoints exist, but nothing in the UI calls them yet.
 
 ### Localization
-English and Spanish, switchable from the top-right corner. All UI strings
-(buttons, dialogs, status messages) are localized. Diagnostic logs stay in
-English for bug reports.
+English and Spanish, switchable from **Launcher Settings → Interface**. All UI
+strings (buttons, dialogs, status messages) are localized and refresh live —
+no restart. Diagnostic logs stay in English for bug reports.
 
 ### Privilege handling
 The launcher runs un-elevated by default. When it needs to write to a
@@ -238,10 +265,18 @@ elevation and relaunches itself with admin rights. Update flow can be
 auto-resumed elevated via the `--update-now` argument.
 
 ### Code signing
-Release builds are Authenticode-signed so Windows shows a publisher name
-instead of "Unknown publisher" in SmartScreen. The current cert is a
-self-signed `CN=Gorgorito` — see [INSTALL.md](WarsOfLibertyLauncher/INSTALL.md)
-for what users will see and how to handle Smart App Control.
+Two signing paths exist today:
+- **Local/dev builds** (`build-release.ps1` or `dotnet build` on the
+  maintainer's machine) are Authenticode-signed with a **self-signed
+  `CN=Gorgorito`** cert — meaningful on the build machine and for the
+  self-updater's same-signer check, but it won't satisfy SmartScreen on other
+  PCs.
+- **Official releases** are built **unsigned in GitHub Actions CI** (a SignPath
+  requirement) and will be signed by **SignPath Foundation** once the pending
+  application is approved — the CI `sign` job activates automatically at that
+  point. Until then, GitHub-release binaries verify by the **SHA-256** printed
+  in the release notes. See [INSTALL.md](WarsOfLibertyLauncher/INSTALL.md) for
+  what users will see and how to handle SmartScreen / Smart App Control.
 
 ---
 
@@ -372,11 +407,20 @@ cert, and prints the path / size / SHA-256 / signature status:
 
 ```powershell
 cd WarsOfLibertyLauncher
-.\build-release.ps1
+.\build-release.ps1 -Version 1.0.5   # release builds MUST pass -Version
 ```
 
-Output: `WarsOfLibertyLauncher\publish\Aoe3ModLauncher.exe` (~120 MB, fully
-self-contained — no .NET install required on the target machine).
+`-Version` accepts a WoL-style letter suffix (`1.0.5a`): the numeric core is
+stamped into the AssemblyVersion and the full string into the
+InformationalVersion — the self-updater relies on both, so don't omit it for
+a release build.
+
+Output: `WarsOfLibertyLauncher\publish\Aoe3ModLauncher.exe` (**~190 MB**, fully
+self-contained — no .NET install required on the target machine). It's ~190 MB
+instead of ~120 MB because single-file **compression is deliberately OFF**
+(`EnableCompressionInSingleFile=false`): the self-extracting decompression was
+the #1 trigger for Defender's `Win32/Injector` packer heuristic. Compression
+comes back once releases are signed by a real trusted cert (SignPath).
 
 The script:
 - Closes any running launcher instance to free file locks.
@@ -408,10 +452,20 @@ the cert exists at `Cert:\CurrentUser\My\<thumbprint>`.
 
 ## Distributing a release
 
-1. Run `.\build-release.ps1` and copy the SHA-256 hash it prints.
-2. Create a new release on GitHub.
+**Official channel — CI (recommended):** push a `vX.Y.Z` tag (or run
+`.github/workflows/release.yml` manually via *workflow_dispatch*). The
+`windows-latest` runner runs the unit tests, builds the same self-contained
+single-file `.exe` **unsigned** (`-p:SignOutput=false`) and prints its SHA-256
+to the run summary. Building in CI is a **SignPath Foundation requirement** —
+once the pending application is approved, the workflow's `sign` job (gated on
+the `SIGNPATH_ORGANIZATION_ID` repo variable) signs the artifact automatically.
+
+**Local/ad-hoc channel:**
+1. Run `.\build-release.ps1 -Version X.Y.Z` and copy the SHA-256 hash it prints.
+2. Create a new release on GitHub with a matching `vX.Y.Z` tag.
 3. Attach `publish\Aoe3ModLauncher.exe` as a release asset.
-4. Paste the SHA-256 in the release notes so users can verify the download.
+4. Paste the SHA-256 in the release notes so users can verify the download
+   (the self-updater also reads it to verify before swapping).
 5. Link to [`INSTALL.md`](WarsOfLibertyLauncher/INSTALL.md) (or copy its
    content) so users know what to do if SmartScreen / Smart App Control
    blocks the binary on first launch.
@@ -423,9 +477,13 @@ the cert exists at `Cert:\CurrentUser\My\<thumbprint>`.
 
 ## Configuration
 
-A `launcher-config.json` file is created next to the `.exe` on first run.
-Most fields auto-populate; edit only when you need to override defaults
-(custom server URLs, non-standard install paths, alternate payload mirrors).
+A `launcher-config.json` file is created in **`%LocalAppData%\AoE3ModLauncher\`**
+on first run (alongside the diagnostic log, snapshots, and telemetry — all
+runtime data lives there, not next to the `.exe`; a legacy next-to-exe config is
+migrated over automatically). Most fields auto-populate; edit only when you need
+to override defaults (custom server URLs, non-standard install paths, alternate
+payload mirrors). The example below is a **partial excerpt** — the real file
+carries more fields (window geometry, notification history, ETags, etc.).
 
 Per-mod state lives under a **`mods` dictionary keyed by mod id**, with the
 launcher-wide `activeModId` selecting the current one — so switching mods never
@@ -440,6 +498,8 @@ cross-contaminates install paths or translations. The flat `modInstallPath` /
     "wol": {
       "installPath": "C:\\Program Files (x86)\\Wars of Liberty",
       "activeTranslationId": "",
+      "activeTranslationVersion": "",
+      "pinnedVersion": "",
       "lastKnownVersion": "1.0.4",
       "lastKnownLatestVersion": "1.0.4"
     }
@@ -468,6 +528,8 @@ cross-contaminates install paths or translations. The flat `modInstallPath` /
   "skippedLauncherTag": "",
   "translationsRepo": "papillo12/translations",
   "modsCatalogRepo": "",
+  "notificationFeedUrl": "",
+  "multiplayerTelemetryEnabled": false,
   "multiplayer": {
     "lobbyBaseUrl": "https://wol-lobby.duckdns.org",
     "sessionToken": "",
@@ -500,6 +562,7 @@ Updater/
 ├── WarsOfLibertyLauncher.Tests/   xUnit tests for pure logic (sibling project)
 ├── docs/MODDING.md                Authoritative mod.json / catalog spec for modders
 ├── aoe3-mods-catalog-template/    Template for the separate community catalog repo
+├── aoe3-translations-template/    Template for the community translations repo
 ├── README.md  CONTRIBUTING.md  DISCLAIMER.md  PRIVACY.md  CODE_SIGNING_POLICY.md  CLAUDE.md  LICENSE
 ```
 
@@ -539,6 +602,8 @@ WarsOfLibertyLauncher/
 │   ├── HeroBanner.xaml(.cs)          Dashboard hero banner
 │   ├── MainTabs.xaml(.cs)            Right-pane tabs (News / Changelog / Help)
 │   ├── MpAlertOverlay.cs             Themed in-window alert cards (not MessageBox)
+│   ├── TitleBar.xaml.cs              Shared title-bar component (template in Chrome.xaml)
+│   ├── ChromePopups.cs               Single-open coordinator for hand-built popups
 │   └── UiScale.cs                    Window-size zoom (ScaleTransform) helper
 │
 ├── Styles/
@@ -565,6 +630,8 @@ WarsOfLibertyLauncher/
 │       └── LobbyDtos.cs              Lobby REST DTOs / WebSocket frame types
 │
 └── Services/
+    ├── AppPaths.cs                   %LocalAppData%\AoE3ModLauncher\ path resolver
+    ├── ConnectivityState.cs          Observed offline/online signal (offline mode)
     ├── HashService.cs                MD5 + CRC32 + SHA-256
     ├── RegistryService.cs            Detect mods via registry
     ├── AoE3Detector.cs               Disk scan for AoE3 (Steam/GOG/retail)
@@ -575,6 +642,7 @@ WarsOfLibertyLauncher/
     ├── UpdateInfoService.cs          Parse UpdateInfo.xml
     ├── ArchiveService.cs             .tar.xz extraction + local delete-list
     ├── UpdateService.cs              Update flow orchestrator
+    ├── VerifyService.cs              Per-file integrity verify (manifest hashes)
     ├── NativeInstallService.cs       Full install pipeline (live path)
     ├── InstallerService.cs           Legacy Inno-Setup install orchestrator (vestigial)
     ├── FolderCloneService.cs         AoE3 → mod clone (+ pre-flight count)
@@ -586,6 +654,8 @@ WarsOfLibertyLauncher/
     ├── ModAssetCacheService.cs       Cache catalog icons/banners locally
     ├── IconConverter.cs              PNG → .ico writer for shortcuts
     ├── NewsService.cs                Fetch the catalog news.json feed
+    ├── NotificationCenter.cs         Bell history store (dedup + persistence)
+    ├── NotificationFeedService.cs    Central wol-notify feed client (ETag/304)
     ├── TranslationService.cs         Apply / remove community translations
     ├── TranslationRegistryService.cs Discover translations on GitHub
     ├── LauncherUpdateService.cs      GitHub Releases self-update (verified swap)

@@ -81,58 +81,6 @@ public static class GameLauncher
         return null;
     }
 
-    /// <summary>
-    /// Find the Age of Empires III install ROOT (the folder that *contains*
-    /// the game executable, walking up from a Steam-style bin/ subfolder if
-    /// needed). Returns null if AoE3 cannot be located on this machine.
-    ///
-    /// This is what mod installers care about: isolated mods (WoL) need to
-    /// be installed alongside AoE3's data files, and in-place mods (IM)
-    /// install directly into this folder.
-    /// </summary>
-    public static string? FindAoe3InstallRoot(LauncherConfig config, string? modInstallPath, ModProfile profile)
-    {
-        var exePath = Find(config, modInstallPath, profile);
-        if (string.IsNullOrEmpty(exePath)) return null;
-
-        // The "install root" is the folder containing AoE3's data — typically
-        // the parent of either `<game>.exe` (legacy retail) or `bin\<game>.exe`
-        // (Steam). The marker for "this is the install root" is the presence
-        // of a `data` subfolder.
-        var dir = Path.GetDirectoryName(exePath);
-        for (int i = 0; i < 3 && !string.IsNullOrEmpty(dir); i++)
-        {
-            if (Directory.Exists(Path.Combine(dir, "data")))
-                return dir;
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        // Fallback: just return the folder that holds the .exe
-        return Path.GetDirectoryName(exePath);
-    }
-
-    /// <summary>
-    /// Best-guess install folder for the active mod: the recommended
-    /// subfolder of AoE3 if we can find AoE3, otherwise null. The launcher
-    /// uses this to pre-fill the folder picker dialog with a sensible
-    /// default. For in-place mods this equals the AoE3 root itself.
-    /// </summary>
-    public static string? SuggestModInstallFolder(LauncherConfig config, string? modInstallPath, ModProfile profile)
-    {
-        var aoe3Root = FindAoe3InstallRoot(config, modInstallPath, profile);
-        if (string.IsNullOrEmpty(aoe3Root)) return null;
-
-        if (profile.InstallType == ModInstallType.InPlaceOverlay)
-            return aoe3Root;
-
-        // Isolated-folder mod: append the profile's folder name so the
-        // user lands on something like "C:\Program Files (x86)\Wars of Liberty".
-        var folderName = string.IsNullOrEmpty(profile.DefaultInstallFolder)
-            ? profile.DisplayName
-            : Path.GetFileName(profile.DefaultInstallFolder.TrimEnd('\\', '/'));
-        return Path.Combine(aoe3Root, folderName);
-    }
-
     /// <summary>Lazy enumeration of likely paths, in priority order.</summary>
     private static IEnumerable<string> EnumerateCandidates(
         LauncherConfig config,
@@ -236,6 +184,18 @@ public static class GameLauncher
             ? profile.GameArguments
             : config.GameArguments;
 
+        // Launch DETACHED (re-parented under explorer.exe) so a forced Task Manager
+        // "End task" on the launcher doesn't cascade-kill the game. Falls back to a
+        // plain launch if re-parenting isn't available — the game must always start.
+        int pid = DetachedProcessLauncher.StartReparented(
+            exePath, arguments, Path.GetDirectoryName(exePath));
+        if (pid > 0)
+        {
+            DiagnosticLog.Write($"Game launched detached (pid {pid}).");
+            return;
+        }
+
+        DiagnosticLog.Write("Detached launch unavailable; falling back to Process.Start.");
         var startInfo = new ProcessStartInfo
         {
             FileName = exePath,
@@ -317,6 +277,37 @@ public static class GameLauncher
         DiagnosticLog.Write(
             $"Launching game (watched): {exePath} (profile '{profile.Id}') args='{arguments}'");
 
+        // Launch DETACHED (re-parented under explorer.exe) so a forced Task Manager
+        // "End task" on the launcher doesn't cascade-kill the game mid-match. We still
+        // get the Exited callback (and a Process handle for the cancel/leave
+        // tree-kills) by opening the new pid — Process.Exited works for any process we
+        // hold a handle to, not only ones we started as a child. Falls back to the
+        // original watched child launch if re-parenting isn't available.
+        int pid = DetachedProcessLauncher.StartReparented(
+            exePath, arguments, Path.GetDirectoryName(exePath));
+        if (pid > 0)
+        {
+            try
+            {
+                var watched = Process.GetProcessById(pid);
+                watched.EnableRaisingEvents = true;
+                watched.Exited += onExited;
+                DiagnosticLog.Write($"Game launched detached + watched (pid {pid}).");
+                return watched;
+            }
+            catch (Exception ex)
+            {
+                // The game IS running (detached); we just couldn't attach the watcher
+                // (rare race if it exited instantly). Don't fall through to a second
+                // launch — return null so the caller degrades gracefully (no exit
+                // callback) instead of spawning a duplicate game.
+                DiagnosticLog.Write(
+                    $"Game launched detached (pid {pid}) but watcher attach failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        DiagnosticLog.Write("Detached launch unavailable; falling back to watched child launch.");
         var startInfo = new ProcessStartInfo
         {
             FileName = exePath,

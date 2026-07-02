@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-06-12_
+_Last updated: 2026-07-02_
 
 The **AoE3 Mod Launcher** is a free, open-source desktop application. This
 document describes exactly what data it stores, what data leaves your computer,
@@ -22,8 +22,9 @@ launcher does, please [open an issue](https://github.com/Gorgorito12/Updater/iss
 
 ## What the launcher stores on your computer
 
-These files live next to the launcher executable (or in your local app data) and
-are **never uploaded anywhere by the launcher**:
+These files live in your local app data folder —
+**`%LocalAppData%\AoE3ModLauncher\`** — and are **never uploaded anywhere by the
+launcher**:
 
 - **`launcher-config.json`** — your settings and, once you sign in to
   multiplayer, the session token issued by the lobby server. Treat this token
@@ -34,8 +35,8 @@ are **never uploaded anywhere by the launcher**:
   your machine unless **you** choose to attach it to a bug report.
 - **`multiplayer-events.log`** — the optional local telemetry log (see below).
   Off by default.
-- **Cached mod assets** (icons, catalog data) under
-  `%LocalAppData%\AoE3ModLauncher\`.
+- **Cached mod assets** (icons, catalog data) under the same folder's
+  `mod-assets\` subdirectory.
 
 You can clear caches and temporary files at any time from **Launcher Settings →
 Maintenance**.
@@ -51,11 +52,17 @@ requests to:
   catalog, list translations, and read the news feed.
 - **Mod servers** (e.g. `aoe3wol.com`, SourceForge, GitHub Releases) — to read
   version manifests and download mod payloads you ask it to install.
+- **The notification feed** (`wol-notify.duckdns.org`, the maintainer's own
+  small server) — a single cached request that replaces per-mod GitHub polling
+  for the "update available" / "new translation" bell. It serves the same
+  public version data; no account or identifier is sent. You can point the
+  launcher elsewhere or opt out entirely (always poll GitHub instead) by
+  setting `notificationFeedUrl` to `"none"` in `launcher-config.json`.
 
 As with any web request, the remote server sees your IP address. The launcher
 sends no personal identifiers in these requests. **You can disable all
-startup network activity** with *Launcher Settings → Updates → "Check for
-updates on startup"*.
+startup network activity** — including the notification feed — with
+*Launcher Settings → Updates → "Check for updates on startup"*.
 
 ### 2. Multiplayer (opt-in — requires Discord sign-in)
 

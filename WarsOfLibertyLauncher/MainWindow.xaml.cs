@@ -2004,21 +2004,6 @@ public partial class MainWindow : Window
         System.Windows.Application.Current.Shutdown();
     }
 
-    // ------------------------------------------------------------------------
-    // Language
-    // ------------------------------------------------------------------------
-
-    private void LangEnButton_Click(object sender, RoutedEventArgs e) => SwitchLanguage(Strings.LangEn);
-    private void LangEsButton_Click(object sender, RoutedEventArgs e) => SwitchLanguage(Strings.LangEs);
-
-    private void SwitchLanguage(string lang)
-    {
-        if (_config.Language == lang) return;
-        _config.Language = lang;
-        _config.Save();
-        Strings.SetLanguage(lang);
-    }
-
     /// <summary>
     /// Mod-specific UI refresh: only the bits that actually differ between
     /// profiles (window title, banner, accent-tinted PLAY button, banner
@@ -2369,18 +2354,6 @@ public partial class MainWindow : Window
     private void InvalidateActiveModCheckCache()
     {
         _checkResultCache.Remove(_updateService.Profile.Id);
-    }
-
-    /// <summary>
-    /// Same as <see cref="InvalidateActiveModCheckCache"/> but for an
-    /// arbitrary profile id. Used by the v0.9 browser flows when the
-    /// user installs / uninstalls a non-active mod and the cached
-    /// CheckResult for that profile is now stale.
-    /// </summary>
-    private void InvalidateCheckCacheFor(string profileId)
-    {
-        if (string.IsNullOrEmpty(profileId)) return;
-        _checkResultCache.Remove(profileId);
     }
 
     private void RefreshStatusCard()
@@ -3405,8 +3378,6 @@ public partial class MainWindow : Window
     private void TopTabPlay_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Play);
     private void TopTabMods_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Mods);
     private void TopTabMultiplayer_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Multiplayer);
-    private void TopTabSettings_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Settings);
-
     /// <summary>
     /// Opens the mod's <c>OfficialWebsite</c> in the user's default browser.
     /// The url has already been validated by the catalog schema (or the
@@ -5033,45 +5004,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Synchronous "is this mod installed right now?" probe used by
-    /// the Change Mod popup to filter the registry. Mirrors the
-    /// resolution order in <see cref="ProbeInstalledState"/> but
-    /// returns a bool so callers don't have to compare against a
-    /// localized status string. Never throws — a flaky filesystem
-    /// just returns false.
-    /// </summary>
-    private bool IsModInstalled(ModProfile profile)
-    {
-        try
-        {
-            // Active profile fast-path: UpdateService already cached
-            // the install path during construction, no I/O needed.
-            if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrEmpty(_updateService.InstallPath))
-                return true;
-
-            // Saved per-mod state from a previous session, validated
-            // through SavedPathLooksValid so stale pointers at e.g.
-            // the vanilla AoE3 folder don't pass a bare Directory.Exists.
-            var saved = _config.GetState(profile.Id).InstallPath;
-            if (!string.IsNullOrEmpty(saved)
-                && Directory.Exists(saved)
-                && SavedPathLooksValid(saved, profile))
-                return true;
-
-            // Last resort: probe the obvious install locations on
-            // disk (same as ProbeInstalledState does for non-active
-            // profiles without saved state).
-            var probe = ResolveProbedInstallPath(profile);
-            return !string.IsNullOrEmpty(probe);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
     /// Tiny helper: synthesise a Button.Click without relying on the
     /// button being attached to the visual tree of the current logical
     /// focus. RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent))
@@ -5083,28 +5015,6 @@ public partial class MainWindow : Window
     {
         if (btn == null) return;
         btn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, btn));
-    }
-
-    /// <summary>
-    /// Sidebar footer link → opens the official AoE3 WoL site (where the
-    /// community Discord invite + contact info live) in the user's
-    /// default browser. Doesn't switch the launcher's active tab.
-    /// </summary>
-    private void SidebarSupportButton_Click(object sender, RoutedEventArgs e)
-    {
-        OpenExternalUrl(string.IsNullOrEmpty(_config?.OfficialWebsite)
-            ? "https://aoe3wol.com/"
-            : _config.OfficialWebsite);
-    }
-
-    /// <summary>
-    /// Sidebar footer link → opens the community wiki in the user's
-    /// default browser. Hardcoded for now; promote to LauncherConfig
-    /// if a different mod team wants their own wiki URL.
-    /// </summary>
-    private void SidebarWikiButton_Click(object sender, RoutedEventArgs e)
-    {
-        OpenExternalUrl("https://aoe3wol.com/");
     }
 
     /// <summary>

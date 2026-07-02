@@ -68,7 +68,11 @@ Create `.github/CODEOWNERS`:
 
 # Each mod's folder is owned by its author. Required for the
 # "modder iterates on their carpeta without bothering you" flow.
+# (The two first-party entries — wol and the detect-only aoe3-tad —
+# are mirrored here for the public listing; the launcher's built-ins
+# shadow them at runtime, so a PR can't redirect their behaviour.)
 /mods/wol/                 @your-username
+/mods/aoe3-tad/            @your-username
 /mods/improvement-mod/     @your-username
 
 # Add new modders here as you accept their first PR:
@@ -77,10 +81,10 @@ Create `.github/CODEOWNERS`:
 
 ### 6. Add `CONTRIBUTING.md` for modders
 A short doc telling them:
-- The folder structure (`mods/<id>/{mod.json, icon.png, banner.png}`)
+- The folder structure (`mods/<id>/{mod.json, icon.png, banner.png}` plus optional `hero*.jpg` / `screenshot1..8.*`)
 - The image specs (icon: 1:1, 256–1024 px PNG ≤1 MB; banner: 4:1, 1200–4800 px PNG/JPG ≤2 MB; hero: 16:9, 1920–3840 px PNG/JPG ≤5 MB; screenshots ≤5 MB). Dimensions validate by aspect + width range, so any size up to 4K passes.
 - The schema URL to point their editor at
-- That cosmetic and release-bump PRs auto-merge
+- That cosmetic and release-bump PRs auto-merge — **except hero/screenshot changes**: `classify_pr.py`'s `ALLOWED_ASSETS` whitelist only covers `icon.png` / `banner.*` / `mod.json`, so a PR adding or changing hero/screenshot files (or those manifest fields) lands in tier 3 (manual review) even though `validate_images.py` fully validates them
 
 The validation workflow + schema make this template enforce most of the rules automatically; CONTRIBUTING.md is mostly for ergonomics.
 

@@ -153,13 +153,6 @@ public sealed class NotificationCenter
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Removes one item from the history.</summary>
-    public void Remove(NotificationItem item)
-    {
-        if (item == null) return;
-        if (Items.Remove(item)) { Persist(); Changed?.Invoke(this, EventArgs.Empty); }
-    }
-
     /// <summary>Clears the whole history.</summary>
     public void Clear()
     {

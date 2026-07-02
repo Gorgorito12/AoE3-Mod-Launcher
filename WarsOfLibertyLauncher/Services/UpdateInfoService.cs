@@ -121,8 +121,8 @@ public class UpdateInfoService
             throw new InvalidDataException(Strings.Get("ErrManifestEmpty"));
 
         // Walk the document recursively so we don't depend on the exact root
-        // element name or nesting depth — any <version>, <download>, or
-        // <updaterinfo> we find anywhere is processed.
+        // element name or nesting depth — any <version> or <download> we find
+        // anywhere is processed.
         ProcessNode(doc.DocumentElement, info);
 
         return info;
@@ -134,14 +134,6 @@ public class UpdateInfoService
         {
             switch (node.Name.ToLowerInvariant())
             {
-                case "updaterinfo":
-                    info.UpdaterInfo = new UpdaterInfo
-                    {
-                        Ver = Attr(node, "ver"),
-                        Link = Attr(node, "link")
-                    };
-                    break;
-
                 case "version":
                     info.Versions.Add(new VersionInfo
                     {

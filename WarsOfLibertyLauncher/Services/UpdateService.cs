@@ -182,16 +182,6 @@ public class UpdateService
         return _profile.Wol?.PayloadZipUrls ?? System.Array.Empty<string>();
     }
 
-    public string EffectiveDefaultInstallFolder() =>
-        !string.IsNullOrWhiteSpace(_config.DefaultInstallFolder)
-            ? _config.DefaultInstallFolder
-            : _profile.DefaultInstallFolder;
-
-    public string EffectiveOfficialWebsite() =>
-        !string.IsNullOrWhiteSpace(_config.OfficialWebsite)
-            ? _config.OfficialWebsite
-            : _profile.Wol?.OfficialWebsite ?? "";
-
     /// <summary>
     /// GitHub repo (<c>owner/repo</c>) the launcher scans for community
     /// translations of the active mod. Returns empty when the active mod

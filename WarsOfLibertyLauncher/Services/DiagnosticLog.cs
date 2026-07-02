@@ -9,7 +9,8 @@ using System.Threading.Tasks;
 namespace WarsOfLibertyLauncher.Services;
 
 /// <summary>
-/// Simple file logger for diagnostics. Writes to launcher-debug.log next to the .exe.
+/// Simple file logger for diagnostics. Writes to launcher-debug.log in the
+/// per-user data dir (%LocalAppData%\AoE3ModLauncher\ via AppPaths.LogFile).
 /// On launcher startup the log is reset, so each session is self-contained.
 ///
 /// Write() is non-blocking: callers from the UI thread (mod switch, CheckAsync,

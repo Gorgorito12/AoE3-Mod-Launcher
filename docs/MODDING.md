@@ -136,6 +136,8 @@ with the real constraints the schema enforces.
 
 > Dimensions are validated by **aspect ratio + a width range**, not a single exact size — so any resolution up to 4K passes as long as the shape is right.
 
+> **Auto-merge note:** icon and banner edits auto-merge (tier 1), but PRs that add or change **hero images or screenshots** (the fields or the files) currently require **human review** (tier 3) — see §6.3.
+
 The files live in `mods/<your-id>/` next to `mod.json`. The launcher
 resolves `icon: "icon.png"` to
 `https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/<your-id>/icon.png`
@@ -458,6 +460,12 @@ What this means for you as a modder:
 - **Your first submission is always tier 3.** Expect to wait for
   review.
 - **Changing icon / banner / text** later: auto-merge within minutes.
+- **Hero images and screenshots are the exception**: adding or changing
+  `heroImage(s)` / `screenshots` — the manifest fields **or** the image
+  files — is classified tier 3 (human review). The auto-merge asset
+  whitelist only covers `icon.png` / `banner.*` / `mod.json` tier-1
+  fields; CI still *validates* hero/screenshot images, it just doesn't
+  auto-merge them.
 - **Shipping a new version** (bumping `approvedReleaseTag`):
   auto-merge.
 - **Changing URLs, hashes, or `install.*`**: human review, always. This
@@ -639,7 +647,8 @@ will see your mod automatically when their cache expires
 ## 10. What you **don't** need to do (and people often try)
 
 - **Don't edit `WarsOfLibertyLauncher/Services/ModRegistry.cs`.** That
-  class has a hardcoded list for WoL only (an offline fallback). Your
+  class hardcodes only the two first-party built-ins — WoL and the
+  detect-only stock game (`aoe3-tad`) — as an offline fallback. Your
   mod goes in the catalog. Editing `ModRegistry` directly would mean
   your mod needs a new launcher release to appear — the opposite of
   what the system is designed for.
@@ -670,7 +679,7 @@ If you want to understand what the launcher does with your `mod.json`:
 | [`WarsOfLibertyLauncher/Models/ModProfile.cs`](../WarsOfLibertyLauncher/Models/ModProfile.cs) | Runtime model the rest of the launcher uses |
 | [`WarsOfLibertyLauncher/Services/NativeInstallService.cs`](../WarsOfLibertyLauncher/Services/NativeInstallService.cs) | Initial install pipeline |
 | [`WarsOfLibertyLauncher/Services/UpdateService.cs`](../WarsOfLibertyLauncher/Services/UpdateService.cs) | Update flow (WolPatcher) |
-| [`WarsOfLibertyLauncher/Services/GitHubReleasesInstallService.cs`](../WarsOfLibertyLauncher/Services/GitHubReleasesInstallService.cs) | Update flow (GitHubReleases) |
+| [`WarsOfLibertyLauncher/Services/GitHubReleaseDownloader.cs`](../WarsOfLibertyLauncher/Services/GitHubReleaseDownloader.cs) | Asset resolve + download (GitHubReleases) |
 | [`aoe3-mods-catalog-template/schema/mod.schema.json`](../aoe3-mods-catalog-template/schema/mod.schema.json) | Authoritative schema |
 | [`aoe3-mods-catalog-template/.github/scripts/classify_pr.py`](../aoe3-mods-catalog-template/.github/scripts/classify_pr.py) | Tier classifier |
 

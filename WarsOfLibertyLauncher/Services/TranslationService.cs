@@ -62,11 +62,6 @@ public class TranslationService
     /// <summary>Folder for a specific translation pack: &lt;install&gt;\translations\&lt;id&gt;\</summary>
     public string GetPackFolder(string id) => Path.Combine(TranslationsRoot, id);
 
-    /// <summary>The list of files covered by translations (relative to install root).</summary>
-    public static IReadOnlyList<string> CoveredFilePaths => DefaultCoveredFiles;
-    /// <summary>The covered files for THIS instance's mod (per-mod, may differ from the default).</summary>
-    public IReadOnlyList<string> CoveredFilePathsForMod => _coveredFiles;
-
     // ------------------------------------------------------------------------
     // Originals snapshot — keeps the canonical EN versions for version
     // detection and for reverting the install back to English.

@@ -81,8 +81,9 @@ you.
 - Reproduction steps, expected vs. actual, OS version, and the launcher
   version from the title bar.
 - Attach the launcher log if relevant: open the settings gear → **Advanced
-  → View diagnostic logs**. The log stays in English on purpose so it can
-  be searched.
+  → View logs**. The log stays in English on purpose so it can be searched.
+  Even better, use **Mod Properties → "Share diagnostics"** — it zips every
+  shareable log (never your config/session token) ready to attach.
 
 ## Code of conduct
 

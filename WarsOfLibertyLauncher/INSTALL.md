@@ -2,14 +2,14 @@
 
 ## Quick start
 
-1. Download `Aoe3ModLauncher.exe` from the latest [GitHub release](https://github.com/YOUR-REPO/releases/latest).
+1. Download `Aoe3ModLauncher.exe` from the latest [GitHub release](https://github.com/Gorgorito12/Updater/releases/latest).
 2. (Optional but recommended) Verify the SHA-256 hash matches the one published in the release notes:
    ```powershell
    Get-FileHash Aoe3ModLauncher.exe -Algorithm SHA256
    ```
 3. Double-click `Aoe3ModLauncher.exe`.
 
-That's it — no installer, no .NET runtime needed, no extra files. The launcher is a single self-contained .exe.
+That's it — no installer, no .NET runtime needed. The launcher is a single self-contained .exe. (Its settings, logs and caches live in `%LocalAppData%\AoE3ModLauncher\` — delete that folder too if you ever want to remove every trace.)
 
 ---
 
@@ -57,8 +57,8 @@ If many users hit the same block, submitting the .exe to Microsoft for analysis 
 
 ## Why does this happen?
 
-The launcher is open-source and built from the public source tree. Each release is signed with a self-signed certificate (`CN=Gorgorito`) so you can verify the binary hasn't been tampered with by checking the digital signature in the file's properties.
+The launcher is open-source and built from the public source tree. Official releases are built in **GitHub Actions CI**; the project has applied to **SignPath Foundation** (free code signing for open source) and, once approved, every release will carry a trusted Authenticode signature — at that point these warnings go away. Until then, CI releases are unsigned and verified by their **SHA-256 hash** (below); maintainer-built local binaries carry a self-signed `CN=Gorgorito` signature, which proves integrity but not identity.
 
-What it doesn't have is a **commercial code-signing certificate** from a Certificate Authority like DigiCert or Sectigo — those cost $200–700/year per certificate and aren't really feasible for a free, open-source modding tool. Without one, Windows treats the publisher as "unknown" and shows the warnings above the first time you run a new release.
+What the releases don't have **yet** is a certificate that Windows already trusts — commercial ones cost $200–700/year, which isn't feasible for a free, open-source modding tool (hence SignPath). Without one, Windows treats the publisher as "unknown" and shows the warnings above the first time you run a new release.
 
 If you want to verify the launcher is exactly what was built from this repository, every release ships with a SHA-256 hash. Compare the hash of your downloaded file (`Get-FileHash Aoe3ModLauncher.exe -Algorithm SHA256`) against the one in the release notes — if they match, the binary is authentic.

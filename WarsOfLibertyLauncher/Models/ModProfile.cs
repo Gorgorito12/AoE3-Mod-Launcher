@@ -215,8 +215,9 @@ public class ModProfile
     public string? LocalBannerPath { get; set; }
 
     /// <summary>
-    /// Remote URL of the mod's 1920×1080 dashboard hero image (PNG/JPG,
-    /// ≤2 MB). When present, this image is painted behind the title +
+    /// Remote URL of the mod's 16:9 dashboard hero image (PNG/JPG,
+    /// 1920–3840 px wide, ≤5 MB — same spec the catalog CI validates).
+    /// When present, this image is painted behind the title +
     /// PLAY button on the dashboard. Higher priority than
     /// <see cref="BannerUrl"/> for that surface — the banner targets the
     /// Workshop mod card thumbnail (1200×300), the hero targets the

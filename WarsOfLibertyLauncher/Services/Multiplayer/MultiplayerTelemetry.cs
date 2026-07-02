@@ -56,26 +56,14 @@ public static class MultiplayerTelemetry
         }
     }
 
-    /// <summary>Read-only snapshot of all counters seen so far this session.</summary>
-    public static System.Collections.Generic.IReadOnlyDictionary<string, long> Snapshot()
-    {
-        var copy = new System.Collections.Generic.Dictionary<string, long>(Counters.Count);
-        foreach (var kv in Counters) copy[kv.Key] = kv.Value;
-        return copy;
-    }
-
     // Standard counter names — referenced from the rest of the code so
     // typos don't fragment the keyspace.
-    public const string SignInAttempted = "mp_signin_attempted";
     public const string SignInSucceeded = "mp_signin_succeeded";
-    public const string SignInDeclined = "mp_signin_declined";
     public const string LobbyCreated = "mp_lobby_created";
     public const string LobbyJoined = "mp_lobby_joined";
     public const string ModMismatch = "mp_mod_mismatch";
     public const string RateLimited = "mp_rate_limited";
     public const string QuotaDegraded = "mp_quota_degraded";
     public const string QuotaExhausted = "mp_quota_exhausted";
-    public const string ZtInstallNeeded = "mp_zt_install_needed";
-    public const string ZtAuthTokenMissing = "mp_zt_auth_token_missing";
     public const string ReplayUploaded = "mp_replay_uploaded";
 }

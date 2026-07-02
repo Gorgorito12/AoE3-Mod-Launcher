@@ -24,16 +24,8 @@ namespace WarsOfLibertyLauncher.Models;
 /// </summary>
 public class UpdateInfo
 {
-    public UpdaterInfo? UpdaterInfo { get; set; }
     public List<VersionInfo> Versions { get; set; } = new();
     public List<DownloadInfo> Downloads { get; set; } = new();
-}
-
-/// <summary>Info about the latest version of the updater itself (for self-update prompts).</summary>
-public class UpdaterInfo
-{
-    public string Ver { get; set; } = "";
-    public string Link { get; set; } = "";
 }
 
 /// <summary>

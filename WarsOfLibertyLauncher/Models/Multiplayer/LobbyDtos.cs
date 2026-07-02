@@ -397,27 +397,6 @@ public class WsRoomMemberFlags
     public string? RadminIp { get; set; }
 }
 
-/// <summary>Server→client: the host left and the lobby was handed to the next
-/// member (GameRanger-style migration).</summary>
-public class WsHostChanged
-{
-    [JsonPropertyName("new_host_user_id")]
-    public string NewHostUserId { get; set; } = "";
-
-    [JsonPropertyName("new_host_login")]
-    public string NewHostLogin { get; set; } = "";
-}
-
-/// <summary>Server→client: a peer reported (or changed) its Radmin IP.</summary>
-public class WsMemberNet
-{
-    [JsonPropertyName("user_id")]
-    public string UserId { get; set; } = "";
-
-    [JsonPropertyName("radmin_ip")]
-    public string? RadminIp { get; set; }
-}
-
 /// <summary>Initial snapshot sent by the DO when our hello succeeds.</summary>
 public class WsRoomState
 {
