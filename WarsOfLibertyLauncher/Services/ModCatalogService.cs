@@ -93,6 +93,11 @@ public class ModCatalogService
         try
         {
             listing = await Http.GetFromJsonAsync<List<GitHubContent>>(listingUrl, ct);
+            // Reached the network → online. This is the recurring call (Activated /
+            // 5-min timer force a re-fetch), so it's what clears the offline chip on
+            // reconnect. We report only SUCCESS here, never failure: a 403 rate-limit
+            // also throws HttpRequestException and must NOT read as "offline".
+            ConnectivityState.ReportSuccess();
         }
         catch (HttpRequestException ex)
         {

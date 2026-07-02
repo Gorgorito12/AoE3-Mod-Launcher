@@ -3076,6 +3076,31 @@ public static class Strings
             [LangEn] = "Up to date. Version {0}. Ready to play!",
             [LangEs] = "Todo al día. Versión {0}. ¡Listo para jugar!",
         },
+        // ---- Offline mode (observed connectivity) ----
+        ["OfflineChip"] = new()
+        {
+            [LangEn] = "Offline",
+            [LangEs] = "Sin conexión",
+        },
+        ["OfflineChipTooltip"] = new()
+        {
+            [LangEn] = "No internet connection. Installed mods are playable; online " +
+                       "features (updates, multiplayer, workshop) are unavailable until " +
+                       "you reconnect.",
+            [LangEs] = "Sin conexión a internet. Los mods instalados se pueden jugar; las " +
+                       "funciones en línea (actualizaciones, multijugador, catálogo) no " +
+                       "están disponibles hasta reconectar.",
+        },
+        ["OfflineNeedsInternet"] = new()
+        {
+            [LangEn] = "Requires an internet connection",
+            [LangEs] = "Necesita conexión a internet",
+        },
+        ["MpOfflineNotice"] = new()
+        {
+            [LangEn] = "You're offline. Multiplayer needs an internet connection.",
+            [LangEs] = "Sin conexión. El multijugador necesita conexión a internet.",
+        },
         // {0} = mod display name, {1} = current ver, {2} = latest ver,
         // {3} = official website URL (from the mod's catalog manifest).
         ["StatusVersionTooOld"] = new()

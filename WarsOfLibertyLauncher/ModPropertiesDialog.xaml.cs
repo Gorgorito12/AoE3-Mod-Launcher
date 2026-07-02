@@ -133,6 +133,7 @@ public partial class ModPropertiesDialog : Window
         LoadLanguage();
         LoadVersions();
         SetActiveTab(TabGeneralBtn);
+        ApplyConnectivityGate();
 
         // Window-size scaling (Controls/UiScale.cs): the content area (Row 1,
         // below the fixed header) shrinks to fit smaller dialogs. sizeSource is
@@ -780,6 +781,21 @@ public partial class ModPropertiesDialog : Window
         LoadGeneral();
         LoadLocalFiles();
         LoadUserData();
+    }
+
+    /// <summary>
+    /// Greys the dialog's explicit online-fetch actions (check-for-updates, refresh
+    /// translations) when the app is offline, matching the app-wide offline mode. The
+    /// version picker self-disables offline (no releases load), and "Check for updates"
+    /// otherwise degrades gracefully to cached state. Runs once at construction —
+    /// connectivity rarely flips during this short-lived dialog.
+    /// </summary>
+    private void ApplyConnectivityGate()
+    {
+        bool offline = Services.ConnectivityState.IsOffline;
+        object? tip = offline ? Strings.Get("OfflineNeedsInternet") : null;
+        if (CheckUpdatesBtn != null) { CheckUpdatesBtn.IsEnabled = !offline; CheckUpdatesBtn.ToolTip = tip; }
+        if (RefreshTranslationsBtn != null) { RefreshTranslationsBtn.IsEnabled = !offline; RefreshTranslationsBtn.ToolTip = tip; }
     }
 
     /// <summary>

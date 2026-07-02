@@ -404,6 +404,15 @@ public partial class MainWindow : Window
         // for both flows. Recomputed every time Launcher Settings closes.
         UpdateTrayIconVisibility();
 
+        // Offline mode: reflect the observed connectivity state (title-bar chip +
+        // greying online-only controls). Subscribe to the app-wide signal and apply
+        // the current state once now (online at startup until a call proves otherwise).
+        // Detach on real close (Closed, not OnClosing — the latter has minimize-to-tray
+        // / match-active early-returns that don't actually close the window).
+        ConnectivityState.OfflineChanged += OnConnectivityChanged;
+        Closed += (_, _) => ConnectivityState.OfflineChanged -= OnConnectivityChanged;
+        ApplyOfflineModeUi(ConnectivityState.IsOffline);
+
         // Check for --update-now flag from elevated relaunch
         var args = Environment.GetCommandLineArgs();
         bool autoUpdate = args.Any(a => string.Equals(a, "--update-now", StringComparison.OrdinalIgnoreCase));
@@ -422,6 +431,16 @@ public partial class MainWindow : Window
         Loaded += async (_, _) =>
         {
             LauncherUpdateService.CleanupOldVersion();
+
+            // Render the primary button from LOCAL install state before any network
+            // work, mirroring the mod-switch path (ReloadActiveServiceAsync 1126+1137).
+            // At cold start the button is otherwise Hidden until the (gated,
+            // possibly-skipped) startup check runs — so offline, OR with
+            // CheckUpdatesOnStartup off, PLAY would stay greyed for an already-installed
+            // mod. _updateService resolved InstallPath synchronously in the ctor, so
+            // this needs no await; the subsequent CheckAsync only refines it.
+            _modIsInstalled = !string.IsNullOrEmpty(_updateService.InstallPath);
+            UpdateGameUI();
 
             // CheckUpdatesOnStartup gates the four parallel network calls
             // that happen at boot. When the user has it off — typically
@@ -6044,8 +6063,13 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // Cache so the next visit to this mod is sync.
-            _checkResultCache[profileAtStart] = result;
+            // Cache so the next visit to this mod is sync — but NEVER cache a degraded
+            // offline result (network was unreachable), or the synchronous cache
+            // fast-path above would replay it all session and never surface the real
+            // updates once we're back online. ApplyCheckResult still runs either way,
+            // so PLAY renders from the local install state.
+            if (!result.Degraded)
+                _checkResultCache[profileAtStart] = result;
             ApplyCheckResult(result);
         }
         catch (OperationCanceledException)
@@ -8433,6 +8457,73 @@ public partial class MainWindow : Window
             SetPrimaryAction(_modIsInstalled ? PrimaryAction.Play : PrimaryAction.Install);
             if (!_isBusy)
                 SetStatus(Strings.Get("StatusGameClosed"));
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Offline mode (observed connectivity — Services/ConnectivityState)
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Fired (possibly off the UI thread) when the app-wide offline state flips.
+    /// Marshals to the dispatcher and re-applies the offline UI.
+    /// </summary>
+    private void OnConnectivityChanged()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnConnectivityChanged));
+            return;
+        }
+        ApplyOfflineModeUi(ConnectivityState.IsOffline);
+    }
+
+    /// <summary>
+    /// Reflects the observed offline state across the UI: shows the title-bar chip
+    /// and greys out the controls that REQUIRE internet (self-update pill, Workshop
+    /// catalog refresh, multiplayer). PLAY and local actions (open folder, logs)
+    /// stay enabled — installed mods remain playable offline. The update CTA isn't
+    /// touched here: offline, CheckAsync degrades to no-pending so it never renders
+    /// (see ApplyCheckResult), and SetBusy owns the Update button's enabled state.
+    /// </summary>
+    private void ApplyOfflineModeUi(bool offline)
+    {
+        if (OfflineChip != null)
+        {
+            OfflineChip.Content = Strings.Get("OfflineChip");
+            OfflineChip.ToolTip = Strings.Get("OfflineChipTooltip");
+            OfflineChip.Visibility = offline ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // The self-update pill points at a download that needs the network — hide it
+        // while offline. Don't force-show when online; its own check controls that.
+        if (offline && LauncherUpdatePill != null)
+            LauncherUpdatePill.Visibility = Visibility.Collapsed;
+
+        // Delegate to the views that own their own online-only controls. Strings are
+        // passed in (ModsBrowser doesn't import the Localization layer).
+        string needNet = Strings.Get("OfflineNeedsInternet");
+        ModsBrowserView?.SetOfflineMode(offline, needNet);
+        MultiplayerView?.SetOfflineMode(offline, needNet, Strings.Get("MpOfflineNotice"));
+    }
+
+    /// <summary>
+    /// The offline chip is a retry affordance: an explicit click re-probes the
+    /// network (self-update check + active-mod check), which reports success on
+    /// reconnect and clears the chip — so the user doesn't have to wait for the
+    /// periodic refresh / window-focus re-check.
+    /// </summary>
+    private async void OfflineChip_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // Self-update always hits GitHub (mod-mechanism independent) and reports
+            // connectivity; the active-mod check refreshes its state too.
+            await Task.WhenAll(CheckForLauncherUpdateAsync(), CheckAsync());
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Offline chip retry failed: {ex.Message}");
         }
     }
 

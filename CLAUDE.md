@@ -61,7 +61,9 @@ All commands run from `WarsOfLibertyLauncher/`.
 - **`build-release.ps1 -Version` accepts a WoL-style LETTER suffix and splits it
   across two assembly attributes — release builds MUST pass `-Version`.** The
   input is `MAJOR.MINOR.PATCH[LETTER]` validated by the regex
-  `^\d+\.\d+\.\d+[A-Za-z]?$` (so `1.0.5`, `1.0.5a`, even multi-letter `1.0.5abc`).
+  `^\d+\.\d+\.\d+[A-Za-z]?$` (so `1.0.5` or a single trailing letter like `1.0.5a`;
+  the `?` allows at most ONE letter, so `1.0.5abc` is rejected by validation — only the
+  numeric-core *stripping* step uses `[A-Za-z]+$`).
   Because `System.Version` is integers-only, the script publishes the **numeric
   core** (`1.0.5a` → `1.0.5`) into `-p:Version` / `-p:FileVersion` /
   `-p:AssemblyVersion`, and the **full string with the letter** into
@@ -431,7 +433,7 @@ don't go looking for it.)
   gracefully. **Why `KeyFileHashes` exists:** the launcher installs a byte-faithful
   copy of a canonical install, whose `data\` bytes never MD5-match any `UpdateInfo.xml`
   version, so the old MD5-vs-UpdateInfo detection couldn't identify a launcher install.
-  `UpdateService.DetectInstalledVersion` now falls through to `RecognizeFromManifest`
+  `UpdateService.DetectCurrentVersionAsync` now falls through to `RecognizeFromManifest`
   → the pure, testable `RecognizeFromManifestData` (`ManifestRecognitionTests`): the
   **baseline path** trusts the manifest's recorded `Version` **only if the 3 live MD5s
   still match `KeyFileHashes`** (drift → returns null, don't trust it); the **migration
@@ -741,6 +743,63 @@ don't go looking for it.)
   their own (the checkbox also reads unchecked then). Nothing is ever auto-applied;
   this is purely "stop nagging me". Caveat surfaced to the user in the hint string:
   skipping updates can break multiplayer version-match with other players.
+
+- **Offline mode is GLOBAL and the launcher stays playable with no internet — the
+  update-check NEVER throws on a network error, and the cold-start UI renders PLAY
+  from LOCAL state.** The launch engine + install detection are already 100% local;
+  the two things that used to break offline were (1) `UpdateService.CheckAsync`'s
+  WolPatcher branch fetched `UpdateInfo.xml` unguarded, so an offline throw discarded
+  the locally-computed `valid` and `MainWindow.CheckAsync`'s catch only showed
+  `Error: …` (PLAY stayed greyed for an installed WoL on a cold start), and (2) cold
+  start had no local-first button render (unlike the mod-switch path
+  `ReloadActiveServiceAsync`, which sets `_modIsInstalled` + `UpdateGameUI()` BEFORE
+  the check). Both fixed: **(a)** `CheckAsync` computes `InstallPath`/`valid` locally,
+  then wraps the WHOLE network core (`CheckCoreAsync`) in one try/catch — `catch
+  (OperationCanceledException) { throw; }` then a generic catch that does
+  `ct.ThrowIfCancellationRequested()` FIRST (the inner catch in
+  `UpdateInfoService.FetchAsync` is UNFILTERED and rewraps a cancellation as
+  `InvalidOperationException`, so without this guard a user-cancel reads as offline),
+  reports offline, and returns `BuildOfflineResult(valid)`. This is GLOBAL: it covers
+  every `ModUpdateMechanism` (the non-WolPatcher branches already short-circuit
+  locally and never throw), not a WoL special-case — mirrors
+  `LauncherUpdateService.CheckAsync`, which likewise never throws offline. The offline
+  `CheckResult` (pure, testable `BuildOfflineResultData`) sets `CurrentVersion` NON-null
+  when `valid` (cached `ModState.LastKnownVersion` → install-manifest `Version` → empty
+  marker) so the UI renders PLAY not Install, `LatestVersion == CurrentVersion` (clean
+  "up to date" status, not the misleading "reinstall from website"), `PendingDownloads`
+  empty (no manifest ⇒ no verifiable update ⇒ don't nag), and **`Degraded = true`**.
+  **`MainWindow.CheckAsync` MUST NOT cache a `Degraded` result** (`if (!result.Degraded)
+  _checkResultCache[...] = result`) — else the sync cache fast-path would replay the
+  stale offline result all session and never surface real updates after reconnect.
+  **(b)** The `Loaded` handler sets `_modIsInstalled` from `_updateService.InstallPath`
+  (resolved synchronously in the ctor) + `UpdateGameUI()` BEFORE the gated startup
+  check, so PLAY is live at cold start for ANY installed mod — this also fixes the
+  `CheckUpdatesOnStartup=false` case where the startup check is skipped entirely.
+  **Connectivity is OBSERVED, never probed** (`Services/ConnectivityState.cs`, static):
+  network code reports the outcome of calls it already makes — `ReportSuccess()` only
+  from a call that actually reached the net (`UpdateInfoService.FetchAsync` success,
+  `LauncherUpdateService.CheckAsync` after `SendAsync` returns — gated by a
+  `reachedServer` flag so a post-response HTTP error / cancel isn't "offline",
+  `ModCatalogService.FetchAsync` after the listing succeeds — the recurring call that
+  clears the chip on reconnect), `ReportFailure(ex)` only when `IsNetworkError(ex)`
+  (walks the inner-exception chain — the wrapper type isn't the signal, its inner
+  `HttpRequestException`/`SocketException`/timeout is). A probe was rejected: a
+  corporate proxy / TLS inspection / captive portal / active Radmin VPN adapter
+  produce false negatives that would wrongly disable online features for an ONLINE
+  user; observed never has that failure mode. **Don't report success unconditionally
+  from `CheckAsync`** — the non-WolPatcher branches do NO network, so that would
+  falsely read "online". UI: `MainWindow.ApplyOfflineModeUi` (subscribed to
+  `ConnectivityState.OfflineChanged`, marshalled to the dispatcher) toggles a title-bar
+  **offline chip** (overlay left of the notification bell, reuses the `MpStatusOffline`
+  brush; clicking it re-probes via self-update + active-mod check) and greys the
+  online-only controls — hides the self-update pill, and delegates to
+  `ModsBrowser.SetOfflineMode` (Workshop "Actualizar") /
+  `MultiplayerTab.SetOfflineMode` (sign-in/create/refresh, re-applied at the end of
+  `RefreshFromSession` so a session refresh can't silently re-enable them while
+  offline) / `ModPropertiesDialog.ApplyConnectivityGate` (check-updates + refresh
+  translations; the version picker self-disables offline). Strings are passed INTO
+  `ModsBrowser` (it doesn't import the Localization layer). Pinned by
+  `OfflineFallbackTests` (`BuildOfflineResultData` + `IsNetworkError`).
 
 - **Version picker (Mod Properties → General) is GitHubReleases-only and installs
   through the SHARED re-overlay path — not a new install flow.** For an installed

@@ -129,6 +129,9 @@ public class LauncherUpdateService
             $"Launcher self-update check. Current tag: '{lastInstalledTag ?? ""}', " +
             $"AssemblyVersion: {CurrentVersion}");
 
+        // Distinguishes "couldn't reach the server" (offline → report it) from "got a
+        // response but it was an HTTP error" (server-side / rate-limit → NOT offline).
+        bool reachedServer = false;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, GitHubApiUrl);
@@ -136,6 +139,8 @@ public class LauncherUpdateService
                 request.Headers.TryAddWithoutValidation("If-None-Match", cachedETag);
 
             using var response = await Http.SendAsync(request, ct);
+            reachedServer = true;
+            ConnectivityState.ReportSuccess();   // we reached the network
 
             // Latest release unchanged since last check — nothing to do, and we
             // keep the same ETag cached. Safe because any update the user hasn't
@@ -201,6 +206,10 @@ public class LauncherUpdateService
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Launcher update check failed: {ex.Message}");
+            // Only an actual connectivity failure (no response received) is "offline";
+            // a deliberate cancellation or a post-response HTTP error is not.
+            if (!reachedServer && !ct.IsCancellationRequested)
+                ConnectivityState.ReportFailure(ex);
             // Preserve the cached ETag so a transient failure doesn't force a
             // full (non-conditional) fetch on the next check.
             return NoUpdate(lastInstalledTag) with { ResponseETag = cachedETag };

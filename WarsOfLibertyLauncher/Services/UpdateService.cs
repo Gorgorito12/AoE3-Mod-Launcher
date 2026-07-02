@@ -255,15 +255,32 @@ public class UpdateService
     public Models.TranslationRevertNotice? LastTranslationRevertNotice { get; set; }
 
     /// <summary>Result of a check operation.</summary>
+    /// <param name="Degraded">
+    /// True when this result was synthesised from LOCAL state because the network
+    /// was unreachable (offline) — see <see cref="BuildOfflineResult"/>. The UI
+    /// applies it (so PLAY renders from the local install) but MUST NOT cache it, or
+    /// a later online re-check this session would replay the stale offline result and
+    /// never surface the real updates. Defaults to false: a normal online result.
+    /// </param>
     public record CheckResult(
         UpdateInfo Info,
         VersionInfo? CurrentVersion,
         VersionInfo? LatestVersion,
         List<DownloadInfo> PendingDownloads,
-        bool IsValidInstall);
+        bool IsValidInstall,
+        bool Degraded = false);
 
     /// <summary>
     /// Step 1: detect install + fetch manifest + figure out what needs updating.
+    ///
+    /// Offline-resilient by design: the LOCAL install detection never touches the
+    /// network, and the network-touching core is wrapped so that ANY connectivity
+    /// failure degrades to a local-state result (<see cref="BuildOfflineResult"/>)
+    /// instead of throwing. This is GLOBAL — it covers every
+    /// <see cref="ModUpdateMechanism"/>, present or future, not just the WoL patcher
+    /// that fetches a manifest today — so "the launcher works offline" holds for all
+    /// mods. Mirrors <c>LauncherUpdateService.CheckAsync</c>, which likewise never
+    /// throws on a network error.
     /// </summary>
     public async Task<CheckResult> CheckAsync(
         IProgress<string>? status = null,
@@ -271,11 +288,54 @@ public class UpdateService
     {
         DiagnosticLog.WriteSection("CheckAsync");
 
+        // Local-only detection (no network): compute it BEFORE the guarded core so
+        // `valid` — the on-disk truth — is available to the offline fallback.
         status?.Report(Strings.Format("StatusDetectingInstall", _profile.DisplayName));
         InstallPath = ResolveInstallPath();
         bool valid = !string.IsNullOrEmpty(InstallPath) && IsProfileInstalled(InstallPath);
         DiagnosticLog.Write($"Install path detected: '{InstallPath}' (valid: {valid})");
 
+        try
+        {
+            // "Online" is reported by the actual network calls (UpdateInfoService for
+            // WolPatcher, plus the catalog / self-update checks). The non-WolPatcher
+            // mechanisms short-circuit with NO network, so returning from the core is
+            // NOT evidence we reached the internet — don't report success here.
+            return await CheckCoreAsync(valid, status, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancellation surfaces as "cancelled", never "offline".
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // A cancellation that landed inside UpdateInfoService's UNFILTERED inner
+            // catch is rewrapped as InvalidOperationException; rethrow it as
+            // cancellation here so it isn't mistaken for offline.
+            ct.ThrowIfCancellationRequested();
+
+            // Network unreachable (offline / server down / proxy blocked): don't throw
+            // away the locally-known install. Record the observed offline state and
+            // return a local-only result so PLAY works and we simply don't offer
+            // updates we can't verify. Returning here also skips the version
+            // persistence in the core, so a good cached LastKnownVersion is preserved.
+            ConnectivityState.ReportFailure(ex);
+            DiagnosticLog.Write(
+                $"CheckAsync: network unreachable, degrading to local state: {ex.Message}");
+            return BuildOfflineResult(valid);
+        }
+    }
+
+    /// <summary>
+    /// The network-touching core of <see cref="CheckAsync"/>, split out so the public
+    /// method can wrap it in one try/catch and degrade ANY mechanism's network failure
+    /// to a local-state result. <paramref name="valid"/> is the already-computed
+    /// on-disk validity.
+    /// </summary>
+    private async Task<CheckResult> CheckCoreAsync(
+        bool valid, IProgress<string>? status, CancellationToken ct)
+    {
         // Short-circuit for mods that don't have a WoL-style updater (e.g.
         // Improvement Mod, which ships its own external patcher). We still
         // detect the install path so the PLAY button works and the gear
@@ -395,6 +455,54 @@ public class UpdateService
         }
 
         return new CheckResult(info, current, latest, pending, valid);
+    }
+
+    /// <summary>
+    /// Builds the local-only <see cref="CheckResult"/> returned when the network is
+    /// unreachable. Gathers the local inputs (cached ModState + install manifest) and
+    /// delegates to the pure <see cref="BuildOfflineResultData"/>.
+    /// </summary>
+    private CheckResult BuildOfflineResult(bool valid)
+    {
+        var state = _config.GetState(_profile.Id);
+        InstallManifest? manifest = null;
+        if (valid && !string.IsNullOrEmpty(InstallPath))
+        {
+            try { manifest = InstallManifest.TryLoad(InstallPath!); }
+            catch { /* best-effort local read; absence just means no manifest version */ }
+        }
+        var result = BuildOfflineResultData(state, manifest, valid);
+        // Keep the service's cached version properties consistent with what we surface.
+        CurrentVersion = result.CurrentVersion;
+        LatestVersion = result.LatestVersion;
+        return result;
+    }
+
+    /// <summary>
+    /// Pure construction of the offline <see cref="CheckResult"/> (no I/O, no
+    /// network), exposed internal for testing. When the install is valid,
+    /// CurrentVersion is non-null — preferring the cached LastKnownVersion, then the
+    /// install manifest's stamped version, then an empty marker — so the UI renders
+    /// PLAY (not Install) for an installed mod it simply couldn't version-check.
+    /// LatestVersion == CurrentVersion (we can't know a newer one offline, and equal
+    /// versions render a clean "up to date" status instead of a misleading "reinstall
+    /// from the website" one). PendingDownloads is empty: with no manifest we can't
+    /// compute or verify an update, so we don't nag about one. Degraded = true so the
+    /// caller does not cache it.
+    /// </summary>
+    internal static CheckResult BuildOfflineResultData(
+        ModState state, InstallManifest? manifest, bool valid)
+    {
+        VersionInfo? current = null;
+        if (valid)
+        {
+            string ver = state.LastKnownVersion;
+            if (string.IsNullOrEmpty(ver))
+                ver = manifest?.Version ?? "";
+            current = new VersionInfo { Ver = ver };
+        }
+        return new CheckResult(
+            new UpdateInfo(), current, current, new List<DownloadInfo>(), valid, Degraded: true);
     }
 
     /// <summary>

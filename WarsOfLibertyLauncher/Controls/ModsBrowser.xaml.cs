@@ -210,6 +210,19 @@ public partial class ModsBrowser : UserControl
     public string ListSummaryFormat { get; set; } = "Available mods ({0})";
 
     public string RefreshCatalogLabel { get => (string)(RefreshCatalogButton.Content ?? ""); set => RefreshCatalogButton.Content = value; }
+
+    /// <summary>
+    /// Greys the online catalog-refresh button while the app is offline (the rest of
+    /// the Workshop browses cached data fine). Strings are passed in — this control
+    /// doesn't import the Localization layer. Called by MainWindow from the app-wide
+    /// ConnectivityState signal.
+    /// </summary>
+    public void SetOfflineMode(bool offline, string needsInternetTooltip)
+    {
+        if (RefreshCatalogButton == null) return;
+        RefreshCatalogButton.IsEnabled = !offline;
+        RefreshCatalogButton.ToolTip = offline ? needsInternetTooltip : null;
+    }
     public string AddLocalModLabel { get => (string)(AddLocalModButton.Content ?? ""); set => AddLocalModButton.Content = value; }
     public string PublishModLabel { get => (string)(PublishModButton.Content ?? ""); set => PublishModButton.Content = value; }
     public string SubTabMyModsLabel { get => (string)(SubTabMyMods.Content ?? ""); set => SubTabMyMods.Content = value; }

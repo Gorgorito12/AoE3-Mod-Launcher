@@ -927,6 +927,56 @@ public partial class MultiplayerTab : UserControl
             SyncGlobalChat();
         });
 
+    // ------------------------------------------------------------------------
+    // Offline mode (driven by MainWindow from the app-wide ConnectivityState)
+    // ------------------------------------------------------------------------
+
+    private bool _offlineMode;
+    private string _offlineNeedsInternet = "";
+    private string _offlineNotice = "";
+
+    /// <summary>
+    /// Greys the multiplayer actions that need the network (sign-in, create room,
+    /// refresh rooms) while the app is offline, and restores them on reconnect.
+    /// Strings are passed in by MainWindow (from the localized keys). Multiplayer is
+    /// inherently online, so this is the whole tab's "you can't do this offline" gate;
+    /// the title-bar chip carries the global signal.
+    /// </summary>
+    public void SetOfflineMode(bool offline, string needsInternetTooltip, string offlineNotice)
+    {
+        _offlineMode = offline;
+        _offlineNeedsInternet = needsInternetTooltip;
+        _offlineNotice = offlineNotice;
+
+        if (offline)
+        {
+            ApplyOfflineDisable();
+        }
+        else
+        {
+            // Back online: drop our tooltips and let the session logic recompute the
+            // correct enabled states (don't force IsEnabled=true on a button that
+            // should stay disabled for another reason, e.g. CreateRoom while signed
+            // out). RefreshFromSession is the single source of those states.
+            if (SignInButton != null) SignInButton.ToolTip = null;
+            if (RefreshButton != null) { RefreshButton.IsEnabled = true; RefreshButton.ToolTip = null; }
+            if (CreateRoomButton != null) CreateRoomButton.ToolTip = null;
+            RefreshFromSession();
+        }
+    }
+
+    /// <summary>
+    /// Force-disables the online action buttons and explains why. Re-applied at the
+    /// end of <see cref="RefreshFromSession"/> so a session refresh can't silently
+    /// re-enable them while we're still offline.
+    /// </summary>
+    private void ApplyOfflineDisable()
+    {
+        if (SignInButton != null) { SignInButton.IsEnabled = false; SignInButton.ToolTip = _offlineNotice; }
+        if (RefreshButton != null) { RefreshButton.IsEnabled = false; RefreshButton.ToolTip = _offlineNeedsInternet; }
+        if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = false; CreateRoomButton.ToolTip = _offlineNeedsInternet; }
+    }
+
     /// <summary>
     /// Compares <c>_attachedSocket</c> with the session's current
     /// <see cref="MultiplayerSession.RoomSocket"/> and (un)subscribes
@@ -2025,6 +2075,10 @@ public partial class MultiplayerTab : UserControl
         }
 
         UpdateSubtabHighlights();
+
+        // Keep the online actions greyed while offline — RenderRoomsTab /
+        // ShowSignInPanel above may have re-enabled them based on session state.
+        if (_offlineMode) ApplyOfflineDisable();
     }
 
     private void RenderRoomsTab()

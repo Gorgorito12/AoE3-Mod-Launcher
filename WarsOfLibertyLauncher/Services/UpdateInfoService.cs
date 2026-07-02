@@ -41,13 +41,17 @@ public class UpdateInfoService
     {
         try
         {
-            return await FetchFromUrlAsync(primaryUrl, ct);
+            var info = await FetchFromUrlAsync(primaryUrl, ct);
+            ConnectivityState.ReportSuccess();   // reached the network
+            return info;
         }
         catch (Exception primaryEx) when (!ct.IsCancellationRequested)
         {
             try
             {
-                return await FetchFromUrlAsync(alternateUrl, ct);
+                var info = await FetchFromUrlAsync(alternateUrl, ct);
+                ConnectivityState.ReportSuccess();   // reached the network (mirror)
+                return info;
             }
             catch (Exception altEx)
             {

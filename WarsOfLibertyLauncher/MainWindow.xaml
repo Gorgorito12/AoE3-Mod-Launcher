@@ -539,6 +539,64 @@
         </controls:TitleBar>
 
         <!-- =============================================================
+             OFFLINE CHIP. Overlaid on the title bar (Grid.Row=0), to the
+             LEFT of the notification bell (inset clears the bell + caption
+             buttons). Visible only when ConnectivityState.IsOffline (driven
+             from code-behind). Reuses the MpStatusOffline brush; a colored
+             dot avoids depending on a specific Segoe MDL2 glyph. Click forces
+             a connectivity re-check so the user can retry without waiting for
+             the periodic refresh. IsHitTestVisibleInChrome so the window-drag
+             handler doesn't eat the click (same recipe as the bell/brand).
+             ============================================================= -->
+        <Grid Grid.Row="0"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Stretch"
+              Margin="0,0,200,0"
+              Panel.ZIndex="10"
+              shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Button x:Name="OfflineChip"
+                    Visibility="Collapsed"
+                    Cursor="Hand"
+                    VerticalAlignment="Center"
+                    Click="OfflineChip_Click"
+                    FontFamily="{DynamicResource BodyFont}"
+                    FontSize="{StaticResource FontSizeCaption}"
+                    ToolTipService.InitialShowDelay="400"
+                    ToolTipService.ShowDuration="8000">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="chipBorder"
+                                Background="#33201A18"
+                                BorderBrush="{DynamicResource MpStatusOffline}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusSm}"
+                                Padding="8,2">
+                            <!-- Label comes from the Button's Content (set in
+                                 code-behind) — an x:Name'd element inside a
+                                 ControlTemplate lives in its own namescope and
+                                 isn't reachable from code-behind, so we drive the
+                                 text through Content + ContentPresenter, like the
+                                 launcher-update pill above. -->
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                        TextElement.Foreground="{DynamicResource MpStatusOffline}">
+                                <Ellipse Width="8" Height="8"
+                                         Fill="{DynamicResource MpStatusOffline}"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,6,0"/>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="chipBorder" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </Grid>
+
+        <!-- =============================================================
              NOTIFICATION BELL (Steam-style). Overlaid on the title bar
              (Grid.Row=0), right-aligned and inset by the width of the 3
              caption buttons (ButtonWidth 46 × 3 = 138) so it sits just to
