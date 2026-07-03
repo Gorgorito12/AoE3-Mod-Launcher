@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace WarsOfLibertyLauncher.Models;
 
@@ -386,4 +388,88 @@ public class ModProfile
     /// same game version produce a matching hash and can share a lobby.
     /// </summary>
     public bool IsStockGame { get; set; } = false;
+
+    // ------------------------------------------------------------------
+    // Image-source resolvers.
+    //
+    // Disk-cache policy: only INSTALLED mods (plus the active/operating one)
+    // get their images written to the mod-asset cache — everything else is
+    // painted live from the catalog URL so browsing the Workshop can't fill
+    // the disk. These resolvers are the single fallback chain every UI
+    // surface goes through: cached local file → remote catalog URL (skipped
+    // while offline, so the UI falls straight to the packed icon / monogram
+    // instead of waiting on a download that will never finish) → packed
+    // pack:// resource → null (caller paints the monogram/gradient).
+    // ------------------------------------------------------------------
+
+    /// <summary>Icon for tiles, dialogs and room discs. Packed fallback is
+    /// <see cref="BannerImage"/> (the embedded WoL.ico for the built-in).</summary>
+    public string? ResolveIconSource()
+        => ResolveImageSource(LocalIconPath, IconUrl, BannerImage,
+            allowRemote: !Services.ConnectivityState.IsOffline);
+
+    /// <summary>Banner for the Workshop detail panel / active-mod header.
+    /// Deliberately NO packed fallback: a 256px .ico stretched to 1200×300
+    /// looks broken — callers fall back to the accent gradient instead.</summary>
+    public string? ResolveBannerSource()
+        => ResolveImageSource(LocalBannerPath, BannerUrl, packedFallback: null,
+            allowRemote: !Services.ConnectivityState.IsOffline);
+
+    /// <summary>
+    /// Effective dashboard hero list: rotating heroes → single hero → banner,
+    /// each preferring cached local files over the remote URLs. Empty means
+    /// "no hero at all" and the dashboard paints its neutral gradient.
+    /// </summary>
+    public IReadOnlyList<string> ResolveHeroSources()
+    {
+        bool allowRemote = !Services.ConnectivityState.IsOffline;
+        var rotating = ResolveImageSources(LocalHeroImagePaths, HeroImageUrls, allowRemote);
+        if (rotating.Count > 0) return rotating;
+        var single = ResolveImageSource(LocalHeroImagePath, HeroImageUrl, null, allowRemote)
+                     ?? ResolveImageSource(LocalBannerPath, BannerUrl, null, allowRemote);
+        return single != null ? new[] { single } : System.Array.Empty<string>();
+    }
+
+    /// <summary>Gallery sources for the detail panel: cached screenshots when
+    /// the mod is installed, the raw catalog URLs otherwise.</summary>
+    public IReadOnlyList<string> ResolveScreenshotSources()
+        => ResolveImageSources(LocalScreenshotPaths, ScreenshotUrls,
+            allowRemote: !Services.ConnectivityState.IsOffline);
+
+    /// <summary>
+    /// Core fallback chain, static with an explicit <paramref name="allowRemote"/>
+    /// so it stays unit-testable without touching the observed connectivity state.
+    /// </summary>
+    internal static string? ResolveImageSource(
+        string? localPath, string? remoteUrl, string? packedFallback, bool allowRemote)
+    {
+        if (!string.IsNullOrWhiteSpace(localPath) && File.Exists(localPath))
+            return localPath;
+        if (allowRemote && !string.IsNullOrWhiteSpace(remoteUrl))
+            return remoteUrl;
+        return string.IsNullOrWhiteSpace(packedFallback) ? null : packedFallback;
+    }
+
+    /// <summary>
+    /// List variant: cached local files win as a SET (a partially-cached list
+    /// paints the files that exist rather than mixing disk and network), else
+    /// the remote list, else empty.
+    /// </summary>
+    internal static IReadOnlyList<string> ResolveImageSources(
+        IReadOnlyList<string>? localPaths, IReadOnlyList<string>? remoteUrls, bool allowRemote)
+    {
+        if (localPaths is { Count: > 0 })
+        {
+            var locals = localPaths
+                .Where(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p))
+                .ToList();
+            if (locals.Count > 0) return locals;
+        }
+        if (allowRemote && remoteUrls is { Count: > 0 })
+        {
+            var remotes = remoteUrls.Where(u => !string.IsNullOrWhiteSpace(u)).ToList();
+            if (remotes.Count > 0) return remotes;
+        }
+        return System.Array.Empty<string>();
+    }
 }

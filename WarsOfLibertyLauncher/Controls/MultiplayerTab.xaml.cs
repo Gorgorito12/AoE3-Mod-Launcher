@@ -3665,9 +3665,12 @@ public partial class MultiplayerTab : UserControl
     private readonly Dictionary<string, ImageBrush> _roomModIconCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Resolve a room's mod icon (cached catalog icon.png → built-in packed
-    /// icon) to a frozen UniformToFill brush for the card's leading disc, or
-    /// null when the mod ships no resolvable icon (caller falls back to ★).
+    /// Resolve a room's mod icon (cached catalog icon.png → live remote URL →
+    /// built-in packed icon, via <see cref="ModProfile.ResolveIconSource"/>)
+    /// to a UniformToFill brush for the card's leading disc, or null when the
+    /// mod ships no resolvable icon (caller falls back to ★). A room for a mod
+    /// the user hasn't installed paints its icon straight from the catalog URL
+    /// — nothing is written to the mod-asset disk cache for it.
     /// Mirrors <c>CreateLobbyDialog.LoadIconBrush</c>.
     /// </summary>
     private ImageBrush? ResolveRoomModIcon(ModProfile? profile)
@@ -3675,10 +3678,7 @@ public partial class MultiplayerTab : UserControl
         if (profile == null) return null;
         if (_roomModIconCache.TryGetValue(profile.Id, out var cached)) return cached;
 
-        string? uri =
-            (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
-                ? profile.LocalIconPath
-                : (!string.IsNullOrEmpty(profile.BannerImage) ? profile.BannerImage : null);
+        string? uri = profile.ResolveIconSource();
         if (string.IsNullOrEmpty(uri)) return null;
 
         try
@@ -3689,9 +3689,18 @@ public partial class MultiplayerTab : UserControl
             bmp.DecodePixelWidth = 48; // disc is 24 logical px; cap the decoded copy
             bmp.UriSource = new Uri(uri, UriKind.Absolute);
             bmp.EndInit();
-            bmp.Freeze();
+            // A remote icon is still downloading here: it can't be frozen yet
+            // (unconditional Freeze throws) and, left unfrozen, the brush
+            // repaints itself when the download completes. Evict the memo on a
+            // failed download so the next quiet refresh retries.
+            if (bmp.IsDownloading)
+            {
+                var modId = profile.Id;
+                bmp.DownloadFailed += (_, _) => _roomModIconCache.Remove(modId);
+            }
+            if (bmp.CanFreeze) bmp.Freeze();
             var brush = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
-            brush.Freeze();
+            if (brush.CanFreeze) brush.Freeze();
             _roomModIconCache[profile.Id] = brush;
             return brush;
         }

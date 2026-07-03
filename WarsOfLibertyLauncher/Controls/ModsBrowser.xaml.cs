@@ -482,9 +482,10 @@ public partial class ModsBrowser : UserControl
 
         // 48x48 icon disc (smaller than the v0.9 cards) — leaves more
         // horizontal room for description + actions in the compact row.
-        // ResolveIconUri also covers built-ins' packed icon so WoL etc. show
-        // their real icon here instead of a letter monogram.
-        var iconBg = TryLoadImageBrush(ResolveIconUri(profile));
+        // ResolveIconSource also covers live catalog URLs (non-installed mods)
+        // and built-ins' packed icon so WoL etc. show their real icon here
+        // instead of a letter monogram.
+        var iconBg = TryLoadImageBrush(profile.ResolveIconSource());
         UIElement iconChild;
         Brush iconBack;
         if (iconBg != null)
@@ -770,8 +771,9 @@ public partial class ModsBrowser : UserControl
         var state = _stateProvider(profile);
         var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("CatalogBlue");
 
-        // Banner: prefer real banner image, fall back to gradient + monogram.
-        var bannerSource = TryLoadBitmap(profile.LocalBannerPath);
+        // Banner: cached local banner → live catalog URL, fall back to
+        // gradient + monogram.
+        var bannerSource = TryLoadBitmap(profile.ResolveBannerSource());
         if (bannerSource != null)
         {
             DetailBannerImage.Source = bannerSource;
@@ -787,7 +789,7 @@ public partial class ModsBrowser : UserControl
             DetailMonogramHero.Visibility = Visibility.Visible;
 
             // No banner: prefer the mod icon over the letter monogram.
-            var iconBrush = TryLoadImageBrush(ResolveIconUri(profile));
+            var iconBrush = TryLoadImageBrush(profile.ResolveIconSource());
             if (iconBrush != null)
             {
                 DetailMonogramHero.Background = iconBrush;
@@ -845,14 +847,16 @@ public partial class ModsBrowser : UserControl
     }
 
     /// <summary>
-    /// Builds the thumbnail strip + large viewer from the mod's cached
-    /// screenshot paths. Hides the whole section when the mod ships none.
+    /// Builds the thumbnail strip + large viewer from the mod's screenshot
+    /// sources — cached files for installed mods, live catalog URLs for
+    /// everything else (nothing is written to disk for those). Hides the
+    /// whole section when the mod ships none.
     /// </summary>
     private void BuildGallery(ModProfile profile)
     {
         ClearGallery();
-        var paths = profile.LocalScreenshotPaths;
-        if (paths is null || paths.Count == 0)
+        var paths = profile.ResolveScreenshotSources();
+        if (paths.Count == 0)
             return;
 
         DetailGallerySection.Visibility = Visibility.Visible;
@@ -884,8 +888,9 @@ public partial class ModsBrowser : UserControl
 
     /// <summary>
     /// Shows one screenshot in the large viewer. A <c>.gif</c> is animated via
-    /// XamlAnimatedGif (off its cached local path); everything else is a static
-    /// bitmap. The thumbnails stay static either way.
+    /// XamlAnimatedGif (off its cached local path or catalog URL — the library
+    /// downloads remote URIs itself); everything else is a static bitmap. The
+    /// thumbnails stay static either way.
     /// </summary>
     private void SelectGalleryShot(string path)
     {
@@ -1114,37 +1119,29 @@ public partial class ModsBrowser : UserControl
         return accent;
     }
 
-    /// <summary>
-    /// Icon URI for a profile: the cached catalog icon if it's on disk, else
-    /// the built-in packed icon (a <c>pack://</c> URI, e.g. WoL.ico), else
-    /// null → caller renders the letter monogram.
-    /// </summary>
-    private static string? ResolveIconUri(ModProfile profile)
-    {
-        if (!string.IsNullOrEmpty(profile.LocalIconPath) && File.Exists(profile.LocalIconPath))
-            return profile.LocalIconPath;
-        if (!string.IsNullOrEmpty(profile.BannerImage))
-            return profile.BannerImage;
-        return null;
-    }
-
     private static ImageBrush? TryLoadImageBrush(string? path)
     {
         var bmp = TryLoadBitmap(path);
         if (bmp is null) return null;
         var br = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
-        br.Freeze();
+        // A remote bitmap still downloading can't be frozen (and neither can a
+        // brush holding it); left unfrozen it repaints itself when the download
+        // completes, which is exactly what live-from-URL painting relies on.
+        if (br.CanFreeze) br.Freeze();
         return br;
     }
 
     private static BitmapImage? TryLoadBitmap(string? path, int decodeWidth = 0)
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
-        // Accept both on-disk cache files (catalog icon.png) and pack:// URIs
-        // (built-in packed resources like WoL.ico). Only a file path needs an
-        // existence check; a pack URI resolves against the assembly.
+        // Accept on-disk cache files (catalog icon.png), pack:// URIs (built-in
+        // packed resources like WoL.ico) AND http(s) catalog URLs — non-installed
+        // mods paint live from the URL instead of being cached to disk. Only a
+        // file path needs an existence check.
         bool isPack = path.StartsWith("pack:", StringComparison.OrdinalIgnoreCase);
-        if (!isPack && !File.Exists(path)) return null;
+        bool isHttp = path.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                      || path.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        if (!isPack && !isHttp && !File.Exists(path)) return null;
         try
         {
             var bmp = new BitmapImage();
@@ -1152,8 +1149,12 @@ public partial class ModsBrowser : UserControl
             bmp.CacheOption = BitmapCacheOption.OnLoad;
             // IgnoreImageCache so a screenshot/icon REPLACED under the same file
             // name (same path, new bytes) re-decodes from disk instead of
-            // serving WPF's stale per-URI cached bitmap.
-            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            // serving WPF's stale per-URI cached bitmap. Local files only: for a
+            // remote URL, WPF's in-memory per-URI cache is what dedupes the same
+            // icon across surfaces within the session — bypassing it would
+            // re-download on every render.
+            if (!isHttp)
+                bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
             // Cap the decode width so a 4K screenshot doesn't sit in RAM at full
             // ~33 MB — thumbnails need ~480, the big viewer ~1920. 0 = no cap
             // (icons/banners are already small). Skipped for .gif so the animated
@@ -1162,7 +1163,9 @@ public partial class ModsBrowser : UserControl
                 bmp.DecodePixelWidth = decodeWidth;
             bmp.UriSource = new Uri(path, UriKind.Absolute);
             bmp.EndInit();
-            bmp.Freeze();
+            // Remote downloads are async: Freeze() while IsDownloading throws and
+            // the image would never render. Unfrozen, it self-updates on completion.
+            if (bmp.CanFreeze) bmp.Freeze();
             return bmp;
         }
         catch

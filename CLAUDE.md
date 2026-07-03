@@ -1227,23 +1227,31 @@ Two cheap gates beyond a green build:
 
 - **Mod icons come from two different places — don't assume the catalog.**
   Community mods and the stock game (`aoe3-tad`) get their icon from the
-  catalog repo (`mods/<id>/icon.png` → `ModProfile.IconUrl` →
-  `ModAssetCacheService` caches it under
-  `%LocalAppData%\AoE3ModLauncher\mod-assets\` → `LocalIconPath`). The
+  catalog repo (`mods/<id>/icon.png` → `ModProfile.IconUrl`; INSTALLED/active
+  mods additionally get it cached by `ModAssetCacheService` under
+  `%LocalAppData%\AoE3ModLauncher\mod-assets\` → `LocalIconPath` — see the
+  disk-cache-policy gotcha below). The
   first-party **WoL built-in sets BOTH**: an `IconUrl` pointing at the catalog
   (`mods/wol/icon.png`) AND `BannerImage` = the `WoL.ico` **embedded in the
-  `.exe`** (a `<Resource>` in the `.csproj`). Resolution is `LocalIconPath`
-  (the catalog icon, once fetched/cached) → `BannerImage` (packed) → null =
-  letter monogram, so the catalog icon wins when present and the embedded
-  `WoL.ico` is the offline / 404 fallback — WoL's icon is editable from the
-  catalog (commit `mods/wol/icon.png`, no recompile) yet always renders even
-  with no network. That `IconUrl` is hardcoded on the built-in in `ModRegistry`;
-  the catalog `mods/wol/mod.json` is shadowed at runtime (id-collision rule
-  above), so a community PR editing that manifest can't redirect WoL's branding
-  — the override is the raw `icon.png` the hardcoded URL points at. Resolution
-  + loading go through `ResolveModIcon` (MainWindow) / `ResolveIconUri`
-  (ModsBrowser); `TryLoadBitmap` / `TryLoadTileImage` accept **both** on-disk
-  paths and `pack://` URIs. The resolved icon is painted on the dashboard hero
+  `.exe`** (a `<Resource>` in the `.csproj`). Resolution is centralized in
+  **`ModProfile.ResolveIconSource()`**: `LocalIconPath` (the cached catalog
+  icon, installed/active mods only) → `IconUrl` **painted live from the
+  network** (skipped while `ConnectivityState.IsOffline`) → `BannerImage`
+  (packed) → null = letter monogram — so the catalog icon wins when present
+  and the embedded `WoL.ico` is the offline / 404 fallback — WoL's icon is
+  editable from the catalog (commit `mods/wol/icon.png`, no recompile) yet
+  always renders even with no network. (`ResolveBannerSource` /
+  `ResolveHeroSources` / `ResolveScreenshotSources` are the sibling resolvers
+  for the other roles; the banner one deliberately has NO packed fallback — a
+  256px .ico stretched to 1200×300 looks broken. Pinned by
+  `ModProfileResolverTests`.) That `IconUrl` is hardcoded on the built-in in
+  `ModRegistry`; the catalog `mods/wol/mod.json` is shadowed at runtime
+  (id-collision rule above), so a community PR editing that manifest can't
+  redirect WoL's branding — the override is the raw `icon.png` the hardcoded
+  URL points at. Every icon surface calls `ModProfile.ResolveIconSource()`
+  (the old per-surface duplicates `ResolveModIcon`/`ResolveIconUri` are gone);
+  `TryLoadBitmap` / `TryLoadTileImage` accept on-disk paths, `pack://` URIs
+  **and http(s) URLs**. The resolved icon is painted on the dashboard hero
   (`DashboardIconHost`), the Workshop tiles / rows / detail header, the Mod
   Properties header (`HeaderIconHost`), the Create-room mod card **and its
   mod-dropdown items** (the latter via `ModProfileIconBrushConverter`, bound from
@@ -1286,11 +1294,17 @@ Two cheap gates beyond a green build:
   8 — see the catalog repo's `CLAUDE.md`/`mod.schema.json`). It flows
   `ModCatalogManifest.Screenshots` → `ModCatalogEntry.ScreenshotUrls` (resolved
   through the same anti-traversal `ResolveAssetUrl` as icon/banner) →
-  `ModProfile.ScreenshotUrls`, and is cached as `{modId}-shot-{i}{ext}`
+  `ModProfile.ScreenshotUrls`, and — for INSTALLED mods only (the strictest
+  tier of the disk-cache policy below: screenshots are the heavy role, up to
+  8×5 MB) — is cached as `{modId}-shot-{i}{ext}`
   (5 MB cap) by `ModAssetCacheService.GetScreenshotPathsAsync`. **It's lazy and
   separate from the icon/banner fetch:** screenshots download only when the
   detail panel opens (`MainWindow.EnsureScreenshotsAsync`, its OWN per-session
-  guard `_screenshotFetchAttempted`), never eagerly per card. The UI
+  guard `_screenshotFetchAttempted`), never eagerly per card. A NON-installed
+  mod's gallery paints live from the catalog URLs instead
+  (`ModProfile.ResolveScreenshotSources`) — nothing written to disk; a remote
+  GIF still animates (XamlAnimatedGif downloads remote URIs itself, at the
+  cost of a re-download per selection). The UI
   (`ModsBrowser`: `DetailGalleryStrip` thumbnails + the big `DetailGalleryViewer`
   Image) is **collapsed when the mod has no screenshots** (zero regression for
   old manifests / built-ins). **GIF animation is confined to the large viewer
@@ -1304,6 +1318,47 @@ Two cheap gates beyond a green build:
   detail close. (Localized via the `WorkshopGalleryTitle` key, passed into
   `ModsBrowser` as the `GalleryTitleText` property — `ModsBrowser` doesn't import
   `Localization`, so strings reach it as properties set in `ApplyLanguage`.)
+
+- **The mod-asset DISK cache is gated: only INSTALLED mods + the ACTIVE
+  dashboard mod (+ the mod with an op in flight) get images written to
+  `mod-assets\` — everything else paints LIVE from the catalog URL. Don't
+  re-widen the gate; browsing the Workshop must not fill the disk.**
+  `EnsureModAssetsAsync` early-returns on `!ShouldCacheAssetsToDisk(profile)`
+  (installed ‖ active ‖ `_operatingModId`; install-detection via
+  `IsProfileInstalledLocally`, the same rule `BuildModRowState` uses) and
+  `EnsureScreenshotsAsync` on `!IsProfileInstalledLocally` (stricter —
+  screenshots are the heavy role). **Both gates sit BEFORE the per-session
+  `_assetFetchAttempted`/`_screenshotFetchAttempted` guards on purpose:** an
+  ineligible mod must not consume its one attempt, so when it becomes eligible
+  later in the session (installed/activated) the same call sites re-enter and
+  the fetch actually runs. The eligibility TRIGGERS are: `BuildModCard` and
+  `RefreshActiveModBanner` kick `EnsureModAssetsAsync` **unconditionally**
+  (the old "only when the brush is null / asset missing" gates are gone —
+  with live URL painting the brush is never null, so they'd never re-fire for
+  a newly-installed mod; the internal gate + session guard keep it cheap),
+  and `InstallAsync`'s success tail clears BOTH session guards for the
+  installed mod (`service.Profile`, not the displayed one) and re-kicks.
+  Non-eligible mods flow through the `ModProfile.Resolve*Source()` resolvers
+  (see the icons gotcha) straight to `BitmapImage.UriSource = <https url>`,
+  which WPF downloads asynchronously: **`Freeze()` on a still-downloading
+  bitmap/brush THROWS and the image never renders — every loader must use
+  `if (x.CanFreeze) x.Freeze()`** (an unfrozen brush repaints itself when the
+  download completes, no `DownloadCompleted` handler needed), and
+  `IgnoreImageCache` is set for LOCAL paths only (for remote URLs, WPF's
+  in-memory per-URI cache is the per-session download dedupe — net8 WPF does
+  NOT use WinINet, so there is no OS-level HTTP cache; between sessions a
+  non-installed mod re-downloads its ~60 KB icon, the accepted cost). The
+  memo caches (`s_tileImageCache`, `_roomModIconCache`) subscribe
+  `DownloadFailed` to evict, so a transient network failure doesn't pin an
+  empty brush for the whole session. A one-time-per-launch migration sweep
+  (`PurgeNonEligibleModAssetsAsync`, called from the `Loaded` handler after
+  the catalog refresh — that call is the policy's single opt-out point)
+  `Clear()`s the cached assets old builds wrote for non-eligible mods; that's
+  a deterministic policy delete, NOT a violation of the offline-safe rule
+  below (which is about NETWORK errors). Offline UX: `Resolve*Source` skips
+  the URL step while `ConnectivityState.IsOffline`, so a non-installed mod
+  falls straight to packed icon / monogram instead of waiting on a download
+  that will never finish.
 
 - **The mod-asset cache is stale-while-revalidate: it reflects a catalog image
   being DELETED or REPLACED, and it's offline-safe — don't revert it to
@@ -1337,13 +1392,15 @@ Two cheap gates beyond a green build:
   with no `.meta` yet, or any failed/offline fetch, keeps serving the cached
   image and self-heals the meta on the next online launch); the only deletes are
   an explicit null URL (confirmed deletion) or a confirmed 200 replacement.
-  (b) **the bitmap loaders must `IgnoreImageCache`** — `TryLoadTileImage`
-  (MainWindow, plus its in-memory `s_tileImageCache` memo, invalidated by
-  `InvalidateTileImageCache`) and `TryLoadBitmap` (ModsBrowser) both set
-  `BitmapCreateOptions.IgnoreImageCache`, or a same-name replacement would repaint
-  WPF's stale per-URI cached bitmap. `BuildModCard` kicks `EnsureModAssetsAsync`
-  whenever the icon brush is null (not just when an `IconUrl` is present) so a mod
-  that dropped its ONLY image still purges the orphan. `PurgeRole`/`Clear` are
+  (b) **the bitmap loaders must `IgnoreImageCache` for LOCAL paths** —
+  `TryLoadTileImage` (MainWindow, plus its in-memory `s_tileImageCache` memo,
+  invalidated by `InvalidateTileImageCache`) and `TryLoadBitmap` (ModsBrowser)
+  both set `BitmapCreateOptions.IgnoreImageCache` for non-http sources, or a
+  same-name replacement would repaint WPF's stale per-URI cached bitmap
+  (deliberately NOT set for http URLs — see the disk-cache-policy gotcha
+  above). `BuildModCard` kicks `EnsureModAssetsAsync` unconditionally (gated
+  internally) so a mod that dropped its ONLY image still purges the orphan.
+  `PurgeRole`/`Clear` are
   anchored to the exact `{modId}-{role}.` prefix (so `Clear("wol")` can't sweep
   `wol-extra-*`); `GetScreenshotPathsAsync` purges surplus `shot-{i}` when a
   gallery shrinks; and `ModRegistry.ApplyMerged`'s `ClearVanishedAssets` wipes a
@@ -1363,9 +1420,10 @@ Two cheap gates beyond a green build:
   re-fetches online now (used to bypass the 24h TTL). (2)
   `MainWindow.RevalidateVisibleAssetsAsync(activeOnly)` clears the fetch guards
   and re-invokes `EnsureModAssetsAsync` per profile so its Phase-2 conditional
-  GETs re-run (detect 404→purge / 200→replace and repaint) — it must call
-  `EnsureModAssetsAsync` directly, NOT via `RefreshModCards`, because
-  `BuildModCard` only kicks the fetch when a card's icon is unloaded. Three
+  GETs re-run (detect 404→purge / 200→replace and repaint). Its loop over
+  `ModRegistry.All` self-limits: the disk-cache gate inside
+  `EnsureModAssetsAsync` filters non-installed mods, so the automatic triggers
+  generate no traffic/disk for mods the user doesn't have. Three
   triggers: the **Workshop "Actualizar" button** (`force:true` + revalidate ALL
   mods, **unconditional** — explicit user action); **window `Activated`**
   (throttle 60s, revalidate all + a forced catalog refresh if ≥5 min stale); a

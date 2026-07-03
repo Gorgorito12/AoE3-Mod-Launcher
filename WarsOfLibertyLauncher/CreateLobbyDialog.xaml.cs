@@ -193,17 +193,17 @@ public partial class CreateLobbyDialog : Window
     }
 
     /// <summary>
-    /// Resolve a mod's icon (cached catalog icon.png → built-in packed icon)
-    /// to a frozen UniformToFill brush. Shared with
+    /// Resolve a mod's icon (cached catalog icon.png → live remote URL →
+    /// built-in packed icon, via <see cref="ModProfile.ResolveIconSource"/>)
+    /// to a UniformToFill brush. Shared with
     /// <see cref="ModProfileIconBrushConverter"/> so the selected-mod card
-    /// disc and the dropdown items resolve icons identically.
+    /// disc and the dropdown items resolve icons identically. A remote icon
+    /// downloads async and can't be frozen mid-flight (unconditional Freeze
+    /// throws); unfrozen it repaints itself when the download completes.
     /// </summary>
     internal static System.Windows.Media.ImageBrush? LoadIconBrush(ModProfile profile)
     {
-        string? uri =
-            (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
-                ? profile.LocalIconPath
-                : (!string.IsNullOrEmpty(profile.BannerImage) ? profile.BannerImage : null);
+        string? uri = profile.ResolveIconSource();
         if (string.IsNullOrEmpty(uri)) return null;
         try
         {
@@ -212,12 +212,12 @@ public partial class CreateLobbyDialog : Window
             bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
             bmp.UriSource = new System.Uri(uri, System.UriKind.Absolute);
             bmp.EndInit();
-            bmp.Freeze();
+            if (bmp.CanFreeze) bmp.Freeze();
             var br = new System.Windows.Media.ImageBrush(bmp)
             {
                 Stretch = System.Windows.Media.Stretch.UniformToFill,
             };
-            br.Freeze();
+            if (br.CanFreeze) br.Freeze();
             return br;
         }
         catch
