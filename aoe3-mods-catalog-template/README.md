@@ -11,7 +11,7 @@ aoe3-mods-catalog-template/
 ├── .github/
 │   ├── scripts/
 │   │   ├── classify_pr.py          PR change classifier (tier1/2/3/invalid)
-│   │   └── validate_images.py      Icon and banner spec checks
+│   │   └── validate_images.py      Icon/banner/hero/screenshot spec checks
 │   └── workflows/
 │       └── auto-merge.yml          Orchestrates classify → validate → decide
 └── schema/
@@ -23,9 +23,9 @@ The workflow runs on every PR. It classifies the diff into one of four buckets:
 | Tier | What changed | Action |
 |---|---|---|
 | **invalid** | Touched files outside `/mods/`, multiple mods at once, or unknown filenames | PR is blocked with an explanatory comment |
-| **tier1** | Only cosmetic fields (`displayName`, `description`, `accentColor`, icons, banners) | Auto-merge after schema + image validation passes |
+| **tier1** | Only cosmetic fields (`displayName`, `description`, `accentColor`, icon, banner, single hero, screenshots) — image files must use the conventional names (`icon.png`, `banner.*`, `hero.*`, `screenshot1..8.*`) | Auto-merge after schema + image validation passes |
 | **tier2** | Only `approvedReleaseTag` bumped (and maybe tier1 alongside) | Auto-merge after validation passes |
-| **tier3** | Critical fields (`install.*`, `update.*`, `sourceRepo`, `id`, or first-time mod submission) | Labelled `needs-manual-review`; you approve manually |
+| **tier3** | Critical fields (`install.*`, `update.*` — including `followLatest` —, `sourceRepo`, `id`, `translations`, rotating `heroImages`, or first-time mod submission) | Labelled `needs-manual-review`; you approve manually |
 
 The intent is: **you only see the PRs that actually need a human decision**. Cosmetic edits and version bumps merge themselves.
 
@@ -81,10 +81,11 @@ Create `.github/CODEOWNERS`:
 
 ### 6. Add `CONTRIBUTING.md` for modders
 A short doc telling them:
-- The folder structure (`mods/<id>/{mod.json, icon.png, banner.png}` plus optional `hero*.jpg` / `screenshot1..8.*`)
+- The folder structure (`mods/<id>/{mod.json, icon.png, banner.png}` plus optional `hero.png/.jpg` / `screenshot1..8.*`)
 - The image specs (icon: 1:1, 256–1024 px PNG ≤1 MB; banner: 4:1, 1200–4800 px PNG/JPG ≤2 MB; hero: 16:9, 1920–3840 px PNG/JPG ≤5 MB; screenshots ≤5 MB). Dimensions validate by aspect + width range, so any size up to 4K passes.
 - The schema URL to point their editor at
-- That cosmetic and release-bump PRs auto-merge — **except hero/screenshot changes**: `classify_pr.py`'s `ALLOWED_ASSETS` whitelist only covers `icon.png` / `banner.*` / `mod.json`, so a PR adding or changing hero/screenshot files (or those manifest fields) lands in tier 3 (manual review) even though `validate_images.py` fully validates them
+- **Every image must be DECLARED in `mod.json` with the exact filename** (`"icon": "icon.png"`, `"heroImage": "hero.png"`, …) — uploading the file alone does nothing, and a declared name that doesn't match the real file (e.g. `hero.jpg` declared, `hero.png` uploaded) resolves to a 404 in the launcher
+- That cosmetic and release-bump PRs auto-merge, including single hero and screenshots (their conventional names are on `classify_pr.py`'s `ALLOWED_ASSETS` whitelist) — **except rotating `heroImages`**: their filenames are free-form, so those PRs land in tier 3 (manual review) even though `validate_images.py` fully validates them
 
 The validation workflow + schema make this template enforce most of the rules automatically; CONTRIBUTING.md is mostly for ergonomics.
 
@@ -133,10 +134,17 @@ The single source of truth for what counts as tier 1/2/3 is at the top of `.gith
 
 ```python
 TIER_1_FIELDS = {"displayName", "subtitle", "description", "accentColor",
-                 "author", "officialWebsite", "icon", "banner"}
+                 "author", "officialWebsite", "icon", "banner",
+                 "heroImage", "screenshots"}
 TIER_2_FIELDS = {"approvedReleaseTag"}
 TIER_3_FIELDS = {"id", "sourceRepo", "install", "update", "translations"}
 ```
+
+Asset files are gated separately by `ALLOWED_ASSETS` (same script): only the
+conventional names (`icon.png`, `banner.*`, `hero.*`, `screenshot1..8.*`,
+`mod.json`) can ride a tier-1 PR — any other file in a mod folder forces
+tier 3. If you add a schema field that references new asset files, add their
+exact names there too, or asset-only PRs stop auto-merging.
 
 **Be conservative when reclassifying down (3 → 2 or 2 → 1).** Anything that controls what the launcher executes or downloads must stay in tier 3 — that's the security boundary.
 
@@ -149,4 +157,5 @@ Adding new schema fields? Add them to one of the three sets here, otherwise the 
 - **The workflow doesn't approve PRs.** It enables auto-merge; the actual merge happens because branch protection requires status checks (not approvals). If you DO want approvals required, you'll need a separate bot account or a GitHub App, since `GITHUB_TOKEN` cannot approve PRs by design.
 - **First-time mod submissions are always tier 3.** The script forces this regardless of what fields the manifest declares — a maintainer must vet new authors. After the first merge, subsequent PRs from the same modder follow normal classification.
 - **The classifier reads the diff, not the contents of the new mod.json alone.** A PR that only changes `accentColor` from `#ff0000` to `#ff0001` is tier 1; a PR that "rewrites" the same `accentColor` value (no actual change) doesn't trigger anything. This matters because some clients write a no-op diff when the file is touched but content is unchanged — those are no-ops by construction.
-- **Image validation is strict on dimensions.** A 257×257 icon fails. If you want to allow tolerance (e.g. ±2 px), edit `validate_images.py`.
+- **Image validation is by aspect ratio + width range, not exact size.** An icon passes if it's square (±2%) and 256–1024 px wide; banner/hero likewise validate shape + range (±3%). A wrong shape or an out-of-range width fails; to loosen the tolerances, edit the spec tuples at the top of `validate_images.py`.
+- **Only DECLARED images are validated.** `validate_images.py` checks the files referenced by `mod.json`; an uploaded file that nothing declares is ignored by both the validator and the launcher (see the CONTRIBUTING point above — every image must be declared with its exact filename).

@@ -142,7 +142,12 @@ with the real constraints the schema enforces.
 
 > Dimensions are validated by **aspect ratio + a width range**, not a single exact size — so any resolution up to 4K passes as long as the shape is right.
 
-> **Auto-merge note:** icon and banner edits auto-merge (tier 1), but PRs that add or change **hero images or screenshots** (the fields or the files) currently require **human review** (tier 3) — see §6.3.
+> **Auto-merge note:** icon, banner, single hero and screenshot edits all
+> auto-merge (tier 1) as long as the files use the conventional names
+> (`icon.png`, `banner.*`, `hero.*`, `screenshot1..8.*`). The one exception
+> is **rotating `heroImages`**: their filenames are free-form, so they are
+> not on the auto-merge asset whitelist and require human review (tier 3) —
+> see §6.3.
 
 The files live in `mods/<your-id>/` next to `mod.json`. The launcher
 resolves `icon: "icon.png"` to
@@ -577,7 +582,7 @@ touches:
 | Tier | Fields modified | Action |
 |---|---|---|
 | **invalid** | Files outside `/mods/`, multiple mods at once, malformed JSON, unknown filenames | PR is blocked with an explanatory comment |
-| **tier1** | Only: `displayName`, `subtitle`, `description`, `accentColor`, `author`, `officialWebsite`, `icon`, `banner` | **Auto-merge** after validation |
+| **tier1** | Only: `displayName`, `subtitle`, `description`, `accentColor`, `author`, `officialWebsite`, `icon`, `banner`, `heroImage`, `screenshots` | **Auto-merge** after validation |
 | **tier2** | Only: `approvedReleaseTag` (version bump) | **Auto-merge** after validation |
 | **tier3** | Anything in: `id`, `sourceRepo`, `install.*`, `update.*`, `translations`, OR a first-time submission | Labelled `needs-manual-review` + comment; maintainer reviews manually |
 
@@ -585,13 +590,14 @@ What this means for you as a modder:
 
 - **Your first submission is always tier 3.** Expect to wait for
   review.
-- **Changing icon / banner / text** later: auto-merge within minutes.
-- **Hero images and screenshots are the exception**: adding or changing
-  `heroImage(s)` / `screenshots` — the manifest fields **or** the image
-  files — is classified tier 3 (human review). The auto-merge asset
-  whitelist only covers `icon.png` / `banner.*` / `mod.json` tier-1
-  fields; CI still *validates* hero/screenshot images, it just doesn't
-  auto-merge them.
+- **Changing icon / banner / hero / screenshots / text** later:
+  auto-merge within minutes, as long as the image files use the
+  conventional names on the asset whitelist (`icon.png`, `banner.*`,
+  `hero.*`, `screenshot1..8.*`).
+- **Rotating `heroImages` are the exception**: their filenames are
+  free-form, so the field and its files are not on the auto-merge
+  whitelist and land in tier 3 (human review). CI still *validates*
+  them, it just doesn't auto-merge.
 - **Shipping a new version** (bumping `approvedReleaseTag`):
   auto-merge.
 - **Changing URLs, hashes, or `install.*`**: human review, always. This
