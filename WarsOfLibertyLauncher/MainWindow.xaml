@@ -1047,21 +1047,56 @@
                              behind when no version is known (fresh
                              machine before CheckAsync ran, or for mods
                              that haven't been installed yet). -->
-                        <Border x:Name="DashboardVersionChip"
-                                HorizontalAlignment="Left"
-                                Margin="0,10,0,0"
-                                Padding="10,3"
-                                CornerRadius="{StaticResource RadiusLg}"
-                                BorderBrush="{DynamicResource StatusInstalledFg}"
-                                BorderThickness="1"
-                                Background="{DynamicResource StatusInstalledBg}"
-                                Visibility="Collapsed">
-                            <TextBlock x:Name="DashboardVersionText"
-                                       FontFamily="{DynamicResource DisplayFont}"
-                                       FontSize="11"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource StatusInstalledFg}"/>
-                        </Border>
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,10,0,0">
+                            <Border x:Name="DashboardVersionChip"
+                                    Padding="10,3"
+                                    VerticalAlignment="Center"
+                                    CornerRadius="{StaticResource RadiusLg}"
+                                    BorderBrush="{DynamicResource StatusInstalledFg}"
+                                    BorderThickness="1"
+                                    Background="{DynamicResource StatusInstalledBg}"
+                                    Visibility="Collapsed">
+                                <TextBlock x:Name="DashboardVersionText"
+                                           FontFamily="{DynamicResource DisplayFont}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource StatusInstalledFg}"/>
+                            </Border>
+                            <!-- Active-copy chip: only visible when the mod has 2+ installed
+                                 copies (HasMultipleInstalls). Shows the active copy's real
+                                 FOLDER name so the user always knows which copy they'll play;
+                                 clicking it opens the same copy switcher as the MODS button
+                                 (reuses DashboardChangeModButton_Click, anchored to this chip). -->
+                            <Button x:Name="DashboardCopyChip"
+                                    Style="{StaticResource DashboardSecondaryButton}"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Padding="10,3"
+                                    Background="{DynamicResource TintGoldHover}"
+                                    BorderBrush="{DynamicResource AccentBrush}"
+                                    BorderThickness="1"
+                                    Visibility="Collapsed"
+                                    Click="DashboardChangeModButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8B7;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,6,0"
+                                               Foreground="{DynamicResource AccentBrush}"/>
+                                    <TextBlock x:Name="DashboardCopyText"
+                                               FontFamily="{DynamicResource DisplayFont}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxWidth="260"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
                         <!-- Description copy: SecondaryFixed (#d2e4fb)
                              — bright cool body tone so the paragraph
                              reads against the dim hero background

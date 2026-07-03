@@ -737,15 +737,29 @@ Two cheap gates beyond a green build:
   `Directory.Exists` and collapses the whole "Installed copies" section when no live
   extra copy remains, so a deleted-folder phantom disappears WITHOUT being purged from
   config (a disconnected external drive re-appears when reconnected); (3) **manual
-  remove** — each non-active row has a ✕ button → `ModState.RemoveInstall(id)` +
-  `Save()` that only forgets the registration (does NOT delete files — that's
-  Uninstall; string `RemoveInstallCopy`). Registration also dedups: `BrowseButton_Click`
+  remove** — `ModState.RemoveInstall(id)` + `Save()` only forgets the registration
+  (does NOT delete files — that's Uninstall; string `RemoveInstallCopy`). The
+  **switcher popup (`AppendInstallCopiesToModPopup`) is a pure copy SELECTOR — every
+  row just switches, it has NO ✕ remove button** (that was deliberately dropped: quick
+  copy-switching and destructive housekeeping are separate concerns). Removing a
+  registered copy lives ONLY in ModProperties → LOCAL FILES → "Manage installs" (the
+  `Remove` button, `RemoveInstallBtn`). Registration also dedups: `BrowseButton_Click`
   ("change mod folder") drops any `OtherInstalls` entry equal to the new active path,
   and the `addNewSlot` rotation guard compares via `PathEquals` and removes a stale
   entry equal to the new active folder. **Don't hard-prune non-existent copies on load**
   (the disconnected-drive footgun) and don't reintroduce a folder-name compare — use
   `ModState.PathEquals` (`Path.GetFullPath` + `OrdinalIgnoreCase` + trimmed separators).
   Pinned by `MultiInstallModelTests`.
+  **The dashboard hero shows which copy is ACTIVE via a chip next to the version chip —
+  ONLY when `HasMultipleInstalls`.** `RefreshActiveCopyChip` (`MainWindow`) fills
+  `DashboardCopyChip`/`DashboardCopyText` with the active copy's real folder leaf
+  (`CopyDisplayLabel(null, _updateService.InstallPath)`); a single-install mod (and the stock
+  game) hides it, so the hero is byte-for-byte the old look for the common case. The chip is
+  a `Button` reusing `DashboardChangeModButton_Click` (opens the same copy switcher, anchored
+  to the chip). It's refreshed everywhere the version chip is (the two `DashboardVersionChip`
+  sites) plus after `SwitchActiveInstallAsync` so it tracks the active copy live. Tooltip
+  `DashboardActiveCopyTooltip`. So the user always knows which copy PLAY will launch without
+  opening the MODS popup.
   **Switcher LABELS are folder-leaf-derived and disambiguated at display.** A copy's
   label defaults to its install-folder leaf (`ActiveInstallLabel`/`ModInstall.Label`), and
   `MakeUniqueInstallFolder` only guarantees full-PATH uniqueness within one parent — two

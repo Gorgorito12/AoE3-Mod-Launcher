@@ -1305,6 +1305,9 @@ public partial class MainWindow : Window
         catch (Exception ex) { DiagnosticLog.Write($"Config save after install switch failed: {ex.Message}"); }
 
         await ReloadActiveServiceAsync(isModSwitch: false);
+        // The active copy just changed — reflect the new folder in the hero's copy chip
+        // immediately (independent of whichever render path the reload took).
+        RefreshActiveCopyChip();
     }
 
     /// <summary>
@@ -2195,6 +2198,8 @@ public partial class MainWindow : Window
         // Sidebar text (status box, actions, game footer, tabs)
         ModsBarLabel.Text = Strings.Get("ModsBarLabel");
         ActionPanelControl.ActionsLabel.Text = Strings.Get("ActionsLabel");
+        if (DashboardCopyChip != null)
+            DashboardCopyChip.ToolTip = Strings.Get("DashboardActiveCopyTooltip");
         // The "INSTALLED VERSION / LATEST AVAILABLE" labels lived in the
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
@@ -2586,6 +2591,7 @@ public partial class MainWindow : Window
                 DashboardVersionChip.Visibility = Visibility.Collapsed;
             }
         }
+        RefreshActiveCopyChip();
 
         // ---- AoE3 missing row ----
         if (!aoe3Detected)
@@ -3052,6 +3058,7 @@ public partial class MainWindow : Window
                 DashboardVersionChip.Visibility = Visibility.Collapsed;
             }
         }
+        RefreshActiveCopyChip();
 
         // Lazy fetch: the active profile may have a banner OR hero image
         // that hasn't been cached yet. Kicking the download here means
@@ -5057,6 +5064,30 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Shows/updates the dashboard hero's "active copy" chip. Only visible when the
+    /// active mod has 2+ registered copies (HasMultipleInstalls) — for a single install
+    /// the folder name is redundant with the title, so the chip stays hidden and the hero
+    /// looks exactly as before. The label is the ACTIVE copy's real folder leaf (same
+    /// CopyDisplayLabel source the switcher uses), so the user always knows which copy PLAY
+    /// will launch. Clicking the chip opens the same copy switcher as the MODS button.
+    /// </summary>
+    private void RefreshActiveCopyChip()
+    {
+        if (DashboardCopyChip == null) return;
+        var st = _config.GetActiveState();
+        var path = _updateService?.InstallPath;
+        if (st.HasMultipleInstalls && !string.IsNullOrWhiteSpace(path))
+        {
+            DashboardCopyText.Text = CopyDisplayLabel(null, path);
+            DashboardCopyChip.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            DashboardCopyChip.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
     /// Friendly label for an install copy: its explicit user label, else the
     /// install folder's leaf name.
     /// </summary>
@@ -5083,7 +5114,7 @@ public partial class MainWindow : Window
         // Only show copies whose folder still exists on disk. A registration whose
         // folder was deleted outside the launcher (a "phantom") must not appear — but
         // the entry stays in config (a disconnected drive re-appears when reconnected);
-        // the user can forget it permanently with the row's remove button.
+        // the user can forget it permanently from Properties → Local files → "Manage installs".
         var liveOthers = new List<ModInstall>();
         foreach (var o in state.OtherInstalls)
         {
@@ -5194,46 +5225,10 @@ public partial class MainWindow : Window
                 if (!isAct) await SwitchActiveInstallAsync(id);
             };
 
-            if (isAct)
-            {
-                stack.Children.Add(btn);
-                continue;
-            }
-
-            // A non-active copy gets a "remove from list" ✕ beside its switch button.
-            // This only forgets the registration — it does NOT delete files on disk
-            // (that's Uninstall). Lives OUTSIDE the switch button so clicking ✕ doesn't
-            // also switch to the copy.
-            var rowGrid = new System.Windows.Controls.Grid();
-            rowGrid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-            { Width = new GridLength(1, GridUnitType.Star) });
-            rowGrid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-            { Width = GridLength.Auto });
-            System.Windows.Controls.Grid.SetColumn(btn, 0);
-            rowGrid.Children.Add(btn);
-
-            var removeBtn = new System.Windows.Controls.Button
-            {
-                Style = (Style)FindResource("SidebarSecondaryButton"),
-                Content = "", // ✕ (Cancel)
-                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                FontSize = 11,
-                Width = 30,
-                Padding = new Thickness(0),
-                Margin = new Thickness(4, 2, 0, 2),
-                VerticalAlignment = VerticalAlignment.Stretch,
-                Background = System.Windows.Media.Brushes.Transparent,
-                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                ToolTip = Strings.Get("RemoveInstallCopy"),
-            };
-            System.Windows.Controls.Grid.SetColumn(removeBtn, 1);
-            removeBtn.Click += (_, _) =>
-            {
-                if (state.RemoveInstall(id)) _config.Save();
-                popup.IsOpen = false; // reopening rebuilds the list (and collapses if empty)
-            };
-            rowGrid.Children.Add(removeBtn);
-            stack.Children.Add(rowGrid);
+            // The switcher popup is a pure copy SELECTOR: every row just switches.
+            // Forgetting a registered copy (the remove-from-list action) lives only
+            // in Properties > Local files > "Manage installs", not here.
+            stack.Children.Add(btn);
         }
     }
 

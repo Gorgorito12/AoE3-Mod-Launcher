@@ -651,6 +651,12 @@ public static class Strings
             [LangEn] = "MODS",
             [LangEs] = "MODS",
         },
+        // Tooltip on the hero's active-copy chip (shown only with 2+ installed copies).
+        ["DashboardActiveCopyTooltip"] = new()
+        {
+            [LangEn] = "Active copy — click to switch",
+            [LangEs] = "Copia activa — clic para cambiar",
+        },
         // Header caption for the cinema-dashboard gear popup (the
         // redesigned per-mod settings menu that replaced the legacy
         // WPF ContextMenu with a MODS-style popup + sub-views).
