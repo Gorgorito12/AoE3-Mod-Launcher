@@ -99,18 +99,19 @@ public static class DeltaPatchService
 
     /// <summary>
     /// Pick the single-hop patch from a set of candidate descriptors: the one whose
-    /// <c>toTag</c> is the approved tag AND whose <c>fromTag</c> is the installed tag
+    /// <c>toTag</c> is the update's target tag (the approved tag, or the resolved latest
+    /// for follow-latest mods) AND whose <c>fromTag</c> is the installed tag
     /// (case-insensitive). Null when none matches (fresh install, version skip, or the mod
     /// ships no matching patch) — caller falls back to full. Pure — unit-tested.
     /// </summary>
     public static DeltaPatchDescriptor? SelectPatch(
-        IEnumerable<DeltaPatchDescriptor> candidates, string? installedTag, string approvedTag)
+        IEnumerable<DeltaPatchDescriptor> candidates, string? installedTag, string targetTag)
     {
-        if (string.IsNullOrWhiteSpace(installedTag) || string.IsNullOrWhiteSpace(approvedTag))
+        if (string.IsNullOrWhiteSpace(installedTag) || string.IsNullOrWhiteSpace(targetTag))
             return null;
         return candidates.FirstOrDefault(d =>
             d != null
-            && string.Equals(d.ToTag, approvedTag, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(d.ToTag, targetTag, StringComparison.OrdinalIgnoreCase)
             && string.Equals(d.FromTag, installedTag, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -216,24 +217,26 @@ public static class DeltaPatchService
     // ---------------------------------------------------------------- consumer: discover + pre-verify
 
     /// <summary>
-    /// Discover a single-hop patch for <paramref name="approvedTag"/> whose <c>fromTag</c> equals
-    /// <paramref name="installedTag"/>, download + hash-verify its zip, and pre-verify it against
-    /// the install. Returns a prepared patch (local zip path + descriptor) or null → full fallback.
-    /// Never throws for a "no delta" condition — any problem returns null.
+    /// Discover a single-hop patch for <paramref name="targetTag"/> (the update's target —
+    /// the approved tag, or the resolved latest for follow-latest mods) whose <c>fromTag</c>
+    /// equals <paramref name="installedTag"/>, download + hash-verify its zip, and pre-verify
+    /// it against the install. Returns a prepared patch (local zip path + descriptor) or
+    /// null → full fallback. Never throws for a "no delta" condition — any problem returns
+    /// null. The target is a PARAMETER (not read from <paramref name="gh"/>) so the caller
+    /// decides the policy and this service stays decoupled from the catalog pin.
     /// </summary>
     public static async Task<PreparedPatch?> TryPrepareAsync(
-        GitHubReleasesSettings gh, string? installedTag, string installPath,
+        GitHubReleasesSettings gh, string? installedTag, string targetTag, string installPath,
         InstallManifest? manifest, IReadOnlyList<string>? coveredFiles, CancellationToken ct)
     {
         try
         {
-            var approvedTag = gh.ApprovedReleaseTag ?? "";
-            if (string.IsNullOrWhiteSpace(installedTag) || string.IsNullOrWhiteSpace(approvedTag)) return null;
-            if (string.Equals(installedTag, approvedTag, StringComparison.OrdinalIgnoreCase)) return null; // nothing to do
+            if (string.IsNullOrWhiteSpace(installedTag) || string.IsNullOrWhiteSpace(targetTag)) return null;
+            if (string.Equals(installedTag, targetTag, StringComparison.OrdinalIgnoreCase)) return null; // nothing to do
             if (manifest == null || !VerifyService.HasFileHashes(manifest)) return null; // need a hash baseline
 
-            // 1. List the approved release's assets (one API call, reused by the caller's full path too).
-            var assets = await new GitHubReleaseDownloader().ListAssetsAsync(gh.SourceRepo, approvedTag, ct);
+            // 1. List the target release's assets (one API call, reused by the caller's full path too).
+            var assets = await new GitHubReleaseDownloader().ListAssetsAsync(gh.SourceRepo, targetTag, ct);
             if (assets == null || assets.Count == 0) return null;
 
             // 2. Download every `patch-*.json` on the release and parse — pick by from/to tags.
@@ -252,7 +255,7 @@ public static class DeltaPatchService
                 catch (Exception ex) { DiagnosticLog.Write($"Delta descriptor parse failed ({a.Name}): {ex.Message}"); }
             }
 
-            var descriptor = SelectPatch(descriptors, installedTag, approvedTag);
+            var descriptor = SelectPatch(descriptors, installedTag, targetTag);
             if (descriptor == null) return null;
             if (descriptor.Changed.Count == 0 && descriptor.Deleted.Count == 0) return null;
             if (descriptor.Changed.Count > MaxChangedFiles) return null;

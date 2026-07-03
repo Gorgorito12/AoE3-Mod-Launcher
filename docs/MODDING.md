@@ -216,7 +216,7 @@ max per language.
 | Field | When to use |
 |---|---|
 | `sourceRepo` | `owner/repo` of your GitHub repository. **Required** if `update.mechanism = GitHubReleases`. Informational for other mechanisms. |
-| `approvedReleaseTag` | Approved release tag for `GitHubReleases`. Bumping this is the normal way to ship a new version (auto-merge, §6). |
+| `approvedReleaseTag` | Approved release tag for `GitHubReleases`. Bumping this is the normal way to ship a new version (auto-merge, §6) — unless your mod opts into `update.github.followLatest` (§5.1), in which case it stays as the first-install seed + API-failure fallback and you rarely touch it again. |
 | `installProductGuid` | Stable Add/Remove Programs key (`HKLM\…\Uninstall\<here>`). If you have a pre-existing installer with its own GUID, put it here to stay compatible. Otherwise omit and the launcher derives `<id>_launcher`. |
 | `userDataFolder` | Folder name under `Documents\My Games\<here>\` where your mod stores saves/replays. When set, the launcher enables the pre-install backup prompt and exposes "Open / Create backup / Restore backup" in the gear menu. Omit if your mod reuses vanilla AoE3's user-data folder. |
 | `translations` | `{ "repo": "owner/repo", "folderRepo": "owner/repo", "coveredFiles": [...] }` so the launcher lists community translations. `folderRepo` hosts packs as **files** under `translations/<id>/` on main (recommended); `repo` hosts them as **releases** (legacy). The launcher reads BOTH (dual mode). Only meaningful if your mod uses the same overlay scheme as WoL (files under `data\`). See §8.x below. |
@@ -342,6 +342,44 @@ The literal `{tag}` is replaced with `approvedReleaseTag` at download
 time. **`externalAssetSha256` is mandatory** when you set the template
 — the launcher refuses to install from an external host without a
 hash, because GitHub no longer underwrites the authenticity.
+
+#### Follow latest (`update.github.followLatest`)
+
+If bumping `approvedReleaseTag` per release feels like overhead, opt
+into **follow-latest**: the launcher resolves your mod's latest version
+from `GET /repos/{sourceRepo}/releases/latest` — the same mechanism the
+launcher uses for its own self-update — and offers/installs it with
+**no catalog PR per version**. You publish a release, users get it.
+
+```json
+"sourceRepo": "youruser/your-mod",
+"approvedReleaseTag": "v1.0",
+"update": {
+  "mechanism": "GitHubReleases",
+  "github": { "followLatest": true }
+}
+```
+
+Rules and trade-offs:
+
+- **Stable releases only.** The `/releases/latest` endpoint excludes
+  drafts and prereleases by definition, so marking a release as a
+  *pre-release* on GitHub keeps it away from users until you promote it.
+- **`approvedReleaseTag` is still required.** It seeds a first install
+  when the launcher has never resolved your latest (e.g. offline) and is
+  the fallback whenever the GitHub API is unreachable. Keep it pointing
+  at a known-good version; you don't need to bump it every release.
+- **Keep shipping the full `.zip` on every release** — follow-latest
+  changes which tag is targeted, not what's downloaded. Delta patches
+  (§ below) compose: ship `patch-<from>-to-<to>.zip`/`.json` on the new
+  release and single-hop updates apply the delta toward the latest.
+- **Not available with external hosting** (`externalAssetUrlTemplate`):
+  the catalog-pinned SHA-256 only covers the approved tag, so other tags
+  can't be verified. The flag is ignored in that case.
+- **Security trade-off:** your releases skip the per-version catalog
+  approval gate. Enabling the flag is a Tier 3 catalog change (reviewed
+  once by a human); after that, whatever you release is what users get —
+  which is why the flag is opt-in per mod rather than the default.
 
 #### Removing files in an update (deletion)
 

@@ -345,9 +345,44 @@ public class UpdateService
 
             if (_profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
             {
-                var ghTag = _profile.GitHubReleases?.ApprovedReleaseTag ?? "";
+                var gh = _profile.GitHubReleases;
+                var ghTag = gh?.ApprovedReleaseTag ?? "";
                 var ghState = _config.GetState(_profile.Id);
                 var ghInstalled = ghState.LastKnownVersion;
+                string? newETag = null;
+
+                // Follow-latest: resolve "latest" from the modder's newest
+                // stable release instead of the catalog-pinned tag, so a new
+                // release reaches users with no catalog PR. External hosting
+                // is excluded (its SHA-256 only covers the approved tag).
+                // GetLatestReleaseTagAsync never throws (except cancel) —
+                // deliberately, so a rate-limit 403 or API blip degrades ONLY
+                // this bonus, not the whole check (which would fall to
+                // BuildOfflineResult and hide even the approved-tag update).
+                // Fallback chain: fresh tag (200) → cached tag (304 or
+                // failure) → approved tag.
+                bool followLatest = gh is { FollowLatest: true }
+                    && !string.IsNullOrWhiteSpace(gh.SourceRepo)
+                    && string.IsNullOrEmpty(gh.ExternalAssetUrlTemplate);
+                if (followLatest)
+                {
+                    var cachedTag = ghState.LastKnownLatestVersion;
+                    // Only send the ETag when we still hold the tag it vouches
+                    // for — a 304 has no body, so a lone ETag would leave us
+                    // tagless.
+                    var etag = !string.IsNullOrEmpty(cachedTag) ? ghState.LatestReleaseETag : null;
+                    var latestRelease = await new GitHubReleaseDownloader()
+                        .GetLatestReleaseTagAsync(gh!.SourceRepo, etag, ct);
+                    if (!string.IsNullOrEmpty(latestRelease.Tag))
+                    {
+                        ghTag = latestRelease.Tag!;
+                        newETag = latestRelease.ETag;
+                    }
+                    else if (!string.IsNullOrEmpty(cachedTag))
+                    {
+                        ghTag = cachedTag; // 304-confirmed, or last known good
+                    }
+                }
 
                 LatestVersion = !string.IsNullOrEmpty(ghTag)
                     ? new VersionInfo { Ver = ghTag }
@@ -358,11 +393,23 @@ public class UpdateService
 
                 // Mirror the WolPatcher path: persist LastKnownLatestVersion
                 // so a cold-start UI render sees the right "Latest" before
-                // the next CheckAsync runs. The installed tag is persisted
-                // separately at install time, so we don't touch it here.
+                // the next CheckAsync runs — and, for follow-latest mods, so
+                // the synchronous resolvers (EffectiveGitHubTag) know which
+                // tag to install. The installed tag is persisted separately
+                // at install time, so we don't touch it here.
+                bool ghDirty = false;
                 if (!string.IsNullOrEmpty(ghTag) && ghState.LastKnownLatestVersion != ghTag)
                 {
                     ghState.LastKnownLatestVersion = ghTag;
+                    ghDirty = true;
+                }
+                if (!string.IsNullOrEmpty(newETag) && ghState.LatestReleaseETag != newETag)
+                {
+                    ghState.LatestReleaseETag = newETag;
+                    ghDirty = true;
+                }
+                if (ghDirty)
+                {
                     try { _config.Save(); }
                     catch (Exception ex)
                     {
@@ -493,6 +540,25 @@ public class UpdateService
         }
         return new CheckResult(
             new UpdateInfo(), current, current, new List<DownloadInfo>(), valid, Degraded: true);
+    }
+
+    /// <summary>
+    /// Pure rule for which GitHub tag a GitHubReleases mod should install /
+    /// update to when the user made no explicit version choice. Static and
+    /// network-free (testable): follow-latest reads the CACHED latest tag
+    /// (<see cref="ModState.LastKnownLatestVersion"/>, written by CheckAsync)
+    /// so the synchronous install/update resolvers never do I/O. External
+    /// hosting is excluded INSIDE this rule — the catalog-pinned SHA-256 only
+    /// covers the approved tag, and centralizing the exclusion here means
+    /// <c>ResolveAssetAsync</c>'s external branch can never receive a
+    /// non-approved tag from a default path.
+    /// </summary>
+    public static string ResolveEffectiveGitHubTag(GitHubReleasesSettings? gh, string? cachedLatest)
+    {
+        var approved = gh?.ApprovedReleaseTag ?? "";
+        if (gh == null || !gh.FollowLatest) return approved;
+        if (!string.IsNullOrEmpty(gh.ExternalAssetUrlTemplate)) return approved;
+        return string.IsNullOrWhiteSpace(cachedLatest) ? approved : cachedLatest;
     }
 
     /// <summary>

@@ -5756,8 +5756,13 @@ public partial class MainWindow : Window
             phaseProgress?.Report(InstallPhase.Download);
             statusProgress?.Report(Strings.Get("StatusDeltaChecking"));
 
+            // Target of a normal update = the effective tag (approved, or the
+            // cached latest for follow-latest mods) — the same value
+            // ResolveInstallVersion stamps below, so descriptor ToTag, manifest
+            // Version and LastKnownVersion stay coherent.
+            var targetTag = EffectiveGitHubTag(profile);
             var prepared = await DeltaPatchService.TryPrepareAsync(
-                gh, installedTag, installPath, manifest, covered, _operatingCts!.Token);
+                gh, installedTag, targetTag, installPath, manifest, covered, _operatingCts!.Token);
             if (prepared == null) return false;   // no usable delta → full
 
             DiagnosticLog.Write(
@@ -5777,7 +5782,7 @@ public partial class MainWindow : Window
                 ProgressPanelControl.PatchBytesText.Text = $"{p.BytesRead} / {p.BytesTotal}";
             });
 
-            var version = ResolveInstallVersion(overrideTag: null);   // = approved tag
+            var version = ResolveInstallVersion(overrideTag: null);   // = effective tag (== targetTag)
             bool ok = await nativeInstaller.ApplyGitHubDeltaAsync(
                 profile, version, prepared, installPath, statusProgress, xp, _operatingCts!.Token);
 
@@ -6052,23 +6057,29 @@ public partial class MainWindow : Window
             if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
             {
                 // Persist the version we just laid down. For GitHubReleases this
-                // is the approved tag, so the next CheckAsync sees installed ==
-                // approved and stops offering the update (hides the Update button).
+                // is the effective tag (approved, or the resolved latest for
+                // follow-latest mods), so the next CheckAsync sees installed ==
+                // latest and stops offering the update (hides the Update button).
                 var st = _config.GetState(_updateService.Profile.Id);
                 var laidDownVersion = ResolveInstallVersion(overrideTag: targetReleaseTag);
                 if (!string.IsNullOrEmpty(laidDownVersion))
                     st.LastKnownVersion = laidDownVersion;
 
                 // Version switch (Fase 1): if the user installed a version OTHER
-                // than the recommended/approved one, PIN it so the launcher doesn't
-                // immediately offer to "update" them back to the approved tag (the
-                // same pause mechanism as Fase 0). Installing the approved version
-                // clears any stale pin so updates flow normally again.
+                // than the recommended one, PIN it so the launcher doesn't
+                // immediately offer to "update" them back (the same pause
+                // mechanism as Fase 0). Installing the recommended version clears
+                // any stale pin so updates flow normally again. Baseline =
+                // EffectiveGitHubTag, not the raw approved tag: for a
+                // follow-latest mod, picking the latest in the picker is
+                // "following the recommendation", not a deviation to pin (a pin
+                // there would suppress every future follow-latest update);
+                // without followLatest, effective == approved — zero change.
                 if (targetReleaseTag != null)
                 {
-                    var approved = _updateService.Profile.GitHubReleases?.ApprovedReleaseTag ?? "";
+                    var baseline = EffectiveGitHubTag(_updateService.Profile);
                     st.PinnedVersion =
-                        string.Equals(laidDownVersion, approved, StringComparison.OrdinalIgnoreCase)
+                        string.Equals(laidDownVersion, baseline, StringComparison.OrdinalIgnoreCase)
                             ? ""
                             : laidDownVersion;
                 }
@@ -7609,10 +7620,16 @@ public partial class MainWindow : Window
             }
             try
             {
-                // overrideTag (when set) installs a user-chosen version instead of
-                // the approved tag; null keeps the default approved-tag behaviour.
+                // overrideTag (when set) installs a user-chosen version. Null =
+                // the default target: the approved tag, or — for follow-latest
+                // mods — the newest stable release cached by CheckAsync
+                // (EffectiveGitHubTag; external-hosted mods always resolve to
+                // approved there, so ResolveAssetAsync's external guard holds).
+                var tag = string.IsNullOrWhiteSpace(overrideTag)
+                    ? EffectiveGitHubTag(profile)
+                    : overrideTag;
                 var asset = await new GitHubReleaseDownloader()
-                    .ResolveAssetAsync(ghs, overrideTag, default);
+                    .ResolveAssetAsync(ghs, tag, default);
                 // External-hosting path carries a SHA-256 pin (required by
                 // ResolveAssetAsync itself). Regular GitHub-asset path
                 // carries no SHA — we trust the asset CDN, like before.
@@ -7657,15 +7674,32 @@ public partial class MainWindow : Window
         var profile = service.Profile;
         return profile.UpdateMechanism switch
         {
-            // overrideTag stamps the user-chosen version; else the approved tag.
+            // overrideTag stamps the user-chosen version; else the effective
+            // default (approved tag, or the cached latest for follow-latest
+            // mods) — this MUST match what ResolvePayloadUrlsAsync downloads.
             ModUpdateMechanism.GitHubReleases =>
                 string.IsNullOrWhiteSpace(overrideTag)
-                    ? (profile.GitHubReleases?.ApprovedReleaseTag ?? "")
+                    ? EffectiveGitHubTag(profile)
                     : overrideTag.Trim(),
             _ => service.CurrentVersion?.Ver
                 ?? service.LatestVersion?.Ver ?? "",
         };
     }
+
+    /// <summary>
+    /// The GitHub tag a default (no explicit user choice) install/update of
+    /// this mod targets. Delegates to the pure
+    /// <see cref="UpdateService.ResolveEffectiveGitHubTag"/> with the cached
+    /// latest tag CheckAsync persisted — fresh by construction: the Update CTA
+    /// only appears after a CheckAsync, which is what writes the cache.
+    /// IMPORTANT: never thread this value through
+    /// <c>targetReleaseTag</c>/<c>overrideTag</c> — those mean "the USER chose
+    /// a version" and trigger the version-picker auto-pin, which would pin the
+    /// mod and suppress every future follow-latest update.
+    /// </summary>
+    private string EffectiveGitHubTag(ModProfile profile)
+        => UpdateService.ResolveEffectiveGitHubTag(
+            profile.GitHubReleases, _config.GetState(profile.Id).LastKnownLatestVersion);
 
     /// <summary>
     /// Fase 1 — enumerate the active GitHubReleases mod's published versions so

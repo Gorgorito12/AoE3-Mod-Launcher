@@ -933,13 +933,17 @@ Two cheap gates beyond a green build:
   `RepairInstallAsync(asUpdate:true, targetReleaseTag:<tag>)`. The tag threads
   through `ResolvePayloadUrlsAsync`/`ResolveInstallVersion`/`GitHubReleaseDownloader.
   ResolveAssetAsync` (all gained an `overrideTag`/`targetReleaseTag` param defaulting
-  to null = the approved tag = unchanged behaviour). **Three load-bearing rules:**
+  to null = the EFFECTIVE tag — the approved tag, or the resolved latest for
+  follow-latest mods; see the follow-latest gotcha below). **Three load-bearing rules:**
   (1) the section is gated to GitHubReleases + installed + NOT external-hosted —
   external hosts pin a SHA-256 for the approved tag only, so other versions can't be
   verified (`ResolveAssetAsync` throws on a non-approved tag for external hosts).
-  (2) Installing a NON-approved version auto-sets `ModState.PinnedVersion` to it
-  (reusing the pin above) so the launcher doesn't immediately offer to "update" the
-  user back to the approved tag; installing the approved version clears the pin.
+  (2) Installing a version OTHER than the effective baseline auto-sets
+  `ModState.PinnedVersion` to it (reusing the pin above) so the launcher doesn't
+  immediately offer to "update" the user back; installing the baseline clears the
+  pin. The baseline is `EffectiveGitHubTag`, NOT the raw approved tag — for a
+  follow-latest mod, picking the latest is "following the recommendation", and
+  pinning it would suppress every future follow-latest update.
   (3) **Rollback is as clean as a forward update because it IS one** — the re-overlay
   runs `ApplyUpdateDeletions`, which auto-removes the previous overlay's net-new
   files the chosen version no longer ships (`previous.OverlayNetNew` minus the new
@@ -949,7 +953,44 @@ Two cheap gates beyond a green build:
   take the recommended tag through the normal Install flow — version choice there is
   a deferred follow-up. Known follow-up: `ListReleasesAsync` hits GitHub
   unauthenticated on every dialog open (60/h per IP — no ETag/304 like the self-
-  updater yet).
+  updater yet). The picker's "recommended" badge reads
+  `UpdateService.ResolveEffectiveGitHubTag`, not the newest list item —
+  `ListReleasesAsync` KEEPS prereleases, so the first item may not be the effective
+  latest.
+
+- **`GitHubReleases` mods can OPT INTO follow-latest (`update.github.followLatest`)
+  — the launcher then resolves "latest" from the modder's newest stable release
+  instead of the catalog-pinned tag. Four rules are load-bearing.**
+  `UpdateService.CheckCoreAsync`'s GitHubReleases branch calls
+  `GitHubReleaseDownloader.GetLatestReleaseTagAsync` (`GET /releases/latest`, which
+  excludes drafts + prereleases by definition — a modder's prerelease is never
+  auto-published) with a per-mod conditional ETag
+  (`ModState.LatestReleaseETag`, paired with `LastKnownLatestVersion`; 304s are
+  free against the unauthenticated 60/h limit; the ETag is only SENT when the
+  cached tag is non-empty, because a 304 has no body). Fallback chain: fresh tag →
+  cached `LastKnownLatestVersion` → `ApprovedReleaseTag` (which stays REQUIRED in
+  the catalog — seed for offline first installs; `ProjectToProfile`'s guard is
+  unchanged). (1) **`GetLatestReleaseTagAsync` never throws except cancellation** —
+  a failure inside `CheckCoreAsync` that bubbled to `CheckAsync`'s offline catch
+  would degrade the WHOLE check to `BuildOfflineResult`, suppressing even the
+  approved-tag update path that needs no network; it reports `ConnectivityState`
+  itself via the reachedServer pattern. (2) **The effective install/update target
+  is centralized in the pure `UpdateService.ResolveEffectiveGitHubTag(gh,
+  cachedLatest)`** (pinned by `GitHubFollowLatestTests`) + the MainWindow wrapper
+  `EffectiveGitHubTag(profile)`; `ResolveInstallVersion` / `ResolvePayloadUrlsAsync`
+  / `TryApplyGitHubDeltaAsync` (via `DeltaPatchService.TryPrepareAsync`'s
+  `targetTag` param) use it when `overrideTag == null`. External hosting resolves
+  to approved INSIDE the rule, so `ResolveAssetAsync`'s external guard can never
+  see a non-approved tag from a default path. (3) **Never thread the resolved
+  latest through `targetReleaseTag`/`overrideTag`** — those mean "the USER chose a
+  version" and trigger the version-picker auto-pin, which would pin the mod and
+  kill every future follow-latest update. (4) The cache is fresh by construction
+  (the Update CTA only appears after a `CheckAsync`, which writes it). Follow-up
+  (repo `notifier-server`, non-blocking): the central feed publishes
+  `latestVersion` from the catalog's approved tag, so the bell for INSTALLED
+  NON-ACTIVE follow-latest mods lags behind until the feed also queries
+  `/releases/latest`; the active mod's check and the sweep's per-mod fallback
+  resolve the real latest.
 
 - **`GitHubReleases` mods can ship OPT-IN incremental delta patches — a small
   "changed files only" update that's a best-effort shortcut with a GUARANTEED

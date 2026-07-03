@@ -1159,7 +1159,12 @@ public partial class ModPropertiesDialog : Window
             return;
         }
 
-        var recommended = _profile.GitHubReleases?.ApprovedReleaseTag ?? "";
+        // "Recommended" badge = the effective default tag (approved, or the
+        // cached latest for follow-latest mods). Not cosmetic: ListReleasesAsync
+        // KEEPS prereleases, so the newest list item may not be the effective
+        // latest — this badge is the only correct signal in the picker.
+        var recommended = UpdateService.ResolveEffectiveGitHubTag(
+            _profile.GitHubReleases, _config.GetState(_profile.Id).LastKnownLatestVersion);
         var installed = _service.CurrentVersion?.Ver ?? "";
 
         VersionCombo.Items.Clear();

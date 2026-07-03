@@ -95,4 +95,20 @@ public class GitHubReleasesSettings
     /// <see cref="Services.DeltaPatchService"/> and docs/MODDING.md.
     /// </summary>
     public bool DeltaPatches { get; set; } = false;
+
+    /// <summary>
+    /// Optional opt-in. When true, the launcher resolves "latest version" from
+    /// <c>GET /repos/{SourceRepo}/releases/latest</c> (GitHub excludes drafts
+    /// and prereleases from that endpoint by definition) instead of pinning to
+    /// <see cref="ApprovedReleaseTag"/> — the modder publishes a release and
+    /// users get it with no catalog PR. The approved tag STAYS required: it is
+    /// the seed for a first install with no cached state and the fallback when
+    /// the GitHub API is unreachable. Ignored for external-hosted mods
+    /// (<see cref="ExternalAssetUrlTemplate"/>): the catalog-pinned SHA-256
+    /// only covers the approved tag, so other tags can't be verified.
+    /// Trade-off a mod accepts by opting in: releases skip the per-version
+    /// catalog approval gate (the opt-in itself is a tier-3 catalog change,
+    /// reviewed once).
+    /// </summary>
+    public bool FollowLatest { get; set; } = false;
 }
