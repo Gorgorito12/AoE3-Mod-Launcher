@@ -2467,6 +2467,26 @@ public static class Strings
             [LangEn] = "{0} was updated to {1}.",
             [LangEs] = "{0} se actualizó a {1}.",
         },
+        ["NotifInstalledTitle"] = new()
+        {
+            [LangEn] = "Installation complete",
+            [LangEs] = "Instalación completada",
+        },
+        ["NotifInstalledBody"] = new()
+        {
+            [LangEn] = "{0} was installed ({1}).",
+            [LangEs] = "{0} se instaló ({1}).",
+        },
+        ["NotifCopyInstalledTitle"] = new()
+        {
+            [LangEn] = "Copy installed",
+            [LangEs] = "Copia instalada",
+        },
+        ["NotifCopyInstalledBody"] = new()
+        {
+            [LangEn] = "A new copy of {0} was installed ({1}).",
+            [LangEs] = "Se instaló una nueva copia de {0} ({1}).",
+        },
         // ---- Bell: launcher self-update ----
         ["NotifLauncherUpdateTitle"] = new()
         {
@@ -3230,6 +3250,43 @@ public static class Strings
         {
             [LangEn] = "Remove from list (doesn't delete files)",
             [LangEs] = "Quitar de la lista (no borra archivos)",
+        },
+        ["RemoveInstallBtn"] = new()
+        {
+            [LangEn] = "Remove",
+            [LangEs] = "Quitar",
+        },
+        ["ManageInstallsHeader"] = new()
+        {
+            [LangEn] = "Manage installs",
+            [LangEs] = "Gestionar instalaciones",
+        },
+        ["ManageInstallsDesc"] = new()
+        {
+            [LangEn] = "Each registered copy of this mod (shown by its folder name). Switch the active " +
+                       "one, remove it from the list (files are kept), add an existing folder, or install a new copy.",
+            [LangEs] = "Cada copia registrada de este mod (por el nombre de su carpeta). Cambia la activa, " +
+                       "quítala de la lista (los archivos se conservan), añade una carpeta existente o instala una copia nueva.",
+        },
+        ["AddExistingFolder"] = new()
+        {
+            [LangEn] = "Add existing folder…",
+            [LangEs] = "Añadir carpeta existente…",
+        },
+        ["RenameInstallHint"] = new()
+        {
+            [LangEn] = "Rename this copy (leave empty to use the folder name)",
+            [LangEs] = "Renombra esta copia (déjalo vacío para usar el nombre de la carpeta)",
+        },
+        ["SwitchToInstall"] = new()
+        {
+            [LangEn] = "Switch",
+            [LangEs] = "Cambiar",
+        },
+        ["ActiveInstallBadge"] = new()
+        {
+            [LangEn] = "Active",
+            [LangEs] = "Activa",
         },
 
         // -------- Elevation (UAC) --------

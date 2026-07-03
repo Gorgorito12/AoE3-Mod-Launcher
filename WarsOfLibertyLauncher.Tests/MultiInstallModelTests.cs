@@ -200,6 +200,38 @@ public class MultiInstallModelTests
         Assert.Equal("keep", st.OtherInstalls[0].Id);
     }
 
+    [Fact]
+    public void RegisterInstall_AddsCopy_DedupingAgainstActiveAndOthers()
+    {
+        var st = new ModState { InstallPath = @"C:\Games\WoL", ActiveInstallId = "act" };
+        st.OtherInstalls.Add(new ModInstall { Id = "c1", InstallPath = @"D:\Copy1" });
+
+        Assert.True(st.RegisterInstall(@"E:\Copy2", "Prueba"));      // new → added
+        Assert.False(st.RegisterInstall(@"c:\games\wol\", "dup"));   // == active (norm) → rejected
+        Assert.False(st.RegisterInstall(@"D:\Copy1", "dup"));        // == existing copy → rejected
+        Assert.False(st.RegisterInstall("  ", "empty"));             // blank → rejected
+
+        Assert.Equal(2, st.OtherInstalls.Count);
+        var added = st.OtherInstalls.Find(i => i.InstallPath == @"E:\Copy2")!;
+        Assert.Equal("Prueba", added.Label);
+        Assert.False(string.IsNullOrEmpty(added.Id));
+    }
+
+    [Fact]
+    public void RenameInstall_TargetsActiveOrCopy()
+    {
+        var st = new ModState { InstallPath = @"C:\A", ActiveInstallId = "act", ActiveInstallLabel = "old" };
+        st.OtherInstalls.Add(new ModInstall { Id = "c1", InstallPath = @"C:\B", Label = "b" });
+
+        Assert.True(st.RenameInstall("act", "Principal"));
+        Assert.Equal("Principal", st.ActiveInstallLabel);
+
+        Assert.True(st.RenameInstall("c1", "Prueba"));
+        Assert.Equal("Prueba", st.OtherInstalls[0].Label);
+
+        Assert.False(st.RenameInstall("nope", "x"));   // unknown id
+    }
+
     [Theory]
     [InlineData(@"C:\A", @"c:\a\", true)]           // casing + trailing slash
     [InlineData(@"C:\A\bin\..", @"C:\A", true)]     // dot-segment normalization
