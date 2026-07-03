@@ -307,10 +307,9 @@ public partial class ModPropertiesDialog : Window
     /// </summary>
     private static System.Windows.Media.ImageBrush? LoadIconBrush(ModProfile profile)
     {
-        string? uri =
-            (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
-                ? profile.LocalIconPath
-                : (!string.IsNullOrEmpty(profile.BannerImage) ? profile.BannerImage : null);
+        // Cached local (installed) → live catalog URL → packed → null. See
+        // ModProfile.ResolveIconSource.
+        string? uri = profile.ResolveIconSource();
         if (string.IsNullOrEmpty(uri)) return null;
         try
         {
@@ -319,12 +318,14 @@ public partial class ModPropertiesDialog : Window
             bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
             bmp.UriSource = new System.Uri(uri, System.UriKind.Absolute);
             bmp.EndInit();
-            bmp.Freeze();
+            // A remote icon is still downloading here — leave it unfrozen (UI
+            // thread; it repaints on completion). Local/pack freeze fine.
+            if (bmp.CanFreeze) bmp.Freeze();
             var br = new System.Windows.Media.ImageBrush(bmp)
             {
                 Stretch = System.Windows.Media.Stretch.UniformToFill,
             };
-            br.Freeze();
+            if (br.CanFreeze) br.Freeze();
             return br;
         }
         catch

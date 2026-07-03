@@ -770,8 +770,9 @@ public partial class ModsBrowser : UserControl
         var state = _stateProvider(profile);
         var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("CatalogBlue");
 
-        // Banner: prefer real banner image, fall back to gradient + monogram.
-        var bannerSource = TryLoadBitmap(profile.LocalBannerPath);
+        // Banner: cached local (installed) → live catalog URL → gradient +
+        // monogram. TryLoadBitmap loads file / http / pack sources alike.
+        var bannerSource = TryLoadBitmap(profile.ResolveBannerSource());
         if (bannerSource != null)
         {
             DetailBannerImage.Source = bannerSource;
@@ -851,7 +852,11 @@ public partial class ModsBrowser : UserControl
     private void BuildGallery(ModProfile profile)
     {
         ClearGallery();
-        var paths = profile.LocalScreenshotPaths;
+        // Cached shots (installed mods) → live catalog URLs (a not-installed mod
+        // streamed straight from the Workshop). TryLoadBitmap / XamlAnimatedGif
+        // handle file and http sources alike, so nothing is cached for a mod the
+        // user is only browsing. See ModProfile.ResolveScreenshotSources.
+        var paths = profile.ResolveScreenshotSources();
         if (paths is null || paths.Count == 0)
             return;
 
@@ -1120,13 +1125,10 @@ public partial class ModsBrowser : UserControl
     /// null → caller renders the letter monogram.
     /// </summary>
     private static string? ResolveIconUri(ModProfile profile)
-    {
-        if (!string.IsNullOrEmpty(profile.LocalIconPath) && File.Exists(profile.LocalIconPath))
-            return profile.LocalIconPath;
-        if (!string.IsNullOrEmpty(profile.BannerImage))
-            return profile.BannerImage;
-        return null;
-    }
+        // Cached local icon (installed) → catalog URL (live, for a not-installed
+        // Workshop mod) → packed built-in → null (monogram). See
+        // ModProfile.ResolveIconSource.
+        => profile.ResolveIconSource();
 
     private static ImageBrush? TryLoadImageBrush(string? path)
     {
@@ -1140,11 +1142,15 @@ public partial class ModsBrowser : UserControl
     private static BitmapImage? TryLoadBitmap(string? path, int decodeWidth = 0)
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
-        // Accept both on-disk cache files (catalog icon.png) and pack:// URIs
-        // (built-in packed resources like WoL.ico). Only a file path needs an
-        // existence check; a pack URI resolves against the assembly.
+        // Accept on-disk cache files (catalog icon.png), pack:// URIs (built-in
+        // packed resources like WoL.ico) AND remote http(s) URLs (a not-installed
+        // Workshop mod streams its images live — WPF downloads them and the
+        // OS-managed WinINet cache bounds any disk use). Only a LOCAL file path
+        // needs an existence check; pack + remote resolve on their own.
         bool isPack = path.StartsWith("pack:", StringComparison.OrdinalIgnoreCase);
-        if (!isPack && !File.Exists(path)) return null;
+        bool isRemote = path.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        if (!isPack && !isRemote && !File.Exists(path)) return null;
         try
         {
             var bmp = new BitmapImage();
@@ -1162,7 +1168,11 @@ public partial class ModsBrowser : UserControl
                 bmp.DecodePixelWidth = decodeWidth;
             bmp.UriSource = new Uri(path, UriKind.Absolute);
             bmp.EndInit();
-            bmp.Freeze();
+            // A remote bitmap is still downloading here, so it can't be frozen —
+            // return it unfrozen (we're on the UI thread; the Image/ImageBrush
+            // updates when the download completes). Local/pack decode synchronously
+            // under OnLoad and freeze fine.
+            if (bmp.CanFreeze) bmp.Freeze();
             return bmp;
         }
         catch

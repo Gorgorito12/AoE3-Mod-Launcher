@@ -3665,20 +3665,19 @@ public partial class MultiplayerTab : UserControl
     private readonly Dictionary<string, ImageBrush> _roomModIconCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Resolve a room's mod icon (cached catalog icon.png → built-in packed
-    /// icon) to a frozen UniformToFill brush for the card's leading disc, or
-    /// null when the mod ships no resolvable icon (caller falls back to ★).
-    /// Mirrors <c>CreateLobbyDialog.LoadIconBrush</c>.
+    /// Resolve a room's mod icon to a UniformToFill brush for the card's leading
+    /// disc, or null when the mod ships no resolvable icon (caller falls back to
+    /// ★). Uses the shared cached-local → LIVE catalog URL → packed fall-through
+    /// (<see cref="ModProfile.ResolveIconSource"/>), so a room whose mod the
+    /// viewer hasn't installed still shows the mod's real icon streamed from the
+    /// catalog instead of the ★ placeholder. Mirrors <c>CreateLobbyDialog.LoadIconBrush</c>.
     /// </summary>
     private ImageBrush? ResolveRoomModIcon(ModProfile? profile)
     {
         if (profile == null) return null;
         if (_roomModIconCache.TryGetValue(profile.Id, out var cached)) return cached;
 
-        string? uri =
-            (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
-                ? profile.LocalIconPath
-                : (!string.IsNullOrEmpty(profile.BannerImage) ? profile.BannerImage : null);
+        string? uri = profile.ResolveIconSource();
         if (string.IsNullOrEmpty(uri)) return null;
 
         try
@@ -3689,9 +3688,11 @@ public partial class MultiplayerTab : UserControl
             bmp.DecodePixelWidth = 48; // disc is 24 logical px; cap the decoded copy
             bmp.UriSource = new Uri(uri, UriKind.Absolute);
             bmp.EndInit();
-            bmp.Freeze();
+            // A remote icon is still downloading here (can't freeze yet) — leave it
+            // unfrozen; we're on the UI thread and the disc repaints on completion.
+            if (bmp.CanFreeze) bmp.Freeze();
             var brush = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
-            brush.Freeze();
+            if (brush.CanFreeze) brush.Freeze();
             _roomModIconCache[profile.Id] = brush;
             return brush;
         }

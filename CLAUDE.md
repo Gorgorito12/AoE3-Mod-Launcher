@@ -1305,9 +1305,48 @@ Two cheap gates beyond a green build:
   `ModsBrowser` as the `GalleryTitleText` property — `ModsBrowser` doesn't import
   `Localization`, so strings reach it as properties set in `ApplyLanguage`.)
 
+- **Images are cached to disk ONLY for INSTALLED (and the active) mod; every
+  other surface paints LIVE from the catalog URL — so browsing the Workshop
+  never grows the on-disk cache.** The concern was a large catalog filling a
+  user's machine: `EnsureModAssetsAsync` used to disk-cache icon+banner+hero(+6
+  rotating)+screenshots for EVERY mod whose card rendered, even ones the user
+  only browsed and never installed (heroes/screenshots are the heavy files —
+  up to ~30 MB / ~40 MB per mod). Now `EnsureModAssetsAsync` /
+  `EnsureScreenshotsAsync` **early-return unless the profile is installed on disk
+  (`IsProfileInstalledLocally`) or is the active/dashboard mod** — installed mods
+  cache so their dashboard works OFFLINE; everything else (the Workshop grid, a
+  mod previewed-not-installed, a multiplayer room whose mod the viewer doesn't
+  have) resolves to the remote catalog URL and WPF paints it live (the OS-managed
+  WinINet cache bounds any disk use — NOT the launcher's `mod-assets` folder).
+  The active-mod inclusion is load-bearing mid-INSTALL: the mod being installed
+  is active but not yet detected as installed, and `CreateShortcuts`/
+  `FindShortcutIcon` needs its cached `icon.png` to build the shortcut `.ico`.
+  The fall-through is centralised on the profile — **`ModProfile.ResolveIconSource`
+  / `ResolveBannerSource` / `ResolveHeroSources` / `ResolveScreenshotSources`**:
+  cached local file (if it EXISTS on disk) → remote http(s) URL → packed built-in
+  → null. EVERY image surface goes through these (dashboard hero/banner/icon,
+  Workshop card/row/detail/gallery, the MP rooms-browser `ResolveRoomModIcon`,
+  `CreateLobbyDialog`/`ModPropertiesDialog` `LoadIconBrush`), so a not-installed
+  mod shows its real icon everywhere instead of a monogram/★ (this fixes the MP
+  case where a room's mod icon was ★ for anyone who didn't have it installed).
+  **The image loaders now accept http(s) URIs** — `ModsBrowser.TryLoadBitmap`
+  (skips the `File.Exists` gate for `http`/`https`), `MainWindow.TryLoadTileImage`
+  + `BuildHeroFillBrush` (already were, via `CanFreeze` guards). **Load-bearing
+  freeze rule:** a remote `BitmapImage` is still downloading when it's returned,
+  so it CANNOT be frozen — every remote-capable loader freezes only
+  `if (bmp.CanFreeze)` / `if (brush.CanFreeze)` and returns it unfrozen (safe:
+  all these run on the UI thread and the Image/ImageBrush repaints on
+  `DownloadCompleted`). An unconditional `.Freeze()` throws for a remote source →
+  the image silently never loads; don't reintroduce one. **Offline consequence
+  (deliberate):** the Workshop shows monograms/gradients offline and a
+  not-installed mod's dashboard preview shows the gradient hero — acceptable
+  because the Workshop is an inherently online surface (you can't install
+  offline). Installed mods stay fully offline-capable via their disk cache.
 - **The mod-asset cache is stale-while-revalidate: it reflects a catalog image
   being DELETED or REPLACED, and it's offline-safe — don't revert it to
-  fetch-once.** Each cached asset has a sidecar `{modId}-{role}.meta` (JSON
+  fetch-once.** (Scope note: the two-track download/revalidate below now runs
+  ONLY for installed/active mods — see the installed-only caching bullet above;
+  Workshop-only mods bypass it entirely and load live.) Each cached asset has a sidecar `{modId}-{role}.meta` (JSON
   `{ url, etag }`). `ModAssetCacheService` has two tracks: (1) the FAST path
   (`GetIconPathAsync`/banner/hero/screenshots) — **no network** when the cached
   file's URL matches; an empty/null URL means "removed from the catalog" → purge

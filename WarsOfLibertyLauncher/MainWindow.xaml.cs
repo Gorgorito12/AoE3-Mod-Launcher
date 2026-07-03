@@ -781,6 +781,23 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// Cheap, network-free "is this mod installed on disk" check — the saved /
+    /// active install path (present, exists, passes the content probe) or a disk
+    /// probe. Used to decide whether to cache a mod's images locally (installed ⇒
+    /// offline-safe cache) or paint them live from the catalog URL (not installed).
+    /// Mirrors the install branch of <see cref="BuildModRowState"/>.
+    /// </summary>
+    private bool IsProfileInstalledLocally(ModProfile profile)
+    {
+        bool isActive = string.Equals(
+            profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
+        string? path = isActive ? _updateService.InstallPath : _config.GetState(profile.Id).InstallPath;
+        if (!string.IsNullOrEmpty(path) && Directory.Exists(path) && SavedPathLooksValid(path, profile))
+            return true;
+        return !string.IsNullOrEmpty(ResolveProbedInstallPath(profile));
+    }
+
     private FrameworkElement BuildModCard(ModProfile profile, string activeId)
     {
         bool isActive = string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase);
@@ -2776,13 +2793,12 @@ public partial class MainWindow : Window
         // Stop any in-flight rotation/animation before repainting (mod switch).
         StopHeroRotation();
 
-        var heroes = new List<string>();
-        if (profile.LocalHeroImagePaths is { Count: > 0 })
-            heroes.AddRange(profile.LocalHeroImagePaths.Where(p => !string.IsNullOrWhiteSpace(p)));
-        if (heroes.Count == 0 && !string.IsNullOrWhiteSpace(profile.LocalHeroImagePath))
-            heroes.Add(profile.LocalHeroImagePath!);
-        if (heroes.Count == 0 && !string.IsNullOrWhiteSpace(profile.LocalBannerPath))
-            heroes.Add(profile.LocalBannerPath!);
+        // Cached rotating set / single hero (installed → offline-safe) → live
+        // catalog hero URL(s) (a not-installed mod previewed from the Workshop) →
+        // banner. BuildHeroFillBrush loads file / http sources alike, so a
+        // not-installed mod's dashboard streams its hero straight from the
+        // catalog with nothing written to the on-disk cache.
+        var heroes = new List<string>(profile.ResolveHeroSources());
 
         // Paint the first frame (or the gradient fallback) on the base layer.
         var first = heroes.Count > 0 ? BuildHeroFillBrush(heroes[0]) : null;
@@ -2951,9 +2967,10 @@ public partial class MainWindow : Window
         gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
             ((System.Windows.Media.SolidColorBrush)accent).Color, 1));
 
-        // Prefer the community banner if cached; otherwise the built-in
-        // tile image (BannerImage). Both paths flow through TryLoadTileImage.
-        var imgBrush = TryLoadTileImage(profile.LocalBannerPath ?? profile.BannerImage);
+        // Prefer the community banner if cached (installed mods); otherwise the
+        // live catalog URL, then the built-in tile image (BannerImage). All flow
+        // through TryLoadTileImage, which handles file / http / pack sources.
+        var imgBrush = TryLoadTileImage(profile.ResolveBannerSource());
         if (imgBrush != null)
         {
             // Show the image plus a dark vignette gradient for legible text.
@@ -3296,14 +3313,11 @@ public partial class MainWindow : Window
     ///   * Otherwise null → caller renders the monogram fallback.
     /// </summary>
     private static string? ResolveModIcon(ModProfile profile)
-    {
-        if (!string.IsNullOrEmpty(profile.LocalIconPath)
-            && System.IO.File.Exists(profile.LocalIconPath))
-            return profile.LocalIconPath;
-        if (!string.IsNullOrEmpty(profile.BannerImage))
-            return profile.BannerImage;
-        return null;
-    }
+        // Cached local icon (installed mods) → catalog URL (loaded live for a
+        // not-installed mod) → packed built-in → null (monogram). Centralised on
+        // the profile so every icon surface behaves identically. See
+        // ModProfile.ResolveIconSource.
+        => profile.ResolveIconSource();
 
     /// <summary>
     /// Fire-and-forget background task that downloads any missing icon and
@@ -3327,6 +3341,22 @@ public partial class MainWindow : Window
         // single session, or if RefreshModCards re-runs while a fetch
         // is still in flight.
         if (!_assetFetchAttempted.Add(profile.Id)) return;
+
+        // Cache to disk only for the INSTALLED mods and the ACTIVE (dashboard)
+        // mod. Everything else — the bulk of the Workshop grid, a multiplayer
+        // room whose mod the viewer doesn't have — is painted LIVE from its
+        // catalog URL by the image loaders (ModProfile.Resolve*Source), so
+        // nothing is written to the on-disk cache for it. This is what keeps the
+        // cache folder from growing with every catalog mod merely browsed.
+        // Including the active mod matters mid-INSTALL: the mod being installed is
+        // active but not yet detected as installed, and CreateShortcuts needs its
+        // cached icon.png to build the shortcut .ico (FindShortcutIcon). (The
+        // cards/dashboard already painted the live URL when built; nothing to
+        // repaint before the cache resolves.)
+        bool isActive = string.Equals(
+            profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
+        if (!isActive && !IsProfileInstalledLocally(profile))
+            return;
 
         var cache = new ModAssetCacheService();
 
@@ -3455,6 +3485,13 @@ public partial class MainWindow : Window
     private async Task EnsureScreenshotsAsync(ModProfile profile)
     {
         if (string.IsNullOrEmpty(profile.Id)) return;
+        // Only cache screenshots for INSTALLED mods. Screenshots (up to 8 × 5 MB)
+        // appear ONLY in the Workshop detail, never the dashboard, so a
+        // not-installed mod streams them live from the catalog URL — the gallery
+        // reads ModProfile.ResolveScreenshotSources(), which falls back to
+        // ScreenshotUrls when no local copy exists. Not caching them is the single
+        // biggest saving for a user who only browses the catalog.
+        if (!IsProfileInstalledLocally(profile)) return;
         // No early-return on an empty set: an emptied gallery still needs the
         // call so GetScreenshotPathsAsync purges the now-orphaned shot files.
         if (!_screenshotFetchAttempted.Add(profile.Id)) return;

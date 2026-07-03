@@ -263,6 +263,93 @@ public class ModProfile
     /// </summary>
     public List<string> LocalScreenshotPaths { get; set; } = new();
 
+    // ---- Image source resolution (installed → cached local; else live URL) ----
+    //
+    // The launcher only writes an image to its on-disk cache for INSTALLED mods
+    // (their dashboard must work offline). Everything else — the Workshop grid,
+    // a mod previewed but not installed, a multiplayer room whose mod the viewer
+    // doesn't have — resolves to the catalog URL and is painted LIVE by WPF
+    // (existence/download is the loader's concern; the OS-managed WinINet cache
+    // bounds any disk use, so browsing hundreds of catalog mods never grows the
+    // launcher's own cache folder). These helpers centralise that fall-through so
+    // every surface (dashboard, Workshop, rooms browser) behaves identically.
+
+    /// <summary>
+    /// Best source for the mod's ICON: the cached local file if it's on disk
+    /// (only INSTALLED mods have one), else the catalog URL (loaded live, so a
+    /// mod the viewer hasn't installed — e.g. a multiplayer room's mod — still
+    /// shows its real icon), else the packed built-in icon, else null (the
+    /// caller renders the letter monogram).
+    /// </summary>
+    public string? ResolveIconSource()
+        => FirstUsableImageSource(LocalIconPath, IconUrl, BannerImage);
+
+    /// <summary>Best source for the detail/dashboard BANNER (cached → live URL → packed → null).</summary>
+    public string? ResolveBannerSource()
+        => FirstUsableImageSource(LocalBannerPath, BannerUrl, BannerImage);
+
+    /// <summary>
+    /// Best sources for the dashboard HERO(es), highest priority first: the
+    /// cached rotating set / single hero (INSTALLED mods → offline-safe), else
+    /// the catalog hero URL(s) loaded live (a not-installed mod previewed from
+    /// the Workshop), else the banner. Empty ⇒ caller paints a neutral gradient.
+    /// </summary>
+    public IReadOnlyList<string> ResolveHeroSources()
+    {
+        var list = new List<string>();
+        AddUsable(list, LocalHeroImagePaths);
+        if (list.Count == 0) AddUsable(list, LocalHeroImagePath);
+        if (list.Count == 0) AddUsable(list, HeroImageUrls);
+        if (list.Count == 0) AddUsable(list, HeroImageUrl);
+        if (list.Count == 0) AddUsable(list, LocalBannerPath);
+        if (list.Count == 0) AddUsable(list, BannerUrl);
+        return list;
+    }
+
+    /// <summary>
+    /// Best sources for the detail SCREENSHOT gallery: cached files if present
+    /// (installed mods), else the catalog URLs loaded live. Screenshots only ever
+    /// appear in the Workshop detail (never the dashboard), so a not-installed
+    /// mod streams them straight from the catalog with nothing written to disk.
+    /// </summary>
+    public IReadOnlyList<string> ResolveScreenshotSources()
+        => (LocalScreenshotPaths is { Count: > 0 }) ? LocalScreenshotPaths : ScreenshotUrls;
+
+    private static string? FirstUsableImageSource(params string?[] candidates)
+    {
+        foreach (var c in candidates)
+            if (IsUsableImageSource(c))
+                return c;
+        return null;
+    }
+
+    private static void AddUsable(List<string> into, string? candidate)
+    {
+        if (IsUsableImageSource(candidate)) into.Add(candidate!);
+    }
+
+    private static void AddUsable(List<string> into, IEnumerable<string> candidates)
+    {
+        foreach (var c in candidates)
+            if (IsUsableImageSource(c)) into.Add(c);
+    }
+
+    /// <summary>
+    /// A candidate is usable if it's a remote (http/https) or packed (pack:) URI
+    /// — existence is the loader's problem — or a LOCAL file path that actually
+    /// exists on disk. A stale local path (its cache entry was purged) is treated
+    /// as unusable so resolution falls through to the live URL.
+    /// </summary>
+    private static bool IsUsableImageSource(string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate)) return false;
+        if (candidate.StartsWith("http://", System.StringComparison.OrdinalIgnoreCase)
+            || candidate.StartsWith("https://", System.StringComparison.OrdinalIgnoreCase)
+            || candidate.StartsWith("pack:", System.StringComparison.OrdinalIgnoreCase))
+            return true;
+        return System.IO.File.Exists(candidate);
+    }
+
     /// <summary>How the mod's files relate to the AoE3 install folder.</summary>
     public ModInstallType InstallType { get; set; } = ModInstallType.IsolatedFolder;
 
