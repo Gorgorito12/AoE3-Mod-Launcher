@@ -5012,6 +5012,20 @@ public partial class MainWindow : Window
         var state = _config.GetActiveState();
         if (!state.HasMultipleInstalls) return;
 
+        // Only show copies whose folder still exists on disk. A registration whose
+        // folder was deleted outside the launcher (a "phantom") must not appear — but
+        // the entry stays in config (a disconnected drive re-appears when reconnected);
+        // the user can forget it permanently with the row's remove button.
+        var liveOthers = new List<ModInstall>();
+        foreach (var o in state.OtherInstalls)
+        {
+            if (string.IsNullOrWhiteSpace(o.InstallPath)) continue;
+            if (ModState.PathEquals(o.InstallPath, state.InstallPath)) continue;
+            try { if (!Directory.Exists(o.InstallPath)) continue; } catch { continue; }
+            liveOthers.Add(o);
+        }
+        if (liveOthers.Count == 0) return;   // no real extra copies → collapse the section
+
         stack.Children.Add(new System.Windows.Controls.Border
         {
             Height = 1,
@@ -5034,7 +5048,7 @@ public partial class MainWindow : Window
              CopyDisplayLabel(state.ActiveInstallLabel, state.InstallPath),
              state.InstallPath, true),
         };
-        foreach (var o in state.OtherInstalls)
+        foreach (var o in liveOthers)
             rows.Add((o.Id, CopyDisplayLabel(o.Label, o.InstallPath), o.InstallPath, false));
 
         foreach (var row in rows)
@@ -5102,7 +5116,47 @@ public partial class MainWindow : Window
                 popup.IsOpen = false;
                 if (!isAct) await SwitchActiveInstallAsync(id);
             };
-            stack.Children.Add(btn);
+
+            if (isAct)
+            {
+                stack.Children.Add(btn);
+                continue;
+            }
+
+            // A non-active copy gets a "remove from list" ✕ beside its switch button.
+            // This only forgets the registration — it does NOT delete files on disk
+            // (that's Uninstall). Lives OUTSIDE the switch button so clicking ✕ doesn't
+            // also switch to the copy.
+            var rowGrid = new System.Windows.Controls.Grid();
+            rowGrid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            { Width = new GridLength(1, GridUnitType.Star) });
+            rowGrid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            { Width = GridLength.Auto });
+            System.Windows.Controls.Grid.SetColumn(btn, 0);
+            rowGrid.Children.Add(btn);
+
+            var removeBtn = new System.Windows.Controls.Button
+            {
+                Style = (Style)FindResource("SidebarSecondaryButton"),
+                Content = "", // ✕ (Cancel)
+                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                FontSize = 11,
+                Width = 30,
+                Padding = new Thickness(0),
+                Margin = new Thickness(4, 2, 0, 2),
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                ToolTip = Strings.Get("RemoveInstallCopy"),
+            };
+            System.Windows.Controls.Grid.SetColumn(removeBtn, 1);
+            removeBtn.Click += (_, _) =>
+            {
+                if (state.RemoveInstall(id)) _config.Save();
+                popup.IsOpen = false; // reopening rebuilds the list (and collapses if empty)
+            };
+            rowGrid.Children.Add(removeBtn);
+            stack.Children.Add(rowGrid);
         }
     }
 
@@ -5254,7 +5308,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        _config.GetActiveState().InstallPath = resolved;
+        var st = _config.GetActiveState();
+        // Re-pointing the active install at a path that's already registered as an
+        // inactive copy would leave a duplicate/phantom in the switcher — drop it first.
+        st.OtherInstalls.RemoveAll(i => ModState.PathEquals(i.InstallPath, resolved));
+        st.InstallPath = resolved;
         _config.Save();
         InvalidateActiveModCheckCache();
         await CheckAsync();
@@ -7878,14 +7936,16 @@ public partial class MainWindow : Window
             var installState = _config.GetState(profile.Id);
             if (addNewSlot
                 && !string.IsNullOrEmpty(installState.InstallPath)
-                && !string.Equals(installState.InstallPath.TrimEnd('\\', '/'),
-                                  installFolder.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                && !ModState.PathEquals(installState.InstallPath, installFolder))
             {
                 // Additional copy: rotate the current active install into
                 // OtherInstalls and make the NEW folder the active one.
                 installState.OtherInstalls.Add(installState.SnapshotActive());
                 installState.ActiveInstallId = Guid.NewGuid().ToString("N");
                 installState.ActiveInstallLabel = Path.GetFileName(installFolder.TrimEnd('\\', '/'));
+                // If the new folder was itself a previously-registered copy, it's now the
+                // active one — drop the stale OtherInstalls entry so it isn't listed twice.
+                installState.OtherInstalls.RemoveAll(i => ModState.PathEquals(i.InstallPath, installFolder));
                 // A fresh copy carries no pin / active translation from the old active.
                 installState.PinnedVersion = "";
                 installState.ActiveTranslationId = "";

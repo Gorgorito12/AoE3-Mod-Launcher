@@ -723,6 +723,30 @@ Two cheap gates beyond a green build:
   example live in `docs/CONFIGURATION.md` (per-mod dict, not the legacy flat
   fields). `Save()` is non-atomic and runs from background threads.
 
+- **Multi-install copies (`ModState.OtherInstalls`) are hidden/deduped, never
+  hard-deleted — a phantom "Mod (2)" in the MODS switcher was a stale registration.**
+  The flat `ModState` fields ARE the active install; inactive copies live in
+  `OtherInstalls` (a `ModInstall` each: `Id`/`Label`/`InstallPath`/version/pin/
+  translation). Copies are registered ONLY by "install another copy"
+  (`InstallAsync(addNewSlot:true)`) and rotated by `SwitchActiveInstallAsync` — the
+  disk scan NEVER writes copies. Three rules keep the switcher honest: (1) **dedup on
+  load** — `ModState.NormalizeInstalls` drops empty entries and any copy whose
+  `ModState.PathEquals`-normalized path equals the active `InstallPath` or an
+  earlier-kept copy (pure, no disk I/O); (2) **hide non-existent at render** —
+  `AppendInstallCopiesToModPopup` (`MainWindow`) skips OTHER copies whose folder fails
+  `Directory.Exists` and collapses the whole "Installed copies" section when no live
+  extra copy remains, so a deleted-folder phantom disappears WITHOUT being purged from
+  config (a disconnected external drive re-appears when reconnected); (3) **manual
+  remove** — each non-active row has a ✕ button → `ModState.RemoveInstall(id)` +
+  `Save()` that only forgets the registration (does NOT delete files — that's
+  Uninstall; string `RemoveInstallCopy`). Registration also dedups: `BrowseButton_Click`
+  ("change mod folder") drops any `OtherInstalls` entry equal to the new active path,
+  and the `addNewSlot` rotation guard compares via `PathEquals` and removes a stale
+  entry equal to the new active folder. **Don't hard-prune non-existent copies on load**
+  (the disconnected-drive footgun) and don't reintroduce a folder-name compare — use
+  `ModState.PathEquals` (`Path.GetFullPath` + `OrdinalIgnoreCase` + trimmed separators).
+  Pinned by `MultiInstallModelTests`.
+
 - **`ModState.PinnedVersion` pauses update PROMPTS, it never auto-updates — and it
   self-corrects when stale.** Empty (default) = follow the latest, normal
   behaviour. When it equals the installed version, `MainWindow.IsUpdatePausedByPin`

@@ -3226,6 +3226,11 @@ public static class Strings
             [LangEn] = "Installed copies",
             [LangEs] = "Copias instaladas",
         },
+        ["RemoveInstallCopy"] = new()
+        {
+            [LangEn] = "Remove from list (doesn't delete files)",
+            [LangEs] = "Quitar de la lista (no borra archivos)",
+        },
 
         // -------- Elevation (UAC) --------
         ["DlgElevationRequiredTitle"] = new()

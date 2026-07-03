@@ -273,6 +273,29 @@ public class ModState
     }
 
     /// <summary>
+    /// Forget a single registered copy by id (the switcher's "remove" action). Only
+    /// drops the registration — it does NOT touch files on disk. Returns true if an
+    /// entry was removed.
+    /// </summary>
+    public bool RemoveInstall(string id)
+        => !string.IsNullOrEmpty(id) && OtherInstalls.RemoveAll(i => i.Id == id) > 0;
+
+    /// <summary>
+    /// Case-insensitive, full-path-normalized comparison of two install paths, so
+    /// <c>bin\..\</c>, trailing slashes, and casing don't defeat dedup. Falls back to
+    /// a trimmed ordinal compare when a path can't be fully qualified.
+    /// </summary>
+    public static bool PathEquals(string? a, string? b)
+        => string.Equals(NormalizePath(a), NormalizePath(b), StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizePath(string? p)
+    {
+        if (string.IsNullOrWhiteSpace(p)) return "";
+        try { p = Path.GetFullPath(p); } catch { /* keep raw on a malformed path */ }
+        return p.TrimEnd('\\', '/');
+    }
+
+    /// <summary>
     /// Idempotent post-load normalization. A NO-OP for single-install configs
     /// (the common case, <see cref="OtherInstalls"/> empty): it only assigns a
     /// stable <see cref="ActiveInstallId"/> when the mod actually has extra
@@ -289,6 +312,24 @@ public class ModState
             ActiveInstallLabel = "";
             return;
         }
+
+        // Drop empty entries and any copy whose path duplicates the active install or
+        // an earlier-kept copy — a stale re-point / double registration would otherwise
+        // surface a phantom duplicate in the switcher. Pure path compare, no disk I/O
+        // (non-existent folders are filtered at render time + removable by hand).
+        if (OtherInstalls.Count > 0)
+        {
+            var kept = new List<ModInstall>();
+            foreach (var o in OtherInstalls)
+            {
+                if (string.IsNullOrWhiteSpace(o.InstallPath)) continue;
+                if (PathEquals(o.InstallPath, InstallPath)) continue;
+                if (kept.Any(k => PathEquals(k.InstallPath, o.InstallPath))) continue;
+                kept.Add(o);
+            }
+            if (kept.Count != OtherInstalls.Count) OtherInstalls = kept;
+        }
+
         if (OtherInstalls.Count > 0 && string.IsNullOrEmpty(ActiveInstallId))
             ActiveInstallId = Guid.NewGuid().ToString("N");
     }

@@ -170,4 +170,42 @@ public class MultiInstallModelTests
         Assert.Empty(st.OtherInstalls);
         Assert.Equal("", st.ActiveInstallId);
     }
+
+    [Fact]
+    public void NormalizeInstalls_DropsEmptyAndDuplicateCopies()
+    {
+        var st = new ModState { InstallPath = @"C:\Games\WoL" };
+        st.OtherInstalls.Add(new ModInstall { Id = "a", InstallPath = "" });               // empty → dropped
+        st.OtherInstalls.Add(new ModInstall { Id = "b", InstallPath = @"c:\games\wol\" }); // == active (norm) → dropped
+        st.OtherInstalls.Add(new ModInstall { Id = "c", InstallPath = @"D:\Copy2" });      // distinct → kept
+        st.OtherInstalls.Add(new ModInstall { Id = "d", InstallPath = @"D:\Copy2\" });     // dup of c (norm) → dropped
+
+        st.NormalizeInstalls(isStock: false);
+
+        Assert.Single(st.OtherInstalls);
+        Assert.Equal("c", st.OtherInstalls[0].Id);
+    }
+
+    [Fact]
+    public void RemoveInstall_RemovesTheMatchingCopyOnly()
+    {
+        var st = new ModState { InstallPath = @"C:\A" };
+        st.OtherInstalls.Add(new ModInstall { Id = "keep", InstallPath = @"C:\B" });
+        st.OtherInstalls.Add(new ModInstall { Id = "gone", InstallPath = @"C:\C" });
+
+        Assert.True(st.RemoveInstall("gone"));
+        Assert.False(st.RemoveInstall("gone"));   // already gone
+        Assert.False(st.RemoveInstall(""));       // guarded
+        Assert.Single(st.OtherInstalls);
+        Assert.Equal("keep", st.OtherInstalls[0].Id);
+    }
+
+    [Theory]
+    [InlineData(@"C:\A", @"c:\a\", true)]           // casing + trailing slash
+    [InlineData(@"C:\A\bin\..", @"C:\A", true)]     // dot-segment normalization
+    [InlineData(@"C:\A", @"C:\B", false)]
+    [InlineData("", "", true)]
+    [InlineData(@"C:\A", "", false)]
+    public void PathEquals_NormalizesForComparison(string a, string b, bool expected)
+        => Assert.Equal(expected, ModState.PathEquals(a, b));
 }
