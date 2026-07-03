@@ -59,10 +59,16 @@ Pick whichever feels most comfortable; the end result is the same PR.
 In the launcher: **Mods tab → "Publish my mod"** button. A 6-step
 wizard asks for every schema field with inline validation:
 
-1. **Identity** — `id`, `displayName`.
+1. **Identity** — `id`, `displayName`, `author`, `subtitle`.
 2. **Look & feel** — `accentColor`, `icon`, `banner`.
-3. **Install** — `type`, `defaultFolder`, `probeFile`, `executable`.
-4. **Updates** — `mechanism` and its dependent fields.
+3. **Install** — `type`, `defaultFolder`, `probeFile`, `executable`,
+   `arguments`, `marker`, plus an *Advanced* section (`installProductGuid`,
+   `payloadUrls`, `payloadSha256`, `userDataFolder`).
+4. **Updates** — `mechanism` and its dependent fields: the WoL subpanel
+   (`updateInfoUrl`, `updateInfoUrlAlt`, `payloadZipUrls`, `payloadSha256`), the
+   GitHub subpanel (`sourceRepo`, `approvedReleaseTag`, and Advanced
+   `externalAssetUrlTemplate` / `externalAssetSha256`), **and the `translations`
+   block (`repo`, `coveredFiles`) — collected here, not on a separate step**.
 5. **Description & website** — `description.en`, `description.es`,
    `officialWebsite`.
 6. **Review** — preview of the generated `mod.json`. Two buttons:
@@ -172,10 +178,9 @@ max per language.
   "type": "IsolatedFolder",
   "defaultFolder": "C:\\Program Files (x86)\\My Mod",
   "probeFile": "data\\stringtable.xml",
+  "marker": "data\\mymod_marker.xml",
   "executable": "age3m.exe",
-  "arguments": "",
-  "payloadUrls": ["https://..."],
-  "payloadSha256": ["aabbcc..."]
+  "arguments": ""
 }
 ```
 
@@ -187,8 +192,13 @@ max per language.
 | `marker` | *Optional.* Relative path (file **or** directory) that is unique to your mod and absent from vanilla AoE3. When set, the launcher detects your mod **by content in a folder with any name** (the install folder no longer has to be named after the mod) and uses it to tell a real install apart from the base game. Needed only when `probeFile` is shared with AoE3 — WoL uses `art\\zulushield`, because its probe `data\\stringtabley.xml` also ships in vanilla. |
 | `executable` | Filename of the .exe that launches the game (`age3y.exe` for WoL, `age3m.exe` for Improvement Mod). The launcher looks for it inside the install folder. |
 | `arguments` | Extra args the launcher appends when running. Usually empty. |
-| `payloadUrls` | Array of HTTPS URLs for the initial install zip. If the mod ships in parts (`.zip.001`, `.002`, …) list them in order — the launcher concatenates and then extracts. |
-| `payloadSha256` | **Strongly recommended.** Parallel array to `payloadUrls` with each part's SHA-256. If you declare it and a download doesn't match, the launcher aborts — defends against payload tampering. |
+| `payloadUrls` | Array of HTTPS URLs for the initial install zip (multi-part `.zip.001`, `.002`, … listed in order). **Reserved — the current launcher does NOT read this.** It's schema-valid and the publish wizard collects it, but the install pipeline sources the initial payload from the **`update` block** instead (a GitHubReleases release asset / `externalAssetUrlTemplate`, or `update.wol.payloadZipUrls`). Declare your payload there. |
+| `payloadSha256` | Parallel array to `payloadUrls` with each part's SHA-256. **Also reserved / not verified today** (the launcher doesn't consume `payloadUrls`). For an actually-enforced hash, use `update.github.externalAssetSha256` (§5.1). |
+
+> **Where the initial payload actually comes from:** GitHubReleases mods get it from the
+> release asset on `approvedReleaseTag` (or `externalAssetUrlTemplate`); WolPatcher mods get it
+> from `update.wol.payloadZipUrls`. `install.payloadUrls`/`payloadSha256` are declared-but-unused
+> at the moment, so a `Manual` mod that only sets `install.payloadUrls` can't be installed yet.
 
 ### 3.5. `update` — how files are kept up to date
 
@@ -225,10 +235,10 @@ Internal steps:
 
 1. Detect AoE3 (Steam / GOG / retail).
 2. Clone the AoE3 folder to `defaultFolder`.
-3. Flatten `bin\` to the root (Steam layout) and delete the now-empty
-   `bin\` afterwards (~3.7 GB saved).
+3. Flatten `bin\` to the root (Steam layout) by copying its contents up,
+   then delete `bin\` (reclaims ~3.7 GB of duplicated files).
 4. Extract your payload on top.
-5. Write shortcuts, registry entry and `<id>-manifest.json`.
+5. Write shortcuts, registry entry and `install-manifest.json`.
 
 Use it when:
 
@@ -248,7 +258,7 @@ Internal steps:
 1. Detect AoE3.
 2. Back up every file about to be overwritten.
 3. Extract your payload on top.
-4. Write `<id>-manifest.json` so an uninstall can revert.
+4. Write `install-manifest.json` so an uninstall can revert.
 
 Use it when:
 
@@ -410,9 +420,13 @@ on each play session runs your `.exe` — if it spawns its own updater
 
 ### 5.4. `Manual` — no automated updates
 
-The launcher lists the mod, lets the user install it (if you declared
-`install.payloadUrls`) and never tries to update it. Useful for demos,
-prototypes, or mods whose update story isn't decided yet.
+The launcher lists the mod and never tries to update it. Useful for demos,
+prototypes, or mods whose update story isn't decided yet. **Note:** the launcher
+currently has no automatic install path for a pure `Manual` mod — it sources the
+initial payload from the `update` block (GitHubReleases asset or
+`update.wol.payloadZipUrls`), and `install.payloadUrls` is not consumed yet
+(§3.4). So `Manual` today means "listed, not auto-installed/updated"; pick
+`GitHubReleases` if you want the launcher to install and update your mod.
 
 ```json
 "update": { "mechanism": "Manual" }
@@ -432,16 +446,18 @@ non-matching regexes, exceeded lengths, schemeless URLs, and so on.
 
 ### 6.2. SHA-256 hashes
 
-| Field | Mandatory when | Strongly recommended when |
+| Field | Mandatory when | Enforced today? |
 |---|---|---|
-| `install.payloadSha256` | never | always, when you declare `payloadUrls` |
-| `update.wol.payloadSha256` | never | always, when you declare `payloadZipUrls` |
-| `update.github.externalAssetSha256` | **always**, when `externalAssetUrlTemplate` is set | n/a |
+| `install.payloadSha256` | never | **No** — `install.payloadUrls` isn't consumed (§3.4), so this is reserved. |
+| `update.wol.payloadSha256` | never | **Not yet** — the WoL catalog SHA isn't wired through to the download verifier. Safe to declare (future-proof), but don't rely on it as a guarantee today. |
+| `update.github.externalAssetSha256` | **always**, when `externalAssetUrlTemplate` is set | **Yes** — verified after download; a mismatch aborts the install. |
 
-The launcher verifies the hash after download and aborts on mismatch.
-Without a hash, the launcher trusts the host (GitHub Releases, the
-mod's own site). **With** a hash, the launcher catches tampering even
-if the host was compromised after the PR was approved.
+The only hash the launcher **enforces today** is
+`update.github.externalAssetSha256` (external-host GitHubReleases). It verifies
+the download and aborts on mismatch — catching tampering even if the host was
+compromised after the PR was approved. For plain GitHub-Releases assets the
+launcher trusts GitHub's CDN (no hash needed). The other two SHA fields are
+declared-but-not-verified for now (see the caveats above).
 
 ### 6.3. Tier system — what auto-merges and what doesn't
 
@@ -655,9 +671,12 @@ will see your mod automatically when their cache expires
 - **Don't upload the mod payload to the catalog.** The catalog repo
   holds only metadata (`mod.json` + small assets). The binary lives in
   GitHub Releases / your CDN.
-- **Don't declare `payloadSha256` without actually computing the hash.**
-  A placeholder hash means the launcher refuses to install for every
-  user.
+- **Don't declare `update.github.externalAssetSha256` without actually
+  computing the hash.** That's the one hash the launcher enforces — a
+  placeholder or wrong value means it refuses to install for every user.
+  (The `install.payloadSha256` / `update.wol.payloadSha256` fields aren't
+  verified today — see §6.2 — so a bad value there is silently ignored, which
+  is arguably worse; only set them to real hashes.)
 - **Don't reuse someone else's `id`.** Even though the schema regex
   doesn't forbid it, CI rejects the PR if `mods/<id>` already exists
   and you're not its CODEOWNER.
