@@ -110,6 +110,25 @@ public sealed class NotificationCenter
     }
 
     /// <summary>
+    /// "Installed" / "Copy installed" for a mod — a fresh install (or a new copy)
+    /// finished, distinct from an update. Not deduped: an install is user-initiated,
+    /// raised exactly once per install (no reconciliation double-fires it), so each
+    /// install — including a second copy of the same version — gets its own confirmation.
+    /// </summary>
+    public bool RaiseInstalled(string modId, string version, string title, string body)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return false;
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.Installed,
+            ModId = modId,
+            Title = title,
+            Body = body,
+            TargetId = version,
+        });
+    }
+
+    /// <summary>
     /// "New translation" for a mod. Deduped on a stable <paramref name="translationKey"/>
     /// (e.g. <c>id@version</c>) via <see cref="ModState.NotifiedTranslationKeys"/>.
     /// </summary>

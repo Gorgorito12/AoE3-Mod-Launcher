@@ -769,6 +769,10 @@
                                                                     <Setter Property="Text" Value="&#xE710;"/>
                                                                     <Setter Property="Foreground" Value="#B48AD8"/>
                                                                 </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="Installed">
+                                                                    <Setter Property="Text" Value="&#xE73E;"/>
+                                                                    <Setter Property="Foreground" Value="#62C462"/>
+                                                                </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </TextBlock.Style>

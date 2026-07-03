@@ -60,6 +60,26 @@ public partial class MainWindow : Window
     // ignores this kind of busy so the user can keep clicking mods without
     // the "operation in progress" popup.
     private bool _isCheckOnly;
+
+    // ---- Background-operation ownership ----
+    // A long op (install/update/repair/verify/uninstall) runs on ONE mod, but the user may
+    // switch to VIEW/PLAY another installed mod while it runs. _operatingModId names the mod
+    // the live op belongs to (null when idle); the button-gate + progress strip key off
+    // whether the DISPLAYED mod is that one. _operatingCts is the op's OWN cancellation token
+    // (separate from _cts, which a mod-switch's CheckAsync reassigns) so Pause/Cancel and a
+    // switch never cross-cancel. Still ONE op at a time (each flow guards on _isBusy).
+    private string? _operatingModId;
+    // The specific install FOLDER the live op targets (a copy install writes a NEW folder,
+    // not the active copy). Lets the gate keep a DIFFERENT already-installed copy of the SAME
+    // mod playable while a new copy installs. Set with _operatingModId; see DisplayedModIsOperating.
+    private string? _operatingInstallPath;
+    private CancellationTokenSource? _operatingCts;
+    // True only while a LONG, decoupled op (install / update) runs — those capture their
+    // service/downloads/token locally, so the user may switch to another installed mod and
+    // play it while they run in the background. The shorter ops (repair / verify / uninstall)
+    // re-read _updateService, so a switch during them is blocked. Cleared when any op ends.
+    private bool _operationIsBackgroundable;
+
     private bool _modIsInstalled = true;  // false when no valid install detected
     // Cached result of GameLauncher.FindAoe3Install — the full registry +
     // VDF + all-drive scan can be 50-150ms on machines where AoE3 isn't
@@ -1072,7 +1092,10 @@ public partial class MainWindow : Window
         // faster than the background check completes fired the "operation in
         // progress" popup even though nothing the user cared about was
         // actually running.
-        if (_isBusy && !_isCheckOnly)
+        // A LONG op (install / update) runs in the BACKGROUND: allow switching to another
+        // installed mod (and playing it) while it continues. Only the shorter ops that
+        // re-read _updateService (repair / verify / uninstall) still block a switch.
+        if (_isBusy && !_isCheckOnly && !_operationIsBackgroundable)
         {
             MessageBox.Show(this,
                 Strings.Get("DlgModSwitchBusyBody"),
@@ -1168,12 +1191,32 @@ public partial class MainWindow : Window
 
         RefreshActiveModUi();
         UpdateActiveModHighlight();
-        ResetProgressUI();
+        // Don't wipe a live background op's progress bars on a mod/copy switch.
+        MaybeResetProgressUI();
         UpdateGameUI();
         RefreshIdlePanel();
+        RefreshOperationGate();   // the displayed mod may differ from the operating one now
 
-        // Re-detect install path + version + pending updates.
-        await CheckAsync();
+        if (_operatingModId != null)
+        {
+            // A background op is running on ANOTHER mod. Refresh the displayed mod from LOCAL
+            // state only — the network CheckAsync toggles the shared _isBusy/_cts and would
+            // disrupt the running op. The mod is installed (the user switched to it to play),
+            // so a cached result or install-presence render is enough to make PLAY live.
+            if (_checkResultCache.TryGetValue(target.Id, out var cachedB))
+                ApplyCheckResult(cachedB);
+            else
+            {
+                _modIsInstalled = !string.IsNullOrEmpty(_updateService.InstallPath);
+                UpdateGameUI();
+                RefreshOperationGate();
+            }
+        }
+        else
+        {
+            // Re-detect install path + version + pending updates.
+            await CheckAsync();
+        }
         RefreshModCards();
 
         // Mod switch: re-fetch the per-mod translation index (gated like startup
@@ -1208,8 +1251,9 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrEmpty(installId)) return;
 
-        // Same guards as a mod switch — a real operation or a running game blocks it.
-        if (_isBusy && !_isCheckOnly)
+        // Block switching the ACTIVE install only while THIS mod is mid-op (a switch re-reads
+        // its active install). A background op on ANOTHER mod doesn't block it.
+        if (DisplayedModIsOperating)
         {
             MessageBox.Show(this,
                 Strings.Get("DlgModSwitchBusyBody"),
@@ -1856,6 +1900,7 @@ public partial class MainWindow : Window
     {
         NotificationKind.UpdateAvailable => _bellBlue,
         NotificationKind.UpdateFinished => _bellGreen,
+        NotificationKind.Installed => _bellGreen,
         NotificationKind.NewTranslation => _bellGold,
         _ => _bellSoftWhite,
     };
@@ -2640,6 +2685,10 @@ public partial class MainWindow : Window
     {
         if (DashboardProgressLabel == null) return;
 
+        // The strip ALWAYS shows the current op, on every mod's dashboard — its title already
+        // names the mod ("Installing Wars of Liberty"), which is exactly the "what's installing
+        // in the background" indicator. The displayed mod's PLAY stays live via the per-install
+        // gate (RefreshOperationGate), so showing the op here doesn't block playing another mod.
         var idle = _progressState == ProgressState.Idle;
         DashboardProgressLabel.Text = idle
             ? Strings.Get("ProgressIdleTitle")
@@ -2671,6 +2720,8 @@ public partial class MainWindow : Window
         // or verifying can't be paused — only the download phase can).
         if (DashboardProgressActions != null)
         {
+            // Pause/Cancel follow the op wherever it's shown, so the background op can be
+            // paused/cancelled from any mod's dashboard.
             DashboardProgressActions.Visibility =
                 ProgressPanelControl.ProgressRunningActions.Visibility;
             DashboardPauseButton.IsEnabled = ProgressPanelControl.PauseButton.IsEnabled;
@@ -3681,7 +3732,24 @@ public partial class MainWindow : Window
             // Fase 1 — version picker (GitHubReleases only): list the repo's
             // releases, and install a chosen one through the shared update path.
             listVersions: () => ListGitHubVersionsAsync(),
-            installVersion: tag => InstallGitHubVersionAsync(tag));
+            installVersion: tag => InstallGitHubVersionAsync(tag),
+            // Multi-install management (the "Manage installs" section).
+            switchInstall: async id =>
+            {
+                await SwitchActiveInstallAsync(id);
+                _modPropertiesDialog?.RefreshData();
+            },
+            removeInstall: id =>
+            {
+                var st = _config.GetActiveState();
+                if (st.RemoveInstall(id))
+                {
+                    _config.Save();
+                    RefreshActiveModBanner();
+                    _modPropertiesDialog?.RefreshData();
+                }
+            },
+            addExistingFolder: () => AddExistingCopy());
         // NO Owner on purpose: an owned window with ShowInTaskbar=True minimizes
         // its owner when closed (the "closing properties minimizes the launcher"
         // bug). Independent top-level window like LobbyWindow; Activate() on open.
@@ -5042,14 +5110,23 @@ public partial class MainWindow : Window
             Margin = new Thickness(8, 2, 8, 6),
         });
 
+        // Names derive from the real FOLDER (pass null → folder leaf), so a stale custom label
+        // from the removed rename feature never shows.
         var rows = new List<(string Id, string Label, string Path, bool IsActive)>
         {
             (state.ActiveInstallId,
-             CopyDisplayLabel(state.ActiveInstallLabel, state.InstallPath),
+             CopyDisplayLabel(null, state.InstallPath),
              state.InstallPath, true),
         };
         foreach (var o in liveOthers)
-            rows.Add((o.Id, CopyDisplayLabel(o.Label, o.InstallPath), o.InstallPath, false));
+            rows.Add((o.Id, CopyDisplayLabel(null, o.InstallPath), o.InstallPath, false));
+
+        // Make every label unique for display (parent folder, then a stable #N) so the
+        // switcher never shows two identical rows — see PathDisplay.DisambiguateLabels.
+        var uniqueLabels = PathDisplay.DisambiguateLabels(
+            rows.Select(r => (r.Label, r.Path)).ToList());
+        for (int i = 0; i < rows.Count; i++)
+            rows[i] = (rows[i].Id, uniqueLabels[i], rows[i].Path, rows[i].IsActive);
 
         foreach (var row in rows)
         {
@@ -5097,7 +5174,7 @@ public partial class MainWindow : Window
                                 },
                                 new System.Windows.Controls.TextBlock
                                 {
-                                    Text = row.Path,
+                                    Text = PathDisplay.CompactPathMiddle(row.Path),
                                     FontSize = (double)FindResource("FontSizeCaption"),
                                     Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
                                     Opacity = 0.85,
@@ -5350,6 +5427,61 @@ public partial class MainWindow : Window
         return false;
     }
 
+    /// <summary>
+    /// Register an EXISTING install folder as an inactive copy of the active mod — adopts a
+    /// real install already on disk WITHOUT reinstalling. Reuses the same folder picker +
+    /// content probe as "Change mod folder"; validates it's a real install of this mod, then
+    /// appends it via <see cref="ModState.RegisterInstall"/> (deduped). Returns true if added.
+    /// </summary>
+    private bool AddExistingCopy()
+    {
+        var profile = _updateService.Profile;
+        if (profile.IsStockGame) return false;
+
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = Strings.Format("DlgFolderPickerTitle", profile.DisplayName),
+            Multiselect = false,
+        };
+        if (!string.IsNullOrEmpty(_updateService.InstallPath) && Directory.Exists(_updateService.InstallPath))
+            dialog.InitialDirectory = _updateService.InstallPath;
+        if (dialog.ShowDialog(this) != true) return false;
+
+        var chosen = dialog.FolderName.TrimEnd('\\', '/');
+        var candidates = new List<string> { chosen };
+        if (!string.IsNullOrEmpty(profile.DisplayName))
+            candidates.Add(Path.Combine(chosen, profile.DisplayName));
+        var defaultLeaf = Path.GetFileName(profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? "");
+        if (!string.IsNullOrEmpty(defaultLeaf)
+            && !candidates.Contains(Path.Combine(chosen, defaultLeaf), StringComparer.OrdinalIgnoreCase))
+            candidates.Add(Path.Combine(chosen, defaultLeaf));
+
+        string? resolved = null;
+        foreach (var candidate in candidates)
+            if (LooksLikeModInstall(candidate, profile)) { resolved = candidate.TrimEnd('\\', '/'); break; }
+
+        if (resolved == null)
+        {
+            MessageBox.Show(this,
+                Strings.Format("DlgInvalidFolderBody", profile.DisplayName,
+                    string.IsNullOrEmpty(profile.InstallProbeFile) ? "(unknown probe file)" : profile.InstallProbeFile),
+                Strings.Get("DlgInvalidFolderTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
+        var st = _config.GetActiveState();
+        if (!st.RegisterInstall(resolved, Path.GetFileName(resolved)))
+        {
+            MessageBox.Show(this,
+                Strings.Format("DlgInstallCopyExistsBody", resolved), Strings.Get("DlgInstallCopyExistsTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return false;
+        }
+        _config.Save();
+        RefreshActiveModBanner();
+        return true;
+    }
+
     // ------------------------------------------------------------------------
     // Update flow
     // ------------------------------------------------------------------------
@@ -5415,7 +5547,7 @@ public partial class MainWindow : Window
         // with the Retry button wired to RepairInstallAsync. Pause makes no sense
         // for a read-only scan, so its button is hidden for this operation.
         SetBusy(true);
-        _cts = new CancellationTokenSource();
+        _operatingCts = new CancellationTokenSource();
         ShowDownloadControls(true);
         ProgressPanelControl.PauseButton.Visibility = Visibility.Collapsed;
         StartProgressPanel(
@@ -5462,7 +5594,7 @@ public partial class MainWindow : Window
                     ProgressPanelControl.PatchBytesText.Text = $"{p.Done} / {p.Total}";
                 }
             });
-            var token = _cts.Token;
+            var token = _operatingCts!.Token;
             var result = await Task.Run(
                 () => VerifyInstallation(_updateService.InstallPath, verifyProfile,
                     verifyProgress, hashPass: true, token), token);
@@ -5539,7 +5671,7 @@ public partial class MainWindow : Window
         var installPath = _updateService.InstallPath!;
 
         SetBusy(true);
-        _cts = new CancellationTokenSource();
+        _operatingCts = new CancellationTokenSource();
         ShowDownloadControls(true);
 
         StartProgressPanel(
@@ -5682,7 +5814,7 @@ public partial class MainWindow : Window
                 });
                 SetStatus(Strings.Get("StatusVerifying"));
                 var pre = await Task.Run(() => VerifyService.VerifyAgainstManifest(
-                    installPath, preManifest!, coveredFiles, verifyProgress, _cts.Token));
+                    installPath, preManifest!, coveredFiles, verifyProgress, _operatingCts!.Token));
                 var damaged = pre.MissingItems.Concat(pre.CorruptItems)
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -5711,7 +5843,7 @@ public partial class MainWindow : Window
                         extractProgress,
                         overlayProgress,
                         payloadSha256: payloadSha256,
-                        ct: _cts.Token);
+                        ct: _operatingCts!.Token);
                 }
             }
             else
@@ -5729,7 +5861,7 @@ public partial class MainWindow : Window
                     extractProgress,
                     overlayProgress,
                     payloadSha256: payloadSha256,
-                    ct: _cts.Token);
+                    ct: _operatingCts!.Token);
             }
 
             var recheckProfile = _updateService.Profile;
@@ -5898,18 +6030,19 @@ public partial class MainWindow : Window
     /// installs under C:\Program Files), prompts the user to consent to a
     /// UAC elevation and relaunches the app with admin privileges.
     /// </summary>
-    private async Task ApplyUpdateWithElevationCheckAsync()
+    private async Task ApplyUpdateWithElevationCheckAsync(
+        InstallCompletion installContext = InstallCompletion.None)
     {
         if (string.IsNullOrEmpty(_updateService.InstallPath))
         {
-            await ApplyAsync();
+            await ApplyAsync(installContext);
             return;
         }
 
         // If we already have write access, just proceed normally
         if (ElevationService.CanWriteTo(_updateService.InstallPath))
         {
-            await ApplyAsync();
+            await ApplyAsync(installContext);
             return;
         }
 
@@ -6195,7 +6328,7 @@ public partial class MainWindow : Window
         var activeSt = _config.GetActiveState();
         InstallPathText.Text =
             activeSt.HasMultipleInstalls && !string.IsNullOrEmpty(_updateService.InstallPath)
-                ? $"[{CopyDisplayLabel(activeSt.ActiveInstallLabel, _updateService.InstallPath)}]  {_updateService.InstallPath}"
+                ? $"[{CopyDisplayLabel(null, _updateService.InstallPath)}]  {PathDisplay.CompactPathMiddle(_updateService.InstallPath, 64)}"
                 : (_updateService.InstallPath ?? "(not detected)");
 
         _modIsInstalled = result.IsValidInstall;
@@ -6302,7 +6435,7 @@ public partial class MainWindow : Window
             }
 
             _pendingDownloads = new();
-            ResetProgressUI();
+            MaybeResetProgressUI();
             return;
         }
 
@@ -6368,7 +6501,7 @@ public partial class MainWindow : Window
                 _pendingDownloads.Count,
                 FormatBytes(totalBytes)));
             SetPrimaryAction(PrimaryAction.Install);
-            ResetProgressUI();
+            MaybeResetProgressUI();
         }
         else if (_pendingDownloads.Count == 0)
         {
@@ -6387,7 +6520,7 @@ public partial class MainWindow : Window
                     _updateService.Profile.OfficialWebsite));
             }
             SetPrimaryAction(PrimaryAction.Play);
-            ResetProgressUI();
+            MaybeResetProgressUI();
         }
         else if (updatePaused)
         {
@@ -6396,7 +6529,7 @@ public partial class MainWindow : Window
             // and the status explains updates are paused (resume in Mod Properties).
             SetStatus(Strings.Format("StatusUpdatePausedPinned", result.CurrentVersion?.Ver));
             SetPrimaryAction(PrimaryAction.Play);
-            ResetProgressUI();
+            MaybeResetProgressUI();
         }
         else
         {
@@ -6419,7 +6552,7 @@ public partial class MainWindow : Window
             // ApplyUpdateWithElevationCheckAsync, so the wiring is
             // already in place.
             SetPrimaryAction(PrimaryAction.Update);
-            ResetProgressUI();
+            MaybeResetProgressUI();
         }
 
         // Notification bell: raise an "update available" item for the ACTIVE mod
@@ -6487,7 +6620,10 @@ public partial class MainWindow : Window
             _installerService.IsPaused = false;
             _updateService.IsPaused = false;
         }
-        _cts?.Cancel();
+        // Cancel the running OP (its own token), not a background check's _cts. The
+        // pause/cancel strip is only interactive while viewing the operating mod, so
+        // _updateService above is that mod's service.
+        _operatingCts?.Cancel();
     }
 
     /// <summary>
@@ -7450,6 +7586,12 @@ public partial class MainWindow : Window
         // auto-continue-into-update ("todo corrido") below so it never fires
         // after a failed / incomplete install.
         bool installSucceeded = false;
+        // True when an addNewSlot copy install left the CURRENT active install in place — the
+        // new copy is registered inactive, so the tail must NOT auto-continue an update against
+        // the still-active OTHER copy. keptCopyVersion is that new copy's snapshot version, for
+        // the "Copy installed" bell (no CheckAsync runs on it, so CurrentVersion would be null).
+        bool keptCurrentActive = false;
+        string keptCopyVersion = "";
 
         var payload = await ResolvePayloadUrlsAsync(service);
         if (payload == null) return;
@@ -7649,7 +7791,11 @@ public partial class MainWindow : Window
 
         // ---- Begin installation ----
         SetBusy(true);
-        _cts = new CancellationTokenSource();
+        _operationIsBackgroundable = true;   // isolated below → switch-to-another-mod OK
+        // The op targets the NEW folder (a copy install), not the active copy — so a DIFFERENT
+        // already-installed copy of the same mod stays playable while this one installs.
+        _operatingInstallPath = installFolder;
+        _operatingCts = new CancellationTokenSource();
         ShowDownloadControls(true);
 
         // Open the colored progress panel in the sidebar with the right
@@ -7860,7 +8006,7 @@ public partial class MainWindow : Window
                             payloadSha256: payloadSha256,
                             extraExcludedSubtrees: siblingExcludes,
                             installLabel: installLabel,
-                            ct: _cts.Token);
+                            ct: _operatingCts!.Token);
                     }
                     else
                     {
@@ -7877,7 +8023,7 @@ public partial class MainWindow : Window
                             overlayProgress,
                             payloadSha256: payloadSha256,
                             installLabel: installLabel,
-                            ct: _cts.Token);
+                            ct: _operatingCts!.Token);
                     }
                     break; // success — exit retry loop
                 }
@@ -7938,24 +8084,27 @@ public partial class MainWindow : Window
                 && !string.IsNullOrEmpty(installState.InstallPath)
                 && !ModState.PathEquals(installState.InstallPath, installFolder))
             {
-                // Additional copy: rotate the current active install into
-                // OtherInstalls and make the NEW folder the active one.
-                installState.OtherInstalls.Add(installState.SnapshotActive());
-                installState.ActiveInstallId = Guid.NewGuid().ToString("N");
-                installState.ActiveInstallLabel = Path.GetFileName(installFolder.TrimEnd('\\', '/'));
-                // If the new folder was itself a previously-registered copy, it's now the
-                // active one — drop the stale OtherInstalls entry so it isn't listed twice.
-                installState.OtherInstalls.RemoveAll(i => ModState.PathEquals(i.InstallPath, installFolder));
-                // A fresh copy carries no pin / active translation from the old active.
-                installState.PinnedVersion = "";
-                installState.ActiveTranslationId = "";
-                installState.ActiveTranslationVersion = "";
-                // New active copy in a different folder → clear the global exe cache.
-                _config.GameExecutable = "";
+                // "Install another copy" NEVER auto-switches you to the new copy — it registers
+                // it in the copy list at its snapshot version, and you switch to it by hand when
+                // you want it. This keeps you on (and possibly playing) your current copy while
+                // the new one installs in the background. It updates when you switch to it.
+                var leaf = Path.GetFileName(installFolder.TrimEnd('\\', '/'));
+                installState.RegisterInstall(installFolder, leaf);
+                if (!string.IsNullOrEmpty(installVersion))
+                {
+                    var added = installState.OtherInstalls
+                        .FirstOrDefault(i => ModState.PathEquals(i.InstallPath, installFolder));
+                    if (added != null) added.LastKnownVersion = installVersion;
+                    keptCopyVersion = installVersion;
+                }
+                keptCurrentActive = true;
             }
-            installState.InstallPath = installFolder;
-            if (!string.IsNullOrEmpty(installVersion))
-                installState.LastKnownVersion = installVersion;
+            if (!keptCurrentActive)
+            {
+                installState.InstallPath = installFolder;
+                if (!string.IsNullOrEmpty(installVersion))
+                    installState.LastKnownVersion = installVersion;
+            }
             _config.Save();
 
             // Verify installation. VerifyInstallation is now profile-aware —
@@ -8025,6 +8174,38 @@ public partial class MainWindow : Window
             _currentInstallPhase = InstallPhase.None;
         }
 
+        var installContext = addNewSlot ? InstallCompletion.Copy : InstallCompletion.Fresh;
+
+        // A copy install that KEPT the current active copy (the user was playing another one):
+        // the new copy is registered inactive at its snapshot version. Don't CheckAsync /
+        // auto-continue against the still-active OTHER copy — just announce the new copy; it
+        // updates when the user switches to it. Refresh the banner so the copy list updates.
+        if (keptCurrentActive)
+        {
+            if (installSucceeded)
+            {
+                RaiseInstalledBell(service, isCopy: true, keptCopyVersion);
+                RefreshActiveModBanner();
+            }
+            return;
+        }
+
+        // If the user switched to another mod while this install ran in the background, the
+        // CheckAsync + auto-continue below would evaluate the now-DISPLAYED mod, patching the
+        // wrong one and mis-labelling the bell. Refresh the INSTALLED mod's cache instead and
+        // announce it; its pending patches surface as an Update CTA when the user returns to
+        // it. (Mirrors ApplyAsync's tail guard.)
+        if (!string.Equals(service.Profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            if (installSucceeded)
+            {
+                _checkResultCache.Remove(service.Profile.Id);
+                RaiseInstalledBell(service, installContext == InstallCompletion.Copy,
+                    service.CurrentVersion?.Ver ?? "");
+            }
+            return;
+        }
+
         // Re-check to detect the freshly installed mod
         InvalidateActiveModCheckCache();
         await CheckAsync();
@@ -8035,7 +8216,35 @@ public partial class MainWindow : Window
         // case — the byte-faithful payload is already the latest, so the
         // recheck finds nothing pending and this returns immediately.
         if (installSucceeded)
-            await MaybeAutoContinueUpdateAfterInstall();
+        {
+            bool continuedIntoUpdate = await MaybeAutoContinueUpdateAfterInstall(installContext);
+            // If nothing was pending (payload already at the latest version), the
+            // auto-continue didn't run — announce the install here with the installed
+            // version. When it DID continue, ApplyAsync raises the bell (final version).
+            if (!continuedIntoUpdate)
+                RaiseInstalledBell(service, installContext == InstallCompletion.Copy,
+                    service.CurrentVersion?.Ver ?? "");
+        }
+    }
+
+    /// <summary>
+    /// Whether a completed <see cref="ApplyAsync"/> should announce an INSTALL (and which
+    /// kind) instead of an update. Threaded from <see cref="InstallAsync"/> through the
+    /// auto-continue chain; the genuine-update callers leave it <see cref="None"/>.
+    /// </summary>
+    private enum InstallCompletion { None, Fresh, Copy }
+
+    /// <summary>Raise the "Installation complete" / "Copy installed" bell, attributed to the
+    /// given mod's service (NOT necessarily the displayed one — a background op may finish
+    /// after the user switched away).</summary>
+    private void RaiseInstalledBell(UpdateService svc, bool isCopy, string version)
+    {
+        var v = string.IsNullOrEmpty(version) ? "?" : version;
+        _notifications.RaiseInstalled(
+            svc.Profile.Id, v,
+            Strings.Get(isCopy ? "NotifCopyInstalledTitle" : "NotifInstalledTitle"),
+            Strings.Format(isCopy ? "NotifCopyInstalledBody" : "NotifInstalledBody",
+                svc.Profile.DisplayName, v));
     }
 
     /// <summary>
@@ -8045,21 +8254,22 @@ public partial class MainWindow : Window
     /// has pending patches, and isn't pinned — otherwise it's a no-op. Keeps
     /// install→update a single continuous flow without a second user click.
     /// </summary>
-    private async Task MaybeAutoContinueUpdateAfterInstall()
+    private async Task<bool> MaybeAutoContinueUpdateAfterInstall(InstallCompletion installContext)
     {
         if (!_checkResultCache.TryGetValue(_updateService.Profile.Id, out var result))
-            return;
+            return false;
         if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
-            return;
-        if (!result.IsValidInstall) return;
-        if (result.CurrentVersion == null) return;       // unrecognized → don't auto-act
-        if (result.PendingDownloads.Count == 0) return;  // already at latest
-        if (IsUpdatePausedByPin(result)) return;         // user pinned this version
+            return false;
+        if (!result.IsValidInstall) return false;
+        if (result.CurrentVersion == null) return false;       // unrecognized → don't auto-act
+        if (result.PendingDownloads.Count == 0) return false;  // already at latest
+        if (IsUpdatePausedByPin(result)) return false;         // user pinned this version
 
         DiagnosticLog.Write(
             $"Auto-continue: fresh install at {result.CurrentVersion.Ver} has " +
             $"{result.PendingDownloads.Count} pending patch(es) → running update.");
-        await ApplyUpdateWithElevationCheckAsync();
+        await ApplyUpdateWithElevationCheckAsync(installContext);
+        return true;
     }
 
     /// <summary>
@@ -8125,20 +8335,26 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ApplyAsync()
+    private async Task ApplyAsync(InstallCompletion installContext = InstallCompletion.None)
     {
         if (_isBusy) return;
         SetBusy(true);
-        _cts = new CancellationTokenSource();
+        _operationIsBackgroundable = true;   // svc/pending captured below → switch-to-another-mod OK
+        _operatingCts = new CancellationTokenSource();
         ShowDownloadControls(true);
 
-        var fromVersion = _updateService.CurrentVersion?.Ver ?? "?";
-        var toVersion = _updateService.LatestVersion?.Ver ?? "?";
+        // Capture the operating service + downloads so a mid-op mod switch (background op)
+        // can repoint _updateService/_pendingDownloads without corrupting THIS update or
+        // mis-attributing its completion to the mod the user switched to.
+        var svc = _updateService;
+        var pending = _pendingDownloads;
+        var fromVersion = svc.CurrentVersion?.Ver ?? "?";
+        var toVersion = svc.LatestVersion?.Ver ?? "?";
         StartProgressPanel(
             ProgressOperation.Update,
-            title: Strings.Format("ProgressTitleUpdating", _updateService.Profile.DisplayName),
+            title: Strings.Format("ProgressTitleUpdating", svc.Profile.DisplayName),
             subtitle: Strings.Format("ProgressUpdating", fromVersion, toVersion),
-            retry: ApplyAsync);
+            retry: () => ApplyAsync());
 
         bool succeeded = false;
         try
@@ -8149,8 +8365,8 @@ public partial class MainWindow : Window
             {
                 _currentUpdatePhase = phase;
             });
-            await _updateService.ApplyUpdatesAsync(
-                _pendingDownloads, progressReporter, statusReporter, phaseReporter, _cts.Token);
+            await svc.ApplyUpdatesAsync(
+                pending, progressReporter, statusReporter, phaseReporter, _operatingCts!.Token);
             succeeded = true;
         }
         catch (OperationCanceledException)
@@ -8177,32 +8393,43 @@ public partial class MainWindow : Window
             ShowProgressCompleted("ProgressTitleCompleted",
                 Strings.Format("ProgressUpdating", fromVersion, toVersion));
 
-            // Notification bell + tray toast for "update finished". Routed
-            // through the NotificationCenter so it lands in the bell history
-            // AND (via ToastRequested → ShowToast) raises the same tray balloon
-            // it used to — which itself only fires when the user is away from
-            // the launcher. Replaces the previous direct ShowToast so the user
-            // never gets two toasts for one completed update.
-            _notifications.RaiseUpdateFinished(
-                _updateService.Profile.Id, toVersion,
-                Strings.Get("NotifUpdateFinishedTitle"),
-                Strings.Format("NotifUpdateFinishedBody",
-                    _updateService.Profile.DisplayName,
-                    string.IsNullOrEmpty(toVersion) ? "?" : toVersion));
+            // Notification bell + tray toast. Routed through the NotificationCenter so it
+            // lands in the bell history AND (via ToastRequested → ShowToast) raises the
+            // tray balloon. When this ApplyAsync is the auto-continue leg of a FRESH
+            // install (installContext set), announce it as an install / copy install
+            // instead of "Update complete" — a fresh install chains install → update, and
+            // the user's mental model is "I installed", not "I updated". A genuine update
+            // (installContext None) keeps the "Update complete" bell exactly as before.
+            if (installContext != InstallCompletion.None)
+                RaiseInstalledBell(svc, installContext == InstallCompletion.Copy, toVersion);
+            else
+                _notifications.RaiseUpdateFinished(
+                    svc.Profile.Id, toVersion,
+                    Strings.Get("NotifUpdateFinishedTitle"),
+                    Strings.Format("NotifUpdateFinishedBody",
+                        svc.Profile.DisplayName,
+                        string.IsNullOrEmpty(toVersion) ? "?" : toVersion));
 
             // If the post-update reconcile reverted an incompatible translation,
             // tell the user instead of silently switching them to English.
-            ShowTranslationRevertNotice(_updateService.LastTranslationRevertNotice);
-            _updateService.LastTranslationRevertNotice = null;
+            ShowTranslationRevertNotice(svc.LastTranslationRevertNotice);
+            svc.LastTranslationRevertNotice = null;
         }
 
-        // Re-check AFTER releasing busy state, otherwise the new CheckAsync
-        // call would short-circuit on its own _isBusy guard. This refreshes
-        // the version info card, the status message, and the pending list.
+        // Refresh the mod this op belongs to. If the user switched away while it ran
+        // (background op), just drop its stale cache — its UI refreshes when they switch
+        // back; don't CheckAsync the now-displayed OTHER mod off this update.
         if (succeeded)
         {
-            InvalidateActiveModCheckCache();
-            await CheckAsync();
+            if (string.Equals(_updateService.Profile.Id, svc.Profile.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                InvalidateActiveModCheckCache();
+                await CheckAsync();
+            }
+            else
+            {
+                _checkResultCache.Remove(svc.Profile.Id);
+            }
         }
     }
 
@@ -8517,8 +8744,9 @@ public partial class MainWindow : Window
         if (DashboardPlayButton != null && DashboardPlayButtonText != null)
         {
             DashboardPlayButtonText.Text = ActionPanelControl.PlayButtonText.Text;
-            DashboardPlayButton.IsEnabled = action != PrimaryAction.Hidden
-                && ActionPanelControl.PlayButton.IsEnabled;
+            // The ENABLED state is owned by RefreshOperationGate (displayed-vs-operating), so
+            // a background op on another mod doesn't wrongly disable this mod's CTA.
+            RefreshOperationGate();
         }
     }
 
@@ -8637,6 +8865,21 @@ public partial class MainWindow : Window
     {
         _isBusy = busy;
         _isCheckOnly = busy && checkOnly;
+        // Remember which mod a REAL op belongs to, so switching to a different mod can leave
+        // its buttons live (background op). Cleared when the op ends.
+        if (busy && !checkOnly)
+        {
+            _operatingModId = _updateService.Profile.Id;
+            // Default target = the active install (update / repair / verify). InstallAsync
+            // overrides it with the NEW folder right after SetBusy(true) for a copy install.
+            _operatingInstallPath = _updateService.InstallPath;
+        }
+        else if (!busy)
+        {
+            _operatingModId = null;
+            _operatingInstallPath = null;
+            _operationIsBackgroundable = false;   // each op re-arms this after SetBusy(true)
+        }
 
         // Lock the Mod Properties language tab during REAL ops (install / update /
         // repair) so the user can't swap translation data files mid-write. The
@@ -8672,6 +8915,53 @@ public partial class MainWindow : Window
             ActionPanelControl.MoreButton.IsEnabled = !busy;
             ActionPanelControl.PlayButton.IsEnabled = !busy && PrimaryActionEnabled();
         }
+
+        // Gate the VISIBLE cinema-hero buttons by whether the DISPLAYED mod is the one this
+        // op runs on — so an install on mod A leaves mod B's PLAY live when the user switches
+        // to it (background op). See RefreshOperationGate.
+        RefreshOperationGate();
+    }
+
+    /// <summary>
+    /// True when the CURRENTLY DISPLAYED mod is the one a real op is running on — i.e. its
+    /// action buttons + progress strip should reflect the busy op. False when idle, during a
+    /// read-only check, or when the user switched to a DIFFERENT mod while an op runs in the
+    /// background.
+    /// </summary>
+    private bool DisplayedModIsOperating
+    {
+        get
+        {
+            if (!_isBusy || _isCheckOnly || _operatingModId == null) return false;
+            if (!string.Equals(_operatingModId, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+                return false;
+            // Same mod. Gate this view only if it IS the copy being operated on. A DIFFERENT
+            // already-installed copy of the same mod (its own path) stays playable while a new
+            // copy installs. A fresh install (displayed path empty → nothing else to play) or an
+            // unknown op target gates as before.
+            var displayedPath = _updateService.InstallPath;
+            if (string.IsNullOrEmpty(displayedPath) || string.IsNullOrEmpty(_operatingInstallPath))
+                return true;
+            return ModState.PathEquals(_operatingInstallPath, displayedPath);
+        }
+    }
+
+    /// <summary>
+    /// Sets the three visible hero buttons' enabled state from "is the displayed mod mid-op".
+    /// The primary CTA + gear are blocked only for the mod that is actually operating; the
+    /// MODS switch is ALWAYS live (switching to another installed mod is the whole point of
+    /// background ops). Called from SetBusy, after a mod switch, and from SetPrimaryAction.
+    /// </summary>
+    private void RefreshOperationGate()
+    {
+        bool displayedBusy = DisplayedModIsOperating;
+        DashboardPlayButton.IsEnabled =
+            !displayedBusy && _primaryAction != PrimaryAction.Hidden && PrimaryActionEnabled();
+        // Settings (gear) + MODS switch are ALWAYS enabled — Properties (settings, manage
+        // installs, view logs) must stay reachable during an op; its destructive actions
+        // (Verify/Repair/Uninstall) self-gate on _isBusy and the language tab locks via SetModBusy.
+        DashboardSettingsButton.IsEnabled = true;
+        DashboardChangeModButton.IsEnabled = true;
     }
 
     /// <summary>
@@ -8705,6 +8995,18 @@ public partial class MainWindow : Window
         ProgressPanelControl.SpeedText.Text = "";
         ProgressPanelControl.EtaText.Text = "";
         ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressCurrentPatch");
+    }
+
+    /// <summary>
+    /// Resets the progress strip to idle — but NOT while a background op is live, so a
+    /// mod/copy switch during an install (which routes through ApplyCheckResult for the
+    /// switched-to copy) doesn't wipe the running op's bar / speed / eta. The op keeps
+    /// painting ProgressPanelControl and the pump mirrors it; after the op ends
+    /// (_operatingModId == null) this resets normally.
+    /// </summary>
+    private void MaybeResetProgressUI()
+    {
+        if (_operatingModId == null) ResetProgressUI();
     }
 
     private static string FormatBytes(long bytes)

@@ -159,6 +159,18 @@ public class NotificationCenterTests
     }
 
     [Fact]
+    public void Installed_AddsItem_NotDeduped()
+    {
+        var center = NewCenter(out _);
+
+        // An install is user-initiated and raised once per install; unlike UpdateFinished
+        // it is NOT deduped, so a second copy of the same version still confirms.
+        Assert.True(center.RaiseInstalled("wol", "1.2.0d", "t", "b"));
+        Assert.True(center.RaiseInstalled("wol", "1.2.0d", "t", "b"));
+        Assert.Equal(2, center.Items.Count(i => i.Kind == NotificationKind.Installed));
+    }
+
+    [Fact]
     public void SeedCatalogBaseline_SuppressesExisting_ThenBellsOnlyNew()
     {
         var center = NewCenter(out var config);

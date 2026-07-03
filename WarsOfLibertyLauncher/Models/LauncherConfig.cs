@@ -281,6 +281,43 @@ public class ModState
         => !string.IsNullOrEmpty(id) && OtherInstalls.RemoveAll(i => i.Id == id) > 0;
 
     /// <summary>
+    /// Register an EXISTING install folder as an inactive copy (the "add existing folder"
+    /// action) — adopts a real install already on disk WITHOUT reinstalling. No-op (returns
+    /// false) when the path is empty or already registered (active or another copy), so it
+    /// can't create a duplicate. Returns true when a new copy was added.
+    /// </summary>
+    public bool RegisterInstall(string path, string label = "")
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        foreach (var p in AllInstallPaths())
+            if (PathEquals(p, path)) return false;
+        OtherInstalls.Add(new ModInstall
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Label = (label ?? "").Trim(),
+            InstallPath = path,
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// Rename a registered install (the "edit label" action). Targets the active install
+    /// when <paramref name="id"/> matches <see cref="ActiveInstallId"/>, else the matching
+    /// <see cref="OtherInstalls"/> entry. An empty label reverts to the folder-derived
+    /// display name. Returns true if something was renamed.
+    /// </summary>
+    public bool RenameInstall(string id, string label)
+    {
+        if (string.IsNullOrEmpty(id)) return false;
+        label = (label ?? "").Trim();
+        if (id == ActiveInstallId) { ActiveInstallLabel = label; return true; }
+        var slot = OtherInstalls.Find(i => i.Id == id);
+        if (slot == null) return false;
+        slot.Label = label;
+        return true;
+    }
+
+    /// <summary>
     /// Case-insensitive, full-path-normalized comparison of two install paths, so
     /// <c>bin\..\</c>, trailing slashes, and casing don't defeat dedup. Falls back to
     /// a trimmed ordinal compare when a path can't be fully qualified.
@@ -355,6 +392,8 @@ public enum NotificationKind
     Connectivity,
     /// <summary>A new community mod appeared in the Workshop catalog.</summary>
     NewMod,
+    /// <summary>A fresh install (or a new copy) of a mod finished — distinct from an update.</summary>
+    Installed,
 }
 
 /// <summary>

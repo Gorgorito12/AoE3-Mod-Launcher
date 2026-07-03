@@ -46,6 +46,11 @@ public partial class ModPropertiesDialog : Window
     private readonly Action _openRepair;
     private readonly Action? _installAnotherCopy;
 
+    // Multi-install management (the "Manage installs" section on the LOCAL FILES tab).
+    private readonly Func<string, System.Threading.Tasks.Task>? _switchInstall;
+    private readonly Action<string>? _removeInstall;
+    private readonly Func<bool>? _addExistingFolder;
+
     // New callbacks (8) folded in from the SETTINGS popup. Each one
     // wraps a RaiseMenuClick on the legacy ActionPanelControl menu
     // item so all the original handlers + dialogs keep owning the
@@ -99,7 +104,10 @@ public partial class ModPropertiesDialog : Window
         Action? onUpdatePolicyChanged = null,
         Func<Task<IReadOnlyList<GitHubReleaseDownloader.ReleaseInfo>>>? listVersions = null,
         Func<string, Task>? installVersion = null,
-        Action? installAnotherCopy = null)
+        Action? installAnotherCopy = null,
+        Func<string, Task>? switchInstall = null,
+        Action<string>? removeInstall = null,
+        Func<bool>? addExistingFolder = null)
     {
         _profile = profile;
         _service = service;
@@ -124,6 +132,9 @@ public partial class ModPropertiesDialog : Window
         _listVersions = listVersions;
         _installVersion = installVersion;
         _installAnotherCopy = installAnotherCopy;
+        _switchInstall = switchInstall;
+        _removeInstall = removeInstall;
+        _addExistingFolder = addExistingFolder;
 
         InitializeComponent();
         ApplyStrings();
@@ -179,10 +190,13 @@ public partial class ModPropertiesDialog : Window
         OpenAoE3FolderBtn.Content = Strings.Get("ModPropOpenAoE3Folder");
         ChangeModFolderBtn.Content = Strings.Get("ModPropChangeModFolder");
         ChangeAoE3FolderBtn.Content = Strings.Get("ModPropChangeAoE3Folder");
+        LblManageInstalls.Text = Strings.Get("ManageInstallsHeader");
+        LblManageInstallsDesc.Text = Strings.Get("ManageInstallsDesc");
+        AddExistingFolderBtn.Content = Strings.Get("AddExistingFolder");
+        InstallNewCopyBtn.Content = Strings.Get("MenuInstallAnotherCopy");
         LblMaintenanceSection.Text = Strings.Get("ModPropMaintenanceSection");
         VerifyBtn.Content = Strings.Get("ModContextVerify");
         RepairBtn.Content = Strings.Get("ModContextRepair");
-        InstallAnotherCopyBtn.Content = Strings.Get("MenuInstallAnotherCopy");
         LblDiagnosticsSection.Text = Strings.Get("ModPropDiagnostics");
         ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
         ShareDiagnosticsBtn.Content = Strings.Get("ModPropShareDiagnostics");
@@ -336,7 +350,8 @@ public partial class ModPropertiesDialog : Window
         ChangeAoE3FolderBtn.IsEnabled = true;
         VerifyBtn.IsEnabled = installed;
         RepairBtn.IsEnabled = installed;
-        InstallAnotherCopyBtn.IsEnabled = installed;
+        AddExistingFolderBtn.IsEnabled = true; // adopting an existing folder is always allowed
+        InstallNewCopyBtn.IsEnabled = installed;
         ViewLogsBtn.IsEnabled = true;          // Logs are always available.
         ShareDiagnosticsBtn.IsEnabled = true;  // Bundle is always available.
         UninstallBtn.IsEnabled = installed;
@@ -351,16 +366,161 @@ public partial class ModPropertiesDialog : Window
             LblMaintenanceSection.Visibility = Visibility.Collapsed;
             VerifyBtn.Visibility = Visibility.Collapsed;
             RepairBtn.Visibility = Visibility.Collapsed;
-            InstallAnotherCopyBtn.Visibility = Visibility.Collapsed;
             VerifyBtn.IsEnabled = false;
             RepairBtn.IsEnabled = false;
-            InstallAnotherCopyBtn.IsEnabled = false;
+
+            // The detect-only stock game never has copies to manage.
+            LblManageInstalls.Visibility = Visibility.Collapsed;
+            LblManageInstallsDesc.Visibility = Visibility.Collapsed;
+            ManageInstallsHost.Visibility = Visibility.Collapsed;
+            ManageInstallsButtons.Visibility = Visibility.Collapsed;
+            ManageInstallsDivider.Visibility = Visibility.Collapsed;
 
             LblDangerZone.Visibility = Visibility.Collapsed;
             LblDangerZoneDesc.Visibility = Visibility.Collapsed;
             UninstallBtn.Visibility = Visibility.Collapsed;
             UninstallBtn.IsEnabled = false;
         }
+
+        LoadManageInstalls();
+    }
+
+    /// <summary>
+    /// Build the "Manage installs" list: one card per registered install (the active one
+    /// first, then each inactive copy) with an editable name, its path + version, and
+    /// Active/Switch/Remove actions. Reuses <see cref="PathDisplay"/> for unique labels and
+    /// compact paths. Skipped for the stock game (no copies).
+    /// </summary>
+    private void LoadManageInstalls()
+    {
+        ManageInstallsHost.Children.Clear();
+        if (_profile.IsStockGame) return;
+
+        var st = _config.GetState(_profile.Id);
+        // Name = the real FOLDER name (ignore any stored custom Label — renaming was removed
+        // because a label that doesn't match the folder is misleading).
+        var rows = new List<(string Id, string Label, string Path, string Version, bool IsActive)>
+        {
+            (st.ActiveInstallId, DeriveLeaf(st.InstallPath), st.InstallPath, st.LastKnownVersion, true),
+        };
+        foreach (var o in st.OtherInstalls)
+            rows.Add((o.Id, DeriveLeaf(o.InstallPath), o.InstallPath, o.LastKnownVersion, false));
+
+        var uniqueLabels = PathDisplay.DisambiguateLabels(
+            rows.Select(r => (r.Label, r.Path)).ToList());
+
+        for (int i = 0; i < rows.Count; i++)
+            ManageInstallsHost.Children.Add(BuildInstallCard(
+                rows[i].Id, uniqueLabels[i], rows[i].Label, rows[i].Path, rows[i].Version, rows[i].IsActive));
+    }
+
+    private static string DeriveLeaf(string? path)
+    {
+        var leaf = System.IO.Path.GetFileName((path ?? "").TrimEnd('\\', '/'));
+        return string.IsNullOrEmpty(leaf) ? (path ?? "") : leaf;
+    }
+
+    private Border BuildInstallCard(
+        string id, string uniqueLabel, string rawLabel, string path, string version, bool isActive)
+    {
+        var card = new Border
+        {
+            Background = (Brush)FindResource("BgBase"),
+            BorderBrush = (Brush)FindResource(isActive ? "AccentBrush" : "BorderSubtle"),
+            BorderThickness = new Thickness(isActive ? 2 : 1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(12, 10, 12, 10),
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var left = new StackPanel();
+
+        // Read-only name = the copy's real FOLDER name (renaming was removed — a label that
+        // doesn't match the folder is misleading). Disambiguated (#N / parent) for uniqueness.
+        var nameText = new TextBlock
+        {
+            Text = uniqueLabel,
+            FontSize = (double)FindResource("FontSizeBodyStrong"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource(isActive ? "AccentBrush" : "SecondaryFixed"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        left.Children.Add(nameText);
+
+        var meta = new TextBlock
+        {
+            Text = string.IsNullOrEmpty(version)
+                ? PathDisplay.CompactPathMiddle(path, 60)
+                : $"{PathDisplay.CompactPathMiddle(path, 60)}   ·   {version}",
+            FontSize = (double)FindResource("FontSizeCaption"),
+            Foreground = (Brush)FindResource("OnSecondaryContainer"),
+            Opacity = 0.85,
+            Margin = new Thickness(0, 3, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        left.Children.Add(meta);
+        Grid.SetColumn(left, 0);
+        grid.Children.Add(left);
+
+        // Actions column: Active badge (active) or Switch button (inactive) + Remove (inactive).
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0),
+        };
+        if (isActive)
+        {
+            actions.Children.Add(new Border
+            {
+                Background = (Brush)FindResource("TintGoldHover"),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 3, 8, 3),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = Strings.Get("ActiveInstallBadge"),
+                    FontSize = (double)FindResource("FontSizeCaption"),
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("AccentBrush"),
+                },
+            });
+        }
+        else
+        {
+            var switchBtn = new Button
+            {
+                Style = (Style)FindResource("PropertyActionButton"),
+                Content = Strings.Get("SwitchToInstall"),
+                MinWidth = 90,
+                Margin = new Thickness(0),
+            };
+            switchBtn.Click += async (_, _) =>
+            {
+                if (_switchInstall != null) await _switchInstall(id);
+            };
+            actions.Children.Add(switchBtn);
+
+            var removeBtn = new Button
+            {
+                Style = (Style)FindResource("PropertyActionButton"),
+                Content = Strings.Get("RemoveInstallBtn"),   // ✕
+                MinWidth = 80,
+                Margin = new Thickness(6, 0, 0, 0),
+                ToolTip = Strings.Get("RemoveInstallCopy"),
+            };
+            removeBtn.Click += (_, _) => _removeInstall?.Invoke(id);
+            actions.Children.Add(removeBtn);
+        }
+        Grid.SetColumn(actions, 1);
+        grid.Children.Add(actions);
+
+        card.Child = grid;
+        return card;
     }
 
     private void LoadUserData()
@@ -1110,12 +1270,20 @@ public partial class ModPropertiesDialog : Window
         _openRepair?.Invoke();
     }
 
-    private void InstallAnotherCopyBtn_Click(object sender, RoutedEventArgs e)
+    private void InstallNewCopyBtn_Click(object sender, RoutedEventArgs e)
     {
         // Closes like Repair — the install progress runs on the main window,
         // which a non-modal Properties window would otherwise cover.
         Close();
         _installAnotherCopy?.Invoke();
+    }
+
+    private void AddExistingFolderBtn_Click(object sender, RoutedEventArgs e)
+    {
+        // Adopts an existing install folder as a copy (no reinstall). Stays open and
+        // refreshes the list in place so the new copy appears immediately.
+        if (_addExistingFolder?.Invoke() == true)
+            LoadManageInstalls();
     }
 
     private void ViewLogsBtn_Click(object sender, RoutedEventArgs e)

@@ -746,6 +746,94 @@ Two cheap gates beyond a green build:
   (the disconnected-drive footgun) and don't reintroduce a folder-name compare — use
   `ModState.PathEquals` (`Path.GetFullPath` + `OrdinalIgnoreCase` + trimmed separators).
   Pinned by `MultiInstallModelTests`.
+  **Switcher LABELS are folder-leaf-derived and disambiguated at display.** A copy's
+  label defaults to its install-folder leaf (`ActiveInstallLabel`/`ModInstall.Label`), and
+  `MakeUniqueInstallFolder` only guarantees full-PATH uniqueness within one parent — two
+  copies in different parents can share a leaf ("Wars of Liberty (2)" twice). So
+  `AppendInstallCopiesToModPopup` disambiguates at render: labels colliding
+  case-insensitively get the distinguishing parent folder appended
+  (`PathDisplay.ParentFolderName`), and the path subtitle uses
+  `PathDisplay.CompactPathMiddle` (ellipsis in the MIDDLE, keeps the distinguishing TAIL —
+  WPF `TextTrimming` only trims the end and would hide it). Both helpers are pure/static in
+  `Services/PathDisplay.cs` (no WPF deps → unit-testable off the UI thread, pinned by
+  `PathDisplayTests`; do NOT move them back into `MainWindow`, whose static brush fields
+  throw off an STA-less test thread).
+  **The full copy manager lives in ModProperties → LOCAL FILES → "Manage installs".**
+  `LoadManageInstalls`/`BuildInstallCard` (`ModPropertiesDialog`) render one card per install
+  (active + each `OtherInstalls`) with a **read-only name = the real FOLDER name** (renaming
+  was REMOVED — a custom label that doesn't match the folder is misleading; the display derives
+  from the path via `DeriveLeaf`/`CopyDisplayLabel(null, path)` everywhere, ignoring any stale
+  stored `Label`), path (`PathDisplay.CompactPathMiddle`), version, and Active-badge / **Switch**
+  (`SwitchActiveInstallAsync`) / **Remove** (`ModState.RemoveInstall`) actions, plus
+  **"Add existing folder"** (`MainWindow.AddExistingCopy` — reuses `BrowseButton_Click`'s
+  picker + `ModInstallProbe` validation, then `ModState.RegisterInstall` which adopts a real
+  on-disk folder WITHOUT reinstalling; this is the way to bring back a removed copy) and
+  **"Install new copy"** (`InstallAsync(addNewSlot:true)`). Callbacks are threaded through the
+  `ModPropertiesDialog` ctor (`switchInstall`/`removeInstall`/`addExistingFolder`).
+  (`ModState.RenameInstall` remains as a dormant, unit-tested model method with no UI — don't
+  re-add a rename textbox.) Names are made UNIQUE for display by
+  `PathDisplay.DisambiguateLabels` (append parent folder, then a stable `#N` when copies share
+  both name and parent), used by both the switcher popup and the manager. The stock game hides
+  the whole section.
+
+- **Long ops (install / update) run in the BACKGROUND — the user can switch to another
+  installed mod and PLAY it while one installs. Still ONE op at a time.** The op is owned by
+  `_operatingModId` (the mod the live op belongs to, set/cleared in `SetBusy` for real ops)
+  and `_operatingCts` (its OWN cancellation token — Install/Update/Repair/Verify use it, and
+  `CancelButton_Click` cancels IT, so a mod-switch's `CheckAsync` reassigning `_cts` can't
+  cross-cancel the op). Button gating flipped from "block everything while `_isBusy`" to
+  **`RefreshOperationGate`**: the visible hero buttons key off **`DisplayedModIsOperating`** —
+  which is now **per-INSTALL, not per-mod**: `_isBusy && !_isCheckOnly && operating mod ==
+  displayed mod && (displayed install path is empty [fresh install] OR
+  `PathEquals(_operatingInstallPath, displayed install path)`)`. `_operatingInstallPath` is the
+  folder the op TARGETS (set in `SetBusy` = the active install; **overridden in `InstallAsync`
+  to the NEW `installFolder`** for a copy install, since during a copy install
+  `_updateService.InstallPath` is still the PREVIOUS copy). So installing a NEW copy of a mod
+  leaves a DIFFERENT already-installed copy of the SAME mod **playable**; only the copy being
+  written is gated. Only the **primary CTA** is disabled (and only for the operating install);
+  the **gear (Settings) and MODS switch are ALWAYS enabled** — Properties (settings, manage
+  installs, view logs) must stay reachable during an op, and its destructive actions
+  (Verify/Repair/Uninstall) self-gate on `_isBusy` while the language tab locks via `SetModBusy`.
+  `RefreshOperationGate` is called from `SetBusy`, `SetPrimaryAction`, and after a mod switch.
+  **Only Install/Update are backgroundable** (`_operationIsBackgroundable`, set after their
+  `SetBusy(true)`): they capture `svc`/`pending`/token LOCALLY so a mid-op `_updateService`
+  swap can't corrupt them or mis-attribute the completion bell (attributed to `svc`, not the
+  displayed mod). **Both tails (`InstallAsync`'s auto-continue+re-check AND `ApplyAsync`'s
+  re-check) are GUARDED on `svc.Profile.Id == _updateService.Profile.Id`:** if the user
+  switched away, the tail skips `CheckAsync`/`MaybeAutoContinueUpdateAfterInstall` (which read
+  the DISPLAYED mod) — it would otherwise patch the wrong mod — and instead drops the operating
+  mod's stale cache entry; that mod's pending patches surface as an Update CTA when the user
+  returns to it. Don't remove either tail guard. The shorter Repair/Verify/Uninstall re-read `_updateService`, so the switch
+  guard (`LoadModProfile`) still blocks a switch during them (`&& !_operationIsBackgroundable`);
+  `SwitchActiveInstallAsync` blocks only when `DisplayedModIsOperating`. **The switch does NOT
+  run the network `CheckAsync` while a background op is live** (`ReloadActiveServiceAsync`
+  renders the newly-displayed mod from cache / install-presence instead) — `CheckAsync` toggles
+  the shared `_isBusy`/`_cts` and would disrupt the op (its existing `if (_isBusy && !_isCheckOnly)
+  return;` guard already keeps it from firing mid-op). **The single progress strip ALWAYS shows
+  the current op** (`SyncDashboardProgressFromLegacyPanel`, `idle = _progressState == Idle` only)
+  — its title already names the mod (`ProgressTitleInstalling` = "Installing Wars of Liberty"),
+  so it doubles as the "what's installing in the background" indicator on EVERY mod's dashboard;
+  pause/cancel show with it, and the displayed mod's PLAY stays live via the per-install gate.
+  Do NOT re-gate the strip to idle on a non-operating mod (that produced the "Ready for
+  operations" label over a live 84% bar bug). **`ResetProgressUI()` is routed through
+  `MaybeResetProgressUI()` (a no-op while `_operatingModId != null`) at the mod/copy-switch
+  reset points — `ReloadActiveServiceAsync` AND every terminal branch of `ApplyCheckResult`**
+  (which the switch-to-a-copy local refresh calls) — so a switch during a live op doesn't zero
+  the running bar/speed/eta (that "progress trail lost" flicker). Op FINALLYs keep their raw
+  `ResetProgressUI()` (they run after `SetBusy(false)` cleared `_operatingModId`, so they still
+  reset).
+  **"Install another copy" NEVER auto-switches to the new copy** (the old `addNewSlot` rotation
+  that made it active is gone): when there's already an active copy, the new folder is
+  `RegisterInstall`ed as INACTIVE at its snapshot version (`keptCurrentActive` +
+  `keptCopyVersion`), the tail skips `CheckAsync`/auto-continue (they'd target the still-active
+  OTHER copy), and it just bells "Copy installed" + `RefreshActiveModBanner`. You stay on your
+  current copy (playable throughout via the per-install gate) and switch to the new one by hand
+  (it shows an Update CTA to patch it). A first install with no prior active copy still becomes
+  active. **This is UI/async — smoke-test on Windows:** install a copy of WoL, PLAY the active
+  copy while it installs, the strip reads "Installing Wars of Liberty" even on another mod's
+  dashboard, Pause/Cancel act on the install, and when the copy finishes you stay on your copy
+  (the new one appears in Manage installs). Don't reintroduce a global `_isBusy` gate on the
+  visible buttons.
 
 - **`ModState.PinnedVersion` pauses update PROMPTS, it never auto-updates — and it
   self-corrects when stale.** Empty (default) = follow the latest, normal
@@ -1274,7 +1362,21 @@ Two cheap gates beyond a green build:
   installed non-active, non-stock mod — sequential, gated by `CheckUpdatesOnStartup`,
   fired once at startup + every 6th `_catalogPollTimer` tick (~30 min) to respect the
   GitHub API budget.
-  **The bell has SIX kinds and its own reliability + UX rules (added later):**
+  **The bell has SEVEN kinds and its own reliability + UX rules (added later):**
+  (0) **`Installed` is distinct from `UpdateFinished`.** A "fresh install" of WoL chains
+  install → auto-continue update internally, so `ApplyAsync`'s success block used to always
+  bell "Update complete" even for a from-scratch copy. Fix: an `InstallCompletion`
+  (`None`/`Fresh`/`Copy`) enum is threaded `InstallAsync → MaybeAutoContinueUpdateAfterInstall
+  → ApplyUpdateWithElevationCheckAsync → ApplyAsync`; at the raise site, a non-`None`
+  context raises `NotificationCenter.RaiseInstalled` ("Installation complete" / "Copy
+  installed", `Notif{Installed,CopyInstalled}{Title,Body}`) instead of `RaiseUpdateFinished`,
+  and the genuine-update callers (leave it `None`) are unchanged. `MaybeAutoContinueUpdateAfterInstall`
+  now returns bool; when it DIDN'T continue (payload already latest), `InstallAsync` raises
+  the install bell itself with the installed version. `RaiseInstalled` is NOT deduped (an
+  install is user-initiated + raised once; no reconciliation double-fires it). **Known
+  limitation:** if the install needs elevation, the `--update-now` relaunch loses the
+  context and that leg falls back to "Update complete" (covering it needs threading the
+  context through the relaunch arg).
   (1) **Three extra `NotificationKind`s** beyond the original three — `LauncherUpdate`
   (raised in `CheckForLauncherUpdateInnerAsync` alongside the gold self-update pill,
   deduped by `LauncherConfig.NotifiedLauncherTag`; click → the self-update dialog),
