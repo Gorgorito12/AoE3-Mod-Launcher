@@ -300,17 +300,16 @@ public partial class ModPropertiesDialog : Window
     }
 
     /// <summary>
-    /// Loads the profile's icon as an ImageBrush — the cached catalog icon
-    /// (icon.png) if it's on disk, else the built-in packed icon (a
-    /// <c>pack://</c> URI). Returns null when neither is available, so the
-    /// caller hides the header icon host.
+    /// Loads the profile's icon as an ImageBrush — cached catalog icon → live
+    /// remote URL → built-in packed icon, via
+    /// <see cref="ModProfile.ResolveIconSource"/>. Returns null when nothing
+    /// resolves, so the caller hides the header icon host. A remote icon
+    /// downloads async and can't be frozen mid-flight (unconditional Freeze
+    /// throws); unfrozen it repaints itself when the download completes.
     /// </summary>
     private static System.Windows.Media.ImageBrush? LoadIconBrush(ModProfile profile)
     {
-        string? uri =
-            (!string.IsNullOrEmpty(profile.LocalIconPath) && System.IO.File.Exists(profile.LocalIconPath))
-                ? profile.LocalIconPath
-                : (!string.IsNullOrEmpty(profile.BannerImage) ? profile.BannerImage : null);
+        string? uri = profile.ResolveIconSource();
         if (string.IsNullOrEmpty(uri)) return null;
         try
         {
@@ -319,12 +318,12 @@ public partial class ModPropertiesDialog : Window
             bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
             bmp.UriSource = new System.Uri(uri, System.UriKind.Absolute);
             bmp.EndInit();
-            bmp.Freeze();
+            if (bmp.CanFreeze) bmp.Freeze();
             var br = new System.Windows.Media.ImageBrush(bmp)
             {
                 Stretch = System.Windows.Media.Stretch.UniformToFill,
             };
-            br.Freeze();
+            if (br.CanFreeze) br.Freeze();
             return br;
         }
         catch
@@ -1160,7 +1159,12 @@ public partial class ModPropertiesDialog : Window
             return;
         }
 
-        var recommended = _profile.GitHubReleases?.ApprovedReleaseTag ?? "";
+        // "Recommended" badge = the effective default tag (approved, or the
+        // cached latest for follow-latest mods). Not cosmetic: ListReleasesAsync
+        // KEEPS prereleases, so the newest list item may not be the effective
+        // latest — this badge is the only correct signal in the picker.
+        var recommended = UpdateService.ResolveEffectiveGitHubTag(
+            _profile.GitHubReleases, _config.GetState(_profile.Id).LastKnownLatestVersion);
         var installed = _service.CurrentVersion?.Ver ?? "";
 
         VersionCombo.Items.Clear();

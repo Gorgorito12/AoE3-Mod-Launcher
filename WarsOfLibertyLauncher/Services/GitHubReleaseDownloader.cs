@@ -140,6 +140,82 @@ public class GitHubReleaseDownloader
     }
 
     /// <summary>
+    /// Result of resolving <c>/releases/latest</c>. <see cref="NotModified"/>
+    /// means "the caller's cached tag is still the latest" (HTTP 304).
+    /// <see cref="Tag"/> null WITHOUT NotModified = failure — the caller falls
+    /// back to its cached tag / approved tag. <see cref="ETag"/> is the value
+    /// to persist: the fresh one on a 200, the one we sent on 304/failure
+    /// (never lose a good ETag to a transient blip).
+    /// </summary>
+    public record LatestReleaseResult(string? Tag, string? ETag, bool NotModified);
+
+    /// <summary>
+    /// Resolve the repo's newest STABLE release tag via
+    /// <c>GET /repos/{repo}/releases/latest</c> — GitHub excludes drafts and
+    /// prereleases from that endpoint by definition, which is exactly the
+    /// follow-latest contract (a modder's prerelease is never auto-published
+    /// to users). NEVER throws except on cancellation: this runs inside
+    /// <c>UpdateService.CheckCoreAsync</c>, and letting a failure bubble to
+    /// CheckAsync's offline catch would degrade the WHOLE check to
+    /// BuildOfflineResult — suppressing even the approved-tag update path,
+    /// which needs no network. A failure here must only degrade the
+    /// follow-latest bonus. Conditional request: pass the persisted ETag and
+    /// a 304 (free — conditional requests don't count against the
+    /// unauthenticated rate limit) confirms the cached tag is still current.
+    /// Connectivity uses LauncherUpdateService's reachedServer pattern:
+    /// success reported after SendAsync returns (a real network round-trip),
+    /// failure only when the server was never reached and it wasn't a cancel.
+    /// </summary>
+    public async Task<LatestReleaseResult> GetLatestReleaseTagAsync(
+        string sourceRepo, string? cachedETag = null, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceRepo))
+            return new LatestReleaseResult(null, cachedETag, false);
+
+        bool reachedServer = false;
+        try
+        {
+            var apiUrl = $"https://api.github.com/repos/{sourceRepo}/releases/latest";
+            using var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+            if (!string.IsNullOrEmpty(cachedETag))
+                request.Headers.TryAddWithoutValidation("If-None-Match", cachedETag);
+
+            using var response = await Http.SendAsync(request, ct);
+            reachedServer = true;
+            ConnectivityState.ReportSuccess();
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotModified)
+                return new LatestReleaseResult(null, cachedETag, true);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                DiagnosticLog.Write(
+                    $"GitHubReleases: /releases/latest for '{sourceRepo}' returned {(int)response.StatusCode}.");
+                return new LatestReleaseResult(null, cachedETag, false);
+            }
+
+            var release = await response.Content.ReadFromJsonAsync<GitHubRelease>(cancellationToken: ct);
+            // Defensive: the endpoint shouldn't return drafts/prereleases, but a
+            // wrong tag here would auto-publish it to every user — treat as failure.
+            if (release == null || string.IsNullOrWhiteSpace(release.TagName)
+                || release.Draft || release.Prerelease)
+                return new LatestReleaseResult(null, cachedETag, false);
+
+            return new LatestReleaseResult(
+                release.TagName, response.Headers.ETag?.ToString() ?? cachedETag, false);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            if (!reachedServer && !ct.IsCancellationRequested)
+                ConnectivityState.ReportFailure(ex);
+            DiagnosticLog.Write(
+                $"GitHubReleases: GetLatestReleaseTagAsync('{sourceRepo}') failed: {ex.Message}");
+            return new LatestReleaseResult(null, cachedETag, false);
+        }
+    }
+
+    /// <summary>
     /// Resolve the modder's release tag into a concrete .zip asset URL.
     /// Doesn't download the asset — just enumerates and picks (or, for
     /// external hosting, templates the URL). Use this to pre-flight

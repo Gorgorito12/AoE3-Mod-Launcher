@@ -151,6 +151,18 @@ public class ModState
     public string LastKnownLatestVersion { get; set; } = "";
 
     /// <summary>
+    /// ETag of the last 200 response from <c>/releases/latest</c> for this mod
+    /// (follow-latest GitHubReleases mods only). Sent as <c>If-None-Match</c> so
+    /// an unchanged latest release is a free 304 (conditional requests don't
+    /// count against GitHub's unauthenticated 60/h rate limit). Kept on a
+    /// transient failure; an indivisible pair with
+    /// <see cref="LastKnownLatestVersion"/> — only sent when the cached tag is
+    /// non-empty, because a 304 carries no body and would leave us tagless.
+    /// </summary>
+    [JsonPropertyName("latestReleaseETag")]
+    public string LatestReleaseETag { get; set; } = "";
+
+    /// <summary>
     /// Version the user explicitly chose to STAY ON for this mod. Empty (the
     /// default) means "follow the latest" — the normal behaviour. When it equals
     /// the installed version, the launcher PAUSES update prompts for this mod: the

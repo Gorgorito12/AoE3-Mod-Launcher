@@ -1553,6 +1553,11 @@ public class NativeInstallService
     ///      means the manifest records it for clean uninstall AND it survives
     ///      the "clear icons cache" button.
     ///   4. Otherwise null — the shortcut falls back to the exe icon.
+    /// LocalIconPath here stays deliberately LOCAL-only (never a catalog URL):
+    /// shortcuts are created during install, when the mod is the operating one
+    /// and therefore disk-cache-eligible, so the cached icon.png is on disk by
+    /// the time this runs (the icon download finishes long before the
+    /// multi-GB install does).
     /// </summary>
     private static string? FindShortcutIcon(string installFolder, ModProfile profile)
     {

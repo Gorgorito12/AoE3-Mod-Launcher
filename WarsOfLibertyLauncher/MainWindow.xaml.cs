@@ -515,6 +515,13 @@ public partial class MainWindow : Window
                 _ = RefreshNewsAsync();
             }
 
+            // One-time-per-launch migration sweep for the "disk cache only for
+            // installed + active" policy: older builds cached images for every
+            // Workshop card ever rendered. Runs AFTER the catalog refresh above
+            // (so community ids are known) and is the policy's single opt-out
+            // point — remove this call to keep pre-existing cached assets.
+            _ = PurgeNonEligibleModAssetsAsync();
+
             if (_modIsInstalled)
             {
                 _ = Task.Run(InstallerService.TryCleanupTemp);
@@ -746,20 +753,8 @@ public partial class MainWindow : Window
         }
         else
         {
-            // No cached check yet — fall back to the saved per-mod path +
-            // last-known version. Same logic as ProbeInstalledState, but
-            // typed instead of a localised string.
-            var state = _config.GetState(profile.Id);
-            string? path = isActive ? _updateService.InstallPath : state.InstallPath;
-            installed = !string.IsNullOrEmpty(path)
-                && Directory.Exists(path)
-                && SavedPathLooksValid(path, profile);
-            if (!installed)
-            {
-                var probe = ResolveProbedInstallPath(profile);
-                installed = !string.IsNullOrEmpty(probe);
-            }
-            current = state.LastKnownVersion;
+            installed = IsProfileInstalledLocally(profile);
+            current = _config.GetState(profile.Id).LastKnownVersion;
         }
 
         Controls.ModRowStatus status = installed
@@ -781,30 +776,66 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// Is this mod installed on THIS machine? The single install-detection
+    /// rule shared by <see cref="BuildModRowState"/> (row badges) and the
+    /// disk-cache gate (<see cref="ShouldCacheAssetsToDisk"/>): the cached
+    /// CheckResult when one exists, else the saved per-mod path validated by
+    /// content (<see cref="SavedPathLooksValid"/>), else the disk probe.
+    /// </summary>
+    private bool IsProfileInstalledLocally(ModProfile profile)
+    {
+        if (_checkResultCache.TryGetValue(profile.Id, out var cached))
+            return cached.IsValidInstall;
+
+        bool isActive = string.Equals(
+            profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
+        var state = _config.GetState(profile.Id);
+        string? path = isActive ? _updateService.InstallPath : state.InstallPath;
+        if (!string.IsNullOrEmpty(path)
+            && Directory.Exists(path)
+            && SavedPathLooksValid(path, profile))
+            return true;
+
+        return !string.IsNullOrEmpty(ResolveProbedInstallPath(profile));
+    }
+
+    /// <summary>
+    /// Disk-cache policy gate: only mods the user actually has — installed,
+    /// the active dashboard mod (its dashboard must work offline and its
+    /// shortcut icon needs a real file), or the mod with the operation in
+    /// flight (so a fresh install has its icon on disk before
+    /// <c>CreateShortcuts</c> runs) — get their images written to
+    /// <c>mod-assets\</c>. Everything else paints live from the catalog URL
+    /// so browsing the Workshop can't fill the disk.
+    /// </summary>
+    private bool ShouldCacheAssetsToDisk(ModProfile profile)
+        => IsProfileInstalledLocally(profile)
+           || string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(profile.Id, _operatingModId, StringComparison.OrdinalIgnoreCase);
+
     private FrameworkElement BuildModCard(ModProfile profile, string activeId)
     {
         bool isActive = string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase);
         var accent = SafeBrush(profile.AccentColor, "#3a3d44");
 
-        // Icon resolution priority:
-        //   1. Cached community icon (profile.LocalIconPath, populated by
-        //      EnsureModAssetsAsync once the catalog's icon.png lands in
-        //      %LocalAppData%\AoE3ModLauncher\mod-assets\).
-        //   2. Built-in pack URI (profile.BannerImage — historical name; for
+        // Icon resolution priority (ModProfile.ResolveIconSource):
+        //   1. Cached community icon (profile.LocalIconPath — only installed/
+        //      active mods get one; populated by EnsureModAssetsAsync).
+        //   2. Live catalog URL (profile.IconUrl) — non-installed mods paint
+        //      straight from the network, nothing written to disk.
+        //   3. Built-in pack URI (profile.BannerImage — historical name; for
         //      WoL it's the .ico embedded as a pack resource).
-        //   3. Fallback: monogram (accent-coloured disc + first letter of
+        //   4. Fallback: monogram (accent-coloured disc + first letter of
         //      DisplayName) — handled below in the else branch.
-        // For community mods that have an IconUrl but haven't been cached
-        // yet, we kick off the download here so the next render swaps the
-        // monogram for the real icon. We also kick it when there's NO icon
-        // brush at all (no IconUrl): EnsureModAssetsAsync then reconciles the
-        // cache — purging a now-orphaned file if the catalog dropped this mod's
-        // only image (URL→null path purges with no network). Mods whose icon is
-        // already painted (iconBrush != null) skip it; the per-session guard
-        // keeps this to one call per mod regardless.
-        var iconBrush = TryLoadTileImage(ResolveModIcon(profile));
-        if (iconBrush == null)
-            _ = EnsureModAssetsAsync(profile);
+        // The disk-cache kick is UNCONDITIONAL: with live URL painting the
+        // brush is rarely null, so the old "kick only when unloaded" gate
+        // would never fire for a newly-installed mod. EnsureModAssetsAsync
+        // itself gates on installed/active/operating (cheap early return for
+        // everything else), reconciles orphaned cache files, and its
+        // per-session guard keeps this to one real pass per mod.
+        var iconBrush = TryLoadTileImage(profile.ResolveIconSource());
+        _ = EnsureModAssetsAsync(profile);
         UIElement iconChild;
         System.Windows.Media.Brush iconBg;
         if (iconBrush != null)
@@ -1410,12 +1441,16 @@ public partial class MainWindow : Window
         try
         {
             var sourceUri = new Uri(uri, UriKind.RelativeOrAbsolute);
+            bool isHttp = uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                          || uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
             // .ico files contain multiple frames at different sizes. WPF's
             // generic BitmapImage decoder often picks the smallest frame
             // (e.g. 16×16) which looks awful at 44 px. Use IconBitmapDecoder
-            // explicitly so we can pick the largest frame ourselves.
-            bool isIco = uri.EndsWith(".ico", StringComparison.OrdinalIgnoreCase);
+            // explicitly so we can pick the largest frame ourselves. An http
+            // .ico can't go through File.OpenRead, so it takes the generic
+            // async-download branch instead.
+            bool isIco = !isHttp && uri.EndsWith(".ico", StringComparison.OrdinalIgnoreCase);
             System.Windows.Media.Imaging.BitmapSource source;
 
             if (isIco)
@@ -1446,15 +1481,24 @@ public partial class MainWindow : Window
                 // name (same on-disk path, new bytes) would repaint the stale
                 // bitmap. We invalidate s_tileImageCache too (see
                 // InvalidateTileImageCache); this covers WPF's own per-URI cache.
-                bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+                // Local files only: for a remote URL that per-URI cache is the
+                // session dedupe — bypassing it would re-download per render.
+                if (!isHttp)
+                    bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
                 bmp.UriSource = sourceUri;
                 bmp.EndInit();
+                // A remote bitmap downloads async; if it fails, evict the memo so
+                // the next render retries instead of serving an empty brush all
+                // session (the memo caches the brush below before completion).
+                if (isHttp && bmp.IsDownloading)
+                    bmp.DownloadFailed += (_, _) => s_tileImageCache.Remove(uri);
                 source = bmp;
             }
 
             if (source.CanFreeze) source.Freeze();
-            DiagnosticLog.Write(
-                $"Mod tile image loaded: '{uri}' ({source.PixelWidth}×{source.PixelHeight}).");
+            if (!(source is System.Windows.Media.Imaging.BitmapImage { IsDownloading: true }))
+                DiagnosticLog.Write(
+                    $"Mod tile image loaded: '{uri}' ({source.PixelWidth}×{source.PixelHeight}).");
             var brush = new System.Windows.Media.ImageBrush(source)
             {
                 Stretch = System.Windows.Media.Stretch.UniformToFill,
@@ -2765,9 +2809,12 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Resolves the active mod's effective hero list and paints the dashboard
-    /// background. Rotating heroes (<see cref="ModProfile.LocalHeroImagePaths"/>)
-    /// win; else the single hero; else the banner; else a neutral gradient. With
-    /// 2+ heroes it (re)starts the crossfade rotation.
+    /// background. Rotating heroes win; else the single hero; else the banner;
+    /// else a neutral gradient — each preferring the cached local file and
+    /// falling back to the live catalog URL
+    /// (<see cref="ModProfile.ResolveHeroSources"/>, so a just-activated mod
+    /// paints immediately while its disk cache fills). With 2+ heroes it
+    /// (re)starts the crossfade rotation.
     /// </summary>
     private void ApplyDashboardHero(ModProfile profile)
     {
@@ -2776,13 +2823,7 @@ public partial class MainWindow : Window
         // Stop any in-flight rotation/animation before repainting (mod switch).
         StopHeroRotation();
 
-        var heroes = new List<string>();
-        if (profile.LocalHeroImagePaths is { Count: > 0 })
-            heroes.AddRange(profile.LocalHeroImagePaths.Where(p => !string.IsNullOrWhiteSpace(p)));
-        if (heroes.Count == 0 && !string.IsNullOrWhiteSpace(profile.LocalHeroImagePath))
-            heroes.Add(profile.LocalHeroImagePath!);
-        if (heroes.Count == 0 && !string.IsNullOrWhiteSpace(profile.LocalBannerPath))
-            heroes.Add(profile.LocalBannerPath!);
+        var heroes = profile.ResolveHeroSources().ToList();
 
         // Paint the first frame (or the gradient fallback) on the base layer.
         var first = heroes.Count > 0 ? BuildHeroFillBrush(heroes[0]) : null;
@@ -2864,15 +2905,21 @@ public partial class MainWindow : Window
         try
         {
             var sourceUri = new Uri(uri, UriKind.RelativeOrAbsolute);
+            bool isHttp = uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                          || uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
             var bmp = new System.Windows.Media.Imaging.BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
             // IgnoreImageCache so a same-name catalog replacement repaints (mirrors
-            // TryLoadTileImage). Only cap the decode when the source is wider than
-            // the cap, so a 1080p/1440p hero decodes native (no upscale); a 4K hero
-            // downscales to HeroDecodeWidth. HighQuality scaling (set on the host
-            // Borders in XAML) keeps the result crisp.
-            bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+            // TryLoadTileImage) — local files only; for a remote hero WPF's per-URI
+            // cache is the session dedupe. Only cap the decode when the source is
+            // wider than the cap, so a 1080p/1440p hero decodes native (no
+            // upscale); a 4K hero downscales to HeroDecodeWidth. HighQuality
+            // scaling (set on the host Borders in XAML) keeps the result crisp.
+            // (TryGetImageWidth is null for remote → a live-painted hero decodes
+            // native, an accepted cost of the no-disk-cache policy.)
+            if (!isHttp)
+                bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
             var nativeWidth = TryGetImageWidth(uri);
             if (nativeWidth is int w && w > HeroDecodeWidth
                 && !uri.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
@@ -2894,12 +2941,14 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Cheap metadata-only read of an on-disk image's pixel width (null for pack:// or on error).</summary>
+    /// <summary>Cheap metadata-only read of an on-disk image's pixel width (null for pack:// / http(s) or on error).</summary>
     private static int? TryGetImageWidth(string uri)
     {
         try
         {
-            if (uri.StartsWith("pack:", StringComparison.OrdinalIgnoreCase)) return null;
+            if (uri.StartsWith("pack:", StringComparison.OrdinalIgnoreCase)
+                || uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return null;
             using var fs = System.IO.File.OpenRead(uri);
             var frame = System.Windows.Media.Imaging.BitmapFrame.Create(
                 fs,
@@ -2951,9 +3000,11 @@ public partial class MainWindow : Window
         gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
             ((System.Windows.Media.SolidColorBrush)accent).Color, 1));
 
-        // Prefer the community banner if cached; otherwise the built-in
-        // tile image (BannerImage). Both paths flow through TryLoadTileImage.
-        var imgBrush = TryLoadTileImage(profile.LocalBannerPath ?? profile.BannerImage);
+        // Prefer the community banner (cached local → live catalog URL);
+        // otherwise the built-in tile image (BannerImage — this small sidebar
+        // tile is the one banner surface where the packed .ico still looks
+        // fine). All paths flow through TryLoadTileImage.
+        var imgBrush = TryLoadTileImage(profile.ResolveBannerSource() ?? profile.BannerImage);
         if (imgBrush != null)
         {
             // Show the image plus a dark vignette gradient for legible text.
@@ -2979,11 +3030,13 @@ public partial class MainWindow : Window
         // mod is selected, matching the Stitch redesign brief. Per-mod
         // colour only shows up via the actual hero/banner image.
         //
-        // Hero resolution priority for the dashboard (highest first):
-        //   1. LocalHeroImagePath — 1920×1080 hero (the right tool for
-        //      a full-bleed dashboard panel)
-        //   2. LocalBannerPath    — 1200×300 banner (will look slightly
-        //      stretched on the dashboard but better than no image)
+        // Hero resolution priority for the dashboard (highest first, each
+        // step preferring cached local over live catalog URL — see
+        // ModProfile.ResolveHeroSources):
+        //   1. Hero image(s) — 1920×1080 (the right tool for a full-bleed
+        //      dashboard panel)
+        //   2. Banner — 1200×300 (will look slightly stretched on the
+        //      dashboard but better than no image)
         //   3. Neutral dark gradient — the fallback when the mod ships
         //      neither hero nor banner
         // BannerImage (the mod's .ico) is deliberately NOT used here
@@ -3007,9 +3060,9 @@ public partial class MainWindow : Window
         if (DashboardIconHost != null)
         {
             // Mod/game icon above the title. Same resolution as the Workshop
-            // tiles (cached catalog icon.png, else built-in packed icon);
-            // collapses to nothing when the mod ships no icon.
-            var iconBrush = TryLoadTileImage(ResolveModIcon(profile));
+            // tiles (cached catalog icon.png → live catalog URL → built-in
+            // packed icon); collapses to nothing when the mod ships no icon.
+            var iconBrush = TryLoadTileImage(profile.ResolveIconSource());
             DashboardIconHost.Background = iconBrush;
             DashboardIconHost.Visibility = iconBrush != null
                 ? Visibility.Visible
@@ -3060,25 +3113,14 @@ public partial class MainWindow : Window
         }
         RefreshActiveCopyChip();
 
-        // Lazy fetch: the active profile may have a banner OR hero image
-        // that hasn't been cached yet. Kicking the download here means
-        // the next switch back to this mod (or the next RefreshModCards
-        // call) will pick up the real asset.
-        //
-        // Either condition triggers — built-in WoL has HeroImageUrl
-        // (pointing at the catalog's raw URL) but no BannerUrl, so a
-        // banner-only gate would never fire for WoL and the hero would
-        // never download.
-        bool needBanner = string.IsNullOrEmpty(profile.LocalBannerPath)
-                          && !string.IsNullOrEmpty(profile.BannerUrl);
-        bool needHero = string.IsNullOrEmpty(profile.LocalHeroImagePath)
-                        && !string.IsNullOrEmpty(profile.HeroImageUrl);
-        // Also fetch the icon here so the dashboard icon appears even for a
-        // mod that ships an icon but no banner/hero (e.g. the stock game).
-        bool needIcon = string.IsNullOrEmpty(profile.LocalIconPath)
-                        && !string.IsNullOrEmpty(profile.IconUrl);
-        if (needBanner || needHero || needIcon)
-            _ = EnsureModAssetsAsync(profile);
+        // Kick the disk-cache fill unconditionally: this runs on every
+        // activation, and the ACTIVE mod is always cache-eligible, so a
+        // just-activated mod that was painting live from its catalog URLs
+        // gets its assets written to disk here (the "needs X" gates are gone —
+        // with live URL painting the brushes are never null, so a needs-based
+        // gate would never fire again). EnsureModAssetsAsync itself gates on
+        // installed/active/operating and dedupes per session.
+        _ = EnsureModAssetsAsync(profile);
     }
 
     // ------------------------------------------------------------------------
@@ -3287,25 +3329,6 @@ public partial class MainWindow : Window
     private readonly HashSet<string> _shortcutHealAttempted = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Resolves which icon URI the UI should hand to <c>TryLoadTileImage</c>
-    /// for the given profile.
-    ///   * Community mod with a cached icon → the local file path.
-    ///   * Built-in mod (or community mod whose icon is still being fetched)
-    ///     → <c>BannerImage</c>, which for built-ins is the pack URI of
-    ///     the embedded .ico.
-    ///   * Otherwise null → caller renders the monogram fallback.
-    /// </summary>
-    private static string? ResolveModIcon(ModProfile profile)
-    {
-        if (!string.IsNullOrEmpty(profile.LocalIconPath)
-            && System.IO.File.Exists(profile.LocalIconPath))
-            return profile.LocalIconPath;
-        if (!string.IsNullOrEmpty(profile.BannerImage))
-            return profile.BannerImage;
-        return null;
-    }
-
-    /// <summary>
     /// Fire-and-forget background task that downloads any missing icon and
     /// banner for <paramref name="profile"/> into the on-disk cache, then
     /// re-renders the affected UI on completion. Idempotent on repeated
@@ -3322,6 +3345,12 @@ public partial class MainWindow : Window
     private async Task EnsureModAssetsAsync(ModProfile profile)
     {
         if (string.IsNullOrEmpty(profile.Id)) return;
+        // Disk-cache gate — BEFORE the session guard, so an ineligible mod
+        // doesn't consume its one attempt: when it later becomes eligible
+        // (installed / activated) the same call sites re-enter here and the
+        // fetch actually runs. Non-eligible mods paint live from the catalog
+        // URL (ModProfile.Resolve*Source) and never touch mod-assets\.
+        if (!ShouldCacheAssetsToDisk(profile)) return;
         // Don't pile up parallel fetches for the same profile if
         // BuildModCard/RefreshActiveModBanner both fire it within a
         // single session, or if RefreshModCards re-runs while a fetch
@@ -3446,6 +3475,61 @@ public partial class MainWindow : Window
         => string.Equals(a ?? string.Empty, b ?? string.Empty, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Startup migration for the disk-cache policy: deletes the mod-asset
+    /// files of every registry mod that is NOT cache-eligible
+    /// (<see cref="ShouldCacheAssetsToDisk"/>) — older builds cached images
+    /// for every Workshop card ever rendered. This does NOT violate the
+    /// cache's offline-safe rule (never delete on a NETWORK error): it's a
+    /// deterministic policy decision with no network involved, and installed/
+    /// active mods are excluded by the gate. Orphaned ids that already left
+    /// the catalog are ModRegistry.ApplyMerged's ClearVanishedAssets' job —
+    /// no file-name parsing here. Eligibility is evaluated on the UI thread
+    /// (it reads UI-owned state); only the file deletes hop to a worker.
+    /// </summary>
+    private async Task PurgeNonEligibleModAssetsAsync()
+    {
+        List<ModProfile> toPurge;
+        try
+        {
+            toPurge = ModRegistry.All
+                .Where(p => !string.IsNullOrEmpty(p.Id) && !ShouldCacheAssetsToDisk(p))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Asset-cache migration sweep skipped: {ex.Message}");
+            return;
+        }
+        if (toPurge.Count == 0) return;
+
+        await Task.Run(() =>
+        {
+            var cache = new ModAssetCacheService();
+            foreach (var p in toPurge)
+            {
+                try { cache.Clear(p.Id); }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Asset-cache migration purge '{p.Id}': {ex.Message}");
+                }
+            }
+        });
+
+        // Drop the now-dangling local paths so the resolvers fall straight to
+        // the catalog URLs instead of File.Exists-probing deleted files.
+        foreach (var p in toPurge)
+        {
+            p.LocalIconPath = null;
+            p.LocalBannerPath = null;
+            p.LocalHeroImagePath = null;
+            p.LocalHeroImagePaths = new List<string>();
+            p.LocalScreenshotPaths = new List<string>();
+        }
+        DiagnosticLog.Write(
+            $"Asset-cache migration: purged cached images of {toPurge.Count} non-eligible mod(s).");
+    }
+
+    /// <summary>
     /// Lazily downloads a mod's gallery screenshots (only when its detail panel
     /// is opened — they're not needed for the card grid) and re-renders the
     /// gallery once they land. Separate from <see cref="EnsureModAssetsAsync"/>
@@ -3455,6 +3539,13 @@ public partial class MainWindow : Window
     private async Task EnsureScreenshotsAsync(ModProfile profile)
     {
         if (string.IsNullOrEmpty(profile.Id)) return;
+        // Disk-cache gate — INSTALLED mods only (stricter than the icon/banner
+        // gate: screenshots are the heavy role, up to 8×5 MB, and a merely
+        // ACTIVE-but-not-installed mod doesn't need them offline). Placed
+        // before the session guard so a mod installed later this session still
+        // gets its fetch. Non-installed detail panels paint the gallery live
+        // from the catalog URLs (ModProfile.ResolveScreenshotSources).
+        if (!IsProfileInstalledLocally(profile)) return;
         // No early-return on an empty set: an emptied gallery still needs the
         // call so GetScreenshotPathsAsync purges the now-orphaned shot files.
         if (!_screenshotFetchAttempted.Add(profile.Id)) return;
@@ -5665,8 +5756,13 @@ public partial class MainWindow : Window
             phaseProgress?.Report(InstallPhase.Download);
             statusProgress?.Report(Strings.Get("StatusDeltaChecking"));
 
+            // Target of a normal update = the effective tag (approved, or the
+            // cached latest for follow-latest mods) — the same value
+            // ResolveInstallVersion stamps below, so descriptor ToTag, manifest
+            // Version and LastKnownVersion stay coherent.
+            var targetTag = EffectiveGitHubTag(profile);
             var prepared = await DeltaPatchService.TryPrepareAsync(
-                gh, installedTag, installPath, manifest, covered, _operatingCts!.Token);
+                gh, installedTag, targetTag, installPath, manifest, covered, _operatingCts!.Token);
             if (prepared == null) return false;   // no usable delta → full
 
             DiagnosticLog.Write(
@@ -5686,7 +5782,7 @@ public partial class MainWindow : Window
                 ProgressPanelControl.PatchBytesText.Text = $"{p.BytesRead} / {p.BytesTotal}";
             });
 
-            var version = ResolveInstallVersion(overrideTag: null);   // = approved tag
+            var version = ResolveInstallVersion(overrideTag: null);   // = effective tag (== targetTag)
             bool ok = await nativeInstaller.ApplyGitHubDeltaAsync(
                 profile, version, prepared, installPath, statusProgress, xp, _operatingCts!.Token);
 
@@ -5961,23 +6057,29 @@ public partial class MainWindow : Window
             if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
             {
                 // Persist the version we just laid down. For GitHubReleases this
-                // is the approved tag, so the next CheckAsync sees installed ==
-                // approved and stops offering the update (hides the Update button).
+                // is the effective tag (approved, or the resolved latest for
+                // follow-latest mods), so the next CheckAsync sees installed ==
+                // latest and stops offering the update (hides the Update button).
                 var st = _config.GetState(_updateService.Profile.Id);
                 var laidDownVersion = ResolveInstallVersion(overrideTag: targetReleaseTag);
                 if (!string.IsNullOrEmpty(laidDownVersion))
                     st.LastKnownVersion = laidDownVersion;
 
                 // Version switch (Fase 1): if the user installed a version OTHER
-                // than the recommended/approved one, PIN it so the launcher doesn't
-                // immediately offer to "update" them back to the approved tag (the
-                // same pause mechanism as Fase 0). Installing the approved version
-                // clears any stale pin so updates flow normally again.
+                // than the recommended one, PIN it so the launcher doesn't
+                // immediately offer to "update" them back (the same pause
+                // mechanism as Fase 0). Installing the recommended version clears
+                // any stale pin so updates flow normally again. Baseline =
+                // EffectiveGitHubTag, not the raw approved tag: for a
+                // follow-latest mod, picking the latest in the picker is
+                // "following the recommendation", not a deviation to pin (a pin
+                // there would suppress every future follow-latest update);
+                // without followLatest, effective == approved — zero change.
                 if (targetReleaseTag != null)
                 {
-                    var approved = _updateService.Profile.GitHubReleases?.ApprovedReleaseTag ?? "";
+                    var baseline = EffectiveGitHubTag(_updateService.Profile);
                     st.PinnedVersion =
-                        string.Equals(laidDownVersion, approved, StringComparison.OrdinalIgnoreCase)
+                        string.Equals(laidDownVersion, baseline, StringComparison.OrdinalIgnoreCase)
                             ? ""
                             : laidDownVersion;
                 }
@@ -7518,10 +7620,16 @@ public partial class MainWindow : Window
             }
             try
             {
-                // overrideTag (when set) installs a user-chosen version instead of
-                // the approved tag; null keeps the default approved-tag behaviour.
+                // overrideTag (when set) installs a user-chosen version. Null =
+                // the default target: the approved tag, or — for follow-latest
+                // mods — the newest stable release cached by CheckAsync
+                // (EffectiveGitHubTag; external-hosted mods always resolve to
+                // approved there, so ResolveAssetAsync's external guard holds).
+                var tag = string.IsNullOrWhiteSpace(overrideTag)
+                    ? EffectiveGitHubTag(profile)
+                    : overrideTag;
                 var asset = await new GitHubReleaseDownloader()
-                    .ResolveAssetAsync(ghs, overrideTag, default);
+                    .ResolveAssetAsync(ghs, tag, default);
                 // External-hosting path carries a SHA-256 pin (required by
                 // ResolveAssetAsync itself). Regular GitHub-asset path
                 // carries no SHA — we trust the asset CDN, like before.
@@ -7566,15 +7674,32 @@ public partial class MainWindow : Window
         var profile = service.Profile;
         return profile.UpdateMechanism switch
         {
-            // overrideTag stamps the user-chosen version; else the approved tag.
+            // overrideTag stamps the user-chosen version; else the effective
+            // default (approved tag, or the cached latest for follow-latest
+            // mods) — this MUST match what ResolvePayloadUrlsAsync downloads.
             ModUpdateMechanism.GitHubReleases =>
                 string.IsNullOrWhiteSpace(overrideTag)
-                    ? (profile.GitHubReleases?.ApprovedReleaseTag ?? "")
+                    ? EffectiveGitHubTag(profile)
                     : overrideTag.Trim(),
             _ => service.CurrentVersion?.Ver
                 ?? service.LatestVersion?.Ver ?? "",
         };
     }
+
+    /// <summary>
+    /// The GitHub tag a default (no explicit user choice) install/update of
+    /// this mod targets. Delegates to the pure
+    /// <see cref="UpdateService.ResolveEffectiveGitHubTag"/> with the cached
+    /// latest tag CheckAsync persisted — fresh by construction: the Update CTA
+    /// only appears after a CheckAsync, which is what writes the cache.
+    /// IMPORTANT: never thread this value through
+    /// <c>targetReleaseTag</c>/<c>overrideTag</c> — those mean "the USER chose
+    /// a version" and trigger the version-picker auto-pin, which would pin the
+    /// mod and suppress every future follow-latest update.
+    /// </summary>
+    private string EffectiveGitHubTag(ModProfile profile)
+        => UpdateService.ResolveEffectiveGitHubTag(
+            profile.GitHubReleases, _config.GetState(profile.Id).LastKnownLatestVersion);
 
     /// <summary>
     /// Fase 1 — enumerate the active GitHubReleases mod's published versions so
@@ -8244,6 +8369,20 @@ public partial class MainWindow : Window
             ShowDownloadControls(false);
             ResetProgressUI();
             _currentInstallPhase = InstallPhase.None;
+        }
+
+        if (installSucceeded)
+        {
+            // The mod is now durably cache-eligible (installed, not just
+            // "operating"): reset the per-session fetch guards and re-kick so
+            // its images land in mod-assets\ even if an earlier in-flight
+            // attempt failed, and so the detail-panel screenshots download on
+            // next open. Cheap when the earlier attempt succeeded — warm-cache
+            // resolve + conditional GETs. Uses the op's OWN profile (`service`),
+            // not the displayed mod (the user may have switched away).
+            _assetFetchAttempted.Remove(service.Profile.Id);
+            _screenshotFetchAttempted.Remove(service.Profile.Id);
+            _ = EnsureModAssetsAsync(service.Profile);
         }
 
         var installContext = addNewSlot ? InstallCompletion.Copy : InstallCompletion.Fresh;

@@ -355,7 +355,7 @@ public static class ModRegistry
     /// defensive lets a malformed manifest skip cleanly via the catch in
     /// the caller rather than producing a silently-wrong profile.
     /// </summary>
-    private static ModProfile ProjectToProfile(ModCatalogEntry entry)
+    internal static ModProfile ProjectToProfile(ModCatalogEntry entry)
     {
         var m = entry.Manifest;
 
@@ -415,7 +415,10 @@ public static class ModRegistry
             // catalog's CI; still, we treat them defensively here and
             // leave GitHubReleases settings null if either is empty so
             // the launcher's install pipeline can skip cleanly instead of
-            // hitting an HTTP 404 against an empty URL.
+            // hitting an HTTP 404 against an empty URL. approvedReleaseTag
+            // stays required even for followLatest mods: it's the only tag
+            // installable with no network/cached state, and the fallback
+            // when the /releases/latest resolution fails.
             if (!string.IsNullOrEmpty(m.SourceRepo)
                 && !string.IsNullOrEmpty(m.ApprovedReleaseTag))
             {
@@ -436,6 +439,9 @@ public static class ModRegistry
                     ExternalAssetSha256 = (m.Update.Github?.ExternalAssetSha256 ?? "").ToLowerInvariant(),
                     // Opt-in incremental delta patches (only the changed files) on normal updates.
                     DeltaPatches = m.Update.Github?.DeltaPatches ?? false,
+                    // Opt-in "follow the newest stable release" (see the
+                    // FollowLatest doc-comment for the seed/fallback rules).
+                    FollowLatest = m.Update.Github?.FollowLatest ?? false,
                 };
             }
         }

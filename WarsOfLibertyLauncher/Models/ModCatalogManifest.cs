@@ -250,6 +250,14 @@ public class ModCatalogGitHubSettings
     /// </summary>
     [JsonPropertyName("deltaPatches")]
     public bool? DeltaPatches { get; set; }
+
+    /// <summary>
+    /// Optional opt-in to follow the repo's newest stable release instead of pinning to
+    /// <c>approvedReleaseTag</c> (which stays required as seed + offline/API-failure fallback).
+    /// See <see cref="GitHubReleasesSettings.FollowLatest"/> and docs/MODDING.md.
+    /// </summary>
+    [JsonPropertyName("followLatest")]
+    public bool? FollowLatest { get; set; }
 }
 
 public class ModCatalogWolSettings
