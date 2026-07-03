@@ -172,6 +172,10 @@ public partial class LauncherSettingsDialog : Window
         TranslationsDescription.Text = Strings.Get("DlgLauncherSettingsTranslationsDescription");
         OpenPackagerButton.Content = "📦  " + Strings.Get("DlgLauncherSettingsOpenPackager");
         TranslationsHint.Text = Strings.Get("DlgLauncherSettingsTranslationsHint");
+        PatchGenHeader.Text = Strings.Get("DlgPatchGenSectionHeader");
+        PatchGenDescription.Text = Strings.Get("DlgPatchGenSectionDescription");
+        OpenPatchGeneratorButton.Content = "🧩  " + Strings.Get("DlgPatchGenOpen");
+        PatchGenHint.Text = Strings.Get("DlgPatchGenSectionHint");
 
         ClearAssetsButton.Content = Strings.Get("DlgLauncherSettingsClearAssets");
         ClearAssetsHint.Text = Strings.Get("DlgLauncherSettingsClearAssetsHint");
@@ -368,6 +372,19 @@ public partial class LauncherSettingsDialog : Window
     private void OpenPackagerButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new TranslationPackagerDialog(_config)
+        {
+            Owner = this,
+        };
+        dialog.ShowDialog();
+    }
+
+    /// <summary>
+    /// Launches the modder-facing incremental patch generator (diffs two overlay zips into a
+    /// small delta patch + descriptor for a GitHubReleases mod). Mod-agnostic like the packager.
+    /// </summary>
+    private void OpenPatchGeneratorButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new PatchGeneratorDialog
         {
             Owner = this,
         };

@@ -2632,6 +2632,138 @@ public static class Strings
             [LangEn] = "Casual users can ignore this tab — it's only useful when authoring a new translation.",
             [LangEs] = "Los usuarios normales pueden ignorar esta sección — solo es útil al crear una traducción nueva.",
         },
+
+        // --- Patch generator (Settings → Packager section + its dialog) ---
+        ["DlgPatchGenSectionHeader"] = new()
+        {
+            [LangEn] = "Incremental patch generator",
+            [LangEs] = "Generador de parches incrementales",
+        },
+        ["DlgPatchGenSectionDescription"] = new()
+        {
+            [LangEn] = "For mod authors on GitHub Releases that enabled delta patches: build a small \"only the changed files\" patch from your previous and new overlay zips, to upload alongside the full release.",
+            [LangEs] = "Para autores de mods en GitHub Releases con parches delta activados: crea un parche pequeño de \"solo los archivos cambiados\" a partir de tu overlay anterior y el nuevo, para subirlo junto al release completo.",
+        },
+        ["DlgPatchGenSectionHint"] = new()
+        {
+            [LangEn] = "Casual users can ignore this — it's only for publishing mod updates.",
+            [LangEs] = "Los usuarios normales pueden ignorar esto — es solo para publicar actualizaciones de mods.",
+        },
+        ["DlgPatchGenOpen"] = new()
+        {
+            [LangEn] = "Open patch generator",
+            [LangEs] = "Abrir generador de parches",
+        },
+        ["DlgPatchGenTitle"] = new()
+        {
+            [LangEn] = "Generate patch",
+            [LangEs] = "Generar parche",
+        },
+        ["DlgPatchGenHeader"] = new()
+        {
+            [LangEn] = "Incremental delta patch",
+            [LangEs] = "Parche delta incremental",
+        },
+        ["DlgPatchGenDescription"] = new()
+        {
+            [LangEn] = "Pick your previous release's overlay .zip and your new overlay .zip. The tool diffs them and writes a small patch-<from>-to-<to>.zip + .json to upload to your new GitHub release. Users on the previous version then download only the changed files.",
+            [LangEs] = "Elige el overlay .zip de tu release anterior y tu overlay .zip nuevo. La herramienta los compara y escribe un pequeño patch-<from>-to-<to>.zip + .json para subir a tu nuevo release de GitHub. Los usuarios en la versión anterior descargarán solo los archivos cambiados.",
+        },
+        ["DlgPatchGenSectionSources"] = new()
+        {
+            [LangEn] = "SOURCE OVERLAYS",
+            [LangEs] = "OVERLAYS DE ORIGEN",
+        },
+        ["DlgPatchGenOldZip"] = new()
+        {
+            [LangEn] = "Previous overlay .zip (the OLD version)",
+            [LangEs] = "Overlay .zip anterior (la versión VIEJA)",
+        },
+        ["DlgPatchGenOldZipHint"] = new()
+        {
+            [LangEn] = "The full overlay zip you shipped on the previous release.",
+            [LangEs] = "El overlay completo que subiste en el release anterior.",
+        },
+        ["DlgPatchGenNewZip"] = new()
+        {
+            [LangEn] = "New overlay .zip (the NEW version)",
+            [LangEs] = "Overlay .zip nuevo (la versión NUEVA)",
+        },
+        ["DlgPatchGenNewZipHint"] = new()
+        {
+            [LangEn] = "The full overlay zip you're about to release — you still upload this one too.",
+            [LangEs] = "El overlay completo que vas a publicar — este también lo subes igual.",
+        },
+        ["DlgPatchGenSectionVersions"] = new()
+        {
+            [LangEn] = "VERSION TAGS",
+            [LangEs] = "TAGS DE VERSIÓN",
+        },
+        ["DlgPatchGenFromTag"] = new()
+        {
+            [LangEn] = "From tag (previous release)",
+            [LangEs] = "Tag origen (release anterior)",
+        },
+        ["DlgPatchGenToTag"] = new()
+        {
+            [LangEn] = "To tag (new release)",
+            [LangEs] = "Tag destino (release nuevo)",
+        },
+        ["DlgPatchGenVersionsHint"] = new()
+        {
+            [LangEn] = "Must match your real GitHub release tags exactly (e.g. v1.0 and v1.1).",
+            [LangEs] = "Deben coincidir exactamente con tus tags reales de GitHub (p. ej. v1.0 y v1.1).",
+        },
+        ["DlgPatchGenSectionOutput"] = new()
+        {
+            [LangEn] = "OUTPUT",
+            [LangEs] = "SALIDA",
+        },
+        ["DlgPatchGenOutputFolder"] = new()
+        {
+            [LangEn] = "Output folder",
+            [LangEs] = "Carpeta de salida",
+        },
+        ["DlgPatchGenBrowse"] = new()
+        {
+            [LangEn] = "Browse…",
+            [LangEs] = "Examinar…",
+        },
+        ["DlgPatchGenGenerate"] = new()
+        {
+            [LangEn] = "Generate patch",
+            [LangEs] = "Generar parche",
+        },
+        ["DlgPatchGenWorking"] = new()
+        {
+            [LangEn] = "Generating…",
+            [LangEs] = "Generando…",
+        },
+        ["DlgPatchGenClose"] = new()
+        {
+            [LangEn] = "Close",
+            [LangEs] = "Cerrar",
+        },
+        ["DlgPatchGenNeedInputs"] = new()
+        {
+            [LangEn] = "Pick both overlay zips, fill in both tags, and choose an output folder.",
+            [LangEs] = "Elige ambos overlays .zip, rellena los dos tags y elige una carpeta de salida.",
+        },
+        ["DlgPatchGenResult"] = new()
+        {
+            [LangEn] = "✓ Patch generated: {0} changed/added, {1} deleted, {2}.",
+            [LangEs] = "✓ Parche generado: {0} cambiados/añadidos, {1} eliminados, {2}.",
+        },
+        ["DlgPatchGenReminder"] = new()
+        {
+            [LangEn] = "Upload BOTH the patch .zip and .json to your new release — and don't forget the full overlay .zip too (needed for fresh installs and version skips).",
+            [LangEs] = "Sube TANTO el .zip como el .json del parche a tu nuevo release — y no olvides subir también el overlay .zip completo (necesario para instalaciones nuevas y saltos de versión).",
+        },
+        ["DlgPatchGenErrorPrefix"] = new()
+        {
+            [LangEn] = "Couldn't generate the patch:",
+            [LangEs] = "No se pudo generar el parche:",
+        },
         ["DlgLauncherSettingsSectionMaintenance"] = new()
         {
             [LangEn] = "MAINTENANCE",
@@ -3393,6 +3525,16 @@ public static class Strings
         {
             [LangEn] = "✓ Installation intact — nothing to repair ({0} files verified).",
             [LangEs] = "✓ Instalación íntegra — nada que reparar ({0} archivos verificados).",
+        },
+        ["StatusDeltaChecking"] = new()
+        {
+            [LangEn] = "Checking for a small patch…",
+            [LangEs] = "Buscando un parche pequeño…",
+        },
+        ["StatusDeltaApplying"] = new()
+        {
+            [LangEn] = "Applying incremental patch…",
+            [LangEs] = "Aplicando parche incremental…",
         },
         ["StatusRepairingFiles"] = new()
         {

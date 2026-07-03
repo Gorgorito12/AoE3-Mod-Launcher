@@ -261,6 +261,10 @@
                         <TextBox  x:Name="FieldApprovedTag" Style="{StaticResource FieldInput}"/>
                         <TextBlock x:Name="HintApprovedTag" Style="{StaticResource FieldHint}"/>
 
+                        <!-- Opt-in incremental delta patches (only the changed files). -->
+                        <CheckBox x:Name="FieldDeltaPatches" Margin="0,14,0,0"/>
+                        <TextBlock x:Name="HintDeltaPatches" Style="{StaticResource FieldHint}"/>
+
                         <!-- How updates + file deletion work (GitHubReleases only). -->
                         <Border Background="{DynamicResource BgPanel}"
                                 BorderBrush="{DynamicResource AccentBrush}"

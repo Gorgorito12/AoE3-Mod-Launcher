@@ -434,6 +434,8 @@ public static class ModRegistry
                     // host elsewhere set these.
                     ExternalAssetUrlTemplate = m.Update.Github?.ExternalAssetUrlTemplate ?? "",
                     ExternalAssetSha256 = (m.Update.Github?.ExternalAssetSha256 ?? "").ToLowerInvariant(),
+                    // Opt-in incremental delta patches (only the changed files) on normal updates.
+                    DeltaPatches = m.Update.Github?.DeltaPatches ?? false,
                 };
             }
         }

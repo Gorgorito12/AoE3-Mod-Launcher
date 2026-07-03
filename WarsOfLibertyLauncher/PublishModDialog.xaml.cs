@@ -432,6 +432,7 @@ public partial class PublishModDialog : Window
         public string? ApprovedReleaseTag { get; init; }  // top-level
         public string? GithubExternalAssetUrlTemplate { get; init; }  // update.github
         public string? GithubExternalAssetSha256 { get; init; }       // update.github
+        public bool GithubDeltaPatches { get; init; }                 // update.github
         public string? WolUpdateInfoUrl { get; init; }     // update.wol
         public string? WolUpdateInfoUrlAlt { get; init; }  // update.wol
         public IReadOnlyList<string>? WolPayloadZipUrls { get; init; } // update.wol
@@ -473,6 +474,7 @@ public partial class PublishModDialog : Window
         ApprovedReleaseTag = FieldApprovedTag.Text,
         GithubExternalAssetUrlTemplate = FieldGhExternalUrl.Text,
         GithubExternalAssetSha256 = FieldGhExternalSha.Text,
+        GithubDeltaPatches = FieldDeltaPatches.IsChecked == true,
         WolUpdateInfoUrl = FieldWolUpdateInfoUrl.Text,
         WolUpdateInfoUrlAlt = FieldWolUpdateInfoUrlAlt.Text,
         WolPayloadZipUrls = SplitLines(FieldWolPayloadZipUrls.Text),
@@ -545,6 +547,10 @@ public partial class PublishModDialog : Window
             var gh = new Dictionary<string, object?>();
             AddIfPresent(gh, "externalAssetUrlTemplate", input.GithubExternalAssetUrlTemplate);
             AddIfPresent(gh, "externalAssetSha256", input.GithubExternalAssetSha256);
+            // Opt-in delta patches. Only meaningful for GitHub-hosted payloads (external-hosted
+            // mods always use the full path), so only emit it when NOT external-hosted.
+            if (input.GithubDeltaPatches && string.IsNullOrWhiteSpace(input.GithubExternalAssetUrlTemplate))
+                gh["deltaPatches"] = true;
             if (gh.Count > 0) update["github"] = gh;
         }
         doc["update"] = update;
@@ -686,6 +692,8 @@ public partial class PublishModDialog : Window
         LblWolUpdateInfoUrl.Text = "UpdateInfo.xml URL"; HintWolUpdateInfoUrl.Text = "URL to a WoL-style UpdateInfo.xml. Example: https://yoursite.com/UpdateInfo.xml";
         LblSourceRepo.Text = "Source repo (owner/repo)"; HintSourceRepo.Text = "Your mod's GitHub repository, e.g. yourname/your-mod.";
         LblApprovedTag.Text = "Approved release tag"; HintApprovedTag.Text = "The release tag the launcher downloads. Example: v1.0.0";
+        FieldDeltaPatches.Content = "Enable incremental delta patches";
+        HintDeltaPatches.Text = "Optional. Lets returning users download only the changed files. Generate the patch with Settings → Packager and upload it alongside your full release zip. See docs/MODDING.md.";
         LblDescriptionEn.Text = "Description (English)"; HintDescription.Text = "1–2 sentences on what your mod does. Example: A total conversion set during the Napoleonic Wars.";
         LblDescriptionEs.Text = "Descripción (Español)";
         LblWebsite.Text = "Official website (optional)"; HintWebsite.Text = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod";

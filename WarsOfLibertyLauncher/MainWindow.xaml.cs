@@ -5641,6 +5641,68 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Best-effort incremental delta update for an opted-in GitHubReleases mod: discover a small
+    /// <c>patch-&lt;from&gt;-to-&lt;to&gt;</c> on the approved release, verify it, and apply only the
+    /// changed files. Returns true when the delta was applied (files + manifest already at the new
+    /// version); false for ANY reason so the caller does the full re-overlay. Runs inside
+    /// <see cref="RepairInstallAsync"/> so the shared tail (recheck, version write, translation
+    /// reconcile, notifications, CheckAsync) is inherited unchanged.
+    /// </summary>
+    private async Task<bool> TryApplyGitHubDeltaAsync(
+        NativeInstallService nativeInstaller, string installPath,
+        IProgress<string>? statusProgress, IProgress<InstallPhase>? phaseProgress)
+    {
+        try
+        {
+            var profile = _updateService.Profile;
+            var gh = profile.GitHubReleases;
+            if (gh == null) return false;
+
+            var installedTag = _config.GetState(profile.Id).LastKnownVersion;
+            var manifest = InstallManifest.TryLoad(installPath);
+            var covered = profile.Translations?.CoveredFiles;
+
+            phaseProgress?.Report(InstallPhase.Download);
+            statusProgress?.Report(Strings.Get("StatusDeltaChecking"));
+
+            var prepared = await DeltaPatchService.TryPrepareAsync(
+                gh, installedTag, installPath, manifest, covered, _operatingCts!.Token);
+            if (prepared == null) return false;   // no usable delta → full
+
+            DiagnosticLog.Write(
+                $"Delta update: {prepared.Descriptor.FromTag} -> {prepared.Descriptor.ToTag} " +
+                $"({prepared.Descriptor.Changed.Count} changed) for {profile.Id}.");
+
+            phaseProgress?.Report(InstallPhase.Extract);
+            statusProgress?.Report(Strings.Get("StatusDeltaApplying"));
+
+            // Drive the dashboard bar off the (small) extraction.
+            var xp = new Progress<ArchiveExtractProgress>(p =>
+            {
+                if (p.BytesTotal <= 0) return;
+                double frac = Math.Clamp((double)p.BytesRead / p.BytesTotal, 0, 1);
+                ProgressPanelControl.PatchProgress.Value = 100.0 * frac;
+                ProgressPanelControl.OverallProgress.Value = 100.0 * frac;
+                ProgressPanelControl.PatchBytesText.Text = $"{p.BytesRead} / {p.BytesTotal}";
+            });
+
+            var version = ResolveInstallVersion(overrideTag: null);   // = approved tag
+            bool ok = await nativeInstaller.ApplyGitHubDeltaAsync(
+                profile, version, prepared, installPath, statusProgress, xp, _operatingCts!.Token);
+
+            try { if (System.IO.File.Exists(prepared.LocalZipPath)) System.IO.File.Delete(prepared.LocalZipPath); }
+            catch { /* best-effort temp cleanup */ }
+            return ok;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Delta update attempt failed → full: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Repairs the installation by re-downloading the WoL payload and
     /// re-copying the mod files over the existing install.
     /// </summary>
@@ -5843,20 +5905,35 @@ public partial class MainWindow : Window
             }
             else
             {
-                // Mod-only install on top of existing (overwrites all overlay files).
-                // Repair re-stamps the manifest with the version we just verified.
-                await nativeInstaller.InstallModOnlyAsync(
-                    _updateService.Profile,
-                    ResolveInstallVersion(overrideTag: targetReleaseTag),
-                    payloadUrls,
-                    installPath,
-                    dlProgress,
-                    statusProgress,
-                    phaseProgress,
-                    extractProgress,
-                    overlayProgress,
-                    payloadSha256: payloadSha256,
-                    ct: _operatingCts!.Token);
+                // Incremental delta patch first (only for a normal update to the approved tag, when
+                // the mod opted in): downloads/apply just the changed files. Any doubt returns false
+                // and we fall through to the full re-overlay below — the delta can never make an
+                // update worse than the full path, only faster. See DeltaPatchService.
+                bool deltaApplied = false;
+                if (asUpdate && targetReleaseTag == null
+                    && DeltaPatchService.IsEligible(_updateService.Profile))
+                {
+                    deltaApplied = await TryApplyGitHubDeltaAsync(
+                        nativeInstaller, installPath, statusProgress, phaseProgress);
+                }
+
+                if (!deltaApplied)
+                {
+                    // Mod-only install on top of existing (overwrites all overlay files).
+                    // Repair re-stamps the manifest with the version we just verified.
+                    await nativeInstaller.InstallModOnlyAsync(
+                        _updateService.Profile,
+                        ResolveInstallVersion(overrideTag: targetReleaseTag),
+                        payloadUrls,
+                        installPath,
+                        dlProgress,
+                        statusProgress,
+                        phaseProgress,
+                        extractProgress,
+                        overlayProgress,
+                        payloadSha256: payloadSha256,
+                        ct: _operatingCts!.Token);
+                }
             }
 
             var recheckProfile = _updateService.Profile;

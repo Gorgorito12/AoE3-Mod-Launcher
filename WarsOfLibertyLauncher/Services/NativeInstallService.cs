@@ -530,6 +530,169 @@ public class NativeInstallService
         DiagnosticLog.Write($"=== Native Install (mod-only) Complete ({profile.DisplayName}) ===");
     }
 
+    /// <summary>
+    /// Apply an incremental GitHubReleases delta patch (only the changed/added files) on top of an
+    /// existing install, then re-stamp the manifest to <paramref name="version"/> — the small-download
+    /// alternative to a full <see cref="InstallModOnlyAsync"/> re-overlay. Mirrors the full path's
+    /// finalize (deletions via <see cref="ApplyUpdateDeletions"/>, <see cref="ClassifyOverlay"/>,
+    /// <see cref="WriteManifest"/>, originals-snapshot refresh) so the RESULT is byte-identical to a
+    /// full update (multiplayer-safe). Returns false (with the install left intact) on any problem so
+    /// the caller falls back to the full download. The caller (<see cref="DeltaPatchService"/>) has
+    /// already discovered, hash-verified and pre-verified the patch.
+    /// </summary>
+    internal async Task<bool> ApplyGitHubDeltaAsync(
+        ModProfile profile, string version, DeltaPatchService.PreparedPatch prepared,
+        string destinationFolder,
+        IProgress<string>? statusProgress,
+        IProgress<ArchiveExtractProgress>? extractProgress,
+        CancellationToken ct)
+    {
+        var previousManifest = InstallManifest.TryLoad(destinationFolder);
+        if (previousManifest == null || previousManifest.OverlayFiles.Count == 0)
+            return false;   // no baseline to patch against → full
+
+        var descriptor = prepared.Descriptor;
+        var sep = Path.DirectorySeparatorChar;
+        string Full(string rel) => Path.Combine(destinationFolder, rel.Replace('/', sep));
+
+        // Backup lives OUTSIDE the install so WriteManifest's file enumeration can't pick it up.
+        var backupFolder = Path.Combine(Path.GetTempPath(), "aoe3ml-delta-bak-" + Guid.NewGuid().ToString("N"));
+
+        // Remember which touched files already existed, so a post-verify failure can roll back
+        // (restore the pre-existing ones from backup, delete the freshly-created ones).
+        var preExisting = descriptor.Changed
+            .Select(c => c.Path.Replace('\\', '/'))
+            .Where(rel => File.Exists(Full(rel)))
+            .ToList();
+
+        DiagnosticLog.Write($"=== Delta patch apply ({profile.DisplayName}): {descriptor.FromTag} -> {descriptor.ToTag} " +
+                            $"({descriptor.Changed.Count} changed, {descriptor.Deleted.Count} deleted) ===");
+
+        IReadOnlyList<string> touched;
+        try
+        {
+            // Extract the small patch zip over the install (backup-before-overwrite + rollback).
+            touched = await new ArchiveService().ExtractZipWithBackupAsync(
+                prepared.LocalZipPath, destinationFolder, backupFolder, statusProgress, extractProgress, ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Delta extract failed (rolled back) → full: {ex.Message}");
+            TryDeleteDir(backupFolder);
+            return false;
+        }
+
+        // Post-verify the applied files against the descriptor's post-hashes (when present). A
+        // mismatch here is nearly impossible once payloadSha256 checked out, but if it happens we
+        // roll back and let the caller do a clean full download.
+        foreach (var c in descriptor.Changed)
+        {
+            if (string.IsNullOrWhiteSpace(c.Sha256)) continue;
+            var rel = c.Path.Replace('\\', '/');
+            string got;
+            try { got = VerifyService.ComputeFingerprintOf(Full(rel)).Sha256; }
+            catch { got = ""; }
+            if (!string.Equals(got, c.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                DiagnosticLog.Write($"Delta post-verify mismatch on '{rel}' → rollback + full.");
+                ArchiveService.RestoreBackup(backupFolder, destinationFolder, preExisting);
+                foreach (var t in touched)
+                    if (!preExisting.Contains(t, StringComparer.OrdinalIgnoreCase))
+                        try { var f = Full(t); if (File.Exists(f)) File.Delete(f); } catch { }
+                TryDeleteDir(backupFolder);
+                return false;
+            }
+        }
+
+        // Build the NEW full overlay state: previous overlay minus deleted, plus what the patch
+        // wrote. FreshOnDisk = files the patch added that weren't in the previous overlay.
+        var deletedSet = new HashSet<string>(
+            descriptor.Deleted.Select(d => d.Replace('\\', '/')), StringComparer.OrdinalIgnoreCase);
+        var prevOverlaySet = new HashSet<string>(previousManifest.OverlayFiles, StringComparer.OrdinalIgnoreCase);
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var newAll = new List<string>();
+        foreach (var f in previousManifest.OverlayFiles)
+            if (!deletedSet.Contains(f) && seen.Add(f)) newAll.Add(f);
+        foreach (var t in touched)
+            if (!deletedSet.Contains(t) && seen.Add(t)) newAll.Add(t);
+        var fresh = touched.Where(t => !prevOverlaySet.Contains(t)).ToList();
+
+        // Merge hashes: keep the previous overlay's (minus deleted) + recompute the touched files
+        // from their live (canonical, pre-translation) bytes — same as the full path captures.
+        var hashes = new Dictionary<string, FileFingerprint>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (rel, fp) in previousManifest.FileHashes)
+            if (!deletedSet.Contains(rel)) hashes[rel] = fp;
+        foreach (var t in touched)
+        {
+            try { hashes[t] = VerifyService.ComputeFingerprintOf(Full(t)); }
+            catch { hashes.Remove(t); }
+        }
+
+        var capture = new OverlayCaptureResult(newAll, fresh) { Hashes = hashes };
+
+        // Translations invariant (load-bearing — the full path gets this for free, the delta must
+        // reconstruct it, and it MUST happen BEFORE WriteManifest). The full re-overlay overwrites
+        // EVERY covered file with canonical English, so at manifest/snapshot time live is canonical.
+        // A delta only rewrites the CHANGED covered files; a covered file the patch didn't touch is
+        // left on disk as whatever it was — for a translated user, the TRANSLATED bytes. If those
+        // leak into WriteManifest (KeyFileHashes MD5s the live key files) or into the _originals
+        // snapshot, they poison version detection AND the multiplayer fingerprint (both read the
+        // canonical bytes). So RESTORE canonical English on every untouched covered file from the
+        // EXISTING (still-valid) snapshot, making the on-disk state match a full overlay. The tail's
+        // ReconcileAfterUpdate re-applies a still-compatible translation on top, exactly like full.
+        if (profile.Translations != null && profile.Translations.CoveredFiles.Count > 0)
+        {
+            try
+            {
+                var originalsFolder = VerifyService.OriginalsFolderOf(destinationFolder);
+                var touchedSet = new HashSet<string>(touched, StringComparer.OrdinalIgnoreCase);
+                foreach (var rel in profile.Translations.CoveredFiles)
+                {
+                    var relFwd = rel.Replace('\\', '/');
+                    if (touchedSet.Contains(relFwd)) continue;   // changed by the patch → already canonical
+                    var snap = Path.Combine(originalsFolder, Path.GetFileName(rel));
+                    var live = Full(relFwd);
+                    if (File.Exists(snap) && File.Exists(live))
+                        File.Copy(snap, live, overwrite: true);   // restore canonical (no-op if not translated)
+                }
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"Delta canonical-restore failed: {ex.Message}"); }
+        }
+
+        // Deletions: reuse the full-path machinery — auto-removes previous net-new files no longer
+        // in the overlay (backed up + clamped to root), and honours any delete.lst the patch shipped.
+        // A base-shadowing file the modder dropped is NOT net-new, so it is never auto-deleted (no holes).
+        ApplyUpdateDeletions(destinationFolder, capture, previousManifest, statusProgress);
+
+        var (overlayFiles, overlayNetNew) = ClassifyOverlay(capture, previousManifest);
+
+        // Re-stamp the manifest to the new version, preserving install identity (shortcuts, source).
+        // Runs AFTER the canonical-restore above, so KeyFileHashes/EngineFileHashes see canonical bytes.
+        WriteManifest(profile, version, destinationFolder,
+            previousManifest.Aoe3SourcePath, previousManifest.ClonedAoe3,
+            previousManifest.Shortcuts ?? new(), previousManifest.StartMenuFolder,
+            overlayFiles, overlayNetNew, installLabel: null, capture.Hashes);
+
+        // Now that every covered file on disk is canonical, refresh the snapshot (updates the
+        // CHANGED covered files to their new canonical bytes; unchanged ones are a no-op).
+        if (profile.Translations != null && profile.Translations.CoveredFiles.Count > 0)
+        {
+            try { new TranslationService(destinationFolder, profile.Translations.CoveredFiles).RefreshOriginalsSnapshot(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Delta translations snapshot failed: {ex.Message}"); }
+        }
+
+        TryDeleteDir(backupFolder);
+        DiagnosticLog.Write($"=== Delta patch apply complete ({profile.DisplayName}) → {version} ===");
+        return true;
+    }
+
+    private static void TryDeleteDir(string path)
+    {
+        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); } catch { /* best-effort */ }
+    }
+
     // =========================================================================
     // Implementation
     // =========================================================================

@@ -65,6 +65,41 @@ public class GitHubReleaseDownloader
     /// </summary>
     public record ReleaseInfo(string Tag, string Name, bool Prerelease);
 
+    /// <summary>One asset on a release: filename, size, and download URL. Used by the delta-patch
+    /// path (<see cref="DeltaPatchService"/>) to discover a mod's optional patch assets, which sit
+    /// alongside the full <c>.zip</c> on the same release and are otherwise ignored by
+    /// <see cref="PickAsset"/>.</summary>
+    public record ReleaseAsset(string Name, long Size, string Url);
+
+    /// <summary>
+    /// Return EVERY asset attached to <paramref name="tag"/>'s release (name/size/url) — the full
+    /// list <see cref="ResolveAssetAsync"/> already fetches but collapses to one. Lets the delta
+    /// path find a <c>patch-*.zip</c>/<c>.json</c> without a second API call shape. Returns an
+    /// empty list on any failure (the caller treats "no assets" as "no delta → full").
+    /// </summary>
+    public async Task<IReadOnlyList<ReleaseAsset>> ListAssetsAsync(
+        string sourceRepo, string tag, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceRepo) || string.IsNullOrWhiteSpace(tag))
+            return new List<ReleaseAsset>();
+        try
+        {
+            var apiUrl = $"https://api.github.com/repos/{sourceRepo}/releases/tags/{tag}";
+            var release = await Http.GetFromJsonAsync<GitHubRelease>(apiUrl, ct);
+            if (release?.Assets == null) return new List<ReleaseAsset>();
+            return release.Assets
+                .Where(a => !string.IsNullOrEmpty(a.Name) && !string.IsNullOrEmpty(a.BrowserDownloadUrl))
+                .Select(a => new ReleaseAsset(a.Name, a.Size, a.BrowserDownloadUrl))
+                .ToList();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"GitHubReleases: ListAssetsAsync('{sourceRepo}','{tag}') failed: {ex.Message}");
+            return new List<ReleaseAsset>();
+        }
+    }
+
     /// <summary>
     /// Enumerate the mod's published releases (newest first) so the user can
     /// pick a version to install instead of only the catalog's approved tag.

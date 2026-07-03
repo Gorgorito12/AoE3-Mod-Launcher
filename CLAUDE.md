@@ -951,6 +951,44 @@ Two cheap gates beyond a green build:
   unauthenticated on every dialog open (60/h per IP — no ETag/304 like the self-
   updater yet).
 
+- **`GitHubReleases` mods can ship OPT-IN incremental delta patches — a small
+  "changed files only" update that's a best-effort shortcut with a GUARANTEED
+  full fallback. Never make the delta path a hard requirement.** Owned by
+  `Services/DeltaPatchService.cs` (+ `NativeInstallService.ApplyGitHubDeltaAsync`,
+  `ArchiveService.ExtractZipWithBackupAsync`, `GitHubReleaseDownloader.ListAssetsAsync`).
+  Gated by `GitHubReleasesSettings.DeltaPatches` (catalog `update.github.deltaPatches:
+  true`, threaded through `ModCatalogManifest`→`ModRegistry.ProjectToProfile`). **The
+  modder** ships, on release vY alongside the full `.zip`, two extra assets:
+  `patch-<X>-to-<Y>.zip` (only changed/added overlay files) + `patch-<X>-to-<Y>.json`
+  (descriptor: `fromTag`/`toTag`/`payload`/`payloadSha256`/`changed[]{path,fromSha256,sha256}`/
+  `deleted[]`), produced by the in-app **Settings → Packager → "Generate patch"** tool
+  (`PatchGeneratorDialog` → `DeltaPatchService.GeneratePatchAsync`, diffs two overlay zips
+  by SHA-256). **Consumer flow** rides INSIDE `RepairInstallAsync`'s update `else` branch
+  (`MainWindow.TryApplyGitHubDeltaAsync`): only for a normal update (`asUpdate && targetReleaseTag
+  == null`) of an eligible mod (`DeltaPatchService.IsEligible`: GitHubReleases + flag + NOT
+  external-hosted), it tries the delta and, on ANY false, falls through to the existing full
+  `InstallModOnlyAsync` — so the shared tail (recheck, `LastKnownVersion` write,
+  `ReconcileAfterUpdate`, notifications, `CheckAsync`) is inherited unchanged. `TryPrepareAsync`
+  discovers the `patch-*.json` on the approved release (`ListAssetsAsync` — the assets are already
+  in the release JSON `ResolveAssetAsync` fetches), matches by `SelectPatch` (`toTag==approved &&
+  fromTag==LastKnownVersion` — **single-hop only**; a version skip → full), **pre-verifies**
+  (`PreVerify`: each `changed` file's recorded pre-state must match — strong via `fromSha256` vs
+  `manifest.FileHashes`, degraded via live-file-vs-manifest; covered files through
+  `ResolveHashTarget`/`_originals`), downloads + `payloadSha256`-verifies the zip.
+  `ApplyGitHubDeltaAsync` extracts with backup/rollback, **post-verifies** against `changed[].sha256`
+  (rollback → false → full on mismatch), reuses `ApplyUpdateDeletions` (auto-removes only
+  net-new files no longer present — a base-shadowing file is NEVER deleted, no holes), recaptures
+  hashes from the live canonical bytes, `ClassifyOverlay` + `WriteManifest` (Version=toTag,
+  preserving shortcuts/source), `RefreshOriginalsSnapshot`. **Load-bearing invariants:** the
+  result is byte-identical to a full update (MP-safe); the delta backup lives in `%TEMP%` (NOT the
+  install, or `WriteManifest`'s enumeration would pick it up); the manifest is written LAST so a
+  crash leaves the OLD version and the next update self-heals via full; hashes in the descriptor
+  are OPTIONAL (verified when present, degraded when absent — same trust level as today's
+  hash-less full GitHubReleases update). Pinned by `DeltaPatchTests` (diff/select/eligible/
+  pre-verify + generator round-trip). Docs: `docs/MODDING.md` §5.1 "Incremental delta patches",
+  catalog schema `update.github.deltaPatches`. **Out of scope (follow-ups):** multi-hop chaining,
+  delta on the arbitrary version-picker, auto-detection without the flag.
+
 - **`config.GameExecutable` is a GLOBAL exe cache that two profiles share — it
   MUST be cleared on mod switch.** Despite the per-mod `Mods` dictionary, the
   resolved game-exe path is cached in the flat, launcher-wide

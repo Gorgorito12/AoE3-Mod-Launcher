@@ -243,6 +243,13 @@ public class ModCatalogGitHubSettings
     /// </summary>
     [JsonPropertyName("externalAssetSha256")]
     public string? ExternalAssetSha256 { get; set; }
+
+    /// <summary>
+    /// Optional opt-in for incremental delta patches (only the changed files) on normal updates.
+    /// See <see cref="GitHubReleasesSettings.DeltaPatches"/> and docs/MODDING.md.
+    /// </summary>
+    [JsonPropertyName("deltaPatches")]
+    public bool? DeltaPatches { get; set; }
 }
 
 public class ModCatalogWolSettings

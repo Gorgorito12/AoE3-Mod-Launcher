@@ -384,6 +384,26 @@
                         <TextBlock x:Name="TranslationsHint"
                                    Style="{StaticResource HintText}"
                                    Margin="0,10,0,0"/>
+
+                        <Border Height="1" Background="{DynamicResource MpDivider}" Margin="0,22,0,18"/>
+                        <TextBlock x:Name="PatchGenHeader"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   FontSize="{StaticResource FontSizeBodyStrong}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8"/>
+                        <TextBlock x:Name="PatchGenDescription"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,16"/>
+                        <Button x:Name="OpenPatchGeneratorButton"
+                                Style="{StaticResource PrimaryButton}"
+                                MinWidth="240"
+                                HorizontalAlignment="Left"
+                                Click="OpenPatchGeneratorButton_Click"/>
+                        <TextBlock x:Name="PatchGenHint"
+                                   Style="{StaticResource HintText}"
+                                   Margin="0,10,0,0"/>
                     </StackPanel>
 
                     <!-- ===================================================

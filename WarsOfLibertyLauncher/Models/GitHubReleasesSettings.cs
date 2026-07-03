@@ -83,4 +83,16 @@ public class GitHubReleasesSettings
     /// is empty.
     /// </summary>
     public string ExternalAssetSha256 { get; set; } = "";
+
+    /// <summary>
+    /// Optional opt-in. When true, the launcher will try an INCREMENTAL "delta patch" on a normal
+    /// update (only when updating from the immediately-previous version): it looks on the approved
+    /// release for a small <c>patch-&lt;from&gt;-to-&lt;to&gt;.zip</c> + <c>.json</c> and, if
+    /// present and verified, applies only the changed files instead of re-downloading the full
+    /// overlay. Best-effort: any doubt (no patch, wrong base, hash mismatch, network error) falls
+    /// back to the normal full download. Disabled for external-hosted mods
+    /// (<see cref="ExternalAssetUrlTemplate"/>) whose SHA is catalog-pinned. See
+    /// <see cref="Services.DeltaPatchService"/> and docs/MODDING.md.
+    /// </summary>
+    public bool DeltaPatches { get; set; } = false;
 }

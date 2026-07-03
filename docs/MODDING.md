@@ -380,6 +380,78 @@ Deletions are backed up before they run, so a failed update rolls back.
 None of this applies to Wars of Liberty, which uses its own
 `WolPatcher` delete-list pipeline (§5.2).
 
+#### Incremental delta patches (optional)
+
+By default every `GitHubReleases` update re-downloads the **whole** overlay
+`.zip` (see the trade-off above). If your overlay is large and you patch often,
+you can opt into **incremental delta patches** so returning users download only
+the files that changed — a GitHub-native alternative to WoL's `WolPatcher`
+pipeline, with no `UpdateInfo.xml` server to run.
+
+**When to use it.** Big overlay + frequent small updates → worth it. Small mod
+or rare updates → the full `.zip` is simpler; skip this. It's **opt-in and
+purely additive**: nothing changes unless you turn it on and ship a patch.
+
+**Requirements.**
+- `update.mechanism` = `GitHubReleases`, payload hosted **on GitHub** (not an
+  external `externalAssetUrlTemplate` CDN — those always use the full path).
+- `"deltaPatches": true` inside `update.github` in your catalog `mod.json` (a
+  Tier-3 change, reviewed once — see §6.3).
+
+**The recipe (per new release):**
+
+1. Build your new full overlay `.zip` exactly as always — **you still upload
+   this** (fresh installs and everyone who skipped a version need it).
+2. In the launcher: **Launcher Settings → Packager → "Generate patch"**. Pick
+   the **old** release's overlay `.zip`, your **new** overlay `.zip`, and type
+   the two tags (`from` = previous release tag, `to` = new tag). It writes
+   `patch-<from>-to-<to>.zip` (only the changed/added files) and
+   `patch-<from>-to-<to>.json` (the descriptor, with hashes filled in for you).
+3. Create the GitHub release for the new tag and upload **three** assets: the
+   full `.zip` **+** the `patch-*.zip` **+** the `patch-*.json`.
+4. Open the usual catalog PR bumping `approvedReleaseTag` (Tier 2, auto-merges).
+   Setting `deltaPatches: true` is a one-time change.
+
+Result: a user on the previous version downloads the small patch; everyone else
+(fresh install, or who skipped versions) downloads the full `.zip` — the
+launcher decides automatically.
+
+**The descriptor** (`patch-*.json`, written by the tool — you don't hand-edit it):
+
+```json
+{
+  "fromTag": "v1.0",
+  "toTag": "v1.1",
+  "payload": "patch-v1.0-to-v1.1.zip",
+  "payloadSha256": "…",
+  "changed": [ { "path": "data/protoy.xml", "fromSha256": "…", "sha256": "…" } ],
+  "deleted": [ "data/old_unit.xml" ]
+}
+```
+
+**Deletions are automatic.** `deleted` is computed from the diff (files your old
+overlay had and the new one doesn't) — you don't hand-write a delete list like
+WoL's `_delete.lst`. The launcher only removes files your mod *added* (net-new);
+a file that overwrote a base-game file is never auto-deleted (that would leave a
+hole). To revert a base file to vanilla, re-pack its original bytes in the new
+overlay (same rule as §5.1's `delete.lst`).
+
+**Guarantees (why it's safe):**
+- **Single-hop.** A delta only applies when you're updating from the
+  *immediately-previous* version. Skipped versions → full download.
+- **Full fallback, always.** Any problem — no patch on the release, a diverged
+  install, a hash mismatch, a network hiccup, an external-hosted mod — silently
+  falls back to the full download. A delta can never make an update *worse* than
+  today, only faster when it works.
+- **Byte-identical result.** After a delta your install is identical to one that
+  did the full update, so **multiplayer version-matching is unaffected**.
+- **Hashes are optional but the tool always includes them** (extra verification;
+  when absent the launcher trusts GitHub's CDN, exactly like the full `.zip`).
+
+**Limitations:** always upload the full `.zip` too; external-hosted mods can't
+use deltas; the arbitrary version picker (Mod Properties) always uses the full
+path.
+
 ### 5.2. `WolPatcher` — for mods already running the legacy pipeline
 
 What Wars of Liberty uses: an `UpdateInfo.xml` on the mod's server
