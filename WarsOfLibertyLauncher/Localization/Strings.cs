@@ -589,6 +589,11 @@ public static class Strings
             [LangEn] = "MODS CATALOG",
             [LangEs] = "CATÁLOGO DE MODS",
         },
+        ["DlgLauncherSettingsSectionTranslationsCatalog"] = new()
+        {
+            [LangEn] = "TRANSLATIONS",
+            [LangEs] = "TRADUCCIONES",
+        },
         ["DlgLauncherSettingsSectionInterface"] = new()
         {
             [LangEn] = "INTERFACE",
@@ -643,13 +648,14 @@ public static class Strings
             [LangEn] = "MULTIPLAYER",
             [LangEs] = "MULTIJUGADOR",
         },
-        // "MODS" pill below the cinema-dashboard PLAY button. Opens
-        // a popup with the mods the user added via the Workshop
-        // (built-in profiles are always included).
+        // "SWITCH GAME" pill below the cinema-dashboard PLAY button. Opens
+        // a popup to switch the active mod/game (built-in profiles + the mods
+        // the user added via the Workshop). Player-facing wording ("juego")
+        // chosen over "mods" so newcomers understand it switches what plays.
         ["DashboardChangeMod"] = new()
         {
-            [LangEn] = "MODS",
-            [LangEs] = "MODS",
+            [LangEn] = "SWITCH GAME",
+            [LangEs] = "CAMBIAR JUEGO",
         },
         // Tooltip on the hero's active-copy chip (shown only with 2+ installed copies).
         ["DashboardActiveCopyTooltip"] = new()
@@ -2014,6 +2020,7 @@ public static class Strings
         ["MpRoomInfoHeader"] = new() { [LangEn] = "ROOM INFO", [LangEs] = "INFO DE LA SALA" },
         ["MpRoomFieldMod"] = new() { [LangEn] = "Mod", [LangEs] = "Mod" },
         ["MpRoomFieldPassword"] = new() { [LangEn] = "Password", [LangEs] = "Contraseña" },
+        ["MpRoomFieldCopy"] = new() { [LangEn] = "Copy", [LangEs] = "Copia" },
         ["MpRoomPasswordYes"] = new() { [LangEn] = "Required", [LangEs] = "Requerida" },
         ["MpRoomPasswordNo"] = new() { [LangEn] = "None", [LangEs] = "Ninguna" },
         ["MpRoomReadyMark"] = new() { [LangEn] = "Mark as ready", [LangEs] = "Marcar como listo" },
@@ -2276,6 +2283,31 @@ public static class Strings
             [LangEn] = "{0} left.",
             [LangEs] = "{0} salió.",
         },
+        ["MpChatPeerLost"] = new()
+        {
+            [LangEn] = "{0} lost connection (not responding).",
+            [LangEs] = "{0} perdió la conexión (no responde).",
+        },
+        ["MpChatPeerReconnected"] = new()
+        {
+            [LangEn] = "{0} reconnected.",
+            [LangEs] = "{0} reconectó.",
+        },
+        ["MpPeerYou"] = new()
+        {
+            [LangEn] = "you",
+            [LangEs] = "vos",
+        },
+        ["MpPeerWaitingVpn"] = new()
+        {
+            [LangEn] = "Waiting for VPN",
+            [LangEs] = "Esperando VPN",
+        },
+        ["MpPeerLost"] = new()
+        {
+            [LangEn] = "No connection",
+            [LangEs] = "Sin conexión",
+        },
         ["MpChatReadySavedLocally"] = new()
         {
             [LangEn] = "Ready saved locally — will sync when the room reconnects.",
@@ -2338,6 +2370,18 @@ public static class Strings
         {
             [LangEn] = "Mod",
             [LangEs] = "Mod",
+        },
+        // Label + read-only hint for the create-room copy picker (shown only
+        // when the selected mod has 2+ installed copies).
+        ["MpCreateDialogCopyLabel"] = new()
+        {
+            [LangEn] = "Copy to use",
+            [LangEs] = "Copia a usar",
+        },
+        ["MpCreateDialogCopyHintReadonly"] = new()
+        {
+            [LangEn] = "This is the mod's active copy. To host with another copy, switch the active copy from the Library first.",
+            [LangEs] = "Es la copia activa del mod. Para hostear con otra copia, cambiá la copia activa desde la Biblioteca primero.",
         },
         ["MpCreateDialogHashLabel"] = new()
         {
@@ -2625,6 +2669,31 @@ public static class Strings
         {
             [LangEn] = "Cache cleared.",
             [LangEs] = "Caché eliminada.",
+        },
+        ["DlgLauncherSettingsTxDefault"] = new()
+        {
+            [LangEn] = "Default (this mod's own translations repo)",
+            [LangEs] = "Por defecto (repo de traducciones del mod)",
+        },
+        ["DlgLauncherSettingsTxCustom"] = new()
+        {
+            [LangEn] = "Custom repository:",
+            [LangEs] = "Repositorio personalizado:",
+        },
+        ["DlgLauncherSettingsTxDisabled"] = new()
+        {
+            [LangEn] = "Disabled (no community translations)",
+            [LangEs] = "Desactivado (sin traducciones de la comunidad)",
+        },
+        ["DlgLauncherSettingsClearTxCache"] = new()
+        {
+            [LangEn] = "Clear translations cache",
+            [LangEs] = "Limpiar caché de traducciones",
+        },
+        ["DlgLauncherSettingsClearTxCacheHint"] = new()
+        {
+            [LangEn] = "Reloads the translation list from the repository now.",
+            [LangEs] = "Recarga la lista de traducciones desde el repositorio ahora.",
         },
         // Named for the tool it holds (the translation PACKAGER), not
         // "Translations" — the generic word made users think this is where the
@@ -4423,6 +4492,12 @@ public static class Strings
         {
             [LangEn] = "DOWNLOAD SIZE",
             [LangEs] = "TAMAÑO",
+        },
+        // Heading over the translator's free-form description in the apply dialog.
+        ["DlgLangApplyDescriptionLabel"] = new()
+        {
+            [LangEn] = "📝 Translator's note",
+            [LangEs] = "📝 Nota del traductor",
         },
         ["DlgLangApplyCompatOk"] = new()
         {

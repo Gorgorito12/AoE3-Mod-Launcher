@@ -56,6 +56,14 @@ public partial class LauncherSettingsDialog : Window
     public Action? AssetsCleared { get; set; }
 
     /// <summary>
+    /// Invoked when the user clicks "Clear translations cache". Community
+    /// translations have no on-disk cache (only MainWindow's in-memory index),
+    /// so the caller wires this to null that index and re-fetch live. Set by
+    /// the caller; null = no-op.
+    /// </summary>
+    public Action? TranslationsCacheCleared { get; set; }
+
+    /// <summary>
     /// Regex for a valid "owner/repo" GitHub identifier. Mirrors the
     /// pattern used by mod.schema.json for the same field — so the
     /// dialog's UX feels consistent with what the catalog accepts.
@@ -64,6 +72,14 @@ public partial class LauncherSettingsDialog : Window
         new(@"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$", RegexOptions.Compiled);
 
     private const string DefaultCatalogRepo = "Gorgorito12/aoe3-mods-catalog";
+
+    /// <summary>
+    /// Folder repo the WoL profile ships as its default translations source —
+    /// shown in the "Default" radio label. Only accurate for WoL; for other
+    /// mods the label reads generically (the effective default is the active
+    /// profile's own FolderRepo, resolved in UpdateService).
+    /// </summary>
+    private const string DefaultTranslationsRepo = "Gorgorito12/translations";
 
     /// <summary>
     /// In-memory working copy of the top-tab order (tab ids). Seeded
@@ -113,6 +129,7 @@ public partial class LauncherSettingsDialog : Window
         TabInterfaceLabel.Text = Strings.Get("DlgLauncherSettingsSectionInterface");
         TabUpdatesLabel.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
         TabCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
+        TabTranslationsCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionTranslationsCatalog");
         TabTranslationsLabel.Text = Strings.Get("DlgLauncherSettingsSectionTranslations");
         TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
         TabPrivacyLabel.Text = Strings.Get("DlgLauncherSettingsSectionPrivacy");
@@ -167,6 +184,13 @@ public partial class LauncherSettingsDialog : Window
 
         ClearCacheButton.Content = Strings.Get("DlgLauncherSettingsClearCache");
         ClearCacheHint.Text = Strings.Get("DlgLauncherSettingsClearCacheHint");
+
+        TxDefaultRadio.Content = Strings.Get("DlgLauncherSettingsTxDefault")
+            + $"  ({DefaultTranslationsRepo})";
+        TxCustomRadio.Content = Strings.Get("DlgLauncherSettingsTxCustom");
+        TxDisabledRadio.Content = Strings.Get("DlgLauncherSettingsTxDisabled");
+        ClearTranslationsCacheButton.Content = Strings.Get("DlgLauncherSettingsClearTxCache");
+        ClearTranslationsCacheHint.Text = Strings.Get("DlgLauncherSettingsClearTxCacheHint");
 
         TranslationsHeader.Text = Strings.Get("DlgLauncherSettingsTranslationsHeader");
         TranslationsDescription.Text = Strings.Get("DlgLauncherSettingsTranslationsDescription");
@@ -267,6 +291,24 @@ public partial class LauncherSettingsDialog : Window
             CatalogCustomRadio.IsChecked = true;
             CatalogCustomBox.Text = rawRepo;
         }
+
+        // Translations source: same three-way mapping ("" / "none" / repo).
+        var rawTxRepo = _config.TranslationsFolderRepo ?? "";
+        if (string.IsNullOrEmpty(rawTxRepo))
+        {
+            TxDefaultRadio.IsChecked = true;
+            TxCustomBox.Text = "";
+        }
+        else if (string.Equals(rawTxRepo, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            TxDisabledRadio.IsChecked = true;
+            TxCustomBox.Text = "";
+        }
+        else
+        {
+            TxCustomRadio.IsChecked = true;
+            TxCustomBox.Text = rawTxRepo;
+        }
     }
 
     /// <summary>
@@ -298,6 +340,7 @@ public partial class LauncherSettingsDialog : Window
         TabInterfaceBtn.Tag = ReferenceEquals(activeBtn, TabInterfaceBtn) ? "active" : null;
         TabUpdatesBtn.Tag = ReferenceEquals(activeBtn, TabUpdatesBtn) ? "active" : null;
         TabCatalogBtn.Tag = ReferenceEquals(activeBtn, TabCatalogBtn) ? "active" : null;
+        TabTranslationsCatalogBtn.Tag = ReferenceEquals(activeBtn, TabTranslationsCatalogBtn) ? "active" : null;
         TabTranslationsBtn.Tag = ReferenceEquals(activeBtn, TabTranslationsBtn) ? "active" : null;
         TabMaintenanceBtn.Tag = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? "active" : null;
         TabPrivacyBtn.Tag = ReferenceEquals(activeBtn, TabPrivacyBtn) ? "active" : null;
@@ -306,6 +349,7 @@ public partial class LauncherSettingsDialog : Window
         InterfacePanel.Visibility = ReferenceEquals(activeBtn, TabInterfaceBtn) ? Visibility.Visible : Visibility.Collapsed;
         UpdatesPanel.Visibility = ReferenceEquals(activeBtn, TabUpdatesBtn) ? Visibility.Visible : Visibility.Collapsed;
         CatalogPanel.Visibility = ReferenceEquals(activeBtn, TabCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
+        TranslationsCatalogPanel.Visibility = ReferenceEquals(activeBtn, TabTranslationsCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
         TranslationsPanel.Visibility = ReferenceEquals(activeBtn, TabTranslationsBtn) ? Visibility.Visible : Visibility.Collapsed;
         MaintenancePanel.Visibility = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? Visibility.Visible : Visibility.Collapsed;
         PrivacyPanel.Visibility = ReferenceEquals(activeBtn, TabPrivacyBtn) ? Visibility.Visible : Visibility.Collapsed;
@@ -315,6 +359,7 @@ public partial class LauncherSettingsDialog : Window
     private void TabInterfaceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabInterfaceBtn);
     private void TabUpdatesBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUpdatesBtn);
     private void TabCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabCatalogBtn);
+    private void TabTranslationsCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabTranslationsCatalogBtn);
     private void TabTranslationsBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabTranslationsBtn);
     private void TabMaintenanceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabMaintenanceBtn);
     private void TabPrivacyBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabPrivacyBtn);
@@ -571,6 +616,32 @@ public partial class LauncherSettingsDialog : Window
             newCatalogRepo = typed;
         }
 
+        // 1b. Resolve the translations source (same validate-first rule as the
+        //     catalog: an invalid custom repo aborts the whole save).
+        string newTxRepo;
+        if (TxDefaultRadio.IsChecked == true)
+        {
+            newTxRepo = "";
+        }
+        else if (TxDisabledRadio.IsChecked == true)
+        {
+            newTxRepo = "none";
+        }
+        else
+        {
+            var typedTx = (TxCustomBox.Text ?? "").Trim();
+            if (!RepoRegex.IsMatch(typedTx))
+            {
+                TxInvalidText.Text = Strings.Get("DlgLauncherSettingsInvalidRepo");
+                TxInvalidText.Visibility = Visibility.Visible;
+                SetActiveTab(TabTranslationsCatalogBtn);
+                TxCustomBox.Focus();
+                return;
+            }
+            TxInvalidText.Visibility = Visibility.Collapsed;
+            newTxRepo = typedTx;
+        }
+
         // 2. Language: persist + apply live so the launcher main window
         //    re-localises on close without a restart. Strings.SetLanguage
         //    raises the LanguageChanged event the rest of the app listens
@@ -590,6 +661,7 @@ public partial class LauncherSettingsDialog : Window
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
         _config.ModsCatalogRepo = newCatalogRepo;
+        _config.TranslationsFolderRepo = newTxRepo;
         _config.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
 
         // Top-tab order (Interface section). Persist the working copy;
@@ -663,6 +735,29 @@ public partial class LauncherSettingsDialog : Window
         {
             DiagnosticLog.Write($"Clear catalog cache failed: {ex.Message}");
             SetHint(ClearCacheHint, ex.Message, success: false);
+        }
+    }
+
+    /// <summary>
+    /// "Clear translations cache" button. Community translations have no
+    /// on-disk cache — the index lives only in MainWindow's in-memory
+    /// <c>_cachedTranslationIndex</c> — so this invokes the caller-provided
+    /// <see cref="TranslationsCacheCleared"/> callback to null that index and
+    /// re-fetch live. Does NOT close the dialog.
+    /// </summary>
+    private void ClearTranslationsCacheButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            TranslationsCacheCleared?.Invoke();
+            SetHint(ClearTranslationsCacheHint,
+                Strings.Get("DlgLauncherSettingsCacheCleared"),
+                success: true);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Clear translations cache failed: {ex.Message}");
+            SetHint(ClearTranslationsCacheHint, ex.Message, success: false);
         }
     }
 

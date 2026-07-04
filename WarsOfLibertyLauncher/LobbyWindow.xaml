@@ -340,6 +340,22 @@
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
                                 </Grid>
+                                <!-- Which install copy this room uses. Shown only
+                                     when the room's mod has 2+ installed copies. -->
+                                <StackPanel x:Name="RoomCopyRow"
+                                            Margin="0,10,0,0"
+                                            Visibility="Collapsed">
+                                    <TextBlock x:Name="RoomCopyLabel"
+                                               Text="Copy"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               FontSize="{StaticResource FontSizeCaption}"
+                                               Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="RoomCopyText"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="{StaticResource FontSizeBody}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
@@ -632,9 +648,9 @@
                                                FontFamily="Consolas, Courier New, monospace"
                                                FontWeight="SemiBold"/>
                                 </StackPanel>
-                                <!-- Connection latency = your internet RTT. Not a
-                                     per-rival ping — per-player ping needs peer IPs
-                                     the launcher can't see (see RadminVpnService note). -->
+                                <!-- Connection latency = YOUR internet RTT (not a
+                                     per-rival ping). The per-player ping lives in the
+                                     peer rows below (real ICMP RTT to each Radmin IP). -->
                                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,0">
                                     <TextBlock x:Name="InGameConnectionHeader"
                                                Text="CONNECTION"

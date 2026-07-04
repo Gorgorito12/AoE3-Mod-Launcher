@@ -32,6 +32,11 @@ public partial class CreateLobbyDialog : Window
     private readonly Func<ModProfile, Task<string>> _computeHash;
     private readonly IReadOnlyList<ModProfile> _profiles;
     private readonly int _lobbyMaxPlayers;
+    private readonly Func<ModProfile, ModCopyInfo> _resolveCopyInfo;
+    private readonly Func<string, Task> _switchActiveCopy;
+    // Guards the copy combo's SelectionChanged while we repopulate it, so a
+    // programmatic rebuild doesn't re-trigger an active-copy switch.
+    private bool _suppressCopyCombo;
 
     private ModProfile? _selectedProfile;
     private string _selectedHash = "";
@@ -70,17 +75,22 @@ public partial class CreateLobbyDialog : Window
         IReadOnlyList<ModProfile> profiles,
         ModProfile? initiallySelected,
         Func<ModProfile, Task<string>> computeHash,
+        Func<ModProfile, ModCopyInfo> resolveCopyInfo,
+        Func<string, Task> switchActiveCopy,
         int lobbyMaxPlayers = 8)
     {
         InitializeComponent();
         _session = session;
         _computeHash = computeHash;
+        _resolveCopyInfo = resolveCopyInfo;
+        _switchActiveCopy = switchActiveCopy;
         _profiles = profiles;
         _lobbyMaxPlayers = lobbyMaxPlayers;
 
         Title = Strings.Get("MpCreateDialogTitle");
         TitleBarControl.Title = Strings.Get("MpCreateDialogTitle");
         ModLabel.Text = Strings.Get("MpCreateDialogModLabel");
+        CopyLabel.Text = Strings.Get("MpCreateDialogCopyLabel");
         // HashLabel is rendered next to the "Advanced details" toggle
         // and uses the localised "(mod fingerprint)" suffix from the
         // strings table. Wrap in parens to make it read as a hint.
@@ -140,6 +150,7 @@ public partial class CreateLobbyDialog : Window
 
         _selectedProfile = profile;
         UpdateModIcon(profile);
+        RefreshCopyRow(profile);
         ModNameDefaultTitle(profile);
         HashText.Text = "Loading…";
         CreateButton.IsEnabled = false;
@@ -158,6 +169,77 @@ public partial class CreateLobbyDialog : Window
             // Create stays disabled — the user can't submit without a
             // valid hash. Switching mods triggers a fresh attempt.
         }
+    }
+
+    /// <summary>
+    /// Repaint the copy row for the picked mod. Hidden for single-install mods
+    /// (zero change for the common case). When the mod has 2+ copies it lists
+    /// them, marking the ACTIVE one; the combo is interactive only for the active
+    /// dashboard mod (choosing a copy rotates the active copy — the copy
+    /// multiplayer actually launches / fingerprints), display-only otherwise.
+    /// </summary>
+    private void RefreshCopyRow(ModProfile profile)
+    {
+        var info = _resolveCopyInfo?.Invoke(profile);
+        if (info == null || !info.HasMultiple)
+        {
+            CopyRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _suppressCopyCombo = true;
+        CopyCombo.Items.Clear();
+        foreach (var c in info.Copies)
+        {
+            CopyCombo.Items.Add(new ComboBoxItem
+            {
+                Content = c.Label,
+                Tag = c.InstallId,
+                IsSelected = c.IsActive,
+            });
+        }
+        if (CopyCombo.SelectedItem == null && CopyCombo.Items.Count > 0)
+            ((ComboBoxItem)CopyCombo.Items[0]!).IsSelected = true;
+        _suppressCopyCombo = false;
+
+        CopyCombo.IsEnabled = info.CanSwitch;
+        CopyHint.Visibility = info.CanSwitch ? Visibility.Collapsed : Visibility.Visible;
+        if (!info.CanSwitch)
+            CopyHint.Text = Strings.Get("MpCreateDialogCopyHintReadonly");
+        CopyRow.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// User picked a different install copy. Multiplayer always uses the ACTIVE
+    /// copy, so this rotates the active copy (single source of truth) and then
+    /// recomputes the fingerprint so the room's required hash matches what will
+    /// actually launch. A no-op when the picked copy is already active.
+    /// </summary>
+    private async void CopyCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressCopyCombo || _selectedProfile == null) return;
+        if (CopyCombo.SelectedItem is not ComboBoxItem item || item.Tag is not string installId)
+            return;
+
+        CreateButton.IsEnabled = false;
+        CopyCombo.IsEnabled = false;
+        HashText.Text = "Loading…";
+        try
+        {
+            await _switchActiveCopy(installId);
+            _selectedHash = await _computeHash(_selectedProfile);
+            HashText.Text = _selectedHash;
+            CreateButton.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            _selectedHash = "";
+            HashText.Text = "";
+            ShowError(ex.Message);
+        }
+        // Re-render so the active marker + enabled state follow the switch
+        // (also restores CopyCombo.IsEnabled per CanSwitch).
+        RefreshCopyRow(_selectedProfile);
     }
 
     /// <summary>Refresh the room-title placeholder to match the picked mod.</summary>

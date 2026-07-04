@@ -100,6 +100,38 @@ public static class AoE3Detector
             }
         }
 
+        // Second pass (b): any Steam library, ANY folder name. The hardcoded
+        // folder names above only match the default install; a renamed or
+        // localized folder (the user moved AoE3 into a differently-named
+        // directory) would be missed even though Steam knows about it. So
+        // enumerate every steamapps\common\<game> directory and probe it for
+        // age3y.exe directly. age3y.exe is exclusive to The Asian Dynasties,
+        // so this can't false-positive on another game, and seenFolders dedupes
+        // against the fast-path matches above.
+        foreach (var library in EnumerateSteamLibraries())
+        {
+            var commonDir = Path.Combine(library, "steamapps", "common");
+            if (!Directory.Exists(commonDir)) continue;
+
+            foreach (var gameDir in SafeEnumerateDirectories(commonDir))
+            {
+                // Steam layout is <game>\bin\age3y.exe; tolerate a flat
+                // <game>\age3y.exe too (mirrors the GOG/retail probes below).
+                var exe = Path.Combine(gameDir, "bin", "age3y.exe");
+                if (!File.Exists(exe))
+                {
+                    exe = Path.Combine(gameDir, "age3y.exe");
+                    if (!File.Exists(exe)) continue;
+                }
+
+                var gameFolder = Path.GetDirectoryName(exe)!;
+                var modRoot = ResolveModRoot(gameFolder);
+                if (!seenFolders.Add(modRoot)) continue;
+
+                found.Add(new Installation(gameFolder, modRoot, "Steam"));
+            }
+        }
+
         // Third pass: GOG entries. GOG registers each game under
         // HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\<gameId>. Iterating every
         // subkey catches AoE3 Complete Collection no matter which numeric id
@@ -251,6 +283,17 @@ public static class AoE3Detector
                     yield return path;
             }
         }
+    }
+
+    /// <summary>
+    /// Immediate subdirectories of <paramref name="dir"/>, swallowing IO /
+    /// access errors so a single unreadable folder under steamapps\common
+    /// (a locked/permission-denied game dir) can't abort the whole AoE3 scan.
+    /// </summary>
+    private static IEnumerable<string> SafeEnumerateDirectories(string dir)
+    {
+        try { return Directory.EnumerateDirectories(dir); }
+        catch { return Array.Empty<string>(); }
     }
 
     private static IEnumerable<string?> ReadSteamRootCandidates()

@@ -405,7 +405,11 @@ public partial class MainWindow : Window
             // Pass the config through so the Radmin assistant overlay
             // can honour the user's Mode preference + flip the
             // "don't show again" flag from inside the overlay.
-            config: _config);
+            config: _config,
+            // Rotate the active install copy from the create-room copy picker.
+            // Multiplayer launches / fingerprints the ACTIVE copy, so choosing a
+            // copy there is exactly an active-copy switch (single source of truth).
+            switchActiveCopy: installId => SwitchActiveInstallAsync(installId));
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -1567,6 +1571,15 @@ public partial class MainWindow : Window
         // restart. activeOnly:false covers the Workshop grid too.
         dialog.AssetsCleared = () => _ = RevalidateVisibleAssetsAsync(activeOnly: false);
 
+        // "Clear translations cache" has no disk file to delete — invalidate the
+        // in-memory index and re-fetch live so the list reflects the (possibly
+        // just-changed) translations repo without a restart.
+        dialog.TranslationsCacheCleared = () =>
+        {
+            _cachedTranslationIndex = null;
+            _ = RefreshTranslationIndexAsync(reportStatus: false);
+        };
+
         // Closed (fires for Save, Cancel, ✕, Esc, and Alt+F4) is the
         // single rendezvous point for post-dialog refresh. ChangesSaved
         // is the replacement for the old DialogResult — true only when
@@ -1587,6 +1600,10 @@ public partial class MainWindow : Window
             // events yet.
             RefreshIdlePanel();
             UpdateGameUI();
+            // The translations source repo may have changed (new TRANSLATIONS
+            // tab). Re-fetch the index so the language list reflects it — the
+            // resolver reads config.TranslationsFolderRepo fresh each call.
+            _ = RefreshTranslationIndexAsync(reportStatus: false);
             // Re-order the nav bar if the user changed the tab order in
             // the Interface section. switchToFirst:false so we don't
             // yank them off their current tab just for saving settings —
@@ -3087,7 +3104,7 @@ public partial class MainWindow : Window
         }
         if (DashboardChangeModButtonText != null)
         {
-            // Locale-aware "CHANGE MOD" / "CAMBIAR MOD" label.
+            // Locale-aware "SWITCH GAME" / "CAMBIAR JUEGO" label.
             DashboardChangeModButtonText.Text = Strings.Get("DashboardChangeMod");
         }
         // Version chip — installed version (CurrentVersion) of the
@@ -3754,6 +3771,14 @@ public partial class MainWindow : Window
     // Properties for a mod they've moved away from.
     private ModPropertiesDialog? _modPropertiesDialog;
 
+    // Single-instance reference for the dashboard MODS switcher popup. This is
+    // what makes the MODS button a RELIABLE toggle — the same field-based model
+    // the gear uses (_modPropertiesDialog above). It replaced the fragile
+    // ChromePopups.ConsumeToggleOff 300 ms timing trick, which assumed the
+    // popup's Closed fired before the opener's Click and failed at runtime
+    // ("solo se vuelve a abrir"). See DashboardChangeModButton_Click.
+    private System.Windows.Controls.Primitives.Popup? _modSwitchPopup;
+
     /// <summary>
     /// Opens the ModPropertiesDialog for a specific profile. For the
     /// active mod we reuse <c>_updateService</c> directly; for non-
@@ -3838,7 +3863,12 @@ public partial class MainWindow : Window
             switchInstall: async id =>
             {
                 await SwitchActiveInstallAsync(id);
-                _modPropertiesDialog?.RefreshData();
+                // Pass the FRESH service: SwitchActiveInstallAsync swapped
+                // _updateService for a new instance bound to the now-active copy.
+                // The dialog must re-point at it AND rebuild the LANGUAGE tab, or
+                // translation compat stays computed against the previous copy's
+                // version until the dialog is reopened.
+                _modPropertiesDialog?.OnActiveInstallSwitched(_updateService);
             },
             removeInstall: id =>
             {
@@ -4922,10 +4952,16 @@ public partial class MainWindow : Window
     {
         var btn = (System.Windows.Controls.Button)sender;
 
-        // Toggle: if this same click is the one that just dismissed the MODS
-        // popup (StaysOpen=false auto-closes on the re-click), don't reopen it.
-        if (Controls.ChromePopups.ConsumeToggleOff(btn))
+        // Toggle — same field-based model as the gear (DashboardSettingsButton_Click):
+        // if a MODS popup is already live, this click closes it instead of reopening.
+        // The field survives the StaysOpen=false auto-dismiss race because its Closed
+        // handler (below) clears it DEFERRED at Background priority — after this Click
+        // has already run — so re-clicking the button reliably lands here and returns.
+        if (_modSwitchPopup != null)
+        {
+            _modSwitchPopup.IsOpen = false; // the Closed handler clears the field
             return;
+        }
 
         var popup = new System.Windows.Controls.Primitives.Popup
         {
@@ -4942,11 +4978,29 @@ public partial class MainWindow : Window
             PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
         };
 
-        // Single-open invariant + close-on-dialog-open + toggle (see ChromePopups):
-        // mutually exclusive with the brand popup, closed automatically when the
-        // gear (ModPropertiesDialog) or any other dialog opens, and re-clicking
-        // the MODS button (owner = btn) toggles it off instead of reopening.
+        // Single-open invariant + close-on-dialog-open (see ChromePopups):
+        // mutually exclusive with the brand popup and closed automatically when the
+        // gear (ModPropertiesDialog) or any other dialog opens. The TOGGLE itself is
+        // now owned by the _modSwitchPopup field (above), not ConsumeToggleOff.
         Controls.ChromePopups.Track(popup, btn);
+
+        // Field-based toggle: remember this popup, and clear the field when it
+        // closes — but DEFERRED to Background priority so the clear runs AFTER the
+        // opener's Click (Input priority always beats Background). That ordering is
+        // what defeats the StaysOpen=false auto-dismiss/Click race: on a re-click,
+        // mouse-down auto-dismisses the popup and QUEUES this clear, then Click fires
+        // with the field still non-null → the gate above closes and returns (no
+        // reopen). An outside click just closes it and the field clears momentarily
+        // after, so the next MODS click opens fresh.
+        _modSwitchPopup = popup;
+        popup.Closed += (_, _) =>
+            Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() =>
+                {
+                    if (ReferenceEquals(_modSwitchPopup, popup))
+                        _modSwitchPopup = null;
+                }));
 
         // Two-tone "punched out" rim — same recipe as the gear
         // ContextMenu's template in ActionPanel.xaml: outer 1px

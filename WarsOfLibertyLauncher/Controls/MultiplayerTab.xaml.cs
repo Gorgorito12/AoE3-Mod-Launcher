@@ -58,6 +58,14 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private Func<ModProfile, bool>? _switchActiveMod;
 
+    /// <summary>
+    /// MainWindow-provided callback to rotate the ACTIVE install copy of the
+    /// active mod (wraps <c>SwitchActiveInstallAsync</c>). Used by the create-room
+    /// copy picker: multiplayer always launches / fingerprints the active copy, so
+    /// choosing a copy there switches the active copy (single source of truth).
+    /// </summary>
+    private Func<string, Task>? _switchActiveCopy;
+
     private Subtab _activeSubtab = Subtab.Rooms;
     private bool _isRefreshingList;
     private bool _isRefreshingHistory;
@@ -152,6 +160,16 @@ public partial class MultiplayerTab : UserControl
         /// <summary>Last measured ICMP RTT to <see cref="RadminIp"/> in ms;
         /// -1 = unknown / no answer / no IP yet.</summary>
         public int PingMs { get; set; } = -1;
+        /// <summary>Consecutive non-answering probes — feeds
+        /// <see cref="PeerNetHealth.Classify"/> so a single dropped packet doesn't
+        /// flip the peer to "Lost". Reset to 0 on any answer.</summary>
+        public int ConsecutiveFails { get; set; }
+        /// <summary>Consecutive answering probes — used to debounce the
+        /// "reconnected" chat edge. Reset to 0 on any failure.</summary>
+        public int ConsecutiveOks { get; set; }
+        /// <summary>Last link state we ANNOUNCED in chat, so RefreshInGamePanel only
+        /// posts on the Online↔Lost edge (not every tick). Init WaitingVpn.</summary>
+        public PeerLinkState LastLinkState { get; set; } = PeerLinkState.WaitingVpn;
     }
 
     // -------- Lobby window (replaces the old in-tab popup) ----------
@@ -688,7 +706,8 @@ public partial class MultiplayerTab : UserControl
         Func<ModProfile, Task<string>> computeModFingerprint,
         Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? launchGame = null,
         Func<ModProfile, bool>? switchActiveMod = null,
-        LauncherConfig? config = null)
+        LauncherConfig? config = null,
+        Func<string, Task>? switchActiveCopy = null)
     {
         if (_session != null)
         {
@@ -702,6 +721,7 @@ public partial class MultiplayerTab : UserControl
         _computeModFingerprint = computeModFingerprint;
         _launchGame = launchGame;
         _switchActiveMod = switchActiveMod;
+        _switchActiveCopy = switchActiveCopy;
         // Optional so old callers (and the parameterless ctor path
         // used by XAML preview) still work — null _config just means
         // the Radmin assistant features stay dormant.
@@ -1504,6 +1524,31 @@ public partial class MultiplayerTab : UserControl
     /// so we draw a coloured circle with their initial (cheap,
     /// stable, matches the redesign's "warm gold" placeholder).
     /// </summary>
+    /// <summary>
+    /// Recolour the roster's per-member health dots in place from the latest ICMP
+    /// probe, without rebuilding the rows (which would re-fetch avatars and flicker).
+    /// Each dot is Tagged with its member userId in <see cref="BuildMemberRow"/>.
+    /// Called on the lobby tick; open-slot rows carry no tagged dot and are skipped.
+    /// </summary>
+    private void RefreshRosterHealthDots()
+    {
+        var panel = _lobbyWindow?.RoomMembersPanel;
+        if (panel == null) return;
+        var myId = _session?.CurrentUser?.Id;
+        foreach (var child in panel.Children)
+        {
+            if (child is not Border b || b.Child is not Grid g) continue;
+            System.Windows.Shapes.Ellipse? dot = null;
+            foreach (var el in g.Children)
+                if (el is System.Windows.Shapes.Ellipse e && e.Tag is string) { dot = e; break; }
+            if (dot?.Tag is not string uid || !_roomMembers.TryGetValue(uid, out var m)) continue;
+            dot.Fill = (myId != null && string.Equals(uid, myId, StringComparison.Ordinal))
+                ? (Brush)Application.Current.FindResource("MpStatusOnline")
+                : PeerDotBrush(PeerNetHealth.Classify(
+                    !string.IsNullOrEmpty(m.RadminIp), m.PingMs, m.ConsecutiveFails));
+        }
+    }
+
     private FrameworkElement BuildMemberRow(RoomMemberEntry m)
     {
         var row = new Border
@@ -1524,11 +1569,19 @@ public partial class MultiplayerTab : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });  // name
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // badges
 
-        // Online dot.
+        // Health dot. Coloured by the peer's derived link state and Tagged with
+        // the userId so RefreshRosterHealthDots can recolour it live (per lobby
+        // tick) without rebuilding the row. Your own row is always green.
+        var isSelfDot = _session?.CurrentUser != null
+            && string.Equals(m.UserId, _session.CurrentUser!.Id, StringComparison.Ordinal);
         grid.Children.Add(WithColumn(new System.Windows.Shapes.Ellipse
         {
             Width = 8, Height = 8,
-            Fill = (Brush)Application.Current.FindResource("MpStatusOnline"),
+            Fill = isSelfDot
+                ? (Brush)Application.Current.FindResource("MpStatusOnline")
+                : PeerDotBrush(PeerNetHealth.Classify(
+                    !string.IsNullOrEmpty(m.RadminIp), m.PingMs, m.ConsecutiveFails)),
+            Tag = m.UserId,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         }, 0));
@@ -1605,12 +1658,9 @@ public partial class MultiplayerTab : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
 
-        // Per-peer ping used to come from the in-launcher PeerMesh
-        // (each PeerChannel ran its own STUN ping cadence). With n2n,
-        // game traffic flows through the virtual NIC and we don't see
-        // per-peer pings at this layer. The row stays without an RTT
-        // line — could be filled in with a manual ICMP probe to the
-        // peer's 10.99.0.X address later if the UI calls for it.
+        // Per-peer link quality is shown via the leading health dot (recoloured
+        // live by RefreshRosterHealthDots from the ICMP probe), so the name cell
+        // stays text-only here; the numeric RTT lives in the in-game panel.
         grid.Children.Add(WithColumn(nameStack, 2));
 
         // Badges (Host / Ready). Compact pills so multiple badges
@@ -2190,6 +2240,7 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.RoomInfoHeaderText.Text = Strings.Get("MpRoomInfoHeader");
         _lobbyWindow.RoomModLabel.Text = Strings.Get("MpRoomFieldMod");
         _lobbyWindow.RoomPasswordLabel.Text = Strings.Get("MpRoomFieldPassword");
+        _lobbyWindow.RoomCopyLabel.Text = Strings.Get("MpRoomFieldCopy");
         _lobbyWindow.ChatHeaderText.Text = Strings.Get("MpRoomChatHeader");
         _lobbyWindow.ClearChatButton.Content = "🗑  " + Strings.Get("MpRoomChatClear");
         _lobbyWindow.ChatSendButton.Content = Strings.Get("MpRoomChatSend");
@@ -2318,7 +2369,22 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow!.RoomPasswordText.Text = hasPwd
             ? Strings.Get("MpRoomPasswordYes")
             : Strings.Get("MpRoomPasswordNo");
-        _lobbyWindow!.RoomInfoCard.Visibility = (modKnown || hasPwd)
+
+        // Which install copy the room uses — only when the room's mod has 2+
+        // copies (multiplayer always uses the ACTIVE copy of that mod). Tells
+        // host + joiners which folder they entered with.
+        string? copyLeaf = null;
+        if (!string.IsNullOrEmpty(_currentLobbyModId))
+        {
+            var st = WarsOfLibertyLauncher.Models.LauncherConfig.Load().GetState(_currentLobbyModId);
+            if (st.HasMultipleInstalls && !string.IsNullOrWhiteSpace(st.InstallPath))
+                copyLeaf = CopyLeaf(st.InstallPath);
+        }
+        var hasCopy = !string.IsNullOrEmpty(copyLeaf);
+        _lobbyWindow!.RoomCopyRow.Visibility = hasCopy ? Visibility.Visible : Visibility.Collapsed;
+        if (hasCopy) _lobbyWindow!.RoomCopyText.Text = copyLeaf;
+
+        _lobbyWindow!.RoomInfoCard.Visibility = (modKnown || hasPwd || hasCopy)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -2833,7 +2899,13 @@ public partial class MultiplayerTab : UserControl
             // The dialog hands us each picked profile and we return
             // its on-disk fingerprint. Bridge through the same
             // callback the tab already received from MainWindow.
-            profile => _computeModFingerprint!(profile))
+            profile => _computeModFingerprint!(profile),
+            // Copy-awareness: which installed copies the mod has + which is
+            // active. Lets the host SEE and (for the active mod) CHOOSE the copy.
+            BuildCopyInfo,
+            // Choosing a copy rotates the active copy (single source of truth);
+            // multiplayer launches / fingerprints the active copy.
+            installId => _switchActiveCopy != null ? _switchActiveCopy(installId) : Task.CompletedTask)
         {
             Owner = Window.GetWindow(this),
         };
@@ -2898,6 +2970,47 @@ public partial class MultiplayerTab : UserControl
             return AoE3Detector.FindInstallRoot();
 
         return null;
+    }
+
+    /// <summary>
+    /// Copy-awareness for the create-room dialog: does this mod have multiple
+    /// installed copies, which is active, and can we switch it from here (only
+    /// when it's the active dashboard mod, since the switch rotates the active
+    /// copy). Labels are disambiguated so two copies sharing a folder name are
+    /// still distinguishable. Read-only for the stock game / single-install mods.
+    /// </summary>
+    private Models.ModCopyInfo BuildCopyInfo(ModProfile profile)
+    {
+        var st = WarsOfLibertyLauncher.Models.LauncherConfig.Load().GetState(profile.Id);
+        if (profile.IsStockGame || !st.HasMultipleInstalls)
+            return new Models.ModCopyInfo(false, false, System.Array.Empty<Models.ModCopyChoice>());
+
+        var raw = new List<(string Id, string Label, string Path, bool Active)>
+        {
+            (st.ActiveInstallId, CopyLeaf(st.InstallPath), st.InstallPath, true),
+        };
+        foreach (var o in st.OtherInstalls)
+            raw.Add((o.Id, CopyLeaf(o.InstallPath), o.InstallPath, false));
+
+        var labels = Services.PathDisplay.DisambiguateLabels(
+            raw.Select(r => (r.Label, r.Path)).ToList());
+
+        var choices = new List<Models.ModCopyChoice>();
+        for (int i = 0; i < raw.Count; i++)
+            choices.Add(new Models.ModCopyChoice(raw[i].Id, labels[i], raw[i].Active));
+
+        var active = _getActiveProfile?.Invoke();
+        bool canSwitch = active != null
+            && string.Equals(active.Id, profile.Id, StringComparison.OrdinalIgnoreCase);
+        return new Models.ModCopyInfo(true, canSwitch, choices);
+    }
+
+    /// <summary>Folder-leaf label of an install path (the copy's own folder name).</summary>
+    private static string CopyLeaf(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "";
+        var leaf = System.IO.Path.GetFileName(path.TrimEnd('\\', '/'));
+        return string.IsNullOrEmpty(leaf) ? path! : leaf;
     }
 
 
@@ -4496,7 +4609,16 @@ public partial class MultiplayerTab : UserControl
         {
             Interval = TimeSpan.FromMilliseconds(2500),
         };
-        _lobbyPingTimer.Tick += (_, _) => { KickConnectionPing(); UpdateLobbyPing(); };
+        _lobbyPingTimer.Tick += (_, _) =>
+        {
+            KickConnectionPing();
+            UpdateLobbyPing();
+            // Also probe peers pre-match so the roster health dots are live before
+            // anyone hits Start (needs our own IP reported first).
+            MaybeReportRadminIp();
+            KickPeerPings();
+            RefreshRosterHealthDots();
+        };
         _lobbyPingTimer.Start();
         KickConnectionPing();
         UpdateLobbyPing();
@@ -4760,12 +4882,12 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Repaint the InGame status overlay from local data: match
-    /// timer, the n2n connection badge, and a list of room members
-    /// alongside us in the virtual LAN. Per-peer RTT used to come
-    /// from PeerMesh's STUN ping cadence — n2n hides that detail
-    /// (the supernode does its own keepalive), so RTT shows as "—"
-    /// for remote players.
+    /// Repaint the InGame status overlay from local data: match timer, traffic,
+    /// your internet CONNECTION, and a per-peer row list with each peer's derived
+    /// <see cref="PeerLinkState"/> (health dot + real ICMP RTT to their Radmin IP,
+    /// or "Esperando VPN" / "Sin conexión"). Also posts a chat line on the
+    /// Online↔Lost edge. The ICMP "Lost" is INDICATIVE only (Radmin/Windows may
+    /// block inbound echo); member_left is the authoritative "left" signal.
     /// </summary>
     private void RefreshInGamePanel()
     {
@@ -4833,10 +4955,8 @@ public partial class MultiplayerTab : UserControl
         {
             _lobbyWindow!.InGamePeersPanel.Children.Add(BuildInGamePeerRow(
                 login: string.IsNullOrEmpty(me.DiscordUsername) ? me.DisplayName : me.DiscordUsername,
-                state: "you",
+                state: PeerLinkState.Online,   // your own row is always "you" / green
                 rttMs: 0,
-                bytesIn: 0,
-                bytesOut: 0,
                 isSelf: true));
         }
         int peerCount = 0;
@@ -4845,14 +4965,19 @@ public partial class MultiplayerTab : UserControl
             if (me != null && string.Equals(member.UserId, me.Id, StringComparison.Ordinal))
                 continue;
             peerCount++;
+            var state = PeerNetHealth.Classify(
+                !string.IsNullOrEmpty(member.RadminIp), member.PingMs, member.ConsecutiveFails);
+            // Chat notice only on the Online↔Lost edge (debounced by the fail
+            // threshold), never on the transient Unstable/WaitingVpn steps.
+            if (state == PeerLinkState.Lost && member.LastLinkState != PeerLinkState.Lost)
+                AppendChatSystem(Strings.Format("MpChatPeerLost", member.Login));
+            else if (state == PeerLinkState.Online && member.LastLinkState == PeerLinkState.Lost)
+                AppendChatSystem(Strings.Format("MpChatPeerReconnected", member.Login));
+            member.LastLinkState = state;
             _lobbyWindow!.InGamePeersPanel.Children.Add(BuildInGamePeerRow(
                 login: member.Login,
-                state: bridgeReady ? "Virtual LAN" : "Connecting…",
-                // Real per-peer ICMP RTT to their Radmin IP (-1 until they
-                // report it / answer; the row shows "…" then).
+                state: state,
                 rttMs: member.PingMs,
-                bytesIn: 0,
-                bytesOut: 0,
                 isSelf: false));
         }
 
@@ -4960,7 +5085,16 @@ public partial class MultiplayerTab : UserControl
                 .Where(m => !string.IsNullOrEmpty(m.RadminIp)
                             && (myId == null || !string.Equals(m.UserId, myId, StringComparison.Ordinal)))
                 .ToList();
-            await Task.WhenAll(targets.Select(async m => m.PingMs = await PingPeerAsync(m.RadminIp!)));
+            await Task.WhenAll(targets.Select(async m =>
+            {
+                var rtt = await PingPeerAsync(m.RadminIp!);
+                m.PingMs = rtt;
+                // Track the short failure/success history the health classifier reads.
+                // A single answered probe clears the fail streak (and vice-versa) so
+                // "Lost" needs sustained silence, not one dropped packet.
+                if (rtt >= 0) { m.ConsecutiveOks++; m.ConsecutiveFails = 0; }
+                else { m.ConsecutiveFails++; m.ConsecutiveOks = 0; }
+            }));
         }
         catch (Exception ex)
         {
@@ -5004,14 +5138,32 @@ public partial class MultiplayerTab : UserControl
             : "MpStatusOffline");
     }
 
+    /// <summary>
+    /// One peer row for the in-game panel: [health dot] [name — star, ellipsis]
+    /// [ping-or-status — right aligned]. Star-sizing the name is load-bearing —
+    /// the old fixed 180+110+80 columns overflowed the ~284 px panel and clipped
+    /// the ping off-screen (the "no ping shows" bug). Self renders as "you" / "—".
+    /// </summary>
     private FrameworkElement BuildInGamePeerRow(
-        string login, string state, double rttMs, long bytesIn, long bytesOut, bool isSelf)
+        string login, PeerLinkState state, double rttMs, bool isSelf)
     {
         var row = new Grid { Margin = new Thickness(0, 4, 0, 4) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) }); // name
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) }); // state
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });  // rtt
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // bytes
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });               // dot
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // name
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });               // ping/status
+
+        var dotBrush = isSelf
+            ? (Brush)Application.Current.FindResource("MpStatusOnline")
+            : PeerDotBrush(state);
+        var dot = new System.Windows.Shapes.Ellipse
+        {
+            Width = 8, Height = 8,
+            Fill = dotBrush,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        Grid.SetColumn(dot, 0);
+        row.Children.Add(dot);
 
         var nameTb = new TextBlock
         {
@@ -5022,62 +5174,61 @@ public partial class MultiplayerTab : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        Grid.SetColumn(nameTb, 0);
+        Grid.SetColumn(nameTb, 1);
         row.Children.Add(nameTb);
 
-        var stateBrush = state switch
+        // Right cell: your own row shows "you"; a peer shows its real RTT
+        // ("NN ms", coloured by health) when Online, else a localized status
+        // ("Esperando VPN" / "…" / "Sin conexión").
+        string statusText;
+        Brush statusBrush;
+        if (isSelf)
         {
-            "Direct P2P" or "Connected" or "you" =>
-                (Brush)Application.Current.FindResource("MpStatusOnline"),
-            "Relay" =>
-                (Brush)Application.Current.FindResource("MpPingMedium"),
-            "Lost" =>
-                (Brush)Application.Current.FindResource("MpStatusOffline"),
-            _ => (Brush)Application.Current.FindResource("TextSecondary"),
-        };
-        var stateTb = new TextBlock
+            statusText = Strings.Get("MpPeerYou");
+            statusBrush = (Brush)Application.Current.FindResource("MpStatusOnline");
+        }
+        else if (state == PeerLinkState.Online && rttMs >= 0)
         {
-            Text = state,
-            Foreground = stateBrush,
+            statusText = $"{(int)rttMs} ms";
+            statusBrush = (Brush)Application.Current.FindResource(
+                rttMs < 80 ? "MpStatusOnline" : rttMs < 200 ? "MpPingMedium" : "MpStatusOffline");
+        }
+        else
+        {
+            statusText = state switch
+            {
+                PeerLinkState.WaitingVpn => Strings.Get("MpPeerWaitingVpn"),
+                PeerLinkState.Lost => Strings.Get("MpPeerLost"),
+                _ => "…",
+            };
+            statusBrush = PeerDotBrush(state);
+        }
+        var statusTb = new TextBlock
+        {
+            Text = statusText,
+            Foreground = statusBrush,
+            FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
             FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
         };
-        Grid.SetColumn(stateTb, 1);
-        row.Children.Add(stateTb);
-
-        // Colour the per-peer RTT by health (same thresholds as CONNECTION) so a
-        // laggy player stands out at a glance — green <80ms / amber <200 / red.
-        var rttBrush = (isSelf || rttMs < 0)
-            ? (Brush)Application.Current.FindResource("TextSecondary")
-            : (Brush)Application.Current.FindResource(
-                rttMs < 80 ? "MpStatusOnline"
-                : rttMs < 200 ? "MpPingMedium"
-                : "MpStatusOffline");
-        var rttTb = new TextBlock
-        {
-            Text = isSelf ? "—" : (rttMs >= 0 ? $"{(int)rttMs} ms" : "…"),
-            Foreground = rttBrush,
-            FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
-            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(rttTb, 2);
-        row.Children.Add(rttTb);
-
-        var bytesTb = new TextBlock
-        {
-            Text = $"↑ {FormatBytes(bytesOut)}   ↓ {FormatBytes(bytesIn)}",
-            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-            FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
-            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(bytesTb, 3);
-        row.Children.Add(bytesTb);
+        Grid.SetColumn(statusTb, 2);
+        row.Children.Add(statusTb);
 
         return row;
     }
+
+    /// <summary>Health-dot / status brush for a derived <see cref="PeerLinkState"/>:
+    /// grey (waiting) / green (online) / amber (unstable) / red (lost).</summary>
+    private static Brush PeerDotBrush(PeerLinkState state) => (Brush)Application.Current.FindResource(
+        state switch
+        {
+            PeerLinkState.Online => "MpStatusOnline",
+            PeerLinkState.Unstable => "MpPingMedium",
+            PeerLinkState.Lost => "MpStatusOffline",
+            _ => "TextSecondary",
+        });
 
     private static string FormatBytes(long bytes)
     {

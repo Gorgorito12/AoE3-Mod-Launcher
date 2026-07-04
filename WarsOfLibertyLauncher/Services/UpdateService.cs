@@ -203,6 +203,15 @@ public class UpdateService
         var profileRepo = _profile.Translations?.Repo;
         if (string.IsNullOrWhiteSpace(profileRepo))
             return "";
+        // When the user has chosen a custom folder repo (or disabled community
+        // translations), the folder repo is the single source of truth — the
+        // legacy GitHub-releases path is suppressed so we don't merge stale
+        // release packs on top of the chosen repo.
+        var folderPref = _config.TranslationsFolderRepo;
+        if (string.Equals(folderPref, "none", StringComparison.OrdinalIgnoreCase))
+            return "";
+        if (!string.IsNullOrWhiteSpace(folderPref))
+            return "";
         return !string.IsNullOrWhiteSpace(_config.TranslationsRepo)
             ? _config.TranslationsRepo!
             : profileRepo!;
@@ -216,7 +225,18 @@ public class UpdateService
     /// </summary>
     public string EffectiveTranslationsFolderRepo()
     {
+        // Participation gate first: a mod with no Translations block never
+        // receives packs (see EffectiveTranslationsRepo remarks) — the global
+        // override must NOT inject a folder repo into a mod that opted out.
         if (_profile.Translations == null) return "";
+        // Global override (config.TranslationsFolderRepo): "none" disables,
+        // a non-empty "owner/repo" replaces the profile's own folder repo,
+        // empty falls back to the profile default.
+        var raw = _config.TranslationsFolderRepo;
+        if (string.Equals(raw, "none", StringComparison.OrdinalIgnoreCase))
+            return "";
+        if (!string.IsNullOrWhiteSpace(raw))
+            return raw;
         return _profile.Translations.FolderRepo ?? "";
     }
 

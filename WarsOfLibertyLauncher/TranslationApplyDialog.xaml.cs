@@ -59,6 +59,7 @@ public partial class TranslationApplyDialog : Window
         TitleBarControl.Title = Strings.Get("DlgLangApplyTitle");
         LblModVersions.Text = Strings.Get("DlgLangApplyModVersionsLabel");
         LblSize.Text = Strings.Get("DlgLangApplySizeLabel");
+        DescriptionLabel.Text = Strings.Get("DlgLangApplyDescriptionLabel");
         ProgressLabelText.Text = Strings.Get("DlgLangApplyDownloading");
         ApplyButton.Content = Strings.Get("DlgLangApplyBtnApply");
         CancelButton.Content = Strings.Get("BtnCancel");
@@ -84,7 +85,7 @@ public partial class TranslationApplyDialog : Window
         if (!string.IsNullOrEmpty(_entry.Description))
         {
             DescriptionText.Text = _entry.Description;
-            DescriptionText.Visibility = Visibility.Visible;
+            DescriptionPanel.Visibility = Visibility.Visible;
         }
 
         // Initial compatibility badge — based on the index entry's declared

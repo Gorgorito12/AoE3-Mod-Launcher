@@ -354,6 +354,24 @@
                     </Grid>
                 </Border>
 
+                <!-- Which installed COPY the room uses. Collapsed unless the
+                     mod has 2+ copies. The combo is enabled only for the active
+                     dashboard mod (picking a copy rotates the active copy, which
+                     is what multiplayer launches / fingerprints); display-only
+                     otherwise. -->
+                <StackPanel x:Name="CopyRow" Visibility="Collapsed" Margin="0,0,0,14">
+                    <TextBlock x:Name="CopyLabel" Style="{StaticResource LabelText}"/>
+                    <ComboBox x:Name="CopyCombo"
+                              Style="{StaticResource MpFormCombo}"
+                              SelectionChanged="CopyCombo_SelectionChanged"/>
+                    <TextBlock x:Name="CopyHint"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="{StaticResource FontSizeCaption}"
+                               TextWrapping="Wrap"
+                               Margin="0,4,0,0"
+                               Visibility="Collapsed"/>
+                </StackPanel>
+
                 <!-- Room title with live char counter. -->
                 <Grid>
                     <Grid.ColumnDefinitions>

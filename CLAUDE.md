@@ -485,6 +485,23 @@ Two cheap gates beyond a green build:
   reintroduce a folder-name check; the marker is the anti-vanilla signal now.
   Pinned by `WarsOfLibertyLauncher.Tests/ModInstallProbeTests`.
 
+- **Finding the BASE AoE3 install (`AoE3Detector.FindAll`) is by CONTENT too —
+  the signal is the file `age3y.exe`, NOT the folder name.** `age3y.exe` is the
+  exclusive executable of *The Asian Dynasties* (vanilla = `age3.exe`, WarChiefs =
+  `age3x.exe`), so probing for it can't false-positive on another game and is the
+  right identity check for the stock `aoe3-tad` profile (no SHA needed — a hash
+  would only pin a patch/language and is fragile). `FindAll()` runs layered passes:
+  hardcoded default paths per fixed drive (Steam/GOG/retail folder-name variants),
+  a Steam-library pass reading `libraryfolders.vdf` (catches AoE3 on other disks),
+  GOG + Microsoft-Games registry passes, all deduped via `seenFolders`. **The
+  folder-name-independent pass** enumerates every `steamapps\common\*` directory of
+  each Steam library (`SafeEnumerateDirectories`, swallows IO/ACL errors) and probes
+  `<game>\bin\age3y.exe` / `<game>\age3y.exe` — so a RENAMED or localized AoE3
+  folder is still detected (the hardcoded name list only covers the default). Don't
+  drop this pass back to name-only matching. **Known gap (out of scope):** the
+  Microsoft Store / Definitive Edition uses a different engine (no `age3y.exe`) and
+  is incompatible with the mod fingerprint, so it's intentionally not detected.
+
 - **The top nav tab ORDER is runtime-driven, not the XAML order.** The three
   tabs (LIBRARY / WORKSHOP / MULTIPLAYER) are declared in a fixed left-to-right
   order in `MainWindow.xaml` (`TopTabBar` StackPanel), but that's just the
@@ -643,17 +660,33 @@ Two cheap gates beyond a green build:
   `MoreButton`, `ModsBrowser` menus) are NOT tracked — they capture input and
   auto-dismiss reliably on their own. A new hand-built popup only needs
   `ChromePopups.Track(popup, ownerButton)` to inherit all of this.
-  **These openers are TOGGLES.** A re-click of the brand / MODS button should
-  CLOSE its popup, not reopen it — but a `StaysOpen=false` popup already
-  auto-dismisses on the mouse-down that re-clicks its own opener, so by the time
-  the button's `Click` fires the popup is gone and a naive "open on click" would
-  immediately reopen it (the "just reopens" flicker the user reported). So each
-  opener calls `ChromePopups.ConsumeToggleOff(btn)` at the TOP of its handler and
-  returns when it's `true` — `Track(popup, owner)` stamps the owner+tick on
-  `Closed`, and `ConsumeToggleOff` reports "a popup owned by this button was
-  dismissed within the last 300 ms" (i.e. this click is the toggle-off). For the
-  owner match to work, pass the SAME stable button instance to both `Track` and
-  `ConsumeToggleOff`. The **gear** is a toggle too but via a different path: it
+  **These openers are TOGGLES, but via TWO different mechanisms — don't assume
+  `ConsumeToggleOff` is the toggle for every popup.** A re-click of a brand / MODS
+  opener should CLOSE its popup, not reopen it — but a `StaysOpen=false` popup
+  already auto-dismisses on the mouse-down that re-clicks its own opener, so by the
+  time the button's `Click` fires the popup is gone and a naive "open on click"
+  would immediately reopen it (the "just reopens" flicker).
+  **(a) The brand popup** (`BrandMenuButton_Click`) uses the timing trick: it calls
+  `ChromePopups.ConsumeToggleOff(btn)` at the TOP of its handler and returns when
+  it's `true` — `Track(popup, owner)` stamps the owner+tick on `Closed`, and
+  `ConsumeToggleOff` reports "a popup owned by this button was dismissed within the
+  last 300 ms" (i.e. this click is the toggle-off). This depends on `Closed` firing
+  (mouse-down) BEFORE `Click` (mouse-up), which is **runtime-fragile** — it failed
+  for the MODS button ("solo se vuelve a abrir"). Pass the SAME stable button
+  instance to both `Track` and `ConsumeToggleOff` for the owner match.
+  **(b) The MODS switcher** (`DashboardChangeModButton_Click`) NO LONGER uses
+  `ConsumeToggleOff` — it uses the **field-based model the gear uses**: a
+  `_modSwitchPopup` field holds the live popup, the click handler returns early
+  (`_modSwitchPopup.IsOpen = false`) when it's non-null, and the popup's `Closed`
+  clears the field **DEFERRED at `DispatcherPriority.Background`** so the clear runs
+  AFTER the opener's `Click` (Input priority beats Background). That ordering
+  defeats the auto-dismiss/Click race deterministically without the 300 ms guess:
+  on a re-click, mouse-down auto-dismisses + QUEUES the clear, then Click fires with
+  the field still non-null → closes and returns; an outside click clears the field a
+  moment later so the next MODS click opens fresh. `Track(popup, btn)` is still
+  called (for mutual exclusion + close-on-dialog-open); only the *toggle* moved off
+  `ConsumeToggleOff`. **The brand popup is a candidate for the same field-based fix**
+  if it ever toggles wrong. The **gear** is a toggle too but via a different path: it
   opens a real Window (`ModPropertiesDialog`), not a popup, so
   `DashboardSettingsButton_Click` simply does `if (_modPropertiesDialog != null)
   { _modPropertiesDialog.Close(); return; }` before `OpenModPropertiesDialog`
@@ -760,6 +793,27 @@ Two cheap gates beyond a green build:
   sites) plus after `SwitchActiveInstallAsync` so it tracks the active copy live. Tooltip
   `DashboardActiveCopyTooltip`. So the user always knows which copy PLAY will launch without
   opening the MODS popup.
+  **Multiplayer ALWAYS uses the ACTIVE copy, and now SHOWS it (create-room dialog +
+  lobby) + lets the host CHOOSE it — all as active-copy switches, never a per-room
+  override.** Both the fingerprint that gates join (`ModHashService.FingerprintAsync`
+  over `_config.GetState(id).InstallPath`) and the game launch resolve the ACTIVE copy;
+  the copy was invisible in the UI (reported: "I don't know which copy MP uses"). The
+  create-room dialog (`CreateLobbyDialog`) now renders a copy row (`CopyRow`/`CopyCombo`,
+  Collapsed unless `HasMultipleInstalls`): `MultiplayerTab.BuildCopyInfo` builds a
+  `Models.ModCopyInfo`/`ModCopyChoice` (active first, labels via
+  `PathDisplay.DisambiguateLabels`, leaf via `MultiplayerTab.CopyLeaf`). The combo is
+  **interactive only when the selected mod is the active dashboard mod** (`CanSwitch`);
+  choosing a copy calls the new `switchActiveCopy` Attach callback →
+  `MainWindow.SwitchActiveInstallAsync(installId)` (rotates the active copy — single
+  source of truth) then the dialog recomputes the fingerprint so the room's required
+  hash matches what will launch. For a non-active mod it's display-only with a hint
+  (`MpCreateDialogCopyHintReadonly`). The lobby `RoomInfoCard` gained a `RoomCopyRow`
+  showing the room mod's active-copy leaf, again only when that mod `HasMultipleInstalls`.
+  **Load-bearing:** don't thread a separate chosen-copy path through fingerprint/launch —
+  choosing IS an active-copy switch, so the whole existing active-copy pipeline stays the
+  one source of truth (avoids a host launching a different copy than the room's hash). The
+  switch runs mid-modal (`ShowDialog`), which re-renders the dashboard behind the dialog —
+  intended. Strings `MpCreateDialogCopyLabel`/`MpCreateDialogCopyHintReadonly`/`MpRoomFieldCopy`.
   **Switcher LABELS are folder-leaf-derived and disambiguated at display.** A copy's
   label defaults to its install-folder leaf (`ActiveInstallLabel`/`ModInstall.Label`), and
   `MakeUniqueInstallFolder` only guarantees full-PATH uniqueness within one parent — two
@@ -1139,7 +1193,17 @@ Two cheap gates beyond a green build:
   emits the **newest** version's `id@contentHash` (one bell per new version). The repos come from the profile's
   `Translations.FolderRepo` (new) + `.Repo` (legacy), resolved by
   `EffectiveTranslationsFolderRepo()` + `EffectiveTranslationsRepo()`; the catalog
-  `mod.json` `translations` block gained a `folderRepo` field. **The dedup /
+  `mod.json` `translations` block gained a `folderRepo` field. **A user-facing
+  GLOBAL override exists** (`config.TranslationsFolderRepo`, Settings → TRANSLATIONS
+  tab, three-way `""`/`"none"`/`"owner/repo"` like `ModsCatalogRepo`): `""` = the
+  profile's own folder repo (default); `"none"` = no community packs; a custom
+  `owner/repo` replaces the folder repo AND suppresses the legacy releases path
+  (`EffectiveTranslationsRepo()` returns `""` whenever the folder override is set or
+  `"none"`), so the chosen repo is the single source. The override still passes
+  through the participation gate — `EffectiveTranslationsFolderRepo()` returns `""`
+  for a profile with no Translations block regardless of the override, so it can't
+  inject packs into a mod that opted out. Pinned by
+  `TranslationsFolderRepoOverrideTests`. **The dedup /
   notification key is centralized in `TranslationCompat.KeyOf`:** release tag →
   `id@contentHash` (folder packs) → `id@version` (legacy). `contentHash` is the
   manifest's field (written by the packager) or recomputed from the files'
@@ -1706,13 +1770,34 @@ Two cheap gates beyond a green build:
   parallel, guarded by `_peerPingInFlight`) ICMP-pings every peer's Radmin IP via
   `PingPeerAsync` (a single-host clone of `PingInternetRttMsAsync`), storing the RTT
   on `RoomMemberEntry.PingMs`. `BuildInGamePeerRow` colours it green/amber/red on
-  the same thresholds as CONNECTION so a laggy player stands out; a peer with no
-  reported IP / no answer still shows `…` (PingMs −1). The bytes column stays a
-  placeholder (`↑0 B`) — per-peer byte counters would need true per-flow
-  accounting Radmin doesn't expose; the whole-adapter TRAFFIC stat covers it. The
+  the same thresholds as CONNECTION so a laggy player stands out. The
   Radmin IP is validated server-side against `26.x` (a client can't inject an
   arbitrary host for everyone to ping), and it's only shared among that room's
   members — the same IP they already use to actually play (`OverrideAddress="<ip>"`).
+  **Two fixes made this actually VISIBLE + gave the −1 case meaning (the "alucard
+  no muestra el ping" report).** (1) **Layout:** the peer row used FIXED columns
+  (name 180 + state 110 + rtt 80 + bytes ⭐ = 370 px) inside the ~284 px left panel
+  with NO horizontal scroll, so the RTT + bytes columns were CLIPPED off the right
+  edge — the ping was computed but never seen. `BuildInGamePeerRow` is now
+  `[health-dot Auto] [name ⭐ ellipsis] [ping-or-status Auto]` (the always-zero bytes
+  placeholder column was DROPPED), so the ping/status can't be pushed off-screen.
+  Don't reintroduce fixed name/state widths there. (2) **Meaning of −1:** a peer's
+  state is derived by the pure, testable `Services/Multiplayer/PeerNetHealth.Classify`
+  (`PeerNetHealthTests`) → `PeerLinkState` {WaitingVpn, Online, Unstable, Lost},
+  rendered as a coloured dot + text: grey **"Esperando VPN"** (no Radmin IP reported
+  yet) vs a real **"NN ms"** vs amber **"…"** (transient miss) vs red **"Sin
+  conexión"** (sustained ICMP silence past `LostThreshold`=5 consecutive 1-s probes).
+  `RoomMemberEntry` gained `ConsecutiveFails`/`ConsecutiveOks`/`LastLinkState` (updated
+  in `KickPeerPings`); `RefreshInGamePanel` posts a chat line ONLY on the Online↔Lost
+  edge (`MpChatPeerLost`/`MpChatPeerReconnected`), debounced by the fail streak.
+  **Load-bearing caveat:** the ICMP "Sin conexión" is INDICATIVE only — Radmin/Windows
+  frequently block inbound ICMP echo while the game works fine, so it's a soft "no
+  responde", NOT an authoritative disconnect; the authoritative "left" signal stays the
+  server's `member_left` (`HandleMemberLeft`). Peer pinging + the health signal now also
+  run in the LOBBY (pre-match): the `_lobbyPingTimer` tick calls
+  `MaybeReportRadminIp`/`KickPeerPings`/`RefreshRosterHealthDots`, which recolours the
+  roster's per-member dot (Tagged with the userId in `BuildMemberRow`) in place — the old
+  always-green dot was static. Your own row is always green / "vos".
 
 - **The rooms browser auto-refreshes its LIST on a quiet diff — separate from the
   PING timer above.** New / closed rooms now appear without pressing *Actualizar*:

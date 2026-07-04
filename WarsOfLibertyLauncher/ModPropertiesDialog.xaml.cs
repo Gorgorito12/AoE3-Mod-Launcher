@@ -32,7 +32,9 @@ namespace WarsOfLibertyLauncher;
 public partial class ModPropertiesDialog : Window
 {
     private readonly ModProfile _profile;
-    private readonly UpdateService _service;
+    // Mutable: re-pointed by OnActiveInstallSwitched after the active install
+    // COPY changes, so the version-dependent tabs (LANGUAGE) read the new copy.
+    private UpdateService _service;
     private readonly LauncherConfig _config;
     // Mutable: the "Buscar nuevas traducciones" button reassigns it after a re-fetch.
     private TranslationIndex? _translationIndex;
@@ -1023,6 +1025,24 @@ public partial class ModPropertiesDialog : Window
     /// Called by MainWindow once the apply/revert flow finishes.
     /// </summary>
     public void RefreshLanguageTab() => LoadLanguage();
+
+    /// <summary>
+    /// Called after the active install COPY was switched (LOCAL FILES → Manage
+    /// installs → Switch). Re-points the dialog at the now-active copy's
+    /// UpdateService and rebuilds the version-dependent tabs — critically the
+    /// LANGUAGE tab, whose translation-compat check reads
+    /// <c>_service.CurrentVersion</c>. Without re-pointing <c>_service</c>,
+    /// <see cref="LoadLanguage"/> would keep reading the PRE-switch copy's version,
+    /// so a pack's compatible/incompatible badge stayed stale until the dialog was
+    /// closed and reopened. <see cref="RefreshData"/> alone doesn't cover this — it
+    /// deliberately skips the language tab.
+    /// </summary>
+    public void OnActiveInstallSwitched(UpdateService service)
+    {
+        _service = service;
+        RefreshData();          // General / Local Files / User Data
+        RefreshLanguageTab();   // recompute translation compat vs the new copy's version
+    }
 
     /// <summary>
     /// Lock / unlock the language list while the mod is installing or updating.

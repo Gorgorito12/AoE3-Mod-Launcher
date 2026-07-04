@@ -164,6 +164,19 @@
                                        Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
+                    <Button x:Name="TabTranslationsCatalogBtn"
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="TabTranslationsCatalogBtn_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE774;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14"
+                                       Margin="0,0,12,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TabTranslationsCatalogLabel"
+                                       Style="{StaticResource SidebarNavLabel}"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="TabTranslationsBtn"
                             Style="{StaticResource SidebarNavButton}"
                             Click="TabTranslationsBtn_Click">
@@ -349,6 +362,51 @@
                                     Click="ClearCacheButton_Click"/>
                             <TextBlock Grid.Column="1"
                                        x:Name="ClearCacheHint"
+                                       Style="{StaticResource HintText}"
+                                       VerticalAlignment="Center"
+                                       Margin="12,0,0,0"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- ===================================================
+                         TRANSLATIONS CATALOG TAB — where community
+                         translation packs are pulled from. Mirrors the MODS
+                         CATALOG tab: Default (the active mod's own folder
+                         repo) / Custom repository / Disabled. Distinct from
+                         the PACKAGER tab below, which is the export tool.
+                         =================================================== -->
+                    <StackPanel x:Name="TranslationsCatalogPanel" Visibility="Collapsed">
+                        <RadioButton x:Name="TxDefaultRadio" GroupName="TranslationsCatalog"/>
+                        <RadioButton x:Name="TxCustomRadio"
+                                     GroupName="TranslationsCatalog"
+                                     Margin="0,8,0,2"/>
+                        <TextBox x:Name="TxCustomBox"
+                                 Margin="22,2,0,2"
+                                 Width="380"
+                                 HorizontalAlignment="Left"/>
+                        <TextBlock x:Name="TxInvalidText"
+                                   Foreground="{DynamicResource ErrorBrush}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   Margin="22,2,0,4"
+                                   Visibility="Collapsed"/>
+                        <RadioButton x:Name="TxDisabledRadio"
+                                     GroupName="TranslationsCatalog"
+                                     Margin="0,8,0,0"/>
+
+                        <Border Style="{StaticResource DialogDivider}"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0"
+                                    x:Name="ClearTranslationsCacheButton"
+                                    Style="{StaticResource PropertyActionButton}"
+                                    MinWidth="180"
+                                    Click="ClearTranslationsCacheButton_Click"/>
+                            <TextBlock Grid.Column="1"
+                                       x:Name="ClearTranslationsCacheHint"
                                        Style="{StaticResource HintText}"
                                        VerticalAlignment="Center"
                                        Margin="12,0,0,0"/>

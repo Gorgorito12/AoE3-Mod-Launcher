@@ -112,13 +112,30 @@
                                FontSize="{StaticResource FontSizeBody}"/>
                 </Grid>
 
-                <!-- Optional description -->
-                <TextBlock x:Name="DescriptionText"
-                           FontSize="{StaticResource FontSizeBody}"
-                           Foreground="{DynamicResource TextSecondary}"
-                           TextWrapping="Wrap"
-                           Margin="0,0,0,12"
-                           Visibility="Collapsed"/>
+                <!-- Optional translator's note — highlighted gold card so the
+                     pack's free-form description stands out (was a plain muted
+                     TextBlock that got lost). Same tinted-card pattern as the
+                     CompatBadge above. -->
+                <Border x:Name="DescriptionPanel"
+                        Background="{DynamicResource TintAccentBadge}"
+                        BorderBrush="{DynamicResource BorderAccentBadge}"
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource RadiusMd}"
+                        Padding="{StaticResource CardPadding}"
+                        Margin="0,0,0,12"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="DescriptionLabel"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock x:Name="DescriptionText"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
 
                 <!-- Download progress block (visible only during download) -->
                 <StackPanel x:Name="ProgressPanel" Visibility="Collapsed" Margin="0,0,0,12">

@@ -985,6 +985,34 @@ public class LauncherConfig
     public string TranslationsRepo { get; set; } = "papillo12/translations";
 
     /// <summary>
+    /// GitHub repository (format "owner/repo") that hosts folder-published
+    /// community translations — files under <c>translations/&lt;id&gt;/&lt;version&gt;/</c>
+    /// on <c>main</c>, discovered via the Git Trees API. This is a GLOBAL
+    /// override of the active mod's own folder repo.
+    ///
+    /// Three values are meaningful:
+    /// <list type="bullet">
+    ///   <item><c>""</c> (empty, default) — use the active mod profile's own
+    ///     folder repo (WoL ships <c>Gorgorito12/translations</c>). This is
+    ///     what most users want.</item>
+    ///   <item><c>"none"</c> — opt-out: skip community translations entirely
+    ///     (both the folder repo AND the legacy releases repo are suppressed),
+    ///     so no community packs are offered.</item>
+    ///   <item><c>"owner/repo"</c> — pull folder-published packs from a specific
+    ///     repo instead (a fork, mirror, or a community member's own language
+    ///     pack repo). When set, the legacy GitHub-releases path is suppressed
+    ///     so the chosen repo is the single source of truth.</item>
+    /// </list>
+    ///
+    /// The override still respects the per-mod participation gate: a mod with
+    /// no <c>Translations</c> block never receives packs, so pointing this at a
+    /// repo can't inject foreign strings into a mod that opted out. See
+    /// <c>UpdateService.EffectiveTranslationsFolderRepo</c>.
+    /// </summary>
+    [JsonPropertyName("translationsFolderRepo")]
+    public string TranslationsFolderRepo { get; set; } = "";
+
+    /// <summary>
     /// GitHub repository (format "owner/repo") that hosts the mods catalog
     /// — one folder per community-submitted mod, each with a
     /// <c>mod.json</c> manifest.
