@@ -60,8 +60,12 @@ public partial class ModPropertiesDialog : Window
     private readonly Action _changeModFolder;
     private readonly Action _changeAoE3Folder;
     private readonly Action _openUserDataFolder;
-    private readonly Action _createBackup;
-    private readonly Action _restoreBackup;
+    // Backup/restore return a localized result line (or null when cancelled /
+    // nothing happened) so THIS dialog can show inline feedback — the main
+    // window's status bar sits behind this non-modal window and its text is
+    // invisible while the user is here.
+    private readonly Func<string?> _createBackup;
+    private readonly Func<string?> _restoreBackup;
     private readonly Action _viewLogs;
     private readonly Action _shareDiagnostics;
     private readonly Action _uninstall;
@@ -95,8 +99,8 @@ public partial class ModPropertiesDialog : Window
         Action changeModFolder,
         Action changeAoE3Folder,
         Action openUserDataFolder,
-        Action createBackup,
-        Action restoreBackup,
+        Func<string?> createBackup,
+        Func<string?> restoreBackup,
         Action viewLogs,
         Action shareDiagnostics,
         Action uninstall,
@@ -208,6 +212,7 @@ public partial class ModPropertiesDialog : Window
         // descriptive title + short description, and a SHORT button
         // label ("Open" / "Backup" / "Restore") because the long
         // text already tells the user what the action does.
+        LblUserDataLocation.Text = Strings.Get("ModPropUserDataLocation");
         LblOpenUserDataTitle.Text = Strings.Get("ModPropOpenUserDataFolder");
         LblOpenUserDataDesc.Text = Strings.Get("ModPropOpenUserDataDesc");
         OpenUserDataFolderBtn.Content = Strings.Get("ModPropOpenBtn");
@@ -215,6 +220,8 @@ public partial class ModPropertiesDialog : Window
         LblCreateBackupDesc.Text = Strings.Get("ModPropCreateBackupDesc");
         CreateBackupBtn.Content = Strings.Get("ModPropBackupBtn");
         LblRestoreBackupTitle.Text = Strings.Get("ModPropRestoreBackup");
+        // Default desc; LoadUserData() overwrites it with the dynamic
+        // "N backups · latest: date" / "no backups yet" variant.
         LblRestoreBackupDesc.Text = Strings.Get("ModPropRestoreBackupDesc");
         RestoreBackupBtn.Content = Strings.Get("ModPropRestoreBtn");
 
@@ -532,7 +539,60 @@ public partial class ModPropertiesDialog : Window
                         && Directory.Exists(_service.InstallPath);
         OpenUserDataFolderBtn.IsEnabled = installed;
         CreateBackupBtn.IsEnabled = installed;
-        RestoreBackupBtn.IsEnabled = installed;
+
+        var folderName = _profile.UserDataFolder;
+
+        // Resolved data path, visible — with OneDrive Known Folder Move the
+        // real Documents can be "...\OneDrive\Dokumente\...", and seeing the
+        // exact folder here is what makes the backup behaviour explainable
+        // (the "backup went to a totally different path" report).
+        var folder = UserDataService.GetUserDataFolder(folderName);
+        UserDataPathText.Text = folder ?? "—";
+
+        var alternate = string.IsNullOrEmpty(folderName)
+            ? null
+            : UserDataService.GetAlternateDataFolderWithFiles(folderName);
+        UserDataDivergesText.Text = alternate != null
+            ? Strings.Format("ModPropUserDataPathDiverges", alternate)
+            : "";
+        UserDataDivergesText.Visibility = alternate != null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        // Restore row: show how many backups exist and when the latest was
+        // made; with none, disable the button and say so up front instead of
+        // surprising the user with a "no backups" message box on click.
+        var backups = string.IsNullOrEmpty(folderName)
+            ? new List<UserDataService.BackupInfo>()
+            : UserDataService.ListBackups(folderName);
+        if (backups.Count > 0)
+        {
+            LblRestoreBackupDesc.Text = Strings.Format(
+                "ModPropRestoreCount", backups.Count,
+                backups[0].CreatedAt == DateTime.MinValue
+                    ? "—"
+                    : backups[0].CreatedAt.ToString("yyyy-MM-dd HH:mm"));
+            RestoreBackupBtn.IsEnabled = installed;
+        }
+        else
+        {
+            LblRestoreBackupDesc.Text = Strings.Get("ModPropRestoreNone");
+            RestoreBackupBtn.IsEnabled = false;
+        }
+    }
+
+    /// <summary>Paints the inline result line under the USER DATA rows
+    /// (success text from the callback; hidden when null/cancelled).</summary>
+    private void ShowUserDataResult(string? result)
+    {
+        if (string.IsNullOrEmpty(result))
+        {
+            UserDataResultHint.Visibility = Visibility.Collapsed;
+            return;
+        }
+        UserDataResultHint.Text = result;
+        UserDataResultHint.Foreground = new SolidColorBrush(Color.FromRgb(0x7d, 0xc9, 0x7d));
+        UserDataResultHint.Visibility = Visibility.Visible;
     }
 
     private void LoadLanguage()
@@ -1318,15 +1378,16 @@ public partial class ModPropertiesDialog : Window
     private void CreateBackupBtn_Click(object sender, RoutedEventArgs e)
     {
         // Stays open: the backup confirmation/MessageBox is modal and lands
-        // on top. The callback is synchronous, so RefreshData() afterwards
-        // sees the final user-data state.
-        _createBackup?.Invoke();
+        // on top. The callback is synchronous and returns the localized
+        // result line (null = cancelled) for the inline hint; RefreshData()
+        // afterwards sees the final user-data state (path/backup count).
+        ShowUserDataResult(_createBackup?.Invoke());
         RefreshData();
     }
 
     private void RestoreBackupBtn_Click(object sender, RoutedEventArgs e)
     {
-        _restoreBackup?.Invoke();
+        ShowUserDataResult(_restoreBackup?.Invoke());
         RefreshData();
     }
 

@@ -4403,11 +4403,10 @@ public partial class MultiplayerTab : UserControl
         AppendChatSystem(Strings.Get("MpChatGameClosed"));
         try
         {
-            // The mod's user-data folder usually lives under Documents/My Games/<userDataFolder>.
-            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            var modUserData = string.IsNullOrEmpty(profile.UserDataFolder)
-                ? null
-                : System.IO.Path.Combine(docs, "My Games", profile.UserDataFolder);
+            // The mod's user-data folder lives under Documents/My Games/<userDataFolder>.
+            // Resolved by the central helper so it honours the dual-root rule
+            // (redirected OneDrive Documents vs the physical folder).
+            var modUserData = UserDataService.GetUserDataFolder(profile.UserDataFolder);
 
             if (string.IsNullOrEmpty(modUserData)) return;
 

@@ -3809,8 +3809,11 @@ public partial class MainWindow : Window
             changeModFolder: () => RaiseMenuClick(ActionPanelControl.MenuSelectModFolder),
             changeAoE3Folder: () => RaiseMenuClick(ActionPanelControl.MenuSelectAoE3Folder),
             openUserDataFolder: () => RaiseMenuClick(ActionPanelControl.MenuOpenUserDataFolder),
-            createBackup: () => RaiseMenuClick(ActionPanelControl.MenuCreateBackupNow),
-            restoreBackup: () => RaiseMenuClick(ActionPanelControl.MenuRestoreUserData),
+            // Backup/restore return the localized result line so the dialog
+            // can show it INLINE — the main-window status bar sits behind the
+            // non-modal Properties window (same rationale as checkForUpdates).
+            createBackup: CreateUserDataBackupCore,
+            restoreBackup: RestoreUserDataCore,
             viewLogs: () => RaiseMenuClick(ActionPanelControl.MenuViewLogs),
             shareDiagnostics: () => ShareDiagnostics(),
             uninstall: () => RaiseMenuClick(ActionPanelControl.UninstallMenuItem),
@@ -10099,11 +10102,19 @@ public partial class MainWindow : Window
     /// the resulting status text in the main window.
     /// </summary>
     private void MenuRestoreUserData_Click(object sender, RoutedEventArgs e)
+        => RestoreUserDataCore();
+
+    /// <summary>
+    /// Restore flow shared by the gear menu and the Properties USER DATA tab.
+    /// Returns the localized result line for the tab's inline hint (null =
+    /// no backups / user cancelled the picker).
+    /// </summary>
+    private string? RestoreUserDataCore()
     {
-        if (_isBusy) return;
+        if (_isBusy) return null;
 
         var userDataFolderName = _updateService.Profile.UserDataFolder;
-        if (string.IsNullOrEmpty(userDataFolderName)) return;
+        if (string.IsNullOrEmpty(userDataFolderName)) return null;
 
         var backups = UserDataService.ListBackups(userDataFolderName);
         if (backups.Count == 0)
@@ -10112,12 +10123,12 @@ public partial class MainWindow : Window
                 Strings.Get("DlgRestoreNoBackupsBody"),
                 Strings.Get("DlgRestoreNoBackupsTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
+            return null;
         }
 
         var dialog = new UserDataRestoreDialog(backups, userDataFolderName) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
-        if (dialog.RestoredBackup == null) return;
+        if (dialog.ShowDialog() != true) return null;
+        if (dialog.RestoredBackup == null) return null;
 
         if (!string.IsNullOrEmpty(dialog.PreviousDataSnapshotPath))
         {
@@ -10130,6 +10141,8 @@ public partial class MainWindow : Window
             SetStatus(Strings.Format("StatusRestoreSuccess",
                 Path.GetFileName(dialog.RestoredBackup.Path)));
         }
+        return Strings.Format("ModPropRestoreDone",
+            Path.GetFileName(dialog.RestoredBackup.Path));
     }
 
     /// <summary>
@@ -10169,11 +10182,20 @@ public partial class MainWindow : Window
     /// post-install alert, but available on demand from the gear menu.
     /// </summary>
     private void MenuCreateBackupNow_Click(object sender, RoutedEventArgs e)
+        => CreateUserDataBackupCore();
+
+    /// <summary>
+    /// Backup flow shared by the gear menu and the Properties USER DATA tab.
+    /// Returns the localized result line for the tab's inline hint (null =
+    /// cancelled / nothing to back up / failed — those paths already told
+    /// the user via their own message boxes).
+    /// </summary>
+    private string? CreateUserDataBackupCore()
     {
-        if (_isBusy) return;
+        if (_isBusy) return null;
 
         var userDataFolderName = _updateService.Profile.UserDataFolder;
-        if (string.IsNullOrEmpty(userDataFolderName)) return;
+        if (string.IsNullOrEmpty(userDataFolderName)) return null;
 
         if (!UserDataService.HasExistingUserData(userDataFolderName))
         {
@@ -10181,14 +10203,14 @@ public partial class MainWindow : Window
                 Strings.Get("DlgBackupNothingBody"),
                 Strings.Get("DlgBackupNothingTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
+            return null;
         }
 
         var confirm = MessageBox.Show(this,
             Strings.Get("DlgBackupConfirmBody"),
             Strings.Get("DlgBackupConfirmTitle"),
             MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
+        if (confirm != MessageBoxResult.Yes) return null;
 
         var path = UserDataService.BackupUserData(userDataFolderName);
         if (string.IsNullOrEmpty(path))
@@ -10197,10 +10219,11 @@ public partial class MainWindow : Window
                 Strings.Get("DlgUserDataAlertBackupFailedBody"),
                 Strings.Get("DlgUserDataAlertBackupFailedTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            return null;
         }
 
         SetStatus(Strings.Format("StatusUserDataBackedUp", path));
+        return Strings.Format("ModPropBackupDone", Path.GetFileName(path));
     }
 
     private async void UninstallMenuItem_Click(object sender, RoutedEventArgs e)

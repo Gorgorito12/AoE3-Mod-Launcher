@@ -1483,6 +1483,35 @@ Two cheap gates beyond a green build:
   Settings now fires an `AssetsCleared` callback → `RevalidateVisibleAssetsAsync`
   so cleared images re-download live instead of staying monograms until restart.
 
+- **User-data paths are DUAL-ROOT: the system Documents folder can be
+  redirected (OneDrive Known Folder Move / moved to another drive) and the
+  game's saves may live in EITHER root — don't collapse the resolution back
+  to a single `GetFolderPath(MyDocuments)`.** The real-world shape (a German
+  user's report, and the maintainer's own machine): `GetFolderPath(MyDocuments)`
+  returns the REDIRECTED path (e.g. `...\OneDrive\Dokumente` — OneDrive uses
+  localized real folder names), while saves written by the 2007 engine before
+  the redirection still sit in the physical `%USERPROFILE%\Documents\My Games\`.
+  `UserDataService.GetUserDataFolder` probes BOTH candidates
+  (`GetCandidateUserDataFolders`: redirected first, physical second, deduped)
+  via the pure `PickUserDataFolder` (first root whose folder EXISTS wins;
+  neither → the redirected one, so new data follows the system convention —
+  pinned by `UserDataRootTests`), logs divergence once per mod per session
+  (`"User-data roots diverge..."` — the evidence a diagnostic bundle needs),
+  `ListBackups` scans `<folder>.bak.*` in BOTH parents, and `RestoreBackup`
+  falls back to a recursive COPY (source left in place) when the chosen backup
+  lives on another volume and `Directory.Move` throws. Every consumer
+  (pre-install alert, gear menu, Properties tab, MP replay finder) goes
+  through `UserDataService` — don't rebuild the path by hand. The Properties
+  USER DATA tab makes this visible on purpose: it shows the resolved path
+  (Consolas), an amber warning when the OTHER root also holds files, the
+  backup count + latest date on the Restore row (button disabled with a
+  "no backups yet" hint instead of a surprise message box), and an inline
+  result line after Backup/Restore — the `createBackup`/`restoreBackup`
+  callbacks are `Func<string?>` (result text or null) because the main-window
+  status bar sits BEHIND the non-modal dialog; the shared cores are
+  `MainWindow.CreateUserDataBackupCore`/`RestoreUserDataCore` (the gear menu
+  items call the same cores).
+
 - **The notification bell (Steam-style) is a persistent, deduped history fed by
   detection hooks — NOT a second toast pipeline.** `Services/NotificationCenter.cs`
   is the UI-free backing store (testable: `NotificationCenterTests`): owns the

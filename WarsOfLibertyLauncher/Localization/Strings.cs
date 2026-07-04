@@ -997,6 +997,36 @@ public static class Strings
             [LangEn] = "Replace current user data with a previous backup.",
             [LangEs] = "Restaura los datos del usuario desde una copia anterior.",
         },
+        ["ModPropUserDataLocation"] = new()
+        {
+            [LangEn] = "Location",
+            [LangEs] = "Ubicación",
+        },
+        ["ModPropUserDataPathDiverges"] = new()
+        {
+            [LangEn] = "⚠ Data was also found at: {0} — your Documents folder was likely moved or redirected (e.g. OneDrive). Backups from both locations appear in the restore list.",
+            [LangEs] = "⚠ También se encontraron datos en: {0} — tu carpeta Documentos probablemente fue movida o redirigida (p. ej. OneDrive). Los backups de ambas ubicaciones aparecen en la lista de restauración.",
+        },
+        ["ModPropRestoreCount"] = new()
+        {
+            [LangEn] = "Replace current user data with a previous backup. {0} available · latest: {1}.",
+            [LangEs] = "Restaura los datos del usuario desde una copia anterior. {0} disponibles · última: {1}.",
+        },
+        ["ModPropRestoreNone"] = new()
+        {
+            [LangEn] = "No backups yet — create one above and it will show up here.",
+            [LangEs] = "Aún no hay backups — crea uno arriba y aparecerá aquí.",
+        },
+        ["ModPropBackupDone"] = new()
+        {
+            [LangEn] = "✔ Backup created: {0}",
+            [LangEs] = "✔ Backup creado: {0}",
+        },
+        ["ModPropRestoreDone"] = new()
+        {
+            [LangEn] = "✔ Restored: {0}",
+            [LangEs] = "✔ Restaurado: {0}",
+        },
         ["ModPropLanguageSectionTitle"] = new()
         {
             [LangEn] = "INTERFACE LANGUAGE",

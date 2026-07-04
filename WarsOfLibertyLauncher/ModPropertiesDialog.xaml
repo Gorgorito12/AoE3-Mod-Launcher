@@ -495,6 +495,33 @@
                          =================================================== -->
                     <StackPanel x:Name="UserDataPanel" Visibility="Collapsed">
 
+                        <!-- Where the data actually lives. Making the resolved
+                             path VISIBLE is load-bearing: with OneDrive Known
+                             Folder Move the real Documents can be
+                             "...\OneDrive\Dokumente\..." and users need to see
+                             that this is where the launcher (and the game)
+                             operate. The amber line appears only when the
+                             OTHER candidate root also holds data (a
+                             redirection happened mid-life). -->
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock x:Name="LblUserDataLocation"
+                                       Style="{StaticResource DialogActionDesc}"/>
+                            <TextBlock x:Name="UserDataPathText"
+                                       FontFamily="Consolas"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       Foreground="#c8d2dc"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"/>
+                            <TextBlock x:Name="UserDataDivergesText"
+                                       Style="{StaticResource DialogActionDesc}"
+                                       Foreground="#d9a94a"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+
+                        <Border Style="{StaticResource DialogDivider}"/>
+
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -555,6 +582,16 @@
                                     VerticalAlignment="Center"
                                     Click="RestoreBackupBtn_Click"/>
                         </Grid>
+
+                        <!-- Inline result of the last Backup/Restore action —
+                             the MainWindow status bar sits BEHIND this
+                             non-modal dialog, so feedback must live here
+                             (same pattern as CheckUpdatesResult on GENERAL). -->
+                        <TextBlock x:Name="UserDataResultHint"
+                                   Style="{StaticResource DialogActionDesc}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,10,0,0"
+                                   Visibility="Collapsed"/>
                     </StackPanel>
 
                     <!-- ===================================================
