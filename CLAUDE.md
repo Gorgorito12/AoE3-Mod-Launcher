@@ -1728,6 +1728,27 @@ Two cheap gates beyond a green build:
   backend `lobby_created` WS push + an app-level persistent `/global/ws`; that needs
   the separate backend repo, so the poll is the launcher-only MVP.
 
+- **The BACKEND also announces new rooms to a Discord CHANNEL via webhook —
+  separate from the in-app bell above, and launcher-independent.** In
+  `wol-launcher-lobby-node`, the `POST /lobbies` handler (`src/lobbies/rest.ts`,
+  right after `ctx.rooms.getOrCreate`) fires a best-effort, fire-and-forget
+  `announceLobbyCreated` (`src/lobbies/discordAnnounce.ts`) that posts a Discord
+  embed (room name, mod, `Players 1/N`, host; private rooms show 🔒 and a grey
+  accent, never the password) to the channel webhook. **Gated + safe:** no-op
+  unless the optional `DISCORD_WEBHOOK_URL` env var is set (NOT in `env.ts`'s
+  hard-fail list, so the service still starts without it), never awaited (no added
+  latency to the 201), and swallows its own errors (a Discord/rate-limit failure
+  can't break room creation). All fixed text is **English on purpose** (community-
+  facing, mirrors the server's English logs); the only variable text is the
+  player-typed room name. The server has no mod catalog, so the pretty mod name
+  comes from a small hardcoded `MOD_LABELS` map (`wol`/`improvement-mod`/`aoe3-tad`)
+  with a fallback to the raw `mod_id`. Deploy is code-only + one env var (`git pull`
+  + add `DISCORD_WEBHOOK_URL` to `.env` + `systemctl restart wol-lobby`) — no
+  migration, no `npm install` (`undici` already ships), no launcher rebuild. This is
+  the MVP; message editing on fill/close (needs a `message_id` column) and a full
+  Discord bot were deliberately deferred (a bot's persistent gateway would blow the
+  1 GB VM's RAM).
+
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
   (`MultiplayerTab.xaml.cs`) fills it, and four duplications were stripped on
