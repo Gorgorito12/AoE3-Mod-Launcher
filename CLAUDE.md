@@ -1728,26 +1728,44 @@ Two cheap gates beyond a green build:
   backend `lobby_created` WS push + an app-level persistent `/global/ws`; that needs
   the separate backend repo, so the poll is the launcher-only MVP.
 
-- **The BACKEND also announces new rooms to a Discord CHANNEL via webhook —
-  separate from the in-app bell above, and launcher-independent.** In
-  `wol-launcher-lobby-node`, the `POST /lobbies` handler (`src/lobbies/rest.ts`,
-  right after `ctx.rooms.getOrCreate`) fires a best-effort, fire-and-forget
-  `announceLobbyCreated` (`src/lobbies/discordAnnounce.ts`) that posts a Discord
-  embed (room name, mod, `Players 1/N`, host; private rooms show 🔒 and a grey
-  accent, never the password) to the channel webhook. **Gated + safe:** no-op
-  unless the optional `DISCORD_WEBHOOK_URL` env var is set (NOT in `env.ts`'s
-  hard-fail list, so the service still starts without it), never awaited (no added
-  latency to the 201), and swallows its own errors (a Discord/rate-limit failure
-  can't break room creation). All fixed text is **English on purpose** (community-
-  facing, mirrors the server's English logs); the only variable text is the
-  player-typed room name. The server has no mod catalog, so the pretty mod name
-  comes from a small hardcoded `MOD_LABELS` map (`wol`/`improvement-mod`/`aoe3-tad`)
-  with a fallback to the raw `mod_id`. Deploy is code-only + one env var (`git pull`
-  + add `DISCORD_WEBHOOK_URL` to `.env` + `systemctl restart wol-lobby`) — no
-  migration, no `npm install` (`undici` already ships), no launcher rebuild. This is
-  the MVP; message editing on fill/close (needs a `message_id` column) and a full
-  Discord bot were deliberately deferred (a bot's persistent gateway would blow the
-  1 GB VM's RAM).
+- **The BACKEND announces rooms to Discord CHANNEL(s) via webhook, with LIVE
+  message editing — separate from the in-app bell above, and launcher-
+  independent.** In `wol-launcher-lobby-node`, `src/lobbies/discordAnnounce.ts` is
+  a small **stateful module** (in-memory `Map<lobbyId, RoomAnnounceState>`, no
+  SQLite column, no migration). `POST /lobbies` (`src/lobbies/rest.ts`, after
+  `ctx.rooms.getOrCreate`) fire-and-forgets `announceLobbyCreated`, which POSTs an
+  embed to **every configured webhook** with `?wait=true` to capture each
+  `message_id`. Then the message is **edited in place** as the room changes:
+  `LobbyRoom.broadcast` (the single choke point every WS state change passes
+  through, `src/lobbies/LobbyRoom.ts`) calls `notifyRoomChanged` on
+  `member_joined`/`member_left` (live player count) and `game_countdown`/
+  `game_cancelled` (status → In game / back to Waiting); edits are **debounced ~2 s**
+  so a burst of joins is one edit (well within Discord's per-webhook edit rate
+  limit). On room close, `finalizeRoom` edits the message to **"Closed"** (grey) and
+  keeps it as history — hooked at the four `status='closed'` sites (`rest.ts`
+  close-prior-rooms loop + host-leave-no-successor, `LobbyRoom.handleDisconnectCleanup`,
+  `matches/rest.ts` match-reported). The embed is **embellished**: host avatar+name
+  as author (`users.avatar_url`), room name as title, **mod icon as thumbnail**
+  (`raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/<modId>/icon.png`
+  — unknown mod 404s and Discord just omits it), fields Mod/Players/Status, **color
+  by status** (gold/green/grey); no stray emojis. **Multi-channel:**
+  `DISCORD_WEBHOOK_URL` is a **comma-separated list** (parsed by `urlListEnv` in
+  `env.ts` into `config.discordWebhookUrls: string[]`), so several channels/servers
+  stay in sync; `configure(config, app.log)` in `index.ts` stashes cfg+logger so the
+  broadcast/close paths can post without threading `ctx`. **Gated + safe:** no-op
+  when the list is empty (NOT in `env.ts`'s hard-fail list) or the room is
+  **private** (private rooms are never announced), never awaited (no latency to the
+  201), and every fetch swallows its own errors (a Discord/rate-limit failure can't
+  break room creation or the WS broadcast). All fixed text is **English on purpose**
+  (community-facing, mirrors the server's English logs); the only variable text is
+  the player-typed room name. Pretty mod name from the hardcoded `MOD_LABELS`
+  (`wol`/`improvement-mod`/`aoe3-tad`), fallback to the raw `mod_id`. Deploy is
+  code-only (`git pull` + set the comma-separated `DISCORD_WEBHOOK_URL` in `.env` +
+  `systemctl restart wol-lobby`) — **no migration** (message ids are in-memory), no
+  `npm install` (`undici` already ships), no launcher rebuild. Trade-off: a server
+  restart with an active room freezes that message at its last state (rooms are
+  ephemeral, restarts rare). Deferred: a full Discord bot (a persistent gateway
+  would blow the 1 GB VM's RAM).
 
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
