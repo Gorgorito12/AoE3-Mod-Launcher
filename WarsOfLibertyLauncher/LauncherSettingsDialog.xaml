@@ -164,19 +164,6 @@
                                        Style="{StaticResource SidebarNavLabel}"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="TabTranslationsCatalogBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabTranslationsCatalogBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE774;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabTranslationsCatalogLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
                     <Button x:Name="TabTranslationsBtn"
                             Style="{StaticResource SidebarNavButton}"
                             Click="TabTranslationsBtn_Click">
@@ -328,9 +315,20 @@
                     </StackPanel>
 
                     <!-- ===================================================
-                         MODS CATALOG TAB
+                         CATALOG & SOURCES TAB — where the launcher fetches
+                         community content from. Two subsections: the mods
+                         catalog repo, and the community-translation SOURCE
+                         repositories. (NOT where a language is applied — that
+                         lives in the in-game language menu / Mod Properties;
+                         this tab only configures where packs are pulled from.)
                          =================================================== -->
                     <StackPanel x:Name="CatalogPanel" Visibility="Collapsed">
+                        <!-- ── Mods catalog ── -->
+                        <TextBlock x:Name="CatalogSubheader"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8"/>
                         <RadioButton x:Name="CatalogDefaultRadio" GroupName="Catalog"/>
                         <RadioButton x:Name="CatalogCustomRadio"
                                      GroupName="Catalog"
@@ -366,32 +364,54 @@
                                        VerticalAlignment="Center"
                                        Margin="12,0,0,0"/>
                         </Grid>
-                    </StackPanel>
 
-                    <!-- ===================================================
-                         TRANSLATIONS CATALOG TAB — where community
-                         translation packs are pulled from. Mirrors the MODS
-                         CATALOG tab: Default (the active mod's own folder
-                         repo) / Custom repository / Disabled. Distinct from
-                         the PACKAGER tab below, which is the export tool.
-                         =================================================== -->
-                    <StackPanel x:Name="TranslationsCatalogPanel" Visibility="Collapsed">
-                        <RadioButton x:Name="TxDefaultRadio" GroupName="TranslationsCatalog"/>
-                        <RadioButton x:Name="TxCustomRadio"
-                                     GroupName="TranslationsCatalog"
-                                     Margin="0,8,0,2"/>
-                        <TextBox x:Name="TxCustomBox"
-                                 Margin="22,2,0,2"
-                                 Width="380"
-                                 HorizontalAlignment="Left"/>
+                        <Border Style="{StaticResource DialogDivider}"/>
+
+                        <!-- ── Translation sources (repositories) — NOT where a
+                             language is applied; this only sets where translation
+                             packs are downloaded from. ── -->
+                        <TextBlock x:Name="TxSourcesHeader"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8"/>
+                        <!-- Default repo: always active, not removable. -->
+                        <TextBlock x:Name="TxDefaultLabel"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"/>
+
+                        <!-- User-added extra repos: all fetched + merged with the default. -->
+                        <TextBlock x:Name="TxAddHeader"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,6"/>
+
+                        <StackPanel x:Name="TxRepoList"
+                                    HorizontalAlignment="Left"
+                                    MinWidth="360"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                            <TextBox x:Name="TxAddBox"
+                                     Width="300"
+                                     VerticalAlignment="Center"/>
+                            <Button x:Name="TxAddButton"
+                                    Style="{StaticResource PropertyActionButton}"
+                                    MinWidth="90"
+                                    Margin="8,0,0,0"
+                                    Click="TxAddButton_Click"/>
+                        </StackPanel>
+
                         <TextBlock x:Name="TxInvalidText"
                                    Foreground="{DynamicResource ErrorBrush}"
                                    FontSize="{StaticResource FontSizeCaption}"
-                                   Margin="22,2,0,4"
+                                   Margin="0,4,0,4"
                                    Visibility="Collapsed"/>
-                        <RadioButton x:Name="TxDisabledRadio"
-                                     GroupName="TranslationsCatalog"
-                                     Margin="0,8,0,0"/>
+
+                        <CheckBox x:Name="TxDisabledCheck"
+                                  Margin="0,10,0,0"/>
 
                         <Border Style="{StaticResource DialogDivider}"/>
 

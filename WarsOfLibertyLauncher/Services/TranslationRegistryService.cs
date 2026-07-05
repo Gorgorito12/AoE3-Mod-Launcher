@@ -106,6 +106,7 @@ public class TranslationRegistryService
                         Description = manifest.Description,
                         TargetMod = manifest.TargetMod,
                         ReleaseTag = release.TagName ?? "",
+                        SourceRepo = repo,
                     });
                     DiagnosticLog.Write(
                         $"  release '{release.TagName}': loaded '{manifest.Id}' v{manifest.Version}");
@@ -227,6 +228,7 @@ public class TranslationRegistryService
                         CompatibleWith = manifest.CompatibleWith,
                         Date = manifest.Date ?? "",
                         Size = 0,
+                        SourceRepo = repo,
                     }, manifest));
                 }
                 catch (Exception ex)
@@ -256,6 +258,7 @@ public class TranslationRegistryService
                 ContentHash = newestVer.ContentHash,
                 FromFolder = true,
                 Versions = versions,
+                SourceRepo = repo,
             });
             DiagnosticLog.Write(
                 $"  '{lang}': {versions.Count} version(s), newest v{newestVer.Version} ({newestVer.ContentHash}).");
@@ -266,26 +269,65 @@ public class TranslationRegistryService
     }
 
     /// <summary>
-    /// Combined discovery (DUAL MODE): folder-published packs from
-    /// <paramref name="folderRepo"/> + legacy release-published packs from
-    /// <paramref name="releasesRepo"/>, merged by id with FOLDER packs winning.
-    /// Folder packs are listed first so they rank as "newest" in
-    /// <see cref="TranslationCompat.OrderForDisplay"/>. Returns null only when
-    /// both sources are unreachable; an empty-but-reachable source contributes []
-    /// rather than failing the whole index.
+    /// Combined discovery (DUAL MODE), single folder repo — back-compat wrapper
+    /// that delegates to the multi-repo <see cref="FetchAsync(IReadOnlyList{string}, string?, CancellationToken)"/>.
     /// </summary>
-    public async Task<TranslationIndex?> FetchAsync(
+    public Task<TranslationIndex?> FetchAsync(
         string? folderRepo, string? releasesRepo, CancellationToken ct = default)
     {
-        TranslationIndex? folder = null, releases = null;
-        if (!string.IsNullOrWhiteSpace(folderRepo))
-            folder = await FetchFromRepoFolderAsync(folderRepo!, ct);
+        var folderRepos = string.IsNullOrWhiteSpace(folderRepo)
+            ? (IReadOnlyList<string>)Array.Empty<string>()
+            : new[] { folderRepo! };
+        return FetchAsync(folderRepos, releasesRepo, ct);
+    }
+
+    /// <summary>
+    /// Combined discovery (DUAL MODE): folder-published packs from EVERY repo in
+    /// <paramref name="folderRepos"/> (the default profile repo first, then the
+    /// user's extra repos) + legacy release-published packs from
+    /// <paramref name="releasesRepo"/>. All folder repos are fetched and their
+    /// packs merged by id (<see cref="MergeFolderEntries"/>); folder packs win
+    /// over release packs on id collision, and folder entries rank first in
+    /// <see cref="TranslationCompat.OrderForDisplay"/>.
+    ///
+    /// Each folder repo is fetched inside its own try/catch so one unreachable /
+    /// rate-limited repo (403) doesn't blank the whole menu. Returns null only
+    /// when NO folder repo was reachable AND the releases source was unreachable;
+    /// an empty-but-reachable source contributes [] rather than failing.
+    /// </summary>
+    public async Task<TranslationIndex?> FetchAsync(
+        IReadOnlyList<string> folderRepos, string? releasesRepo, CancellationToken ct = default)
+    {
+        // Fetch each folder repo independently; keep repo ORDER (default first)
+        // because MergeFolderEntries uses index 0 as the authoritative default.
+        var perRepo = new List<IReadOnlyList<TranslationIndexEntry>>();
+        bool anyFolderReachable = false;
+        foreach (var repo in folderRepos ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(repo)) continue;
+            try
+            {
+                var idx = await FetchFromRepoFolderAsync(repo, ct);
+                if (idx != null)
+                {
+                    anyFolderReachable = true;
+                    perRepo.Add(idx.Translations ?? new List<TranslationIndexEntry>());
+                }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Translation folder repo '{repo}' failed, skipping: {ex.Message}");
+            }
+        }
+
+        TranslationIndex? releases = null;
         if (!string.IsNullOrWhiteSpace(releasesRepo))
             releases = await FetchFromReleasesAsync(releasesRepo!, ct);
 
-        if (folder == null && releases == null) return null;
+        if (!anyFolderReachable && releases == null) return null;
 
-        var folderEntries = folder?.Translations ?? new List<TranslationIndexEntry>();
+        var folderEntries = MergeFolderEntries(perRepo);
         var releaseEntries = releases?.Translations ?? new List<TranslationIndexEntry>();
         var folderIds = new HashSet<string>(
             folderEntries.Select(e => e.Id), StringComparer.OrdinalIgnoreCase);
@@ -293,6 +335,117 @@ public class TranslationRegistryService
         var combined = new List<TranslationIndexEntry>(folderEntries);
         combined.AddRange(releaseEntries.Where(e => !folderIds.Contains(e.Id)));
         return new TranslationIndex { Translations = combined };
+    }
+
+    /// <summary>
+    /// Merges the per-repo folder-scan results into one entry per id. Pure (no
+    /// I/O) so it's unit-testable. <paramref name="perRepoInOrder"/> is the list
+    /// of each repo's entries, in repo order — index 0 is the DEFAULT repo.
+    ///
+    /// On an id collision (two repos publish the same pack id), the versions of
+    /// all repos are UNIONED into one entry's <see cref="TranslationIndexEntry.Versions"/>
+    /// list (de-duplicated by <c>ContentHash</c>, newest-first, capped by
+    /// <see cref="TranslationCompat.OrderVersions"/>), each version keeping its
+    /// <see cref="TranslationVersion.SourceRepo"/>. The BASE entry (whose
+    /// display + one-click-apply metadata is used) is:
+    ///   * the DEFAULT repo's entry for that id if present ("mine is the default"
+    ///     — so an added repo can't rename or hijack the one-click apply of a pack
+    ///     the default already ships); otherwise
+    ///   * the entry that owns the globally-newest version.
+    /// Entries are emitted in first-seen id order (default repo's ids first) so
+    /// the display ranking stays stable.
+    /// </summary>
+    public static List<TranslationIndexEntry> MergeFolderEntries(
+        IReadOnlyList<IReadOnlyList<TranslationIndexEntry>> perRepoInOrder)
+    {
+        var order = new List<string>();
+        var byId = new Dictionary<string, List<(int repoIndex, TranslationIndexEntry entry)>>(
+            StringComparer.OrdinalIgnoreCase);
+
+        for (int ri = 0; ri < (perRepoInOrder?.Count ?? 0); ri++)
+        {
+            var repoEntries = perRepoInOrder![ri];
+            if (repoEntries == null) continue;
+            foreach (var e in repoEntries)
+            {
+                if (e == null || string.IsNullOrEmpty(e.Id)) continue;
+                if (!byId.TryGetValue(e.Id, out var group))
+                {
+                    group = new();
+                    byId[e.Id] = group;
+                    order.Add(e.Id);
+                }
+                group.Add((ri, e));
+            }
+        }
+
+        var merged = new List<TranslationIndexEntry>(order.Count);
+        foreach (var id in order)
+        {
+            var group = byId[id];
+
+            // Union all versions across repos for this id (default-first, so the
+            // default's instance wins a contentHash tie), then order + cap.
+            var union = new List<TranslationVersion>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (_, entry) in group)
+            {
+                if (entry.Versions == null) continue;
+                foreach (var v in entry.Versions)
+                {
+                    var key = !string.IsNullOrWhiteSpace(v.ContentHash)
+                        ? "h:" + v.ContentHash
+                        : $"k:{v.SourceRepo}|{v.Version}|{v.DownloadUrl}";
+                    if (seen.Add(key)) union.Add(v);
+                }
+            }
+            var ordered = TranslationCompat.OrderVersions(union);
+
+            // Base entry: the default repo's entry (repoIndex 0) if present, else
+            // the entry owning the globally-newest version.
+            TranslationIndexEntry baseEntry;
+            var defaultOwned = group
+                .Where(g => g.repoIndex == 0)
+                .Select(g => g.entry)
+                .FirstOrDefault();
+            if (defaultOwned != null)
+            {
+                baseEntry = defaultOwned;
+            }
+            else if (ordered.Count > 0)
+            {
+                var newest = ordered[0];
+                baseEntry = group
+                    .Select(g => g.entry)
+                    .FirstOrDefault(e => e.Versions != null
+                        && e.Versions.Any(v => ReferenceEquals(v, newest)))
+                    ?? group[0].entry;
+            }
+            else
+            {
+                baseEntry = group[0].entry;
+            }
+
+            merged.Add(new TranslationIndexEntry
+            {
+                Id = baseEntry.Id,
+                Name = baseEntry.Name,
+                Language = baseEntry.Language,
+                Author = baseEntry.Author,
+                Version = baseEntry.Version,
+                CompatibleWith = baseEntry.CompatibleWith,
+                DownloadUrl = baseEntry.DownloadUrl,
+                Size = baseEntry.Size,
+                Sha256 = baseEntry.Sha256,
+                Description = baseEntry.Description,
+                TargetMod = baseEntry.TargetMod,
+                ContentHash = baseEntry.ContentHash,
+                FromFolder = true,
+                SourceRepo = baseEntry.SourceRepo,
+                Versions = ordered,
+            });
+        }
+        return merged;
     }
 
     // Minimal DTOs for the GitHub Releases API response. Only the fields we

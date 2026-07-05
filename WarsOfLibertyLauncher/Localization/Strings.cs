@@ -586,13 +586,18 @@ public static class Strings
         },
         ["DlgLauncherSettingsSectionCatalog"] = new()
         {
-            [LangEn] = "MODS CATALOG",
-            [LangEs] = "CATÁLOGO DE MODS",
+            [LangEn] = "CATALOG & SOURCES",
+            [LangEs] = "CATÁLOGO Y FUENTES",
         },
-        ["DlgLauncherSettingsSectionTranslationsCatalog"] = new()
+        ["DlgLauncherSettingsCatalogSubheader"] = new()
         {
-            [LangEn] = "TRANSLATIONS",
-            [LangEs] = "TRADUCCIONES",
+            [LangEn] = "Mods catalog",
+            [LangEs] = "Catálogo de mods",
+        },
+        ["DlgLauncherSettingsTxSourcesHeader"] = new()
+        {
+            [LangEn] = "Translation sources (repositories)",
+            [LangEs] = "Fuentes de traducciones (repositorios)",
         },
         ["DlgLauncherSettingsSectionInterface"] = new()
         {
@@ -2670,20 +2675,40 @@ public static class Strings
             [LangEn] = "Cache cleared.",
             [LangEs] = "Caché eliminada.",
         },
-        ["DlgLauncherSettingsTxDefault"] = new()
+        ["DlgLauncherSettingsTxDefaultLabel"] = new()
         {
-            [LangEn] = "Default (this mod's own translations repo)",
-            [LangEs] = "Por defecto (repo de traducciones del mod)",
+            [LangEn] = "Default repository (always active): {0}",
+            [LangEs] = "Repositorio por defecto (siempre activo): {0}",
         },
-        ["DlgLauncherSettingsTxCustom"] = new()
+        ["DlgLauncherSettingsTxAddHeader"] = new()
         {
-            [LangEn] = "Custom repository:",
-            [LangEs] = "Repositorio personalizado:",
+            [LangEn] = "Additional repositories (all are merged):",
+            [LangEs] = "Repositorios adicionales (todos se combinan):",
         },
-        ["DlgLauncherSettingsTxDisabled"] = new()
+        ["DlgLauncherSettingsTxAddButton"] = new()
         {
-            [LangEn] = "Disabled (no community translations)",
-            [LangEs] = "Desactivado (sin traducciones de la comunidad)",
+            [LangEn] = "Add",
+            [LangEs] = "Agregar",
+        },
+        ["DlgLauncherSettingsTxRemoveTooltip"] = new()
+        {
+            [LangEn] = "Remove this repository",
+            [LangEs] = "Quitar este repositorio",
+        },
+        ["DlgLauncherSettingsTxNoneYet"] = new()
+        {
+            [LangEn] = "No extra repositories added yet.",
+            [LangEs] = "Aún no agregaste repositorios adicionales.",
+        },
+        ["DlgLauncherSettingsTxDuplicate"] = new()
+        {
+            [LangEn] = "That repository is already in the list.",
+            [LangEs] = "Ese repositorio ya está en la lista.",
+        },
+        ["DlgLauncherSettingsTxDisableToggle"] = new()
+        {
+            [LangEn] = "Disable all community translations",
+            [LangEs] = "Desactivar todas las traducciones de la comunidad",
         },
         ["DlgLauncherSettingsClearTxCache"] = new()
         {

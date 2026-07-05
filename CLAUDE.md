@@ -1190,20 +1190,38 @@ Two cheap gates beyond a green build:
   URL/hash/compat (`ApplyChosenVersion`). The applied version is remembered in
   `ModState.ActiveTranslationVersion` (cleared on revert-to-English). The gear
   menu stays single-entry (newest). The notifier mirrors the tree-API scan and
-  emits the **newest** version's `id@contentHash` (one bell per new version). The repos come from the profile's
+  emits the **newest** version's `id@contentHash` (one bell per new version).
+  **Multi-repo caveat:** with several folder repos merged (below), "newest" here
+  means the entry's top-level version, and for an id the DEFAULT repo also ships,
+  `MergeFolderEntries` keeps the top-level fields (gear one-click apply + this
+  notification key) from the **default** repo's entry ("mine is the default") — so
+  a *newer* version of that same id coming from an EXTRA repo is NOT what the gear
+  applies and does NOT re-bell here; it's reachable only via the Properties →
+  Language version picker (labelled by source repo). Top-level `Version` can thus
+  differ from `Versions[0]` in the collision case. The repos come from the profile's
   `Translations.FolderRepo` (new) + `.Repo` (legacy), resolved by
-  `EffectiveTranslationsFolderRepo()` + `EffectiveTranslationsRepo()`; the catalog
-  `mod.json` `translations` block gained a `folderRepo` field. **A user-facing
-  GLOBAL override exists** (`config.TranslationsFolderRepo`, Settings → TRANSLATIONS
-  tab, three-way `""`/`"none"`/`"owner/repo"` like `ModsCatalogRepo`): `""` = the
-  profile's own folder repo (default); `"none"` = no community packs; a custom
-  `owner/repo` replaces the folder repo AND suppresses the legacy releases path
-  (`EffectiveTranslationsRepo()` returns `""` whenever the folder override is set or
-  `"none"`), so the chosen repo is the single source. The override still passes
-  through the participation gate — `EffectiveTranslationsFolderRepo()` returns `""`
-  for a profile with no Translations block regardless of the override, so it can't
-  inject packs into a mod that opted out. Pinned by
-  `TranslationsFolderRepoOverrideTests`. **The dedup /
+  `EffectiveTranslationsFolderRepos()` (PLURAL) + `EffectiveTranslationsRepo()`; the
+  catalog `mod.json` `translations` block gained a `folderRepo` field. **The user can
+  add MULTIPLE folder repos** (Settings → CATALOG & SOURCES, the "Translation sources"
+  subsection — the standalone TRANSLATIONS tab was folded in here to avoid new players
+  reading it as "where to get a translation"): the profile's own folder repo
+  (the default, always first) PLUS `config.ExtraTranslationsFolderRepos` (a hand-added
+  `owner/repo[]`), all fetched and merged. `config.CommunityTranslationsDisabled` (the
+  "Disable" checkbox) turns everything off. `EffectiveTranslationsFolderRepos()` returns
+  the default + extras (de-duped), or an EMPTY list when the profile doesn't participate
+  (no Translations block) or translations are disabled — the participation gate means an
+  added repo can't inject packs into a mod that opted out. The merge is
+  `TranslationRegistryService.MergeFolderEntries` (pure, unit-tested): one entry per id;
+  on an id collision the repos' versions are UNIONED into that entry's `Versions[]`
+  (deduped by contentHash, each version keeps its `SourceRepo`, surfaced in the Mod
+  Properties version picker labelled by repo), and the base/display+one-click-apply
+  metadata comes from the DEFAULT repo's entry when it has that id (else the newest
+  version's owner). `RefreshTranslationIndexAsync` + the notif sweep filter the merged
+  index by `targetMod` so a foreign repo's packs don't pollute the active mod's menu.
+  Each folder repo is fetched in its own try/catch so one bad/rate-limited repo doesn't
+  blank the menu. The deprecated single-string `config.TranslationsFolderRepo` is migrated
+  into the new fields on load (`MigrateTranslationsFolderRepo`). Pinned by
+  `MultiTranslationRepoTests` + `TranslationMergeTests`. **The dedup /
   notification key is centralized in `TranslationCompat.KeyOf`:** release tag →
   `id@contentHash` (folder packs) → `id@version` (legacy). `contentHash` is the
   manifest's field (written by the packager) or recomputed from the files'

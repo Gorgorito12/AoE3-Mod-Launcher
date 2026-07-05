@@ -9706,13 +9706,23 @@ public partial class MainWindow : Window
         {
             TranslationIndex? index = null;
             var releasesRepo = _updateService.EffectiveTranslationsRepo();
-            var folderRepo = _updateService.EffectiveTranslationsFolderRepo();
-            if (!string.IsNullOrWhiteSpace(releasesRepo) || !string.IsNullOrWhiteSpace(folderRepo))
+            var folderRepos = _updateService.EffectiveTranslationsFolderRepos();
+            if (folderRepos.Count > 0 || !string.IsNullOrWhiteSpace(releasesRepo))
             {
                 // Dual mode: folder-published packs (translations/<id>/ on main)
-                // merged with legacy release-published packs.
-                index = await registry.FetchAsync(folderRepo, releasesRepo);
+                // from every configured folder repo (default + user extras),
+                // merged together and with legacy release-published packs.
+                index = await registry.FetchAsync(folderRepos, releasesRepo);
             }
+
+            // With multiple repos, an extra repo can ship packs whose targetMod
+            // is a DIFFERENT mod — keep only packs meant for this mod (empty
+            // targetMod = legacy/unverified, still allowed) so foreign packs
+            // don't pollute this mod's language menu / version picker.
+            if (index != null)
+                index.Translations = index.Translations
+                    .Where(e => Models.TranslationCompat.TargetModMatches(e.TargetMod, _updateService.Profile.Id))
+                    .ToList();
 
             _cachedTranslationIndex = index;
 
@@ -9864,12 +9874,17 @@ public partial class MainWindow : Window
             try
             {
                 var relRepo = svc.EffectiveTranslationsRepo();
-                var folderRepo = svc.EffectiveTranslationsFolderRepo();
-                if (!string.IsNullOrWhiteSpace(relRepo) || !string.IsNullOrWhiteSpace(folderRepo))
+                var folderRepos = svc.EffectiveTranslationsFolderRepos();
+                if (folderRepos.Count > 0 || !string.IsNullOrWhiteSpace(relRepo))
                 {
-                    var index = await new TranslationRegistryService().FetchAsync(folderRepo, relRepo);
+                    var index = await new TranslationRegistryService().FetchAsync(folderRepos, relRepo);
                     if (index != null)
+                    {
+                        index.Translations = index.Translations
+                            .Where(e => Models.TranslationCompat.TargetModMatches(e.TargetMod, profile.Id))
+                            .ToList();
                         await Dispatcher.InvokeAsync(() => NotifyNewTranslations(profile, index));
+                    }
                 }
             }
             catch (Exception ex)

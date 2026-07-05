@@ -90,6 +90,14 @@ public partial class LauncherSettingsDialog : Window
     /// </summary>
     private readonly System.Collections.Generic.List<string> _tabOrder = new();
 
+    /// <summary>
+    /// Working copy of the user's EXTRA translation folder repos (Settings →
+    /// TRANSLATIONS). Seeded from config in <see cref="LoadFromConfig"/>, edited
+    /// by the Add/✕ buttons, committed to config only on Save — so Cancel
+    /// discards the edits, mirroring <see cref="_tabOrder"/>.
+    /// </summary>
+    private readonly System.Collections.Generic.List<string> _extraTxRepos = new();
+
     public LauncherSettingsDialog(LauncherConfig config)
     {
         InitializeComponent();
@@ -129,7 +137,6 @@ public partial class LauncherSettingsDialog : Window
         TabInterfaceLabel.Text = Strings.Get("DlgLauncherSettingsSectionInterface");
         TabUpdatesLabel.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
         TabCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
-        TabTranslationsCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionTranslationsCatalog");
         TabTranslationsLabel.Text = Strings.Get("DlgLauncherSettingsSectionTranslations");
         TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
         TabPrivacyLabel.Text = Strings.Get("DlgLauncherSettingsSectionPrivacy");
@@ -177,6 +184,7 @@ public partial class LauncherSettingsDialog : Window
         OpenPostUpdateCheck.Content = Strings.Get("DlgLauncherSettingsOpenPostUpdate");
         OpenPostUpdateHint.Text = Strings.Get("DlgLauncherSettingsOpenPostUpdateHint");
 
+        CatalogSubheader.Text = Strings.Get("DlgLauncherSettingsCatalogSubheader");
         CatalogDefaultRadio.Content = Strings.Get("DlgLauncherSettingsCatalogDefault")
             + $"  ({DefaultCatalogRepo})";
         CatalogCustomRadio.Content = Strings.Get("DlgLauncherSettingsCatalogCustom");
@@ -185,10 +193,11 @@ public partial class LauncherSettingsDialog : Window
         ClearCacheButton.Content = Strings.Get("DlgLauncherSettingsClearCache");
         ClearCacheHint.Text = Strings.Get("DlgLauncherSettingsClearCacheHint");
 
-        TxDefaultRadio.Content = Strings.Get("DlgLauncherSettingsTxDefault")
-            + $"  ({DefaultTranslationsRepo})";
-        TxCustomRadio.Content = Strings.Get("DlgLauncherSettingsTxCustom");
-        TxDisabledRadio.Content = Strings.Get("DlgLauncherSettingsTxDisabled");
+        TxSourcesHeader.Text = Strings.Get("DlgLauncherSettingsTxSourcesHeader");
+        TxDefaultLabel.Text = Strings.Format("DlgLauncherSettingsTxDefaultLabel", DefaultTranslationsRepo);
+        TxAddHeader.Text = Strings.Get("DlgLauncherSettingsTxAddHeader");
+        TxAddButton.Content = Strings.Get("DlgLauncherSettingsTxAddButton");
+        TxDisabledCheck.Content = Strings.Get("DlgLauncherSettingsTxDisableToggle");
         ClearTranslationsCacheButton.Content = Strings.Get("DlgLauncherSettingsClearTxCache");
         ClearTranslationsCacheHint.Text = Strings.Get("DlgLauncherSettingsClearTxCacheHint");
 
@@ -292,23 +301,12 @@ public partial class LauncherSettingsDialog : Window
             CatalogCustomBox.Text = rawRepo;
         }
 
-        // Translations source: same three-way mapping ("" / "none" / repo).
-        var rawTxRepo = _config.TranslationsFolderRepo ?? "";
-        if (string.IsNullOrEmpty(rawTxRepo))
-        {
-            TxDefaultRadio.IsChecked = true;
-            TxCustomBox.Text = "";
-        }
-        else if (string.Equals(rawTxRepo, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            TxDisabledRadio.IsChecked = true;
-            TxCustomBox.Text = "";
-        }
-        else
-        {
-            TxCustomRadio.IsChecked = true;
-            TxCustomBox.Text = rawTxRepo;
-        }
+        // Translations: default repo is implicit/always-on; seed the user's
+        // extra-repo working copy + the master disable toggle.
+        _extraTxRepos.Clear();
+        _extraTxRepos.AddRange(_config.GetExtraTranslationsFolderRepos());
+        RenderTxRepoList();
+        TxDisabledCheck.IsChecked = _config.CommunityTranslationsDisabled;
     }
 
     /// <summary>
@@ -340,7 +338,6 @@ public partial class LauncherSettingsDialog : Window
         TabInterfaceBtn.Tag = ReferenceEquals(activeBtn, TabInterfaceBtn) ? "active" : null;
         TabUpdatesBtn.Tag = ReferenceEquals(activeBtn, TabUpdatesBtn) ? "active" : null;
         TabCatalogBtn.Tag = ReferenceEquals(activeBtn, TabCatalogBtn) ? "active" : null;
-        TabTranslationsCatalogBtn.Tag = ReferenceEquals(activeBtn, TabTranslationsCatalogBtn) ? "active" : null;
         TabTranslationsBtn.Tag = ReferenceEquals(activeBtn, TabTranslationsBtn) ? "active" : null;
         TabMaintenanceBtn.Tag = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? "active" : null;
         TabPrivacyBtn.Tag = ReferenceEquals(activeBtn, TabPrivacyBtn) ? "active" : null;
@@ -349,7 +346,6 @@ public partial class LauncherSettingsDialog : Window
         InterfacePanel.Visibility = ReferenceEquals(activeBtn, TabInterfaceBtn) ? Visibility.Visible : Visibility.Collapsed;
         UpdatesPanel.Visibility = ReferenceEquals(activeBtn, TabUpdatesBtn) ? Visibility.Visible : Visibility.Collapsed;
         CatalogPanel.Visibility = ReferenceEquals(activeBtn, TabCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
-        TranslationsCatalogPanel.Visibility = ReferenceEquals(activeBtn, TabTranslationsCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
         TranslationsPanel.Visibility = ReferenceEquals(activeBtn, TabTranslationsBtn) ? Visibility.Visible : Visibility.Collapsed;
         MaintenancePanel.Visibility = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? Visibility.Visible : Visibility.Collapsed;
         PrivacyPanel.Visibility = ReferenceEquals(activeBtn, TabPrivacyBtn) ? Visibility.Visible : Visibility.Collapsed;
@@ -359,7 +355,6 @@ public partial class LauncherSettingsDialog : Window
     private void TabInterfaceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabInterfaceBtn);
     private void TabUpdatesBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUpdatesBtn);
     private void TabCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabCatalogBtn);
-    private void TabTranslationsCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabTranslationsCatalogBtn);
     private void TabTranslationsBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabTranslationsBtn);
     private void TabMaintenanceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabMaintenanceBtn);
     private void TabPrivacyBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabPrivacyBtn);
@@ -563,6 +558,114 @@ public partial class LauncherSettingsDialog : Window
     }
 
     /// <summary>
+    /// Rebuilds the extra-translation-repos list (Settings → TRANSLATIONS) from
+    /// <see cref="_extraTxRepos"/> — one row per repo with a ✕ remove button.
+    /// Mirrors <see cref="RenderTabOrderList"/> (manual code-behind rows, full
+    /// re-render on mutate). Shows a muted placeholder when the list is empty.
+    /// </summary>
+    private void RenderTxRepoList()
+    {
+        TxRepoList.Children.Clear();
+
+        if (_extraTxRepos.Count == 0)
+        {
+            TxRepoList.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("DlgLauncherSettingsTxNoneYet"),
+                Foreground = (Brush)FindResource("TextSecondary"),
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                Margin = new Thickness(0, 0, 0, 8),
+            });
+            return;
+        }
+
+        for (int i = 0; i < _extraTxRepos.Count; i++)
+        {
+            var row = new Border
+            {
+                Background = (Brush)FindResource("MpSurface"),
+                BorderBrush = (Brush)FindResource("BorderSubtle"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(12, 6, 6, 6),
+                Margin = new Thickness(0, 0, 0, 6),
+            };
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var name = new TextBlock
+            {
+                Text = _extraTxRepos[i],
+                Foreground = (Brush)FindResource("TextPrimary"),
+                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+            };
+            Grid.SetColumn(name, 0);
+            grid.Children.Add(name);
+
+            var removeBtn = new Button
+            {
+                Style = (Style)FindResource("PropertyActionButton"),
+                Content = "✕",
+                MinWidth = 36,
+                Margin = new Thickness(6, 0, 0, 0),
+                ToolTip = Strings.Get("DlgLauncherSettingsTxRemoveTooltip"),
+                Tag = i,
+            };
+            removeBtn.Click += RemoveTxRepo_Click;
+            Grid.SetColumn(removeBtn, 1);
+            grid.Children.Add(removeBtn);
+
+            row.Child = grid;
+            TxRepoList.Children.Add(row);
+        }
+    }
+
+    private void RemoveTxRepo_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: int i } && i >= 0 && i < _extraTxRepos.Count)
+        {
+            _extraTxRepos.RemoveAt(i);
+            RenderTxRepoList();
+        }
+    }
+
+    /// <summary>
+    /// Validates the typed "owner/repo" (same <see cref="RepoRegex"/> as the
+    /// catalog), rejects blanks/dupes (vs the list and vs the default repo), and
+    /// appends it to <see cref="_extraTxRepos"/>. Errors show inline via
+    /// <c>TxInvalidText</c>; the change commits to config only on Save.
+    /// </summary>
+    private void TxAddButton_Click(object sender, RoutedEventArgs e)
+    {
+        var typed = (TxAddBox.Text ?? "").Trim();
+        if (!RepoRegex.IsMatch(typed))
+        {
+            TxInvalidText.Text = Strings.Get("DlgLauncherSettingsInvalidRepo");
+            TxInvalidText.Visibility = Visibility.Visible;
+            TxAddBox.Focus();
+            return;
+        }
+        if (string.Equals(typed, DefaultTranslationsRepo, StringComparison.OrdinalIgnoreCase)
+            || _extraTxRepos.FindIndex(r => string.Equals(r, typed, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            TxInvalidText.Text = Strings.Get("DlgLauncherSettingsTxDuplicate");
+            TxInvalidText.Visibility = Visibility.Visible;
+            TxAddBox.Focus();
+            return;
+        }
+
+        TxInvalidText.Visibility = Visibility.Collapsed;
+        _extraTxRepos.Add(typed);
+        TxAddBox.Text = "";
+        RenderTxRepoList();
+        TxAddBox.Focus();
+    }
+
+    /// <summary>
     /// Localised display name for a top-tab id. Reuses the same strings
     /// the nav bar paints (TopTabPlay/Mods/Multiplayer) so the reorder
     /// list reads identically to the bar it controls.
@@ -616,31 +719,8 @@ public partial class LauncherSettingsDialog : Window
             newCatalogRepo = typed;
         }
 
-        // 1b. Resolve the translations source (same validate-first rule as the
-        //     catalog: an invalid custom repo aborts the whole save).
-        string newTxRepo;
-        if (TxDefaultRadio.IsChecked == true)
-        {
-            newTxRepo = "";
-        }
-        else if (TxDisabledRadio.IsChecked == true)
-        {
-            newTxRepo = "none";
-        }
-        else
-        {
-            var typedTx = (TxCustomBox.Text ?? "").Trim();
-            if (!RepoRegex.IsMatch(typedTx))
-            {
-                TxInvalidText.Text = Strings.Get("DlgLauncherSettingsInvalidRepo");
-                TxInvalidText.Visibility = Visibility.Visible;
-                SetActiveTab(TabTranslationsCatalogBtn);
-                TxCustomBox.Focus();
-                return;
-            }
-            TxInvalidText.Visibility = Visibility.Collapsed;
-            newTxRepo = typedTx;
-        }
+        // (Translations extra-repo list is validated at Add time, so nothing to
+        //  validate here — the working copy is committed below.)
 
         // 2. Language: persist + apply live so the launcher main window
         //    re-localises on close without a restart. Strings.SetLanguage
@@ -661,7 +741,8 @@ public partial class LauncherSettingsDialog : Window
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
         _config.ModsCatalogRepo = newCatalogRepo;
-        _config.TranslationsFolderRepo = newTxRepo;
+        _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();
+        _config.CommunityTranslationsDisabled = TxDisabledCheck.IsChecked == true;
         _config.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
 
         // Top-tab order (Interface section). Persist the working copy;

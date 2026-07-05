@@ -203,14 +203,8 @@ public class UpdateService
         var profileRepo = _profile.Translations?.Repo;
         if (string.IsNullOrWhiteSpace(profileRepo))
             return "";
-        // When the user has chosen a custom folder repo (or disabled community
-        // translations), the folder repo is the single source of truth — the
-        // legacy GitHub-releases path is suppressed so we don't merge stale
-        // release packs on top of the chosen repo.
-        var folderPref = _config.TranslationsFolderRepo;
-        if (string.Equals(folderPref, "none", StringComparison.OrdinalIgnoreCase))
-            return "";
-        if (!string.IsNullOrWhiteSpace(folderPref))
+        // Master off-switch disables the legacy releases path too.
+        if (_config.CommunityTranslationsDisabled)
             return "";
         return !string.IsNullOrWhiteSpace(_config.TranslationsRepo)
             ? _config.TranslationsRepo!
@@ -218,26 +212,33 @@ public class UpdateService
     }
 
     /// <summary>
-    /// The repo that hosts folder-published translations (files under
-    /// <c>translations/&lt;id&gt;/</c> on main) for the active profile, or empty
-    /// when the profile doesn't participate or declares no folder repo. Read
-    /// alongside <see cref="EffectiveTranslationsRepo"/> for dual-mode discovery.
+    /// The folder repos to scan for community translations of the active mod:
+    /// the profile's own <see cref="TranslationsSettings.FolderRepo"/> (the
+    /// default) FIRST, then the user's <see cref="LauncherConfig.ExtraTranslationsFolderRepos"/>
+    /// (de-duplicated, default excluded). All are fetched and their packs merged.
     /// </summary>
-    public string EffectiveTranslationsFolderRepo()
+    /// <remarks>
+    /// Participation gate first: a mod with no <see cref="ModProfile.Translations"/>
+    /// block returns an EMPTY list regardless of the user's extra repos — so
+    /// pointing the launcher at a repo can't inject foreign strings into a mod
+    /// that opted out (the stock base game shows no packs). The master
+    /// <see cref="LauncherConfig.CommunityTranslationsDisabled"/> switch also
+    /// yields an empty list. Order matters: the default is first so its metadata
+    /// wins on id collision and it ranks as "newest" in OrderForDisplay.
+    /// </remarks>
+    public IReadOnlyList<string> EffectiveTranslationsFolderRepos()
     {
-        // Participation gate first: a mod with no Translations block never
-        // receives packs (see EffectiveTranslationsRepo remarks) — the global
-        // override must NOT inject a folder repo into a mod that opted out.
-        if (_profile.Translations == null) return "";
-        // Global override (config.TranslationsFolderRepo): "none" disables,
-        // a non-empty "owner/repo" replaces the profile's own folder repo,
-        // empty falls back to the profile default.
-        var raw = _config.TranslationsFolderRepo;
-        if (string.Equals(raw, "none", StringComparison.OrdinalIgnoreCase))
-            return "";
-        if (!string.IsNullOrWhiteSpace(raw))
-            return raw;
-        return _profile.Translations.FolderRepo ?? "";
+        if (_profile.Translations == null) return Array.Empty<string>();
+        if (_config.CommunityTranslationsDisabled) return Array.Empty<string>();
+
+        var list = new List<string>();
+        var def = _profile.Translations.FolderRepo;
+        if (!string.IsNullOrWhiteSpace(def))
+            list.Add(def!);
+        foreach (var r in _config.GetExtraTranslationsFolderRepos())
+            if (!list.Contains(r, StringComparer.OrdinalIgnoreCase))
+                list.Add(r);
+        return list;
     }
 
     /// <summary>True while a download is paused.</summary>

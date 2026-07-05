@@ -985,32 +985,65 @@ public class LauncherConfig
     public string TranslationsRepo { get; set; } = "papillo12/translations";
 
     /// <summary>
-    /// GitHub repository (format "owner/repo") that hosts folder-published
-    /// community translations — files under <c>translations/&lt;id&gt;/&lt;version&gt;/</c>
-    /// on <c>main</c>, discovered via the Git Trees API. This is a GLOBAL
-    /// override of the active mod's own folder repo.
-    ///
-    /// Three values are meaningful:
-    /// <list type="bullet">
-    ///   <item><c>""</c> (empty, default) — use the active mod profile's own
-    ///     folder repo (WoL ships <c>Gorgorito12/translations</c>). This is
-    ///     what most users want.</item>
-    ///   <item><c>"none"</c> — opt-out: skip community translations entirely
-    ///     (both the folder repo AND the legacy releases repo are suppressed),
-    ///     so no community packs are offered.</item>
-    ///   <item><c>"owner/repo"</c> — pull folder-published packs from a specific
-    ///     repo instead (a fork, mirror, or a community member's own language
-    ///     pack repo). When set, the legacy GitHub-releases path is suppressed
-    ///     so the chosen repo is the single source of truth.</item>
-    /// </list>
-    ///
-    /// The override still respects the per-mod participation gate: a mod with
-    /// no <c>Translations</c> block never receives packs, so pointing this at a
-    /// repo can't inject foreign strings into a mod that opted out. See
-    /// <c>UpdateService.EffectiveTranslationsFolderRepo</c>.
+    /// DEPRECATED single-repo override. Superseded by
+    /// <see cref="ExtraTranslationsFolderRepos"/> + <see cref="CommunityTranslationsDisabled"/>.
+    /// Kept only so old configs deserialize; <see cref="MigrateTranslationsFolderRepo"/>
+    /// folds any value into the new fields on load and clears this. Never read at
+    /// runtime anymore.
     /// </summary>
     [JsonPropertyName("translationsFolderRepo")]
     public string TranslationsFolderRepo { get; set; } = "";
+
+    /// <summary>
+    /// EXTRA community-translation folder repos (each "owner/repo") the user has
+    /// added by hand in Settings → TRANSLATIONS. These are fetched IN ADDITION to
+    /// the active mod profile's own folder repo (the default), and all packs are
+    /// merged — so translations from several people coexist. Different people can
+    /// host their own repo; the user opts in explicitly, so this is not a trust
+    /// escalation (apply-time MD5 + <c>targetMod</c> remain the compatibility
+    /// authority). On an id collision the packs' versions are UNIONED into one
+    /// entry's version picker (labelled by source repo); display + one-click-apply
+    /// metadata comes from the default repo when it has that id.
+    ///
+    /// Never read raw — go through <see cref="GetExtraTranslationsFolderRepos"/>,
+    /// which trims, de-dupes (case-insensitive) and drops entries that aren't a
+    /// valid <c>owner/repo</c>.
+    /// </summary>
+    [JsonPropertyName("extraTranslationsFolderRepos")]
+    public string[] ExtraTranslationsFolderRepos { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Master off-switch for ALL community translations (the default folder repo,
+    /// the extra repos, and the legacy releases path). Toggled by the "Disable"
+    /// checkbox in Settings → TRANSLATIONS. Default false = translations enabled.
+    /// </summary>
+    [JsonPropertyName("communityTranslationsDisabled")]
+    public bool CommunityTranslationsDisabled { get; set; } = false;
+
+    /// <summary>Matches a valid "owner/repo" GitHub identifier.</summary>
+    private static readonly System.Text.RegularExpressions.Regex RepoIdRegex =
+        new(@"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns <see cref="ExtraTranslationsFolderRepos"/> sanitised: trimmed,
+    /// de-duplicated case-insensitively, and filtered to syntactically valid
+    /// <c>owner/repo</c> entries — so a hand-edited config can't feed a garbage
+    /// value into the fetch URL builder.
+    /// </summary>
+    public string[] GetExtraTranslationsFolderRepos()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+        foreach (var r in ExtraTranslationsFolderRepos ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(r)) continue;
+            var norm = r.Trim();
+            if (!RepoIdRegex.IsMatch(norm)) continue;
+            if (seen.Add(norm)) result.Add(norm);
+        }
+        return result.ToArray();
+    }
 
     /// <summary>
     /// GitHub repository (format "owner/repo") that hosts the mods catalog
@@ -1154,6 +1187,7 @@ public class LauncherConfig
         cfg.Multiplayer ??= new MultiplayerConfig();
         cfg.MigrateLegacyState();
         cfg.MigrateLobbyBaseUrl();
+        cfg.MigrateTranslationsFolderRepo();
         cfg.NormalizeModInstalls();
         return cfg;
     }
@@ -1211,6 +1245,57 @@ public class LauncherConfig
         DiagnosticLog.Write(
             $"Migrated multiplayer.lobbyBaseUrl: '{oldUrl}' -> '{Multiplayer.LobbyBaseUrl}'. " +
             $"Session cleared; user needs to sign in again with Discord.");
+    }
+
+    /// <summary>
+    /// One-time migration of the DEPRECATED single-repo
+    /// <see cref="TranslationsFolderRepo"/> into the multi-repo model
+    /// (<see cref="ExtraTranslationsFolderRepos"/> + <see cref="CommunityTranslationsDisabled"/>):
+    ///   * <c>"none"</c> → set <see cref="CommunityTranslationsDisabled"/> = true.
+    ///   * a custom <c>"owner/repo"</c> → append to the extra-repos list.
+    ///   * <c>""</c> → nothing to do.
+    /// Then clears the old field so it never re-migrates. Idempotent.
+    /// </summary>
+    private void MigrateTranslationsFolderRepo()
+    {
+        if (!ApplyDeprecatedTranslationsFolderRepoMigration()) return;
+        try { Save(); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Config translationsFolderRepo migration save failed: {ex.Message}");
+        }
+        DiagnosticLog.Write("Migrated translationsFolderRepo into the multi-repo model.");
+    }
+
+    /// <summary>
+    /// Pure in-place migration of the deprecated <see cref="TranslationsFolderRepo"/>
+    /// into the multi-repo model (<see cref="ExtraTranslationsFolderRepos"/> +
+    /// <see cref="CommunityTranslationsDisabled"/>): <c>"none"</c> → disabled;
+    /// a custom <c>owner/repo</c> → appended (de-duped) to the extra list;
+    /// <c>""</c> → no-op. Clears the old field afterward. Returns true iff it
+    /// changed anything. Split out (no disk write) so it's unit-testable without
+    /// touching <c>launcher-config.json</c>; the <see cref="Save"/> lives in the
+    /// caller <see cref="MigrateTranslationsFolderRepo"/>. Idempotent.
+    /// </summary>
+    internal bool ApplyDeprecatedTranslationsFolderRepoMigration()
+    {
+        var old = (TranslationsFolderRepo ?? "").Trim();
+        if (old.Length == 0) return false;
+
+        if (string.Equals(old, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            CommunityTranslationsDisabled = true;
+        }
+        else
+        {
+            var list = ExtraTranslationsFolderRepos?.ToList() ?? new List<string>();
+            if (!list.Contains(old, StringComparer.OrdinalIgnoreCase))
+                list.Add(old);
+            ExtraTranslationsFolderRepos = list.ToArray();
+        }
+
+        TranslationsFolderRepo = "";
+        return true;
     }
 
     /// <summary>

@@ -135,6 +135,14 @@ public class TranslationVersion
     /// <summary>ISO-8601 UTC build timestamp (for newest-first ordering); may be empty.</summary>
     public string Date { get; set; } = "";
     public long Size { get; set; }
+
+    /// <summary>
+    /// The <c>owner/repo</c> this version was fetched from. Set by the registry
+    /// during a folder scan. When multiple repos are merged and contribute
+    /// versions to the same pack id, this disambiguates which repo each version
+    /// came from (surfaced in the version picker). Empty for legacy release packs.
+    /// </summary>
+    public string SourceRepo { get; set; } = "";
 }
 
 /// <summary>
@@ -216,6 +224,14 @@ public class TranslationIndexEntry
     /// </summary>
     [JsonIgnore]
     public List<TranslationVersion> Versions { get; set; } = new();
+
+    /// <summary>
+    /// The <c>owner/repo</c> this entry was fetched from (set by the registry).
+    /// With multiple folder repos merged, identifies the winning entry's origin.
+    /// Empty for legacy release packs.
+    /// </summary>
+    [JsonIgnore]
+    public string SourceRepo { get; set; } = "";
 }
 
 /// <summary>

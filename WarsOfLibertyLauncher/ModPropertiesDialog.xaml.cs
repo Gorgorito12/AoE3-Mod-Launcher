@@ -821,6 +821,14 @@ public partial class ModPropertiesDialog : Window
             IsEnabled = !_modBusy, Margin = new Thickness(0, 8, 0, 0),
         };
         int compatIdx = -1, activeIdx = -1;
+        // When versions for this id come from more than one repo (merged
+        // multi-repo), show each version's source repo so the user can tell
+        // whose "ES-LA 1.0" is whose.
+        bool multiSource = versions
+            .Select(v => v.SourceRepo ?? "")
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count() > 1;
         for (int i = 0; i < versions.Count; i++)
         {
             var v = versions[i];
@@ -830,7 +838,10 @@ public partial class ModPropertiesDialog : Window
                 && string.Equals(v.Version, activeVersion, StringComparison.OrdinalIgnoreCase))
             { tags.Add(Strings.Get("LangCardVerActive")); activeIdx = i; }
             if (compatIdx < 0 && TranslationCompat.IsCompatible(v.CompatibleWith, modVersion)) compatIdx = i;
-            var label = tags.Count > 0 ? $"{v.Version}  —  {string.Join(", ", tags)}" : v.Version;
+            var srcSuffix = multiSource && !string.IsNullOrWhiteSpace(v.SourceRepo)
+                ? $"  ·  {v.SourceRepo}" : "";
+            var label = (tags.Count > 0 ? $"{v.Version}  —  {string.Join(", ", tags)}" : v.Version)
+                        + srcSuffix;
             combo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = label, Tag = v });
         }
 
