@@ -155,6 +155,8 @@ public partial class LauncherSettingsDialog : Window
         MinimizeToTrayHint.Text = Strings.Get("DlgLauncherSettingsMinimizeToTrayHint");
         ShowToastsCheck.Content = Strings.Get("DlgLauncherSettingsShowToasts");
         ShowToastsHint.Text = Strings.Get("DlgLauncherSettingsShowToastsHint");
+        NotifyNewRoomsCheck.Content = Strings.Get("DlgSettingsNotifyRooms");
+        NotifyNewRoomsHint.Text = Strings.Get("DlgSettingsNotifyRoomsHint");
 
         // Radmin assistant mode picker. Combo items tagged with the
         // raw enum strings ("Auto"/"OnRequest"/"Never") so saving is
@@ -255,6 +257,7 @@ public partial class LauncherSettingsDialog : Window
         CloseOnGameCheck.IsChecked = _config.CloseLauncherOnGameStart;
         MinimizeToTrayCheck.IsChecked = _config.MinimizeToTray;
         ShowToastsCheck.IsChecked = _config.ShowToastNotifications;
+        NotifyNewRoomsCheck.IsChecked = _config.NotifyNewRooms;
         AutoCheckCheck.IsChecked = _config.CheckUpdatesOnStartup;
         OpenPostUpdateCheck.IsChecked = _config.OpenPostUpdatePages;
         TelemetryCheck.IsChecked = _config.MultiplayerTelemetryEnabled;
@@ -737,6 +740,7 @@ public partial class LauncherSettingsDialog : Window
         _config.CloseLauncherOnGameStart = CloseOnGameCheck.IsChecked == true;
         _config.MinimizeToTray = MinimizeToTrayCheck.IsChecked == true;
         _config.ShowToastNotifications = ShowToastsCheck.IsChecked == true;
+        _config.NotifyNewRooms = NotifyNewRoomsCheck.IsChecked == true;
         _config.CheckUpdatesOnStartup = AutoCheckCheck.IsChecked == true;
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;

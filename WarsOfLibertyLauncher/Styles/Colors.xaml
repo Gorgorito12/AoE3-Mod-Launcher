@@ -269,27 +269,30 @@
          from shared chrome.
          ========================================================= -->
 
-    <!-- Primary blue CTA + variants. -->
-    <SolidColorBrush x:Key="MpBlue" Color="#3F6FAE"/>
-    <SolidColorBrush x:Key="MpBlueHover" Color="#4F7FBE"/>
-    <SolidColorBrush x:Key="MpBluePressed" Color="#34608E"/>
+    <!-- Primary blue CTA + variants. Brighter, more saturated navy-blue for the
+         "premium" multiplayer refresh (mockup-driven). Flows into MpPrimary /
+         MpOutlineBlue button styles across the whole MP area. -->
+    <SolidColorBrush x:Key="MpBlue" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="MpBlueHover" Color="#2563EB"/>
+    <SolidColorBrush x:Key="MpBluePressed" Color="#1D4ED8"/>
     <!-- Subtle blue tint for selected rows / hover backgrounds /
          outline-variant button fills. Low saturation so it doesn't
          compete with the dark base. -->
-    <SolidColorBrush x:Key="MpBlueSubtle" Color="#1D2840"/>
+    <SolidColorBrush x:Key="MpBlueSubtle" Color="#14264A"/>
 
-    <!-- Multiplayer-specific surfaces. Slightly lighter than the
-         shared BgPanel so the room table / chat bar feel "raised". -->
-    <SolidColorBrush x:Key="MpSurface" Color="#1B2025"/>
-    <SolidColorBrush x:Key="MpSurfaceAlt" Color="#232830"/>
+    <!-- Multiplayer-specific surfaces — deep navy for the premium refresh so
+         the room table / chat cards read as "raised" above the navy tab
+         gradient (MpTabBackground bottom #07111F is darker than this). -->
+    <SolidColorBrush x:Key="MpSurface" Color="#0F1A2B"/>
+    <SolidColorBrush x:Key="MpSurfaceAlt" Color="#182740"/>
     <!-- Card/panel border + hairline divider for all multiplayer
          surfaces. Raised from #2C313A → #3A434F: at the old value it was
          barely lighter than MpSurface (#1B2025), so the lobby's player
          list / info card / chat panel borders washed out against the
          near-black BgBase. This tone reads as a clear edge without the
          harshness of the app's brighter BorderSubtle (#3C4650). -->
-    <SolidColorBrush x:Key="MpDivider" Color="#3A434F"/>
-    <SolidColorBrush x:Key="MpTableHeader" Color="#A8B0B8"/>
+    <SolidColorBrush x:Key="MpDivider" Color="#22344F"/>
+    <SolidColorBrush x:Key="MpTableHeader" Color="#94A3B8"/>
 
     <!-- Connection status dots. Online matches SuccessBrush;
          Offline matches ErrorBrush; in-flight states get their
@@ -298,8 +301,14 @@
     <SolidColorBrush x:Key="MpStatusOnline" Color="#4FA66A"/>
     <SolidColorBrush x:Key="MpStatusReconnect" Color="#D4A04A"/>
     <SolidColorBrush x:Key="MpStatusOffline" Color="#B85A4A"/>
-    <SolidColorBrush x:Key="MpStatusWaiting" Color="#3F6FAE"/>
-    <SolidColorBrush x:Key="MpStatusInGame" Color="#4FA66A"/>
+    <SolidColorBrush x:Key="MpStatusWaiting" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="MpStatusInGame" Color="#22C55E"/>
+    <!-- A room at capacity: warm amber dot (matches the "Full" action). -->
+    <SolidColorBrush x:Key="MpStatusFull" Color="#F59E0B"/>
+    <!-- A private (password-gated) room: purple dot. The room is still
+         JOINABLE (Join prompts for the password) — the dot is informational,
+         it does NOT disable the action. MP-only, no external consumers. -->
+    <SolidColorBrush x:Key="MpStatusLocked" Color="#8B5CF6"/>
 
     <!-- Destructive (Leave room). A touch darker than the shared
          DangerBrush so it doesn't compete with the blue primary. -->
@@ -308,9 +317,36 @@
 
     <!-- Ping bars (green / amber / red) — used in the rooms table
          "Ping" column and the in-room per-member RTT indicator. -->
-    <SolidColorBrush x:Key="MpPingGood" Color="#4FA66A"/>
-    <SolidColorBrush x:Key="MpPingMedium" Color="#D4A04A"/>
-    <SolidColorBrush x:Key="MpPingBad" Color="#B85A4A"/>
+    <SolidColorBrush x:Key="MpPingGood" Color="#22C55E"/>
+    <SolidColorBrush x:Key="MpPingMedium" Color="#F59E0B"/>
+    <SolidColorBrush x:Key="MpPingBad" Color="#EF4444"/>
+
+    <!-- ==== Rooms-table navy refresh (mockup-driven) — MP-only, no external
+         consumers, so no leak into non-MP chrome. ==== -->
+    <!-- Blue-tinted panel edge for the "active rooms" + chat cards — a low-alpha
+         blue (rgba(59,130,246,~0.25)) so it reads as a subtle premium rim. -->
+    <SolidColorBrush x:Key="MpCardBorder" Color="#403B82F6"/>
+    <!-- Room ROW fill — a distinct navy band so each room stands out against the
+         card (MpSurface #0F1A2B), instead of blending in. Hover lifts a touch. -->
+    <SolidColorBrush x:Key="MpRoomRowBg" Color="#16243A"/>
+    <SolidColorBrush x:Key="MpRoomRowHover" Color="#1B2D49"/>
+    <!-- MOD badge fill + outline. Deliberately DISTINCT from the row bg
+         (MpRoomRowBg #16243A) so the badge stays legible on the row + hover. -->
+    <SolidColorBrush x:Key="MpModBadgeBg" Color="#1F3358"/>
+    <SolidColorBrush x:Key="MpModBadgeBorder" Color="#3B558A"/>
+    <!-- Multiplayer tab background: deep navy with a subtle top glow. Vertical;
+         a XAML resource so it's auto-frozen + shared. Bottom (#07111F) is
+         darker than MpSurface (#0F1A2B) so the cards float above it. -->
+    <LinearGradientBrush x:Key="MpTabBackground" StartPoint="0.5,0" EndPoint="0.5,1">
+        <GradientStop Color="#0E1B2E" Offset="0.0"/>
+        <GradientStop Color="#0B1424" Offset="0.35"/>
+        <GradientStop Color="#07111F" Offset="1.0"/>
+    </LinearGradientBrush>
+    <!-- Subtle vertical gradient for the MOD badge (mockup "premium" look). -->
+    <LinearGradientBrush x:Key="MpModBadgeGradient" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#2A3856" Offset="0.0"/>
+        <GradientStop Color="#212D48" Offset="1.0"/>
+    </LinearGradientBrush>
 
     <!-- =========================================================
          INTERACTION TOKENS — semantic colors for hover/active

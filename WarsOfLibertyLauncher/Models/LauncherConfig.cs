@@ -406,6 +406,8 @@ public enum NotificationKind
     NewMod,
     /// <summary>A fresh install (or a new copy) of a mod finished — distinct from an update.</summary>
     Installed,
+    /// <summary>Any user created a new multiplayer room (for a mod you have installed).</summary>
+    RoomCreated,
 }
 
 /// <summary>
@@ -775,6 +777,15 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("showToastNotifications")]
     public bool ShowToastNotifications { get; set; } = true;
+
+    /// <summary>
+    /// When true, the launcher shows a Windows notification when ANY user creates
+    /// a new multiplayer room for a mod you have installed (a background poll of
+    /// the lobby list detects it). Independent of <see cref="ShowToastNotifications"/>
+    /// so a user can keep update toasts but silence room notifications. Default true.
+    /// </summary>
+    [JsonPropertyName("notifyNewRooms")]
+    public bool NotifyNewRooms { get; set; } = true;
 
     /// <summary>
     /// When true (default), the launcher runs the standard "check for
@@ -1166,6 +1177,13 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("catalogBaselineSeeded")]
     public bool CatalogBaselineSeeded { get; set; }
+
+    /// <summary>
+    /// Deduplicates the "new room created" Windows notification so the same room
+    /// isn't re-announced across a restart. Capped like <see cref="NotifiedCatalogModIds"/>.
+    /// </summary>
+    [JsonPropertyName("notifiedRoomIds")]
+    public List<string> NotifiedRoomIds { get; set; } = new();
 
     private const string ConfigFileName = "launcher-config.json";
 

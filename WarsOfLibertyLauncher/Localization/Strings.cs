@@ -1988,6 +1988,7 @@ public static class Strings
         ["MpRoomYours"] = new() { [LangEn] = "Your room", [LangEs] = "Tu sala" },
         ["MpRoomFull"] = new() { [LangEn] = "Full", [LangEs] = "Llena" },
         ["MpRoomStatusWaiting"] = new() { [LangEn] = "Waiting", [LangEs] = "Esperando" },
+        ["MpRoomStatusLocked"] = new() { [LangEn] = "Private", [LangEs] = "Privada" },
         // Room cards (BuildRoomCard) + empty state + "last updated" header.
         ["MpRoomModNotInstalled"] = new() { [LangEn] = "Mod not installed", [LangEs] = "Mod no instalado" },
         ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms available right now", [LangEs] = "No hay salas disponibles ahora" },
@@ -1998,11 +1999,13 @@ public static class Strings
         ["MpRoomPrivate"] = new() { [LangEn] = "Private", [LangEs] = "Privado" },
         // Room-list column headers (the card list mimics a table now).
         ["MpColRoom"] = new() { [LangEn] = "ROOM", [LangEs] = "SALA" },
+        ["MpColMod"] = new() { [LangEn] = "MOD", [LangEs] = "MOD" },
         ["MpColHost"] = new() { [LangEn] = "HOST", [LangEs] = "ANFITRIÓN" },
         ["MpColPlayers"] = new() { [LangEn] = "PLAYERS", [LangEs] = "JUGADORES" },
         ["MpColPing"] = new() { [LangEn] = "PING", [LangEs] = "PING" },
         ["MpColStatus"] = new() { [LangEn] = "STATUS", [LangEs] = "ESTADO" },
         ["MpColAction"] = new() { [LangEn] = "ACTION", [LangEs] = "ACCIÓN" },
+        ["MpRoomsShowingCount"] = new() { [LangEn] = "Showing {0} rooms", [LangEs] = "Mostrando {0} salas" },
         ["MpRoomLeave"] = new() { [LangEn] = "Leave room", [LangEs] = "Salir de la sala" },
         ["MpRoomReady"] = new() { [LangEn] = "Ready", [LangEs] = "Listo" },
         ["MpRoomStart"] = new() { [LangEn] = "Start game", [LangEs] = "Empezar partida" },
@@ -2455,6 +2458,16 @@ public static class Strings
             [LangEn] = "A system tray balloon appears when an update completes while the launcher window is hidden or minimised.",
             [LangEs] = "Aparece una notificación en la bandeja cuando termina una actualización y la ventana del launcher está oculta o minimizada.",
         },
+        ["DlgSettingsNotifyRooms"] = new()
+        {
+            [LangEn] = "Notify me when a multiplayer room is created",
+            [LangEs] = "Avisarme cuando se crea una sala multijugador",
+        },
+        ["DlgSettingsNotifyRoomsHint"] = new()
+        {
+            [LangEn] = "A Windows notification when any player opens a room for a mod you have installed (only while the launcher window isn't focused).",
+            [LangEs] = "Una notificación de Windows cuando cualquier jugador crea una sala de un mod que tenés instalado (solo cuando la ventana del launcher no está en foco).",
+        },
         ["DlgLauncherSettingsSectionPrivacy"] = new()
         {
             [LangEn] = "PRIVACY",
@@ -2551,6 +2564,16 @@ public static class Strings
         {
             [LangEn] = "{0} was updated to {1}.",
             [LangEs] = "{0} se actualizó a {1}.",
+        },
+        ["MpNotifRoomCreatedTitle"] = new()
+        {
+            [LangEn] = "New room",
+            [LangEs] = "Nueva sala",
+        },
+        ["MpNotifRoomCreatedBody"] = new()
+        {
+            [LangEn] = "'{0}' · {1}",
+            [LangEs] = "'{0}' · {1}",
         },
         ["NotifInstalledTitle"] = new()
         {

@@ -260,6 +260,9 @@
                         <CheckBox x:Name="ShowToastsCheck"/>
                         <TextBlock x:Name="ShowToastsHint" Style="{StaticResource HintText}"/>
 
+                        <CheckBox x:Name="NotifyNewRoomsCheck"/>
+                        <TextBlock x:Name="NotifyNewRoomsHint" Style="{StaticResource HintText}"/>
+
                         <Border Style="{StaticResource DialogDivider}"/>
 
                         <!-- Radmin assistant mode — decides whether the

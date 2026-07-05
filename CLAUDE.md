@@ -1698,6 +1698,36 @@ Two cheap gates beyond a green build:
   `latestVersion` / `translations` silently breaks every client → coordinate across
   both repos.)
 
+- **"A new room was created" fires a Windows notification via a BACKGROUND lobby
+  poll (`MainWindow.PollNewRoomsAsync`), not a WS push.** There is no `lobby_created`
+  push (the `/global/ws` channel is chat-only; emitting lobby events is deferred to
+  the backend repo). So a MainWindow-owned `DispatcherTimer` (`_lobbyNotifyTimer`,
+  **90 s** — process-wide, tab-independent) polls `_multiplayerSession.Api.ListLobbiesAsync()`
+  and diffs lobby **`Id`s** (NOT `CreatedAt`, which is an unparsed string) against the
+  session set `_knownLobbyIds`. The **first successful poll seeds `_knownLobbyIds`
+  silently** (`_lobbyBaselineSeeded`) so existing rooms don't flood — only rooms
+  created AFTER the poll starts notify. For each genuinely-new id it skips **your own
+  room** (host id / DiscordUsername match) and rooms whose **mod isn't installed**
+  (`MainWindow.IsModInstalled`, ported from `MultiplayerTab.IsModInstalledLocally` —
+  the user chose "only joinable rooms"), then calls
+  `NotificationCenter.RaiseRoomCreated(id, modId, title, body)` → the existing `Add`
+  chute → real Windows tray balloon (`ShowToast`) + bell item + badge. Dedup is
+  two-layer: the in-memory `_knownLobbyIds` (per session) + persisted
+  `LauncherConfig.NotifiedRoomIds` (capped 500, cross-restart, in `RaiseRoomCreated`).
+  **Gating (load-bearing):** the tick early-returns unless `_config.NotifyNewRooms`
+  (a dedicated Settings toggle, default true, separate from `ShowToastNotifications`)
+  **AND** `_config.CheckUpdatesOnStartup` (metered/silent mode) **AND** the session is
+  `SignedIn`. **Budget:** `/lobbies` is 60/min·2000/day per IP; 90 s ⇒ ~960/day — don't
+  drop the interval (per-IP cap is shared behind NAT/Radmin). Detection lives ONLY in
+  this poll (the MP tab's 10 s render poll doesn't raise it). Kind is
+  `NotificationKind.RoomCreated`; clicking the bell item →
+  `NavigateToNotification` opens Multiplayer → Rooms (`MultiplayerTab.ShowRooms()`,
+  a public entry mirroring `SubtabRooms_Click`), added BEFORE the `profile == null`
+  guard. Toast is still suppressed while the window is focused (existing `ShowToast`
+  rule — fine, you'd see the room appear). **Future:** the efficient path is a
+  backend `lobby_created` WS push + an app-level persistent `/global/ws`; that needs
+  the separate backend repo, so the poll is the launcher-only MVP.
+
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
   (`MultiplayerTab.xaml.cs`) fills it, and four duplications were stripped on
@@ -1850,24 +1880,76 @@ Two cheap gates beyond a green build:
   bullet described a `WrapPanel` of cards whose "old table + column-header strip
   + zebra rows are gone" — that was **REVERTED**. The code is a table; trust it.)
   `BuildRoomCard` builds one full-width row per room into a `StackPanel`
-  (`RoomsListPanel`), each a 6-column `Grid` aligned under the `ColHeader*` strip
-  in `MultiplayerTab.xaml`: SALA, ANFITRIÓN, JUGADORES, PING, ESTADO, ACCIÓN.
-  **Those six columns are STAR-sized with Min/Max, NOT fixed px** — fixed widths
-  summed ~810px and, since the rooms list shares its row with the 380px
-  global-chat column and the `RoomsListScroll` ScrollViewer **disables horizontal
-  scroll**, the right-most ACCIÓN column (the Join/Re-enter button) got
-  **clipped off-screen on a small / restored window** (it only showed fully when
-  maximized — the reported bug). Stars always divide the available width so the
-  row can't overflow; each column's `MaxWidth` replicates the old fixed look on a
-  large window and its `MinWidth` (esp. ACCIÓN = 110) keeps the button fully
-  visible when space is tight. **Keep the header strip and the `BuildRoomCard`
-  column defs in lockstep, and don't revert either to fixed px** — that re-clips
-  the button. The row shows: a **leading mod-icon disc** (the room's mod icon,
-  resolved by `ResolveRoomModIcon` = cached catalog `icon.png` → built-in packed
-  icon, cached per mod id and decoded once; **gold ★ fallback** when the mod
-  ships no resolvable icon — so icon-less rooms look exactly as before), title
-  (+ 🔒 if private), the mod name (chip), the host with an initial circle
-  (`Anfitrión: <name>`), players, ping, a status cell, and the **ACCIÓN-column
+  (`RoomsListPanel`), each a **7-column** `Grid` aligned under the
+  `RoomsHeaderStrip` `ColHeader*` strip in `MultiplayerTab.xaml`: **ROOM, MOD,
+  HOST, PLAYERS, PING, STATUS, ACTION** (the MOD chip is now its OWN column,
+  split out of the ROOM cell — mockup-driven redesign). **Rows are flush TABLE
+  rows, not floating cards, but each row has its OWN fill so a room stands out
+  against the panel** (revived per-room colour): the `MpRoomCard` style fills with
+  `MpRoomRowBg` (#16243A, a navy band distinct from the card `MpSurface` #0F1A2B +
+  header band #0C1626), a 1px `MpDivider` bottom border, and an `MpRoomRowHover`
+  (#1B2D49) hover, compact padding `14,9,14,9` (≈46px rows). Don't set it back to
+  `Transparent` — the fill is the "a created room is visible" feature. **The two cards (rooms + chat)
+  got a PREMIUM navy treatment** (mockup-driven): the tab background is a navy
+  gradient (`MpTabBackground`), each card has a blue-tinted border (`MpCardBorder`)
+  + `RadiusLg` corners + a soft blue outer **glow via a separate underlay Border**
+  (a `DropShadowEffect` is on the underlay, NEVER on the content card — an Effect
+  on the card kills ClearType on all its text). The MP palette (`Mp*` brushes in
+  `Colors.xaml`) was retuned to a **deep-navy premium set** app-wide across MP
+  (LobbyWindow, CreateLobbyDialog, buttons): `MpTabBackground` #0E1B2E→#07111F,
+  `MpSurface` #0F1A2B, `MpSurfaceAlt` #182740, `MpRoomRowBg` #16243A / hover
+  #1B2D49, `MpCardBorder` #403B82F6 (blue ~25% alpha), `MpDivider` #22344F,
+  `MpTableHeader` #94A3B8, `MpBlue` #3B82F6 / hover #2563EB / pressed #1D4ED8,
+  status Waiting #3B82F6 / InGame #22C55E / Full #F59E0B / Locked #8B5CF6, ping
+  #22C55E/#F59E0B/#EF4444. The top-bar header Border is `Transparent` (blends into
+  the navy gradient) with an `MpDivider` bottom rule; the Radmin banner's connected
+  state is green #123C2B + a low-alpha green border (set in `RefreshRadminBanner`);
+  the "Radmin VPN" NAT badge colours are set in `RenderNatBadge` (#182740/#94A3B8).
+  `MpStatusOffline` was deliberately left alone (it leaks to the title-bar offline
+  chip + PatchGeneratorDialog). **The seven columns
+  are STAR-sized with Min/Max, NOT fixed px** — fixed widths overflowed a small
+  window, and since the `RoomsListScroll` ScrollViewer **disables horizontal
+  scroll**, overflow clips off-screen. Weights/mins:
+  **all columns are proportional with NO MaxWidth** (except none) so on a wide
+  window they grow TOGETHER and the "air" distributes evenly (symmetric) instead
+  of ROOM absorbing all slack — the earlier `4*`-no-max ROOM produced a giant gap
+  before MOD. Weights/mins (title is **single-line `CharacterEllipsis`**, compact
+  rows): ROOM `2.3*` min120, MOD `1.05*` min58, HOST `1.35*` min66,
+  PLAYERS `0.62*` min46, PING `0.62*` min48, STATUS `0.9*` min60,
+  ACTION `0.95*` min100. Mins sum ≈498 so the 7 fit the min window (~714px table
+  region) without clipping ACTION. **The ACTION button is `HorizontalAlignment=Center`
+  + MinWidth 96 / MaxWidth 130** so it stays compact/centred (not stretched) now
+  that its column has no cap. **ROOM and HOST cells are
+  `Grid{Auto,*}` (disc in col0, text in col1), NOT horizontal StackPanels** — a
+  horizontal StackPanel measures children with infinite width so wrap/ellipsis
+  never fire; the text must live in a bounded `*` column. **Keep the header strip
+  and the `BuildRoomCard` column defs in lockstep (7 each), and don't revert
+  either to fixed px.** Left inset is now **30px** (ScrollViewer pad 16 + row
+  padding 14; the flat row has no side border) — the header strip (wrapped in a
+  subtle `#141C2C` band Border with a bottom `MpDivider` divider) has a `30,7,30,7`
+  margin that matches it. **Header columns 0–5 are clickable SORT buttons**
+  (`MpColHeaderButton`, label + a `SortArrow*` glyph: `⇅` idle, `↑`/`↓` active),
+  wired to `RoomHeader_Click` → toggles asc/desc, sets `_roomsSort`/`_roomsSortAsc`,
+  `UpdateSortArrows()`, then `RerenderRoomsFromCache()` (re-orders from
+  `_lastBrowserList`, NO network). Sort is applied render-side by `ApplyRoomSort`
+  (stable `OrderBy`, `Reverse` for desc; ROOM/MOD/HOST by name, PLAYERS by count,
+  STATUS by Waiting<Full<InGame rank, PING is a no-op since your latency is the
+  same for every row); `BuildRoomsSignature` stays in SERVER order so the quiet
+  10s auto-refresh diff is stable and doesn't lose the chosen sort. ACTION (col 6)
+  is a plain centered label, not sortable. A **footer** (`RoomsShowingCount`,
+  `MpRoomsShowingCount` = "Showing N rooms") shows the count — **no pagination**
+  (the list scrolls). **The layout is ~75/25** — the rooms table col is `3*`, the
+  global-chat column is FLEXIBLE (`*` MinWidth 320 / MaxWidth 360) — so the table
+  fills ~75%;
+  `SyncHeaderScrollbarGutter` (hooked to `RoomsListScroll.ScrollChanged`) bumps the
+  header's right margin by `SystemParameters.VerticalScrollBarWidth` when the vbar
+  shows so the header tracks the rows. The row shows: a **leading mod-icon disc**
+  (the room's mod icon, resolved by `ResolveRoomModIcon` = cached catalog
+  `icon.png` → built-in packed icon, cached per mod id and decoded once; **gold ★
+  fallback** when the mod ships no resolvable icon), the title (+ a small 🔒 /
+  "not installed" sub-line under it), the **MOD chip** (own column), the host with
+  a **name-colored** monogram circle (`HostMonogramBrush`, hashed palette + white
+  initial), players, ping, a status cell, and the **ACTION-column
   action button** whose caption + enabled-ness pick per room in this **priority
   order** (first match wins) — enabled Join / Re-enter use the
   `MpOutlineBlueButton` outline style, the disabled states use
@@ -1888,11 +1970,19 @@ Two cheap gates beyond a green build:
   5. **mod not installed locally** → **disabled "Join"** (`IsEnabled =
      modInstalled`); else → **enabled "Join"** → `JoinRoomButton_Click`.
 
-  Status shows in the ESTADO column as a dot + label (`BuildStatusCell`):
-  `Esperando` (waiting) or `En partida` (in game), localised via
-  `MpRoomStatusWaiting` / `MpRoomStatusInGame`. (The disabled "In game" / "Full"
-  action button — not a separate badge — is the actual join block; an unused
-  `BuildRoomBadge` leftover from the reverted card design was removed.) The header also carries an
+  Status shows in the STATUS column as a **colored dot + label**
+  (`BuildStatusCell(label, RoomStatusKind)`) with FOUR kinds by priority
+  **In Game > Full > Private > Waiting**: **In Game** (green `MpStatusInGame`, bold
+  label), **Full** (amber `MpStatusFull`), **Private** (purple `MpStatusLocked`,
+  string `MpRoomStatusLocked` = "Private"/"Privada", shown for `IsPrivate` rooms
+  that aren't in-game/full), **Waiting** (blue `MpStatusWaiting`). **The purple
+  Private dot is COSMETIC — the ACTION stays an enabled `Join`** because private
+  rooms ARE joinable (the click handler prompts for the password via
+  `PasswordPromptDialog`); do NOT turn it into a disabled "Locked" (that would
+  break joining private rooms). `StatusRank` is untouched (private sorts at
+  Waiting rank — acceptable). **There is no "Watch"/spectate action** (the mockup
+  had one; removed on request) — an in-game room shows the disabled "En partida"
+  button. The header also carries an
   `Actualizado hace X` timestamp (`RoomsUpdatedText` / `UpdateRoomsUpdatedLabel`,
   ticked by `_roomsPingTimer`), and the empty state is now localized
   (`MpRoomsEmptyTitle` / `MpRoomsEmptyBody` — they used to be hardcoded English).
@@ -1933,7 +2023,9 @@ Two cheap gates beyond a green build:
   {online}` / `pong` / `error` — each `line` is
   `{id, userId, login, avatarUrl, body, at}`, and the client renders `avatarUrl`
   as a circular photo with the login **monogram as the fallback** when it's null
-  or fails to load (panel width is a fixed 380 px column). Client side it
+  or fails to load (the chat column is FLEXIBLE — `*` MinWidth 320 / MaxWidth 360,
+  ~25% of a ~75/25 split with the rooms table `3*`; see the rooms-table bullet).
+  Client side it
   **reuses the generic `LobbyWebSocket`** (SessionToken hello,
   `BuildWsUri(Api.BaseUri, "global/ws")`), but the socket is **owned by
   `MultiplayerTab`, NOT `MultiplayerSession`** (unlike `RoomSocket`) because its

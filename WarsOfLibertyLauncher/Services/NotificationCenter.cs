@@ -220,6 +220,31 @@ public sealed class NotificationCenter
     }
 
     /// <summary>
+    /// "New multiplayer room created" — any user opened a room. Deduped via
+    /// <see cref="LauncherConfig.NotifiedRoomIds"/> so the same room id isn't
+    /// re-announced across a restart. The caller filters to joinable rooms and
+    /// seeds a silent baseline of existing rooms itself (in-memory), so this only
+    /// fires for rooms created after the poll started.
+    /// </summary>
+    public bool RaiseRoomCreated(string roomId, string modId, string title, string body)
+    {
+        if (string.IsNullOrWhiteSpace(roomId)) return false;
+        if (_config.NotifiedRoomIds.Contains(roomId, StringComparer.OrdinalIgnoreCase))
+            return false;
+        _config.NotifiedRoomIds.Add(roomId);
+        if (_config.NotifiedRoomIds.Count > 500)
+            _config.NotifiedRoomIds.RemoveRange(0, _config.NotifiedRoomIds.Count - 500);
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.RoomCreated,
+            ModId = modId,
+            Title = title,
+            Body = body,
+            TargetId = roomId,
+        });
+    }
+
+    /// <summary>
     /// One-time SILENT baseline of the catalog "new mod" dedup set — records every
     /// currently-known mod id as already-notified WITHOUT belling, so the first-ever
     /// catalog fetch doesn't flood the bell with every existing mod. No-op after the

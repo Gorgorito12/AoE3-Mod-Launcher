@@ -58,52 +58,57 @@
             <Setter Property="Margin" Value="18,0,0,0"/>
         </Style>
 
-        <!-- Room CARD (replaces the old table row). A rounded surface
-             tile that brightens + gains a blue rim on hover. The card
-             body (title, mod, host, players/ping, status badge, action
-             button) is built in code-behind by BuildRoomCard so all the
-             load-bearing state logic (action caption, in-place ping,
-             mod-installed gating) is preserved. -->
+        <!-- Room ROW (table row, NOT a floating card). A flush surface with
+             a hairline bottom divider and a subtle hover tint — so the list
+             reads as a clean table like the reference mockup, not a stack of
+             gapped cards. The row body (title, mod chip, host, players, ping,
+             status badge, action button) is built in code-behind by
+             BuildRoomCard so all the load-bearing state logic (action caption,
+             in-place ping, mod-installed gating) is preserved. Left inset =
+             Padding.Left 14 + ScrollViewer pad 16 = 30, matched by the header
+             strip's 30px left margin so columns line up under the labels. -->
         <Style x:Key="MpRoomCard" TargetType="Border">
-            <!-- Subtle dark-BLUE fill (not the panel's neutral MpSurface) so the
-                 card reads as a distinct item and ties into the blue accents. -->
-            <Setter Property="Background" Value="#1A2433"/>
-            <!-- STATIC, subtle BLUE illumination (no animation): a thin blue
-                 rim (MpBlue, same as the action button) + a faint, tenue blue
-                 halo. Hover lifts the surface and the glow a touch so the row
-                 still reads as "selected". -->
-            <Setter Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Padding" Value="14"/>
-            <Setter Property="Effect">
-                <Setter.Value>
-                    <DropShadowEffect Color="#4F7FBE"
-                                      BlurRadius="8"
-                                      ShadowDepth="0"
-                                      Opacity="0.16"/>
-                </Setter.Value>
-            </Setter>
+            <Setter Property="Background" Value="{DynamicResource MpRoomRowBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="14,9,14,9"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#22304A"/>
-                    <Setter Property="Effect">
-                        <Setter.Value>
-                            <DropShadowEffect Color="#4F7FBE"
-                                              BlurRadius="11"
-                                              ShadowDepth="0"
-                                              Opacity="0.3"/>
-                        </Setter.Value>
-                    </Setter>
+                    <Setter Property="Background" Value="{DynamicResource MpRoomRowHover}"/>
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- Clickable, sortable column header. Transparent button that shows
+             the column label + a sort arrow (set in code-behind); brightens on
+             hover. Left-aligned so the label sits flush over its column. Zero
+             left padding keeps the ROOM label aligned with the 30px row inset. -->
+        <Style x:Key="MpColHeaderButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 
     <!-- x:Name="TabRootGrid" — host for MpAlertOverlay notice/confirm cards
          (the themed replacement for MessageBox on the join / create / mod
          error paths that fire from the tab, outside a lobby window). -->
-    <Grid x:Name="TabRootGrid" Background="{DynamicResource BgBase}">
+    <Grid x:Name="TabRootGrid" Background="{DynamicResource MpTabBackground}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>     <!-- Header (subtabs + status bar) -->
             <RowDefinition Height="*"/>        <!-- Active view -->
@@ -117,8 +122,8 @@
              expects to look for them.
              ============================================================ -->
         <Border Grid.Row="0"
-                Background="{DynamicResource BgPanel}"
-                BorderBrush="{DynamicResource BorderSubtle}"
+                Background="Transparent"
+                BorderBrush="{DynamicResource MpDivider}"
                 BorderThickness="0,0,0,1"
                 Padding="24,8,24,0">
             <Grid>
@@ -256,7 +261,7 @@
                         BorderThickness="1"
                         CornerRadius="{StaticResource RadiusMd}"
                         Margin="24,12,24,0"
-                        Padding="14,10">
+                        Padding="12,8">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>    <!-- title + primary button -->
@@ -428,7 +433,7 @@
                                 Click="SignOutLink_Click"
                                 Background="Transparent"
                                 BorderBrush="Transparent"
-                                Foreground="#7fb0ff"
+                                Foreground="{DynamicResource MpBlue}"
                                 FontSize="{StaticResource FontSizeBody}"
                                 Cursor="Hand"
                                 Padding="0"/>
@@ -455,22 +460,34 @@
                      the chat panel each live in their own card. -->
                 <Grid Grid.Row="2" Margin="24,2,24,16">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="3*"/>
                         <ColumnDefinition Width="16"/>     <!-- gutter -->
-                        <ColumnDefinition Width="380"/>    <!-- global chat -->
+                        <!-- Global chat ≈24-25%. Flexible: shrinks to 320, caps
+                             at 360 (so the rooms table takes ~75%). -->
+                        <ColumnDefinition Width="*" MinWidth="320" MaxWidth="360"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- ===================== LEFT: active rooms ===================== -->
-                    <Border Grid.Column="0"
-                            Background="{DynamicResource MpSurface}"
-                            BorderBrush="{DynamicResource MpDivider}"
+                    <!-- Wrapper: glow underlay (Effect, no children) BEHIND the
+                         real content card (no Effect → text stays ClearType-crisp). -->
+                    <Grid Grid.Column="0">
+                    <Border Background="{DynamicResource MpSurface}"
+                            CornerRadius="{StaticResource RadiusLg}"
+                            Margin="1">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#3A6BD0" BlurRadius="18" ShadowDepth="0" Opacity="0.28"/>
+                        </Border.Effect>
+                    </Border>
+                    <Border Background="{DynamicResource MpSurface}"
+                            BorderBrush="{DynamicResource MpCardBorder}"
                             BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusMd}">
+                            CornerRadius="{StaticResource RadiusLg}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>   <!-- section title -->
                                 <RowDefinition Height="Auto"/>   <!-- table header -->
                                 <RowDefinition Height="*"/>      <!-- rows / empty / error -->
+                                <RowDefinition Height="Auto"/>   <!-- footer: "Showing N rooms" -->
                             </Grid.RowDefinitions>
 
                             <!-- Section title: people glyph + "Salas activas"
@@ -496,51 +513,85 @@
                                            FontSize="{StaticResource FontSizeCaption}"/>
                             </Grid>
 
-                            <!-- Column headers for the card list. The cards
-                                 (BuildRoomCard) mirror these EXACT column defs,
-                                 and the 31px side margin matches each card's
-                                 content inset (ScrollViewer pad 16 + card border
-                                 1 + card padding 14) so the columns line up under
-                                 the labels. Keep the two grids in sync.
-                                 Columns are STAR-sized with Min/Max (not fixed
-                                 px): fixed widths summed ~810px and overflowed a
-                                 narrow window with horizontal scroll disabled, so
-                                 the right-most ACTION column (the Join/Re-enter
-                                 button) was clipped off-screen on small windows.
-                                 Stars always divide the available width so the
-                                 row never overflows; MaxWidth keeps the large-
-                                 window look identical to the old fixed widths,
-                                 MinWidth (esp. ACTION) guarantees the button stays
-                                 fully visible when space is tight. -->
-                            <Grid Grid.Row="1" Margin="31,2,31,8">
+                            <!-- Column headers for the room list. The rows
+                                 (BuildRoomCard) mirror these EXACT 7 column defs,
+                                 and the 30px side margin matches each row's
+                                 content inset (ScrollViewer pad 16 + row padding
+                                 14; the row has no side border) so the columns
+                                 line up under the labels. Keep the two grids in
+                                 sync (lockstep invariant). Columns 0-5 are
+                                 clickable/sortable buttons (label + sort arrow,
+                                 arrows set by UpdateSortArrows); ACTION (6) is a
+                                 plain centered label. Columns are STAR-sized with
+                                 Min/Max so the row never overflows a narrow
+                                 window (horizontal scroll is disabled); ROOM has
+                                 no MaxWidth so it absorbs slack (no empty band).
+                                 The right margin is bumped by the scrollbar width
+                                 at runtime (SyncHeaderScrollbarGutter) so the
+                                 header tracks the rows when the vbar shows. -->
+                            <Border Grid.Row="1"
+                                    Background="#0C1626"
+                                    BorderBrush="{DynamicResource MpDivider}"
+                                    BorderThickness="0,0,0,1">
+                            <Grid x:Name="RoomsHeaderStrip" Margin="30,7,30,7">
+                                <!-- Proportional, NO MaxWidth: on a wide window
+                                     every column grows together so the "air"
+                                     distributes evenly (symmetric) instead of
+                                     ROOM absorbing all slack. Low MinWidths so
+                                     the 7 columns still fit a small window with
+                                     the ACTION button visible. Keep IDENTICAL to
+                                     BuildRoomCard (lockstep). -->
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" MinWidth="120"/>
-                                    <ColumnDefinition Width="*" MinWidth="88" MaxWidth="150"/>
-                                    <ColumnDefinition Width="*" MinWidth="58" MaxWidth="90"/>
-                                    <ColumnDefinition Width="*" MinWidth="66" MaxWidth="100"/>
-                                    <ColumnDefinition Width="*" MinWidth="74" MaxWidth="120"/>
-                                    <ColumnDefinition Width="*" MinWidth="110" MaxWidth="150"/>
+                                    <ColumnDefinition Width="2.3*" MinWidth="120"/>
+                                    <ColumnDefinition Width="1.05*" MinWidth="58"/>
+                                    <ColumnDefinition Width="1.35*" MinWidth="66"/>
+                                    <ColumnDefinition Width="0.62*" MinWidth="46"/>
+                                    <ColumnDefinition Width="0.62*" MinWidth="48"/>
+                                    <ColumnDefinition Width="0.9*" MinWidth="60"/>
+                                    <ColumnDefinition Width="0.95*" MinWidth="100"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" x:Name="ColHeaderRoom"
-                                           Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Grid.Column="1" x:Name="ColHeaderHost"
-                                           Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Grid.Column="2" x:Name="ColHeaderPlayers"
-                                           Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Grid.Column="3" x:Name="ColHeaderPing"
-                                           Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Grid.Column="4" x:Name="ColHeaderStatus"
-                                           Foreground="{DynamicResource MpTableHeader}"
-                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Grid.Column="5" x:Name="ColHeaderAction"
+                                <Button Grid.Column="0" Style="{StaticResource MpColHeaderButton}" Tag="Room" Click="RoomHeader_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ColHeaderRoom" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="1" Style="{StaticResource MpColHeaderButton}" Tag="Mod" Click="RoomHeader_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ColHeaderMod" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="SortArrowMod" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Host" Click="RoomHeader_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ColHeaderHost" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="SortArrowHost" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="4" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ColHeaderPing" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="5" Style="{StaticResource MpColHeaderButton}" Tag="Status" Click="RoomHeader_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ColHeaderStatus" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="SortArrowStatus" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <TextBlock Grid.Column="6" x:Name="ColHeaderAction"
                                            Foreground="{DynamicResource MpTableHeader}"
                                            FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                                           HorizontalAlignment="Center"/>
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
+                            </Border>
 
                 <!-- Cards OR empty-state. ScrollViewer keeps it scannable
                      when many rooms exist; RoomsListPanel is a StackPanel so
@@ -641,16 +692,37 @@
                                    TextWrapping="Wrap"/>
                     </Border>
                 </Grid>
+
+                            <!-- Footer: room count (no pagination — the list
+                                 scrolls). Left inset matches the header/rows
+                                 (30px). -->
+                            <Border Grid.Row="3"
+                                    BorderBrush="{DynamicResource MpDivider}"
+                                    BorderThickness="0,1,0,0"
+                                    Padding="30,10,30,12">
+                                <TextBlock x:Name="RoomsShowingCount"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           VerticalAlignment="Center"/>
+                            </Border>
                         </Grid>
                     </Border>
+                    </Grid>
                     <!-- /LEFT card -->
 
                     <!-- ===================== RIGHT: global chat ===================== -->
-                    <Border Grid.Column="2"
-                            Background="{DynamicResource MpSurface}"
-                            BorderBrush="{DynamicResource MpDivider}"
+                    <Grid Grid.Column="2">
+                    <Border Background="{DynamicResource MpSurface}"
+                            CornerRadius="{StaticResource RadiusLg}"
+                            Margin="1">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#3A6BD0" BlurRadius="18" ShadowDepth="0" Opacity="0.28"/>
+                        </Border.Effect>
+                    </Border>
+                    <Border Background="{DynamicResource MpSurface}"
+                            BorderBrush="{DynamicResource MpCardBorder}"
                             BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusMd}">
+                            CornerRadius="{StaticResource RadiusLg}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>   <!-- title -->
@@ -772,6 +844,7 @@
                             </Border>
                         </Grid>
                     </Border>
+                    </Grid>
                     <!-- /RIGHT global chat -->
                 </Grid>
             </Grid>

@@ -111,6 +111,15 @@ public partial class MainWindow : Window
     // the 60/h budget. See RevalidateVisibleAssetsAsync.
     private DispatcherTimer? _catalogPollTimer;
     private int _pollTickCount;
+
+    // Background lobby-creation notifier: polls /lobbies (a process-wide, tab-
+    // independent DispatcherTimer) and fires a Windows notification when a NEW
+    // room appears for a mod the user has installed. `_knownLobbyIds` is the
+    // session's seen-set; the first tick seeds it silently (baseline) so
+    // existing rooms don't flood. See the plan / CLAUDE.md.
+    private DispatcherTimer? _lobbyNotifyTimer;
+    private readonly HashSet<string> _knownLobbyIds = new(StringComparer.Ordinal);
+    private bool _lobbyBaselineSeeded;
     private DateTime _lastFocusRevalidateUtc = DateTime.MinValue;
     private DateTime _lastCatalogRefreshUtc = DateTime.MinValue;
     private bool _revalidateInFlight;
@@ -613,6 +622,94 @@ public partial class MainWindow : Window
             };
             _catalogPollTimer.Start();
         }
+
+        // Background "new room created" notifier. Created unconditionally so the
+        // Settings toggle can enable it at runtime; the tick self-gates on the
+        // feature toggle + metered mode + sign-in. 90 s ⇒ ~960 /lobbies calls/day,
+        // well under the backend's 2000/day per-IP cap.
+        _lobbyNotifyTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(90) };
+        _lobbyNotifyTimer.Tick += async (_, _) => await PollNewRoomsAsync();
+        _lobbyNotifyTimer.Start();
+    }
+
+    /// <summary>
+    /// Background poll of the lobby list to surface a Windows notification when
+    /// ANY user creates a new room (for a mod the user has installed). Detection
+    /// lives ONLY here (not in the MP tab's render poll). Non-fatal.
+    /// </summary>
+    private async Task PollNewRoomsAsync()
+    {
+        // Respect the feature toggle and the "metered / stay silent" setting; only
+        // notify signed-in MP users (the audience who could actually join).
+        if (!_config.NotifyNewRooms || !_config.CheckUpdatesOnStartup) return;
+        if (_multiplayerSession.Status != Services.Multiplayer.MultiplayerSession.SessionStatus.SignedIn)
+            return;
+
+        try
+        {
+            var list = await _multiplayerSession.Api.ListLobbiesAsync();
+            var lobbies = list?.Lobbies;
+            if (lobbies == null) return;
+
+            // First successful poll: seed the baseline silently so existing rooms
+            // don't bell — only rooms created AFTER this fire a notification.
+            if (!_lobbyBaselineSeeded)
+            {
+                foreach (var l in lobbies)
+                    if (!string.IsNullOrEmpty(l.Id)) _knownLobbyIds.Add(l.Id);
+                _lobbyBaselineSeeded = true;
+                return;
+            }
+
+            var me = _multiplayerSession.CurrentUser;
+            foreach (var l in lobbies)
+            {
+                if (string.IsNullOrEmpty(l.Id) || _knownLobbyIds.Contains(l.Id)) continue;
+                _knownLobbyIds.Add(l.Id);
+
+                // Skip my own room, and rooms for a mod I don't have (can't join).
+                bool isMine = me != null && (
+                    (!string.IsNullOrEmpty(l.Host?.Id) && string.Equals(l.Host.Id, me.Id, StringComparison.Ordinal))
+                    || (!string.IsNullOrEmpty(l.Host?.DiscordUsername)
+                        && string.Equals(l.Host.DiscordUsername, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
+                if (isMine) continue;
+                if (!IsModInstalled(l.ModId)) continue;
+
+                var hostName = l.Host?.DisplayName;
+                if (string.IsNullOrWhiteSpace(hostName) || hostName == "-") hostName = l.Host?.DiscordUsername;
+                if (string.IsNullOrWhiteSpace(hostName) || hostName == "-") hostName = "—";
+                var title = string.IsNullOrWhiteSpace(l.Title) ? "—" : l.Title;
+
+                _notifications.RaiseRoomCreated(
+                    l.Id, l.ModId,
+                    Strings.Get("MpNotifRoomCreatedTitle"),
+                    Strings.Format("MpNotifRoomCreatedBody", title, hostName));
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"PollNewRooms failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Is the given mod id installed on this PC? Ported from
+    /// <c>MultiplayerTab.IsModInstalledLocally</c> so the background room-notifier
+    /// only notifies about rooms the user could actually join.
+    /// </summary>
+    private bool IsModInstalled(string modId)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(modId)) return false;
+            var state = _config.GetState(modId);
+            if (!string.IsNullOrEmpty(state.InstallPath)) return true;
+            var profile = ModRegistry.Find(modId);
+            if (profile is { IsStockGame: true })
+                return !string.IsNullOrEmpty(AoE3Detector.FindInstallRoot());
+            return false;
+        }
+        catch { return false; }
     }
 
     /// <summary>
@@ -1966,6 +2063,7 @@ public partial class MainWindow : Window
         NotificationKind.UpdateFinished => _bellGreen,
         NotificationKind.Installed => _bellGreen,
         NotificationKind.NewTranslation => _bellGold,
+        NotificationKind.RoomCreated => _bellBlue,
         _ => _bellSoftWhite,
     };
 
@@ -2084,6 +2182,15 @@ public partial class MainWindow : Window
         // Connectivity: informational only — nothing to navigate to.
         if (item.Kind == NotificationKind.Connectivity)
             return;
+
+        // New room created: open Multiplayer → Rooms (before the profile guard,
+        // since a room's mod need not resolve to a catalog profile here).
+        if (item.Kind == NotificationKind.RoomCreated)
+        {
+            try { SwitchTopTab(TopTab.Multiplayer); MultiplayerView.ShowRooms(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → rooms failed: {ex.Message}"); }
+            return;
+        }
 
         var profile = ModRegistry.Find(item.ModId);
         if (profile == null) return;
