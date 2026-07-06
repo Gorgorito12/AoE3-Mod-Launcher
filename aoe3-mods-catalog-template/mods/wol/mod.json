@@ -5,6 +5,7 @@
   "subtitle": "Launcher",
   "accentColor": "#c8102e",
   "author": "Wars of Liberty Team",
+  "maintainers": ["your-username"],
   "officialWebsite": "http://aoe3wol.com/",
   "description": {
     "en": "Total-conversion mod for AoE3, set in 19th-century colonial wars.",

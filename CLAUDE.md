@@ -2404,6 +2404,25 @@ the default, `InPlaceOverlay`), update mechanisms (`GitHubReleases` recommended,
 model enforced by the catalog repo's CI. The JSON schema lives at
 `aoe3-mods-catalog-template/schema/mod.schema.json`.
 
+**Per-mod OWNERSHIP gate in the catalog CI (governance, not consumed by the
+launcher).** The catalog's `classify_pr.py` now decides auto-merge by WHO opens
+the PR, not just WHAT changed: each `mod.json` carries a `maintainers` array of
+GitHub logins (read from the BASE manifest, so a PR can't self-authorize), plus a
+repo-wide `REPO_MAINTAINERS` set. An **owner** of a mod (its maintainer or a repo
+maintainer) auto-merges ANY change to THEIR folder — including `install`/`update`
+download URLs (a deliberate full-autonomy trust grant); a **non-owner** editing a
+mod's cosmetic/release fields is BLOCKED (`classify` exits 1 → the required check
+fails), and a non-owner's critical/unknown change goes to manual review. This
+closed the "anyone could change any mod's look & feel" hole. `maintainers` is a
+tier-3 field (no self-granting), the workflow pins the classifier to the base ref
+(a fork can't rewrite the gate), and it passes `PR_AUTHOR`. **The launcher IGNORES
+`maintainers`** (`ModCatalogManifest` deserializes with S.T.Json's default
+skip-unknown, so the field is safe to ship in live manifests). Keep the catalog
+repo (`aoe3-mods-catalog`) and this template's `classify_pr.py`/`auto-merge.yml`/
+`mod.schema.json` in sync (only `REPO_MAINTAINERS` differs — real `gorgorito12`
+vs template `your-username`). Owner-fork auto-merge additionally needs the repo's
+"send write tokens to fork PRs" toggle; the ownership BLOCK works regardless.
+
 ## Runtime conventions
 
 - **Runtime-generated files live in `%LocalAppData%\AoE3ModLauncher\`, NOT next
