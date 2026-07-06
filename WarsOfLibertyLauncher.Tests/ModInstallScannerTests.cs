@@ -139,6 +139,42 @@ public class ModInstallScannerTests : IDisposable
     }
 
     [Fact]
+    public void FindDeep_RespectsMaxDirsCap()
+    {
+        // 40 decoy dirs at depth 1 + a WoL install at depth 2. A low maxDirs cap
+        // is exhausted on the depth-1 decoys before BFS ever reaches depth 2, so
+        // the install is NOT found; a high cap finds it. Pins the conservative
+        // passive-scan cap (UpdateService.BroadFallbackScan passes a low one).
+        var root = NewTempDir();
+        for (int i = 0; i < 40; i++)
+            Directory.CreateDirectory(Path.Combine(root, $"decoy{i:D2}"));
+        var wol = Path.Combine(root, "decoy00", "WoL");
+        MakeWolInstall(wol);
+
+        var capped = ModInstallScanner.FindDeep(
+            root, WolLikeProfile(), maxDepth: 5, maxDirs: 5).ToList();
+        Assert.Empty(capped);
+
+        var full = ModInstallScanner.FindDeep(
+            root, WolLikeProfile(), maxDepth: 5, maxDirs: 10_000).ToList();
+        Assert.Contains(full, h => string.Equals(
+            Path.GetFullPath(h).TrimEnd('\\'), Path.GetFullPath(wol).TrimEnd('\\'),
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData(@"C:\", true)]
+    [InlineData(@"D:\", true)]
+    [InlineData(@"C:\Program Files", false)]
+    [InlineData(@"C:\Program Files\", false)]
+    [InlineData(@"D:\Games\WoL", false)]
+    [InlineData("", false)]
+    public void IsBareDriveRoot_ClassifiesCorrectly(string path, bool expected)
+    {
+        Assert.Equal(expected, ModInstallScanner.IsBareDriveRoot(path));
+    }
+
+    [Fact]
     public void FindDeep_SharedVisitedSet_SkipsOverlappingRoots()
     {
         // Scanning a parent then a child with a shared visited-set must not

@@ -995,9 +995,9 @@ public class UpdateService
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// True when the broad, whole-drive fallback scan is appropriate for this
-    /// profile: an isolated-folder mod (not the stock game) that declares a
-    /// content signal (probe/marker) so the scan can't false-positive.
+    /// True when the broad fallback scan is appropriate for this profile: an
+    /// isolated-folder mod (not the stock game) that declares a content signal
+    /// (probe/marker) so the scan can't false-positive.
     /// </summary>
     private bool ShouldBroadScan()
         => _profile.InstallType == ModInstallType.IsolatedFolder
@@ -1006,16 +1006,24 @@ public class UpdateService
                || !string.IsNullOrEmpty(_profile.InstallMarker));
 
     /// <summary>
-    /// Bounded, content-gated scan of curated likely-install roots across the
-    /// machine (Steam libraries, Program Files, drive roots) for an existing
+    /// Bounded, content-gated scan of curated likely-install roots for an existing
     /// install of this mod. Returns the first match (adopting + caching it), or
     /// null. Swallows everything except cancellation. Runs off the UI thread.
+    ///
+    /// CONSERVATIVE on purpose: this runs automatically (no user prompt), so it
+    /// does NOT enumerate whole drive roots (includeDriveRoots:false) and uses a
+    /// lower directory cap — whole-drive enumeration is a ransomware-adjacent
+    /// behavioural signal antivirus heuristics watch. It still covers
+    /// AoE3-adjacent roots + Steam <c>steamapps\common</c> + Program Files. A mod
+    /// sitting on a bare drive root (e.g. <c>D:\WoL</c>) is found via the MANUAL
+    /// "search for my install" button / folder picker instead.
     /// </summary>
     private string? BroadFallbackScan(CancellationToken ct)
     {
         try
         {
-            foreach (var hit in ModInstallScanner.FindBroad(_profile, maxDepth: 2, ct))
+            foreach (var hit in ModInstallScanner.FindBroad(
+                _profile, maxDepth: 2, ct, includeDriveRoots: false, maxDirs: 6000))
             {
                 if (IsProfileInstalled(hit) && LooksLikeRealModInstall(hit))
                 {

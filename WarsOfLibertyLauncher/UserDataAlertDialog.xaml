@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Datos de versión anterior detectados"
-        Width="600" SizeToContent="Height"
+        Width="640" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="NoResize"
@@ -22,6 +22,7 @@
         <TextBlock x:Name="HeaderText"
                    FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
+                   TextWrapping="Wrap"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="DescriptionText"
                    FontSize="{StaticResource FontSizeBody}"

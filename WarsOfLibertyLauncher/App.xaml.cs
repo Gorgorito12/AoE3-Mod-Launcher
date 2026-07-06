@@ -104,6 +104,32 @@ public partial class App : System.Windows.Application
         // BEFORE anything reads config or writes the debug log (MainWindow's ctor).
         Services.AppPaths.EnsureReady();
 
+        // Global crash net. Before this existed, an unhandled exception killed the
+        // process with ZERO in-app trace: no global handler wrote anything, the
+        // debug log is truncated each launch, and there was no persistent crash
+        // file — so a user-reported crash left nothing to diagnose. Now every
+        // unhandled exception is persisted to a crash-<ts>.log that survives the
+        // next launch (see DiagnosticLog.WriteCrash), and UI-thread throws are
+        // swallowed so the launcher stays usable instead of dying.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Services.DiagnosticLog.WriteCrash("DispatcherUnhandledException", args.Exception);
+            // Log-and-survive: most UI-thread exceptions leave the app usable, and
+            // staying up beats a hard crash for a consumer launcher.
+            args.Handled = true;
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            Services.DiagnosticLog.WriteCrash(
+                "AppDomain.UnhandledException" + (args.IsTerminating ? " (terminating)" : ""),
+                args.ExceptionObject as Exception);
+
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            Services.DiagnosticLog.WriteCrash("UnobservedTaskException", args.Exception);
+            args.SetObserved();
+        };
+
         EventManager.RegisterClassHandler(
             typeof(Window),
             FrameworkElement.LoadedEvent,

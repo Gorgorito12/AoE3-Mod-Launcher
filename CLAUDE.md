@@ -492,28 +492,41 @@ Two cheap gates beyond a green build:
   maxDepth, ct, visited?)` is a bounded BFS (skips system dirs, per-dir IO swallow, lazy
   yield, `MaxDirsScanned` cap, cancellable) that delegates each folder to
   `ModInstallProbe.LooksLikeModInstall` — so it can NEVER promote vanilla AoE3 to WoL.
-  `FindBroad`/`EnumerateLikelyRoots` scan a curated root set (every `AoE3Detector.FindAll`
-  ModRoot/GameFolder/parent, Steam-library `steamapps\common`, and per fixed drive the
-  Program Files variants + the drive root) with a shared visited-set. Four wired uses:
+  `FindBroad`/`EnumerateLikelyRoots(includeDriveRoots)` scan a curated root set (every
+  `AoE3Detector.FindAll` ModRoot/GameFolder/parent, Steam-library `steamapps\common`, and per
+  fixed drive the Program Files variants + — **only when `includeDriveRoots`** — the bare drive
+  root) with a shared visited-set. **The bare-drive-root crawl is gated because enumerating whole
+  drives (`C:\`, `D:\`…) is a ransomware-adjacent behavioural signal for AV heuristics; the
+  AUTOMATIC/passive scan opts OUT (`includeDriveRoots:false`) and the MANUAL/user-initiated search
+  keeps it in** (see uses 2 vs 4 below). `FindBroad`/`FindDeep` also take a `maxDirs` cap (default
+  `MaxDirsScanned`=20_000; the passive scan passes a lower 6_000). `IsBareDriveRoot` (internal,
+  unit-tested) classifies `C:\` vs `C:\Program Files\`. Four wired uses:
   (1) `IsolatedCandidates` pass-2 now scans the AoE3 root/`bin\` **2 levels** deep (parent
   still 1) via `FindDeep` — catches `Mods\WoL`, still bounded to the AoE3 tree, still
-  synchronous (cheap). (2) A **broad fallback** in `UpdateService.CheckAsync` runs
-  `FindBroad` **off the UI thread** (`Task.Run`) ONLY when the cheap resolution (cache /
-  registry / near-AoE3 scan) failed, gated to isolated-folder + non-stock + has-content-
-  signal, and **once per session per profile** (`s_broadScanAttempted`, static) so a
-  not-installed user pays it at most once. (3) The manual folder picker
+  synchronous (cheap). (2) A **broad fallback** in `UpdateService.CheckAsync`
+  (`BroadFallbackScan`) runs `FindBroad` **off the UI thread** (`Task.Run`) ONLY when the cheap
+  resolution (cache / registry / near-AoE3 scan) failed, gated to isolated-folder + non-stock +
+  has-content-signal, and **once per session per profile** (`s_broadScanAttempted`, static) so a
+  not-installed user pays it at most once. **This automatic scan is CONSERVATIVE**
+  (`includeDriveRoots:false`, `maxDirs:6000`): it does NOT crawl bare drive roots — it covers only
+  near-AoE3 + Steam `steamapps\common` + Program Files — to keep the unprompted background scan off
+  AV behavioural radar. A mod on a bare drive root (`D:\WoL`) is instead found via use (4) below. (3) The manual folder picker
   (`MainWindow.ResolvePickedModInstall`, used by "Change mod folder" + "Add existing
   folder") deep-scans the CHOSEN tree (maxDepth 4) after the shallow candidates miss —
   point at any reasonable ancestor and it's found. (4) A hero **"¿YA LO TENÉS?" / "ALREADY
   INSTALLED?"** button (`DashboardSearchInstallButton`, shown next to Install only when an
   isolated-folder non-stock mod reads not-installed) + the ModProperties → LOCAL FILES
   **"Search for my install…"** button both call `MainWindow.SearchInstallAsync` →
-  `FindBroad` off-thread, adopt the first hit (near-AoE3 roots first) + re-check. Also:
+  `FindBroad` off-thread with the **THOROUGH defaults** (`includeDriveRoots:true`, full cap — a
+  broad scan is expected when the user explicitly asks), adopt the first hit (near-AoE3 roots
+  first) + re-check. **This is the deliberate split: passive scan quiet, on-demand scan
+  exhaustive.** Also:
   `RegistryService.FindInstallPath` now reads **HKCU** as well as HKLM (per-user Inno
   installs). **Load-bearing:** the broad scan NEVER relaxes the marker (no
   false-positive-on-vanilla), NEVER runs on the UI thread, and is bounded (no full-disk
-  crawl). Pinned by `WarsOfLibertyLauncher.Tests/ModInstallScannerTests` (nested-found /
-  maxDepth / system-dir-skip / no-marker-rejected / multiple / shared-visited). **Known
+  crawl) — and the PASSIVE variant additionally skips bare-drive-root enumeration. Pinned by
+  `WarsOfLibertyLauncher.Tests/ModInstallScannerTests` (nested-found / maxDepth / system-dir-skip /
+  no-marker-rejected / multiple / shared-visited / **maxDirs-cap / IsBareDriveRoot**). **Known
   simplifications (not yet done):** the multi-install case adopts the first hit + tells the
   user to pick a specific one via "Change mod folder" (no chooser dialog yet); the whole
   search UI needs a manual Windows click-test (build/unit-tests don't exercise it).
@@ -2447,9 +2460,38 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   writing benign data to `%LocalAppData%` is the standard Windows pattern and
   doesn't touch the binary — unrelated to the single-file compression packer
   heuristic.
+- **Crash capture is a global net — an unhandled exception is PERSISTED, and
+  UI-thread throws are survived, not fatal.** `App.OnStartup` subscribes the three
+  global hooks (`DispatcherUnhandledException`, `AppDomain.CurrentDomain.UnhandledException`,
+  `TaskScheduler.UnobservedTaskException`) → each calls `DiagnosticLog.WriteCrash(source, ex)`,
+  which writes a timestamped **`crash-<yyyyMMdd-HHmmss>.log`** in `AppPaths.DataDir`
+  (full `ex.ToString()` + version/OS), mirrors a marker into the debug log, and
+  `Flush()`es. The dispatcher (UI-thread) handler sets **`e.Handled = true`
+  (log-and-survive)** — most UI-thread throws leave the app usable, so staying up
+  beats a hard crash; the AppDomain handler just logs (terminal), and the task one
+  `SetObserved()`s. **Why this exists:** before it, a crash left ZERO trace — no
+  global handler wrote anything, `launcher-debug.log` is truncated each launch, and
+  there was no crash file, so a user-reported crash was undiagnosable (a shared
+  diagnostic bundle showed a clean session because the crash was in a PRIOR,
+  overwritten run). Two coupled changes make a crash survive into the next bundle:
+  (1) `crash-*.log` is **persistent** (not rotated; capped at the newest 5 via
+  `PruneOldCrashLogs`) and (2) `DiagnosticLog.Reset()` now **rotates** the old
+  `launcher-debug.log` → `launcher-debug.prev.log` (one generation) BEFORE
+  truncating, so even a hard/native kill that never trips the .NET net leaves the
+  crashed run's full log behind. **`ExportBundle` needs no change** — both
+  `crash-*.log` and `launcher-debug.prev.log` end in `.log`, so its existing glob
+  picks them up. Load-bearing: `WriteCrash` must never throw (it runs while the app
+  may be dying — whole body try/caught). Specific hardening that pairs with the net:
+  the game-monitor `DispatcherTimer.Tick` (`MainWindow`, every 2 s on the UI thread
+  for the whole game session) and the `Process.Exited` handlers
+  (`GameLauncher.LaunchAndWatch`, thread-pool) are now individually try/caught +
+  the monitor disposes the `Process[]` it enumerates — the monitor tick was the
+  strongest crash vector (an unguarded throw there killed the launcher WHILE the
+  game ran, since the game is launched detached and survives).
 - **Logging:** call `DiagnosticLog.Write(...)` (or `WriteSection`). It's a
-  non-blocking queued logger that resets at each launch and writes
-  `launcher-debug.log`. Log messages are **always English** (they're for bug
+  non-blocking queued logger that **rotates** at each launch (`Reset()` moves the
+  prior `launcher-debug.log` to `launcher-debug.prev.log`, then truncates) and
+  writes `launcher-debug.log`. Log messages are **always English** (they're for bug
   reports), even though the UI is localized. **Bug-report bundle:**
   `DiagnosticLog.ExportBundle(zipPath)` zips the shareable diagnostics — every
   top-level `*.log` and `*snapshot*` file in `AppPaths.DataDir`, copied to a temp

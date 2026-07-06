@@ -53,12 +53,15 @@ public partial class GitHubLoginDialog : Window
         StatusText.Text = Strings.Get("MpSignInWaiting");
         OpenBrowserButton.Content = Strings.Get("MpSignInOpenBrowser");
         CopyButton.Content = Strings.Get("MpSignInCopy");
+        CopyLinkButton.Content = Strings.Get("MpSignInCopyLink");
+        BrowserHintText.Text = Strings.Get("MpSignInBrowserHint");
         CancelButton.Content = Strings.Get("MpSignInCancel");
         BuildPrivacyConsent();
 
         // Disable until /device returns; otherwise the user could open
-        // an empty browser tab.
+        // an empty browser tab or copy an empty link.
         OpenBrowserButton.IsEnabled = false;
+        CopyLinkButton.IsEnabled = false;
         CopyButton.IsEnabled = false;
 
         Loaded += OnLoaded;
@@ -107,6 +110,7 @@ public partial class GitHubLoginDialog : Window
             _start = await _session.StartSignInAsync(_cts.Token);
             VerificationUriText.Text = _start.VerificationUri;
             OpenBrowserButton.IsEnabled = true;
+            CopyLinkButton.IsEnabled = true;
 
             // Hide the "type this code" panel when the server didn't
             // give us one. Discord's flow doesn't have a user_code —
@@ -184,6 +188,35 @@ public partial class GitHubLoginDialog : Window
         if (_start == null) return;
         try { Clipboard.SetText(_start.UserCode); }
         catch (Exception ex) { DiagnosticLog.Write($"DiscordLoginDialog: clipboard: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Copies the FULL verification URL (not the ellipsized display text) so a
+    /// user can paste it into a browser they trust when "Open browser" opens an
+    /// unfamiliar one. Briefly flashes "Copied ✓" as confirmation for less
+    /// technical users, then restores the label.
+    /// </summary>
+    private void CopyLinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_start == null) return;
+        try { Clipboard.SetText(_start.VerificationUri); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"DiscordLoginDialog: clipboard (link): {ex.Message}");
+            return;
+        }
+
+        CopyLinkButton.Content = Strings.Get("MpSignInCopyLinkDone");
+        var timer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(1400),
+        };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            CopyLinkButton.Content = Strings.Get("MpSignInCopyLink");
+        };
+        timer.Start();
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)

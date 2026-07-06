@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,6 +23,10 @@ public static class DiagnosticLog
 {
     private static readonly string LogPath = AppPaths.LogFile;
 
+    /// <summary>Previous session's rotated log — see <see cref="Reset"/>.</summary>
+    private static readonly string PrevLogPath =
+        Path.Combine(AppPaths.DataDir, "launcher-debug.prev.log");
+
     private static readonly object FileLock = new();
     private static readonly ConcurrentQueue<string> Queue = new();
     private static readonly SemaphoreSlim Signal = new(0);
@@ -33,6 +38,22 @@ public static class DiagnosticLog
         {
             lock (FileLock)
             {
+                // Preserve the previous session's log as launcher-debug.prev.log
+                // BEFORE truncating, so a crash that killed the last run (even one
+                // that didn't trip the in-app crash net, e.g. a native/hard kill)
+                // still leaves its full log behind for the next diagnostic bundle.
+                // One generation only — overwritten each launch. ExportBundle picks
+                // it up automatically (it ends in .log).
+                try
+                {
+                    if (File.Exists(LogPath))
+                    {
+                        if (File.Exists(PrevLogPath)) File.Delete(PrevLogPath);
+                        File.Move(LogPath, PrevLogPath);
+                    }
+                }
+                catch { /* if rotation fails we still truncate below */ }
+
                 File.WriteAllText(LogPath,
                     $"=== Wars of Liberty Launcher debug log ===\n" +
                     $"Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n\n");
@@ -42,6 +63,72 @@ public static class DiagnosticLog
         {
             // If we can't even create the log, oh well — don't crash the app.
         }
+    }
+
+    /// <summary>
+    /// Persists an unhandled exception to a timestamped <c>crash-&lt;…&gt;.log</c> in
+    /// the data dir. Unlike <see cref="LogPath"/> (which <see cref="Reset"/> rotates
+    /// each launch), a crash log SURVIVES the next launch so the reporter's
+    /// diagnostic bundle actually contains the crash. Also mirrors a one-line marker
+    /// into the debug log and flushes. Called from the global exception hooks in
+    /// <c>App</c>. Best-effort — must never throw (it runs while the app may be dying).
+    /// </summary>
+    public static void WriteCrash(string source, Exception? ex)
+    {
+        try
+        {
+            var now = DateTime.Now;
+            var body =
+                "=== Wars of Liberty Launcher CRASH ===\n" +
+                $"Time:    {now:yyyy-MM-dd HH:mm:ss}\n" +
+                $"Source:  {source}\n" +
+                $"Version: {VersionLine()}\n" +
+                $"OS:      {Environment.OSVersion} / .NET {Environment.Version}\n\n" +
+                (ex?.ToString() ?? "(no exception object)") + "\n";
+
+            var path = Path.Combine(AppPaths.DataDir, $"crash-{now:yyyyMMdd-HHmmss}.log");
+            lock (FileLock)
+            {
+                try { File.WriteAllText(path, body); } catch { /* best-effort */ }
+            }
+
+            Write($"UNHANDLED EXCEPTION ({source}): " +
+                  $"{ex?.GetType().Name}: {ex?.Message} -> {Path.GetFileName(path)}");
+            Flush();
+            PruneOldCrashLogs();
+        }
+        catch { /* never let crash logging itself crash */ }
+    }
+
+    private static string VersionLine()
+    {
+        try
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion;
+            return string.IsNullOrWhiteSpace(info)
+                ? asm.GetName().Version?.ToString() ?? "?"
+                : info;
+        }
+        catch { return "?"; }
+    }
+
+    /// <summary>Keep only the newest <paramref name="keep"/> crash logs.</summary>
+    private static void PruneOldCrashLogs(int keep = 5)
+    {
+        try
+        {
+            var files = Directory.GetFiles(AppPaths.DataDir, "crash-*.log");
+            if (files.Length <= keep) return;
+            Array.Sort(files,
+                (a, b) => File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a)));
+            for (int i = keep; i < files.Length; i++)
+            {
+                try { File.Delete(files[i]); } catch { /* best-effort */ }
+            }
+        }
+        catch { /* best-effort */ }
     }
 
     public static void Write(string message)

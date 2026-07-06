@@ -5791,6 +5791,11 @@ public partial class MainWindow : Window
         System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
         try
         {
+            // User-initiated: keep the THOROUGH scan (default includeDriveRoots:true
+            // + full cap) — a broad scan is expected when the user explicitly asks
+            // to find their install. The AUTOMATIC startup scan
+            // (UpdateService.BroadFallbackScan) is the conservative one that skips
+            // whole-drive enumeration.
             hits = await Task.Run(() =>
                 ModInstallScanner.FindBroad(profile, maxDepth: 3)
                     .Where(p => LooksLikeModInstall(p, profile))
@@ -9152,10 +9157,25 @@ public partial class MainWindow : Window
         };
         _gameMonitorTimer.Tick += (_, _) =>
         {
-            var processes = Process.GetProcessesByName(GameProcessName());
-            if (processes.Length == 0)
+            // Guarded: this fires on the UI thread every 2 s for the whole game
+            // session. Process.GetProcessesByName can throw transiently
+            // (InvalidOperationException/Win32Exception) and OnGameExited touches
+            // UI — an unhandled throw here would kill the launcher WHILE the game
+            // runs (the game is launched detached, so it survives). Dispose the
+            // returned Process handles too, or they leak over a long session.
+            try
             {
-                OnGameExited();
+                var processes = Process.GetProcessesByName(GameProcessName());
+                bool running = processes.Length > 0;
+                foreach (var p in processes) p.Dispose();
+                if (!running)
+                {
+                    OnGameExited();
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Game monitor tick failed (ignored): {ex.Message}");
             }
         };
         _gameMonitorTimer.Start();

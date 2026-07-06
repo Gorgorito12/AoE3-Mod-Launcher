@@ -1769,8 +1769,8 @@ public static class Strings
         ["MpSignInDialogTitle"] = new() { [LangEn] = "Discord sign-in", [LangEs] = "Inicio de sesión Discord" },
         ["MpSignInStep1"] = new()
         {
-            [LangEn] = "Open this URL in your browser and click Authorize:",
-            [LangEs] = "Abre esta URL en tu navegador y haz clic en Autorizar:",
+            [LangEn] = "Sign in with Discord: open this link in your browser (or copy it) and click Authorize.",
+            [LangEs] = "Inicia sesión con Discord: abre este enlace en tu navegador (o cópialo) y haz clic en Autorizar.",
         },
         ["MpSignInStep2"] = new()
         {
@@ -1783,11 +1783,18 @@ public static class Strings
         },
         ["MpSignInWaiting"] = new()
         {
-            [LangEn] = "Waiting for you to authorize in the browser…",
-            [LangEs] = "Esperando tu autorización en el navegador…",
+            [LangEn] = "Waiting for you to authorize in the browser… this window will continue automatically.",
+            [LangEs] = "Esperando tu autorización en el navegador… esta ventana continuará automáticamente.",
         },
         ["MpSignInOpenBrowser"] = new() { [LangEn] = "Open browser", [LangEs] = "Abrir navegador" },
         ["MpSignInCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
+        ["MpSignInCopyLink"] = new() { [LangEn] = "Copy link", [LangEs] = "Copiar enlace" },
+        ["MpSignInCopyLinkDone"] = new() { [LangEn] = "Copied ✓", [LangEs] = "¡Copiado! ✓" },
+        ["MpSignInBrowserHint"] = new()
+        {
+            [LangEn] = "If a browser you don't recognize opens, copy the link and paste it into a browser you trust (Chrome, Edge, Firefox).",
+            [LangEs] = "Si se abre un navegador que no reconoces, copia el enlace y pégalo en un navegador de confianza (Chrome, Edge, Firefox).",
+        },
         ["MpSignInCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
         ["MpSignInPrivacyPrefix"] = new()
         {
@@ -3998,7 +4005,7 @@ public static class Strings
         ["DlgUserDataAlertDescription"] = new()
         {
             [LangEn] = "We're about to install {0}. If you previously played a " +
-                       "newer version, your saves and metropolises may not be " +
+                       "newer version, your saves and home cities may not be " +
                        "compatible — the game can hang on the loading screen " +
                        "until you patch back to the latest version.",
             [LangEs] = "Vamos a instalar {0}. Si jugaste antes una versión más " +
@@ -4014,7 +4021,7 @@ public static class Strings
         ["DlgUserDataAlertSavegameCount"] = new()
         {
             [LangEn] = "⚠ Found {0} file(s) in Savegame\\ — these may include " +
-                       "metropolises in a newer format the older binary can't read.",
+                       "home cities in a newer format the older binary can't read.",
             [LangEs] = "⚠ Hay {0} archivo(s) en Savegame\\ — pueden incluir " +
                        "metrópolis en formato nuevo que el binario viejo no puede leer.",
         },
@@ -4703,7 +4710,7 @@ public static class Strings
         },
         ["TooltipMenuOpenUserDataFolder"] = new()
         {
-            [LangEn] = "View your savegames, custom metropolises and game settings",
+            [LangEn] = "View your savegames, custom home cities and game settings",
             [LangEs] = "Ver tus partidas guardadas, metrópolis y configuración del juego",
         },
         ["TooltipMenuCreateBackupNow"] = new()

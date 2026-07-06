@@ -277,6 +277,19 @@ public static class GameLauncher
         DiagnosticLog.Write(
             $"Launching game (watched): {exePath} (profile '{profile.Id}') args='{arguments}'");
 
+        // Wrap the caller's Exited handler so a throw inside it can't escape. This
+        // fires on a thread-pool thread (Process.Exited), so an unhandled throw
+        // there is a background crash — guard it at the single point where both
+        // launch paths attach it.
+        EventHandler safeOnExited = (s, ev) =>
+        {
+            try { onExited(s, ev); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Game Exited handler failed (ignored): {ex.Message}");
+            }
+        };
+
         // Launch DETACHED (re-parented under explorer.exe) so a forced Task Manager
         // "End task" on the launcher doesn't cascade-kill the game mid-match. We still
         // get the Exited callback (and a Process handle for the cancel/leave
@@ -291,7 +304,7 @@ public static class GameLauncher
             {
                 var watched = Process.GetProcessById(pid);
                 watched.EnableRaisingEvents = true;
-                watched.Exited += onExited;
+                watched.Exited += safeOnExited;
                 DiagnosticLog.Write($"Game launched detached + watched (pid {pid}).");
                 return watched;
             }
@@ -324,7 +337,7 @@ public static class GameLauncher
             StartInfo = startInfo,
             EnableRaisingEvents = true,
         };
-        process.Exited += onExited;
+        process.Exited += safeOnExited;
         if (!process.Start()) return null;
         return process;
     }

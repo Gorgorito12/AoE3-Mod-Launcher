@@ -55,7 +55,8 @@ public static class ModInstallScanner
         ModProfile profile,
         int maxDepth,
         CancellationToken ct = default,
-        HashSet<string>? visited = null)
+        HashSet<string>? visited = null,
+        int maxDirs = MaxDirsScanned)
     {
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             yield break;
@@ -73,7 +74,7 @@ public static class ModInstallScanner
             var (dir, depth) = queue.Dequeue();
 
             if (!seen.Add(NormalizeDir(dir))) continue;
-            if (++scanned > MaxDirsScanned) yield break;
+            if (++scanned > maxDirs) yield break;
 
             if (ModInstallProbe.LooksLikeModInstall(dir, profile))
                 yield return dir;
@@ -99,13 +100,15 @@ public static class ModInstallScanner
     public static IEnumerable<string> FindBroad(
         ModProfile profile,
         int maxDepth,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool includeDriveRoots = true,
+        int maxDirs = MaxDirsScanned)
     {
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var root in EnumerateLikelyRoots())
+        foreach (var root in EnumerateLikelyRoots(includeDriveRoots))
         {
             ct.ThrowIfCancellationRequested();
-            foreach (var hit in FindDeep(root, profile, maxDepth, ct, visited))
+            foreach (var hit in FindDeep(root, profile, maxDepth, ct, visited, maxDirs))
                 yield return hit;
         }
     }
@@ -116,7 +119,7 @@ public static class ModInstallScanner
     /// enumeration. Cheap to build (no deep IO); the actual walking is the
     /// caller's bounded <see cref="FindDeep"/>.
     /// </summary>
-    public static IEnumerable<string> EnumerateLikelyRoots()
+    public static IEnumerable<string> EnumerateLikelyRoots(bool includeDriveRoots = true)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -140,16 +143,42 @@ public static class ModInstallScanner
             if (Fresh(common)) yield return common!;
         }
 
-        // 3) Per fixed drive: Program Files (x86/64) and the drive root itself
-        //    (the drive root is walked only to the caller's shallow maxDepth, which
-        //    still catches D:\WoL and D:\Games\WoL without crawling the whole disk).
+        // 3) Per fixed drive: Program Files (x86/64) and — only when
+        //    includeDriveRoots — the bare drive root itself. Enumerating whole
+        //    drive roots (C:\, D:\…) is a ransomware-adjacent behavioural signal
+        //    for antivirus heuristics, so the AUTOMATIC/passive scan opts out
+        //    (includeDriveRoots:false) and covers only AoE3-adjacent + Steam +
+        //    Program Files; the MANUAL, user-initiated search keeps drive roots
+        //    (a broad scan is expected when the user clicks "find my install").
         foreach (var probeRoot in SafeList(() => AoE3Detector.EnumerateProbeRoots().ToList()))
         {
+            if (!includeDriveRoots && IsBareDriveRoot(probeRoot)) continue;
             if (Fresh(probeRoot)) yield return probeRoot;
         }
     }
 
     // ---------- helpers ----------
+
+    /// <summary>
+    /// True if <paramref name="p"/> is a bare drive root (e.g. <c>C:\</c>), as
+    /// opposed to a subfolder like <c>C:\Program Files\</c>. Used to keep the
+    /// passive scan off whole-drive enumeration.
+    /// </summary>
+    internal static bool IsBareDriveRoot(string p)
+    {
+        if (string.IsNullOrWhiteSpace(p)) return false;
+        try
+        {
+            var full = Path.GetFullPath(p);
+            var root = Path.GetPathRoot(full);
+            return !string.IsNullOrEmpty(root)
+                && string.Equals(
+                    Path.TrimEndingDirectorySeparator(full),
+                    Path.TrimEndingDirectorySeparator(root),
+                    StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
 
     private static IEnumerable<string> SafeEnumerateDirectories(string dir)
     {
