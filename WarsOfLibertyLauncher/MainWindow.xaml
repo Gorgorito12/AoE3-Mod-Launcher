@@ -1166,6 +1166,29 @@
                                            FontWeight="SemiBold"/>
                             </StackPanel>
                         </Button>
+                        <!-- Shown only when an isolated-folder mod (WoL) reads as
+                             NOT installed: lets a user who already has it point the
+                             launcher at it instead of re-downloading via Install.
+                             Collapsed by default; ApplyCheckResult toggles it. -->
+                        <Button x:Name="DashboardSearchInstallButton"
+                                Style="{StaticResource DashboardSecondaryButton}"
+                                Margin="14,0,0,0"
+                                Padding="22,0"
+                                Visibility="Collapsed"
+                                Click="DashboardSearchInstallButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE721;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="18"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock x:Name="DashboardSearchInstallButtonText"
+                                           Margin="12,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontFamily="{DynamicResource DisplayFont}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
 
                     <!-- Progress strip. Always visible; the label flips

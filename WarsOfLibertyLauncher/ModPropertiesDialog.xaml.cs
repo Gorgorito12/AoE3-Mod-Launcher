@@ -52,6 +52,7 @@ public partial class ModPropertiesDialog : Window
     private readonly Func<string, System.Threading.Tasks.Task>? _switchInstall;
     private readonly Action<string>? _removeInstall;
     private readonly Func<bool>? _addExistingFolder;
+    private readonly Action? _searchInstall;
 
     // New callbacks (8) folded in from the SETTINGS popup. Each one
     // wraps a RaiseMenuClick on the legacy ActionPanelControl menu
@@ -113,7 +114,8 @@ public partial class ModPropertiesDialog : Window
         Action? installAnotherCopy = null,
         Func<string, Task>? switchInstall = null,
         Action<string>? removeInstall = null,
-        Func<bool>? addExistingFolder = null)
+        Func<bool>? addExistingFolder = null,
+        Action? searchInstall = null)
     {
         _profile = profile;
         _service = service;
@@ -141,6 +143,7 @@ public partial class ModPropertiesDialog : Window
         _switchInstall = switchInstall;
         _removeInstall = removeInstall;
         _addExistingFolder = addExistingFolder;
+        _searchInstall = searchInstall;
 
         InitializeComponent();
         ApplyStrings();
@@ -196,6 +199,11 @@ public partial class ModPropertiesDialog : Window
         OpenAoE3FolderBtn.Content = Strings.Get("ModPropOpenAoE3Folder");
         ChangeModFolderBtn.Content = Strings.Get("ModPropChangeModFolder");
         ChangeAoE3FolderBtn.Content = Strings.Get("ModPropChangeAoE3Folder");
+        SearchInstallBtn.Content = Strings.Get("SearchInstallButton");
+        // The broad "find my install" search is meaningless for the stock game
+        // (the launcher never installs it) — hide it there.
+        SearchInstallBtn.Visibility = _profile.IsStockGame
+            ? Visibility.Collapsed : Visibility.Visible;
         LblManageInstalls.Text = Strings.Get("ManageInstallsHeader");
         LblManageInstallsDesc.Text = Strings.Get("ManageInstallsDesc");
         AddExistingFolderBtn.Content = Strings.Get("AddExistingFolder");
@@ -1379,6 +1387,14 @@ public partial class ModPropertiesDialog : Window
         // refreshes the list in place so the new copy appears immediately.
         if (_addExistingFolder?.Invoke() == true)
             LoadManageInstalls();
+    }
+
+    private void SearchInstallBtn_Click(object sender, RoutedEventArgs e)
+    {
+        // The broad search + adopt runs on the main window (it shows a wait
+        // cursor and re-checks there), so close like Verify/Repair to uncover it.
+        Close();
+        _searchInstall?.Invoke();
     }
 
     private void ViewLogsBtn_Click(object sender, RoutedEventArgs e)

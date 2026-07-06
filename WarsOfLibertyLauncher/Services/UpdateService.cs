@@ -306,6 +306,26 @@ public class UpdateService
         bool valid = !string.IsNullOrEmpty(InstallPath) && IsProfileInstalled(InstallPath);
         DiagnosticLog.Write($"Install path detected: '{InstallPath}' (valid: {valid})");
 
+        // Broad fallback (OFF the UI thread): when the cheap resolution above
+        // (cache, registry, near-AoE3 scan) found nothing, the mod may be
+        // installed somewhere unrelated to a detected AoE3 install — another
+        // drive, an arbitrary folder, or AoE3 itself wasn't detected. This scan
+        // is expensive, so it runs at most ONCE per session per profile
+        // (s_broadScanAttempted), only for isolated-folder mods with a content
+        // marker (so it can't false-positive on vanilla AoE3), and never for the
+        // stock game. The on-demand "search" button bypasses this guard.
+        if (!valid && ShouldBroadScan() && s_broadScanAttempted.Add(_profile.Id))
+        {
+            status?.Report(Strings.Format("StatusDetectingInstall", _profile.DisplayName));
+            var found = await Task.Run(() => BroadFallbackScan(ct), ct);
+            if (!string.IsNullOrEmpty(found))
+            {
+                InstallPath = found;
+                valid = IsProfileInstalled(InstallPath);
+                DiagnosticLog.Write($"Broad fallback resolved install: '{InstallPath}' (valid: {valid})");
+            }
+        }
+
         try
         {
             // "Online" is reported by the actual network calls (UpdateInfoService for
@@ -964,6 +984,62 @@ public class UpdateService
     }
 
     /// <summary>
+    /// Profiles for which the automatic broad fallback scan has already run this
+    /// session, keyed by profile id. Session-lived + static so switching the
+    /// active mod (which builds a fresh <see cref="UpdateService"/>) doesn't
+    /// re-trigger the expensive scan; the on-demand "search" button scans fresh
+    /// regardless. Never cleared — a genuinely-new install is picked up by the
+    /// button or the folder picker.
+    /// </summary>
+    private static readonly HashSet<string> s_broadScanAttempted =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when the broad, whole-drive fallback scan is appropriate for this
+    /// profile: an isolated-folder mod (not the stock game) that declares a
+    /// content signal (probe/marker) so the scan can't false-positive.
+    /// </summary>
+    private bool ShouldBroadScan()
+        => _profile.InstallType == ModInstallType.IsolatedFolder
+           && !_profile.IsStockGame
+           && (!string.IsNullOrEmpty(_profile.InstallProbeFile)
+               || !string.IsNullOrEmpty(_profile.InstallMarker));
+
+    /// <summary>
+    /// Bounded, content-gated scan of curated likely-install roots across the
+    /// machine (Steam libraries, Program Files, drive roots) for an existing
+    /// install of this mod. Returns the first match (adopting + caching it), or
+    /// null. Swallows everything except cancellation. Runs off the UI thread.
+    /// </summary>
+    private string? BroadFallbackScan(CancellationToken ct)
+    {
+        try
+        {
+            foreach (var hit in ModInstallScanner.FindBroad(_profile, maxDepth: 2, ct))
+            {
+                if (IsProfileInstalled(hit) && LooksLikeRealModInstall(hit))
+                {
+                    DiagnosticLog.Write($"Found '{_profile.Id}' via broad fallback scan: {hit}");
+                    var state = _config.GetState(_profile.Id);
+                    state.InstallPath = hit;
+                    try { _config.Save(); }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLog.Write($"Failed to persist broad-scan install path: {ex.Message}");
+                    }
+                    return hit.TrimEnd('\\', '/');
+                }
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Broad fallback scan for '{_profile.Id}' failed: {ex.Message}");
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Probe locations for an isolated-folder mod (e.g. WoL). Two passes:
     /// first the fast happy-path guesses where the folder is named after the
     /// mod (<c>profile.DisplayName</c> or the leaf of
@@ -999,26 +1075,28 @@ public class UpdateService
 
         // Pass 2 — content scan, so the mod is found in a folder with ANY
         // name. Needs a content signal to match against; without one, every
-        // subfolder would match.
+        // subfolder would match. Scans the AoE3 root and its bin\ TWO levels
+        // deep (catches a nested "…\Age Of Empires 3\Mods\WoL"), and the
+        // parent-that-holds-AoE3-as-sibling one level deep. A shared visited-set
+        // keeps overlapping trees (bin\ is under the root) from being walked
+        // twice. Still bounded to the AoE3 tree — the broad, whole-drive scan is
+        // a separate off-thread fallback in CheckAsync.
         bool hasContentSignal = !string.IsNullOrEmpty(_profile.InstallProbeFile)
             || !string.IsNullOrEmpty(_profile.InstallMarker);
         if (!hasContentSignal)
             yield break;
 
-        foreach (var baseDir in new[] { install.ModRoot, install.GameFolder, parent })
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (baseDir, depth) in new[]
+                 {
+                     (install.ModRoot, 2),
+                     (install.GameFolder, 2),
+                     (parent, 1),
+                 })
         {
-            if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(baseDir))
-                continue;
-
-            string[] subdirs;
-            try { subdirs = Directory.GetDirectories(baseDir); }
-            catch { continue; } // permission / IO — skip this base quietly
-
-            foreach (var sub in subdirs)
-            {
-                if (ModInstallProbe.LooksLikeModInstall(sub, _profile))
-                    yield return sub;
-            }
+            if (string.IsNullOrEmpty(baseDir)) continue;
+            foreach (var hit in ModInstallScanner.FindDeep(baseDir!, _profile, depth, default, visited))
+                yield return hit;
         }
     }
 

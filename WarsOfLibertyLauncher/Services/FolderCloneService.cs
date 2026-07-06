@@ -205,6 +205,25 @@ public class FolderCloneService
     }
 
     /// <summary>
+    /// Pre-flight SIZE: total bytes a <see cref="CloneAsync"/> with the SAME args
+    /// would copy, WITHOUT copying anything. Identical enumeration + exclusion set
+    /// as <see cref="CountCloneableFiles"/> / the real clone (so it respects every
+    /// excluded subtree), summing <c>FileInfo.Length</c> instead of counting — the
+    /// authoritative size of the AoE3 clone, used to estimate the disk space an
+    /// install needs before it starts. Returns 0 for a missing source.
+    /// </summary>
+    public long CountCloneableBytes(
+        string sourceFolder,
+        string destFolder,
+        IEnumerable<string>? extraExcludedSubtrees = null,
+        CancellationToken ct = default)
+    {
+        if (!Directory.Exists(sourceFolder)) return 0;
+        var excluded = BuildExcludedSubtrees(sourceFolder, destFolder, extraExcludedSubtrees);
+        return EnumerateFiles(sourceFolder, excluded, ct).Sum(f => f.Length);
+    }
+
+    /// <summary>
     /// Builds the clone exclusion set: destFolder (no self-recursion) + caller-
     /// supplied sibling subtrees + the hard AlwaysExclude list + auto-detected
     /// launcher-managed mod clones ("*-manifest.json" probe). Shared by

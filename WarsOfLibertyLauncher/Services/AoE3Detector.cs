@@ -218,6 +218,14 @@ public static class AoE3Detector
     /// </summary>
     internal static IEnumerable<string> EnumerateProbeRoots() => EnumerateFixedDriveRoots();
 
+    /// <summary>
+    /// Public-facing wrapper around the Steam-library enumeration FindAll() uses.
+    /// Lets the broad mod-install fallback scan (<see cref="ModInstallScanner"/>)
+    /// reach into <c>steamapps\common</c> of every Steam library the user has,
+    /// so a mod sitting next to another game on any Steam drive is found.
+    /// </summary>
+    internal static IEnumerable<string> EnumerateSteamLibraryRoots() => EnumerateSteamLibraries();
+
     private static IEnumerable<string> EnumerateFixedDriveRoots()
     {
         DriveInfo[] drives;

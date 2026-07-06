@@ -1,7 +1,10 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Services;
 
 namespace WarsOfLibertyLauncher;
 
@@ -28,6 +31,15 @@ public partial class InstallFolderDialog : Window
     private string? _aoe3SourceLabel;
     private readonly string _modDisplayName;
 
+    // Disk-space estimate state. _cloneBytes = -1 means "not measured yet"; it's
+    // filled off-thread by measuring the AoE3 source we'd clone. _spaceWarning is
+    // set by UpdateDiskSpace when free space is below the conservative estimate —
+    // it drives the amber warning line and the confirm-to-proceed on OK.
+    private long _cloneBytes = -1;
+    private string? _measuredSource;
+    private bool _spaceWarning;
+    private Brush? _diskSpaceDefaultBrush;
+
     /// <param name="modDisplayName">
     /// Display name of the mod being installed (e.g. "Wars of Liberty",
     /// "Improvement Mod"). Templated into the dialog's title and the
@@ -37,6 +49,7 @@ public partial class InstallFolderDialog : Window
     public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel, string modDisplayName)
     {
         InitializeComponent();
+        _diskSpaceDefaultBrush = DiskSpaceText.Foreground;
         Aoe3SourcePath = aoe3Path;
         _aoe3SourceLabel = aoe3SourceLabel;
         _modDisplayName = string.IsNullOrEmpty(modDisplayName) ? "the mod" : modDisplayName;
@@ -129,6 +142,10 @@ public partial class InstallFolderDialog : Window
         // Setting / clearing AoE3 flips whether the install can proceed,
         // so re-run validation to enable/disable the OK button.
         ValidateInputs();
+
+        // The clone size depends on the AoE3 source — (re)measure it off-thread
+        // whenever the source changes, then the disk-space warning updates.
+        MeasureCloneSizeAsync();
     }
 
     private void FolderTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -215,22 +232,123 @@ public partial class InstallFolderDialog : Window
         }
     }
 
+    /// <summary>
+    /// Measure the AoE3 clone size off the UI thread (it enumerates the whole
+    /// source tree), then refresh the disk-space line. No-op / clears when there's
+    /// no source; cached per source so re-opening the same source doesn't re-scan.
+    /// Fire-and-forget UI handler.
+    /// </summary>
+    private async void MeasureCloneSizeAsync()
+    {
+        var source = Aoe3SourcePath;
+        var dest = FolderTextBox.Text.Trim();
+
+        if (string.IsNullOrEmpty(source))
+        {
+            _cloneBytes = -1;
+            _measuredSource = null;
+            UpdateDiskSpace();
+            return;
+        }
+
+        // Already measured this exact source — just recompute against current free space.
+        if (_cloneBytes >= 0
+            && string.Equals(source, _measuredSource, StringComparison.OrdinalIgnoreCase))
+        {
+            UpdateDiskSpace();
+            return;
+        }
+
+        // Transient "calculating" state while we enumerate.
+        _cloneBytes = -1;
+        _spaceWarning = false;
+        DiskSpaceText.Foreground = _diskSpaceDefaultBrush;
+        DiskSpaceText.Text = Strings.Get("DiskSpaceCalculating");
+
+        try
+        {
+            var svc = new FolderCloneService();
+            long bytes = await Task.Run(() => svc.CountCloneableBytes(source!, dest));
+            _cloneBytes = bytes;
+            _measuredSource = source;
+        }
+        catch
+        {
+            _cloneBytes = -1; // couldn't measure → no warning, just show free space
+        }
+
+        UpdateDiskSpace();
+    }
+
     private void UpdateDiskSpace()
+    {
+        var dest = FolderTextBox.Text.Trim();
+        long free = DiskSpaceService.SafeFreeSpace(dest);
+        var root = SafeRoot(dest);
+
+        // Until the clone is measured (or with no source), just show free space —
+        // never warn on an unknown requirement.
+        if (_cloneBytes < 0)
+        {
+            _spaceWarning = false;
+            DiskSpaceText.Foreground = _diskSpaceDefaultBrush;
+            DiskSpaceText.Text = (free >= 0 && !string.IsNullOrEmpty(root))
+                ? Strings.Format("InstallDiskSpace", DiskSpaceService.FormatBytes(free), root)
+                : "";
+            return;
+        }
+
+        long required = DiskSpaceService.EstimateInstallRequirement(_cloneBytes);
+        long freeTemp = DiskSpaceService.SafeFreeSpace(Path.GetTempPath());
+
+        bool destShort = DiskSpaceService.IsShort(free, required);
+        // If %TEMP% is on a DIFFERENT volume than the destination, it needs room
+        // for the payload download + extraction independently — check it too.
+        bool tempDifferent = !SameRoot(dest, Path.GetTempPath());
+        bool tempShort = tempDifferent
+            && DiskSpaceService.IsShort(freeTemp, DiskSpaceService.InstallExtraAllowanceBytes);
+
+        _spaceWarning = destShort || tempShort;
+
+        if (_spaceWarning)
+        {
+            long shortFree = destShort ? free : freeTemp;
+            long shortReq = destShort ? required : DiskSpaceService.InstallExtraAllowanceBytes;
+            var shortDrive = destShort ? root : SafeRoot(Path.GetTempPath());
+            DiskSpaceText.Foreground = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString("#E0A82E"));
+            DiskSpaceText.Text = "⚠ " + Strings.Format("DiskSpaceWarningLine",
+                DiskSpaceService.FormatBytes(shortReq),
+                DiskSpaceService.FormatBytes(shortFree),
+                shortDrive);
+        }
+        else
+        {
+            _spaceWarning = false;
+            DiskSpaceText.Foreground = _diskSpaceDefaultBrush;
+            DiskSpaceText.Text = (free >= 0 && !string.IsNullOrEmpty(root))
+                ? Strings.Format("InstallDiskSpace", DiskSpaceService.FormatBytes(free), root)
+                : "";
+        }
+    }
+
+    private static string SafeRoot(string path)
+    {
+        try { return Path.GetPathRoot(path) ?? ""; }
+        catch { return ""; }
+    }
+
+    /// <summary>True when both paths live on the same volume (conservative: on
+    /// any error assume same, so we don't add a spurious temp-drive warning).</summary>
+    private static bool SameRoot(string a, string b)
     {
         try
         {
-            var path = FolderTextBox.Text.Trim();
-            var root = Path.GetPathRoot(path);
-            if (!string.IsNullOrEmpty(root))
-            {
-                var drive = new DriveInfo(root);
-                DiskSpaceText.Text = Strings.Format("InstallDiskSpace",
-                    FormatBytes(drive.AvailableFreeSpace), root);
-                return;
-            }
+            var ra = Path.GetPathRoot(Path.GetFullPath(a));
+            var rb = Path.GetPathRoot(Path.GetFullPath(b));
+            return string.Equals(ra, rb, StringComparison.OrdinalIgnoreCase);
         }
-        catch { }
-        DiskSpaceText.Text = "";
+        catch { return true; }
     }
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e)
@@ -337,6 +455,17 @@ public partial class InstallFolderDialog : Window
         {
             ValidateInputs();
             return;
+        }
+
+        // Low-disk-space warning (warn-but-allow): if the conservative estimate
+        // says the drive is short, confirm before proceeding. Never blocks.
+        if (_spaceWarning)
+        {
+            var res = MessageBox.Show(this,
+                Strings.Get("DiskSpaceConfirmInstallBody"),
+                Strings.Get("DiskSpaceConfirmTitle"),
+                MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (res != MessageBoxResult.Yes) return;
         }
 
         SelectedFolder = chosen;

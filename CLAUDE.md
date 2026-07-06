@@ -484,6 +484,39 @@ Two cheap gates beyond a green build:
   (probe or marker) or it bails (else every subfolder would match). Don't
   reintroduce a folder-name check; the marker is the anti-vanilla signal now.
   Pinned by `WarsOfLibertyLauncher.Tests/ModInstallProbeTests`.
+  **The SEARCH for that install was later made robust in WHERE it looks (never in
+  WHAT counts — the marker gate above is untouched), via `Services/ModInstallScanner.cs`.**
+  The gap: the auto-scan only looked one level inside/next to a detected AoE3 install,
+  so WoL on an unrelated drive (`D:\Juegos\WoL`), nested (`…\AoE3\Mods\WoL`), or with
+  AoE3 undetected read as "not installed". `ModInstallScanner.FindDeep(root, profile,
+  maxDepth, ct, visited?)` is a bounded BFS (skips system dirs, per-dir IO swallow, lazy
+  yield, `MaxDirsScanned` cap, cancellable) that delegates each folder to
+  `ModInstallProbe.LooksLikeModInstall` — so it can NEVER promote vanilla AoE3 to WoL.
+  `FindBroad`/`EnumerateLikelyRoots` scan a curated root set (every `AoE3Detector.FindAll`
+  ModRoot/GameFolder/parent, Steam-library `steamapps\common`, and per fixed drive the
+  Program Files variants + the drive root) with a shared visited-set. Four wired uses:
+  (1) `IsolatedCandidates` pass-2 now scans the AoE3 root/`bin\` **2 levels** deep (parent
+  still 1) via `FindDeep` — catches `Mods\WoL`, still bounded to the AoE3 tree, still
+  synchronous (cheap). (2) A **broad fallback** in `UpdateService.CheckAsync` runs
+  `FindBroad` **off the UI thread** (`Task.Run`) ONLY when the cheap resolution (cache /
+  registry / near-AoE3 scan) failed, gated to isolated-folder + non-stock + has-content-
+  signal, and **once per session per profile** (`s_broadScanAttempted`, static) so a
+  not-installed user pays it at most once. (3) The manual folder picker
+  (`MainWindow.ResolvePickedModInstall`, used by "Change mod folder" + "Add existing
+  folder") deep-scans the CHOSEN tree (maxDepth 4) after the shallow candidates miss —
+  point at any reasonable ancestor and it's found. (4) A hero **"¿YA LO TENÉS?" / "ALREADY
+  INSTALLED?"** button (`DashboardSearchInstallButton`, shown next to Install only when an
+  isolated-folder non-stock mod reads not-installed) + the ModProperties → LOCAL FILES
+  **"Search for my install…"** button both call `MainWindow.SearchInstallAsync` →
+  `FindBroad` off-thread, adopt the first hit (near-AoE3 roots first) + re-check. Also:
+  `RegistryService.FindInstallPath` now reads **HKCU** as well as HKLM (per-user Inno
+  installs). **Load-bearing:** the broad scan NEVER relaxes the marker (no
+  false-positive-on-vanilla), NEVER runs on the UI thread, and is bounded (no full-disk
+  crawl). Pinned by `WarsOfLibertyLauncher.Tests/ModInstallScannerTests` (nested-found /
+  maxDepth / system-dir-skip / no-marker-rejected / multiple / shared-visited). **Known
+  simplifications (not yet done):** the multi-install case adopts the first hit + tells the
+  user to pick a specific one via "Change mod folder" (no chooser dialog yet); the whole
+  search UI needs a manual Windows click-test (build/unit-tests don't exercise it).
 
 - **Finding the BASE AoE3 install (`AoE3Detector.FindAll`) is by CONTENT too —
   the signal is the file `age3y.exe`, NOT the folder name.** `age3y.exe` is the
@@ -2297,6 +2330,30 @@ engine** and the UI binds to it.
    lets the dialog confirm without AoE3 (the old `InstallAoe3NotDetected` copy
    used to say "or the mod will install without copying AoE3 files" — that was
    misleading and was rewritten to "AoE3 is required").
+   **`InstallFolderDialog` also carries a low-disk-space WARNING (warn-but-allow,
+   never a block), and Repair has a smaller one.** `Services/DiskSpaceService.cs`
+   (pure + unit-tested, `DiskSpaceServiceTests`) holds the conservative,
+   network-free estimate: `EstimateInstallRequirement(cloneBytes) = max(0,cloneBytes)
+   + InstallExtraAllowanceBytes` (4 GiB fixed for payload download + extraction +
+   overlay + headroom), `SafeFreeSpace(path)` (→ -1 on error, never throws),
+   `IsShort(free,req)` (-1 is NEVER short — don't cry wolf when unmeasured). The
+   dominant, variable cost — the AoE3 clone (~10 GB) — is measured EXACTLY via the
+   new `FolderCloneService.CountCloneableBytes` (same enumeration + exclusions as
+   `CountCloneableFiles`, `Sum(f=>f.Length)`); everything else is the fixed
+   allowance (no HEAD/API calls). `InstallFolderDialog` measures the clone
+   OFF-THREAD (`MeasureCloneSizeAsync`, cached per source, "Calculating…" transient)
+   whenever the AoE3 source changes, then `UpdateDiskSpace()` compares free space on
+   BOTH the destination drive (against the full estimate) and, if `%TEMP%` is on a
+   different volume, the temp drive (against the payload allowance) — amber warning
+   line + `_spaceWarning`; on OK, `_spaceWarning` triggers a Yes/No confirm but never
+   blocks. Repair (`MainWindow.ConfirmRepairSpaceOk`) uses `RepairAllowanceBytes`
+   (3 GiB — repair re-overlays only, NO clone) and is checked **right before each
+   `InstallModOnlyAsync` re-download** (NOT at the top) so a "plain repair intact"
+   (no download) never false-warns; declining throws `OperationCanceledException`
+   (caught as a clean cancel). Strings `DiskSpace{Calculating,WarningLine,ConfirmTitle,
+   ConfirmInstallBody,ConfirmRepairBody}`. Load-bearing: the estimate is deliberately
+   conservative (exact clone + fixed slack), unknown free space never warns, and it
+   NEVER blocks — it's a protective heads-up for low-space users.
    **Uninstall is a blanket recursive delete** of the install folder, gated only
    by a probe/manifest check that it looks like a mod install — it ignores the
    manifest's file list and has **no per-file base-game protection**. AoE3 base

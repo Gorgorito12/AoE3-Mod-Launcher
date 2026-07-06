@@ -3214,6 +3214,8 @@ public partial class MainWindow : Window
             // Locale-aware "SWITCH GAME" / "CAMBIAR JUEGO" label.
             DashboardChangeModButtonText.Text = Strings.Get("DashboardChangeMod");
         }
+        if (DashboardSearchInstallButtonText != null)
+            DashboardSearchInstallButtonText.Text = Strings.Get("SearchInstallButtonShort");
         // Version chip — installed version (CurrentVersion) of the
         // active mod. Hidden when no version is known yet (fresh
         // machine before CheckAsync ran, or mod not installed). The
@@ -3987,7 +3989,8 @@ public partial class MainWindow : Window
                     _modPropertiesDialog?.RefreshData();
                 }
             },
-            addExistingFolder: () => AddExistingCopy());
+            addExistingFolder: () => AddExistingCopy(),
+            searchInstall: () => _ = SearchInstallAsync(_updateService.Profile));
         // NO Owner on purpose: an owned window with ShowInTaskbar=True minimizes
         // its owner when closed (the "closing properties minimizes the launcher"
         // bug). Independent top-level window like LobbyWindow; Activate() on open.
@@ -5593,33 +5596,12 @@ public partial class MainWindow : Window
 
         var chosen = dialog.FolderName.TrimEnd('\\', '/');
 
-        // Be tolerant: if the user picked the AoE3 root by mistake, try a
-        // mod-named subfolder inside it before failing. The candidate names
-        // come from the active profile, not from hardcoded WoL strings, so
-        // this works for any mod whose install convention is a separate
-        // folder under AoE3. "Validity" of a candidate is verified by the
-        // mod's own probe file (e.g. age3y.exe / age3m.exe / etc.).
-        var candidates = new List<string> { chosen };
-        if (!string.IsNullOrEmpty(profile.DisplayName))
-            candidates.Add(Path.Combine(chosen, profile.DisplayName));
-        var defaultLeaf = Path.GetFileName(
-            profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? "");
-        if (!string.IsNullOrEmpty(defaultLeaf)
-            && !candidates.Contains(Path.Combine(chosen, defaultLeaf),
-                StringComparer.OrdinalIgnoreCase))
-        {
-            candidates.Add(Path.Combine(chosen, defaultLeaf));
-        }
-
-        string? resolved = null;
-        foreach (var candidate in candidates)
-        {
-            if (LooksLikeModInstall(candidate, profile))
-            {
-                resolved = candidate.TrimEnd('\\', '/');
-                break;
-            }
-        }
+        // Be tolerant: try the folder itself + mod-named subfolders, then a
+        // bounded deep scan of the chosen tree (so the user can point at any
+        // reasonable ancestor — the AoE3 root, a "Games" parent — and the
+        // install is still found). Content-based, name-independent; the marker
+        // keeps a vanilla AoE3 folder from passing as WoL.
+        string? resolved = ResolvePickedModInstall(chosen, profile);
 
         if (resolved == null)
         {
@@ -5678,6 +5660,38 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Resolve the real mod-install folder from a user-picked folder. Tries the
+    /// shallow candidates first (the folder itself, a mod-named subfolder, the
+    /// default-install leaf); if none match, does a BOUNDED deep scan of the
+    /// chosen subtree (<see cref="ModInstallScanner.FindDeep"/>, skipping system
+    /// dirs). Because the user explicitly pointed at this folder, scanning a few
+    /// levels down is safe and forgiving — point at any reasonable ancestor (a
+    /// parent, a "Games" folder) and the install is still found. Returns the
+    /// resolved install path, or null when nothing under the tree looks like a
+    /// real install of this mod.
+    /// </summary>
+    private static string? ResolvePickedModInstall(string chosen, ModProfile profile)
+    {
+        chosen = chosen.TrimEnd('\\', '/');
+
+        var candidates = new List<string> { chosen };
+        if (!string.IsNullOrEmpty(profile.DisplayName))
+            candidates.Add(Path.Combine(chosen, profile.DisplayName));
+        var defaultLeaf = Path.GetFileName(profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? "");
+        if (!string.IsNullOrEmpty(defaultLeaf)
+            && !candidates.Contains(Path.Combine(chosen, defaultLeaf), StringComparer.OrdinalIgnoreCase))
+            candidates.Add(Path.Combine(chosen, defaultLeaf));
+
+        foreach (var candidate in candidates)
+            if (LooksLikeModInstall(candidate, profile))
+                return candidate.TrimEnd('\\', '/');
+
+        // Deep scan of the chosen tree (bounded depth, system dirs skipped).
+        var hit = ModInstallScanner.FindDeep(chosen, profile, maxDepth: 4).FirstOrDefault();
+        return hit?.TrimEnd('\\', '/');
+    }
+
+    /// <summary>
     /// Register an EXISTING install folder as an inactive copy of the active mod — adopts a
     /// real install already on disk WITHOUT reinstalling. Reuses the same folder picker +
     /// content probe as "Change mod folder"; validates it's a real install of this mod, then
@@ -5698,17 +5712,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) != true) return false;
 
         var chosen = dialog.FolderName.TrimEnd('\\', '/');
-        var candidates = new List<string> { chosen };
-        if (!string.IsNullOrEmpty(profile.DisplayName))
-            candidates.Add(Path.Combine(chosen, profile.DisplayName));
-        var defaultLeaf = Path.GetFileName(profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? "");
-        if (!string.IsNullOrEmpty(defaultLeaf)
-            && !candidates.Contains(Path.Combine(chosen, defaultLeaf), StringComparer.OrdinalIgnoreCase))
-            candidates.Add(Path.Combine(chosen, defaultLeaf));
-
-        string? resolved = null;
-        foreach (var candidate in candidates)
-            if (LooksLikeModInstall(candidate, profile)) { resolved = candidate.TrimEnd('\\', '/'); break; }
+        string? resolved = ResolvePickedModInstall(chosen, profile);
 
         if (resolved == null)
         {
@@ -5730,6 +5734,106 @@ public partial class MainWindow : Window
         _config.Save();
         RefreshActiveModBanner();
         return true;
+    }
+
+    /// <summary>
+    /// On-demand broad search for an existing install of <paramref name="profile"/>
+    /// across likely game locations (Steam libraries, Program Files, drive roots),
+    /// for when auto-detection didn't find a WoL install that's actually there.
+    /// Runs OFF the UI thread; adopts the first match (near-AoE3 roots are searched
+    /// first, so it's the most likely "main" install) and re-checks. Content-gated
+    /// (probe + marker via <see cref="LooksLikeModInstall"/>), so it can never
+    /// mistake vanilla AoE3 for WoL.
+    /// </summary>
+    /// <summary>
+    /// Show the hero "Search for my install" affordance only when it makes sense:
+    /// an isolated-folder mod (WoL) that isn't the stock game. Called from the
+    /// not-installed branches of <c>ApplyCheckResult</c>.
+    /// </summary>
+    private void MaybeShowSearchInstall()
+    {
+        var p = _updateService.Profile;
+        DashboardSearchInstallButton.Visibility =
+            (!p.IsStockGame && p.InstallType == ModInstallType.IsolatedFolder)
+                ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void DashboardSearchInstallButton_Click(object sender, RoutedEventArgs e)
+        => _ = SearchInstallAsync(_updateService.Profile);
+
+    /// <summary>
+    /// Low-disk-space guard for Repair (which re-downloads the payload but does
+    /// NOT clone AoE3, so the requirement is small). Returns true to proceed:
+    /// enough space (or unknown → don't cry wolf) proceeds silently; short space
+    /// prompts a warn-but-allow confirm. False only when the user declines — the
+    /// caller then aborts via OperationCanceledException (handled as a cancel).
+    /// </summary>
+    private bool ConfirmRepairSpaceOk(string installPath)
+    {
+        long free = Services.DiskSpaceService.SafeFreeSpace(installPath);
+        if (!Services.DiskSpaceService.IsShort(free, Services.DiskSpaceService.RepairAllowanceBytes))
+            return true;
+
+        var body = Strings.Format("DiskSpaceConfirmRepairBody",
+            Services.DiskSpaceService.FormatBytes(Services.DiskSpaceService.RepairAllowanceBytes),
+            Services.DiskSpaceService.FormatBytes(free),
+            Path.GetPathRoot(installPath) ?? installPath);
+        return MessageBox.Show(this, body,
+            Strings.Get("DiskSpaceConfirmTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+    }
+
+    private async Task SearchInstallAsync(ModProfile profile)
+    {
+        if (_isBusy || profile.IsStockGame) return;
+
+        List<string> hits;
+        System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+        try
+        {
+            hits = await Task.Run(() =>
+                ModInstallScanner.FindBroad(profile, maxDepth: 3)
+                    .Where(p => LooksLikeModInstall(p, profile))
+                    .Select(p => p.TrimEnd('\\', '/'))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(20)
+                    .ToList());
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"SearchInstall for '{profile.Id}' failed: {ex.Message}");
+            hits = new List<string>();
+        }
+        finally
+        {
+            System.Windows.Input.Mouse.OverrideCursor = null;
+        }
+
+        if (hits.Count == 0)
+        {
+            MessageBox.Show(this,
+                Strings.Format("SearchInstallNotFound", profile.DisplayName),
+                Strings.Get("SearchInstallButton"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var chosen = hits[0];
+        var st = _config.GetActiveState();
+        st.OtherInstalls.RemoveAll(i => ModState.PathEquals(i.InstallPath, chosen));
+        st.InstallPath = chosen;
+        _config.Save();
+        InvalidateActiveModCheckCache();
+        await CheckAsync();
+        _modPropertiesDialog?.RefreshData();
+
+        // If several installs turned up, tell the user they can pick a specific
+        // one via "Change mod folder" — we adopted the most likely.
+        var body = hits.Count == 1
+            ? Strings.Format("SearchInstallFound", chosen)
+            : Strings.Format("SearchInstallFoundMultiple", chosen, hits.Count - 1);
+        MessageBox.Show(this, body, Strings.Get("SearchInstallButton"),
+            MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     // ------------------------------------------------------------------------
@@ -6146,6 +6250,9 @@ public partial class MainWindow : Window
                 else
                 {
                     // Damaged — re-lay the WHOLE overlay (not just the damaged set).
+                    // This re-downloads the payload, so warn on low disk space first.
+                    if (!ConfirmRepairSpaceOk(installPath))
+                        throw new OperationCanceledException();
                     SetStatus(Strings.Format("StatusRepairingFiles", damaged.Count));
                     ProgressPanelControl.LblCurrentPatch.Text =
                         Strings.Format("StatusRepairingFiles", damaged.Count);
@@ -6179,6 +6286,9 @@ public partial class MainWindow : Window
 
                 if (!deltaApplied)
                 {
+                    // Full re-overlay re-downloads the payload — warn on low space first.
+                    if (!ConfirmRepairSpaceOk(installPath))
+                        throw new OperationCanceledException();
                     // Mod-only install on top of existing (overwrites all overlay files).
                     // Repair re-stamps the manifest with the version we just verified.
                     await nativeInstaller.InstallModOnlyAsync(
@@ -6671,6 +6781,13 @@ public partial class MainWindow : Window
 
         _modIsInstalled = result.IsValidInstall;
 
+        // "Search for my install" affordance: shown on the hero next to Install
+        // ONLY when an isolated-folder mod (WoL) reads as not-installed — so a
+        // user who already has it can point the launcher at it instead of
+        // re-downloading. Hidden by default here; the not-installed branches
+        // below flip it on. Never for the stock game.
+        DashboardSearchInstallButton.Visibility = Visibility.Collapsed;
+
         // Backstop for the "update finished" bell: if the detected installed version
         // advanced since we last recorded it, raise it here in the USER's own session
         // (covers an elevated / other-profile apply that couldn't write this user's
@@ -6764,6 +6881,7 @@ public partial class MainWindow : Window
             {
                 SetPrimaryAction(PrimaryAction.Install);
                 SetStatus(Strings.Get("StatusNotInstalled"));
+                MaybeShowSearchInstall();
             }
             else
             {
@@ -6784,6 +6902,7 @@ public partial class MainWindow : Window
             // No installation detected — primary becomes "Install".
             SetStatus(Strings.Get("StatusNotInstalled"));
             SetPrimaryAction(PrimaryAction.Install);
+            MaybeShowSearchInstall();
             _pendingDownloads = new();
             ActionPanelControl.UpdateButton.Visibility = Visibility.Collapsed;
             RefreshIdlePanel();

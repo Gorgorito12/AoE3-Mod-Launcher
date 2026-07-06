@@ -24,13 +24,16 @@ public static class RegistryService
     /// </summary>
     public static string? FindInstallPath()
     {
-        // Try every combination of registry view + key path + value name.
-        // The original updater tries these in order and uses the first that works.
+        // Try every combination of registry hive + view + key path + value name.
+        // HKCU is included as well as HKLM: an Inno install done "for the current
+        // user only" (no admin elevation) writes its uninstall key under HKCU,
+        // so an HKLM-only lookup would miss a perfectly valid per-user install.
+        foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
         foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
         foreach (var keyPath in new[] { Key64, Key32 })
         foreach (var valueName in new[] { "Inno Setup: App Path", "Path" })
         {
-            var path = ReadValue(view, keyPath, valueName);
+            var path = ReadValue(hive, view, keyPath, valueName);
             if (!string.IsNullOrWhiteSpace(path) && IsValidInstall(path))
                 return path.TrimEnd('\\', '/');
         }
@@ -50,11 +53,11 @@ public static class RegistryService
         return Directory.Exists(marker);
     }
 
-    private static string? ReadValue(RegistryView view, string keyPath, string valueName)
+    private static string? ReadValue(RegistryHive hive, RegistryView view, string keyPath, string valueName)
     {
         try
         {
-            using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
+            using var baseKey = RegistryKey.OpenBaseKey(hive, view);
             using var subKey = baseKey.OpenSubKey(keyPath);
             return subKey?.GetValue(valueName) as string;
         }

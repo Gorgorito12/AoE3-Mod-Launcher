@@ -435,6 +435,15 @@
                                     Click="ChangeAoE3FolderBtn_Click"/>
                         </UniformGrid>
 
+                        <!-- Search for an existing install (broad scan across
+                             likely game locations) — for when the launcher
+                             doesn't auto-detect a WoL install that's there. -->
+                        <Button x:Name="SearchInstallBtn"
+                                Style="{StaticResource PropertyActionButton}"
+                                HorizontalAlignment="Left"
+                                Margin="0,8,0,0"
+                                Click="SearchInstallBtn_Click"/>
+
                         <Border Style="{StaticResource DialogDivider}"/>
 
                         <!-- Maintenance -->

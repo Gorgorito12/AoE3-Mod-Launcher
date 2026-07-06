@@ -3418,6 +3418,33 @@ public static class Strings
             [LangEn] = "Available disk space: {0} on {1}",
             [LangEs] = "Espacio en disco disponible: {0} en {1}",
         },
+        ["DiskSpaceCalculating"] = new()
+        {
+            [LangEn] = "Calculating required space…",
+            [LangEs] = "Calculando el espacio necesario…",
+        },
+        // {0} = required, {1} = free, {2} = drive
+        ["DiskSpaceWarningLine"] = new()
+        {
+            [LangEn] = "Low space: about {0} needed, only {1} free on {2}.",
+            [LangEs] = "Poco espacio: se necesitan ~{0}, solo hay {1} en {2}.",
+        },
+        ["DiskSpaceConfirmTitle"] = new()
+        {
+            [LangEn] = "Low disk space",
+            [LangEs] = "Poco espacio en disco",
+        },
+        ["DiskSpaceConfirmInstallBody"] = new()
+        {
+            [LangEn] = "There may not be enough free disk space to install. The install can fail part-way if the drive fills up. Continue anyway?",
+            [LangEs] = "Puede que no haya suficiente espacio en disco para instalar. La instalación puede fallar a la mitad si el disco se llena. ¿Continuar igual?",
+        },
+        // {0} = required, {1} = free, {2} = drive
+        ["DiskSpaceConfirmRepairBody"] = new()
+        {
+            [LangEn] = "Repair needs about {0} of free space, but only {1} is free on {2}. It can fail part-way if the drive fills up. Continue anyway?",
+            [LangEs] = "La reparación necesita unos {0} libres, pero solo hay {1} en {2}. Puede fallar a la mitad si el disco se llena. ¿Continuar igual?",
+        },
         // {0} = mod display name. Size deliberately omitted — the progress
         // bar underneath already shows real bytes for whichever mod is
         // being downloaded.
@@ -3557,6 +3584,31 @@ public static class Strings
         {
             [LangEn] = "Add existing folder…",
             [LangEs] = "Añadir carpeta existente…",
+        },
+        ["SearchInstallButton"] = new()
+        {
+            [LangEn] = "Search for my install…",
+            [LangEs] = "Buscar mi instalación…",
+        },
+        ["SearchInstallButtonShort"] = new()
+        {
+            [LangEn] = "ALREADY INSTALLED?",
+            [LangEs] = "¿YA LO TENÉS?",
+        },
+        ["SearchInstallNotFound"] = new()
+        {
+            [LangEn] = "No existing {0} install was found on your drives. If you have it installed, use “Change mod folder” and point it at the folder.",
+            [LangEs] = "No se encontró una instalación de {0} en tus discos. Si la tenés instalada, usá «Cambiar carpeta del mod» y apuntá a la carpeta.",
+        },
+        ["SearchInstallFound"] = new()
+        {
+            [LangEn] = "Found your install:\n{0}",
+            [LangEs] = "Se encontró tu instalación:\n{0}",
+        },
+        ["SearchInstallFoundMultiple"] = new()
+        {
+            [LangEn] = "Found your install:\n{0}\n\n({1} other install(s) were also found — pick a specific one with “Change mod folder”.)",
+            [LangEs] = "Se encontró tu instalación:\n{0}\n\n(También se encontraron {1} instalación(es) más — elegí una específica con «Cambiar carpeta del mod».)",
         },
         ["RenameInstallHint"] = new()
         {
