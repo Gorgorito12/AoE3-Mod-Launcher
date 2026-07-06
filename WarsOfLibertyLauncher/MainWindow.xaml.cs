@@ -220,6 +220,12 @@ public partial class MainWindow : Window
 
         _config = LauncherConfig.Load();
 
+        // Register (or, if the user opted out, clear) the wol-launcher:// deep-link
+        // scheme. Re-applying each launch self-heals the exe path for the portable
+        // binary (the registered path follows wherever the user last ran it).
+        if (_config.EnableJoinLinks) Services.DeepLinkService.EnsureRegistered();
+        else Services.DeepLinkService.EnsureUnregistered();
+
         // Telemetry is opt-in (PRIVACY.md / SignPath Foundation terms):
         // MultiplayerTelemetry defaults to on in-process, but the launcher
         // must collect nothing until the user enables it in Launcher
@@ -575,6 +581,17 @@ public partial class MainWindow : Window
             if (autoUpdate && _modIsInstalled && _pendingDownloads.Count > 0)
             {
                 await ApplyAsync();
+            }
+
+            // ---- Discord "Join" deep links (wol-launcher://join/<id>) ----
+            // A later launch forwards its link over the single-instance pipe and
+            // App raises JoinRequested on the UI thread; a cold-start link (this
+            // very launch was the click) is stashed in App.PendingJoinLobbyId.
+            WarsOfLibertyLauncher.App.JoinRequested += id => _ = HandleJoinDeepLink(id);
+            if (WarsOfLibertyLauncher.App.PendingJoinLobbyId is { } coldStartJoin)
+            {
+                WarsOfLibertyLauncher.App.ClearPendingJoin();
+                _ = HandleJoinDeepLink(coldStartJoin);
             }
         };
 
@@ -4168,6 +4185,25 @@ public partial class MainWindow : Window
         "multiplayer" => TopTab.Multiplayer,
         _ => TopTab.Play, // "library" and any unexpected fallback
     };
+
+    /// <summary>
+    /// Handle a Discord "Join" deep link (<c>wol-launcher://join/&lt;id&gt;</c>):
+    /// navigate to Multiplayer → Rooms and auto-join the room. The MP tab owns all
+    /// the gates (sign-in, mod installed, password, room-not-found). Called from the
+    /// Loaded drain (cold start) and the App.JoinRequested pipe forward (running).
+    /// </summary>
+    private async Task HandleJoinDeepLink(string lobbyId)
+    {
+        try
+        {
+            SwitchTopTab(TopTab.Multiplayer);
+            await MultiplayerView.JoinByLobbyIdAsync(lobbyId);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"DeepLink: HandleJoinDeepLink failed: {ex.Message}");
+        }
+    }
 
     private void SwitchTopTab(TopTab tab)
     {

@@ -2259,6 +2259,32 @@ public static class Strings
             [LangEn] = "Couldn't join the room",
             [LangEs] = "No se pudo unir a la sala",
         },
+        // Discord "Join" deep-link (wol-launcher://join/<id>) auto-join notices.
+        ["MpDeepLinkSignInTitle"] = new()
+        {
+            [LangEn] = "Sign in to join",
+            [LangEs] = "Iniciá sesión para unirte",
+        },
+        ["MpDeepLinkSignInBody"] = new()
+        {
+            [LangEn] = "You need to sign in with Discord before joining a room from a link.",
+            [LangEs] = "Necesitás iniciar sesión con Discord antes de unirte a una sala desde un enlace.",
+        },
+        ["MpDeepLinkNotFoundTitle"] = new()
+        {
+            [LangEn] = "Room not available",
+            [LangEs] = "Sala no disponible",
+        },
+        ["MpDeepLinkNotFoundBody"] = new()
+        {
+            [LangEn] = "That room is no longer open — it may have closed or already started.",
+            [LangEs] = "Esa sala ya no está abierta — puede haberse cerrado o ya empezó.",
+        },
+        ["MpDeepLinkFailedTitle"] = new()
+        {
+            [LangEn] = "Couldn't open the room",
+            [LangEs] = "No se pudo abrir la sala",
+        },
         ["MpNoticeCreateFailedTitle"] = new()
         {
             [LangEn] = "Couldn't enter the lobby",
@@ -2434,6 +2460,18 @@ public static class Strings
         {
             [LangEn] = "Launches automatically when you log in.",
             [LangEs] = "Se inicia automáticamente al iniciar sesión.",
+        },
+        ["DlgLauncherSettingsJoinLinks"] = new()
+        {
+            [LangEn] = "Enable Discord \"Join\" links",
+            [LangEs] = "Activar enlaces \"Unirme\" de Discord",
+        },
+        ["DlgLauncherSettingsJoinLinksHint"] = new()
+        {
+            [LangEn] = "Lets a room's Join link on Discord open this launcher and join the room. " +
+                       "Registers a wol-launcher:// handler for your user (no admin). Turn off to leave no registry entry.",
+            [LangEs] = "Permite que el enlace Unirme de una sala en Discord abra este launcher y entre a la sala. " +
+                       "Registra un handler wol-launcher:// para tu usuario (sin admin). Desactivalo para no dejar ninguna entrada en el registro.",
         },
         ["DlgLauncherSettingsCloseOnGame"] = new()
         {

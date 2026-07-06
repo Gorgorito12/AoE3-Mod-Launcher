@@ -251,6 +251,9 @@
                         <CheckBox x:Name="StartWithWindowsCheck"/>
                         <TextBlock x:Name="StartWithWindowsHint" Style="{StaticResource HintText}"/>
 
+                        <CheckBox x:Name="EnableJoinLinksCheck"/>
+                        <TextBlock x:Name="EnableJoinLinksHint" Style="{StaticResource HintText}"/>
+
                         <CheckBox x:Name="CloseOnGameCheck"/>
                         <TextBlock x:Name="CloseOnGameHint" Style="{StaticResource HintText}"/>
 

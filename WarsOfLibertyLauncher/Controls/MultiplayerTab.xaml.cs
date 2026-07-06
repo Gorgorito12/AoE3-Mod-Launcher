@@ -4204,8 +4204,23 @@ public partial class MultiplayerTab : UserControl
 
     private async void JoinRoomButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_session == null || _getActiveProfile == null || _computeModFingerprint == null) return;
         if (sender is not Button btn || btn.Tag is not LobbySummary lobby) return;
+        btn.IsEnabled = false;
+        try { await JoinLobbyCoreAsync(lobby); }
+        finally { btn.IsEnabled = true; }
+    }
+
+    /// <summary>
+    /// Runs the full join flow for an already-resolved <paramref name="lobby"/>:
+    /// mod-match / install gate (auto-switching the active mod when the room's mod
+    /// is installed locally), fingerprint, password prompt for private rooms, then
+    /// the session join. Shared by the Join button and the deep-link auto-join
+    /// (<see cref="JoinByLobbyIdAsync"/>). Assumes the caller already ensured
+    /// sign-in; all failures surface as in-tab notices.
+    /// </summary>
+    private async Task JoinLobbyCoreAsync(LobbySummary lobby)
+    {
+        if (_session == null || _getActiveProfile == null || _computeModFingerprint == null) return;
 
         var profile = _getActiveProfile();
         if (profile == null)
@@ -4316,7 +4331,6 @@ public partial class MultiplayerTab : UserControl
             password = prompt.EnteredPassword;
         }
 
-        btn.IsEnabled = false;
         try
         {
             // Stamp the room's mod id so LaunchActiveModGame uses
@@ -4347,10 +4361,84 @@ public partial class MultiplayerTab : UserControl
                 ex.Message,
                 Strings.Get("MpAlertOk"));
         }
-        finally
+    }
+
+    /// <summary>
+    /// Deep-link auto-join: join a room by its id (from a Discord "Join" link).
+    /// Ensures the user is signed in (opening the sign-in dialog if needed),
+    /// resolves the <see cref="LobbySummary"/> from the live list (there is no
+    /// get-by-id API), navigates to Rooms, and runs the shared join flow. If we're
+    /// already in that room it just re-opens the lobby window. All failures surface
+    /// as in-tab notices.
+    /// </summary>
+    public async Task JoinByLobbyIdAsync(string lobbyId)
+    {
+        if (_session == null || string.IsNullOrWhiteSpace(lobbyId)) return;
+        DiagnosticLog.Write($"DeepLink: auto-join requested for lobby '{lobbyId}'.");
+
+        // 1. Ensure signed in (reuse the same modal the Sign in button opens).
+        if (_session.Status != MultiplayerSession.SessionStatus.SignedIn)
         {
-            btn.IsEnabled = true;
+            try
+            {
+                var dlg = new GitHubLoginDialog(_session) { Owner = Window.GetWindow(this) };
+                dlg.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"DeepLink: sign-in dialog failed: {ex.Message}");
+            }
+            if (_session.Status != MultiplayerSession.SessionStatus.SignedIn)
+            {
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("MpDeepLinkSignInTitle"),
+                    Strings.Get("MpDeepLinkSignInBody"),
+                    Strings.Get("MpAlertOk"));
+                return;
+            }
         }
+
+        ShowRooms();
+
+        // 2. Already in this room? Just bring its window up.
+        if (string.Equals(_session.CurrentLobbyId, lobbyId, StringComparison.OrdinalIgnoreCase))
+        {
+            OpenLobbyWindow();
+            return;
+        }
+
+        // 3. Resolve the LobbySummary from the live list (no get-by-id endpoint).
+        LobbySummary? lobby = null;
+        try
+        {
+            var list = await _session.Api.ListLobbiesAsync();
+            foreach (var l in list.Lobbies)
+            {
+                if (string.Equals(l.Id, lobbyId, StringComparison.OrdinalIgnoreCase)) { lobby = l; break; }
+            }
+        }
+        catch (Exception ex)
+        {
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpDeepLinkFailedTitle"),
+                ex.Message,
+                Strings.Get("MpAlertOk"));
+            return;
+        }
+
+        if (lobby == null)
+        {
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpDeepLinkNotFoundTitle"),
+                Strings.Get("MpDeepLinkNotFoundBody"),
+                Strings.Get("MpAlertOk"));
+            return;
+        }
+
+        await JoinLobbyCoreAsync(lobby);
     }
 
     // ---------- In-room actions ----------

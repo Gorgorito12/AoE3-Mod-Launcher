@@ -149,6 +149,8 @@ public partial class LauncherSettingsDialog : Window
 
         StartWithWindowsCheck.Content = Strings.Get("DlgLauncherSettingsStartWithWindows");
         StartWithWindowsHint.Text = Strings.Get("DlgLauncherSettingsStartWithWindowsHint");
+        EnableJoinLinksCheck.Content = Strings.Get("DlgLauncherSettingsJoinLinks");
+        EnableJoinLinksHint.Text = Strings.Get("DlgLauncherSettingsJoinLinksHint");
         CloseOnGameCheck.Content = Strings.Get("DlgLauncherSettingsCloseOnGame");
         CloseOnGameHint.Text = Strings.Get("DlgLauncherSettingsCloseOnGameHint");
         MinimizeToTrayCheck.Content = Strings.Get("DlgLauncherSettingsMinimizeToTray");
@@ -254,6 +256,7 @@ public partial class LauncherSettingsDialog : Window
         // (the user may have removed our entry manually via Task Manager).
         // The launcher's own field is rewritten on Save anyway.
         StartWithWindowsCheck.IsChecked = StartupRegistrationService.IsRegistered();
+        EnableJoinLinksCheck.IsChecked = _config.EnableJoinLinks;
         CloseOnGameCheck.IsChecked = _config.CloseLauncherOnGameStart;
         MinimizeToTrayCheck.IsChecked = _config.MinimizeToTray;
         ShowToastsCheck.IsChecked = _config.ShowToastNotifications;
@@ -748,6 +751,7 @@ public partial class LauncherSettingsDialog : Window
         _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();
         _config.CommunityTranslationsDisabled = TxDisabledCheck.IsChecked == true;
         _config.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+        _config.EnableJoinLinks = EnableJoinLinksCheck.IsChecked == true;
 
         // Top-tab order (Interface section). Persist the working copy;
         // MainWindow re-applies it to the nav bar on the post-save
@@ -773,6 +777,8 @@ public partial class LauncherSettingsDialog : Window
         //    * Language change goes through Strings so the rest of the
         //      app updates immediately.
         StartupRegistrationService.Apply(_config.StartWithWindows);
+        if (_config.EnableJoinLinks) Services.DeepLinkService.EnsureRegistered();
+        else Services.DeepLinkService.EnsureUnregistered();
         Strings.SetLanguage(newLang);
         // Re-apply the telemetry opt-in immediately so the change takes
         // effect this session without a restart (mirrors how MainWindow

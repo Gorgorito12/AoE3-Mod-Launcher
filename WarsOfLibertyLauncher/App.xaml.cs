@@ -1,5 +1,9 @@
 using System;
+using System.IO;
+using System.IO.Pipes;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -134,6 +138,140 @@ public partial class App : System.Windows.Application
             typeof(Window),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(OnAnyWindowLoaded));
+
+        // (The wol-launcher:// scheme registration lives in MainWindow's ctor,
+        // gated on the EnableJoinLinks config flag — App.OnStartup has no config
+        // yet. The single-instance mutex/pipe below do NOT depend on it.)
+
+        // Single-instance guard + deep-link handoff. A deep link fired while the
+        // launcher is already open must route into the RUNNING instance (join that
+        // room), not spawn a second window. Extract any join id from our args, then
+        // claim the app-wide mutex.
+        var joinId = Services.DeepLinkService.FindJoinLobbyId(Environment.GetCommandLineArgs());
+        bool primary;
+        try { _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out primary); }
+        catch (Exception ex)
+        {
+            // Fail OPEN: if the mutex can't be created (rare policy/ACL issue), run
+            // as a normal instance rather than refusing to start.
+            Services.DiagnosticLog.Write($"SingleInstance: mutex failed, running normally: {ex.Message}");
+            _instanceMutex = null;
+            primary = true;
+        }
+
+        if (!primary)
+        {
+            // Another instance owns the app — hand it our deep link (if any) and
+            // exit WITHOUT creating a second MainWindow.
+            if (joinId != null) ForwardJoinToRunningInstance(joinId);
+            else Services.DiagnosticLog.Write("SingleInstance: second launch with no deep link; exiting.");
+            Shutdown();
+            return;
+        }
+
+        // Primary instance: stash a cold-start deep link for MainWindow to pick up
+        // once its UI/session are ready, and start listening for links forwarded by
+        // later launches.
+        PendingJoinLobbyId = joinId;
+        StartDeepLinkPipeServer();
+
+        // StartupUri was removed from App.xaml so this guard can suppress a second
+        // window; create + show the main window ourselves for the primary instance.
+        var main = new WarsOfLibertyLauncher.MainWindow();
+        MainWindow = main;
+        main.Show();
+    }
+
+    // ---- Single-instance + deep-link IPC -------------------------------------
+
+    // Local\ = per-session single-instance (a deep link fired from a browser runs
+    // in the SAME session, so it reaches this instance). Global\ would wrongly
+    // block a second Windows user on a shared PC.
+    private const string MutexName = @"Local\WarsOfLibertyLauncher.SingleInstance.v1";
+    private const string PipeName = "WarsOfLibertyLauncher.DeepLink.v1";
+    private static Mutex? _instanceMutex;
+
+    /// <summary>Cold-start join deep link (set before MainWindow exists); MainWindow
+    /// drains it on load. Null when the launch carried no deep link.</summary>
+    public static string? PendingJoinLobbyId { get; private set; }
+
+    /// <summary>Raised (on the UI thread) when a join deep link arrives from a later
+    /// launch forwarded over the IPC pipe. MainWindow subscribes.</summary>
+    public static event Action<string>? JoinRequested;
+
+    /// <summary>Marks the cold-start deep link consumed so a mod-switch re-check
+    /// doesn't reprocess it.</summary>
+    public static void ClearPendingJoin() => PendingJoinLobbyId = null;
+
+    private void StartDeepLinkPipeServer()
+    {
+        var t = new Thread(DeepLinkPipeLoop) { IsBackground = true, Name = "DeepLinkPipe" };
+        t.Start();
+    }
+
+    private void DeepLinkPipeLoop()
+    {
+        while (true)
+        {
+            try
+            {
+                using var server = new NamedPipeServerStream(
+                    PipeName, PipeDirection.In, 1,
+                    PipeTransmissionMode.Byte, PipeOptions.None);
+                server.WaitForConnection();
+                using var reader = new StreamReader(server, Encoding.UTF8);
+                var id = reader.ReadLine()?.Trim();
+                if (Services.DeepLinkService.IsValidLobbyId(id))
+                    DispatchJoin(id!);
+                else
+                    Services.DiagnosticLog.Write($"DeepLink pipe: ignored invalid payload.");
+            }
+            catch (Exception ex)
+            {
+                Services.DiagnosticLog.Write($"DeepLink pipe error: {ex.Message}");
+                try { Thread.Sleep(500); } catch { /* backoff */ }
+            }
+        }
+    }
+
+    private void DispatchJoin(string lobbyId)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                if (MainWindow is { } mw)
+                {
+                    if (mw.WindowState == WindowState.Minimized)
+                        mw.WindowState = WindowState.Normal;
+                    mw.Activate();
+                    // Nudge to the foreground without staying topmost.
+                    mw.Topmost = true;
+                    mw.Topmost = false;
+                }
+                JoinRequested?.Invoke(lobbyId);
+            }
+            catch (Exception ex)
+            {
+                Services.DiagnosticLog.Write($"DeepLink dispatch failed: {ex.Message}");
+            }
+        });
+    }
+
+    private static void ForwardJoinToRunningInstance(string lobbyId)
+    {
+        try
+        {
+            using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+            client.Connect(2000);
+            using var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true };
+            writer.WriteLine(lobbyId);
+            Services.DiagnosticLog.Write($"DeepLink: forwarded join '{lobbyId}' to running instance.");
+        }
+        catch (Exception ex)
+        {
+            Services.DiagnosticLog.Write($"DeepLink: forward to running instance failed: {ex.Message}");
+        }
     }
 
     /// <summary>

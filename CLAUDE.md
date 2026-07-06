@@ -1813,6 +1813,44 @@ Two cheap gates beyond a green build:
   ephemeral, restarts rare). Deferred: a full Discord bot (a persistent gateway
   would blow the 1 GB VM's RAM).
 
+- **The Discord room announcement carries a "Join" DEEP LINK that opens the
+  launcher and AUTO-JOINS the room — and this made the launcher SINGLE-INSTANCE.**
+  The webhook embed (`discordAnnounce.ts`) now includes a `description` with
+  `▶ [Join in the launcher](https://wol-lobby.duckdns.org/j/<lobbyId>)` (only while
+  the room is joinable — dropped on `closed`). **Discord can't linkify a custom
+  scheme**, so the link is HTTPS → a backend **bounce route `GET /j/:id`**
+  (`index.ts`, public, no DB, validates `^[A-Za-z0-9]{1,32}$`) returns a tiny HTML
+  page that redirects the browser to `wol-launcher://join/<id>`. The launcher
+  registers that scheme per-user in `App.OnStartup` via
+  `Services/DeepLinkService.EnsureRegistered()` (HKCU `Software\Classes`,
+  idempotent, self-healing exe path — mirrors `StartupRegistrationService`);
+  `DeepLinkService.TryParseJoin` treats the URI as UNTRUSTED (any web page can fire
+  it) and only ever yields a validated lobby id (pinned by `DeepLinkServiceTests`).
+  **Single-instance (NEW behaviour):** a deep link fired while the launcher is open
+  must route into the RUNNING instance, not spawn a second window. `App.OnStartup`
+  takes a per-session `Mutex` (`Local\WarsOfLibertyLauncher.SingleInstance.v1`); the
+  SECOND launch forwards its lobby id over a **named pipe**
+  (`WarsOfLibertyLauncher.DeepLink.v1`) to the primary and `Shutdown()`s WITHOUT
+  showing a window; the PRIMARY runs a background pipe-server loop that, on a valid
+  id, marshals to the dispatcher, `Activate()`s the window, and raises
+  `App.JoinRequested`. **Load-bearing: `StartupUri` was REMOVED from `App.xaml`** so
+  the guard can suppress a second window — the primary creates `new MainWindow()`
+  itself in `OnStartup` (don't re-add `StartupUri`; `ShutdownMode=OnMainWindowClose`
+  still works because we set `Application.MainWindow`). A COLD-START link (this
+  launch WAS the click) is stashed in `App.PendingJoinLobbyId` and drained by
+  `MainWindow`'s `Loaded` handler. Both paths call `MainWindow.HandleJoinDeepLink`
+  → `SwitchTopTab(Multiplayer)` + `MultiplayerTab.JoinByLobbyIdAsync(id)`, which
+  ensures sign-in (opens `GitHubLoginDialog` if needed), resolves the `LobbySummary`
+  from `Api.ListLobbiesAsync()` (no get-by-id endpoint), and runs the SHARED
+  `JoinLobbyCoreAsync(LobbySummary)` (the extracted core of `JoinRoomButton_Click` —
+  same mod-install / fingerprint / password / mod-mismatch gates). **Scope caveat:**
+  only works for users who already have the launcher installed (scheme registered) +
+  signed in + the room's mod installed — it's for re-joining, not onboarding. The
+  mutex fails OPEN (a policy/ACL failure runs a normal instance rather than refusing
+  to start). Registering a URI scheme is a standard pattern (`steam://`,
+  `discord://`) but can add SmartScreen/AV friction on the unsigned binary — best
+  paired with the SignPath signature.
+
 - **The lobby room view (`LobbyWindow`) deliberately shows each datum once —
   don't "helpfully" re-add the removed fields.** `RenderRoomPanel`
   (`MultiplayerTab.xaml.cs`) fills it, and four duplications were stripped on

@@ -745,6 +745,18 @@ public class LauncherConfig
     public bool StartWithWindows { get; set; } = false;
 
     /// <summary>
+    /// When true (default), the launcher registers the <c>wol-launcher://</c> URI
+    /// scheme (HKCU) so a Discord room "Join" link opens the launcher and joins
+    /// the room. On by default so the deep link "just works" once the portable
+    /// exe has run; users who want the portable exe to leave no registry trace can
+    /// turn it off, which clears the key. <see cref="Services.DeepLinkService"/>
+    /// applies / clears it on save and re-applies (self-heals the exe path) each
+    /// launch.
+    /// </summary>
+    [JsonPropertyName("enableJoinLinks")]
+    public bool EnableJoinLinks { get; set; } = true;
+
+    /// <summary>
     /// When true, the launcher's main window closes itself once the game
     /// process has started, freeing resources while the user plays. The
     /// previously default behaviour (window stays open) is preserved by

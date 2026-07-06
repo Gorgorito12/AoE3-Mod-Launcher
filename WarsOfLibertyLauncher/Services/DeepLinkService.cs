@@ -75,6 +75,38 @@ public static class DeepLinkService
     }
 
     /// <summary>
+    /// Remove the <c>wol-launcher://</c> registration (the whole class subtree).
+    /// Best-effort — used when the user turns the feature off. Idempotent (no-op
+    /// when nothing is registered).
+    /// </summary>
+    public static void EnsureUnregistered()
+    {
+        try
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(ClassRoot, throwOnMissingSubKey: false);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"DeepLink: unregister failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>True if the <c>wol-launcher://</c> scheme is currently registered.</summary>
+    public static bool IsRegistered()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(ClassRoot + @"\shell\open\command");
+            return key?.GetValue(null) is string s && !string.IsNullOrWhiteSpace(s);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"DeepLink: IsRegistered read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// If <paramref name="arg"/> is a valid <c>wol-launcher://join/&lt;id&gt;</c>
     /// deep link, extract the validated lobby id. Returns false for anything else
     /// (a normal arg like <c>--update-now</c>, junk, or a hostile URI).
@@ -93,6 +125,11 @@ public static class DeepLinkService
         lobbyId = id;
         return true;
     }
+
+    /// <summary>True if <paramref name="id"/> is a well-formed lobby id (the only
+    /// value we ever accept from an untrusted deep link or the IPC pipe).</summary>
+    public static bool IsValidLobbyId(string? id)
+        => !string.IsNullOrEmpty(id) && LobbyIdPattern.IsMatch(id);
 
     /// <summary>
     /// Scan a process's command-line args for the first valid join deep link,
