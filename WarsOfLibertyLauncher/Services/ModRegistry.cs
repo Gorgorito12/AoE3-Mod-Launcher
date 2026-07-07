@@ -551,9 +551,15 @@ public static class ModRegistry
             UpdateMechanism = ModUpdateMechanism.WolPatcher,
             Wol = new WolPatcherSettings
             {
-                UpdateInfoUrl = "http://aoe3wol.com/updates/UpdateInfo.xml",
-                UpdateInfoUrlAlt =
-                    "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml",
+                // HTTPS is the PRIMARY: aoe3wol's HTTP endpoint returns a
+                // truncated ~7 KB body (fails XML parse) — consistently as of this
+                // writing — while HTTPS serves the correct, complete file (verified,
+                // 47 versions). HTTP stays as the alt in case it recovers. (The old
+                // alt was a SourceForge mirror frozen at 1.0.9h; falling back to that
+                // ancient file made a valid 1.2.0e install read as unrecognized → a
+                // spurious reinstall prompt — that's the bug this pair fixes.)
+                UpdateInfoUrl = "https://aoe3wol.com/updates/UpdateInfo.xml",
+                UpdateInfoUrlAlt = "http://aoe3wol.com/updates/UpdateInfo.xml",
                 OfficialWebsite = "http://aoe3wol.com/",
                 PayloadZipUrls = new[]
                 {

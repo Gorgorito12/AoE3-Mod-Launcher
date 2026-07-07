@@ -445,10 +445,56 @@ Two cheap gates beyond a green build:
   `NativeInstallService.RecaptureHashes` → merges into `FileHashes`, `PruneMissingHashes`,
   recomputes `EngineFileHashes`, saves. It's wrapped non-fatal (try/catch +
   `DiagnosticLog`) — a patched install is the normal WoL state and must stay verifiable.
+  **The same post-patch block ALSO re-stamps the version-KEY baseline** (`KeyFileHashes`
+  + `manifest.Version`), which used to be a real bug: `KeyFileHashes` was written ONLY at
+  install/repair, never after a patch, so a patched-to-current install kept the PRE-patch
+  3-MD5 baseline → `RecognizeFromManifestData` computed `intact=false` → "live files
+  drifted" → NO MATCH. So a genuine 1.2.0e install whose UpdateInfo was momentarily
+  stale/unreachable read as unrecognized. The re-stamp computes the 3 MD5s the SAME way
+  `DetectCurrentVersionAsync` reads them (`ComputeRecognitionKeyHashesAsync`: proto/tech
+  live, stringtabley from `_originals` — NOT `NativeInstallService.ComputeKeyFileHashes`,
+  which reads stringtabley LIVE and would drift under an active translation) and sets
+  `KeyFileHashes` + `Version` TOGETHER to `LatestVersion.Ver` (never one without the
+  other) so the baseline always matches what recognition later compares against. (Old
+  drifted manifests self-heal on the next patch/Repair; the valid-install guard below
+  covers them meanwhile.)
   (b) **`PruneMissingHashes` is mandatory after any deletion** (delete-list,
   `ApplyUpdateDeletions`): a fingerprint left for a deleted file makes verify report a
   false "missing" and granular Repair **resurrect** a file the pipeline intentionally
   stripped — inverting the strip. (See also the byte-faithful + delete-list bullets.)
+
+- **A VALID install whose version can't be recognized NEVER gets offered a destructive
+  from-scratch reinstall — `ApplyCheckResult` shows PLAY, not Install.** The failure it
+  guards: WoL's UpdateInfo (`aoe3wol.com` over HTTP) intermittently returns a
+  short/truncated body; `UpdateInfoService.FetchAsync` uses the primary unless it THROWS
+  (a truncated body fails `LoadXml`), then falls to the ALT **without any version-count /
+  newer-wins validation**. The old ALT was a SourceForge mirror **frozen at 1.0.9h**, so
+  the fallback served an ancient UpdateInfo → a real 1.2.0e install matched no `<version>`
+  → NO MATCH → (manifest baseline drifted, see above, so no rescue) → the install path was
+  VALID but `CurrentVersion==null` with bogus pending downloads → the UI offered a **full
+  reinstall** (users started a 4 GB re-download into `Wars of Liberty (2)`). Two fixes:
+  (1) **`ModRegistry._builtIn` WoL UpdateInfo URLs: primary = `https://aoe3wol.com/updates/UpdateInfo.xml`,
+  alt = `http://aoe3wol.com/updates/UpdateInfo.xml`.** aoe3wol's HTTP endpoint returns a
+  truncated ~7 KB body (fails XML parse) — consistently — while HTTPS serves the correct
+  complete file (47 versions, verified live), so HTTPS is the primary and HTTP the fallback
+  (in case it recovers). The old alt was the ancient SourceForge mirror (frozen at 1.0.9h)
+  — falling back to THAT is what made a valid 1.2.0e install read as unrecognized. (The
+  built-in shadows the catalog, so this can't be fixed from `mod.json` — recompile only;
+  the template `mod.json` was synced for consistency.) (2) **`ApplyCheckResult`'s
+  `!versionKnown` branch is split on `result.IsValidInstall`**: a VALID-but-unrecognized
+  install → `SetPrimaryAction(Play)` + neutral `StatusInstalledVersionUnknown` + **clears
+  `_pendingDownloads`** (so nothing — e.g. a `--update-now` auto-apply — acts on the
+  stale/downgrade "updates"); only a NON-valid install keeps the destructive Install CTA.
+  **(3) The SAME guard is mirrored in `ModPropertiesDialog`** so the gear-menu dialog never
+  contradicts the dashboard: `CheckUpdatesBtn_Click` shows `StatusInstalledVersionUnknown`
+  (not "update available") when `result.IsValidInstall && result.CurrentVersion == null`,
+  and `LoadGeneral` shows `ModPropVersionUnknown` ("installed — version not verified")
+  instead of "(not installed)" when the version is null but `_service.InstallPath` is set.
+  Without this, Properties said "An update is available — open the launcher to install it"
+  while the dashboard showed Play → the user clicked "update" and nothing happened. Same
+  philosophy as the offline fallback: a mod on disk stays playable regardless of a
+  flaky/stale UpdateInfo; Repair/reinstall stays available via the gear menu but is never
+  pushed, and every surface agrees.
 
 - **Install detection is by CONTENT, never by folder name —
   `InstallProbeFile` + an optional `InstallMarker`, unified in
@@ -936,18 +982,62 @@ Two cheap gates beyond a green build:
   the running bar/speed/eta (that "progress trail lost" flicker). Op FINALLYs keep their raw
   `ResetProgressUI()` (they run after `SetBusy(false)` cleared `_operatingModId`, so they still
   reset).
-  **"Install another copy" NEVER auto-switches to the new copy** (the old `addNewSlot` rotation
-  that made it active is gone): when there's already an active copy, the new folder is
-  `RegisterInstall`ed as INACTIVE at its snapshot version (`keptCurrentActive` +
-  `keptCopyVersion`), the tail skips `CheckAsync`/auto-continue (they'd target the still-active
-  OTHER copy), and it just bells "Copy installed" + `RefreshActiveModBanner`. You stay on your
-  current copy (playable throughout via the per-install gate) and switch to the new one by hand
-  (it shows an Update CTA to patch it). A first install with no prior active copy still becomes
-  active. **This is UI/async — smoke-test on Windows:** install a copy of WoL, PLAY the active
-  copy while it installs, the strip reads "Installing Wars of Liberty" even on another mod's
-  dashboard, Pause/Cancel act on the install, and when the copy finishes you stay on your copy
-  (the new one appears in Manage installs). Don't reintroduce a global `_isBusy` gate on the
-  visible buttons.
+  **"Install another copy" installs the snapshot into a NEW folder, then — WHEN SAFE — auto-switches
+  to it and brings it fully current (Option A), reusing the ACTIVE-install update flow.** When
+  there's already an active copy, the new folder is `RegisterInstall`ed (id captured as
+  `newCopyInstallId`) with NO version stamped (see the version-recording rule below). Then the
+  `keptCurrentActive` tail: if it's **safe** — `!_isGameRunning` (a switch is blocked mid-game) AND
+  the copy's mod is still the displayed/active one (`service.Profile.Id == _updateService.Profile.Id`,
+  i.e. the user didn't switch mods during the background install) — it `SwitchActiveInstallAsync(newCopyInstallId)`
+  (which re-checks the copy → detects its REAL version + pending) then `MaybeAutoContinueUpdateAfterInstall(Copy)`
+  patches it to latest. So a copy ends up ready like a first install, and `ApplyAsync` raises the final
+  bell (the "Copy installed" bell here only fires when we did NOT continue into an update — mirrors the
+  fresh-install tail). **If NOT safe** (game running, or the user switched mods), it falls back to the
+  old behavior: bell "Copy installed" + `RefreshActiveModBanner`, you stay on your current copy, and the
+  new one updates when you switch to it by hand. A first install with no prior active copy still becomes
+  active via the normal path. **Why "switch first, THEN update" (not a background non-active update):**
+  making the copy active means the whole tested update flow (progress, cancel, the `--update-now` UAC
+  relaunch that re-resolves the ACTIVE install) targets the copy CORRECTLY — no new plumbing. The
+  alternative (updating a non-active copy in place) was deliberately NOT done: it needs a UAC-relaunch
+  target arg + a second concurrent op on a non-active path. **This is UI/async — smoke-test on Windows:**
+  install a copy of WoL while NOT in a game → it auto-switches to the new copy and updates it to latest;
+  install a copy WHILE PLAYING the active copy → it stays on your copy (no yank), bells "Copy installed",
+  and the new copy shows Update when you switch to it. Don't reintroduce a global `_isBusy` gate on the
+  visible buttons. **The cleanest end-state is still a CURRENT payload** — then the copy lands on latest
+  with nothing to update and the auto-switch has no patch to run.
+  **Two coupled correctness rules make the "switch to the copy → it shows Update" escape hatch
+  actually work — both were bugs.** (a) **The copy is registered with NO version, not the ACTIVE
+  copy's version.** `InstallAsync`'s `addNewSlot` branch used to stamp the new copy's
+  `LastKnownVersion`/`keptCopyVersion` with `installVersion = ResolveInstallVersion(service)` —
+  which is the *active* copy's detected version, NOT the new copy's. When the payload snapshot is
+  an OLDER version than the active copy (a stale `WolPayload.zip`), the copy was registered as the
+  newer version it doesn't have → switching to it read "already on that version" → **no Update CTA
+  → stuck**. Fix: leave the copy's `LastKnownVersion` empty; the bell shows "?" and the first
+  switch re-detects the real version. (b) **`SwitchActiveInstallAsync` invalidates
+  `_checkResultCache[modId]` before reloading.** The session check-cache is keyed by MOD id
+  (shared across copies), and `CheckAsync` short-circuits on it, so switching to a copy replayed
+  the PREVIOUS copy's `CheckResult` (its version/Update state) instead of re-detecting the new
+  copy's real version from its own `data\` MD5s. Dropping the cache entry on switch forces a full
+  `DetectCurrentVersionAsync` on the new copy's path. Don't remove either — together they make a
+  behind copy correctly surface its Update CTA (both when the Option-A auto-switch re-checks it and
+  when the user switches by hand). **The cleanest end-state remains a CURRENT payload** — a fresh
+  copy then lands on latest with nothing to update, so even the fallback "switch by hand" has no
+  patch to run.
+
+- **An antivirus quarantining a payload file mid-install surfaces an ACTIONABLE error, not a raw
+  IOException — `PayloadFileBlockedException`.** Windows Defender's real-time protection sometimes
+  false-positives on a WoL payload file (observed: `AI3\wolai.upl`) and deletes it from `%TEMP%`
+  *while* `CopyPayloadToDestinationAsync`'s `File.Copy` is reading it → `IOException`
+  "...contains a virus or potentially unwanted software...". The copy loop catches ONLY that case
+  — by **HRESULT `0x800700E1` (ERROR_VIRUS_INFECTED) / `0x800700E2` (ERROR_VIRUS_DELETED)**, which
+  is locale-independent (the message text is localized, so don't match on it) — and rethrows
+  `Services.PayloadFileBlockedException(relPath)`. `MainWindow.InstallAsync` catches it BEFORE the
+  generic handler and shows the localized `InstallDefenderBlocked` (naming the blocked file, telling
+  the user to add an exclusion for the install + `%TEMP%` folders). **No auto-retry** — the temp
+  source is already quarantined, so a retry re-fails; the guidance is the fix. This is a band-aid:
+  the durable fixes are the SignPath signature (suppresses the AV heuristic) + reporting the file to
+  Microsoft as a false positive. Don't widen the catch to all `IOException` (a real disk/sharing
+  error must still surface its own message).
 
 - **`ModState.PinnedVersion` pauses update PROMPTS, it never auto-updates — and it
   self-corrects when stale.** Empty (default) = follow the latest, normal

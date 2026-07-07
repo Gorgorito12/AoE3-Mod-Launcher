@@ -1453,6 +1453,14 @@ public partial class MainWindow : Window
         try { _config.Save(); }
         catch (Exception ex) { DiagnosticLog.Write($"Config save after install switch failed: {ex.Message}"); }
 
+        // Invalidate the session check-result cache for THIS mod before reloading.
+        // The cache is keyed by mod id (shared across copies), so without this the
+        // reload's CheckAsync would replay the PREVIOUS copy's result for the new
+        // copy — a different install/version — and never re-detect the copy's real
+        // version from its own data\ files (so a behind copy would never surface its
+        // Update CTA). Dropping it forces a full re-detection on the new copy's path.
+        _checkResultCache.Remove(_config.ActiveModId);
+
         await ReloadActiveServiceAsync(isModSwitch: false);
         // The active copy just changed — reflect the new folder in the hero's copy chip
         // immediately (independent of whichever render path the reload took).
@@ -6990,7 +6998,23 @@ public partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
 
-        if (!versionKnown)
+        if (!versionKnown && result.IsValidInstall)
+        {
+            // A VALID install (marker present) whose version we couldn't identify —
+            // e.g. a transiently short/truncated or offline UpdateInfo, or a
+            // fall-back to an ancient mirror. NEVER push a destructive from-scratch
+            // reinstall: the mod is on disk and playable. Keep PLAY, show a neutral
+            // note, and DROP the pending list (those "updates" came from a stale
+            // UpdateInfo — acting on them would be a downgrade). Repair/reinstall
+            // stays available via the gear menu for anyone who actually wants it.
+            DiagnosticLog.Write(
+                "Valid install with unrecognized version — keeping Play (not offering a reinstall).");
+            _pendingDownloads = new();
+            SetStatus(Strings.Get("StatusInstalledVersionUnknown"));
+            SetPrimaryAction(PrimaryAction.Play);
+            MaybeResetProgressUI();
+        }
+        else if (!versionKnown)
         {
             long totalBytes = 0;
             foreach (var d in _pendingDownloads) totalBytes += d.Size;
@@ -8113,6 +8137,9 @@ public partial class MainWindow : Window
         // the "Copy installed" bell (no CheckAsync runs on it, so CurrentVersion would be null).
         bool keptCurrentActive = false;
         string keptCopyVersion = "";
+        // Install id of the freshly-registered copy, so the tail can (when safe) auto-switch to it
+        // and bring it fully current — "install from scratch, then update" for a copy (Option A).
+        string newCopyInstallId = "";
 
         var payload = await ResolvePayloadUrlsAsync(service);
         if (payload == null) return;
@@ -8611,13 +8638,15 @@ public partial class MainWindow : Window
                 // the new one installs in the background. It updates when you switch to it.
                 var leaf = Path.GetFileName(installFolder.TrimEnd('\\', '/'));
                 installState.RegisterInstall(installFolder, leaf);
-                if (!string.IsNullOrEmpty(installVersion))
-                {
-                    var added = installState.OtherInstalls
-                        .FirstOrDefault(i => ModState.PathEquals(i.InstallPath, installFolder));
-                    if (added != null) added.LastKnownVersion = installVersion;
-                    keptCopyVersion = installVersion;
-                }
+                newCopyInstallId = installState.OtherInstalls
+                    .FirstOrDefault(i => ModState.PathEquals(i.InstallPath, installFolder))?.Id ?? "";
+                // Do NOT stamp the copy with installVersion — that's the ACTIVE copy's
+                // detected version, not this NEW copy's. The payload snapshot can be an
+                // older version than the active copy, so claiming the active version
+                // would hide a needed update (no Update CTA when you switch to it, since
+                // it'd read "already on that version"). Leave it unknown; the first
+                // switch re-detects the copy's real version from its own data\ files
+                // (the check-cache is invalidated on switch — see SwitchActiveInstallAsync).
                 keptCurrentActive = true;
             }
             if (!keptCurrentActive)
@@ -8680,6 +8709,17 @@ public partial class MainWindow : Window
             SetStatus(Strings.Get("StatusInstallBaseMissing"));
             ShowProgressError(Strings.Get("StatusInstallBaseMissing"));
         }
+        catch (Services.PayloadFileBlockedException ex)
+        {
+            // Windows Defender (or another AV) quarantined a mod file mid-install —
+            // a known false positive (e.g. AI3\wolai.upl). A retry re-fails (the temp
+            // source is already gone), so tell the user exactly what to do instead of
+            // surfacing the raw "...contains a virus..." IOException.
+            DiagnosticLog.Write($"Install aborted — antivirus blocked payload file: {ex}");
+            var msg = Strings.Format("InstallDefenderBlocked", ex.BlockedFile);
+            SetStatus(msg);
+            ShowProgressError(msg);
+        }
         catch (Exception ex)
         {
             SetStatus($"Error: {ex.Message}");
@@ -8719,8 +8759,35 @@ public partial class MainWindow : Window
         {
             if (installSucceeded)
             {
-                RaiseInstalledBell(service, isCopy: true, keptCopyVersion);
                 RefreshActiveModBanner();
+
+                // Option A ("install from scratch, then update" for a copy): when it's
+                // SAFE, auto-switch to the new copy and bring it fully current, so a copy
+                // ends up ready like a first install — instead of sitting at its snapshot
+                // until the user switches by hand. Reuses the ACTIVE-install update flow
+                // (the copy becomes active first), so no non-active/background-update
+                // plumbing: SwitchActiveInstallAsync re-checks the copy (detecting its real
+                // version + pending), then MaybeAutoContinueUpdateAfterInstall patches it.
+                // Gated: only when NO game is running (a switch is blocked mid-game) and the
+                // copy's mod is still the displayed/active one (the user didn't switch mods
+                // during the background install). If not safe, fall back to the old behavior
+                // (announce the copy; it updates when the user switches to it by hand).
+                bool broughtCurrent = false;
+                if (!_isGameRunning
+                    && !string.IsNullOrEmpty(newCopyInstallId)
+                    && string.Equals(service.Profile.Id, _updateService.Profile.Id,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    DiagnosticLog.Write(
+                        $"Copy install: auto-switching to new copy '{newCopyInstallId}' to bring it current.");
+                    await SwitchActiveInstallAsync(newCopyInstallId);
+                    broughtCurrent = await MaybeAutoContinueUpdateAfterInstall(InstallCompletion.Copy);
+                }
+
+                // Only bell "Copy installed" here when we did NOT continue into an update;
+                // when we did, ApplyAsync raises the final bell (like the fresh-install tail).
+                if (!broughtCurrent)
+                    RaiseInstalledBell(service, isCopy: true, keptCopyVersion);
             }
             return;
         }

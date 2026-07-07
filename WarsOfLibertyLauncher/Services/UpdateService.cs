@@ -869,10 +869,28 @@ public class UpdateService
                 foreach (var kv in overlay) manifest.FileHashes[kv.Key] = kv.Value;
                 manifest.FileHashes = NativeInstallService.PruneMissingHashes(InstallPath, manifest.FileHashes);
                 manifest.EngineFileHashes = engine;
+
+                // Re-stamp the version-KEY baseline (the 3 MD5s) + the reached version
+                // TOO. KeyFileHashes was only ever stamped at install/repair, never
+                // after patches, so a patched install kept the PRE-patch baseline →
+                // "live files drifted" → the manifest couldn't recognize it (the exact
+                // failure that made a valid, patched-to-current install read as
+                // unrecognized when the UpdateInfo was stale). Computed the SAME way
+                // DetectCurrentVersion reads the keys (proto/tech live, stringtabley
+                // from the _originals snapshot), and only together with the version so
+                // the two never disagree. LatestVersion is the version the full patch
+                // chain reaches.
+                if (!string.IsNullOrEmpty(LatestVersion?.Ver))
+                {
+                    manifest.KeyFileHashes = await ComputeRecognitionKeyHashesAsync(InstallPath, ct);
+                    manifest.Version = LatestVersion!.Ver;
+                }
+
                 manifest.Save();
                 DiagnosticLog.Write(
                     $"Post-update: refreshed manifest hashes — {manifest.FileHashes.Count} overlay, " +
-                    $"{engine.Count} engine ({touchedByPatches.Count} files touched).");
+                    $"{engine.Count} engine ({touchedByPatches.Count} files touched); " +
+                    $"baseline re-stamped to version {manifest.Version}.");
             }
         }
         catch (Exception ex)
@@ -1220,6 +1238,30 @@ public class UpdateService
         // records), so recognize it via the install-manifest the launcher
         // stamped at install/repair time.
         return RecognizeFromManifest(installPath, knownVersions, protoMd5, techMd5, strMd5);
+    }
+
+    /// <summary>
+    /// Computes the three version-key MD5s the SAME way
+    /// <see cref="DetectCurrentVersionAsync"/> reads them — proto/tech from the
+    /// live files, stringtabley from the <c>_originals</c> snapshot
+    /// (localization-invariant) — keyed like
+    /// <see cref="Models.InstallManifest.KeyFileHashes"/> (forward-slash rel
+    /// paths). Used to re-stamp the manifest baseline after a patch so it matches
+    /// exactly what recognition later compares against.
+    /// </summary>
+    private static async Task<Dictionary<string, string>> ComputeRecognitionKeyHashesAsync(
+        string installPath, CancellationToken ct)
+    {
+        var proto = await HashService.ComputeMd5Async(Path.Combine(installPath, ProtoRelativePath), ct);
+        var tech = await HashService.ComputeMd5Async(Path.Combine(installPath, TechRelativePath), ct);
+        var strPath = new TranslationService(installPath).ResolveHashableFile(StrRelativePath);
+        var str = await HashService.ComputeMd5Async(strPath, ct);
+        return new Dictionary<string, string>
+        {
+            [ProtoRelativePath.Replace('\\', '/')] = proto,
+            [TechRelativePath.Replace('\\', '/')] = tech,
+            [StrRelativePath.Replace('\\', '/')] = str,
+        };
     }
 
     /// <summary>

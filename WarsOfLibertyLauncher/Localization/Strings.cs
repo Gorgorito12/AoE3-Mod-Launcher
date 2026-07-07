@@ -787,6 +787,11 @@ public static class Strings
             [LangEn] = "(not installed)",
             [LangEs] = "(no instalado)",
         },
+        ["ModPropVersionUnknown"] = new()
+        {
+            [LangEn] = "installed — version not verified",
+            [LangEs] = "instalado — versión sin verificar",
+        },
         ["ModPropNoTranslations"] = new()
         {
             [LangEn] = "This mod ships no translation packs.",
@@ -3112,6 +3117,11 @@ public static class Strings
             [LangEn] = "Up to date. Version {0}. Ready to play!",
             [LangEs] = "Todo al día. Versión {0}. ¡Listo para jugar!",
         },
+        ["StatusInstalledVersionUnknown"] = new()
+        {
+            [LangEn] = "Installed and ready to play — couldn't verify your version or updates right now.",
+            [LangEs] = "Instalado y listo para jugar — no se pudo verificar tu versión ni actualizaciones ahora.",
+        },
         // ---- Offline mode (observed connectivity) ----
         ["OfflineChip"] = new()
         {
@@ -3718,6 +3728,11 @@ public static class Strings
         {
             [LangEn] = "The Age of Empires III base game wasn't copied, so the mod can't run. Your AoE3 install may be missing, in an unexpected location, or excluded by another mod's path. The mod was NOT installed — check your AoE3 install and try again.",
             [LangEs] = "No se copió el juego base de Age of Empires III, así que el mod no puede ejecutarse. Tu instalación de AoE3 podría faltar, estar en una ubicación inesperada o quedar excluida por la ruta de otro mod. El mod NO se instaló — revisa tu instalación de AoE3 e inténtalo de nuevo.",
+        },
+        ["InstallDefenderBlocked"] = new()
+        {
+            [LangEn] = "Windows Defender (or your antivirus) blocked a mod file during install: {0}. This is a known false positive — the mod is safe. Add an exclusion for the install folder AND the temp folder (%TEMP%), or turn off real-time protection briefly, then install again.",
+            [LangEs] = "Windows Defender (o tu antivirus) bloqueó un archivo del mod durante la instalación: {0}. Es un falso positivo conocido — el mod es seguro. Agregá una exclusión para la carpeta de instalación Y la carpeta temporal (%TEMP%), o desactivá la protección en tiempo real un momento, y volvé a instalar.",
         },
 
         // -------- Download corruption retry (NativeInstall) --------

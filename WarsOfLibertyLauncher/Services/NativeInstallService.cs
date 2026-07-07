@@ -1135,7 +1135,21 @@ public class NativeInstallService
                     DiagnosticLog.Write($"Overlay hash failed for {relForward}: {ex.Message}");
                 }
 
-                File.Copy(srcFile, destPath, overwrite: true);
+                try
+                {
+                    File.Copy(srcFile, destPath, overwrite: true);
+                }
+                catch (IOException ioex) when (
+                    ioex.HResult == unchecked((int)0x800700E1) ||   // ERROR_VIRUS_INFECTED
+                    ioex.HResult == unchecked((int)0x800700E2))     // ERROR_VIRUS_DELETED
+                {
+                    // Real-time AV (Defender) quarantined a payload file mid-copy — a
+                    // known false positive on some WoL files (e.g. AI3\wolai.upl). The
+                    // source in %TEMP% is already gone, so a plain retry re-fails; surface
+                    // an actionable error instead of a raw, cryptic IOException.
+                    DiagnosticLog.Write($"Payload file blocked by antivirus: {relForward} ({ioex.Message})");
+                    throw new PayloadFileBlockedException(relForward, ioex);
+                }
                 bytesDone += srcSize;
 
                 if (done == 1 || done % 100 == 0 || done == total)

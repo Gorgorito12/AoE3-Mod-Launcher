@@ -258,8 +258,15 @@ public partial class ModPropertiesDialog : Window
         ValName.Text = _profile.DisplayName ?? "";
         ValAuthor.Text = string.IsNullOrWhiteSpace(_profile.Author) ? "—" : _profile.Author;
         var ver = _service.CurrentVersion?.Ver;
-        bool installed = !string.IsNullOrWhiteSpace(ver);
-        ValVersion.Text = installed ? ver : Strings.Get("ModPropNotInstalled");
+        bool hasVersion = !string.IsNullOrWhiteSpace(ver);
+        // A valid install whose version we couldn't identify (stale/unreachable
+        // UpdateInfo) is NOT "(not installed)" — the mod is on disk. Distinguish
+        // "installed, version unknown" from genuinely-not-installed by the resolved
+        // install path, so this never contradicts the dashboard's Play.
+        bool hasInstall = !string.IsNullOrWhiteSpace(_service.InstallPath);
+        ValVersion.Text = hasVersion ? ver!
+            : hasInstall ? Strings.Get("ModPropVersionUnknown")
+            : Strings.Get("ModPropNotInstalled");
         ValWebsite.Text = string.IsNullOrWhiteSpace(_profile.OfficialWebsite) ? "—" : _profile.OfficialWebsite;
 
         // Mirror the version into the header's pill badge so the
@@ -267,7 +274,7 @@ public partial class ModPropertiesDialog : Window
         // they're on. When the mod isn't installed the badge
         // collapses so the header stays clean instead of showing
         // an empty pill.
-        if (installed)
+        if (hasVersion)
         {
             HeaderVersionText.Text = "v" + ver;
             HeaderVersionBadge.Visibility = Visibility.Visible;
@@ -280,7 +287,7 @@ public partial class ModPropertiesDialog : Window
 
         // Stay-on-version pin (Fase 0): only meaningful once we know the installed
         // version. Checked only when the pin matches the version we actually have.
-        if (installed)
+        if (hasVersion)
         {
             var pinned = _config.GetState(_profile.Id).PinnedVersion;
             StayOnVersionCheck.Content = Strings.Format("ModPropStayOnVersion", ver);
@@ -1168,6 +1175,15 @@ public partial class ModPropertiesDialog : Window
             if (result == null || !result.IsValidInstall)
             {
                 SetCheckResult(Strings.Get("ModPropCheckNotInstalled"), "TextSecondary");
+            }
+            else if (result.CurrentVersion == null)
+            {
+                // Valid install we couldn't identify (stale/unreachable UpdateInfo).
+                // Mirror the dashboard's valid-install guard: the pending downloads
+                // are from a stale UpdateInfo, so DON'T claim "update available"
+                // (which contradicts the dashboard's Play and points the user at an
+                // action that isn't offered).
+                SetCheckResult(Strings.Get("StatusInstalledVersionUnknown"), "TextSecondary");
             }
             else if (result.PendingDownloads.Count > 0)
             {
