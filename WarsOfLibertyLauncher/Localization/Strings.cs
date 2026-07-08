@@ -2025,6 +2025,14 @@ public static class Strings
         ["MpRoomPeekLoading"] = new() { [LangEn] = "Loading players…", [LangEs] = "Cargando jugadores…" },
         ["MpRoomPeekEmpty"] = new() { [LangEn] = "No players in this room.", [LangEs] = "No hay jugadores en esta sala." },
         ["MpRoomPeekError"] = new() { [LangEn] = "Couldn't load the players. Try again.", [LangEs] = "No se pudieron cargar los jugadores. Probá de nuevo." },
+        ["MpOnlinePlayersTitle"] = new() { [LangEn] = "Online players · {0}", [LangEs] = "Jugadores conectados · {0}" },
+        ["MpOnlinePlayersEmpty"] = new() { [LangEn] = "No one online.", [LangEs] = "Nadie conectado." },
+        ["MpOnlinePlayersTooltip"] = new() { [LangEn] = "See who's online", [LangEs] = "Ver quién está conectado" },
+        ["MpOnlinePlayersYou"] = new() { [LangEn] = "you", [LangEs] = "vos" },
+        ["MpPlayersPanelTitle"] = new() { [LangEn] = "Players · {0}", [LangEs] = "Jugadores · {0}" },
+        ["MpPlayersInGame"] = new() { [LangEn] = "In game · {0}", [LangEs] = "En partida · {0}" },
+        ["MpPlayersInRoom"] = new() { [LangEn] = "In a room · {0}", [LangEs] = "En una sala · {0}" },
+        ["MpPlayersInLauncher"] = new() { [LangEn] = "In launcher · {0}", [LangEs] = "En el launcher · {0}" },
         ["MpRoomStart"] = new() { [LangEn] = "Start game", [LangEs] = "Empezar partida" },
         ["MpRoomChatPlaceholder"] = new()
         {

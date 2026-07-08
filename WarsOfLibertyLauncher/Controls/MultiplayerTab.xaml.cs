@@ -3365,6 +3365,7 @@ public partial class MultiplayerTab : UserControl
                             AppendGlobalChatLine(line, scroll: true);
                         break;
                     case "presence":
+                        ParseOnlineUsers(e.Json);
                         if (e.Json.TryGetProperty("online", out var on) && on.TryGetInt32(out var n))
                             UpdateGlobalPresence(n);
                         break;
@@ -3391,10 +3392,37 @@ public partial class MultiplayerTab : UserControl
             foreach (var line in hist.EnumerateArray())
                 AppendGlobalChatLine(line, scroll: false);
         }
+        ParseOnlineUsers(json);
         if (json.TryGetProperty("online", out var on) && on.TryGetInt32(out var n))
             UpdateGlobalPresence(n);
         UpdateGlobalChatEmptyHint();
         ScrollGlobalChatToEnd();
+    }
+
+    /// <summary>
+    /// Cache the global-chat "who's online" list (with each player's live status)
+    /// from a presence / global_state frame's optional <c>onlineUsers</c> array,
+    /// then (re)render the live players panel. Only replaces the cache when the
+    /// frame carries the array — an old backend that sends only the count leaves
+    /// the list untouched (back-compat; the panel then shows empty). Each entry's
+    /// <c>status</c> is <c>in_game</c> / <c>in_room</c> / <c>idle</c> (missing →
+    /// idle, so an old backend puts everyone "in launcher").
+    /// </summary>
+    private void ParseOnlineUsers(JsonElement frame)
+    {
+        if (frame.TryGetProperty("onlineUsers", out var arr) && arr.ValueKind == JsonValueKind.Array)
+        {
+            _globalOnlineUsers.Clear();
+            foreach (var u in arr.EnumerateArray())
+            {
+                var userId = u.TryGetProperty("userId", out var idEl) ? (idEl.GetString() ?? "") : "";
+                var login = u.TryGetProperty("login", out var lEl) ? (lEl.GetString() ?? "") : "";
+                var avatarUrl = u.TryGetProperty("avatarUrl", out var avEl) ? avEl.GetString() : null;
+                var status = u.TryGetProperty("status", out var stEl) ? (stEl.GetString() ?? "idle") : "idle";
+                _globalOnlineUsers.Add((userId, login, avatarUrl, status));
+            }
+        }
+        RenderPlayersPanel();
     }
 
     private void AppendGlobalChatLine(JsonElement line, bool scroll)
@@ -3675,10 +3703,108 @@ public partial class MultiplayerTab : UserControl
     private int _lastQuotaPlayers;
     private int _lastActiveRooms;
 
+    // The connected global-chat users + each one's live status, cached from the
+    // presence / global_state frames' onlineUsers array (see ParseOnlineUsers).
+    // Status: "in_game" / "in_room" / "idle". Rendered by RenderPlayersPanel.
+    private readonly List<(string userId, string login, string? avatarUrl, string status)> _globalOnlineUsers = new();
+
     private void UpdateTopBarCounts()
     {
         int players = _lastGlobalOnline ?? _lastQuotaPlayers;
-        QuotaText.Text = $"👥 {players} players online   ·   🏠 {_lastActiveRooms} active rooms";
+        // The 👥 icon is static in the XAML chip; here we set just the label.
+        // "active rooms" is its own static chip. The detailed list lives in the
+        // players panel in the right column (RenderPlayersPanel).
+        OnlinePlayersText.Text = $"{players} players online";
+        ActiveRoomsText.Text = $"🏠 {_lastActiveRooms} active rooms";
+    }
+
+    /// <summary>
+    /// (Re)render the live players panel (right column, bottom half) from the
+    /// cached presence list, grouped by status into three sections —
+    /// 🟢 In game / 🟡 In a room / ⚪ In launcher — each with a count. One row per
+    /// player: <see cref="BuildAvatarDisc"/> + name, own row tagged "· you".
+    /// Called on every presence / global_state frame (cheap, ≤~60 rows). Empty
+    /// (old backend / no presence yet) → a neutral hint.
+    /// </summary>
+    private void RenderPlayersPanel()
+    {
+        if (PlayersPanel == null) return;
+        PlayersPanel.Children.Clear();
+        PlayersPanelTitle.Text = Strings.Format("MpPlayersPanelTitle", _globalOnlineUsers.Count);
+
+        Brush R(string k) => (Brush)Application.Current.FindResource(k);
+        double F(string k) => (double)Application.Current.FindResource(k);
+
+        if (_globalOnlineUsers.Count == 0)
+        {
+            PlayersPanel.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("MpOnlinePlayersEmpty"),
+                Foreground = R("TextSecondary"),
+                FontSize = F("FontSizeBody"),
+                Margin = new Thickness(4, 6, 0, 0),
+            });
+            return;
+        }
+
+        var me = _session?.CurrentUser;
+        bool IsMe((string userId, string login, string? avatarUrl, string status) u) =>
+            me != null && (
+                (!string.IsNullOrEmpty(u.userId) && string.Equals(u.userId, me.Id, StringComparison.Ordinal))
+                || (!string.IsNullOrEmpty(u.login)
+                    && string.Equals(u.login, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
+
+        void Section(string statusKey, string headerKey, string dotBrushKey)
+        {
+            var members = _globalOnlineUsers.Where(u => u.status == statusKey).ToList();
+            // Category header: a status dot + "<label> · N" (always shown).
+            var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 4) };
+            headerRow.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 8, Height = 8, Fill = R(dotBrushKey),
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
+            });
+            headerRow.Children.Add(new TextBlock
+            {
+                Text = Strings.Format(headerKey, members.Count),
+                Foreground = R("TextSecondary"),
+                FontSize = F("FontSizeCaption"),
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            PlayersPanel.Children.Add(headerRow);
+
+            foreach (var u in members)
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 2, 0, 2) };
+                var disc = BuildAvatarDisc(u.login, u.avatarUrl, 24);
+                disc.Margin = new Thickness(0, 0, 8, 0);
+                row.Children.Add(disc);
+                row.Children.Add(new TextBlock
+                {
+                    Text = u.login,
+                    Foreground = R("TextPrimary"),
+                    FontSize = F("FontSizeBody"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 200,
+                });
+                if (IsMe(u))
+                    row.Children.Add(new TextBlock
+                    {
+                        Text = "  · " + Strings.Get("MpOnlinePlayersYou"),
+                        Foreground = R("TextSecondary"),
+                        FontSize = F("FontSizeCaption"),
+                        VerticalAlignment = VerticalAlignment.Center,
+                    });
+                PlayersPanel.Children.Add(row);
+            }
+        }
+
+        // Ordered: playing → waiting in a room → idle in the launcher.
+        Section("in_game", "MpPlayersInGame", "MpStatusInGame");
+        Section("in_room", "MpPlayersInRoom", "MpStatusFull");
+        Section("idle", "MpPlayersInLauncher", "TextSecondary");
     }
 
     // The room-roster "peek" popup (see who's in a room without joining). Single
@@ -3828,14 +3954,18 @@ public partial class MultiplayerTab : UserControl
             // counter lives in the tooltip so the header strip stays compact.
             _lastQuotaPlayers = q.Players.Active;
             _lastActiveRooms = q.Lobbies.Active;
-            QuotaText.ToolTip = Strings.Format("MpQuotaBar",
+            // The /max breakdown lives on the active-rooms chip's tooltip; the
+            // players pill keeps its own "see who's online" tooltip.
+            ActiveRoomsChip.ToolTip = Strings.Format("MpQuotaBar",
                 q.Players.Active, q.Players.Max,
                 q.Lobbies.Active, q.Lobbies.Max);
             UpdateTopBarCounts();
         }
         catch
         {
-            QuotaText.Text = "";
+            // Quota fetch failed: blank only the quota-derived rooms label; the
+            // players pill is presence-driven and keeps its last value.
+            ActiveRoomsText.Text = "";
         }
     }
 

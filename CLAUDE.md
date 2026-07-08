@@ -1922,8 +1922,19 @@ Two cheap gates beyond a green build:
   `matches/rest.ts` match-reported). The embed is **embellished**: host avatar+name
   as author (`users.avatar_url`), room name as title, **mod icon as thumbnail**
   (`raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/mods/<modId>/icon.png`
-  — unknown mod 404s and Discord just omits it), fields Mod/Players/Status, **color
-  by status** (gold/green/grey); no stray emojis. **Multi-channel:**
+  — unknown mod 404s and Discord just omits it), fields Mod/Players/Status +
+  **Opened/Lasted uptime**, **color by status** (gold/green/grey); no stray emojis.
+  **The uptime field is a LIVE relative timestamp at ZERO server cost:** while the
+  room is active the 4th field is `Opened: <t:<unixSeconds>:R>` — Discord's native
+  relative-time markdown, which each CLIENT renders as "5 minutes ago" and updates
+  live on its own (localised per viewer), so there is NO polling / periodic edit /
+  timer on the backend (`renderKey` stays `players|status`, so the constant
+  timestamp triggers no extra flushes). On close, `buildEmbed` swaps it to a STATIC
+  `Lasted: <formatDuration(now-createdAt)>` (compact `1h 5m`/`12m`/`45s`) so a closed
+  room shows its final duration frozen instead of an ever-growing "opened N ago".
+  Don't "improve" the live counter by editing the message on a timer — that would
+  burn the per-webhook edit rate limit + CPU for what Discord already does client-side.
+  **Multi-channel:**
   `DISCORD_WEBHOOK_URL` is a **comma-separated list** (parsed by `urlListEnv` in
   `env.ts` into `config.discordWebhookUrls: string[]`), so several channels/servers
   stay in sync; `configure(config, app.log)` in `index.ts` stashes cfg+logger so the
@@ -1934,9 +1945,16 @@ Two cheap gates beyond a green build:
   break room creation or the WS broadcast). All fixed text is **English on purpose**
   (community-facing, mirrors the server's English logs); the only variable text is
   the player-typed room name. Pretty mod name from the hardcoded `MOD_LABELS`
-  (`wol`/`improvement-mod`/`aoe3-tad`), fallback to the raw `mod_id`. Deploy is
-  code-only (`git pull` + set the comma-separated `DISCORD_WEBHOOK_URL` in `.env` +
-  `systemctl restart wol-lobby`) — **no migration** (message ids are in-memory), no
+  (`wol`/`improvement-mod`/`aoe3-tad`), fallback to the raw `mod_id`. **Optional
+  ROLE PING:** if `DISCORD_PLAYERS_ROLE_ID` (env, server-specific) is set, the
+  create POST adds `content: "<@&<id>>"` + `allowed_mentions:{parse:[],roles:[id]}`
+  so a "Players"/"Jugadores" role gets notified (the mention MUST be in `content`,
+  not the embed; the `allowed_mentions` restriction stops a room name from
+  @everyone-ing). It's ONLY on the create POST — the PATCH edits never re-ping —
+  and no-op when the var is empty. (Multi-server caveat: a role id belongs to one
+  server, so with multiple webhooks the ping only lands on the server that has it.)
+  Deploy is code-only (`git pull` + set the comma-separated `DISCORD_WEBHOOK_URL`
+  [+ optional `DISCORD_PLAYERS_ROLE_ID`] in `.env` + `systemctl restart wol-lobby`) — **no migration** (message ids are in-memory), no
   `npm install` (`undici` already ships), no launcher rebuild. Trade-off: a server
   restart with an active room freezes that message at its last state (rooms are
   ephemeral, restarts rare). Deferred: a full Discord bot (a persistent gateway
@@ -2154,7 +2172,35 @@ Two cheap gates beyond a green build:
   instead of the old `/quota` `players.active` (in-lobby count) that made it disagree.
   "N active rooms" stays from `/quota`; presence falls back to the `/quota` count until
   the first presence frame. **These need the backend redeploy for avatars** (the list/
-  WS changes); the peek + players-online are launcher-only.
+  WS changes); the peek + top-bar count are launcher-only. (4) **The right column is now
+  SPLIT 50/50 — global chat on top, a LIVE PLAYERS panel on the bottom, categorized by
+  status: 🟢 In game / 🟡 In a room / ⚪ In launcher** (GameRanger-style). This REPLACED an
+  earlier clickable "N players online" chip/popup (that pill + `OnlinePlayers_Click` +
+  `_onlinePopup` are GONE — don't reintroduce them; the top-bar "N players online" is a
+  plain static count again). The split is a `Grid` at `Grid.Column="2"` with rows
+  `["*",12,"*"]`: row 0 = the existing chat card, row 2 = a new Players card cloning the
+  same glow+`MpSurface`/`MpCardBorder`/`RadiusLg` chrome (`PlayersPanelTitle` header +
+  `PlayersPanel` StackPanel in a `PlayersScroll` ScrollViewer). **Per-user status is
+  backend-computed and pushed LIVE.** The `presence` / `global_state` frames carry
+  `onlineUsers: [{userId, login, avatarUrl, status}]` alongside the `online` count;
+  `GlobalChatRoom.onlineUsers()` is now **async** — it runs ONE bounded query
+  (`SELECT lm.user_id, l.status FROM lobby_members lm JOIN lobbies l ON l.id=lm.lobby_id
+  WHERE l.status IN ('open','locked','in_game')`, ≤ maxActiveGames×lobbyMaxPlayers rows on
+  indexed columns) and maps each connected user: `in_game`→`in_game`, `open`/`locked`→
+  `in_room`, absent→`idle`. `broadcastPresence` is async; `this.ctx` is stashed in
+  `handleConnection` for the DB handle. **Live updates come from `GlobalChatRoom.refreshPlayers()`**
+  (public, **debounced ~1.5s**, self-swallowing) called on every room-state change: the
+  lobby paths reach it via a module stash `attachGlobalChat(globalChat)` (wired in
+  `index.ts`) — `LobbyRoom.reflectToDiscord` (member_joined/left, game_countdown→in_game,
+  game_cancelled→open) + `handleDisconnectCleanup` + `rest.ts` create/leave. No polling.
+  Launcher: `_globalOnlineUsers` widened to `(userId, login, avatarUrl, status)`;
+  `ParseOnlineUsers` reads `status` (missing→`idle`) and calls `RenderPlayersPanel()`,
+  which clears `PlayersPanel` and emits the 3 status sections (dot + `<label> · N` header
+  via `MpPlayersInGame`/`MpPlayersInRoom`/`MpPlayersInLauncher`, dots `MpStatusInGame`/
+  `MpStatusFull`/`TextSecondary`) with one `BuildAvatarDisc` row per player (own row tagged
+  "· you" via `_session.CurrentUser`). Empty (old backend / no presence) → `MpOnlinePlayersEmpty`.
+  **This DOES need the backend redeploy** (the `status` field + `refreshPlayers` hooks); with
+  an old backend the panel just shows everyone under "In launcher" (or empty).
 
 - **The rooms browser is a TABLE with responsive columns — the action button
   isn't a plain always-"Join".** (Doc heads-up: an earlier revision of this
