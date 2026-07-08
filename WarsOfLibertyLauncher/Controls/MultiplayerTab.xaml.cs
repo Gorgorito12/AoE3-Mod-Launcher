@@ -2641,7 +2641,7 @@ public partial class MultiplayerTab : UserControl
         // Coming (back) to the Rooms subtab: quietly freshen the list so
         // rooms created while the user was on another subtab show up at
         // once, without the skeleton flash a full refresh would cause. The
-        // 10 s _roomsListTimer keeps it current from here on.
+        // 5 s _roomsListTimer keeps it current from here on.
         if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
             _ = RefreshRoomsListAsync(quiet: true);
     }

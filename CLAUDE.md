@@ -2216,7 +2216,7 @@ Two cheap gates beyond a green build:
   (stable `OrderBy`, `Reverse` for desc; ROOM/MOD/HOST by name, PLAYERS by count,
   STATUS by Waiting<Full<InGame rank, PING is a no-op since your latency is the
   same for every row); `BuildRoomsSignature` stays in SERVER order so the quiet
-  10s auto-refresh diff is stable and doesn't lose the chosen sort. ACTION (col 6)
+  5s auto-refresh diff is stable and doesn't lose the chosen sort. ACTION (col 6)
   is a plain centered label, not sortable. A **footer** (`RoomsShowingCount`,
   `MpRoomsShowingCount` = "Showing N rooms") shows the count — **no pagination**
   (the list scrolls). **The layout is ~75/25** — the rooms table col is `3*`, the
@@ -2273,7 +2273,7 @@ Two cheap gates beyond a green build:
   only from inside), so if in-game rooms never lock, check the backend is flipping
   the lobby status, not the launcher. How these
   captions refresh: `BuildRoomsSignature` (the quiet-diff key) includes status +
-  player count + host, so In-game / Full / host changes repaint within ≤10 s while
+  player count + host, so In-game / Full / host changes repaint within ≤5 s while
   browsing. The **viewer-relative** bits (`iAmInThisRoom` / `iAmHost`) are
   deliberately **NOT** in the signature — they don't need to be, because they're
   recomputed on every render and the events that flip them also change the payload
