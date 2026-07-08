@@ -301,10 +301,17 @@
     <SolidColorBrush x:Key="MpStatusOnline" Color="#4FA66A"/>
     <SolidColorBrush x:Key="MpStatusReconnect" Color="#D4A04A"/>
     <SolidColorBrush x:Key="MpStatusOffline" Color="#B85A4A"/>
-    <SolidColorBrush x:Key="MpStatusWaiting" Color="#3B82F6"/>
-    <SolidColorBrush x:Key="MpStatusInGame" Color="#22C55E"/>
+    <!-- Room status dots. GREEN = open/joinable (waiting), BLUE = in game.
+         Kept IN SYNC with the Discord webhook's embed colours (open=green,
+         in_game=blue) so the same room reads the same colour in both places —
+         the "traffic-light": green = go/join, blue = in progress. -->
+    <SolidColorBrush x:Key="MpStatusWaiting" Color="#22C55E"/>
+    <SolidColorBrush x:Key="MpStatusInGame" Color="#3B82F6"/>
     <!-- A room at capacity: warm amber dot (matches the "Full" action). -->
     <SolidColorBrush x:Key="MpStatusFull" Color="#F59E0B"/>
+    <!-- "Ready" checkmark green. Its own key so the InGame dot can be blue
+         (matching the webhook) without turning the ✓ Listo pill blue too. -->
+    <SolidColorBrush x:Key="MpStatusReady" Color="#22C55E"/>
     <!-- A private (password-gated) room: purple dot. The room is still
          JOINABLE (Join prompts for the password) — the dot is informational,
          it does NOT disable the action. MP-only, no external consumers. -->

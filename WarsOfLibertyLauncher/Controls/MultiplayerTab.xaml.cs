@@ -3937,7 +3937,7 @@ public partial class MultiplayerTab : UserControl
                     row.Children.Add(new TextBlock
                     {
                         Text = "  ✓ " + Strings.Get("MpRoomReady"),
-                        Foreground = R("MpStatusInGame"),
+                        Foreground = R("MpStatusReady"),
                         FontSize = F("FontSizeCaption"),
                         VerticalAlignment = VerticalAlignment.Center,
                     });

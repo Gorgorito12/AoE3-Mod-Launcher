@@ -2238,8 +2238,15 @@ Two cheap gates beyond a green build:
   `MpSurface` #0F1A2B, `MpSurfaceAlt` #182740, `MpRoomRowBg` #16243A / hover
   #1B2D49, `MpCardBorder` #403B82F6 (blue ~25% alpha), `MpDivider` #22344F,
   `MpTableHeader` #94A3B8, `MpBlue` #3B82F6 / hover #2563EB / pressed #1D4ED8,
-  status Waiting #3B82F6 / InGame #22C55E / Full #F59E0B / Locked #8B5CF6, ping
-  #22C55E/#F59E0B/#EF4444. The top-bar header Border is `Transparent` (blends into
+  status Waiting #22C55E (green) / InGame #3B82F6 (blue) / Full #F59E0B / Locked
+  #8B5CF6, ping #22C55E/#F59E0B/#EF4444. **The Waiting/InGame status dots are
+  deliberately GREEN/BLUE (not the reverse) to match the Discord webhook's embed
+  colours** (`discordAnnounce.ts`: open=green `0x22c55e`, in_game=blue `0x3b82f6`)
+  so the same room reads the same colour in the launcher table and the webhook —
+  green = open/joinable, blue = in progress. Because `MpStatusInGame` also tinted
+  the ✓ "Listo/Ready" pill green, flipping it to blue would have turned that pill
+  blue; so Ready now uses its own `MpStatusReady` (#22C55E green). Don't re-swap
+  these back or the launcher and webhook will disagree again. The top-bar header Border is `Transparent` (blends into
   the navy gradient) with an `MpDivider` bottom rule; the Radmin banner's connected
   state is green #123C2B + a low-alpha green border (set in `RefreshRadminBanner`);
   the "Radmin VPN" NAT badge colours are set in `RenderNatBadge` (#182740/#94A3B8).
