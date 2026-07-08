@@ -2023,7 +2023,18 @@ Two cheap gates beyond a green build:
   snapshot (`_lastBrowserList`) it checks first; the Mod name resolves the same
   way (`_lastBrowserList` → `_currentLobbyModId` fallback) so the host sees the
   mod, not an em-dash. The two-method label refresh this view relies on is in the
-  Localization bullet under Runtime conventions.
+  Localization bullet under Runtime conventions. **The PLAYERS numerator is derived
+  from the roster in ONE place (`RefreshRoomPlayerCount`, called from BOTH
+  `RenderRoomPanel` AND the end of `RenderRoomMembers`) so the stat can never lag
+  the roster.** It used to be set inline only in `RenderRoomPanel`, but the
+  incremental `member_joined`/`member_left` handlers call `RenderRoomMembers`
+  (rebuild roster) WITHOUT `RenderRoomPanel`, so a join grew the roster to 2 while
+  the stat stayed the stale `"1 / 8"` from the last `room_state` (the reported
+  "somos dos pero figura 1" bug). Since every room frame calls `RenderRoomMembers`,
+  refreshing the count there keeps stat == `_roomMembers.Count` always. (The
+  `room_state` WS frame carries NO count field — only the `members` roster — so
+  `_roomMembers.Count` is the sole in-room source; the DB `current_players` is a
+  SEPARATE fact surfaced only in the rooms-browser LIST.)
 
 - **The players roster (`RenderRoomMembers` / `BuildMemberRow`) is host-first
   with open-slot placeholders — keep both, they're load-bearing UX.** Members

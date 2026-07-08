@@ -1489,6 +1489,30 @@ public partial class MultiplayerTab : UserControl
             for (var i = _roomMembers.Count; i < max; i++)
                 _lobbyWindow!.RoomMembersPanel.Children.Add(BuildOpenSlotRow());
         }
+
+        // Keep the PLAYERS stat in lockstep with the roster. RenderRoomMembers
+        // is called by EVERY room frame (room_state / member_joined / member_left
+        // / member_ready / host_changed), so deriving the count here means the
+        // stat and the roster can never diverge — fixing the "roster 2, stat 1/8"
+        // bug where an incremental member_joined rebuilt the roster but left the
+        // count text stale (it was only refreshed by RenderRoomPanel).
+        RefreshRoomPlayerCount();
+    }
+
+    /// <summary>
+    /// Set the PLAYERS stat ("N / max", or "N" when the max is unknown) from the
+    /// live roster (<c>_roomMembers.Count</c>). Single source of truth for the
+    /// count, called from both <see cref="RenderRoomPanel"/> and
+    /// <see cref="RenderRoomMembers"/> so they stay consistent. (Max only arrives
+    /// on the browser's lobby summary — see <see cref="TryGetCurrentLobbyMaxPlayers"/>.)
+    /// </summary>
+    private void RefreshRoomPlayerCount()
+    {
+        if (_lobbyWindow == null) return;
+        var playerCount = _roomMembers.Count;
+        _lobbyWindow.RoomPlayersText.Text = TryGetCurrentLobbyMaxPlayers(out var maxP)
+            ? $"{playerCount} / {maxP}"
+            : playerCount.ToString();
     }
 
     /// <summary>
@@ -2313,15 +2337,7 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow!.RoomTitleText.Text = title;
 
         // ---------- Players ----------
-        // Live count vs configured max. The trailing "players" word is
-        // gone (the PLAYERS header says it) and we drop the "/ ?" when
-        // the max is unknown rather than printing a question mark.
-        // (MaxPlayers only arrives on the browser's lobby summary; see
-        // TryGetCurrentLobbyMaxPlayers.)
-        var playerCount = _roomMembers.Count;
-        _lobbyWindow!.RoomPlayersText.Text = TryGetCurrentLobbyMaxPlayers(out var maxP)
-            ? $"{playerCount} / {maxP}"
-            : playerCount.ToString();
+        RefreshRoomPlayerCount();
 
         // ---------- ROOM ID ----------
         // Short uppercase code if the worker assigns one, otherwise the
