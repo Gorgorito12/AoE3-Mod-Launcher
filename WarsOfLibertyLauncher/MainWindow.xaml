@@ -871,14 +871,28 @@
                 <Button x:Name="TopTabMultiplayer"
                         Style="{StaticResource NavTabButton}"
                         Click="TopTabMultiplayer_Click">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="&#xE716;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="16"
-                                   Margin="0,0,10,0"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE716;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16"
+                                       Margin="0,0,10,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- "New room created" dot: set from PollNewRoomsAsync,
+                             cleared when the user switches to Multiplayer. Mirrors
+                             the notification bell's badge (MainWindow.xaml ~645). -->
+                        <Ellipse x:Name="MultiplayerTabDot"
+                                 Width="7" Height="7"
+                                 Fill="#E5484D"
+                                 Stroke="{DynamicResource BgSidebar}"
+                                 StrokeThickness="1"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Top"
+                                 Margin="0,2,-2,0"
+                                 Visibility="Collapsed"/>
+                    </Grid>
                 </Button>
             </StackPanel>
         </Border>

@@ -226,7 +226,18 @@ public sealed class NotificationCenter
     /// seeds a silent baseline of existing rooms itself (in-memory), so this only
     /// fires for rooms created after the poll started.
     /// </summary>
-    public bool RaiseRoomCreated(string roomId, string modId, string title, string body)
+    /// <summary>
+    /// Records a room as already-notified (persistent, cross-restart dedup on
+    /// <see cref="LauncherConfig.NotifiedRoomIds"/>) WITHOUT adding a bell item.
+    /// Room notifications no longer live in the bell — the caller surfaces them as a
+    /// Windows toast plus a dot on the MULTIPLAYER tab / Rooms subtab — so this only
+    /// owns the dedup. Returns true the first time a room id is seen (caller should
+    /// surface it), false if it was already notified.
+    /// (The <see cref="NotificationKind.RoomCreated"/> enum member + its KindBrush /
+    /// NavigateToNotification handling are kept only so room items persisted by older
+    /// builds still render and click; no new room items are ever added.)
+    /// </summary>
+    public bool TryMarkRoomNotified(string roomId)
     {
         if (string.IsNullOrWhiteSpace(roomId)) return false;
         if (_config.NotifiedRoomIds.Contains(roomId, StringComparer.OrdinalIgnoreCase))
@@ -234,14 +245,8 @@ public sealed class NotificationCenter
         _config.NotifiedRoomIds.Add(roomId);
         if (_config.NotifiedRoomIds.Count > 500)
             _config.NotifiedRoomIds.RemoveRange(0, _config.NotifiedRoomIds.Count - 500);
-        return Add(new NotificationItem
-        {
-            Kind = NotificationKind.RoomCreated,
-            ModId = modId,
-            Title = title,
-            Body = body,
-            TargetId = roomId,
-        });
+        _config.Save();   // previously saved via Add→Persist; now saved here directly
+        return true;
     }
 
     /// <summary>

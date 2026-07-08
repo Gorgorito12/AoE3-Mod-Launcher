@@ -8,6 +8,19 @@ using System.Text.RegularExpressions;
 namespace WarsOfLibertyLauncher.Services;
 
 /// <summary>
+/// Current Radmin VPN power-toggle state, derived from the log's
+/// <c>Switched On</c>/<c>Switched Off</c>/<c>Connected to server</c>
+/// events. <see cref="Unknown"/> means no readable/decisive log — the
+/// caller should NOT treat it as "off" (fall back to its other signals).
+/// </summary>
+public enum RadminPowerState
+{
+    Unknown,
+    On,
+    Off,
+}
+
+/// <summary>
 /// Reads Radmin VPN's <c>service.log</c> (plus any rotated backups) to
 /// determine which networks the user is currently joined to.
 ///
@@ -266,6 +279,118 @@ public static class RadminLogService
             // files still contribute their events to the dict.
             DiagnosticLog.Write($"RadminLogService.ScanOneLog '{path}': {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Current Radmin VPN power state, read from the log's toggle events.
+    /// This is the ONLY reliable "is the VPN actually connected" signal:
+    /// the virtual adapter stays Up with its static 26.x identity IP even
+    /// when Radmin is powered off ("Desconectado"), and the network
+    /// membership parser (<see cref="GetActiveNetworkMemberships"/>) goes
+    /// stale after a power-off because Radmin emits <c>Switched Off</c>
+    /// but NOT a <c>You left network</c> line. The toggle IS logged, so we
+    /// read it directly — local + deterministic, unlike an ICMP seed ping
+    /// (which false-negatives whenever no peer happens to be online).
+    ///
+    /// Reads the newest few <c>service*.log</c> files (the toggle event is
+    /// always near the tail of the live/most-recent log) and returns the
+    /// first decisive result. <see cref="RadminPowerState.Unknown"/> when
+    /// no readable/decisive log exists — callers must NOT treat that as
+    /// "off".
+    /// </summary>
+    public static RadminPowerState GetPowerState()
+    {
+        try
+        {
+            if (!Directory.Exists(LogDir)) return RadminPowerState.Unknown;
+
+            // Newest-first: the current power state lives in the most
+            // recently written log. We only need a handful — right after a
+            // rotation the live file can be tiny, so fall through to the
+            // previous one(s), but never scan the whole rotated history.
+            var files = Directory.EnumerateFiles(LogDir, "service*.log")
+                .Select(p => new FileInfo(p))
+                .Where(f => LogFilePattern.IsMatch(f.Name))
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .Take(3);
+
+            foreach (var f in files)
+            {
+                var lines = ReadLogLines(f.FullName);
+                if (lines == null) continue; // unreadable file — try the next
+                var state = DeterminePowerState(lines);
+                if (state != RadminPowerState.Unknown) return state;
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RadminLogService.GetPowerState: {ex.Message}");
+        }
+        return RadminPowerState.Unknown;
+    }
+
+    /// <summary>
+    /// Pure classifier (unit-tested): scan lines newest→oldest and return
+    /// the first decisive power event. <c>Switched Off</c> ⇒ Off;
+    /// <c>Switched On</c> or <c>Connected to server</c> ⇒ On. Everything
+    /// else is ignored — crucially the transient <c>Disconnected from
+    /// server</c> (a network blip that's always followed by a reconnect or
+    /// a real <c>Switched Off</c>), and the per-peer <c>Connected to
+    /// &lt;id&gt;/'name'</c> lines (which never contain the literal
+    /// "Connected to server"). No decisive line ⇒ Unknown.
+    /// </summary>
+    internal static RadminPowerState DeterminePowerState(IReadOnlyList<string> lines)
+    {
+        for (int i = lines.Count - 1; i >= 0; i--)
+        {
+            var l = lines[i];
+            if (l.Contains("Switched Off", StringComparison.Ordinal))
+                return RadminPowerState.Off;
+            if (l.Contains("Switched On", StringComparison.Ordinal)
+                || l.Contains("Connected to server", StringComparison.Ordinal))
+                return RadminPowerState.On;
+        }
+        return RadminPowerState.Unknown;
+    }
+
+    /// <summary>
+    /// Read one log file's lines with the same share/encoding/size-cap
+    /// rules <see cref="ScanOneLog"/> uses (the Radmin service holds the
+    /// live log with an exclusive write lock, so read-share + Delete is
+    /// mandatory; BOM auto-detect handles Radmin's UTF-16LE files). Returns
+    /// null when the file can't be opened at all.
+    /// </summary>
+    private static IReadOnlyList<string>? ReadLogLines(string path)
+    {
+        try
+        {
+            using var fs = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+
+            long start = 0;
+            if (fs.Length > MaxBytesScannedPerFile)
+            {
+                start = fs.Length - MaxBytesScannedPerFile;
+                fs.Seek(start, SeekOrigin.Begin);
+            }
+
+            using var reader = new StreamReader(fs, Encoding.UTF8);
+            if (start > 0) reader.ReadLine(); // drop the partial first line
+
+            var lines = new List<string>();
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+                lines.Add(line);
+            return lines;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RadminLogService.ReadLogLines '{path}': {ex.Message}");
+            return null;
         }
     }
 }

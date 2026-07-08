@@ -697,10 +697,16 @@ public partial class MainWindow : Window
                 if (string.IsNullOrWhiteSpace(hostName) || hostName == "-") hostName = "—";
                 var title = string.IsNullOrWhiteSpace(l.Title) ? "—" : l.Title;
 
-                _notifications.RaiseRoomCreated(
-                    l.Id, l.ModId,
-                    Strings.Get("MpNotifRoomCreatedTitle"),
-                    Strings.Format("MpNotifRoomCreatedBody", title, hostName));
+                // Room notifications no longer land in the bell — surface a Windows
+                // toast plus a dot on the MULTIPLAYER tab / Rooms subtab instead.
+                if (_notifications.TryMarkRoomNotified(l.Id))
+                {
+                    ShowToast(
+                        Strings.Get("MpNotifRoomCreatedTitle"),
+                        Strings.Format("MpNotifRoomCreatedBody", title, hostName));
+                    if (_activeTopTab != TopTab.Multiplayer) SetMultiplayerTabDot(true);
+                    MultiplayerView?.SetNewRoomIndicator(true);
+                }
             }
         }
         catch (Exception ex)
@@ -4220,7 +4226,23 @@ public partial class MainWindow : Window
         ModsBrowserView.Visibility = tab == TopTab.Mods ? Visibility.Visible : Visibility.Collapsed;
         MultiplayerView.Visibility = tab == TopTab.Multiplayer ? Visibility.Visible : Visibility.Collapsed;
         SettingsView.Visibility = tab == TopTab.Settings ? Visibility.Visible : Visibility.Collapsed;
+        // Landing on Multiplayer clears the "new room" dot on its nav tab (the
+        // finer Rooms-subtab dot clears when the user actually opens that subtab).
+        if (tab == TopTab.Multiplayer) SetMultiplayerTabDot(false);
         RefreshTopTabHighlight();
+    }
+
+    /// <summary>
+    /// Toggles the small red "new room created" dot overlaid on the MULTIPLAYER
+    /// nav tab. Room notifications no longer add a bell item — they surface as a
+    /// Windows toast plus this dot (and the Rooms-subtab dot inside the tab).
+    /// Set from <see cref="PollNewRoomsAsync"/> when a room appears while the user
+    /// is on another top tab; cleared when they switch to Multiplayer.
+    /// </summary>
+    private void SetMultiplayerTabDot(bool on)
+    {
+        if (MultiplayerTabDot != null)
+            MultiplayerTabDot.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>

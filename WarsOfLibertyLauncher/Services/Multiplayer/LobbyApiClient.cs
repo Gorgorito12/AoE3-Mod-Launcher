@@ -165,6 +165,11 @@ public class LobbyApiClient : IDisposable
         await PostAsync<object>($"lobbies/{lobbyId}/leave", body: null, requireAuth: true, ct);
     }
 
+    /// <summary>Fetch one lobby's full roster (members + avatars + ready) WITHOUT
+    /// joining its WS. Public endpoint — powers the "see who's in a room" peek.</summary>
+    public Task<LobbyDetail> GetLobbyByIdAsync(string lobbyId, CancellationToken ct = default)
+        => GetAsync<LobbyDetail>($"lobbies/{Uri.EscapeDataString(lobbyId)}", requireAuth: false, ct);
+
     // ---------------------------------------------------------------
     // Status
     // ---------------------------------------------------------------

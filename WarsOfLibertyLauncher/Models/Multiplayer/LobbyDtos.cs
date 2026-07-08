@@ -94,6 +94,9 @@ public class LobbyHost
 
     [JsonPropertyName("display_name")]
     public string DisplayName { get; set; } = "";
+
+    [JsonPropertyName("avatar_url")]
+    public string? AvatarUrl { get; set; }
 }
 
 public class LobbySummary
@@ -133,6 +136,60 @@ public class LobbyListResponse
 {
     [JsonPropertyName("lobbies")]
     public List<LobbySummary> Lobbies { get; set; } = new();
+}
+
+/// <summary>One member in a lobby's roster (from GET /lobbies/:id), used by the
+/// "see who's in a room without joining" peek.</summary>
+public class LobbyMember
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("discord_username")]
+    public string DiscordUsername { get; set; } = "";
+
+    [JsonPropertyName("display_name")]
+    public string DisplayName { get; set; } = "";
+
+    [JsonPropertyName("avatar_url")]
+    public string? AvatarUrl { get; set; }
+
+    [JsonPropertyName("is_ready")]
+    public bool IsReady { get; set; }
+
+    [JsonPropertyName("role")]
+    public string Role { get; set; } = "player";
+}
+
+/// <summary>GET /lobbies/:id — a lobby's details WITH its member roster.</summary>
+public class LobbyDetail
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = "";
+
+    [JsonPropertyName("mod_id")]
+    public string ModId { get; set; } = "";
+
+    [JsonPropertyName("max_players")]
+    public int MaxPlayers { get; set; }
+
+    [JsonPropertyName("current_players")]
+    public int CurrentPlayers { get; set; }
+
+    [JsonPropertyName("is_private")]
+    public bool IsPrivate { get; set; }
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "";
+
+    [JsonPropertyName("host_user_id")]
+    public string HostUserId { get; set; } = "";
+
+    [JsonPropertyName("members")]
+    public List<LobbyMember> Members { get; set; } = new();
 }
 
 public class CreateLobbyRequest
@@ -395,6 +452,12 @@ public class WsRoomMemberFlags
     /// the snake_case top-level frames.</summary>
     [JsonPropertyName("radminIp")]
     public string? RadminIp { get; set; }
+
+    /// <summary>The member's Discord avatar URL, so the roster can paint their real
+    /// photo. Null for legacy rooms that don't send it → the roster falls back to a
+    /// monogram. camelCase key, rides inside the room-state member object.</summary>
+    [JsonPropertyName("avatarUrl")]
+    public string? AvatarUrl { get; set; }
 }
 
 /// <summary>Initial snapshot sent by the DO when our hello succeeds.</summary>

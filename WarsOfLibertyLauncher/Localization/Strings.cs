@@ -2020,6 +2020,11 @@ public static class Strings
         ["MpRoomsShowingCount"] = new() { [LangEn] = "Showing {0} rooms", [LangEs] = "Mostrando {0} salas" },
         ["MpRoomLeave"] = new() { [LangEn] = "Leave room", [LangEs] = "Salir de la sala" },
         ["MpRoomReady"] = new() { [LangEn] = "Ready", [LangEs] = "Listo" },
+        ["MpRoomPeekTooltip"] = new() { [LangEn] = "See who's in this room", [LangEs] = "Ver quién está en esta sala" },
+        ["MpRoomPeekTitle"] = new() { [LangEn] = "Players in room", [LangEs] = "Jugadores en la sala" },
+        ["MpRoomPeekLoading"] = new() { [LangEn] = "Loading players…", [LangEs] = "Cargando jugadores…" },
+        ["MpRoomPeekEmpty"] = new() { [LangEn] = "No players in this room.", [LangEs] = "No hay jugadores en esta sala." },
+        ["MpRoomPeekError"] = new() { [LangEn] = "Couldn't load the players. Try again.", [LangEs] = "No se pudieron cargar los jugadores. Probá de nuevo." },
         ["MpRoomStart"] = new() { [LangEn] = "Start game", [LangEs] = "Empezar partida" },
         ["MpRoomChatPlaceholder"] = new()
         {

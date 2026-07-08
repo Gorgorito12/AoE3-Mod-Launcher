@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.NetworkInformation;
@@ -24,12 +25,18 @@ public enum RadminInstallState
 /// <param name="ExePath">Path to RvGuiStarter.exe / RvRvpnGui.exe when installed; null otherwise.</param>
 /// <param name="Version">Installed version string from the uninstall registry.</param>
 /// <param name="IsServiceRunning">
-/// True when the Radmin VPN virtual adapter is up with a 26.x.x.x IP.
-/// That means the user's Radmin client has signed in to Famatech and
-/// received its identity IP — but does NOT imply they're joined to any
-/// specific network. Radmin's per-network membership lives inside its
-/// own process and isn't reliably observable from the OS, so the
-/// banner asks the user to verify the AoE3 network themselves.
+/// True when the Radmin VPN GUI app (RvRvpnGui.exe) is running, the VPN is
+/// NOT powered off (per the log's Switched On/Off toggle), AND the Radmin
+/// virtual adapter is up with a 26.x.x.x IP. Two gates beyond the adapter
+/// are load-bearing, because Radmin's background service (RvControlSvc)
+/// keeps the adapter Up with its static identity IP regardless of the
+/// app or the power toggle: (1) the GUI process must be alive (else a
+/// CLOSED Radmin read as "running"); (2) the log power state must not be
+/// Off (else an OPEN-but-DESCONECTADO Radmin read as "running"). Only a
+/// POSITIVE log "Off" blocks — an unreadable log (Unknown) falls back to
+/// app+adapter. It still does NOT imply they're joined to any specific
+/// network — Radmin's per-network membership isn't reliably observable
+/// from the OS, so the banner asks the user to verify the AoE3 network.
 /// </param>
 /// <param name="AdapterIp">The user's own 26.x.x.x address when the service is running.</param>
 public sealed record RadminStatus(
@@ -82,13 +89,26 @@ public static class RadminVpnService
     /// </summary>
     public const string AoE3TadNetworkName = "Age of Empires III: The Asian Dynasties";
 
+    // Cached Radmin power-toggle state (from the log). Read on the UI
+    // thread by GetStatus; refreshed OFF-thread by MaybeRefreshPowerState
+    // so the 3-second banner poll never does log IO on the UI thread —
+    // mirrors the KickConnectionPing / _connectionPingMs pattern.
+    private static volatile RadminPowerState s_powerState = RadminPowerState.Unknown;
+    private static long s_powerStampMs;              // Environment.TickCount64 of last refresh
+    private static int s_powerInFlight;              // 0/1 via Interlocked
+
     /// <summary>
     /// Take a snapshot of Radmin's state right now. Safe to call from
-    /// any thread; performs only registry reads + NIC enumeration, both
-    /// of which are sub-millisecond on a typical desktop.
+    /// any thread; performs only registry reads + NIC enumeration + a
+    /// process check, all sub-millisecond. The log-based power state is
+    /// read asynchronously (see <see cref="MaybeRefreshPowerState"/>) and
+    /// folded in from a cache, so this stays cheap on the 3s poll.
     /// </summary>
     public static RadminStatus GetStatus()
     {
+        // Keep the cached power state fresh without blocking the UI thread.
+        MaybeRefreshPowerState();
+
         var (exe, version) = FindInstallation();
         if (exe == null)
         {
@@ -154,18 +174,38 @@ public static class RadminVpnService
     }
 
     /// <summary>
-    /// True when there's an "up" network adapter whose name contains
-    /// "Radmin" AND that has an IPv4 address in 26.0.0.0/8 (Radmin
-    /// VPN's reserved CIDR). That means the Radmin VPN Control Service
-    /// is running AND the client has signed in to Famatech and been
-    /// assigned its identity IP. It does NOT mean the user is joined
-    /// to any network — Radmin will assign you the same 26.x.x.x even
-    /// when you're logged in but in zero networks.
+    /// True when the Radmin VPN GUI app is running AND there's an "up"
+    /// network adapter whose name contains "Radmin" with an IPv4 address
+    /// in 26.0.0.0/8 (Radmin VPN's reserved CIDR).
+    ///
+    /// The GUI-process gate is what makes this honest: the background
+    /// Radmin VPN Control Service (RvControlSvc) auto-starts at boot and
+    /// keeps the 26.x adapter Up with its identity IP even after the user
+    /// closes the Radmin app, so checking the adapter alone reported
+    /// "running" for a shut Radmin (the false positive this method now
+    /// avoids). A service-state check would NOT help — the service is
+    /// always running; the signal that actually flips when the user
+    /// closes Radmin is its GUI process.
+    ///
+    /// It still does NOT mean the user is joined to any network — Radmin
+    /// assigns the same 26.x.x.x even when logged in but in zero networks.
     /// </summary>
     private static (bool running, string? ip) DetectServiceRunning()
     {
         try
         {
+            // Radmin's adapter lingers Up (via RvControlSvc) after the app
+            // is closed, so gate on the GUI process actually being alive.
+            if (!IsAppRunning()) return (false, null);
+
+            // The adapter ALSO stays Up with its static 26.x IP while the
+            // app is open but the VPN is powered off ("Desconectado"), so
+            // honour the log-derived power toggle: only a POSITIVE "Off"
+            // blocks (Unknown = unreadable log ⇒ fall back to app+adapter,
+            // don't cry wolf). This is the fix for the false green while
+            // Radmin is switched off. See RadminLogService.GetPowerState.
+            if (s_powerState == RadminPowerState.Off) return (false, null);
+
             foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
             {
                 if (!nic.Name.Contains("Radmin", StringComparison.OrdinalIgnoreCase)) continue;
@@ -186,6 +226,55 @@ public static class RadminVpnService
             DiagnosticLog.Write($"RadminVpnService.DetectServiceRunning: {ex.Message}");
         }
         return (false, null);
+    }
+
+    /// <summary>
+    /// True when the Radmin VPN GUI process (RvRvpnGui.exe) is alive — the
+    /// user-facing "is Radmin open" signal. It's running whether the window
+    /// is shown OR minimised to the system tray, and gone once the user
+    /// exits Radmin fully. Deliberately does NOT count RvGuiStarter.exe
+    /// (a transient launch stub, documented in <see cref="FindInstallation"/>
+    /// as a zombie risk) nor RvControlSvc (the always-on background service,
+    /// which is exactly why the adapter alone isn't a reliable signal).
+    /// </summary>
+    private static bool IsAppRunning()
+    {
+        try
+        {
+            var ps = Process.GetProcessesByName("RvRvpnGui");
+            try { return ps.Length > 0; }
+            finally { foreach (var p in ps) p.Dispose(); }
+        }
+        catch (Exception ex)
+        {
+            // Never let a Process query break the 3-second polling loop.
+            DiagnosticLog.Write($"RadminVpnService.IsAppRunning: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Refresh the cached Radmin power state from the log OFF the UI thread,
+    /// at most every ~2 s and never concurrently. Fire-and-forget: reading
+    /// a ~1 MB rotated log every 3s poll on the UI thread would risk jank,
+    /// so <see cref="GetStatus"/> reads the cache and this keeps it warm —
+    /// same shape as the launcher's KickConnectionPing. Nothing here throws.
+    /// </summary>
+    private static void MaybeRefreshPowerState()
+    {
+        var now = Environment.TickCount64;
+        if (now - System.Threading.Volatile.Read(ref s_powerStampMs) < 2000) return;
+        if (System.Threading.Interlocked.CompareExchange(ref s_powerInFlight, 1, 0) != 0) return;
+        _ = Task.Run(() =>
+        {
+            try { s_powerState = RadminLogService.GetPowerState(); }
+            catch (Exception ex) { DiagnosticLog.Write($"RadminVpnService.MaybeRefreshPowerState: {ex.Message}"); }
+            finally
+            {
+                System.Threading.Volatile.Write(ref s_powerStampMs, Environment.TickCount64);
+                System.Threading.Interlocked.Exchange(ref s_powerInFlight, 0);
+            }
+        });
     }
 
     /// <summary>

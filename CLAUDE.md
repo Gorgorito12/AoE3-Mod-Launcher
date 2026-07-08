@@ -167,7 +167,34 @@ Two cheap gates beyond a green build:
   same dict, and combines the result. An ICMP ping to a known seed peer is
   the fallback signal when no log file is readable (deleted, ACL'd, sandboxed
   account) (`Services/RadminVpnService.cs`, `RadminAssistantService.cs`,
-  `RadminLogService.cs`). The launcher is
+  `RadminLogService.cs`). **"Radmin is running" (`RadminStatus.IsServiceRunning`,
+  the green banner + the `LoggedIn` stage) requires THREE things, because the 26.x
+  adapter alone is a false positive: (1) the GUI process `RvRvpnGui.exe` ALIVE
+  (`IsAppRunning`), (2) the VPN NOT powered off per the log
+  (`RadminLogService.GetPowerState() != Off`), and (3) an Up 26.x adapter.**
+  `DetectServiceRunning` early-returns `(false,null)` when either (1) or (2) fails.
+  The background service `RvControlSvc` auto-starts at boot and keeps the adapter Up
+  with its STATIC 26.x identity IP regardless of the app OR the power toggle — so an
+  adapter-only check read "running · IP" both for a CLOSED Radmin and for an OPEN but
+  **"Desconectado"** (powered-off) Radmin (two reported false positives). Neither a
+  service-state check (the service is always up) nor the network-membership parser
+  (`GetActiveNetworkMemberships` — powering off logs `Switched Off` but NOT `You left
+  network`, so membership goes STALE) can tell. The reliable live signal is the log's
+  own power toggle: `RadminLogService.GetPowerState()` reads the newest `service*.log`
+  (newest-first, same rotation/UTF-16-BOM/share rules as `ScanOneLog`) and the pure,
+  unit-tested `DeterminePowerState` scans lines newest→oldest — `Switched Off` ⇒ Off,
+  `Switched On`/`Connected to server` ⇒ On (ignoring the transient `Disconnected from
+  server` and per-peer `Connected to <id>/'name'` lines), `Unknown` when unreadable.
+  Only a POSITIVE `Off` blocks (Unknown falls back to app+adapter, no false alarm).
+  The log read is cached + refreshed OFF the UI thread (`MaybeRefreshPowerState`,
+  ~2s throttle + in-flight guard, mirroring `KickConnectionPing`) so the 3s banner
+  poll does no UI-thread IO. **The banner's non-green "not ready" state is now RED**
+  (same palette as NotInstalled: bg `#3d1f1f`, glyph `!`) — it covers closed AND
+  powered-off; the model is traffic-light (red = not ready, green = connected). Don't
+  "simplify" `DetectServiceRunning` back to adapter-only, and don't gate green on the
+  stale membership parser. (`GetAdapterBytes`, the in-match traffic meter, stays
+  adapter-only on purpose — it measures real bytes, and the app is in the tray during
+  a match.) Pinned by `RadminPowerStateTests`. The launcher is
   the *meta layer* (sign-in, lobbies, chat, mod-hash gating) over a **self-hosted
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
   Worker. Sign-in is **Discord OAuth** (a state flow shaped like device flow),
@@ -1845,24 +1872,36 @@ Two cheap gates beyond a green build:
   created AFTER the poll starts notify. For each genuinely-new id it skips **your own
   room** (host id / DiscordUsername match) and rooms whose **mod isn't installed**
   (`MainWindow.IsModInstalled`, ported from `MultiplayerTab.IsModInstalledLocally` —
-  the user chose "only joinable rooms"), then calls
-  `NotificationCenter.RaiseRoomCreated(id, modId, title, body)` → the existing `Add`
-  chute → real Windows tray balloon (`ShowToast`) + bell item + badge. Dedup is
-  two-layer: the in-memory `_knownLobbyIds` (per session) + persisted
-  `LauncherConfig.NotifiedRoomIds` (capped 500, cross-restart, in `RaiseRoomCreated`).
-  **Gating (load-bearing):** the tick early-returns unless `_config.NotifyNewRooms`
-  (a dedicated Settings toggle, default true, separate from `ShowToastNotifications`)
-  **AND** `_config.CheckUpdatesOnStartup` (metered/silent mode) **AND** the session is
+  the user chose "only joinable rooms"). **Room notifications DELIBERATELY do NOT go
+  to the bell** (the user found room items cluttered the notification history) — the
+  poll instead surfaces each genuinely-new room as a **Windows tray toast + a red dot**
+  on the MULTIPLAYER nav tab and the Rooms subtab: it calls
+  `NotificationCenter.TryMarkRoomNotified(id)` (persistent cross-restart dedup on
+  `LauncherConfig.NotifiedRoomIds`, capped 500, **no** bell item — replaced the old
+  `RaiseRoomCreated`) and, on first-seen, fires `ShowToast(...)` directly plus
+  `SetMultiplayerTabDot(true)` (`MainWindow`, the `MultiplayerTabDot` ellipse on the
+  `TopTabMultiplayer` button, cleared in `SwitchTopTab` when Multiplayer becomes
+  active) and `MultiplayerView.SetNewRoomIndicator(true)` (`MultiplayerTab`, the
+  `RoomsSubtabDot` on `SubtabRooms`, cleared when the user opens the Rooms subtab via
+  `SubtabRooms_Click`/`ShowRooms`→`UpdateSubtabHighlights`; the `_hasNewRoomSignal`
+  field keeps a repaint from stomping it). Both dots reuse the notification bell's
+  badge recipe (7px `#E5484D` ellipse + a `DynamicResource` ring — `BgSidebar` on the
+  nav tab, `MpSurface` on the subtab). Dedup is two-layer: the in-memory
+  `_knownLobbyIds` (per session, seeds the silent baseline) + persisted
+  `NotifiedRoomIds`. **`NotificationKind.RoomCreated` + its `KindBrush` /
+  `NavigateToNotification`→`MultiplayerTab.ShowRooms()` handling are KEPT only for
+  backward compat** — room items persisted by OLDER builds still render/click; no new
+  room items are ever added. **Gating (load-bearing):** the tick early-returns unless
+  `_config.NotifyNewRooms` (a dedicated Settings toggle, default true — now = toast +
+  dot, no longer bell — separate from `ShowToastNotifications`) **AND**
+  `_config.CheckUpdatesOnStartup` (metered/silent mode) **AND** the session is
   `SignedIn`. **Budget:** `/lobbies` is 60/min·2000/day per IP; 90 s ⇒ ~960/day — don't
   drop the interval (per-IP cap is shared behind NAT/Radmin). Detection lives ONLY in
-  this poll (the MP tab's 10 s render poll doesn't raise it). Kind is
-  `NotificationKind.RoomCreated`; clicking the bell item →
-  `NavigateToNotification` opens Multiplayer → Rooms (`MultiplayerTab.ShowRooms()`,
-  a public entry mirroring `SubtabRooms_Click`), added BEFORE the `profile == null`
-  guard. Toast is still suppressed while the window is focused (existing `ShowToast`
-  rule — fine, you'd see the room appear). **Future:** the efficient path is a
-  backend `lobby_created` WS push + an app-level persistent `/global/ws`; that needs
-  the separate backend repo, so the poll is the launcher-only MVP.
+  this poll (the MP tab's render poll doesn't raise it). Toast is still suppressed while
+  the window is focused (existing `ShowToast` rule — fine, you'd see the room appear).
+  **Future:** the efficient path is a backend `lobby_created` WS push + an app-level
+  persistent `/global/ws`; that needs the separate backend repo, so the poll is the
+  launcher-only MVP.
 
 - **The BACKEND announces rooms to Discord CHANNEL(s) via webhook, with LIVE
   message editing — separate from the in-app bell above, and launcher-
@@ -2062,7 +2101,7 @@ Two cheap gates beyond a green build:
 
 - **The rooms browser auto-refreshes its LIST on a quiet diff — separate from the
   PING timer above.** New / closed rooms now appear without pressing *Actualizar*:
-  a dedicated `_roomsListTimer` (10 s, created in `StartQuotaPolling`, stopped in
+  a dedicated `_roomsListTimer` (5 s, created in `StartQuotaPolling`, stopped in
   `OnVisibleChangedTabGate`'s not-visible branch alongside the other timers) calls
   `RefreshRoomsListAsync(quiet: true)`, gated to **MP-tab-visible + signed-in +
   `_activeSubtab == Subtab.Rooms`** so it never polls while the list is hidden
@@ -2078,15 +2117,44 @@ Two cheap gates beyond a green build:
   leave-room still call `RefreshRoomsListAsync()` **non-quiet** (skeleton + error
   banner + always re-render); `SubtabRooms_Click` fires one *quiet* kick so
   returning to the subtab freshens at once. Cost is one `GET /lobbies` (a single
-  small SQLite SELECT, ≤8 active lobbies) every 10 s **while actively browsing** —
-  well under the backend's `llist` cap (60/min · 2000/day per IP, `rateLimit.ts`)
-  and the 100k/day global budget. **The rooms list itself is REST-poll** — the
+  small SQLite SELECT, ≤8 active lobbies) every 5 s **while actively browsing** —
+  12 req/min (under the `llist` 60/min per-IP cap, `rateLimit.ts`); the 2000/day
+  per-IP cap is only approached after hours of continuous browsing (accepted for a
+  fresher list). (Was 10 s; dropped to 5 s on request.) **The rooms list itself is REST-poll** — the
   lobby WebSocket (`/lobbies/:id/ws`) is per-room and only joined once you're
   *inside* a room, so a viewer sitting on the list has no per-room socket. A
   process-wide global WS channel DOES now exist (`/global/ws`, added for the
   global chat — see its bullet below), so the infra for real-time room push is
   in place; actually emitting `lobby_created/closed/updated` onto it is still
-  deferred (the 10 s poll is enough at current scale).
+  deferred (the 5 s poll is enough at current scale).
+
+- **Discord avatars, the room-roster "peek", and the top-bar "players online" count
+  (added together).** (1) **Avatars everywhere, via one helper.** `MultiplayerTab.
+  BuildAvatarDisc(name, avatarUrl, size)` = a circular disc: the real Discord photo
+  (`Ellipse` + `ImageBrush(BitmapImage(uri))`) over a coloured-hash monogram fallback
+  (`HostMonogramBrush` + initial) — used by the roster (`BuildMemberRow`, ALL members
+  now, not just "me"), the rooms-list HOST cell (`BuildRoomCard`), and the peek popup.
+  The `avatar_url` had to be plumbed through the backend: `GET /lobbies` host object
+  (`rest.ts` — `u.avatar_url AS host_avatar`) and the room WS `room_state`/
+  `member_joined` members (`LobbyRoom.ts` — read `users.avatar_url` in the same
+  membership query on `hello`, carry it on `MemberEntry`, and preserve it across the
+  `member_ready` reconstruction via `{...existing}`). Launcher DTOs gained the field:
+  `LobbyHost.AvatarUrl`, `WsRoomMemberFlags.AvatarUrl`, `RoomMemberEntry.AvatarUrl`,
+  and `LobbyMember`/`LobbyDetail` (below). Legacy rooms without the field → monogram
+  fallback (no break). (2) **Peek a room's roster WITHOUT joining.** `GET /lobbies/:id`
+  is a PUBLIC endpoint returning the full roster (`members[]` with avatar/name/ready/
+  role) — no join, no WS. `LobbyApiClient.GetLobbyByIdAsync` → `LobbyDetail`; the
+  rooms-list PLAYERS cell is clickable (hand cursor + hover underline + tooltip) and
+  opens a single-instance `Popup` (`_peekPopup`, `ChromePopups.Track`, deferred Closed-
+  clear to toggle instead of reopen) showing each member via `BuildAvatarDisc` + host/
+  ready badges. Works for full/private/in-game rooms (read-only). (3) **Top-bar "N
+  players online" now reads the LIVE global-chat presence** (`_lastGlobalOnline`, fed
+  by the `/global/ws` `presence`/`global_state` frames via `UpdateGlobalPresence`) via
+  `UpdateTopBarCounts()`, so it matches the chat's "N connected" (real connected users)
+  instead of the old `/quota` `players.active` (in-lobby count) that made it disagree.
+  "N active rooms" stays from `/quota`; presence falls back to the `/quota` count until
+  the first presence frame. **These need the backend redeploy for avatars** (the list/
+  WS changes); the peek + players-online are launcher-only.
 
 - **The rooms browser is a TABLE with responsive columns — the action button
   isn't a plain always-"Join".** (Doc heads-up: an earlier revision of this

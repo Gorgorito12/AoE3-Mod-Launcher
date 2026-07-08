@@ -152,6 +152,9 @@ public partial class MultiplayerTab : UserControl
     {
         public required string UserId { get; init; }
         public string Login { get; set; } = "";
+        /// <summary>Discord avatar URL from the room roster (room_state/member_joined),
+        /// null for legacy rooms that don't send it yet → falls back to a monogram.</summary>
+        public string? AvatarUrl { get; set; }
         public bool Ready { get; set; }
         /// <summary>Peer's Radmin VPN IP (26.x), from room_state / member_net.
         /// Null until they report it (at match launch). Used to ICMP-ping them
@@ -390,10 +393,14 @@ public partial class MultiplayerTab : UserControl
         }
         else if (!status.IsServiceRunning)
         {
-            RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#1f2c3d")!;
-            RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#3a5a8c")!;
-            RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#3a5a8c")!;
-            RadminStatusGlyph.Text = "i";
+            // RED warning (same palette as NotInstalled): "not ready" —
+            // Radmin is installed but closed OR powered off ("Desconectado").
+            // A blue "info" tone under-sold it; this is an action-required
+            // state, so it reads as a warning like the traffic-light green.
+            RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#3d1f1f")!;
+            RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#8c3a3a")!;
+            RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#8c3a3a")!;
+            RadminStatusGlyph.Text = "!";
             RadminBannerTitle.Text = Strings.Get("MpRadminNotConnectedTitle");
             RadminBannerBody.Text = Strings.Get("MpRadminNotConnectedBody");
             RadminBannerBody.Visibility = Visibility.Visible;
@@ -819,17 +826,19 @@ public partial class MultiplayerTab : UserControl
         _roomsPingTimer.Start();
         KickConnectionPing();
 
-        // Auto-refresh the rooms LIST every ~10 s so newly-created rooms
-        // appear without the user pressing Actualizar. The fetch is a quiet,
-        // diff-based render (no "loading" skeleton, no row/Join-button
+        // Auto-refresh the rooms LIST every ~5 s so newly-created rooms
+        // appear quickly without the user pressing Actualizar. The fetch is a
+        // quiet, diff-based render (no "loading" skeleton, no row/Join-button
         // rebuild when nothing changed — see RefreshRoomsListAsync(quiet:true))
         // and only fires while signed in AND on the Rooms subtab, so it costs
-        // at most one cheap GET /lobbies every 10 s while the user is actually
-        // browsing — well under the backend's 60/min · 2000/day per-IP cap.
+        // at most one cheap GET /lobbies every 5 s while the user is actually
+        // browsing: 12 req/min (under the 60/min per-IP cap) and ~720/h — the
+        // daily 2000/IP cap is only approached after hours of continuous
+        // browsing, which is acceptable for a fresher list.
         _roomsListTimer?.Stop();
         _roomsListTimer = new System.Windows.Threading.DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(10),
+            Interval = TimeSpan.FromSeconds(5),
         };
         _roomsListTimer.Tick += (_, _) =>
         {
@@ -1274,6 +1283,7 @@ public partial class MultiplayerTab : UserControl
                 Login = memberLogin,
                 Ready = kv.Value.Ready,
                 RadminIp = kv.Value.RadminIp,
+                AvatarUrl = kv.Value.AvatarUrl,
             };
         }
 
@@ -1357,14 +1367,16 @@ public partial class MultiplayerTab : UserControl
         var userId = u.GetString();
         if (string.IsNullOrEmpty(userId)) return;
         var login = json.TryGetProperty("discord_username", out var l) ? (l.GetString() ?? userId) : userId;
+        var avatar = json.TryGetProperty("avatar_url", out var av) ? av.GetString() : null;
 
         if (_roomMembers.TryGetValue(userId, out var existing))
         {
             existing.Login = login;
+            if (!string.IsNullOrEmpty(avatar)) existing.AvatarUrl = avatar;
         }
         else
         {
-            _roomMembers[userId] = new RoomMemberEntry { UserId = userId, Login = login };
+            _roomMembers[userId] = new RoomMemberEntry { UserId = userId, Login = login, AvatarUrl = avatar };
         }
         AppendChatSystem(Strings.Format("MpChatMemberJoined", login));
         RenderRoomMembers();
@@ -1591,62 +1603,16 @@ public partial class MultiplayerTab : UserControl
             Margin = new Thickness(0, 0, 8, 0),
         }, 0));
 
-        // Avatar circle. We use the current user's Discord avatar
-        // when this row IS the current user (only data we have
-        // locally); otherwise an initial-on-coloured-disc tile.
-        var avatarSize = 28.0;
-        var avatarHost = new Border
-        {
-            Width = avatarSize, Height = avatarSize,
-            CornerRadius = new CornerRadius(avatarSize / 2),
-            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
-            BorderBrush = (Brush)Application.Current.FindResource("BorderSubtle"),
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 10, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        // Avatar circle: the member's real Discord photo from the room roster
+        // (room_state/member_joined), with a coloured-initial fallback. "Me" also
+        // has its avatar locally as a backstop for legacy rooms.
         var me = _session?.CurrentUser;
         var isMe = me != null && string.Equals(m.UserId, me.Id, StringComparison.Ordinal);
-        var initialText = !string.IsNullOrEmpty(m.Login)
-            ? m.Login.Substring(0, 1).ToUpperInvariant()
-            : "?";
-        try
-        {
-            if (isMe && !string.IsNullOrEmpty(me?.AvatarUrl))
-            {
-                var img = new System.Windows.Media.ImageBrush
-                {
-                    ImageSource = new System.Windows.Media.Imaging.BitmapImage(
-                        new Uri(me!.AvatarUrl!, UriKind.Absolute)),
-                    Stretch = System.Windows.Media.Stretch.UniformToFill,
-                };
-                avatarHost.Background = img;
-            }
-            else
-            {
-                avatarHost.Child = new TextBlock
-                {
-                    Text = initialText,
-                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                    FontSize = (double)Application.Current.FindResource("FontSizeBody"),
-                    FontWeight = FontWeights.Bold,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-            }
-        }
-        catch
-        {
-            avatarHost.Child = new TextBlock
-            {
-                Text = initialText,
-                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
-                FontWeight = FontWeights.Bold,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-        }
+        var memberAvatar = !string.IsNullOrEmpty(m.AvatarUrl)
+            ? m.AvatarUrl
+            : (isMe ? me?.AvatarUrl : null);
+        var avatarHost = BuildAvatarDisc(m.Login, memberAvatar, 28);
+        avatarHost.Margin = new Thickness(0, 0, 10, 0);
         grid.Children.Add(WithColumn(avatarHost, 1));
 
         // Name + (optional) RTT.
@@ -2588,6 +2554,27 @@ public partial class MultiplayerTab : UserControl
         Paint(SubtabFriends, _activeSubtab == Subtab.Friends);
         Paint(SubtabProfile, _activeSubtab == Subtab.Profile);
         Paint(SubtabHistory, _activeSubtab == Subtab.History);
+
+        // Viewing the Rooms subtab clears the "new room created" dot.
+        if (_activeSubtab == Subtab.Rooms) SetNewRoomIndicator(false);
+    }
+
+    /// <summary>True while an unseen "new room created" signal is pending.</summary>
+    private bool _hasNewRoomSignal;
+
+    /// <summary>
+    /// Shows/hides the small red "new room created" dot on the Rooms subtab.
+    /// Room notifications no longer add a bell item — MainWindow's lobby poll
+    /// calls this (plus a Windows toast + the MULTIPLAYER nav-tab dot). The dot
+    /// only shows while the user is NOT already on the Rooms subtab, and is
+    /// cleared when they open it (see <see cref="UpdateSubtabHighlights"/>).
+    /// </summary>
+    public void SetNewRoomIndicator(bool on)
+    {
+        _hasNewRoomSignal = on;
+        if (RoomsSubtabDot != null)
+            RoomsSubtabDot.Visibility =
+                on && _activeSubtab != Subtab.Rooms ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -2649,6 +2636,7 @@ public partial class MultiplayerTab : UserControl
     private void SubtabRooms_Click(object sender, RoutedEventArgs e)
     {
         _activeSubtab = Subtab.Rooms;
+        SetNewRoomIndicator(false); // opening Rooms clears the "new room" dot
         RefreshFromSession();
         // Coming (back) to the Rooms subtab: quietly freshen the list so
         // rooms created while the user was on another subtab show up at
@@ -3546,9 +3534,15 @@ public partial class MultiplayerTab : UserControl
         _lastGlobalChatAuthor = login;
     }
 
-    private void UpdateGlobalPresence(int online) =>
+    private void UpdateGlobalPresence(int online)
+    {
         // The presence dot lives in the merged header now, so just the count text.
         GlobalChatPresenceText.Text = Strings.Format("MpGlobalChatPresence", online);
+        // This live presence is also the top-bar "players online" source now, so
+        // both read the same real connected-user count.
+        _lastGlobalOnline = online;
+        UpdateTopBarCounts();
+    }
 
     /// <summary>
     /// Toggle the centered hint shown when the message list is empty:
@@ -3625,8 +3619,204 @@ public partial class MultiplayerTab : UserControl
     private static string Monogram(string login) =>
         string.IsNullOrWhiteSpace(login) ? "?" : login.Substring(0, 1).ToUpperInvariant();
 
+    /// <summary>
+    /// A circular avatar disc: the user's Discord photo when we have a URL, with a
+    /// coloured-hash monogram underneath (visible when there's no photo or it fails
+    /// to load). Reused by the roster, the rooms-list host cell and the room-peek
+    /// popup so Discord avatars render consistently everywhere — matching the webhook.
+    /// </summary>
+    private static FrameworkElement BuildAvatarDisc(string name, string? avatarUrl, double size)
+    {
+        var disc = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
+        disc.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(size / 2),
+            Background = HostMonogramBrush(name),
+            Child = new TextBlock
+            {
+                Text = Monogram(name),
+                Foreground = Brushes.White,
+                FontWeight = FontWeights.Bold,
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        });
+        if (!string.IsNullOrEmpty(avatarUrl))
+        {
+            try
+            {
+                disc.Children.Add(new System.Windows.Shapes.Ellipse
+                {
+                    Width = size,
+                    Height = size,
+                    Fill = new ImageBrush(
+                        new System.Windows.Media.Imaging.BitmapImage(new Uri(avatarUrl, UriKind.Absolute)))
+                    {
+                        Stretch = Stretch.UniformToFill,
+                    },
+                });
+            }
+            catch { /* malformed URL → monogram stays visible */ }
+        }
+        return disc;
+    }
+
     private static string FormatChatTime(long atMs) =>
         DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime.ToString("HH:mm");
+
+    // Top-bar count sources. "players online" prefers the LIVE global-chat
+    // presence (the same number the chat shows as "N connected" — the users
+    // actually connected right now), which is why it now matches the chat and
+    // no longer shows the /quota in-lobby count. `_lastGlobalOnline` stays null
+    // until the first presence frame arrives, so until then we fall back to the
+    // /quota active-players count. "active rooms" stays from /quota.
+    private int? _lastGlobalOnline;
+    private int _lastQuotaPlayers;
+    private int _lastActiveRooms;
+
+    private void UpdateTopBarCounts()
+    {
+        int players = _lastGlobalOnline ?? _lastQuotaPlayers;
+        QuotaText.Text = $"👥 {players} players online   ·   🏠 {_lastActiveRooms} active rooms";
+    }
+
+    // The room-roster "peek" popup (see who's in a room without joining). Single
+    // instance; cleared DEFERRED on Closed so a re-click on the same cell toggles
+    // it off instead of reopening (the StaysOpen=false auto-dismiss + click race).
+    private System.Windows.Controls.Primitives.Popup? _peekPopup;
+
+    private async void PlayersPeek_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement anchor || anchor.Tag is not LobbySummary lobby || _session == null)
+            return;
+        // Toggle: a re-click on the same cell closes the open peek.
+        if (_peekPopup != null) { _peekPopup.IsOpen = false; return; }
+
+        Brush R(string k) => (Brush)Application.Current.FindResource(k);
+        double F(string k) => (double)Application.Current.FindResource(k);
+
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(lobby.Title) ? Strings.Get("MpRoomPeekTitle") : lobby.Title,
+            Foreground = R("TextPrimary"),
+            FontWeight = FontWeights.Bold,
+            FontSize = F("FontSizeBodyStrong"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 260,
+            Margin = new Thickness(0, 0, 0, 8),
+        });
+        var loading = new TextBlock
+        {
+            Text = Strings.Get("MpRoomPeekLoading"),
+            Foreground = R("TextSecondary"),
+            FontSize = F("FontSizeBody"),
+        };
+        panel.Children.Add(loading);
+
+        var card = new Border
+        {
+            Background = R("MpSurface"),
+            BorderBrush = R("MpCardBorder"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusLg"),
+            Padding = new Thickness(14),
+            MinWidth = 220,
+            MaxWidth = 300,
+            Child = panel,
+        };
+        var popup = new System.Windows.Controls.Primitives.Popup
+        {
+            Child = card,
+            PlacementTarget = anchor,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            StaysOpen = false,
+            AllowsTransparency = true,
+        };
+        ChromePopups.Track(popup, anchor);
+        popup.Closed += (_, _) => Dispatcher.BeginInvoke(
+            new Action(() => { if (ReferenceEquals(_peekPopup, popup)) _peekPopup = null; }),
+            System.Windows.Threading.DispatcherPriority.Background);
+        _peekPopup = popup;
+        popup.IsOpen = true;
+
+        try
+        {
+            var detail = await _session.Api.GetLobbyByIdAsync(lobby.Id);
+            if (!ReferenceEquals(_peekPopup, popup)) return; // closed while loading
+            panel.Children.Remove(loading);
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"👤 {detail.CurrentPlayers} / {detail.MaxPlayers}",
+                Foreground = R("TextSecondary"),
+                FontSize = F("FontSizeCaption"),
+                Margin = new Thickness(0, 0, 0, 8),
+            });
+            if (detail.Members.Count == 0)
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = Strings.Get("MpRoomPeekEmpty"),
+                    Foreground = R("TextSecondary"),
+                    FontSize = F("FontSizeBody"),
+                });
+            }
+            foreach (var m in detail.Members)
+            {
+                var display = !string.IsNullOrWhiteSpace(m.DisplayName) ? m.DisplayName : m.DiscordUsername;
+                bool isHost = string.Equals(m.Id, detail.HostUserId, StringComparison.Ordinal);
+                var row = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(0, 3, 0, 3),
+                };
+                var disc = BuildAvatarDisc(display, m.AvatarUrl, 24);
+                disc.Margin = new Thickness(0, 0, 8, 0);
+                row.Children.Add(disc);
+                row.Children.Add(new TextBlock
+                {
+                    Text = display,
+                    Foreground = isHost ? R("AccentBrush") : R("TextPrimary"),
+                    FontSize = F("FontSizeBody"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 190,
+                });
+                if (isHost)
+                    row.Children.Add(new TextBlock
+                    {
+                        Text = "  · " + Strings.Get("MpRoomBadgeHost"),
+                        Foreground = R("AccentBrush"),
+                        FontSize = F("FontSizeCaption"),
+                        VerticalAlignment = VerticalAlignment.Center,
+                    });
+                else if (m.IsReady)
+                    row.Children.Add(new TextBlock
+                    {
+                        Text = "  ✓ " + Strings.Get("MpRoomReady"),
+                        Foreground = R("MpStatusInGame"),
+                        FontSize = F("FontSizeCaption"),
+                        VerticalAlignment = VerticalAlignment.Center,
+                    });
+                panel.Children.Add(row);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Room peek failed: {ex.Message}");
+            if (!ReferenceEquals(_peekPopup, popup)) return;
+            panel.Children.Remove(loading);
+            panel.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("MpRoomPeekError"),
+                Foreground = R("ErrorBrush"),
+                FontSize = F("FontSizeBody"),
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 260,
+            });
+        }
+    }
 
     private async Task RefreshQuotaAsync()
     {
@@ -3634,14 +3824,14 @@ public partial class MultiplayerTab : UserControl
         try
         {
             var q = await _session.Api.GetQuotaAsync();
-            // Render in the "12 players online · 4 active rooms"
-            // style from the redesign reference. Drop the /max
-            // counter on the visible label — it lives in the
-            // tooltip instead so the header strip stays compact.
-            QuotaText.Text = $"👥 {q.Players.Active} players online   ·   🏠 {q.Lobbies.Active} active rooms";
+            // Render in the "12 players online · 4 active rooms" style. The /max
+            // counter lives in the tooltip so the header strip stays compact.
+            _lastQuotaPlayers = q.Players.Active;
+            _lastActiveRooms = q.Lobbies.Active;
             QuotaText.ToolTip = Strings.Format("MpQuotaBar",
                 q.Players.Active, q.Players.Max,
                 q.Lobbies.Active, q.Lobbies.Max);
+            UpdateTopBarCounts();
         }
         catch
         {
@@ -3807,23 +3997,8 @@ public partial class MultiplayerTab : UserControl
         var hostCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var hostDisc = new Border
-        {
-            Width = 24, Height = 24,
-            CornerRadius = new CornerRadius(12),
-            Background = HostMonogramBrush(hostName),
-            Margin = new Thickness(0, 0, 8, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = Monogram(hostName),
-                Foreground = Brushes.White,
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                FontWeight = FontWeights.Bold,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            },
-        };
+        var hostDisc = BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, 24);
+        hostDisc.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(hostDisc, 0);
         hostCell.Children.Add(hostDisc);
         var hostNameText = new TextBlock
@@ -3839,14 +4014,22 @@ public partial class MultiplayerTab : UserControl
         Grid.SetColumn(hostCell, 2);
         grid.Children.Add(hostCell);
 
-        // === Col 3: PLAYERS — icon + X/Y. ===
+        // === Col 3: PLAYERS — icon + X/Y, clickable to PEEK the roster without joining. ===
         var playersCell = new TextBlock
         {
             Text = $"👤 {lobby.CurrentPlayers} / {lobby.MaxPlayers}",
             Foreground = textPrimary,
             FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             VerticalAlignment = VerticalAlignment.Center,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Tag = lobby,
+            ToolTip = Strings.Get("MpRoomPeekTooltip"),
+            TextDecorations = null,
         };
+        // Underline on hover so it reads as clickable (link affordance).
+        playersCell.MouseEnter += (_, _) => playersCell.TextDecorations = TextDecorations.Underline;
+        playersCell.MouseLeave += (_, _) => playersCell.TextDecorations = null;
+        playersCell.MouseLeftButtonUp += PlayersPeek_Click;
         Grid.SetColumn(playersCell, 3);
         grid.Children.Add(playersCell);
 
