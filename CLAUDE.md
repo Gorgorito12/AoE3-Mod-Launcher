@@ -1946,13 +1946,16 @@ Two cheap gates beyond a green build:
   (community-facing, mirrors the server's English logs); the only variable text is
   the player-typed room name. Pretty mod name from the hardcoded `MOD_LABELS`
   (`wol`/`improvement-mod`/`aoe3-tad`), fallback to the raw `mod_id`. **Optional
-  ROLE PING:** if `DISCORD_PLAYERS_ROLE_ID` (env, server-specific) is set, the
-  create POST adds `content: "<@&<id>>"` + `allowed_mentions:{parse:[],roles:[id]}`
-  so a "Players"/"Jugadores" role gets notified (the mention MUST be in `content`,
-  not the embed; the `allowed_mentions` restriction stops a room name from
-  @everyone-ing). It's ONLY on the create POST — the PATCH edits never re-ping —
-  and no-op when the var is empty. (Multi-server caveat: a role id belongs to one
-  server, so with multiple webhooks the ping only lands on the server that has it.)
+  ROLE PING:** the create POST adds `content: "<@&<id>>"` +
+  `allowed_mentions:{parse:[],roles:[id]}` so a "Players"/"Jugadores" role gets
+  notified (the mention MUST be in `content`, not the embed; the `allowed_mentions`
+  restriction stops a room name from @everyone-ing). It's ONLY on the create POST —
+  the PATCH edits never re-ping. The role id **DEFAULTS to the WoL community
+  "Players" role, hardcoded in `env.ts`** (a role id is a public identifier, not a
+  secret — same pattern as the other hardcoded server defaults), so it works with no
+  config; `DISCORD_PLAYERS_ROLE_ID` overrides it for another server and `"none"`
+  disables the ping. (Multi-server caveat: a role id belongs to one server, so with
+  multiple webhooks the ping only lands on the server that has it.)
   Deploy is code-only (`git pull` + set the comma-separated `DISCORD_WEBHOOK_URL`
   [+ optional `DISCORD_PLAYERS_ROLE_ID`] in `.env` + `systemctl restart wol-lobby`) — **no migration** (message ids are in-memory), no
   `npm install` (`undici` already ships), no launcher rebuild. Trade-off: a server
