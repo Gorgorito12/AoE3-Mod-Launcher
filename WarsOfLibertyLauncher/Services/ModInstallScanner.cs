@@ -57,6 +57,24 @@ public static class ModInstallScanner
         CancellationToken ct = default,
         HashSet<string>? visited = null,
         int maxDirs = MaxDirsScanned)
+        => FindDeep(root, dir => ModInstallProbe.LooksLikeModInstall(dir, profile),
+                    maxDepth, ct, visited, maxDirs);
+
+    /// <summary>
+    /// Same bounded BFS as the <see cref="ModProfile"/> overload, but the
+    /// per-folder decision is an arbitrary <paramref name="match"/> predicate
+    /// instead of the mod-install content rule. Lets other content-searches
+    /// (e.g. finding a clean AoE3 base by <c>age3y.exe</c>) reuse the exact
+    /// same skip-list / depth / visited-set / cap / cancellation machinery.
+    /// The predicate MUST NOT throw — it's called per directory inside the walk.
+    /// </summary>
+    public static IEnumerable<string> FindDeep(
+        string root,
+        Func<string, bool> match,
+        int maxDepth,
+        CancellationToken ct = default,
+        HashSet<string>? visited = null,
+        int maxDirs = MaxDirsScanned)
     {
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             yield break;
@@ -76,7 +94,7 @@ public static class ModInstallScanner
             if (!seen.Add(NormalizeDir(dir))) continue;
             if (++scanned > maxDirs) yield break;
 
-            if (ModInstallProbe.LooksLikeModInstall(dir, profile))
+            if (match(dir))
                 yield return dir;
 
             if (depth >= maxDepth) continue;

@@ -8305,6 +8305,29 @@ public partial class MainWindow : Window
 
         // Detect AoE3
         var aoe3Installs = AoE3Detector.FindAll();
+
+        // Fallback: if the fast name/registry detection found nothing, run a
+        // bounded content scan that catches a clean AoE3 base in a NON-STANDARD
+        // folder (e.g. …\Microsoft Studios\Age of Empires III) the probes miss.
+        // Off the UI thread; the passive variant skips whole-drive enumeration
+        // (an antivirus behavioural signal). Non-fatal — worst case is the same
+        // "no AoE3 detected" the dialog already handles.
+        if (aoe3Installs.Count == 0)
+        {
+            try
+            {
+                aoe3Installs = await Task.Run(
+                    () => AoE3Detector.FindAllDeep(includeDriveRoots: false));
+                if (aoe3Installs.Count > 0)
+                    DiagnosticLog.Write(
+                        $"Install: deep AoE3 scan found base at '{aoe3Installs[0].ModRoot}'.");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Install: deep AoE3 scan failed (non-fatal): {ex.Message}");
+            }
+        }
+
         string? aoe3SourcePath = null;
         string? aoe3SourceLabel = null;
 

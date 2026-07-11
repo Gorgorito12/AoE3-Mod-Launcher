@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -103,6 +104,7 @@ public partial class InstallFolderDialog : Window
         LblFolder.Text = Strings.Get("DlgPickInstallFolderLabel");
         BrowseButton.Content = Strings.Get("ChangePathButton");
         BrowseAoE3InDialogButton.Content = Strings.Get("ChangePathButton");
+        SearchAoe3Button.Content = Strings.Get("DlgSearchAoe3Button");
         OkButton.Content = Strings.Get("BtnInstall");
         CancelButton.Content = Strings.Get("BtnCancel");
     }
@@ -138,6 +140,13 @@ public partial class InstallFolderDialog : Window
             Aoe3StatusText.Foreground = (System.Windows.Media.Brush)
                 new System.Windows.Media.BrushConverter().ConvertFromString("#d4a04a")!;
         }
+
+        // Offer the manual "search my Asian Dynasties" button only while no
+        // source is set (a real AoE3 in a non-standard folder that neither the
+        // fast probes nor the automatic pre-scan found).
+        SearchAoe3Button.Visibility = string.IsNullOrEmpty(Aoe3SourcePath)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // Setting / clearing AoE3 flips whether the install can proceed,
         // so re-run validation to enable/disable the OK button.
@@ -441,6 +450,52 @@ public partial class InstallFolderDialog : Window
         // Also suggest installing inside this AoE3 folder
         var suggestedWolPath = Path.Combine(gameFolder!, _modDisplayName);
         FolderTextBox.Text = suggestedWolPath;
+    }
+
+    /// <summary>
+    /// Exhaustive, user-initiated content search for a clean Age of Empires III
+    /// base — the manual counterpart of the automatic pre-scan in
+    /// <c>MainWindow.InstallAsync</c>. Runs <see cref="AoE3Detector.FindAllDeep"/>
+    /// off the UI thread WITH drive roots (a broad scan is expected when the user
+    /// asks for it). A mod folder (e.g. an existing WoL) is never returned as a
+    /// base — <see cref="AoE3Detector.IsCleanAoE3Folder"/> excludes it — so this
+    /// can't seed a contaminated clone.
+    /// </summary>
+    private async void SearchAoe3Button_Click(object sender, RoutedEventArgs e)
+    {
+        SearchAoe3Button.IsEnabled = false;
+        Aoe3StatusText.Text = Strings.Get("DlgSearchAoe3Searching");
+        Aoe3StatusText.Foreground = _diskSpaceDefaultBrush ?? Brushes.Gray;
+
+        try
+        {
+            var hits = await Task.Run(
+                () => AoE3Detector.FindAllDeep(includeDriveRoots: true, maxDirs: 20_000));
+            var hit = hits.FirstOrDefault(h => !string.IsNullOrEmpty(h.ModRoot));
+
+            if (hit != null)
+            {
+                Aoe3SourcePath = hit.ModRoot;
+                _aoe3SourceLabel = null;   // found by content, no named source
+                UpdateAoE3Display();       // green status, hides this button, re-validates
+                return;
+            }
+
+            Aoe3StatusText.Text = Strings.Get("DlgSearchAoe3NotFound");
+            Aoe3StatusText.Foreground = (Brush)
+                new BrushConverter().ConvertFromString("#d4a04a")!;
+        }
+        catch
+        {
+            Aoe3StatusText.Text = Strings.Get("DlgSearchAoe3NotFound");
+            Aoe3StatusText.Foreground = (Brush)
+                new BrushConverter().ConvertFromString("#d4a04a")!;
+        }
+        finally
+        {
+            if (string.IsNullOrEmpty(Aoe3SourcePath))
+                SearchAoe3Button.IsEnabled = true;
+        }
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)

@@ -703,6 +703,44 @@ Two cheap gates beyond a green build:
   drop this pass back to name-only matching. **Known gap (out of scope):** the
   Microsoft Store / Definitive Edition uses a different engine (no `age3y.exe`) and
   is incompatible with the mod fingerprint, so it's intentionally not detected.
+  **`FindAll` still misses a real AoE3 in a NON-STANDARD folder (name AND location)
+  outside Steam — so there is a SEPARATE, opt-in deep content scan
+  `AoE3Detector.FindAllDeep`, used ONLY by the install flow.** The real report: an
+  AoE3 install can live at e.g. `…\Program Files (x86)\Microsoft Studios\Age of
+  Empires III` (note "Studios", not the probed "Microsoft **Games**") — not a
+  Steam library, maybe no registry entry — so `FindAll` returns nothing and a fresh
+  install said "AoE3 not detected". `FindAllDeep(includeDriveRoots, ct, maxDirs)`
+  runs the fast `FindAll` first, then a **bounded content BFS** for `age3y.exe`
+  across the likely roots (Program Files variants + Steam `common`; bare drive
+  roots only when `includeDriveRoots`), **reusing `ModInstallScanner`'s machinery**
+  via a NEW `FindDeep(root, Func<string,bool> match, …)` overload (skip-list, depth,
+  shared visited-set, dir cap, cancellation). **Load-bearing invariants:** (1) it is
+  **NOT** folded into `FindAll` on purpose — `FindAll`/`FindInstallRoot` are called
+  on 9 HOT paths (multiplayer per-render/join, cold start, stock-game fingerprint,
+  `GameLauncher`, uninstall, `ModInstallScanner`), and a deep scan there would slow
+  every one; `FindAllDeep` is install-only, off the UI thread. (2) The per-folder
+  predicate `AoE3Detector.IsCleanAoE3Folder(dir)` requires `age3y.exe` (flat or
+  `bin\`) **AND** a `data\` dir **AND** that the folder is **NOT a mod install** —
+  it excludes `install-manifest.json` and **ANY** `ModRegistry.All` `InstallMarker`
+  (WoL's `art\zulushield` + every catalog mod's marker, via
+  `ModInstallProbe.MarkerExists`), so a WoL / mod folder (which also ships
+  `age3y.exe`) is **never** offered as a clone source (that would produce a
+  contaminated mod-on-mod install). This is GLOBAL, not WoL-specific — every
+  `IsolatedFolder` mod that clones AoE3 benefits, since the base game is
+  mod-agnostic. Two wired uses: (a) **automatic** — `MainWindow.InstallAsync` runs
+  `FindAllDeep(includeDriveRoots:false)` (conservative: no drive-root crawl, ~6000
+  dir cap — the AV-signal rule from the mod scanner) off-thread ONLY when the fast
+  `FindAll()` returned nothing, pre-filling `aoe3SourcePath`; (b) **manual** — a
+  "Buscar mi Asian Dynasties…" button in `InstallFolderDialog` (shown only when no
+  source) runs `FindAllDeep(includeDriveRoots:true, maxDirs:20_000)` (exhaustive,
+  user-initiated), the base-game analog of WoL's "¿YA LO TENÉS?" search. Backstops
+  if the scan ever picked a bad source: the existing `CountCloneableFiles`
+  preflight + `InstallBaseGameMissingException` (0-file abort) + the 3-key-file
+  `data\` verify. Pinned by `AoE3DetectorTests` (clean-vs-mod predicate, non-standard
+  folder found, WoL folder never returned) + the `FindDeep` predicate overload cases.
+  A machine that has ONLY a WoL (its `age3y.exe` bundled inside the marked WoL
+  folder) and no separate clean AoE3 correctly finds nothing to clone — the existing
+  WoL is recognized by the mod-detection path instead; this is intended, not a miss.
 
 - **The top nav tab ORDER is runtime-driven, not the XAML order.** The three
   tabs (LIBRARY / WORKSHOP / MULTIPLAYER) are declared in a fixed left-to-right

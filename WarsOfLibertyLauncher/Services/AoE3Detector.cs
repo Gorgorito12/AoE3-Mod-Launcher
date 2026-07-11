@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Microsoft.Win32;
 
 namespace WarsOfLibertyLauncher.Services;
@@ -472,5 +473,103 @@ public static class AoE3Detector
             current = current.Parent;
         }
         return false;
+    }
+
+    /// <summary>
+    /// True if <paramref name="dir"/> looks like a CLEAN Age of Empires III
+    /// base install we can safely clone: it has the TAD executable
+    /// (<c>age3y.exe</c> directly or in <c>bin\</c>), a <c>data\</c> directory
+    /// (every real AoE3 has one), and is NOT itself a mod install. "Is a mod" is
+    /// checked GLOBALLY — an <c>install-manifest.json</c> (any launcher-made mod)
+    /// or ANY registered mod's content marker (e.g. WoL's <c>art\zulushield</c>) —
+    /// so a WoL / Improvement-Mod / catalog-mod folder is never offered as a clone
+    /// source (which would produce a contaminated mod-on-mod install). Pure and
+    /// exception-safe; callable inside a directory walk.
+    /// </summary>
+    public static bool IsCleanAoE3Folder(string dir)
+        => IsCleanAoE3Folder(dir, KnownModMarkers());
+
+    private static bool IsCleanAoE3Folder(string dir, IReadOnlyList<string> modMarkers)
+    {
+        if (string.IsNullOrEmpty(dir)) return false;
+        try
+        {
+            bool hasExe = File.Exists(Path.Combine(dir, "age3y.exe"))
+                || File.Exists(Path.Combine(dir, "bin", "age3y.exe"));
+            if (!hasExe) return false;
+            if (!Directory.Exists(Path.Combine(dir, "data"))) return false;
+
+            // Reject any mod install so we never clone a mod as the "base game".
+            if (File.Exists(Path.Combine(dir, "install-manifest.json"))) return false;
+            foreach (var marker in modMarkers)
+                if (ModInstallProbe.MarkerExists(dir, marker)) return false;
+
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Non-empty content markers of every known mod (built-in + catalog).</summary>
+    private static IReadOnlyList<string> KnownModMarkers()
+    {
+        var list = new List<string>();
+        try
+        {
+            foreach (var p in ModRegistry.All)
+                if (!string.IsNullOrEmpty(p.InstallMarker))
+                    list.Add(p.InstallMarker);
+        }
+        catch { }
+        return list;
+    }
+
+    /// <summary>
+    /// Fast <see cref="FindAll"/> PLUS a bounded, content-based fallback that
+    /// finds a clean AoE3 base in NON-STANDARD folders (e.g.
+    /// <c>…\Microsoft Studios\Age of Empires III</c>) that the name-based probes
+    /// miss. Kept SEPARATE from <see cref="FindAll"/> on purpose — the deep scan
+    /// is opt-in and only for the install flow, so the hot callers of
+    /// <see cref="FindAll"/> / <see cref="FindInstallRoot"/> (multiplayer, stock
+    /// game, launch) never pay for it. Reuses <see cref="ModInstallScanner"/>'s
+    /// bounded BFS (skip-list, depth, shared visited-set, dir cap, cancellation)
+    /// with the <see cref="IsCleanAoE3Folder"/> predicate. Run it OFF the UI
+    /// thread. Results from the fast pass keep their real source labels; deep-scan
+    /// hits carry an empty label (shown as the generic "detected" message).
+    /// </summary>
+    /// <param name="includeDriveRoots">
+    /// When false (the automatic/passive scan) whole drive roots are skipped —
+    /// enumerating <c>C:\</c>/<c>D:\</c> is an antivirus behavioural signal; the
+    /// manual, user-initiated search passes true.
+    /// </param>
+    public static List<Installation> FindAllDeep(
+        bool includeDriveRoots = false,
+        CancellationToken ct = default,
+        int maxDirs = 6_000)
+    {
+        // Seed with whatever the cheap name/registry detection already found.
+        var found = FindAll();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in found) seen.Add(f.ModRoot);
+
+        var markers = KnownModMarkers();
+        bool Match(string d) => IsCleanAoE3Folder(d, markers);
+
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in ModInstallScanner.EnumerateLikelyRoots(includeDriveRoots))
+        {
+            ct.ThrowIfCancellationRequested();
+            foreach (var hit in ModInstallScanner.FindDeep(
+                         root, Match, maxDepth: 3, ct, visited, maxDirs))
+            {
+                var gameFolder = File.Exists(Path.Combine(hit, "age3y.exe"))
+                    ? hit
+                    : Path.Combine(hit, "bin");
+                var modRoot = ResolveModRoot(gameFolder);
+                if (!seen.Add(modRoot)) continue;
+                found.Add(new Installation(gameFolder, modRoot, ""));
+            }
+        }
+
+        return found;
     }
 }

@@ -3781,6 +3781,26 @@ public static class Strings
             [LangEn] = "Select your Age of Empires III folder above to enable installation.",
             [LangEs] = "Selecciona tu carpeta de Age of Empires III arriba para poder instalar.",
         },
+        // Manual "search my Asian Dynasties" button + its transient states.
+        // Shown only while no AoE3 source is set; runs an exhaustive content
+        // scan that finds AoE3 even in non-standard folders (e.g. Microsoft Studios).
+        ["DlgSearchAoe3Button"] = new()
+        {
+            [LangEn] = "Search for my Asian Dynasties…",
+            [LangEs] = "Buscar mi Asian Dynasties…",
+        },
+        ["DlgSearchAoe3Searching"] = new()
+        {
+            [LangEn] = "Searching for Age of Empires III on your PC…",
+            [LangEs] = "Buscando Age of Empires III en tu equipo…",
+        },
+        ["DlgSearchAoe3NotFound"] = new()
+        {
+            [LangEn] = "⚠ No clean Age of Empires III install was found. Use the button " +
+                       "above to select the folder manually.",
+            [LangEs] = "⚠ No se encontró una instalación limpia de Age of Empires III. Usa el " +
+                       "botón de arriba para seleccionar la carpeta manualmente.",
+        },
         ["InstallDiskSpace"] = new()
         {
             [LangEn] = "Available disk space: {0} on {1}",

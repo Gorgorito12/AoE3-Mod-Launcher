@@ -61,7 +61,17 @@
         <TextBlock x:Name="Aoe3StatusText"
                    FontSize="{StaticResource FontSizeCaption}"
                    TextWrapping="Wrap"
-                   Margin="0,0,0,14"/>
+                   Margin="0,0,0,6"/>
+
+        <!-- Manual "search my Asian Dynasties" — exhaustive content scan, shown
+             only when no source is set. The automatic pre-fill already runs a
+             conservative scan; this is the user-initiated exhaustive one. -->
+        <Button x:Name="SearchAoe3Button"
+                Style="{StaticResource DialogButton}"
+                HorizontalAlignment="Left"
+                Margin="0,0,0,14"
+                Visibility="Collapsed"
+                Click="SearchAoe3Button_Click"/>
 
         <!-- First-run reminder: open the original game at least once
              before installing (non-blocking, shown only when AoE3's
