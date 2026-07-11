@@ -114,6 +114,43 @@ public class ModInstallProbeTests : IDisposable
     }
 
     [Fact]
+    public void Inspect_ReportsTheExactMissingSignal()
+    {
+        var profile = WolLikeProfile();
+
+        // Both present → Match.
+        var full = Path.Combine(NewTempDir(), "MiWoL");
+        CreateFileAt(full, @"data\stringtabley.xml");
+        CreateDirAt(full, @"art\zulushield");
+        Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(full, profile));
+
+        // Probe present, marker gone → MarkerMissing (looks like base AoE3 /
+        // an install whose overlay was uninstalled). This is the real-world
+        // rejection that used to surface as a blind "invalid folder".
+        var markerless = Path.Combine(NewTempDir(), "Wars of Liberty");
+        CreateFileAt(markerless, @"data\stringtabley.xml");
+        Assert.Equal(ProbeOutcome.MarkerMissing, ModInstallProbe.Inspect(markerless, profile));
+
+        // No probe at all → ProbeMissing.
+        var empty = NewTempDir();
+        Assert.Equal(ProbeOutcome.ProbeMissing, ModInstallProbe.Inspect(empty, profile));
+
+        // Path doesn't exist → NotADirectory.
+        var missing = Path.Combine(NewTempDir(), "does-not-exist");
+        Assert.Equal(ProbeOutcome.NotADirectory, ModInstallProbe.Inspect(missing, profile));
+    }
+
+    [Fact]
+    public void Inspect_OutcomeOrdering_MarkerMissingIsMoreInstallLikeThanProbeMissing()
+    {
+        // The manual picker keeps the "closest to a real install" reason across
+        // candidates by comparing outcomes; this ordering is load-bearing for that.
+        Assert.True(ProbeOutcome.Match > ProbeOutcome.MarkerMissing);
+        Assert.True(ProbeOutcome.MarkerMissing > ProbeOutcome.ProbeMissing);
+        Assert.True(ProbeOutcome.ProbeMissing > ProbeOutcome.NotADirectory);
+    }
+
+    [Fact]
     public void MarkerExists_MatchesBothFileAndDirectory()
     {
         var dirMarker = NewTempDir();

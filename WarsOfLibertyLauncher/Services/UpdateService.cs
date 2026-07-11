@@ -295,14 +295,18 @@ public class UpdateService
     /// </summary>
     public async Task<CheckResult> CheckAsync(
         IProgress<string>? status = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? forceInstallPath = null)
     {
         DiagnosticLog.WriteSection("CheckAsync");
 
         // Local-only detection (no network): compute it BEFORE the guarded core so
         // `valid` — the on-disk truth — is available to the offline fallback.
+        // `forceInstallPath` is a folder the user just picked in the manual folder
+        // picker (already content-validated): it's adopted directly so a valid pick
+        // is honoured even if the normal cached-path resolution can't see it.
         status?.Report(Strings.Format("StatusDetectingInstall", _profile.DisplayName));
-        InstallPath = ResolveInstallPath();
+        InstallPath = ResolveInstallPath(forceInstallPath);
         bool valid = !string.IsNullOrEmpty(InstallPath) && IsProfileInstalled(InstallPath);
         DiagnosticLog.Write($"Install path detected: '{InstallPath}' (valid: {valid})");
 
@@ -912,9 +916,41 @@ public class UpdateService
     ///      for as subfolders of AoE3 installs, in-place mods are detected
     ///      by their probe file sitting inside the AoE3 folder itself.
     /// </summary>
-    private string? ResolveInstallPath()
+    private string? ResolveInstallPath(string? forced = null)
     {
         var state = _config.GetState(_profile.Id);
+
+        // Decisive diagnostic: the manual-picker "change folder" path sets
+        // state.InstallPath and then calls CheckAsync, yet a report showed this
+        // reading back empty. Log exactly what we read (and the forced pick) so a
+        // future bundle pins the cause. Cheap, one line per check.
+        DiagnosticLog.Write(
+            $"ResolveInstallPath('{_profile.Id}'): cached state.InstallPath=" +
+            $"'{state.InstallPath}', forced='{forced ?? "(none)"}', " +
+            $"hasMultiple={state.HasMultipleInstalls}.");
+
+        // 0. User-picked folder (manual folder picker). The picker already
+        //    content-validated it (probe + marker), so adopt it DIRECTLY here
+        //    instead of relying on the cached-path read below — that read was
+        //    observed returning empty for a folder the picker had just Matched,
+        //    leaving a valid manual pick un-adopted. Re-validate defensively; an
+        //    invalid `forced` falls through to normal resolution (we never adopt a
+        //    folder that isn't a real install of this mod).
+        if (!string.IsNullOrWhiteSpace(forced)
+            && IsProfileInstalled(forced)
+            && LooksLikeRealModInstall(forced))
+        {
+            var picked = forced.TrimEnd('\\', '/');
+            state.InstallPath = picked;
+            try { _config.Save(); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Failed to persist user-picked install path: {ex.Message}");
+            }
+            DiagnosticLog.Write(
+                $"ResolveInstallPath: adopted user-picked path '{picked}' for '{_profile.Id}'.");
+            return picked;
+        }
 
         // 1. Path cached for THIS mod from a previous detection (per-mod —
         //    cannot leak across profiles). On top of the probe-file check we

@@ -603,6 +603,38 @@ Two cheap gates beyond a green build:
   simplifications (not yet done):** the multi-install case adopts the first hit + tells the
   user to pick a specific one via "Change mod folder" (no chooser dialog yet); the whole
   search UI needs a manual Windows click-test (build/unit-tests don't exercise it).
+  **A manually-picked folder that content-validates is now ADOPTED DIRECTLY, and the
+  picker is no longer a silent black box — both from a real diagnostic bundle.** The bug: a
+  user pointed "Change mod folder" at a valid separate WoL install (`D:\Wars of Liberty`);
+  the picker MATCHED it (probe + marker present), `BrowseButton_Click` wrote
+  `st.InstallPath = resolved` + `Save()` + `CheckAsync()` — yet `ResolveInstallPath` read
+  `state.InstallPath` back EMPTY (no "rejecting stale cache" log, which only fires on a
+  NON-empty invalid path), so the mod stayed "not installed". Deterministic (2/2), and
+  unexplained statically (`GetActiveState()` and `GetState(profile.Id)` resolve to the SAME
+  `ModState`; `_config` is one shared reference). Two fixes plus instrumentation:
+  (1) **`ModInstallProbe.Inspect(path, profile) -> ProbeOutcome`** {NotADirectory, ProbeMissing,
+  MarkerMissing, Match} (ordered least→most install-like) reports WHICH check failed;
+  `LooksLikeModInstall` is now a wrapper `=> Inspect(...) == Match`. `ResolvePickedModInstall`
+  logs the chosen folder + each candidate's outcome + the deep-scan hit, and returns the
+  best (closest) failure reason so the rejection message can name the MISSING signal — a
+  marker-missing folder (looks like base AoE3 / an uninstalled overlay) shows
+  `DlgInvalidFolderMarkerBody` ("missing `art\zulushield`… reinstall"), everything else the
+  probe+marker list (`DlgInvalidFolderBody`). Pinned by `ModInstallProbeTests`.
+  (2) **`forceInstallPath`**: the picked, already-validated path is threaded THROUGH the
+  check — `MainWindow.CheckAsync(forceInstallPath)` (optional; skips the session cache
+  fast-path when set) → `UpdateService.CheckAsync(..., forceInstallPath)` →
+  `ResolveInstallPath(forced)`, whose new **step 0** adopts `forced` directly when it passes
+  `IsProfileInstalled` + `LooksLikeRealModInstall` (re-validated defensively; invalid falls
+  through to normal resolution). So a valid manual pick is adopted **without depending on the
+  cached-path read that was observed failing.** Both "Change mod folder" (`BrowseButton_Click`)
+  and "Add existing folder" (`AddExistingCopy`, when there is NO active install — otherwise it
+  registers an inactive copy as before) route through it. Invariant: **a manual pick that
+  validates probe+marker is ALWAYS adopted.** (3) **Instrumentation kept**: `ResolveInstallPath`
+  now logs, at the top of every check, the `_profile.Id` + the `state.InstallPath` it actually
+  reads + `forced` + `hasMultiple`, and `BrowseButton_Click` logs a readback of the ids/state
+  right after the write — so the next bundle pins WHY the normal config read returned empty
+  (root cause of the paradox still open; the `forceInstallPath` fix unblocks the user
+  regardless). Don't drop the top-of-`ResolveInstallPath` log or the forced step-0.
 
 - **Finding the BASE AoE3 install (`AoE3Detector.FindAll`) is by CONTENT too —
   the signal is the file `age3y.exe`, NOT the folder name.** `age3y.exe` is the

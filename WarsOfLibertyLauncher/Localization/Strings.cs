@@ -3363,8 +3363,8 @@ public static class Strings
             [LangEn] = "Invalid folder",
             [LangEs] = "Carpeta no válida",
         },
-        // {0} = mod display name, {1} = probe file the launcher checks for
-        // (relative to the install folder), e.g. "data\\stringtabley.xml"
+        // {0} = mod display name, {1} = the content signals the launcher expects
+        // inside the install folder, e.g. "data\\stringtabley.xml + art\\zulushield"
         // for WoL or "age3m.exe" for Improvement Mod.
         ["DlgInvalidFolderBody"] = new()
         {
@@ -3372,6 +3372,17 @@ public static class Strings
                        "Expected to find '{1}' inside.",
             [LangEs] = "La carpeta seleccionada no parece ser una instalación válida de {0}.\n\n" +
                        "Esperaba encontrar '{1}' adentro.",
+        },
+        // {0} = mod display name, {1} = the content marker that's missing
+        // (relative to the install folder), e.g. "art\\zulushield" for WoL. Shown
+        // when the folder has the probe file but not the marker — i.e. it looks
+        // like a base-game / incomplete install rather than a full mod install.
+        ["DlgInvalidFolderMarkerBody"] = new()
+        {
+            [LangEn] = "The selected folder looks like a base Age of Empires III folder, not a complete {0} installation — it's missing '{1}'.\n\n" +
+                       "If you uninstalled {0} or files are missing, reinstall it from the launcher (adding the folder can't recover deleted mod files).",
+            [LangEs] = "La carpeta seleccionada parece un Age of Empires III base, no una instalación completa de {0} — le falta '{1}'.\n\n" +
+                       "Si desinstalaste {0} o faltan archivos, reinstalalo desde el launcher (agregar la carpeta no puede recuperar archivos del mod borrados).",
         },
         // {0} = mod display name.
         ["DlgFolderPickerTitle"] = new()

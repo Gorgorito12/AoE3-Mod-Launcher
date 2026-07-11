@@ -26,6 +26,27 @@ namespace WarsOfLibertyLauncher.Services;
 /// the mod's DisplayName" heuristic, which broke the moment a user renamed the
 /// install folder.
 /// </summary>
+/// <summary>
+/// Which content signal (if any) a candidate folder is missing, so callers can
+/// log the exact reason a folder was rejected and craft a specific user message
+/// (e.g. "missing the WoL marker" vs "not a mod folder at all"). Ordered from
+/// least to most "install-like" so a caller comparing candidates can pick the
+/// most informative outcome: a folder that has the probe but lacks the marker
+/// (<see cref="MarkerMissing"/>) is closer to a real install than one missing
+/// the probe entirely.
+/// </summary>
+public enum ProbeOutcome
+{
+    /// <summary>The path doesn't exist or isn't a directory.</summary>
+    NotADirectory = 0,
+    /// <summary>The profile's probe file isn't present under the folder.</summary>
+    ProbeMissing = 1,
+    /// <summary>Probe present, but the mod's content marker is absent (looks like the base game).</summary>
+    MarkerMissing = 2,
+    /// <summary>Probe (and marker, if declared) present — a real install of this mod.</summary>
+    Match = 3,
+}
+
 public static class ModInstallProbe
 {
     /// <summary>
@@ -43,26 +64,36 @@ public static class ModInstallProbe
     }
 
     /// <summary>
-    /// True if <paramref name="path"/> looks like a real install of
-    /// <paramref name="profile"/> by content (probe file + optional marker),
-    /// regardless of the folder's name. See the type doc for the rule.
+    /// Inspect <paramref name="path"/> against <paramref name="profile"/>'s
+    /// content rule (existence → probe file → marker, same order as
+    /// <see cref="LooksLikeModInstall"/>) and report the FIRST check that fails,
+    /// or <see cref="ProbeOutcome.Match"/> when all pass. Lets callers name the
+    /// missing signal instead of a blind "invalid folder".
     /// </summary>
-    public static bool LooksLikeModInstall(string path, ModProfile profile)
+    public static ProbeOutcome Inspect(string path, ModProfile profile)
     {
         if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
-            return false;
+            return ProbeOutcome.NotADirectory;
 
         // Probe file: the mod's own data file that lands here on install.
         if (!string.IsNullOrEmpty(profile.InstallProbeFile)
             && !File.Exists(Path.Combine(path, profile.InstallProbeFile)))
-            return false;
+            return ProbeOutcome.ProbeMissing;
 
         // Content marker: distinguishes the mod from the base game it
         // clones/overlays, when the probe file alone is ambiguous.
         if (!string.IsNullOrEmpty(profile.InstallMarker)
             && !MarkerExists(path, profile.InstallMarker))
-            return false;
+            return ProbeOutcome.MarkerMissing;
 
-        return true;
+        return ProbeOutcome.Match;
     }
+
+    /// <summary>
+    /// True if <paramref name="path"/> looks like a real install of
+    /// <paramref name="profile"/> by content (probe file + optional marker),
+    /// regardless of the folder's name. See the type doc for the rule.
+    /// </summary>
+    public static bool LooksLikeModInstall(string path, ModProfile profile)
+        => Inspect(path, profile) == ProbeOutcome.Match;
 }

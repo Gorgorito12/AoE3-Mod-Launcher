@@ -5667,17 +5667,13 @@ public partial class MainWindow : Window
         // reasonable ancestor — the AoE3 root, a "Games" parent — and the
         // install is still found). Content-based, name-independent; the marker
         // keeps a vanilla AoE3 folder from passing as WoL.
-        string? resolved = ResolvePickedModInstall(chosen, profile);
+        string? resolved = ResolvePickedModInstall(chosen, profile, out var reason);
 
         if (resolved == null)
         {
+            DiagnosticLog.Write($"Change mod folder ('{profile.Id}'): rejected '{chosen}' (reason={reason}).");
             MessageBox.Show(this,
-                Strings.Format(
-                    "DlgInvalidFolderBody",
-                    profile.DisplayName,
-                    string.IsNullOrEmpty(profile.InstallProbeFile)
-                        ? "(unknown probe file)"
-                        : profile.InstallProbeFile),
+                InvalidFolderMessage(profile, reason),
                 Strings.Get("DlgInvalidFolderTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -5689,8 +5685,18 @@ public partial class MainWindow : Window
         st.OtherInstalls.RemoveAll(i => ModState.PathEquals(i.InstallPath, resolved));
         st.InstallPath = resolved;
         _config.Save();
+        // Readback diagnostic: a report showed this write not surviving into the
+        // subsequent CheckAsync's ResolveInstallPath (read back empty, no reject
+        // log). Capture the exact ids/state so a future bundle pins that paradox.
+        DiagnosticLog.Write(
+            $"Change mod folder: set active install for '{profile.Id}' -> '{resolved}'. " +
+            $"Readback: serviceProfile='{_updateService.Profile.Id}', activeModId='{_config.ActiveModId}', " +
+            $"getActiveState='{st.InstallPath}', getState('{_updateService.Profile.Id}')=" +
+            $"'{_config.GetState(_updateService.Profile.Id).InstallPath}'.");
         InvalidateActiveModCheckCache();
-        await CheckAsync();
+        // Pass the picked path THROUGH the check so it's adopted directly — the
+        // config write above was observed not surviving the read in ResolveInstallPath.
+        await CheckAsync(forceInstallPath: resolved);
         // Keep an open Mod Properties window in sync with the new mod path /
         // re-detected version once the async re-check completes.
         _modPropertiesDialog?.RefreshData();
@@ -5737,8 +5743,20 @@ public partial class MainWindow : Window
     /// real install of this mod.
     /// </summary>
     private static string? ResolvePickedModInstall(string chosen, ModProfile profile)
+        => ResolvePickedModInstall(chosen, profile, out _);
+
+    /// <summary>
+    /// Overload that also reports, via <paramref name="bestReason"/>, the most
+    /// informative failure across the tried candidates (MarkerMissing &gt;
+    /// ProbeMissing &gt; NotADirectory) so the caller can name the missing signal
+    /// in the rejection message. Every step is written to the diagnostic log —
+    /// the manual picker was previously silent, so a rejection left no trace in a
+    /// shared diagnostic bundle.
+    /// </summary>
+    private static string? ResolvePickedModInstall(string chosen, ModProfile profile, out ProbeOutcome bestReason)
     {
         chosen = chosen.TrimEnd('\\', '/');
+        bestReason = ProbeOutcome.NotADirectory;
 
         var candidates = new List<string> { chosen };
         if (!string.IsNullOrEmpty(profile.DisplayName))
@@ -5748,13 +5766,60 @@ public partial class MainWindow : Window
             && !candidates.Contains(Path.Combine(chosen, defaultLeaf), StringComparer.OrdinalIgnoreCase))
             candidates.Add(Path.Combine(chosen, defaultLeaf));
 
+        DiagnosticLog.Write($"ResolvePickedModInstall ('{profile.Id}'): chosen='{chosen}', {candidates.Count} candidate(s).");
         foreach (var candidate in candidates)
-            if (LooksLikeModInstall(candidate, profile))
+        {
+            var outcome = ModInstallProbe.Inspect(candidate, profile);
+            DiagnosticLog.Write($"  candidate '{candidate}' -> {outcome}");
+            if (outcome == ProbeOutcome.Match)
+            {
+                bestReason = ProbeOutcome.Match;
                 return candidate.TrimEnd('\\', '/');
+            }
+            // Keep the closest-to-a-real-install reason (higher enum = more install-like).
+            if (outcome > bestReason)
+                bestReason = outcome;
+
+            // WoL legacy Inno-registry install without the modern probe/marker still counts.
+            if (string.Equals(profile.Id, ModRegistry.WolId, StringComparison.OrdinalIgnoreCase)
+                && RegistryService.IsValidInstall(candidate))
+            {
+                DiagnosticLog.Write($"  candidate '{candidate}' -> accepted via WoL Inno-registry fallback.");
+                bestReason = ProbeOutcome.Match;
+                return candidate.TrimEnd('\\', '/');
+            }
+        }
 
         // Deep scan of the chosen tree (bounded depth, system dirs skipped).
         var hit = ModInstallScanner.FindDeep(chosen, profile, maxDepth: 4).FirstOrDefault();
-        return hit?.TrimEnd('\\', '/');
+        if (hit != null)
+        {
+            DiagnosticLog.Write($"  deep scan (depth 4) matched '{hit}'.");
+            bestReason = ProbeOutcome.Match;
+            return hit.TrimEnd('\\', '/');
+        }
+
+        DiagnosticLog.Write($"ResolvePickedModInstall ('{profile.Id}'): no match; best reason = {bestReason}.");
+        return null;
+    }
+
+    /// <summary>
+    /// Message body for a rejected manual folder pick, chosen by the closest
+    /// failure reason: a folder that has the probe but lacks the mod's content
+    /// marker looks like a base-game / incomplete install, so we say so and name
+    /// the marker; anything else lists the content signals we expected to find.
+    /// </summary>
+    private static string InvalidFolderMessage(ModProfile profile, ProbeOutcome reason)
+    {
+        if (reason == ProbeOutcome.MarkerMissing && !string.IsNullOrEmpty(profile.InstallMarker))
+            return Strings.Format("DlgInvalidFolderMarkerBody", profile.DisplayName, profile.InstallMarker);
+
+        var expected = string.IsNullOrEmpty(profile.InstallProbeFile)
+            ? "(unknown probe file)"
+            : profile.InstallProbeFile;
+        if (!string.IsNullOrEmpty(profile.InstallMarker))
+            expected += " + " + profile.InstallMarker;
+        return Strings.Format("DlgInvalidFolderBody", profile.DisplayName, expected);
     }
 
     /// <summary>
@@ -5778,18 +5843,37 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) != true) return false;
 
         var chosen = dialog.FolderName.TrimEnd('\\', '/');
-        string? resolved = ResolvePickedModInstall(chosen, profile);
+        string? resolved = ResolvePickedModInstall(chosen, profile, out var reason);
 
         if (resolved == null)
         {
+            DiagnosticLog.Write($"Add existing folder ('{profile.Id}'): rejected '{chosen}' (reason={reason}).");
             MessageBox.Show(this,
-                Strings.Format("DlgInvalidFolderBody", profile.DisplayName,
-                    string.IsNullOrEmpty(profile.InstallProbeFile) ? "(unknown probe file)" : profile.InstallProbeFile),
+                InvalidFolderMessage(profile, reason),
                 Strings.Get("DlgInvalidFolderTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
         var st = _config.GetActiveState();
+
+        // No active install yet? "Add existing folder" on a not-installed mod must
+        // ADOPT the picked folder as the ACTIVE install — otherwise RegisterInstall
+        // files it as an inactive copy and the mod keeps reading "not installed".
+        // Route it through the same forced-adoption path as "Change mod folder".
+        if (string.IsNullOrEmpty(st.InstallPath))
+        {
+            st.OtherInstalls.RemoveAll(i => ModState.PathEquals(i.InstallPath, resolved));
+            st.InstallPath = resolved;
+            _config.Save();
+            DiagnosticLog.Write(
+                $"Add existing folder ('{profile.Id}'): no active install — adopted '{resolved}' as ACTIVE.");
+            InvalidateActiveModCheckCache();
+            _ = CheckAsync(forceInstallPath: resolved);
+            _modPropertiesDialog?.RefreshData();
+            return true;
+        }
+
+        // There IS an active install — register the folder as an inactive copy.
         if (!st.RegisterInstall(resolved, Path.GetFileName(resolved)))
         {
             MessageBox.Show(this,
@@ -6740,7 +6824,7 @@ public partial class MainWindow : Window
             System.Windows.Media.ScaleTransform.ScaleYProperty, null);
     }
 
-    private async Task CheckAsync()
+    private async Task CheckAsync(string? forceInstallPath = null)
     {
         // Only a real (non-checkOnly) busy state blocks re-entry. Rapid mod
         // switches need to start a fresh CheckAsync even if the previous
@@ -6755,8 +6839,11 @@ public partial class MainWindow : Window
         // Fast path: if we've already run a full check for this mod in this
         // session, replay the cached result synchronously. Skips the 1-2s
         // network round-trip on every revisit so rapid mod switching is
-        // genuinely instant after the first visit to each mod.
-        if (_checkResultCache.TryGetValue(profileAtStart, out var cached))
+        // genuinely instant after the first visit to each mod. SKIPPED when the
+        // user just picked a folder (forceInstallPath) — that must re-detect the
+        // install from the chosen path, not replay a stale "not installed".
+        if (forceInstallPath == null
+            && _checkResultCache.TryGetValue(profileAtStart, out var cached))
         {
             // Sanity: drop the cache entry if the on-disk state visibly
             // disagrees (cache said "installed" but the new UpdateService's
@@ -6782,7 +6869,7 @@ public partial class MainWindow : Window
         try
         {
             var statusReporter = new Progress<string>(SetStatus);
-            var result = await _updateService.CheckAsync(statusReporter, _cts.Token);
+            var result = await _updateService.CheckAsync(statusReporter, _cts.Token, forceInstallPath);
 
             if (!string.Equals(_updateService.Profile.Id, profileAtStart, StringComparison.OrdinalIgnoreCase))
             {
