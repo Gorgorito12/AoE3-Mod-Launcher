@@ -257,8 +257,11 @@
                         <CheckBox x:Name="CloseOnGameCheck"/>
                         <TextBlock x:Name="CloseOnGameHint" Style="{StaticResource HintText}"/>
 
-                        <CheckBox x:Name="MinimizeToTrayCheck"/>
-                        <TextBlock x:Name="MinimizeToTrayHint" Style="{StaticResource HintText}"/>
+                        <!-- Folded into the single "Run in background" toggle
+                             (StartWithWindowsCheck). Kept (collapsed) so code-behind
+                             references still compile; don't re-surface it. -->
+                        <CheckBox x:Name="MinimizeToTrayCheck" Visibility="Collapsed"/>
+                        <TextBlock x:Name="MinimizeToTrayHint" Style="{StaticResource HintText}" Visibility="Collapsed"/>
 
                         <CheckBox x:Name="ShowToastsCheck"/>
                         <TextBlock x:Name="ShowToastsHint" Style="{StaticResource HintText}"/>
@@ -546,6 +549,34 @@
                                        VerticalAlignment="Center"
                                        Margin="12,0,0,0"/>
                         </Grid>
+
+                        <!-- Lightweight self-install: copy the portable exe to a
+                             stable per-user location + shortcuts, then relaunch.
+                             Hidden as a whole when already running from the
+                             installed path. The pre-checked "run in background"
+                             box makes installing = staying connected (offered, not
+                             silent — the visible check is the AV-safe pattern). -->
+                        <StackPanel x:Name="SelfInstallRow">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0"
+                                        x:Name="SelfInstallButton"
+                                        Style="{StaticResource PropertyActionButton}"
+                                        MinWidth="180"
+                                        Click="SelfInstallButton_Click"/>
+                                <TextBlock Grid.Column="1"
+                                           x:Name="SelfInstallHint"
+                                           Style="{StaticResource HintText}"
+                                           VerticalAlignment="Center"
+                                           Margin="12,0,0,0"/>
+                            </Grid>
+                            <CheckBox x:Name="InstallRunInBackgroundCheck"
+                                      IsChecked="True"
+                                      Margin="0,8,0,0"/>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- ===================================================

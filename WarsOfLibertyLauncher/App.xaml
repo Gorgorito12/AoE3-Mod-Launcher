@@ -90,6 +90,49 @@
             <sys:Double x:Key="FontSizeTitle">18</sys:Double>
             <sys:Double x:Key="FontSizeHeading">24</sys:Double>
             <sys:Double x:Key="FontSizeDisplay">34</sys:Double>
+
+            <!-- ============================================================
+                 Dark tooltip — APP-WIDE (was MainWindow-only). Defined here so
+                 it reaches surfaces that render in SEPARATE popups and resolve
+                 implicit styles against Application.Resources, NOT a Window's
+                 resources: the gear ContextMenu, and the standalone dialogs
+                 (Settings / Mod Properties). Without this, long tooltips measured
+                 at infinite width and got clipped to one line (the reported bug).
+
+                 String tooltips are wrapped by callers via TooltipHelper.Wrap
+                 (a Wrap+MaxWidth TextBlock) since TextWrapping can't be forced on
+                 a ContentPresenter; rich-content tooltips (BuildMenuTooltip) cap
+                 their own TextBlocks' MaxWidth. This style just themes + bounds.
+                 Uses literal colors (no {StaticResource}) so it's safe inline. -->
+            <Style TargetType="ToolTip">
+                <Setter Property="Background" Value="#22252c"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderBrush" Value="#3a3d44"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="14,10"/>
+                <Setter Property="HasDropShadow" Value="True"/>
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToolTip">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    Padding="{TemplateBinding Padding}"
+                                    CornerRadius="4"
+                                    MaxWidth="360">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="10"
+                                                      ShadowDepth="2"
+                                                      Color="Black"
+                                                      Opacity="0.5"/>
+                                </Border.Effect>
+                                <ContentPresenter/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

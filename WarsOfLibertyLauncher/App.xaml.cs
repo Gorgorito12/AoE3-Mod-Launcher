@@ -148,6 +148,8 @@ public partial class App : System.Windows.Application
         // room), not spawn a second window. Extract any join id from our args, then
         // claim the app-wide mutex.
         var joinId = Services.DeepLinkService.FindJoinLobbyId(Environment.GetCommandLineArgs());
+        bool fromInstall = Array.Exists(e.Args, a =>
+            string.Equals(a, Services.SelfInstallService.FromInstallArg, StringComparison.OrdinalIgnoreCase));
         bool primary;
         try { _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out primary); }
         catch (Exception ex)
@@ -157,6 +159,18 @@ public partial class App : System.Windows.Application
             Services.DiagnosticLog.Write($"SingleInstance: mutex failed, running normally: {ex.Message}");
             _instanceMutex = null;
             primary = true;
+        }
+
+        // Self-install relaunch: the portable parent starts us with --from-install
+        // and is exiting to release the mutex. Wait briefly for that handoff instead
+        // of treating this as a duplicate launch and quitting (which would abort the
+        // install relaunch). When the parent exits it abandons the mutex →
+        // AbandonedMutexException, which we treat as a clean acquisition.
+        if (!primary && fromInstall && _instanceMutex != null)
+        {
+            try { primary = _instanceMutex.WaitOne(TimeSpan.FromSeconds(5)); }
+            catch (AbandonedMutexException) { primary = true; }
+            catch (Exception ex) { Services.DiagnosticLog.Write($"SingleInstance: from-install wait failed: {ex.Message}"); }
         }
 
         if (!primary)
@@ -175,12 +189,31 @@ public partial class App : System.Windows.Application
         PendingJoinLobbyId = joinId;
         StartDeepLinkPipeServer();
 
+        // Detect the auto-start-to-tray flag. The Run-key registration (see
+        // StartupRegistrationService) appends --minimized so a Windows-login
+        // launch opens straight to the tray; a manual double-click carries no
+        // arg and shows the window normally. MainWindow's Loaded handler reads
+        // this and hides to the tray before it paints.
+        StartMinimized = Array.Exists(e.Args, a =>
+            string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
+
         // StartupUri was removed from App.xaml so this guard can suppress a second
         // window; create + show the main window ourselves for the primary instance.
         var main = new WarsOfLibertyLauncher.MainWindow();
         MainWindow = main;
+        // Even when starting minimized we call Show() so the window's visual tree
+        // (and the Hardcodet TaskbarIcon it hosts) initialises and Loaded fires;
+        // MainWindow then hides itself to the tray from Loaded. WindowState is set
+        // to Minimized first to avoid a visible flash of the full window.
+        if (StartMinimized) main.WindowState = System.Windows.WindowState.Minimized;
         main.Show();
     }
+
+    /// <summary>True when this launch was an auto-start (Windows login) that
+    /// should open straight to the system tray — set from the <c>--minimized</c>
+    /// argument the Run-key registration appends. MainWindow drains it on Loaded.
+    /// </summary>
+    public static bool StartMinimized { get; private set; }
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 

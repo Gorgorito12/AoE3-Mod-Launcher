@@ -177,6 +177,18 @@ public static class DiagnosticLog
     /// multiplayer-events.log) and <c>*snapshot*</c> files from
     /// <paramref name="sourceDir"/> (defaults to <see cref="AppPaths.DataDir"/>).
     ///
+    /// When <paramref name="gameUserDataDir"/> is given (the mod's
+    /// <c>My Games\&lt;folder&gt;</c> resolved by
+    /// <see cref="UserDataService.GetUserDataFolder(string)"/>), the bundle ALSO
+    /// carries — under a <c>game-userdata/</c> subfolder — the small OOS / sync /
+    /// text-log artifacts AoE3 writes there (matched by
+    /// <see cref="ShouldIncludeGameFile"/>, size- and count-capped so recorded
+    /// games / savegames are never swept), plus a <c>game-userdata-listing.txt</c>
+    /// snapshot of that folder. This is what makes an in-game OUT-OF-SYNC report
+    /// diagnosable: a sim desync is written by the GAME, not the launcher log, so
+    /// without these files the bundle can't show the cause. It is READ-ONLY — files
+    /// are copied to staging, the game folder is never modified.
+    ///
     /// DELIBERATELY EXCLUDES <c>launcher-config.json</c>: it holds the cached
     /// Discord session token, which must not leave the user's machine in a shared
     /// bundle. Subfolders (e.g. <c>mod-assets\</c>) are not included.
@@ -185,7 +197,8 @@ public static class DiagnosticLog
     /// path) so an in-flight log write can't race the archive. Returns the zip
     /// path; throws on failure so the caller can surface it.
     /// </summary>
-    public static string ExportBundle(string destinationZipPath, string? sourceDir = null)
+    public static string ExportBundle(
+        string destinationZipPath, string? sourceDir = null, string? gameUserDataDir = null)
     {
         Flush();
         var src = sourceDir ?? AppPaths.DataDir;
@@ -213,6 +226,10 @@ public static class DiagnosticLog
                 }
             }
 
+            // Game user-data OOS/sync artifacts (best-effort, read-only).
+            if (!string.IsNullOrEmpty(gameUserDataDir))
+                StageGameUserData(gameUserDataDir!, staging);
+
             var destDir = Path.GetDirectoryName(destinationZipPath);
             if (!string.IsNullOrEmpty(destDir)) Directory.CreateDirectory(destDir);
             if (File.Exists(destinationZipPath)) File.Delete(destinationZipPath);
@@ -225,6 +242,94 @@ public static class DiagnosticLog
         {
             try { if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true); }
             catch { /* best-effort cleanup */ }
+        }
+    }
+
+    /// <summary>Cap on a single game-folder file we'll copy (bytes). Above this we
+    /// skip it — a recorded game (<c>.age3Yrec</c>) / savegame is far larger and
+    /// isn't a small OOS/sync/log dump.</summary>
+    internal const long GameFileMaxBytes = 2L * 1024 * 1024;
+
+    /// <summary>Safety cap on how many game-folder files we copy into the bundle.</summary>
+    internal const int GameFileMaxCount = 40;
+
+    /// <summary>
+    /// Pure include/exclude rule for a top-level file in the game's user-data
+    /// folder (kept static + parameterised so it's unit-testable). We take only the
+    /// small OOS / sync / plain-text-log artifacts — matched by name pattern
+    /// (<c>*oos*</c>, <c>*sync*</c>, <c>*.txt</c>, <c>*.log</c>, case-insensitive) —
+    /// and reject anything over <see cref="GameFileMaxBytes"/>, so recorded games
+    /// (<c>.age3Yrec</c>), savegames (<c>.age3Ysav</c>), configs and other binaries
+    /// never enter the shared bundle.
+    /// </summary>
+    internal static bool ShouldIncludeGameFile(string name, long sizeBytes)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        if (sizeBytes < 0 || sizeBytes > GameFileMaxBytes) return false;
+
+        bool nameMatch =
+            name.Contains("oos", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("sync", StringComparison.OrdinalIgnoreCase) ||
+            name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ||
+            name.EndsWith(".log", StringComparison.OrdinalIgnoreCase);
+        return nameMatch;
+    }
+
+    /// <summary>
+    /// Copy the game user-data folder's OOS/sync/log artifacts into a
+    /// <c>game-userdata/</c> subfolder of the staging area, and always write a
+    /// <c>game-userdata-listing.txt</c> snapshot of the folder's top level — even
+    /// when nothing matched — so a reporter (and we) can see exactly what AoE3 left
+    /// there and learn the real dump names. Whole-operation best-effort: a failure
+    /// here must never abort the bundle.
+    /// </summary>
+    private static void StageGameUserData(string gameUserDataDir, string staging)
+    {
+        try
+        {
+            if (!Directory.Exists(gameUserDataDir)) return;
+
+            var outDir = Path.Combine(staging, "game-userdata");
+            Directory.CreateDirectory(outDir);
+
+            var listing = new System.Text.StringBuilder();
+            listing.Append("Game user-data folder: ").AppendLine(gameUserDataDir);
+            listing.AppendLine("Top-level entries (name | bytes | last write UTC):");
+            listing.AppendLine();
+
+            int copied = 0;
+            foreach (var file in Directory.EnumerateFiles(gameUserDataDir, "*", SearchOption.TopDirectoryOnly))
+            {
+                long size;
+                DateTime mtimeUtc;
+                var name = Path.GetFileName(file);
+                try
+                {
+                    var info = new FileInfo(file);
+                    size = info.Length;
+                    mtimeUtc = info.LastWriteTimeUtc;
+                }
+                catch { continue; }
+
+                listing.Append(name).Append(" | ").Append(size).Append(" | ")
+                       .AppendLine(mtimeUtc.ToString("u"));
+
+                if (copied < GameFileMaxCount && ShouldIncludeGameFile(name, size))
+                {
+                    try { File.Copy(file, Path.Combine(outDir, name), overwrite: true); copied++; }
+                    catch { /* skip a file we couldn't read; bundle the rest */ }
+                }
+            }
+
+            listing.AppendLine().Append("Files copied into bundle: ").Append(copied)
+                   .Append(" (cap ").Append(GameFileMaxCount).AppendLine(").");
+
+            try { File.WriteAllText(Path.Combine(outDir, "game-userdata-listing.txt"), listing.ToString()); }
+            catch { /* listing is a nice-to-have */ }
+        }
+        catch (Exception ex)
+        {
+            Write($"ExportBundle: could not stage game user-data '{gameUserDataDir}': {ex.Message}");
         }
     }
 

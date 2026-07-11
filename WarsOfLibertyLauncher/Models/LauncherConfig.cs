@@ -777,6 +777,19 @@ public class LauncherConfig
     public bool MinimizeToTray { get; set; } = false;
 
     /// <summary>
+    /// When true, an AUTO-START launch (Windows login, recognised by the
+    /// <c>--minimized</c> argument the Run-key registration appends) opens the
+    /// launcher straight to the system tray instead of showing the window — so
+    /// the "run in background" experience doesn't pop a window on every login.
+    /// A MANUAL double-click still shows the window (it carries no
+    /// <c>--minimized</c> arg). Set together with <see cref="StartWithWindows"/>
+    /// + <see cref="MinimizeToTray"/> by the single "Run in background" toggle.
+    /// Off by default — opt-in.
+    /// </summary>
+    [JsonPropertyName("startMinimized")]
+    public bool StartMinimized { get; set; } = false;
+
+    /// <summary>
     /// When true, the launcher shows a system-tray balloon notification
     /// after long-running operations finish (mod update applied, launcher
     /// self-update available). The toast only fires when the main window

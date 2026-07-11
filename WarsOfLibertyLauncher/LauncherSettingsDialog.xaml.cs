@@ -126,6 +126,12 @@ public partial class LauncherSettingsDialog : Window
     /// </summary>
     private void ApplyLanguage()
     {
+        // Attach a localized hover tooltip (the "detail" a newcomer reads by
+        // hovering) to any control. Kept as a local helper so every settings
+        // control wires its tooltip in one line, re-localized whenever
+        // ApplyLanguage runs.
+        static void SetTip(FrameworkElement el, string key) => el.ToolTip = TooltipHelper.Wrap(Strings.Get(key));
+
         Title = Strings.Get("DlgLauncherSettingsTitle");
         TitleBarControl.Title = Strings.Get("DlgLauncherSettingsTitle");
 
@@ -149,16 +155,21 @@ public partial class LauncherSettingsDialog : Window
 
         StartWithWindowsCheck.Content = Strings.Get("DlgLauncherSettingsStartWithWindows");
         StartWithWindowsHint.Text = Strings.Get("DlgLauncherSettingsStartWithWindowsHint");
+        SetTip(StartWithWindowsCheck, "DlgLauncherSettingsStartWithWindowsTip");
         EnableJoinLinksCheck.Content = Strings.Get("DlgLauncherSettingsJoinLinks");
         EnableJoinLinksHint.Text = Strings.Get("DlgLauncherSettingsJoinLinksHint");
+        SetTip(EnableJoinLinksCheck, "DlgLauncherSettingsJoinLinksTip");
         CloseOnGameCheck.Content = Strings.Get("DlgLauncherSettingsCloseOnGame");
         CloseOnGameHint.Text = Strings.Get("DlgLauncherSettingsCloseOnGameHint");
+        SetTip(CloseOnGameCheck, "DlgLauncherSettingsCloseOnGameTip");
         MinimizeToTrayCheck.Content = Strings.Get("DlgLauncherSettingsMinimizeToTray");
         MinimizeToTrayHint.Text = Strings.Get("DlgLauncherSettingsMinimizeToTrayHint");
         ShowToastsCheck.Content = Strings.Get("DlgLauncherSettingsShowToasts");
         ShowToastsHint.Text = Strings.Get("DlgLauncherSettingsShowToastsHint");
+        SetTip(ShowToastsCheck, "DlgLauncherSettingsShowToastsTip");
         NotifyNewRoomsCheck.Content = Strings.Get("DlgSettingsNotifyRooms");
         NotifyNewRoomsHint.Text = Strings.Get("DlgSettingsNotifyRoomsHint");
+        SetTip(NotifyNewRoomsCheck, "DlgSettingsNotifyRoomsTip");
 
         // Radmin assistant mode picker. Combo items tagged with the
         // raw enum strings ("Auto"/"OnRequest"/"Never") so saving is
@@ -185,8 +196,10 @@ public partial class LauncherSettingsDialog : Window
 
         AutoCheckCheck.Content = Strings.Get("DlgLauncherSettingsAutoCheck");
         AutoCheckHint.Text = Strings.Get("DlgLauncherSettingsAutoCheckHint");
+        SetTip(AutoCheckCheck, "DlgLauncherSettingsAutoCheckTip");
         OpenPostUpdateCheck.Content = Strings.Get("DlgLauncherSettingsOpenPostUpdate");
         OpenPostUpdateHint.Text = Strings.Get("DlgLauncherSettingsOpenPostUpdateHint");
+        SetTip(OpenPostUpdateCheck, "DlgLauncherSettingsOpenPostUpdateTip");
 
         CatalogSubheader.Text = Strings.Get("DlgLauncherSettingsCatalogSubheader");
         CatalogDefaultRadio.Content = Strings.Get("DlgLauncherSettingsCatalogDefault")
@@ -196,6 +209,7 @@ public partial class LauncherSettingsDialog : Window
 
         ClearCacheButton.Content = Strings.Get("DlgLauncherSettingsClearCache");
         ClearCacheHint.Text = Strings.Get("DlgLauncherSettingsClearCacheHint");
+        SetTip(ClearCacheButton, "DlgLauncherSettingsClearCacheTip");
 
         TxSourcesHeader.Text = Strings.Get("DlgLauncherSettingsTxSourcesHeader");
         TxDefaultLabel.Text = Strings.Format("DlgLauncherSettingsTxDefaultLabel", DefaultTranslationsRepo);
@@ -207,26 +221,41 @@ public partial class LauncherSettingsDialog : Window
 
         TranslationsHeader.Text = Strings.Get("DlgLauncherSettingsTranslationsHeader");
         TranslationsDescription.Text = Strings.Get("DlgLauncherSettingsTranslationsDescription");
-        OpenPackagerButton.Content = "📦  " + Strings.Get("DlgLauncherSettingsOpenPackager");
+        OpenPackagerButton.Content = Strings.Get("DlgLauncherSettingsOpenPackager");
         TranslationsHint.Text = Strings.Get("DlgLauncherSettingsTranslationsHint");
         PatchGenHeader.Text = Strings.Get("DlgPatchGenSectionHeader");
         PatchGenDescription.Text = Strings.Get("DlgPatchGenSectionDescription");
-        OpenPatchGeneratorButton.Content = "🧩  " + Strings.Get("DlgPatchGenOpen");
+        OpenPatchGeneratorButton.Content = Strings.Get("DlgPatchGenOpen");
         PatchGenHint.Text = Strings.Get("DlgPatchGenSectionHint");
 
         ClearAssetsButton.Content = Strings.Get("DlgLauncherSettingsClearAssets");
         ClearAssetsHint.Text = Strings.Get("DlgLauncherSettingsClearAssetsHint");
+        SetTip(ClearAssetsButton, "DlgLauncherSettingsClearAssetsTip");
         ClearTempButton.Content = Strings.Get("DlgLauncherSettingsClearTemp");
         ClearTempHint.Text = Strings.Get("DlgLauncherSettingsClearTempHint");
-        OpenDataFolderButton.Content = "📂  " + Strings.Get("DlgLauncherSettingsOpenDataFolder");
+        SetTip(ClearTempButton, "DlgLauncherSettingsClearTempTip");
+        OpenDataFolderButton.Content = Strings.Get("DlgLauncherSettingsOpenDataFolder");
         OpenDataFolderHint.Text = Strings.Get("DlgLauncherSettingsOpenDataFolderHint");
+        SetTip(OpenDataFolderButton, "DlgLauncherSettingsOpenDataFolderTip");
+
+        SelfInstallButton.Content = Strings.Get("DlgLauncherSettingsInstall");
+        SelfInstallHint.Text = Strings.Get("DlgLauncherSettingsInstallHint");
+        SetTip(SelfInstallButton, "DlgLauncherSettingsInstallTip");
+        InstallRunInBackgroundCheck.Content = Strings.Get("DlgLauncherSettingsInstallRunInBackground");
+        SetTip(InstallRunInBackgroundCheck, "DlgLauncherSettingsInstallRunInBackgroundTip");
+        // Hide the whole row once we're running from the installed location —
+        // there's nothing to install then.
+        SelfInstallRow.Visibility = Services.SelfInstallService.IsInstalled()
+            ? Visibility.Collapsed : Visibility.Visible;
 
         PrivacyHeader.Text = Strings.Get("DlgLauncherSettingsPrivacyHeader");
         PrivacyDescription.Text = Strings.Get("DlgLauncherSettingsPrivacyDescription");
         TelemetryCheck.Content = Strings.Get("DlgLauncherSettingsTelemetry");
         TelemetryHint.Text = Strings.Get("DlgLauncherSettingsTelemetryHint");
+        SetTip(TelemetryCheck, "DlgLauncherSettingsTelemetryTip");
         PrivacyPolicyButton.Content = Strings.Get("DlgLauncherSettingsViewPrivacy");
         PrivacyPolicyHint.Text = Strings.Get("DlgLauncherSettingsPrivacyHint");
+        SetTip(PrivacyPolicyButton, "DlgLauncherSettingsPrivacyTip");
 
         CancelButton.Content = Strings.Get("BtnCancel");
         SaveButton.Content = Strings.Get("BtnSave");
@@ -252,13 +281,15 @@ public partial class LauncherSettingsDialog : Window
         if (LanguageCombo.SelectedItem == null)
             LanguageCombo.SelectedIndex = 0;
 
-        // Start-with-Windows: trust the registry as the source of truth
-        // (the user may have removed our entry manually via Task Manager).
-        // The launcher's own field is rewritten on Save anyway.
+        // "Run in background" master toggle: on when auto-start is registered
+        // (the registry is the source of truth — the user may have removed our
+        // entry via Task Manager). Saving re-derives all three background flags
+        // from this one checkbox. The old standalone MinimizeToTray checkbox is
+        // collapsed in XAML (its behaviour folded into this toggle).
         StartWithWindowsCheck.IsChecked = StartupRegistrationService.IsRegistered();
         EnableJoinLinksCheck.IsChecked = _config.EnableJoinLinks;
         CloseOnGameCheck.IsChecked = _config.CloseLauncherOnGameStart;
-        MinimizeToTrayCheck.IsChecked = _config.MinimizeToTray;
+        MinimizeToTrayCheck.IsChecked = _config.MinimizeToTray;   // hidden; kept for compile parity
         ShowToastsCheck.IsChecked = _config.ShowToastNotifications;
         NotifyNewRoomsCheck.IsChecked = _config.NotifyNewRooms;
         AutoCheckCheck.IsChecked = _config.CheckUpdatesOnStartup;
@@ -407,6 +438,55 @@ public partial class LauncherSettingsDialog : Window
         {
             DiagnosticLog.Write($"Open data folder failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Lightweight self-install: copy the portable exe to a stable per-user
+    /// location + shortcuts (<see cref="SelfInstallService"/>), then offer to
+    /// relaunch from there. Opt-in; the exe keeps self-updating in place.
+    /// </summary>
+    private void SelfInstallButton_Click(object sender, RoutedEventArgs e)
+    {
+        SelfInstallButton.IsEnabled = false;
+        var (ok, message) = Services.SelfInstallService.Install();
+        if (!ok)
+        {
+            SelfInstallHint.Text = Strings.Format("DlgLauncherSettingsInstallFailed", message);
+            SelfInstallButton.IsEnabled = true;
+            return;
+        }
+
+        SelfInstallHint.Text = Strings.Format(
+            "DlgLauncherSettingsInstallDone", Services.SelfInstallService.CanonicalExe);
+
+        // "Run in background" was offered pre-checked with the install. When kept,
+        // enable the three background flags AND register auto-start pointing at the
+        // INSTALLED exe (we're still running the portable one, so ProcessPath would
+        // be wrong — pass the canonical path explicitly). The installed instance
+        // reads the same %LocalAppData% config after relaunch, so the Settings
+        // toggle shows checked and its own save stays consistent.
+        if (InstallRunInBackgroundCheck.IsChecked == true)
+        {
+            _config.StartWithWindows = true;
+            _config.MinimizeToTray = true;
+            _config.StartMinimized = true;
+            try { _config.Save(); }
+            catch (Exception ex) { DiagnosticLog.Write($"SelfInstall: config save failed: {ex.Message}"); }
+            StartupRegistrationService.Apply(
+                enabled: true, startMinimized: true,
+                exePathOverride: Services.SelfInstallService.CanonicalExe);
+            // Reflect the change in the (repurposed) master toggle immediately.
+            StartWithWindowsCheck.IsChecked = true;
+        }
+
+        var relaunch = MessageBox.Show(
+            Strings.Get("DlgLauncherSettingsInstallRelaunchBody"),
+            Strings.Get("DlgLauncherSettingsInstallRelaunchTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (relaunch == MessageBoxResult.Yes)
+            Services.SelfInstallService.RelaunchInstalledAndExit();
+        else
+            SelfInstallButton.IsEnabled = true;
     }
 
     /// <summary>
@@ -741,7 +821,6 @@ public partial class LauncherSettingsDialog : Window
         // 3. Write all the bools / strings into the config object.
         _config.Language = newLang;
         _config.CloseLauncherOnGameStart = CloseOnGameCheck.IsChecked == true;
-        _config.MinimizeToTray = MinimizeToTrayCheck.IsChecked == true;
         _config.ShowToastNotifications = ShowToastsCheck.IsChecked == true;
         _config.NotifyNewRooms = NotifyNewRoomsCheck.IsChecked == true;
         _config.CheckUpdatesOnStartup = AutoCheckCheck.IsChecked == true;
@@ -750,7 +829,13 @@ public partial class LauncherSettingsDialog : Window
         _config.ModsCatalogRepo = newCatalogRepo;
         _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();
         _config.CommunityTranslationsDisabled = TxDisabledCheck.IsChecked == true;
-        _config.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+        // Single "Run in background" toggle drives the three background flags
+        // together: auto-start with Windows, X-minimises-to-tray, and auto-start
+        // opens straight to the tray. See DlgLauncherSettingsStartWithWindows.
+        var runInBackground = StartWithWindowsCheck.IsChecked == true;
+        _config.StartWithWindows = runInBackground;
+        _config.MinimizeToTray = runInBackground;
+        _config.StartMinimized = runInBackground;
         _config.EnableJoinLinks = EnableJoinLinksCheck.IsChecked == true;
 
         // Top-tab order (Interface section). Persist the working copy;
@@ -776,7 +861,7 @@ public partial class LauncherSettingsDialog : Window
         //    * Registry write for the autostart entry.
         //    * Language change goes through Strings so the rest of the
         //      app updates immediately.
-        StartupRegistrationService.Apply(_config.StartWithWindows);
+        StartupRegistrationService.Apply(_config.StartWithWindows, startMinimized: _config.StartMinimized);
         if (_config.EnableJoinLinks) Services.DeepLinkService.EnsureRegistered();
         else Services.DeepLinkService.EnsureUnregistered();
         Strings.SetLanguage(newLang);

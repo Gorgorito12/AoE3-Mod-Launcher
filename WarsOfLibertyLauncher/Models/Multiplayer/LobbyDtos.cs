@@ -291,6 +291,12 @@ public class MatchHistoryRow
     [JsonPropertyName("duration_seconds")]
     public int DurationSeconds { get; set; }
 
+    /// <summary>How many players took part in the match. Computed server-side
+    /// as COUNT(match_participants) for this match. 0 on an old backend that
+    /// doesn't emit the field → the UI hides the "N players" chip.</summary>
+    [JsonPropertyName("player_count")]
+    public int PlayerCount { get; set; }
+
     [JsonPropertyName("started_at")]
     public string StartedAt { get; set; } = "";
 

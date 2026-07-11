@@ -221,12 +221,27 @@ public partial class ModsBrowser : UserControl
     {
         if (RefreshCatalogButton == null) return;
         RefreshCatalogButton.IsEnabled = !offline;
-        RefreshCatalogButton.ToolTip = offline ? needsInternetTooltip : null;
+        // Offline → explain why it's greyed. Online → the normal "what it does"
+        // tooltip (stored so this doesn't wipe it back to null).
+        RefreshCatalogButton.ToolTip = offline ? TooltipHelper.Wrap(needsInternetTooltip) : _refreshCatalogTooltip;
     }
+
+    /// <summary>Normal (online) tooltip content for the catalog refresh button (a
+    /// wrapped TextBlock), kept so SetOfflineMode can restore it when back online.</summary>
+    private object? _refreshCatalogTooltip;
+    public string RefreshCatalogTooltip
+    {
+        set { _refreshCatalogTooltip = TooltipHelper.Wrap(value); if (RefreshCatalogButton?.IsEnabled == true) RefreshCatalogButton.ToolTip = _refreshCatalogTooltip; }
+    }
+
     public string AddLocalModLabel { get => (string)(AddLocalModButton.Content ?? ""); set => AddLocalModButton.Content = value; }
+    public string AddLocalModTooltip { set => AddLocalModButton.ToolTip = TooltipHelper.Wrap(value); }
     public string PublishModLabel { get => (string)(PublishModButton.Content ?? ""); set => PublishModButton.Content = value; }
+    public string PublishModTooltip { set => PublishModButton.ToolTip = TooltipHelper.Wrap(value); }
     public string SubTabMyModsLabel { get => (string)(SubTabMyMods.Content ?? ""); set => SubTabMyMods.Content = value; }
+    public string SubTabMyModsTooltip { set => SubTabMyMods.ToolTip = TooltipHelper.Wrap(value); }
     public string SubTabCatalogLabel { get => (string)(SubTabCatalog.Content ?? ""); set => SubTabCatalog.Content = value; }
+    public string SubTabCatalogTooltip { set => SubTabCatalog.ToolTip = TooltipHelper.Wrap(value); }
     public string FiltersLabelText { get => FiltersLabel.Text; set => FiltersLabel.Text = value; }
     public string SortLabelText { get => SortLabel.Text; set => SortLabel.Text = value; }
 
@@ -238,6 +253,16 @@ public partial class ModsBrowser : UserControl
         FilterNotInstalled.Content = notInstalled;
         FilterUpdates.Content = updates;
         FilterCompatible.Content = compatible;
+    }
+
+    /// <summary>Hover tooltips for the filter chips. Same order as SetFilterLabels.</summary>
+    public void SetFilterTooltips(string all, string installed, string notInstalled, string updates, string compatible)
+    {
+        FilterAll.ToolTip = TooltipHelper.Wrap(all);
+        FilterInstalled.ToolTip = TooltipHelper.Wrap(installed);
+        FilterNotInstalled.ToolTip = TooltipHelper.Wrap(notInstalled);
+        FilterUpdates.ToolTip = TooltipHelper.Wrap(updates);
+        FilterCompatible.ToolTip = TooltipHelper.Wrap(compatible);
     }
 
     /// <summary>Sets the sort dropdown items. Order: Recent / Name / Status.</summary>

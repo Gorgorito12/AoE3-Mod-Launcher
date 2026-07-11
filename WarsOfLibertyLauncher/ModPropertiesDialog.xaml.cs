@@ -164,6 +164,11 @@ public partial class ModPropertiesDialog : Window
 
     private void ApplyStrings()
     {
+        // Localized hover tooltip helper — one line per action button so a
+        // newcomer can hover any button and read what it does. Reuses the gear
+        // menu's tooltip strings where the action matches (same table).
+        static void SetTip(System.Windows.FrameworkElement el, string key) => el.ToolTip = TooltipHelper.Wrap(Strings.Get(key));
+
         Title = Strings.Format("ModPropTitle", _profile.DisplayName ?? "");
         TitleBarControl.Title = _profile.DisplayName ?? "";
         // (The neutral subtitle that used to sit under HeaderTitleText
@@ -184,22 +189,30 @@ public partial class ModPropertiesDialog : Window
         LblVersion.Text = Strings.Get("ModPropVersion");
         LblWebsite.Text = Strings.Get("ModPropWebsite");
         CheckUpdatesBtn.Content = Strings.Get("ModPropCheckUpdates");
+        SetTip(CheckUpdatesBtn, "TooltipMenuCheckForUpdates");
         StayOnVersionHint.Text = Strings.Get("ModPropStayOnVersionHint");
         VersionSectionLabel.Text = Strings.Get("ModPropVersionSection");
         VersionSectionHint.Text = Strings.Get("ModPropVersionHint");
         InstallVersionBtn.Content = Strings.Get("ModPropVersionInstallBtn");
+        SetTip(InstallVersionBtn, "TipMpInstallVersion");
 
         // LOCAL FILES tab
         LblInstallPath.Text = Strings.Get("ModPropInstallSection");
         LblTempSection.Text = Strings.Get("ModPropTempSection");
         LblTempDesc.Text = Strings.Get("ModPropTempDesc");
         ClearTempBtn.Content = Strings.Get("ModPropClearTemp");
+        SetTip(ClearTempBtn, "DlgLauncherSettingsClearTempTip");
         LblPathsSection.Text = Strings.Get("ModPropPathsSection");
         OpenFolderBtn.Content = Strings.Get("ModPropOpenFolder");
+        SetTip(OpenFolderBtn, "TipMpOpenFolder");
         OpenAoE3FolderBtn.Content = Strings.Get("ModPropOpenAoE3Folder");
+        SetTip(OpenAoE3FolderBtn, "TooltipMenuOpenAoE3Folder");
         ChangeModFolderBtn.Content = Strings.Get("ModPropChangeModFolder");
+        SetTip(ChangeModFolderBtn, "TipMpChangeModFolder");
         ChangeAoE3FolderBtn.Content = Strings.Get("ModPropChangeAoE3Folder");
+        SetTip(ChangeAoE3FolderBtn, "TooltipMenuSelectAoE3Folder");
         SearchInstallBtn.Content = Strings.Get("SearchInstallButton");
+        SetTip(SearchInstallBtn, "TipSearchInstall");
         // The broad "find my install" search is meaningless for the stock game
         // (the launcher never installs it) — hide it there.
         SearchInstallBtn.Visibility = _profile.IsStockGame
@@ -207,16 +220,23 @@ public partial class ModPropertiesDialog : Window
         LblManageInstalls.Text = Strings.Get("ManageInstallsHeader");
         LblManageInstallsDesc.Text = Strings.Get("ManageInstallsDesc");
         AddExistingFolderBtn.Content = Strings.Get("AddExistingFolder");
+        SetTip(AddExistingFolderBtn, "TipMpAddExistingFolder");
         InstallNewCopyBtn.Content = Strings.Get("MenuInstallAnotherCopy");
+        SetTip(InstallNewCopyBtn, "TooltipMenuInstallAnotherCopy");
         LblMaintenanceSection.Text = Strings.Get("ModPropMaintenanceSection");
         VerifyBtn.Content = Strings.Get("ModContextVerify");
+        SetTip(VerifyBtn, "TooltipMenuVerifyFiles");
         RepairBtn.Content = Strings.Get("ModContextRepair");
+        SetTip(RepairBtn, "TooltipMenuRepairInstall");
         LblDiagnosticsSection.Text = Strings.Get("ModPropDiagnostics");
         ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
+        SetTip(ViewLogsBtn, "TooltipMenuViewLogs");
         ShareDiagnosticsBtn.Content = Strings.Get("ModPropShareDiagnostics");
+        SetTip(ShareDiagnosticsBtn, "TipMpShareDiagnostics");
         LblDangerZone.Text = Strings.Get("ModPropDangerZone");
         LblDangerZoneDesc.Text = Strings.Get("ModPropDangerZoneDesc");
         UninstallBtn.Content = Strings.Get("ModPropUninstall");
+        SetTip(UninstallBtn, "TooltipMenuUninstall");
 
         // USER DATA tab — action-card layout: each card has a long
         // descriptive title + short description, and a SHORT button

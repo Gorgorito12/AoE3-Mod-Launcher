@@ -171,6 +171,11 @@
                                 <Setter Property="ToolTipService.InitialShowDelay" Value="500"/>
                                 <Setter Property="ToolTipService.ShowDuration" Value="10000"/>
                                 <Setter Property="ToolTipService.BetweenShowDelay" Value="100"/>
+                                <!-- Show the description tooltip to the RIGHT of the item
+                                     instead of under it, so it doesn't cover the menu items
+                                     above/below (the reported "gets cut / overlaps" issue). -->
+                                <Setter Property="ToolTipService.Placement" Value="Right"/>
+                                <Setter Property="ToolTipService.HorizontalOffset" Value="8"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="MenuItem">

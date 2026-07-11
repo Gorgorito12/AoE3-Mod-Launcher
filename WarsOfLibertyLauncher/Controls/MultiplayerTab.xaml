@@ -490,9 +490,10 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*"/>
                         <ColumnDefinition Width="16"/>     <!-- gutter -->
-                        <!-- Global chat ≈24-25%. Flexible: shrinks to 320, caps
-                             at 360 (so the rooms table takes ~75%). -->
-                        <ColumnDefinition Width="*" MinWidth="320" MaxWidth="360"/>
+                        <!-- Global chat + Players ≈22-24%. Flexible: shrinks to 280,
+                             caps at 300 (narrowed from 320-360 so the rooms table
+                             gets more room). -->
+                        <ColumnDefinition Width="*" MinWidth="280" MaxWidth="300"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- ===================== LEFT: active rooms ===================== -->
@@ -742,7 +743,7 @@
                     <Grid Grid.Column="2">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>    <!-- global chat (top half) -->
-                        <RowDefinition Height="12"/>   <!-- gutter -->
+                        <RowDefinition Height="10"/>   <!-- gutter -->
                         <RowDefinition Height="*"/>    <!-- live players (bottom half) -->
                     </Grid.RowDefinitions>
                     <Border Grid.Row="0"
@@ -773,29 +774,29 @@
                                  header reads as a single status line. -->
                             <StackPanel Grid.Row="0"
                                         Orientation="Horizontal"
-                                        Margin="18,16,18,12"
+                                        Margin="14,10,14,8"
                                         VerticalAlignment="Center">
                                 <TextBlock Text="💬"
-                                           FontSize="{StaticResource FontSizeSubtitle}"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            VerticalAlignment="Center"
-                                           Margin="0,0,8,0"/>
+                                           Margin="0,0,7,0"/>
                                 <TextBlock x:Name="GlobalChatHeaderText"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="{StaticResource FontSizeSubtitle}"
+                                           FontSize="{StaticResource FontSizeBodyStrong}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Text="·"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeSubtitle}"
-                                           Margin="8,0,8,0"
+                                           FontSize="{StaticResource FontSizeBodyStrong}"
+                                           Margin="7,0,7,0"
                                            VerticalAlignment="Center"/>
-                                <Ellipse Width="8" Height="8"
+                                <Ellipse Width="7" Height="7"
                                          Fill="{DynamicResource MpStatusOnline}"
                                          VerticalAlignment="Center"
                                          Margin="0,0,6,0"/>
                                 <TextBlock x:Name="GlobalChatPresenceText"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeBody}"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
 
@@ -803,14 +804,14 @@
                             <Border Grid.Row="1"
                                     Height="1"
                                     Background="{DynamicResource MpDivider}"
-                                    Margin="18,0,18,0"/>
+                                    Margin="14,0,14,0"/>
 
                             <!-- Messages list + empty/placeholder hint -->
                             <Grid Grid.Row="2">
                                 <ScrollViewer x:Name="GlobalChatScroll"
                                               VerticalScrollBarVisibility="Auto"
                                               HorizontalScrollBarVisibility="Disabled"
-                                              Padding="12,0,12,0">
+                                              Padding="10,0,10,0">
                                     <StackPanel x:Name="GlobalChatPanel"/>
                                 </ScrollViewer>
                                 <TextBlock x:Name="GlobalChatEmptyHint"
@@ -828,7 +829,7 @@
                             <Border Grid.Row="3"
                                     BorderBrush="{DynamicResource MpDivider}"
                                     BorderThickness="0,1,0,0"
-                                    Padding="12,10">
+                                    Padding="10,7">
                                 <StackPanel>
                                     <!-- Throttle / slow-mode hint: shown when the
                                          server drops a message, cleared on next keystroke. -->
@@ -846,7 +847,7 @@
                                     <Grid Grid.Column="0" Margin="0,0,8,0">
                                         <TextBox x:Name="GlobalChatInput"
                                                  MaxLength="500"
-                                                 MinHeight="40"
+                                                 MinHeight="34"
                                                  Padding="10,0,0,0"
                                                  VerticalContentAlignment="Center"
                                                  TextChanged="GlobalChatInput_TextChanged"
@@ -865,12 +866,12 @@
                                             Grid.Column="1"
                                             Click="GlobalChatSendButton_Click"
                                             Style="{StaticResource MpPrimaryButton}"
-                                            Width="44"
-                                            Height="40"
+                                            Width="38"
+                                            Height="34"
                                             Padding="0">
                                         <TextBlock Text="&#xE724;"
                                                    FontFamily="Segoe MDL2 Assets"
-                                                   FontSize="16"
+                                                   FontSize="15"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
                                     </Button>
@@ -904,26 +905,26 @@
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0"
                                         Orientation="Horizontal"
-                                        Margin="18,16,18,12"
+                                        Margin="14,10,14,8"
                                         VerticalAlignment="Center">
                                 <TextBlock Text="👥"
-                                           FontSize="{StaticResource FontSizeSubtitle}"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            VerticalAlignment="Center"
-                                           Margin="0,0,8,0"/>
+                                           Margin="0,0,7,0"/>
                                 <TextBlock x:Name="PlayersPanelTitle"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="{StaticResource FontSizeSubtitle}"
+                                           FontSize="{StaticResource FontSizeBodyStrong}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
                             <Border Grid.Row="1"
                                     Height="1"
                                     Background="{DynamicResource MpDivider}"
-                                    Margin="18,0,18,0"/>
+                                    Margin="14,0,14,0"/>
                             <ScrollViewer Grid.Row="2"
                                           x:Name="PlayersScroll"
                                           VerticalScrollBarVisibility="Auto"
-                                          Padding="12,8,12,8">
+                                          Padding="10,6,10,6">
                                 <StackPanel x:Name="PlayersPanel"/>
                             </ScrollViewer>
                         </Grid>

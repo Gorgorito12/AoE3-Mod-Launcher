@@ -239,6 +239,16 @@ public partial class MultiplayerTab : UserControl
     private long _matchTimerStartTicks;
 
     /// <summary>
+    /// Snapshot of the room roster (user ids) taken when the match STARTS
+    /// (<see cref="EnterInGamePhase"/>), used as the participant list when the
+    /// host reports the finished match. Captured at start, not at exit, so the
+    /// record reflects "who was in the room when the game began" — the closest
+    /// the launcher can get to "who played" (AoE3 never tells us who actually
+    /// entered the LAN game). Empty outside a match.
+    /// </summary>
+    private readonly System.Collections.Generic.List<string> _matchParticipantSnapshot = new();
+
+    /// <summary>
     /// Radmin-adapter total-byte counter captured when the match started,
     /// so the InGame TRAFFIC stat can show bytes moved during THIS match
     /// (the OS counter is cumulative since the adapter came up). -1 = the
@@ -778,6 +788,13 @@ public partial class MultiplayerTab : UserControl
             StartQuotaPolling();
             StartRadminPolling();
         }
+
+        // Connect the global chat / presence socket NOW if we're already signed
+        // in (e.g. the cached JWT was still valid at startup), regardless of
+        // which tab is visible — this is what makes the user appear connected in
+        // the background. If sign-in completes later, OnSessionStateChanged
+        // calls SyncGlobalChat again. Idempotent (self-gates on SignedIn).
+        SyncGlobalChat();
     }
 
     /// <summary>
@@ -801,7 +818,11 @@ public partial class MultiplayerTab : UserControl
             _radminTimer?.Stop();
             _roomsPingTimer?.Stop();
             _roomsListTimer?.Stop();
-            CloseGlobalChat();
+            // NOTE: the global chat / presence socket is intentionally NOT
+            // closed here. It stays open while signed in (see SyncGlobalChat)
+            // so the user keeps appearing "connected" in the background — that
+            // is the whole point of the presence feature. Only the polling
+            // timers above are visibility-gated.
         }
     }
 
@@ -848,7 +869,9 @@ public partial class MultiplayerTab : UserControl
         };
         _roomsListTimer.Start();
 
-        // Connect the persistent global chat while the tab is up + signed in.
+        // Ensure the presence socket is up (idempotent). It's now always-on
+        // while signed in — NOT tied to this tab being visible — so this call is
+        // just a belt-and-suspenders refresh on tab activation.
         SyncGlobalChat();
     }
 
@@ -1044,6 +1067,7 @@ public partial class MultiplayerTab : UserControl
             {
                 _currentLobbyModId = null;
                 _currentLobbyMaxPlayers = 0;
+                _matchParticipantSnapshot.Clear();
             }
             UpdateConnectionStatus();
             // Also reset the match-phase machinery. If we somehow
@@ -2700,7 +2724,7 @@ public partial class MultiplayerTab : UserControl
 
             stack.Children.Add(new TextBlock
             {
-                Text = "Loading…",
+                Text = Strings.Get("MpHistoryLoading"),
                 Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
                 FontStyle = FontStyles.Italic,
             });
@@ -2712,7 +2736,7 @@ public partial class MultiplayerTab : UserControl
             {
                 stack.Children.Add(new TextBlock
                 {
-                    Text = "No matches yet — your first game will appear here.",
+                    Text = Strings.Get("MpHistoryEmpty"),
                     Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
                     FontStyle = FontStyles.Italic,
                 });
@@ -2756,46 +2780,48 @@ public partial class MultiplayerTab : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel();
-        var label = row.Result switch
-        {
-            >= 0.99 => "Win",
-            <= 0.01 => "Loss",
-            _ => "Draw",
-        };
-        var color = row.Result switch
-        {
-            >= 0.99 => Brushes.LimeGreen,
-            <= 0.01 => Brushes.IndianRed,
-            _ => (Brush)Application.Current.FindResource("TextSecondary"),
-        };
 
-        var header = new StackPanel { Orientation = Orientation.Horizontal };
-        header.Children.Add(new TextBlock
+        // Mod display name — fall back to the raw id if it isn't a known
+        // profile (a mod the user no longer has, an old catalog entry, etc.).
+        var modName = row.ModId;
+        foreach (var p in ModRegistry.All)
         {
-            Text = label,
-            Foreground = color,
-            FontWeight = FontWeights.Bold,
-            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
-            Margin = new Thickness(0, 0, 8, 0),
-        });
-        header.Children.Add(new TextBlock
-        {
-            Text = $"{row.ModId} · {row.MapName ?? "—"}",
-            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
-            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
-        });
-        left.Children.Add(header);
-
-        var meta = $"{row.StartedAt} · {TimeSpan.FromSeconds(row.DurationSeconds):mm\\:ss}";
-        if (row.RatingBefore.HasValue && row.RatingAfter.HasValue)
-        {
-            var delta = row.RatingAfter.Value - row.RatingBefore.Value;
-            var sign = delta >= 0 ? "+" : "";
-            meta += $" · ELO {row.RatingBefore.Value:0}→{row.RatingAfter.Value:0} ({sign}{delta:0})";
+            if (string.Equals(p.Id, row.ModId, StringComparison.OrdinalIgnoreCase))
+            {
+                modName = p.DisplayName;
+                break;
+            }
         }
+
         left.Children.Add(new TextBlock
         {
-            Text = meta,
+            Text = modName,
+            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            FontWeight = FontWeights.SemiBold,
+            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+        });
+
+        // Meta line: "N players · duration · date". This is an unranked match
+        // log — no win/loss (AoE3 doesn't expose it) and no ELO, so we show the
+        // facts we DO have. Player count is 0 on an old backend that doesn't
+        // emit the field → that segment is dropped.
+        var parts = new System.Collections.Generic.List<string>();
+        if (row.PlayerCount > 0)
+            parts.Add(Strings.Format("MpHistoryPlayers", row.PlayerCount));
+        var dur = TimeSpan.FromSeconds(Math.Max(0, row.DurationSeconds));
+        parts.Add(dur.TotalHours >= 1 ? dur.ToString(@"h\:mm\:ss") : dur.ToString(@"mm\:ss"));
+        if (DateTimeOffset.TryParse(
+                row.StartedAt,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal,
+                out var started))
+            parts.Add(started.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture));
+        else if (!string.IsNullOrEmpty(row.StartedAt))
+            parts.Add(row.StartedAt);
+
+        left.Children.Add(new TextBlock
+        {
+            Text = string.Join(" · ", parts),
             Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
             FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             Margin = new Thickness(0, 2, 0, 0),
@@ -2808,7 +2834,7 @@ public partial class MultiplayerTab : UserControl
         {
             var dl = new Button
             {
-                Content = "Replay",
+                Content = Strings.Get("MpHistoryReplay"),
                 Style = (Style)Application.Current.FindResource("SidebarPrimaryButton"),
                 Padding = new Thickness(12, 4, 12, 4),
                 MinWidth = 90,
@@ -3309,14 +3335,22 @@ public partial class MultiplayerTab : UserControl
     // ---------- Global chat ----------
 
     /// <summary>
-    /// Open the global chat socket when it should be live (tab visible +
-    /// signed in) and close it otherwise. Idempotent — safe to call from
-    /// the visibility gate, session-state changes and tab activation.
+    /// Open the global chat / presence socket whenever the user is signed in,
+    /// and close it on sign-out. Idempotent — safe to call from session-state
+    /// changes and Attach.
+    ///
+    /// **Deliberately NOT gated on tab/window visibility.** This socket is what
+    /// makes the user appear "connected" (present) to everyone else — it must
+    /// stay open while the launcher runs and is signed in, even when the user is
+    /// on another tab or the window is minimised to the tray (background
+    /// presence, GameRanger-style). The 30 s ping heartbeat lives on the socket's
+    /// own Task (not the UI thread), so a tray socket survives the backend's 90 s
+    /// idle-kick. The visibility-gated pollers (quota/rooms/radmin) stay in
+    /// <see cref="OnVisibleChangedTabGate"/>; only THIS socket is always-on.
     /// </summary>
     private void SyncGlobalChat()
     {
-        var shouldConnect = IsVisible
-            && _session?.Status == MultiplayerSession.SessionStatus.SignedIn;
+        var shouldConnect = _session?.Status == MultiplayerSession.SessionStatus.SignedIn;
         if (shouldConnect) OpenGlobalChat();
         else CloseGlobalChat();
     }
@@ -3478,8 +3512,8 @@ public partial class MultiplayerTab : UserControl
         var bubble = new Border
         {
             Background = bubbleBg,
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(10, 6, 10, 7),
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(9, 5, 9, 6),
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, sameAuthor ? 0 : 3, 0, 0),
             Child = new TextBlock
@@ -3494,9 +3528,9 @@ public partial class MultiplayerTab : UserControl
         var grid = new Grid
         {
             // Tight gap for a continuation, a clearer gap when the author changes.
-            Margin = new Thickness(0, sameAuthor ? 2 : 10, 0, 0),
+            Margin = new Thickness(0, sameAuthor ? 1 : 7, 0, 0),
         };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         if (sameAuthor)
@@ -3522,7 +3556,7 @@ public partial class MultiplayerTab : UserControl
             });
             if (!string.IsNullOrEmpty(avatarUrl))
             {
-                var photo = new System.Windows.Shapes.Ellipse { Width = 30, Height = 30 };
+                var photo = new System.Windows.Shapes.Ellipse { Width = 26, Height = 26 };
                 try
                 {
                     photo.Fill = new ImageBrush(
@@ -3536,9 +3570,9 @@ public partial class MultiplayerTab : UserControl
             }
             var avatar = new Border
             {
-                Width = 30,
-                Height = 30,
-                CornerRadius = new CornerRadius(15),
+                Width = 26,
+                Height = 26,
+                CornerRadius = new CornerRadius(13),
                 Background = bubbleBg,
                 VerticalAlignment = VerticalAlignment.Top,
                 Child = avatarInner,
@@ -3576,6 +3610,15 @@ public partial class MultiplayerTab : UserControl
 
         GlobalChatPanel.Children.Add(grid);
         _lastGlobalChatAuthor = login;
+
+        // Cap the rendered chat to the last N rows. The presence socket is now
+        // always-on (see SyncGlobalChat), so while the launcher sits in the tray
+        // for hours these rows would otherwise accumulate unbounded in a hidden
+        // panel — a slow memory leak. Trimming the oldest keeps it bounded while
+        // still showing recent chat when the user re-opens the tab.
+        const int MaxGlobalChatRows = 200;
+        while (GlobalChatPanel.Children.Count > MaxGlobalChatRows)
+            GlobalChatPanel.Children.RemoveAt(0);
     }
 
     private void UpdateGlobalPresence(int online)
@@ -3774,10 +3817,10 @@ public partial class MultiplayerTab : UserControl
         {
             var members = _globalOnlineUsers.Where(u => u.status == statusKey).ToList();
             // Category header: a status dot + "<label> · N" (always shown).
-            var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 4) };
+            var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 3) };
             headerRow.Children.Add(new System.Windows.Shapes.Ellipse
             {
-                Width = 8, Height = 8, Fill = R(dotBrushKey),
+                Width = 7, Height = 7, Fill = R(dotBrushKey),
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
             });
             headerRow.Children.Add(new TextBlock
@@ -3792,9 +3835,9 @@ public partial class MultiplayerTab : UserControl
 
             foreach (var u in members)
             {
-                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 2, 0, 2) };
-                var disc = BuildAvatarDisc(u.login, u.avatarUrl, 24);
-                disc.Margin = new Thickness(0, 0, 8, 0);
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 1, 0, 1) };
+                var disc = BuildAvatarDisc(u.login, u.avatarUrl, 22);
+                disc.Margin = new Thickness(0, 0, 7, 0);
                 row.Children.Add(disc);
                 row.Children.Add(new TextBlock
                 {
@@ -5126,15 +5169,21 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// Called when the AoE3 process spawned by <see cref="LaunchActiveModGame"/>
-    /// exits. Best-effort post-game flow: find the freshest
-    /// <c>.age3yrec</c> in the mod's user-data folder and surface it
-    /// in the chat. Full upload + match reporting requires per-player
-    /// result data that we don't auto-extract for v1.0 — that polish
-    /// pass comes once AoE3 result parsing is in scope.
+    /// exits. Best-effort post-game flow: (1) if we're the host, report the
+    /// finished match to the backend so it shows up in every participant's
+    /// History tab; (2) find the freshest <c>.age3yrec</c> in the mod's
+    /// user-data folder and surface it in the chat. The report is an unranked
+    /// "match log" (players + duration + mod + date) — win/loss + ELO need a
+    /// replay parser AoE3 doesn't give us, so that stays out of scope.
     /// </summary>
     private async Task OnGameExitedAsync(ModProfile profile, DateTime gameStartedAtUtc)
     {
         AppendChatSystem(Strings.Get("MpChatGameClosed"));
+
+        // Report the match FIRST — before the replay block's early return on a
+        // missing user-data folder, which would otherwise skip reporting.
+        await TryReportMatchAsync(profile);
+
         try
         {
             // The mod's user-data folder lives under Documents/My Games/<userDataFolder>.
@@ -5153,6 +5202,127 @@ public partial class MultiplayerTab : UserControl
             DiagnosticLog.Write($"MultiplayerTab.OnGameExitedAsync: {ex.Message}");
         }
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Host-only, best-effort report of the just-finished match to the backend
+    /// (<c>POST /matches</c>). Populates every participant's History tab with an
+    /// unranked record: mod, player count, duration, timestamps. Uses the
+    /// lobby_id branch, which the backend host-validates and which CLOSES the
+    /// room (+ fires the Discord "match ended" webhook) — the maintainer's
+    /// "close the room when the match ends" choice. Never throws; a failure
+    /// (offline, room already GC'd, non-host) is swallowed with a log line so
+    /// the post-match flow is unaffected.
+    /// </summary>
+    private async Task TryReportMatchAsync(ModProfile profile)
+    {
+        // Every skip below is LOGGED with its reason — before this, a match that
+        // didn't record looked identical whether it was skipped (not host, too
+        // short, solo) or failed (404/403/offline), so "nothing happened" was
+        // undiagnosable. The reason line in launcher-debug.log is the first thing
+        // to check when a real game doesn't show up in History.
+
+        // Only the host reports — OnGameExitedAsync fires on EVERY player's
+        // client, and the POST inserts a row for each participant, so a single
+        // host report already fills everyone's history. Without this gate we'd
+        // get N duplicate matches.
+        if (!_isHostInCurrentRoom)
+        {
+            DiagnosticLog.Write("MultiplayerTab.TryReportMatchAsync: skipped — not host of this room");
+            return;
+        }
+        if (_session?.CurrentUser == null || _computeModFingerprint == null)
+        {
+            DiagnosticLog.Write("MultiplayerTab.TryReportMatchAsync: skipped — no session / fingerprint hook");
+            return;
+        }
+
+        var lobbyId = _session.CurrentLobbyId;
+        if (string.IsNullOrEmpty(lobbyId) || string.IsNullOrEmpty(_currentLobbyModId))
+        {
+            DiagnosticLog.Write(
+                $"MultiplayerTab.TryReportMatchAsync: skipped — lobbyId='{lobbyId}' modId='{_currentLobbyModId}'");
+            return;
+        }
+
+        // Anti-noise gates: the server rejects < 2 participants anyway, and a
+        // sub-3-minute session is almost certainly "opened AoE3, closed it"
+        // rather than a real game — don't pollute the log with those.
+        var participantIds = _matchParticipantSnapshot
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Distinct()
+            .ToList();
+        if (participantIds.Count < 2)
+        {
+            DiagnosticLog.Write(
+                $"MultiplayerTab.TryReportMatchAsync: skipped — only {participantIds.Count} participant(s), " +
+                "need >= 2 (multiplayer match, not a solo launch)");
+            return;
+        }
+
+        var endedAt = DateTime.UtcNow;
+        var durationSeconds = (int)Math.Max(0, (endedAt - _matchStartedAtUtc).TotalSeconds);
+        const int MinReportableSeconds = 180;
+        if (durationSeconds < MinReportableSeconds)
+        {
+            DiagnosticLog.Write(
+                $"MultiplayerTab.TryReportMatchAsync: skipped — duration {durationSeconds}s < {MinReportableSeconds}s");
+            return;
+        }
+
+        try
+        {
+            var hash = await _computeModFingerprint(profile);
+            var req = new ReportMatchRequest
+            {
+                LobbyId = lobbyId,
+                ModId = _currentLobbyModId,
+                ModCombinedHash = hash,
+                MapName = null,
+                StartedAt = _matchStartedAtUtc.ToString("o"),
+                EndedAt = endedAt.ToString("o"),
+                DurationSeconds = durationSeconds,
+                // Unranked "match log": every participant is a draw (result=0.5)
+                // — AoE3 doesn't expose win/loss, so no real outcome to record.
+                Participants = participantIds.Select(id => new MatchParticipantReport
+                {
+                    UserId = id,
+                    Team = 0,
+                    Civ = null,
+                    Score = 0,
+                    Result = 0.5,
+                }).ToList(),
+            };
+
+            await _session.Api.ReportMatchAsync(req);
+            DiagnosticLog.Write(
+                $"MultiplayerTab.TryReportMatchAsync: reported match lobby={lobbyId} " +
+                $"players={participantIds.Count} duration={durationSeconds}s");
+            // Visible confirmation. The backend closes the room right after, so
+            // the lobby window is about to disappear — but the History tab
+            // populating is the real confirmation; this chat line is a bonus.
+            AppendChatSystem(Strings.Format("MpChatMatchRecorded", participantIds.Count));
+        }
+        catch (LobbyApiException apiEx)
+        {
+            // On failure the room STAYS OPEN (no close happened), so this chat
+            // line is actually visible to the host. Surface the HTTP status/code
+            // so a failed report is diagnosable at a glance: 404 = room already
+            // gone, 403 = host migrated mid-game, 401 = session expired, etc.
+            DiagnosticLog.Write(
+                $"MultiplayerTab.TryReportMatchAsync: report FAILED status={apiEx.Status} code={apiEx.Code} — {apiEx.Message}");
+            AppendChatSystem(Strings.Format("MpChatMatchNotRecorded", apiEx.Status, apiEx.Code));
+        }
+        catch (Exception ex)
+        {
+            // Offline / transient (no HTTP status). Still surface it.
+            DiagnosticLog.Write($"MultiplayerTab.TryReportMatchAsync: report FAILED — {ex.Message}");
+            AppendChatSystem(Strings.Format("MpChatMatchNotRecorded", 0, "offline"));
+        }
+        finally
+        {
+            _matchParticipantSnapshot.Clear();
+        }
     }
 
     // ==================================================================
@@ -5459,6 +5629,13 @@ public partial class MultiplayerTab : UserControl
         _aoe3Process = gameProcess;
         _matchStartedAtUtc = DateTime.UtcNow;
         _matchTimerStartTicks = Environment.TickCount64;
+
+        // Snapshot who's in the room right now — this is the participant list
+        // the host reports when the match ends (see OnGameExitedAsync). Taken
+        // at start on purpose: the roster can churn during a 30-min game, and
+        // "who was here when we launched" is the honest record.
+        _matchParticipantSnapshot.Clear();
+        _matchParticipantSnapshot.AddRange(_roomMembers.Keys);
 
         // Snapshot the Radmin adapter's byte counter so the TRAFFIC stat
         // can show bytes moved during THIS match (delta), and reset the

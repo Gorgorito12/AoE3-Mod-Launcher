@@ -475,6 +475,21 @@ public partial class MainWindow : Window
         // "Refresh" needed for the common case. Pre-fetching the catalog
         // means community mods appear in the top bar without a launcher
         // restart.
+        // Auto-start-to-tray: when Windows launched us at login (the Run-key
+        // registration appended --minimized, parsed into App.StartMinimized), hide
+        // straight to the tray so the "run in background" experience doesn't pop a
+        // window every login. Runs from Loaded (after App called Show()) so the
+        // hide sticks; WindowState was pre-set to Minimized in App to avoid a flash.
+        // A manual double-click carries no --minimized arg, so it shows normally.
+        Loaded += (_, _) =>
+        {
+            if (App.StartMinimized)
+            {
+                DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
+                HideToTray();
+            }
+        };
+
         Loaded += async (_, _) =>
         {
             LauncherUpdateService.CleanupOldVersion();
@@ -2399,6 +2414,21 @@ public partial class MainWindow : Window
         ActionPanelControl.ActionsLabel.Text = Strings.Get("ActionsLabel");
         if (DashboardCopyChip != null)
             DashboardCopyChip.ToolTip = Strings.Get("DashboardActiveCopyTooltip");
+
+        // Localized hover tooltips for the dashboard's mod buttons (these were
+        // previously hardcoded English or had none). The primary CTA tooltip is
+        // dynamic (set per-state in SetPrimaryAction). Set here so they follow the
+        // language switch. Null-guarded because ApplyLanguage can run early.
+        if (DashboardSettingsButton != null)
+            DashboardSettingsButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipGearButton"));
+        if (DashboardChangeModButton != null)
+            DashboardChangeModButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipChangeMod"));
+        if (DashboardSearchInstallButton != null)
+            DashboardSearchInstallButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipSearchInstall"));
+        if (DashboardPauseButton != null)
+            DashboardPauseButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipPauseResume"));
+        if (DashboardCancelButton != null)
+            DashboardCancelButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipCancel"));
         // The "INSTALLED VERSION / LATEST AVAILABLE" labels lived in the
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
@@ -2444,10 +2474,15 @@ public partial class MainWindow : Window
 
         // Header action buttons.
         ModsBrowserView.RefreshCatalogLabel = Strings.Get("ModsBrowserRefreshCatalog");
+        ModsBrowserView.RefreshCatalogTooltip = Strings.Get("TipWsRefreshCatalog");
         ModsBrowserView.AddLocalModLabel = Strings.Get("ModsBrowserAddLocal");
+        ModsBrowserView.AddLocalModTooltip = Strings.Get("TipWsAddLocal");
         ModsBrowserView.PublishModLabel = Strings.Get("ModsBrowserMenuPublish");
+        ModsBrowserView.PublishModTooltip = Strings.Get("TipWsPublish");
         ModsBrowserView.SubTabMyModsLabel = Strings.Get("ModsBrowserSubTabMyMods");
+        ModsBrowserView.SubTabMyModsTooltip = Strings.Get("TipWsSubTabMyMods");
         ModsBrowserView.SubTabCatalogLabel = Strings.Get("ModsBrowserSubTabCatalog");
+        ModsBrowserView.SubTabCatalogTooltip = Strings.Get("TipWsSubTabCatalog");
 
         // Filter chips + sort dropdown.
         ModsBrowserView.FiltersLabelText = Strings.Get("ModsBrowserFiltersLabel");
@@ -2458,6 +2493,12 @@ public partial class MainWindow : Window
             Strings.Get("ModsBrowserFilterNotInstalled"),
             Strings.Get("ModsBrowserFilterUpdates"),
             Strings.Get("ModsBrowserFilterCompatible"));
+        ModsBrowserView.SetFilterTooltips(
+            Strings.Get("TipWsFilterAll"),
+            Strings.Get("TipWsFilterInstalled"),
+            Strings.Get("TipWsFilterNotInstalled"),
+            Strings.Get("TipWsFilterUpdates"),
+            Strings.Get("TipWsFilterCompatible"));
         ModsBrowserView.SetSortItems(
             Strings.Get("ModsBrowserSortRecent"),
             Strings.Get("ModsBrowserSortName"),
@@ -2584,6 +2625,8 @@ public partial class MainWindow : Window
             (string)ActionPanelControl.MenuRepairInstall.Header, Strings.Get("TooltipMenuRepairInstall"));
         ActionPanelControl.MenuVerifyFiles.ToolTip = BuildMenuTooltip(
             (string)ActionPanelControl.MenuVerifyFiles.Header, Strings.Get("TooltipMenuVerifyFiles"));
+        ActionPanelControl.MenuInstallAnotherCopy.ToolTip = BuildMenuTooltip(
+            (string)ActionPanelControl.MenuInstallAnotherCopy.Header, Strings.Get("TooltipMenuInstallAnotherCopy"));
         ActionPanelControl.MenuViewLogs.ToolTip = BuildMenuTooltip(
             (string)ActionPanelControl.MenuViewLogs.Header, Strings.Get("TooltipMenuViewLogs"));
         ActionPanelControl.UninstallMenuItem.ToolTip = BuildMenuTooltip(
@@ -7719,7 +7762,12 @@ public partial class MainWindow : Window
 
         try
         {
-            DiagnosticLog.ExportBundle(zipPath);
+            // Also fold in the active mod's game user-data OOS/sync/log artifacts
+            // (My Games\<folder>), so an in-game OUT-OF-SYNC report is diagnosable —
+            // a sim desync is written by AoE3, not the launcher log. Read-only; null
+            // (e.g. the stock game, which has no managed user-data folder) is a no-op.
+            var gameUserDataDir = UserDataService.GetUserDataFolder(_updateService.Profile.UserDataFolder);
+            DiagnosticLog.ExportBundle(zipPath, gameUserDataDir: gameUserDataDir);
 
             // Reveal the freshly-created zip selected in Explorer (ready to drag
             // into Discord / attach). /select expects a quoted absolute path.
@@ -9220,12 +9268,20 @@ public partial class MainWindow : Window
     /// </summary>
     private static System.Windows.Controls.ToolTip BuildMenuTooltip(string title, string description)
     {
+        // MaxWidth is set on the TextBlocks THEMSELVES (not just the ToolTip
+        // template) because a gear ContextMenu renders in a separate popup that
+        // doesn't inherit MainWindow's ToolTip style — so without this the text
+        // measures at infinite width and gets clipped to one line. With a bounded
+        // MaxWidth + Wrap, WPF wraps the description to multiple lines reliably.
+        const double TooltipContentMaxWidth = 320;
         var titleBlock = new System.Windows.Controls.TextBlock
         {
             Text = title,
             Foreground = Brush("White"),
             FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             FontWeight = System.Windows.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = TooltipContentMaxWidth,
         };
         var descBlock = new System.Windows.Controls.TextBlock
         {
@@ -9233,6 +9289,7 @@ public partial class MainWindow : Window
             Foreground = Brush("#aaa"),
             FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             TextWrapping = TextWrapping.Wrap,
+            MaxWidth = TooltipContentMaxWidth,
             Margin = new Thickness(0, 4, 0, 0),
         };
 
@@ -9470,6 +9527,17 @@ public partial class MainWindow : Window
         if (DashboardPlayButton != null && DashboardPlayButtonText != null)
         {
             DashboardPlayButtonText.Text = ActionPanelControl.PlayButtonText.Text;
+            // Dynamic tooltip: explain what the primary action does in its CURRENT
+            // state (Play vs Install vs Update vs Stop), so a newcomer knows what
+            // the big button will do before clicking it. Localized per action.
+            DashboardPlayButton.ToolTip = action switch
+            {
+                PrimaryAction.Install => TooltipHelper.Wrap(Strings.Get("TipCtaInstall")),
+                PrimaryAction.Play => TooltipHelper.Wrap(Strings.Get("TipCtaPlay")),
+                PrimaryAction.Update => TooltipHelper.Wrap(Strings.Get("TipCtaUpdate")),
+                PrimaryAction.Stop => TooltipHelper.Wrap(Strings.Get("TipCtaStop")),
+                _ => null,
+            };
             // The ENABLED state is owned by RefreshOperationGate (displayed-vs-operating), so
             // a background op on another mod doesn't wrongly disable this mod's CTA.
             RefreshOperationGate();

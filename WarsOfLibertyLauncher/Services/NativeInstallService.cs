@@ -1927,7 +1927,7 @@ public class NativeInstallService
     /// .ico file (with index 0) instead of the default icon embedded in the
     /// target executable.
     /// </summary>
-    private static void CreateShortcutFile(
+    internal static void CreateShortcutFile(
         string linkPath, string targetExe, string workingDir,
         string description, string? iconPath = null)
     {

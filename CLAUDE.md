@@ -198,12 +198,63 @@ Two cheap gates beyond a green build:
   the *meta layer* (sign-in, lobbies, chat, mod-hash gating) over a **self-hosted
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
   Worker. Sign-in is **Discord OAuth** (a state flow shaped like device flow),
-  **not** GitHub, yielding a JWT cached in `launcher-config.json`. Match-history/
-  ELO (`ReportMatchAsync`) and replay upload (`UploadAsync`) are scaffolded but
-  have **no live caller**. Authoritative source: the `MultiplayerSession.cs`
-  class doc-comment + `LobbyApiClient.cs`. Scattered `WinDivert` / `PeerMesh` /
-  `n2n` / `ZeroTier` mentions are historical comments. **Trust the code over both
-  the README and stale comments here.**
+  **not** GitHub, yielding a JWT cached in `launcher-config.json`. **Match history
+  IS now wired (unranked "match log"); ELO is not surfaced and replay upload
+  (`UploadAsync`) is still scaffolded with no live caller.** Authoritative source:
+  the `MultiplayerSession.cs` class doc-comment + `LobbyApiClient.cs`. Scattered
+  `WinDivert` / `PeerMesh` / `n2n` / `ZeroTier` mentions are historical comments.
+  **Trust the code over both the README and stale comments here.**
+
+- **The History subtab is fed by a HOST-ONLY, unranked match report at game
+  exit — don't re-add per-player reporting or an ELO/win-loss display.** The
+  Multiplayer → History tab (`RefreshHistoryAsync`/`BuildHistoryRow`) was fully
+  built but empty forever because nothing called `ReportMatchAsync`. Now
+  `MultiplayerTab.TryReportMatchAsync` (invoked from `OnGameExitedAsync`, BEFORE
+  its replay-block early-return) posts the finished match. **Load-bearing rules:**
+  (1) **host-only** (`if (!_isHostInCurrentRoom) return;`) — `OnGameExitedAsync`
+  fires on EVERY player's client and the backend inserts a `match_participants`
+  row for each participant (so every player's own `GET /matches/history/:userId`
+  returns it), so a single host report fills everyone's history; without the gate
+  you get N duplicate matches. (2) The participant list is a SNAPSHOT taken at
+  match START (`_matchParticipantSnapshot`, filled in `EnterInGamePhase` from
+  `_roomMembers.Keys`, cleared on leave), NOT the roster at exit — the honest
+  "who was in the room when we launched" (AoE3 never tells the launcher who
+  actually entered the LAN game). (3) It uses the **`lobby_id`-present** branch of
+  `POST /matches`, which the backend host-validates AND **closes the room**
+  (`status='closed'` + `finalizeRoom` Discord webhook) — the maintainer's "close
+  the room when the match ends" choice; the backend WS close (`4007
+  match_reported`) tears down the lobby window for everyone. (4) **Unranked**: every
+  participant is `result=0.5` (AoE3 exposes no win/loss; no replay parser), so
+  `BuildHistoryRow` shows `mod · N players · duration · date` and does NOT show
+  Win/Loss/Draw or ELO (the backend still runs Glicko on the all-draws, but nothing
+  surfaces it). (5) **Anti-noise gates**: skip when the snapshot has < 2 players or
+  the match ran < 3 min (an opened-and-closed AoE3). The whole call is best-effort
+  non-fatal (offline / 404 room-GC'd / 403 host-mismatch swallowed with a log).
+  Backend: `GET /matches/history/:userId` gained a `player_count` subquery →
+  `MatchHistoryRow.PlayerCount` (0 on an old backend → the "N players" chip is
+  hidden). **Resource cost is negligible** (1 POST per match, 1 GET per tab open,
+  <1 MB per 1000 matches — no sockets/timers), which was the user's concern.
+  **Known limitations:** a host crash = no report (match lost from all histories);
+  lobby membership ≠ guaranteed in-game; no map/civs. Server change lives in the
+  sibling repo `wol-launcher-lobby-node` (`src/matches/rest.ts`) and needs a
+  redeploy (`git pull` + `systemctl restart wol-lobby`) for `player_count`.
+  **Observability (load-bearing for diagnosis):** `TryReportMatchAsync` LOGS the
+  reason for every skip (`not host` / `< 2 participants` / `< 3 min` / missing
+  lobby+mod) and, on a real attempt, surfaces the outcome VISIBLY —
+  `AppendChatSystem` "Match recorded" on success (`MpChatMatchRecorded`) and, on
+  failure, the HTTP status + code (`MpChatMatchNotRecorded`, e.g. `HTTP 404 ·
+  http_error`). This exists because a match that didn't record used to look
+  identical (silent) whether it was skipped or failed — "nothing happened" was
+  undiagnosable (the recurring confusion: creating a room records nothing, because
+  the report only fires from `OnGameExitedAsync` when the GAME process exits, not
+  on room creation). The failure chat line is genuinely visible because the room
+  stays OPEN on failure (only success closes it). **Two testable halves:** the
+  DISPLAY half is verifiable SOLO with no code — `GET /matches/history/:userId`
+  has no ≥2 check (that lives only in POST), so seeding one `matches` +
+  `match_participants` row with your own `users.id` renders the row; the REPORT
+  half needs 2 real Discord users + a >3 min game. `_matchParticipantSnapshot`
+  keys are backend `users.id` (the room_state member dict is keyed by the JWT
+  `sub`), so the `match_participants` FK is satisfied.
 
 - **Single-file publish deliberately omits `IncludeAllContentForSelfExtract`.**
   Turning it on would point `AppContext.BaseDirectory` at a `%TEMP%` extract dir.
@@ -2318,9 +2369,9 @@ Two cheap gates beyond a green build:
   5s auto-refresh diff is stable and doesn't lose the chosen sort. ACTION (col 6)
   is a plain centered label, not sortable. A **footer** (`RoomsShowingCount`,
   `MpRoomsShowingCount` = "Showing N rooms") shows the count — **no pagination**
-  (the list scrolls). **The layout is ~75/25** — the rooms table col is `3*`, the
-  global-chat column is FLEXIBLE (`*` MinWidth 320 / MaxWidth 360) — so the table
-  fills ~75%;
+  (the list scrolls). **The layout is ~78/22** — the rooms table col is `3*`, the
+  global-chat column is FLEXIBLE (`*` MinWidth 280 / MaxWidth 300) — so the table
+  fills ~78%;
   `SyncHeaderScrollbarGutter` (hooked to `RoomsListScroll.ScrollChanged`) bumps the
   header's right margin by `SystemParameters.VerticalScrollBarWidth` when the vbar
   shows so the header tracks the rows. The row shows: a **leading mod-icon disc**
@@ -2380,6 +2431,78 @@ Two cheap gates beyond a green build:
   forces a non-quiet `RefreshRoomsListAsync()`**), so a render happens regardless.
   Don't try to encode "is this my room" into the signature.
 
+- **Presence is ALWAYS-ON while signed in — the global-chat/`/global/ws` socket is
+  deliberately NOT gated on tab/window visibility, so a launcher in the background
+  (other tab, or minimised to the tray) still shows the user as "connected" to
+  everyone (GameRanger-style).** This was the whole point of the "run in background"
+  work. `MultiplayerTab.SyncGlobalChat` gates ONLY on `_session.Status == SignedIn`
+  (NOT `IsVisible`); `OnVisibleChangedTabGate`'s not-visible branch stops the
+  pollers (quota/rooms/radmin) but **does NOT** `CloseGlobalChat()`; and `Attach`
+  calls `SyncGlobalChat()` unconditionally so it connects at startup for a cached
+  valid session regardless of the active tab. **Load-bearing details:** (1) the 30 s
+  ping keep-alive is a background `Task.Delay` loop in `LobbyWebSocket` (NOT
+  UI-gated), so a tray socket survives the backend's 90 s idle-kick — don't move the
+  ping onto a Dispatcher timer that pauses when hidden. (2) With the socket open in
+  the background, `AppendGlobalChatRow` **caps `GlobalChatPanel.Children` to 200
+  rows** (ring buffer) — otherwise chat rows accumulate unbounded in a hidden panel
+  (slow leak). (3) Only the presence socket is always-on; the pollers stay
+  visibility-gated. (4) Presence needs a valid cached JWT to auto-connect at
+  startup; an expired token means no presence until re-login. **Backend capacity:**
+  `globalChatMaxConnections` was decoupled from `MAX_CONCURRENT_USERS` (60) and
+  defaulted to **200** (`env.ts` / `.env.example`), because every running launcher
+  now holds a persistent socket — size it to the online installed base, not active
+  lobby players. ~15 MB RAM at 150 idle sockets on the 1-core/1GB VM (nginx
+  terminates TLS → Node sees plain WS); the full-list presence frame is O(N²) bytes
+  but debounced ~1.5 s + event-driven, so it's fine to ~150 and strains the single
+  vCPU only past ~300-500 (where you'd switch to delta presence). Don't re-gate the
+  presence socket on visibility, and don't drop the 200-row render cap.
+
+- **"Run in background" is ONE opt-in toggle that bundles auto-start + minimise-to-tray
+  + start-to-tray — and auto-start opens straight to the tray via a `--minimized`
+  arg, not the config.** The single `StartWithWindowsCheck` in Launcher Settings
+  (relabelled "Run in background" / "Ejecutar en segundo plano") drives all three
+  config flags together on save: `StartWithWindows` + `MinimizeToTray` +
+  `StartMinimized` (the standalone MinimizeToTray checkbox is collapsed in XAML, kept
+  only for compile parity). `StartupRegistrationService.Apply(enabled, startMinimized)`
+  appends **`--minimized`** to the HKCU Run-key command when `startMinimized` — so
+  the **Windows-login** launch opens to the tray, while a **manual double-click**
+  (no arg) still shows the window. `App.OnStartup` parses `--minimized` into
+  `App.StartMinimized`, pre-sets `WindowState=Minimized` before `Show()` (avoids a
+  flash), and `MainWindow`'s Loaded handler calls `HideToTray()` when it's set. The
+  self-update preserves the exe path, so the registered auto-start survives updates.
+  Don't split the toggle back into separate checkboxes (the user asked for one), and
+  keep `--minimized` on the registration side (not a config field) so manual launches
+  aren't affected.
+
+- **The portable single-file exe can self-install to a stable location —
+  `Services/SelfInstallService.cs`, opt-in, NOT a return to Inno Setup.** The launcher
+  ships as one signed self-contained exe; that's fragile for "run in background"
+  (a Downloads-folder exe that gets moved/deleted breaks auto-start). `SelfInstallService`
+  copies the running exe to `%LocalAppData%\Programs\Aoe3ModLauncher\Aoe3ModLauncher.exe`,
+  creates Start-Menu + Desktop shortcuts (reusing `NativeInstallService.CreateShortcutFile`,
+  now `internal`; the exe is its own `.lnk` icon source), then relaunches from there and
+  shuts down the portable instance. **Single-instance handoff:** the relaunched child
+  carries `SelfInstallService.FromInstallArg` (`--from-install`) and `App.OnStartup`, when
+  it sees that arg and the mutex is still held by the exiting parent, **waits up to 5 s**
+  (`WaitOne`, treating `AbandonedMutexException` as acquired) instead of quitting as a
+  duplicate — without this the relaunch aborts. The self-update keeps swapping in place at
+  the installed path. Exposed via a "Install on this PC" button in Launcher Settings →
+  Maintenance, hidden when already `IsInstalled()`. Don't reintroduce an installer
+  toolchain — this is the deliberate lightweight alternative.
+  **Install OFFERS "run in background" with a PRE-CHECKED box (never silent opt-out).**
+  Next to the install button sits `InstallRunInBackgroundCheck` (checked by default). When
+  kept, the install handler enables the three background flags + `_config.Save()` + registers
+  auto-start — and MUST pass `StartupRegistrationService.Apply(..., exePathOverride:
+  SelfInstallService.CanonicalExe)` because it still runs from the PORTABLE exe, so
+  `Environment.ProcessPath` (the default) would register the wrong path. The installed
+  instance reads the same `%LocalAppData%` config after relaunch, so the Settings toggle
+  reads checked and its own save (using ProcessPath = the installed exe) stays consistent.
+  **Why offered-and-visible, not automatic:** silently adding a Run-key persistence entry
+  is the pattern AV behavioural heuristics score highest **while the binary is self-signed**
+  (untrusted cert + persistence + background sockets ≈ backdoor profile); a user-visible,
+  pre-checked box is the normal, AV-safe pattern (Steam/Discord). The durable fix for the
+  whole class is the SignPath trusted signature. Don't turn this into a silent opt-out.
+
 - **Global chat is a process-wide WebSocket room — separate from the per-lobby
   chat, and the launcher's first real server-push channel.** The Multiplayer
   tab's Rooms view is now TWO columns: active rooms (left card) + a persistent
@@ -2403,8 +2526,8 @@ Two cheap gates beyond a green build:
   {online}` / `pong` / `error` — each `line` is
   `{id, userId, login, avatarUrl, body, at}`, and the client renders `avatarUrl`
   as a circular photo with the login **monogram as the fallback** when it's null
-  or fails to load (the chat column is FLEXIBLE — `*` MinWidth 320 / MaxWidth 360,
-  ~25% of a ~75/25 split with the rooms table `3*`; see the rooms-table bullet).
+  or fails to load (the chat column is FLEXIBLE — `*` MinWidth 280 / MaxWidth 300,
+  ~22% of a ~78/22 split with the rooms table `3*`; see the rooms-table bullet).
   Client side it
   **reuses the generic `LobbyWebSocket`** (SessionToken hello,
   `BuildWsUri(Api.BaseUri, "global/ws")`), but the socket is **owned by
@@ -2683,8 +2806,9 @@ engine** and the UI binds to it.
    self-hosted Node/Fastify backend (`wol-lobby.duckdns.org`) for lobbies + chat,
    gated by a mod fingerprint (`ModHashService`) → players join a shared **Radmin
    VPN** network manually for the actual LAN; the host's game launch appends
-   `OverrideAddress="<radmin-ip>"` plus skip-intro flags. Match-history/ELO and
-   replay upload are scaffolded but not wired.
+   `OverrideAddress="<radmin-ip>"` plus skip-intro flags. Match history is wired as
+   a host-only unranked "match log" (players + duration + mod + date; see the
+   History-subtab gotcha); ELO and replay upload remain scaffolded/not surfaced.
 
 ### Multi-mod profile system
 
@@ -2797,7 +2921,27 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   from ModProperties' **"📤 Share diagnostics"** button (`shareDiagnostics`
   callback → `MainWindow.ShareDiagnostics`: Save dialog defaulting to the Desktop
   → `ExportBundle` → reveal in Explorer, ready to drag into Discord). Strings
-  `ModPropShareDiagnostics*`. Separately, `MultiplayerTelemetry`
+  `ModPropShareDiagnostics*`. **The bundle ALSO folds in the active mod's GAME
+  user-data OOS/sync artifacts — this is what makes an in-game OUT-OF-SYNC report
+  diagnosable.** `ShareDiagnostics` resolves
+  `UserDataService.GetUserDataFolder(profile.UserDataFolder)` (`My Games\<folder>`;
+  null for the stock game / any profile with no managed user-data folder → no-op)
+  and passes it as `ExportBundle`'s 3rd param `gameUserDataDir`. `ExportBundle` then
+  copies that folder's **top-level** small OOS/sync/text-log files into a
+  `game-userdata/` subfolder and writes a `game-userdata-listing.txt` snapshot of
+  the whole top level (so we can learn the real AoE3 dump names even when nothing
+  matched). The include rule is the pure, unit-tested
+  `DiagnosticLog.ShouldIncludeGameFile(name, size)`: name matches `*oos*`/`*sync*`/
+  `*.txt`/`*.log` (case-insensitive) AND size ≤ `GameFileMaxBytes` (2 MiB), capped at
+  `GameFileMaxCount` (40) files — so recorded games (`.age3Yrec`), savegames
+  (`.age3Ysav`), configs and binaries are never swept. It's **READ-ONLY** (copies to
+  staging, never touches the game folder) and whole-operation best-effort (a failure
+  can't abort the bundle). **Why:** a sim desync (the "OOS at 8 min" report) is
+  written by the GAME, not the launcher log, and file-mismatch OOS shows "within
+  seconds" (see `ModFingerprint`) — so a mid-game OOS is a simulation desync the
+  3-file MP fingerprint can't catch, and these artifacts are the only in-bundle
+  evidence. Recorded games (ideal for replay-diffing) stay a manual ask — too large
+  to auto-bundle. Pinned by `DiagnosticLogTests`. Separately, `MultiplayerTelemetry`
   appends a plaintext `multiplayer-events.log` next to the `.exe`. It is now
   **opt-in and OFF by default** (`LauncherConfig.MultiplayerTelemetryEnabled`,
   wired to `MultiplayerTelemetry.Enabled` in `MainWindow`'s ctor at startup and
@@ -2813,6 +2957,40 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
   literal in XAML/code. A missing key renders as the key itself (a visible
   signal). `Strings.SetLanguage` raises `LanguageChanged` for live refresh.
+  **This includes hover TOOLTIPS — they are localized too, never hardcoded.** A
+  newcomer-onboarding pass gave the interactive controls in Settings, the dashboard
+  mod buttons, the gear menu / Mod Properties, and the Workshop a clear label + a
+  benefit-first hint + a hover tooltip with the detail. The pattern is a local
+  `static void SetTip(FrameworkElement el, string key) => el.ToolTip = Strings.Get(key);`
+  helper inside each dialog's `ApplyLanguage`/`ApplyStrings` (see
+  `LauncherSettingsDialog` and `ModPropertiesDialog`), with keys named `*Tip`
+  (`DlgLauncherSettings*Tip`, `TipCta*`/`TipGear*` dashboard, `TipMp*` Mod
+  Properties, `TipWs*` Workshop). The dashboard primary CTA tooltip is **dynamic**
+  (set per-state in `SetPrimaryAction`: Play/Install/Update/Stop). Some MainWindow
+  tooltips were previously **hardcoded English** ("Mod actions", "Pause/Resume",
+  "Cancel") — those were migrated to localized keys; don't reintroduce a literal
+  tooltip. `ModsBrowser` doesn't import the Localization layer, so its tooltips are
+  fed as **properties/methods** from MainWindow (`RefreshCatalogTooltip`,
+  `SetFilterTooltips(...)`, `*Tooltip` setters) — same pattern as its labels.
+  Adding a new control ⇒ add its `*Tip` string + a `SetTip`/property call.
+  **No emojis in labels** — the maintenance/packager button labels used to carry
+  💾/📂/📦/🧩 prefixes; those were removed on request. Don't re-add emoji to labels.
+  **Tooltips WRAP — the dark ToolTip style is APP-WIDE (`App.xaml`), not
+  `MainWindow.Window.Resources`.** It had to move: a `ContextMenu` (the gear menu)
+  renders in a SEPARATE popup that resolves implicit styles against
+  `Application.Resources`, NOT a Window's — so MainWindow's old `MaxWidth` never
+  reached the gear tooltips and long descriptions clipped to one line (reported
+  bug). Two coupled rules: (1) **string tooltips must be wrapped by the caller** via
+  `TooltipHelper.Wrap(text)` (a `TextBlock{TextWrapping=Wrap, MaxWidth=340}`) —
+  `TextBlock.TextWrapping` is NOT an attached property, so it can't be forced on the
+  template's `ContentPresenter`; every `SetTip` helper (Settings, Mod Properties) and
+  every direct `X.ToolTip = <string>` (dashboard buttons, `ModsBrowser` setters) go
+  through `Wrap`. (2) **rich-content tooltips** (`MainWindow.BuildMenuTooltip`, the
+  gear menu) set `MaxWidth` + `TextWrapping=Wrap` on their OWN `TextBlock`s. The gear
+  `MenuItem` style also sets `ToolTipService.Placement="Right"` so the description
+  shows beside the item instead of covering the menu. Don't re-add an implicit
+  `ToolTip` style to a single Window, and don't assign a raw long string to
+  `.ToolTip` (use `TooltipHelper.Wrap`).
   The lobby window (`LobbyWindow`) splits its localisation across **two**
   methods in `MultiplayerTab.xaml.cs`: `ApplyLobbyStaticLabels()` for static
   labels (section/field headers, button captions, chat placeholder, copy

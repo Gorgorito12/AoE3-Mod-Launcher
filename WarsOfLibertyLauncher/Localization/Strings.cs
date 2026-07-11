@@ -668,6 +668,132 @@ public static class Strings
             [LangEn] = "Active copy — click to switch",
             [LangEs] = "Copia activa — clic para cambiar",
         },
+
+        // --- Dashboard mod-button tooltips (hover detail for newcomers) ---
+        ["TipCtaPlay"] = new()
+        {
+            [LangEn] = "Launch the mod and start playing.",
+            [LangEs] = "Abrí el mod y empezá a jugar.",
+        },
+        ["TipCtaInstall"] = new()
+        {
+            [LangEn] = "Download and install this mod on your PC. Needs your Age of Empires III installed first.",
+            [LangEs] = "Descargá e instalá este mod en tu PC. Necesita tu Age of Empires III ya instalado.",
+        },
+        ["TipCtaUpdate"] = new()
+        {
+            [LangEn] = "Install the latest version. Keep your mod current to play online with everyone.",
+            [LangEs] = "Instalá la última versión. Mantené tu mod al día para jugar online con todos.",
+        },
+        ["TipCtaStop"] = new()
+        {
+            [LangEn] = "The game is running. Close it to play again.",
+            [LangEs] = "El juego está abierto. Cerralo para volver a jugar.",
+        },
+        ["TipGearButton"] = new()
+        {
+            [LangEn] = "Mod options: verify files, repair, change folder, view logs, uninstall…",
+            [LangEs] = "Opciones del mod: verificar archivos, reparar, cambiar carpeta, ver registros, desinstalar…",
+        },
+        ["TipChangeMod"] = new()
+        {
+            [LangEn] = "Switch between your installed mods.",
+            [LangEs] = "Cambiá entre tus mods instalados.",
+        },
+        ["TipSearchInstall"] = new()
+        {
+            [LangEn] = "Already have this mod? Search your PC for it instead of downloading again.",
+            [LangEs] = "¿Ya tenés este mod? Buscalo en tu PC en vez de descargarlo de nuevo.",
+        },
+        ["TipPauseResume"] = new()
+        {
+            [LangEn] = "Pause or resume the download.",
+            [LangEs] = "Pausar o reanudar la descarga.",
+        },
+        ["TipCancel"] = new()
+        {
+            [LangEn] = "Cancel this operation.",
+            [LangEs] = "Cancelar esta operación.",
+        },
+
+        // --- Mod Properties dialog button tooltips ---
+        ["TipMpInstallVersion"] = new()
+        {
+            [LangEn] = "Install the version selected above. Useful to go back to an older version.",
+            [LangEs] = "Instalá la versión elegida arriba. Útil para volver a una versión anterior.",
+        },
+        ["TipMpOpenFolder"] = new()
+        {
+            [LangEn] = "Open the mod's install folder in Explorer.",
+            [LangEs] = "Abrí la carpeta donde está instalado el mod en el Explorador.",
+        },
+        ["TipMpChangeModFolder"] = new()
+        {
+            [LangEn] = "Point the launcher at the mod's folder if you moved it or installed it elsewhere.",
+            [LangEs] = "Indicale al launcher dónde está la carpeta del mod si la moviste o la instalaste en otro lado.",
+        },
+        ["TipMpAddExistingFolder"] = new()
+        {
+            [LangEn] = "Register a mod folder you already have on disk, without downloading it again.",
+            [LangEs] = "Registrá una carpeta de mod que ya tenés en el disco, sin volver a descargarla.",
+        },
+        ["TipMpShareDiagnostics"] = new()
+        {
+            [LangEn] = "Bundle the logs into a zip to attach to a bug report on Discord.",
+            [LangEs] = "Junta los registros en un zip para adjuntar a un reporte de error en Discord.",
+        },
+
+        // --- Workshop (mods browser) tooltips ---
+        ["TipWsRefreshCatalog"] = new()
+        {
+            [LangEn] = "Get the newest list of community mods.",
+            [LangEs] = "Traé la lista más nueva de mods de la comunidad.",
+        },
+        ["TipWsAddLocal"] = new()
+        {
+            [LangEn] = "Add a mod you already have in a folder on your PC.",
+            [LangEs] = "Agregá un mod que ya tenés en una carpeta de tu PC.",
+        },
+        ["TipWsPublish"] = new()
+        {
+            [LangEn] = "For mod authors: submit your mod to the community catalog.",
+            [LangEs] = "Para autores de mods: enviá tu mod al catálogo de la comunidad.",
+        },
+        ["TipWsSubTabMyMods"] = new()
+        {
+            [LangEn] = "The mods you have installed.",
+            [LangEs] = "Los mods que tenés instalados.",
+        },
+        ["TipWsSubTabCatalog"] = new()
+        {
+            [LangEn] = "All the mods available to install.",
+            [LangEs] = "Todos los mods disponibles para instalar.",
+        },
+        ["TipWsFilterAll"] = new()
+        {
+            [LangEn] = "Show every mod.",
+            [LangEs] = "Mostrar todos los mods.",
+        },
+        ["TipWsFilterInstalled"] = new()
+        {
+            [LangEn] = "Show only the mods you have installed.",
+            [LangEs] = "Mostrar solo los mods que tenés instalados.",
+        },
+        ["TipWsFilterNotInstalled"] = new()
+        {
+            [LangEn] = "Show only mods you haven't installed yet.",
+            [LangEs] = "Mostrar solo los mods que todavía no instalaste.",
+        },
+        ["TipWsFilterUpdates"] = new()
+        {
+            [LangEn] = "Show only mods with an update available.",
+            [LangEs] = "Mostrar solo los mods con una actualización disponible.",
+        },
+        ["TipWsFilterCompatible"] = new()
+        {
+            [LangEn] = "Show only mods compatible with your Age of Empires III.",
+            [LangEs] = "Mostrar solo los mods compatibles con tu Age of Empires III.",
+        },
         // Header caption for the cinema-dashboard gear popup (the
         // redesigned per-mod settings menu that replaced the legacy
         // WPF ContextMenu with a MODS-style popup + sub-views).
@@ -1690,6 +1816,26 @@ public static class Strings
         ["MpSubtabProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
         ["MpSubtabHistory"] = new() { [LangEn] = "History", [LangEs] = "Historial" },
 
+        // --- History tab (match log: players + duration + date) ---
+        ["MpHistoryLoading"] = new() { [LangEn] = "Loading…", [LangEs] = "Cargando…" },
+        ["MpHistoryEmpty"] = new()
+        {
+            [LangEn] = "No matches yet — your first game will appear here.",
+            [LangEs] = "Todavía no hay partidas — tu primera partida aparecerá acá.",
+        },
+        ["MpHistoryPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
+        ["MpHistoryReplay"] = new() { [LangEn] = "Replay", [LangEs] = "Repetición" },
+        ["MpChatMatchRecorded"] = new()
+        {
+            [LangEn] = "Match recorded in your history ({0} players).",
+            [LangEs] = "Partida registrada en tu historial ({0} jugadores).",
+        },
+        ["MpChatMatchNotRecorded"] = new()
+        {
+            [LangEn] = "Couldn't record the match (HTTP {0} · {1}).",
+            [LangEs] = "No se pudo registrar la partida (HTTP {0} · {1}).",
+        },
+
         // --- Radmin VPN banner (reactive, three states) ---
         ["MpRadminNotInstalledTitle"] = new()
         {
@@ -2471,13 +2617,22 @@ public static class Strings
         },
         ["DlgLauncherSettingsStartWithWindows"] = new()
         {
-            [LangEn] = "Start with Windows",
-            [LangEs] = "Iniciar con Windows",
+            [LangEn] = "Run in background (recommended)",
+            [LangEs] = "Ejecutar en segundo plano (recomendado)",
         },
         ["DlgLauncherSettingsStartWithWindowsHint"] = new()
         {
-            [LangEn] = "Launches automatically when you log in.",
-            [LangEs] = "Se inicia automáticamente al iniciar sesión.",
+            [LangEn] = "Stay shown as connected to your friends, even without the window open.",
+            [LangEs] = "Aparecés conectado a tus amigos aunque no tengas la ventana abierta.",
+        },
+        ["DlgLauncherSettingsStartWithWindowsTip"] = new()
+        {
+            [LangEn] = "Starts with Windows straight to the system tray, and closing the window keeps it "
+                     + "running there so other players keep seeing you online. Right-click the tray icon "
+                     + "→ Exit to fully quit. You can turn this off anytime.",
+            [LangEs] = "Se inicia con Windows directo a la bandeja del sistema, y al cerrar la ventana sigue "
+                     + "corriendo ahí para que los demás jugadores te sigan viendo conectado. Clic derecho "
+                     + "en el ícono de la bandeja → Salir para cerrarlo del todo. Lo podés apagar cuando quieras.",
         },
         ["DlgLauncherSettingsJoinLinks"] = new()
         {
@@ -2486,20 +2641,32 @@ public static class Strings
         },
         ["DlgLauncherSettingsJoinLinksHint"] = new()
         {
-            [LangEn] = "Lets a room's Join link on Discord open this launcher and join the room. " +
-                       "Registers a wol-launcher:// handler for your user (no admin). Turn off to leave no registry entry.",
-            [LangEs] = "Permite que el enlace Unirme de una sala en Discord abra este launcher y entre a la sala. " +
-                       "Registra un handler wol-launcher:// para tu usuario (sin admin). Desactivalo para no dejar ninguna entrada en el registro.",
+            [LangEn] = "Click a room's Join link on Discord to open the launcher and jump straight into the room.",
+            [LangEs] = "Tocá el enlace Unirme de una sala en Discord y el launcher se abre y entra directo a la sala.",
+        },
+        ["DlgLauncherSettingsJoinLinksTip"] = new()
+        {
+            [LangEn] = "Registers a wol-launcher:// handler for your user only (no admin needed). "
+                     + "Turn off if you'd rather leave no entry in the Windows registry.",
+            [LangEs] = "Registra un handler wol-launcher:// solo para tu usuario (sin admin). "
+                     + "Desactivalo si preferís no dejar ninguna entrada en el registro de Windows.",
         },
         ["DlgLauncherSettingsCloseOnGame"] = new()
         {
-            [LangEn] = "Close launcher when game starts",
+            [LangEn] = "Close launcher when the game starts",
             [LangEs] = "Cerrar el launcher al iniciar el juego",
         },
         ["DlgLauncherSettingsCloseOnGameHint"] = new()
         {
-            [LangEn] = "Frees resources while you play. Reopen the launcher manually after the game closes.",
-            [LangEs] = "Libera recursos mientras juegas. Vuelve a abrir el launcher manualmente cuando termines.",
+            [LangEn] = "Frees up resources while you play.",
+            [LangEs] = "Libera recursos mientras jugás.",
+        },
+        ["DlgLauncherSettingsCloseOnGameTip"] = new()
+        {
+            [LangEn] = "The launcher closes itself once the game opens. You reopen it by hand after "
+                     + "the game closes. Leave off if you want the launcher (and multiplayer chat) to stay open.",
+            [LangEs] = "El launcher se cierra solo cuando abre el juego. Lo volvés a abrir a mano cuando el "
+                     + "juego cierra. Dejalo apagado si querés que el launcher (y el chat multijugador) siga abierto.",
         },
         ["DlgLauncherSettingsMinimizeToTray"] = new()
         {
@@ -2513,23 +2680,37 @@ public static class Strings
         },
         ["DlgLauncherSettingsShowToasts"] = new()
         {
-            [LangEn] = "Show notifications when updates finish",
-            [LangEs] = "Mostrar notificaciones cuando terminan las actualizaciones",
+            [LangEn] = "Notify me when updates finish",
+            [LangEs] = "Avisarme cuando terminan las actualizaciones",
         },
         ["DlgLauncherSettingsShowToastsHint"] = new()
         {
-            [LangEn] = "A system tray balloon appears when an update completes while the launcher window is hidden or minimised.",
-            [LangEs] = "Aparece una notificación en la bandeja cuando termina una actualización y la ventana del launcher está oculta o minimizada.",
+            [LangEn] = "Get a heads-up when a download or update is done.",
+            [LangEs] = "Te enterás cuando termina una descarga o actualización.",
+        },
+        ["DlgLauncherSettingsShowToastsTip"] = new()
+        {
+            [LangEn] = "A small system-tray notification appears when an update finishes while the "
+                     + "launcher window is hidden or minimised — so you can step away and come back when it's ready.",
+            [LangEs] = "Aparece una notificación chica en la bandeja cuando termina una actualización y la "
+                     + "ventana está oculta o minimizada — así podés hacer otra cosa y volver cuando esté lista.",
         },
         ["DlgSettingsNotifyRooms"] = new()
         {
-            [LangEn] = "Notify me when a multiplayer room is created",
-            [LangEs] = "Avisarme cuando se crea una sala multijugador",
+            [LangEn] = "Tell me when someone opens a game (recommended)",
+            [LangEs] = "Avisarme cuando alguien crea una partida (recomendado)",
         },
         ["DlgSettingsNotifyRoomsHint"] = new()
         {
-            [LangEn] = "A Windows notification when any player opens a room for a mod you have installed (only while the launcher window isn't focused).",
-            [LangEs] = "Una notificación de Windows cuando cualquier jugador crea una sala de un mod que tenés instalado (solo cuando la ventana del launcher no está en foco).",
+            [LangEn] = "Never miss a match — get pinged when a room opens for a mod you have.",
+            [LangEs] = "No te perdés ninguna partida — te avisa cuando se abre una sala de un mod que tenés.",
+        },
+        ["DlgSettingsNotifyRoomsTip"] = new()
+        {
+            [LangEn] = "A Windows notification when any player creates a multiplayer room for a mod you "
+                     + "have installed. Only shows while the launcher window isn't in focus.",
+            [LangEs] = "Una notificación de Windows cuando cualquier jugador crea una sala multijugador de un "
+                     + "mod que tenés instalado. Solo aparece cuando la ventana del launcher no está en foco.",
         },
         ["DlgLauncherSettingsSectionPrivacy"] = new()
         {
@@ -2553,8 +2734,17 @@ public static class Strings
         },
         ["DlgLauncherSettingsTelemetryHint"] = new()
         {
-            [LangEn] = "Writes a local multiplayer-events.log in the launcher's data folder (%LocalAppData%\\AoE3ModLauncher) with plain event counters (sign-ins, lobby joins, error codes). No network, no third parties — it never leaves your PC. Helps diagnose multiplayer issues if you share it in a bug report.",
-            [LangEs] = "Escribe un multiplayer-events.log local en la carpeta de datos del launcher (%LocalAppData%\\AoE3ModLauncher) con contadores de eventos (inicios de sesión, entradas a salas, códigos de error). Sin red ni terceros: nunca sale de tu PC. Ayuda a diagnosticar problemas de multijugador si lo adjuntas a un reporte.",
+            [LangEn] = "Optional. A local log that helps diagnose multiplayer problems.",
+            [LangEs] = "Opcional. Un registro local que ayuda a diagnosticar problemas de multijugador.",
+        },
+        ["DlgLauncherSettingsTelemetryTip"] = new()
+        {
+            [LangEn] = "Writes a local multiplayer-events.log with plain counters (sign-ins, lobby joins, error "
+                     + "codes). No network, no third parties — it never leaves your PC. Only useful if you attach "
+                     + "it to a bug report.",
+            [LangEs] = "Escribe un multiplayer-events.log local con contadores simples (inicios de sesión, entradas "
+                     + "a salas, códigos de error). Sin red ni terceros: nunca sale de tu PC. Solo sirve si lo "
+                     + "adjuntás a un reporte de error.",
         },
         ["DlgLauncherSettingsViewPrivacy"] = new()
         {
@@ -2563,8 +2753,13 @@ public static class Strings
         },
         ["DlgLauncherSettingsPrivacyHint"] = new()
         {
-            [LangEn] = "Opens PRIVACY.md on GitHub in your browser.",
-            [LangEs] = "Abre PRIVACY.md en GitHub en tu navegador.",
+            [LangEn] = "See exactly what data the launcher uses.",
+            [LangEs] = "Mirá exactamente qué datos usa el launcher.",
+        },
+        ["DlgLauncherSettingsPrivacyTip"] = new()
+        {
+            [LangEn] = "Opens the privacy policy (PRIVACY.md on GitHub) in your browser.",
+            [LangEs] = "Abre la política de privacidad (PRIVACY.md en GitHub) en tu navegador.",
         },
         ["TrayTooltip"] = new()
         {
@@ -2713,23 +2908,35 @@ public static class Strings
         },
         ["DlgLauncherSettingsAutoCheck"] = new()
         {
-            [LangEn] = "Check for updates on startup",
-            [LangEs] = "Buscar actualizaciones al iniciar",
+            [LangEn] = "Check for updates on startup (recommended)",
+            [LangEs] = "Buscar actualizaciones al iniciar (recomendado)",
         },
         ["DlgLauncherSettingsAutoCheckHint"] = new()
         {
-            [LangEn] = "Runs in the background; the launcher only surfaces a notice when something is pending.",
-            [LangEs] = "Se ejecuta en segundo plano; el launcher solo te avisa cuando hay algo pendiente.",
+            [LangEn] = "Keeps your mods current so you can play online with everyone.",
+            [LangEs] = "Mantiene tus mods al día para poder jugar online con todos.",
+        },
+        ["DlgLauncherSettingsAutoCheckTip"] = new()
+        {
+            [LangEn] = "Runs quietly in the background at launch and only shows a notice when there's an "
+                     + "update to install. Turn off on a metered connection to keep the launcher silent.",
+            [LangEs] = "Corre en silencio al arrancar y solo te avisa cuando hay una actualización para "
+                     + "instalar. Apagalo en una conexión con límite de datos para que el launcher no use red.",
         },
         ["DlgLauncherSettingsOpenPostUpdate"] = new()
         {
-            [LangEn] = "Open post-update pages in browser",
-            [LangEs] = "Abrir páginas post-actualización en el navegador",
+            [LangEn] = "Open changelog page after updating",
+            [LangEs] = "Abrir la página de novedades tras actualizar",
         },
         ["DlgLauncherSettingsOpenPostUpdateHint"] = new()
         {
-            [LangEn] = "Some mods link to a changelog page after applying a patch.",
-            [LangEs] = "Algunos mods enlazan a una página de cambios después de aplicar un parche.",
+            [LangEn] = "See what changed after a patch is applied.",
+            [LangEs] = "Mirá qué cambió después de aplicar un parche.",
+        },
+        ["DlgLauncherSettingsOpenPostUpdateTip"] = new()
+        {
+            [LangEn] = "Some mods link to a changelog / news page in your browser right after a patch is applied.",
+            [LangEs] = "Algunos mods enlazan a una página de cambios / novedades en tu navegador justo después de aplicar un parche.",
         },
         ["DlgLauncherSettingsCatalogDefault"] = new()
         {
@@ -2753,8 +2960,13 @@ public static class Strings
         },
         ["DlgLauncherSettingsClearCacheHint"] = new()
         {
-            [LangEn] = "Forces a fresh fetch on next start.",
-            [LangEs] = "Fuerza una nueva descarga en el próximo arranque.",
+            [LangEn] = "Only if the mod list looks out of date.",
+            [LangEs] = "Solo si la lista de mods se ve desactualizada.",
+        },
+        ["DlgLauncherSettingsClearCacheTip"] = new()
+        {
+            [LangEn] = "Forces the launcher to download a fresh mod catalog next time it starts.",
+            [LangEs] = "Fuerza al launcher a descargar un catálogo de mods nuevo la próxima vez que arranca.",
         },
         ["DlgLauncherSettingsCacheCleared"] = new()
         {
@@ -2982,12 +3194,19 @@ public static class Strings
         ["DlgLauncherSettingsClearAssets"] = new()
         {
             [LangEn] = "Clear mod icons cache",
-            [LangEs] = "Limpiar caché de iconos de mods",
+            [LangEs] = "Limpiar caché de íconos de mods",
         },
         ["DlgLauncherSettingsClearAssetsHint"] = new()
         {
-            [LangEn] = "Removes cached icon/banner images. They redownload on next launcher start.",
-            [LangEs] = "Elimina las imágenes (iconos/banners) cacheadas. Se vuelven a descargar al reabrir el launcher.",
+            [LangEn] = "Only if you see broken or outdated mod images.",
+            [LangEs] = "Solo si ves imágenes de mods rotas o desactualizadas.",
+        },
+        ["DlgLauncherSettingsClearAssetsTip"] = new()
+        {
+            [LangEn] = "Deletes the downloaded icon/banner images. They download again by themselves the next "
+                     + "time you open the launcher. Safe — it doesn't touch your installed mods.",
+            [LangEs] = "Borra las imágenes (íconos/portadas) descargadas. Se vuelven a bajar solas la próxima "
+                     + "vez que abrís el launcher. Es seguro — no toca tus mods instalados.",
         },
         ["DlgLauncherSettingsClearTemp"] = new()
         {
@@ -2996,8 +3215,15 @@ public static class Strings
         },
         ["DlgLauncherSettingsClearTempHint"] = new()
         {
-            [LangEn] = "Removes leftover download/extract files from interrupted updates.",
-            [LangEs] = "Elimina archivos sobrantes de descargas/extracciones interrumpidas.",
+            [LangEn] = "Frees disk space from interrupted downloads.",
+            [LangEs] = "Libera espacio de descargas interrumpidas.",
+        },
+        ["DlgLauncherSettingsClearTempTip"] = new()
+        {
+            [LangEn] = "Removes leftover download/extract files from updates that were cancelled or crashed. "
+                     + "Safe — it doesn't touch your installed mods.",
+            [LangEs] = "Elimina archivos sobrantes de descargas/extracciones que se cancelaron o fallaron. "
+                     + "Es seguro — no toca tus mods instalados.",
         },
         ["DlgLauncherSettingsOpenDataFolder"] = new()
         {
@@ -3006,8 +3232,64 @@ public static class Strings
         },
         ["DlgLauncherSettingsOpenDataFolderHint"] = new()
         {
-            [LangEn] = "Opens the launcher's data folder (config, logs, caches) — no longer next to the .exe.",
-            [LangEs] = "Abre la carpeta de datos del launcher (config, registros, cachés) — ya no junto al .exe.",
+            [LangEn] = "Where the launcher keeps its settings and logs.",
+            [LangEs] = "Donde el launcher guarda su configuración y registros.",
+        },
+        ["DlgLauncherSettingsOpenDataFolderTip"] = new()
+        {
+            [LangEn] = "Opens the launcher's data folder (settings, logs, caches). Handy when sharing logs for a bug report.",
+            [LangEs] = "Abre la carpeta de datos del launcher (configuración, registros, cachés). Útil para compartir registros en un reporte de error.",
+        },
+        ["DlgLauncherSettingsInstall"] = new()
+        {
+            [LangEn] = "Install on my PC (recommended)",
+            [LangEs] = "Instalar en mi PC (recomendado)",
+        },
+        ["DlgLauncherSettingsInstallHint"] = new()
+        {
+            [LangEn] = "Leave the launcher installed with a Desktop and Start-Menu shortcut. It keeps updating itself.",
+            [LangEs] = "Deja el launcher instalado con acceso directo en el Escritorio y el Menú Inicio. Se sigue actualizando solo.",
+        },
+        ["DlgLauncherSettingsInstallTip"] = new()
+        {
+            [LangEn] = "Copies the launcher to a fixed folder so you never lose it if you move or delete this "
+                     + "file — and so 'Run in background' keeps working. You don't need this to get updates "
+                     + "(it already updates itself), but it's the tidy way to keep it.",
+            [LangEs] = "Copia el launcher a una carpeta fija para no perderlo si movés o borrás este archivo — y "
+                     + "para que 'Ejecutar en segundo plano' siga funcionando. No hace falta para actualizar "
+                     + "(ya se actualiza solo), pero es la forma prolija de tenerlo.",
+        },
+        ["DlgLauncherSettingsInstallRunInBackground"] = new()
+        {
+            [LangEn] = "Start with Windows and appear online to my friends",
+            [LangEs] = "Iniciar con Windows y aparecer conectado a mis amigos",
+        },
+        ["DlgLauncherSettingsInstallRunInBackgroundTip"] = new()
+        {
+            [LangEn] = "When you turn on the PC, the launcher starts by itself in the system tray and shows "
+                     + "you as connected to other players. You can turn this off anytime in Settings.",
+            [LangEs] = "Al encender la PC, el launcher arranca solo en la bandeja del sistema y te muestra "
+                     + "conectado a los demás jugadores. Lo podés apagar cuando quieras desde Configuración.",
+        },
+        ["DlgLauncherSettingsInstallDone"] = new()
+        {
+            [LangEn] = "Installed to {0}",
+            [LangEs] = "Instalado en {0}",
+        },
+        ["DlgLauncherSettingsInstallFailed"] = new()
+        {
+            [LangEn] = "Install failed: {0}",
+            [LangEs] = "Falló la instalación: {0}",
+        },
+        ["DlgLauncherSettingsInstallRelaunchTitle"] = new()
+        {
+            [LangEn] = "Restart from the installed copy?",
+            [LangEs] = "¿Reiniciar desde la copia instalada?",
+        },
+        ["DlgLauncherSettingsInstallRelaunchBody"] = new()
+        {
+            [LangEn] = "The launcher was installed. Restart it now from the installed location? This closes the current window and reopens it from the new path.",
+            [LangEs] = "El launcher se instaló. ¿Reiniciarlo ahora desde la ubicación instalada? Esto cierra la ventana actual y la reabre desde la nueva ruta.",
         },
         ["DlgLauncherSettingsAssetsCleared"] = new()
         {
@@ -3087,6 +3369,13 @@ public static class Strings
                        "text editor.",
             [LangEs] = "Abre el log de diagnóstico del launcher en tu editor " +
                        "de texto predeterminado.",
+        },
+        ["TooltipMenuInstallAnotherCopy"] = new()
+        {
+            [LangEn] = "Install a second, separate copy of this mod in another folder — " +
+                       "handy for keeping different versions side by side.",
+            [LangEs] = "Instala una segunda copia separada de este mod en otra carpeta — " +
+                       "útil para tener distintas versiones al mismo tiempo.",
         },
         ["BtnPlay"] = new()
         {
