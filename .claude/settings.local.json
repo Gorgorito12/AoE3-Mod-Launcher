@@ -42,7 +42,8 @@
       "Bash(Select-Object Name)",
       "WebSearch",
       "WebFetch(domain:signpath.org)",
-      "PowerShell(dotnet build *)"
+      "PowerShell(dotnet build *)",
+      "Bash(git -C \"/c/Users/Jeison/Documents/AoE3-Mod-Launcher\" status -s)"
     ]
   }
 }
