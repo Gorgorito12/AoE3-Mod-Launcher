@@ -309,6 +309,16 @@ Two cheap gates beyond a green build:
   `IsPaused` (pause flag) + `TempDirectory`, which are all the UI still uses. Don't
   reintroduce the Inno methods; do install work through `NativeInstallService`. (Its
   old companion `InstallProgressMonitor` was removed once nothing referenced it.)
+  **`ExtractPayloadAsync` flattens a single WRAPPER folder** via
+  `NativeInstallService.NormalizePayloadRoot` (internal, unit-tested `PayloadRootTests`):
+  some mods package their overlay INSIDE one folder (e.g. the zip's only top-level entry
+  is `Knights and Barbarians/`, with `data\`/`art\` under it). The overlay copy is
+  relative to the returned root, so without this the mod files land one level too deep
+  (`…\install\Knights and Barbarians\data`) and never merge over the cloned AoE3 → broken.
+  `NormalizePayloadRoot` descends while a folder has EXACTLY one subdir and NO loose files
+  (bounded 4 levels), so a normal FLAT payload (WoL/Improvement Mod ship several top-level
+  dirs) is an immediate no-op. Don't remove it — it's what makes wrapped community zips
+  installable without repackaging.
 
 - **`NativeInstallService.RemoveStaleBuildArtifacts` is now a deliberate NO-OP — the
   launcher installs the WoL payload byte-faithfully and strips NOTHING.** It used to
@@ -741,8 +751,19 @@ Two cheap gates beyond a green build:
   user-initiated), the base-game analog of WoL's "¿YA LO TENÉS?" search. Backstops
   if the scan ever picked a bad source: the existing `CountCloneableFiles`
   preflight + `InstallBaseGameMissingException` (0-file abort) + the 3-key-file
-  `data\` verify. Pinned by `AoE3DetectorTests` (clean-vs-mod predicate, non-standard
-  folder found, WoL folder never returned) + the `FindDeep` predicate overload cases.
+  `data\` verify. **`InstallAsync` ALSO reuses the durable manual AoE3 pin as a LAST
+  resort** — after both `FindAll` and `FindAllDeep` come up empty, it tries
+  `AoE3Detector.InstallationFromManualRoot(config.Aoe3ManualPath)` (returns an
+  `Installation` only when the pinned folder passes `IsCleanAoE3Folder`;
+  `ModRoot = the pin` is the clone source, correct for both the standard game-root and
+  the atypical `…\bin` layout). So a user who already pointed "Change AoE3 folder" at a
+  non-standard AoE3 doesn't have to re-find it for EVERY mod install (WoL copies +
+  community mods) — the same durable-pin learning as the stock-game detection, applied
+  to the install flow. It's a fallback (fires only when the scans found nothing), so
+  zero regression, and the same `CountCloneableFiles` preflight + 0-file abort backstop
+  it. Pinned by `AoE3DetectorTests` (clean-vs-mod predicate, non-standard
+  folder found, WoL folder never returned, `InstallationFromManualRoot` flat/bin/mod/blank)
+  + the `FindDeep` predicate overload cases.
   A machine that has ONLY a WoL (its `age3y.exe` bundled inside the marked WoL
   folder) and no separate clean AoE3 correctly finds nothing to clone — the existing
   WoL is recognized by the mod-detection path instead; this is intended, not a miss.
@@ -2078,7 +2099,44 @@ Two cheap gates beyond a green build:
   the window is focused (existing `ShowToast` rule — fine, you'd see the room appear).
   **Future:** the efficient path is a backend `lobby_created` WS push + an app-level
   persistent `/global/ws`; that needs the separate backend repo, so the poll is the
-  launcher-only MVP.
+  launcher-only MVP. **(Done — see the AppToast bullet below: `lobby_created` is now
+  pushed over `/global/ws` for an INSTANT toast; this 90 s poll stays as the fallback,
+  sharing dedup via `_knownLobbyIds` + `NotifiedRoomIds` so a room is announced once.)**
+
+- **In-app "toasts" + multiplayer invites — `Controls/AppToast.cs` + a `/global/ws`
+  invite/lobby-created protocol. A THIRD notification surface, distinct from the bell
+  (persistent history) and the OS tray balloon.** `AppToast` is a small, NON-modal,
+  auto-dismissing card that slides into the window's bottom-right and STACKS (host =
+  `ToastHost` StackPanel in `MainWindow.xaml`, spans all rows, `Background=null` so only
+  the cards catch clicks). Reuses `MpAlertOverlay`'s card look (MpSurface + two-tone rim +
+  shadow) but has no scrim, times out (~9 s), and carries optional action buttons
+  (Join/Ignore). `MainWindow.ShowAppToast(opts)` adds the card AND, when the window is
+  minimised/unfocused, ALSO fires the OS `ShowToast` (so it's seen off-window). Wired to
+  `MultiplayerTab` via the `showAppToast` callback in `MultiplayerView.Attach`.
+  **Three real-time frames over the always-on `/global/ws`** (owned by `MultiplayerTab`,
+  sent via `LobbyWebSocket.SendAsync`): (1) **invite** — right-click a player in the
+  Players panel → "Invite to my room" (`AttachInviteContextMenu`, enabled only while
+  `_session.CurrentLobbyId != null`) sends `{type:"invite", target_user_id, lobby_id}`;
+  the backend (`GlobalChatRoom.handleInvite`) VALIDATES the sender is a member of that
+  lobby, rate-limits (`globalChatInvitesPerMin`), and routes `{type:"invite", from,
+  lobbyId, roomName, modId}` to the target's one socket + acks the sender
+  `invite_sent`. The recipient's `HandleInviteFrame` shows an AppToast whose Join runs
+  the SAME `JoinByLobbyIdAsync` as the deep link. Invite errors (`invite_*`) surface as a
+  toast, not the chat composer notice. (2) **lobby_created** — POST /lobbies broadcasts it
+  (backend `announceLobbyCreated`, **skips private rooms**); `HandleLobbyCreatedFrame`
+  hands it to `MainWindow.OnNewRoomFromWs`, which SHARES the poll's dedup (`_knownLobbyIds`
+  + `NotifiedRoomIds.TryMarkRoomNotified`), gates (not my room, mod installed), shows the
+  toast (Join), and sets the same tab/subtab dots — so the WS push and the 90 s poll never
+  double-announce. (3) **invite_sent** — brief confirmation toast. **Load-bearing:** the
+  `lobby_created` dedup MUST feed `_knownLobbyIds` (so the fallback poll skips the room)
+  AND gate on `TryMarkRoomNotified`; don't split them. **Backend contract** (repo
+  `wol-launcher-lobby-node`): `GlobalChatRoom` gained `handleInvite`/`announceLobbyCreated`
+  + the `invite` dispatch case + `inviteWindowStart/inviteCount` on `AttachedSocket`;
+  `rest.ts` POST /lobbies reads the host once and calls both `announceLobbyCreated`
+  (in-app, all non-private) and the Discord webhook; `env.ts` `globalChatInvitesPerMin`
+  (default 10). Forward-compatible: an old launcher ignores the new frames; an old backend
+  answers the `invite` with `unknown_type` (swallowed). Deploy: `git pull` + `npm run
+  build` + `systemctl restart wol-lobby`.
 
 - **Feedback sounds are a tiny dependency-free layer — `Services/SoundService.cs`
   playing embedded WAVs via `SoundPlayer` — gated by one config toggle, and the

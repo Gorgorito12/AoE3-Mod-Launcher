@@ -435,7 +435,13 @@ public partial class MainWindow : Window
             // Rotate the active install copy from the create-room copy picker.
             // Multiplayer launches / fingerprints the ACTIVE copy, so choosing a
             // copy there is exactly an active-copy switch (single source of truth).
-            switchActiveCopy: installId => SwitchActiveInstallAsync(installId));
+            switchActiveCopy: installId => SwitchActiveInstallAsync(installId),
+            // Show an in-app toast (new-room / invite notifications) over any tab,
+            // with an OS tray-balloon fallback when the window isn't visible.
+            showAppToast: opts => ShowAppToast(opts),
+            // Real-time "new room" push over /global/ws — routed here so it shares
+            // the room dedup + tab/subtab dots with the 90 s fallback poll.
+            onNewRoomFromWs: OnNewRoomFromWs);
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -739,6 +745,58 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"PollNewRooms failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Real-time "new room" push from <c>/global/ws</c> (via <see cref="MultiplayerView"/>).
+    /// Shares the poll's dedup so a room is announced once: it feeds
+    /// <see cref="_knownLobbyIds"/> (so the 90 s poll skips it) and gates on
+    /// <see cref="NotificationCenter.TryMarkRoomNotified"/> (persistent). Skips my own
+    /// room + mods I don't have, then shows the in-app toast (with a Join action) and
+    /// sets the same tab/subtab dots the poll uses. Runs on the UI thread.
+    /// </summary>
+    private void OnNewRoomFromWs(string lobbyId, string title, string modId, string hostUserId, string hostLogin)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(lobbyId)) return;
+            _knownLobbyIds.Add(lobbyId);   // keep the fallback poll from re-announcing it
+
+            var me = _multiplayerSession.CurrentUser;
+            if (me != null && !string.IsNullOrEmpty(hostUserId)
+                && string.Equals(hostUserId, me.Id, StringComparison.Ordinal))
+                return;   // my own room
+            if (!IsModInstalled(modId)) return;
+
+            // Persistent dedup shared with the poll — first-seen only.
+            if (!_notifications.TryMarkRoomNotified(lobbyId)) return;
+
+            var host = string.IsNullOrWhiteSpace(hostLogin) ? "—" : hostLogin;
+            var name = string.IsNullOrWhiteSpace(title) ? "—" : title;
+            var modName = ModRegistry.Find(modId)?.DisplayName ?? modId;
+
+            ShowAppToast(new Controls.AppToast.ToastOptions(
+                "🎮",
+                Strings.Get("MpToastNewRoomTitle"),
+                Strings.Format("MpToastNewRoomBody", name, host, modName),
+                new[]
+                {
+                    new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), true, () =>
+                    {
+                        SwitchTopTab(TopTab.Multiplayer);
+                        _ = MultiplayerView?.JoinByLobbyIdAsync(lobbyId);
+                    }),
+                    new Controls.AppToast.ToastAction(Strings.Get("MpToastIgnore"), false, () => { }),
+                }));
+
+            if (_activeTopTab != TopTab.Multiplayer) SetMultiplayerTabDot(true);
+            MultiplayerView?.SetNewRoomIndicator(true);
+            Services.SoundService.PlayConnect();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"OnNewRoomFromWs failed: {ex.Message}");
         }
     }
 
@@ -2028,6 +2086,27 @@ public partial class MainWindow : Window
     /// TaskbarIcon falls back to a plain notification on systems where
     /// balloons are disabled by group policy.
     /// </summary>
+    /// <summary>
+    /// Show an in-app toast (the AppToast corner card) over any tab. When the
+    /// window is minimised or not focused — so the card wouldn't be seen — ALSO
+    /// fire the OS tray balloon (<see cref="ShowToast"/>) as a fallback. Called by
+    /// the multiplayer surface (new-room + invite notifications) via the
+    /// <c>showAppToast</c> callback wired in <see cref="MultiplayerView"/>.Attach.
+    /// </summary>
+    public void ShowAppToast(Controls.AppToast.ToastOptions opts)
+    {
+        if (opts == null) return;
+        Dispatcher.Invoke(() =>
+        {
+            Controls.AppToast.Show(ToastHost, opts);
+            // Off-window fallback: if they can't see the in-app card, mirror it to
+            // a Windows notification (respects ShowToastNotifications itself).
+            bool userIsLooking = IsVisible && WindowState != WindowState.Minimized && IsActive;
+            if (!userIsLooking)
+                ShowToast(opts.Title, opts.Body ?? "");
+        });
+    }
+
     private void ShowToast(string title, string message)
     {
         if (!_config.ShowToastNotifications) return;
@@ -8405,6 +8484,22 @@ public partial class MainWindow : Window
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"Install: deep AoE3 scan failed (non-fatal): {ex.Message}");
+            }
+        }
+
+        // Last resort: the user already pinned their AoE3 base by hand (durable
+        // config.Aoe3ManualPath — survives mod switches). Reuse it so a non-standard
+        // install the scans can't locate isn't re-hunted for every mod install. Only
+        // when nothing else was found, and only if it's a clean, cloneable AoE3 (the
+        // helper rejects mod folders / anything without age3y.exe + data\).
+        if (aoe3Installs.Count == 0)
+        {
+            var pinned = AoE3Detector.InstallationFromManualRoot(_config.Aoe3ManualPath);
+            if (pinned != null)
+            {
+                aoe3Installs = new List<AoE3Detector.Installation> { pinned };
+                DiagnosticLog.Write(
+                    $"Install: reusing manually-pinned AoE3 base '{pinned.ModRoot}'.");
             }
         }
 

@@ -140,4 +140,56 @@ public class AoE3DetectorTests : IDisposable
 
         Assert.Empty(hits);
     }
+
+    // ---- InstallationFromManualRoot: reuse the durable manual AoE3 pin as a clone source ----
+
+    [Fact]
+    public void InstallationFromManualRoot_FlatLayout_GameFolderIsRoot()
+    {
+        var dir = NewTempDir();
+        MakeCleanAoE3(dir, steamLayout: false);
+        var install = AoE3Detector.InstallationFromManualRoot(dir);
+        Assert.NotNull(install);
+        Assert.Equal(dir.TrimEnd('\\', '/'), install!.ModRoot);
+        Assert.Equal(dir.TrimEnd('\\', '/'), install.GameFolder);
+        Assert.Equal("manual", install.Source);
+    }
+
+    [Fact]
+    public void InstallationFromManualRoot_BinLayout_GameFolderIsBin()
+    {
+        var dir = NewTempDir();
+        MakeCleanAoE3(dir, steamLayout: true);   // age3y.exe in bin\, data\ at root
+        var install = AoE3Detector.InstallationFromManualRoot(dir);
+        Assert.NotNull(install);
+        Assert.Equal(dir.TrimEnd('\\', '/'), install!.ModRoot);   // clone source = root
+        Assert.Equal(Path.Combine(dir, "bin"), install.GameFolder);
+    }
+
+    [Fact]
+    public void InstallationFromManualRoot_ModFolder_ReturnsNull()
+    {
+        // A WoL folder (clean base + zulushield marker) must never be offered as a clone source.
+        var dir = NewTempDir();
+        MakeCleanAoE3(dir, steamLayout: false);
+        Directory.CreateDirectory(Path.Combine(dir, "art", "zulushield"));
+        Assert.Null(AoE3Detector.InstallationFromManualRoot(dir));
+    }
+
+    [Fact]
+    public void InstallationFromManualRoot_NoData_ReturnsNull()
+    {
+        var dir = NewTempDir();
+        File.WriteAllText(Path.Combine(dir, "age3y.exe"), "x");   // exe but no data\
+        Assert.Null(AoE3Detector.InstallationFromManualRoot(dir));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void InstallationFromManualRoot_Blank_ReturnsNull(string? root)
+    {
+        Assert.Null(AoE3Detector.InstallationFromManualRoot(root));
+    }
 }

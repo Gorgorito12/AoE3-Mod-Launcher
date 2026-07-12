@@ -66,6 +66,14 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private Func<string, Task>? _switchActiveCopy;
 
+    /// <summary>Show an in-app toast (new-room / invite popups) over any tab, with an
+    /// OS tray-balloon fallback when the window isn't visible. Set in <see cref="Attach"/>.</summary>
+    private Action<AppToast.ToastOptions>? _showAppToast;
+
+    /// <summary>A new room arrived over /global/ws (id, title, modId, hostUserId, hostLogin).
+    /// Handed to MainWindow so the room dedup + dots are shared with the 90 s fallback poll.</summary>
+    private Action<string, string, string, string, string>? _onNewRoomFromWs;
+
     private Subtab _activeSubtab = Subtab.Rooms;
     private bool _isRefreshingList;
     private bool _isRefreshingHistory;
@@ -736,7 +744,9 @@ public partial class MultiplayerTab : UserControl
         Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? launchGame = null,
         Func<ModProfile, bool>? switchActiveMod = null,
         LauncherConfig? config = null,
-        Func<string, Task>? switchActiveCopy = null)
+        Func<string, Task>? switchActiveCopy = null,
+        Action<AppToast.ToastOptions>? showAppToast = null,
+        Action<string, string, string, string, string>? onNewRoomFromWs = null)
     {
         if (_session != null)
         {
@@ -751,6 +761,8 @@ public partial class MultiplayerTab : UserControl
         _launchGame = launchGame;
         _switchActiveMod = switchActiveMod;
         _switchActiveCopy = switchActiveCopy;
+        _showAppToast = showAppToast;
+        _onNewRoomFromWs = onNewRoomFromWs;
         // Optional so old callers (and the parameterless ctor path
         // used by XAML preview) still work — null _config just means
         // the Radmin assistant features stay dormant.
@@ -3451,10 +3463,25 @@ public partial class MultiplayerTab : UserControl
                         if (e.Json.TryGetProperty("online", out var on) && on.TryGetInt32(out var n))
                             UpdateGlobalPresence(n);
                         break;
+                    case "invite":
+                        HandleInviteFrame(e.Json);
+                        break;
+                    case "invite_sent":
+                        HandleInviteSentFrame(e.Json);
+                        break;
+                    case "lobby_created":
+                        HandleLobbyCreatedFrame(e.Json);
+                        break;
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
                         DiagnosticLog.Write($"Global chat error frame: {code}");
-                        ShowGlobalChatNoticeFor(code);
+                        // Invite-flow errors are shown as a toast (the sender is usually
+                        // inside a room, not looking at the global-chat composer); other
+                        // errors keep the inline composer notice.
+                        if (code.StartsWith("invite_", StringComparison.Ordinal))
+                            HandleInviteError(code);
+                        else
+                            ShowGlobalChatNoticeFor(code);
                         break;
                 }
             }
@@ -3463,6 +3490,96 @@ public partial class MultiplayerTab : UserControl
                 DiagnosticLog.Write($"Global chat frame handling failed: {ex.Message}");
             }
         });
+
+    /// <summary>
+    /// A room invite arrived (someone invited me to their room). Show an in-app
+    /// toast with Join / Ignore. Join reuses the same path as the deep link.
+    /// </summary>
+    private void HandleInviteFrame(JsonElement json)
+    {
+        var lobbyId = json.TryGetProperty("lobbyId", out var l) ? (l.GetString() ?? "") : "";
+        if (string.IsNullOrEmpty(lobbyId)) return;
+        var roomName = json.TryGetProperty("roomName", out var rn) ? (rn.GetString() ?? "") : "";
+        var modId = json.TryGetProperty("modId", out var m) ? (m.GetString() ?? "") : "";
+        var fromLogin = "";
+        if (json.TryGetProperty("from", out var from) && from.ValueKind == JsonValueKind.Object)
+            fromLogin = from.TryGetProperty("login", out var fl) ? (fl.GetString() ?? "") : "";
+        if (string.IsNullOrWhiteSpace(fromLogin)) fromLogin = Strings.Get("MpRoomTitleGeneric");
+
+        var modName = ResolveModDisplayName(modId);
+        var body = string.IsNullOrWhiteSpace(roomName)
+            ? modName
+            : $"{roomName}  ·  {modName}";
+
+        _showAppToast?.Invoke(new AppToast.ToastOptions(
+            "📨",   // 📨
+            Strings.Format("MpInviteToastTitle", fromLogin),
+            body,
+            new[]
+            {
+                new AppToast.ToastAction(Strings.Get("MpToastJoin"), true,
+                    () => _ = JoinByLobbyIdAsync(lobbyId)),
+                new AppToast.ToastAction(Strings.Get("MpToastIgnore"), false, () => { }),
+            }));
+        Services.SoundService.PlayConnect();
+    }
+
+    /// <summary>Surface an invite-flow error (offline / rate-limited / not-in-room) as a toast.</summary>
+    private void HandleInviteError(string code)
+    {
+        var key = code switch
+        {
+            "invite_target_offline" => "MpInviteErrOffline",
+            "invite_rate_limited" => "MpInviteErrRate",
+            "invite_not_in_room" => "MpInviteErrNotInRoom",
+            _ => "MpInviteErrGeneric",
+        };
+        _showAppToast?.Invoke(new AppToast.ToastOptions(
+            "⚠", Strings.Get(key), null, System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 5000));
+    }
+
+    /// <summary>The server confirmed our invite reached the target — brief toast.</summary>
+    private void HandleInviteSentFrame(JsonElement json)
+    {
+        var login = json.TryGetProperty("login", out var l) ? (l.GetString() ?? "") : "";
+        if (string.IsNullOrWhiteSpace(login)) return;
+        _showAppToast?.Invoke(new AppToast.ToastOptions(
+            "✉",   // ✉
+            Strings.Format("MpInviteSent", login),
+            null,
+            System.Array.Empty<AppToast.ToastAction>(),
+            AutoDismissMs: 4000));
+    }
+
+    /// <summary>
+    /// A new room was created (real-time push over /global/ws). Hand it to
+    /// MainWindow, which shares the room dedup + tab/subtab dots with the 90 s
+    /// fallback poll and shows the in-app toast (with a Join action).
+    /// </summary>
+    private void HandleLobbyCreatedFrame(JsonElement json)
+    {
+        if (!json.TryGetProperty("lobby", out var lobby) || lobby.ValueKind != JsonValueKind.Object) return;
+        var id = lobby.TryGetProperty("id", out var idEl) ? (idEl.GetString() ?? "") : "";
+        if (string.IsNullOrEmpty(id)) return;
+        var title = lobby.TryGetProperty("title", out var t) ? (t.GetString() ?? "") : "";
+        var modId = lobby.TryGetProperty("modId", out var m) ? (m.GetString() ?? "") : "";
+        var hostUserId = "";
+        var hostLogin = "";
+        if (lobby.TryGetProperty("host", out var host) && host.ValueKind == JsonValueKind.Object)
+        {
+            hostUserId = host.TryGetProperty("userId", out var hu) ? (hu.GetString() ?? "") : "";
+            hostLogin = host.TryGetProperty("login", out var hl) ? (hl.GetString() ?? "") : "";
+        }
+        _onNewRoomFromWs?.Invoke(id, title, modId, hostUserId, hostLogin);
+    }
+
+    /// <summary>Resolve a mod id to its display name for toasts (falls back to the id).</summary>
+    private static string ResolveModDisplayName(string modId)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return "";
+        try { return ModRegistry.Find(modId)?.DisplayName ?? modId; }
+        catch { return modId; }
+    }
 
     private void RenderGlobalChatState(JsonElement json)
     {
@@ -3916,6 +4033,8 @@ public partial class MultiplayerTab : UserControl
                         FontSize = F("FontSizeCaption"),
                         VerticalAlignment = VerticalAlignment.Center,
                     });
+                else if (!string.IsNullOrEmpty(u.userId))
+                    AttachInviteContextMenu(row, u.userId, u.login);
                 PlayersPanel.Children.Add(row);
             }
         }
@@ -3924,6 +4043,43 @@ public partial class MultiplayerTab : UserControl
         Section("in_game", "MpPlayersInGame", "MpStatusInGame");
         Section("in_room", "MpPlayersInRoom", "MpStatusFull");
         Section("idle", "MpPlayersInLauncher", "TextSecondary");
+    }
+
+    /// <summary>
+    /// Right-click "Invite to my room" on another player's row. Enabled only while
+    /// I'm in a room (I have a lobby to invite them to) and the global socket is up.
+    /// The result (delivered / offline / rate-limited) comes back as an invite_sent
+    /// or error frame over the same socket.
+    /// </summary>
+    private void AttachInviteContextMenu(FrameworkElement row, string targetUserId, string targetLogin)
+    {
+        Brush Res(string k) => (Brush)Application.Current.FindResource(k);
+        // No app-wide ContextMenu style exists, so theme it minimally to match the
+        // dark UI instead of the default light WPF menu.
+        var menu = new ContextMenu
+        {
+            Background = Res("BgPanel"),
+            Foreground = Res("TextPrimary"),
+            BorderBrush = Res("MpDivider"),
+        };
+        var invite = new MenuItem { Header = Strings.Get("MpInviteMenuItem"), Foreground = Res("TextPrimary") };
+        void RefreshEnabled() =>
+            invite.IsEnabled = !string.IsNullOrEmpty(_session?.CurrentLobbyId) && _globalChatSocket != null;
+        RefreshEnabled();
+        invite.Click += (_, _) => SendInvite(targetUserId, targetLogin);
+        menu.Items.Add(invite);
+        menu.Opened += (_, _) => RefreshEnabled();   // in-room state may have changed
+        row.ContextMenu = menu;
+    }
+
+    /// <summary>Send a room invite for the CURRENT room to <paramref name="targetUserId"/>.</summary>
+    private void SendInvite(string targetUserId, string targetLogin)
+    {
+        var sock = _globalChatSocket;
+        var lobbyId = _session?.CurrentLobbyId;
+        if (sock == null || string.IsNullOrEmpty(lobbyId) || string.IsNullOrEmpty(targetUserId)) return;
+        DiagnosticLog.Write($"Sending room invite to '{targetLogin}' for lobby '{lobbyId}'.");
+        _ = sock.SendAsync(new { type = "invite", target_user_id = targetUserId, lobby_id = lobbyId });
     }
 
     // The room-roster "peek" popup (see who's in a room without joining). Single

@@ -2892,6 +2892,62 @@ public static class Strings
             [LangEn] = "'{0}' · {1}",
             [LangEs] = "'{0}' · {1}",
         },
+        // ---- In-app toasts: room invites + new-room push (/global/ws) ----
+        ["MpInviteMenuItem"] = new()
+        {
+            [LangEn] = "Invite to my room",
+            [LangEs] = "Invitar a mi sala",
+        },
+        ["MpInviteToastTitle"] = new()
+        {
+            [LangEn] = "{0} invited you to their room",
+            [LangEs] = "{0} te invitó a su sala",
+        },
+        ["MpInviteSent"] = new()
+        {
+            [LangEn] = "Invite sent to {0}",
+            [LangEs] = "Invitación enviada a {0}",
+        },
+        ["MpInviteErrOffline"] = new()
+        {
+            [LangEn] = "That player is offline",
+            [LangEs] = "Ese jugador está desconectado",
+        },
+        ["MpInviteErrRate"] = new()
+        {
+            [LangEn] = "Too many invites — slow down",
+            [LangEs] = "Demasiadas invitaciones — esperá un momento",
+        },
+        ["MpInviteErrNotInRoom"] = new()
+        {
+            [LangEn] = "You're not in a room",
+            [LangEs] = "No estás en una sala",
+        },
+        ["MpInviteErrGeneric"] = new()
+        {
+            [LangEn] = "Couldn't send the invite",
+            [LangEs] = "No se pudo enviar la invitación",
+        },
+        ["MpToastNewRoomTitle"] = new()
+        {
+            [LangEn] = "New room",
+            [LangEs] = "Nueva sala",
+        },
+        ["MpToastNewRoomBody"] = new()
+        {
+            [LangEn] = "{0} · {2} · by {1}",
+            [LangEs] = "{0} · {2} · por {1}",
+        },
+        ["MpToastJoin"] = new()
+        {
+            [LangEn] = "Join",
+            [LangEs] = "Unirse",
+        },
+        ["MpToastIgnore"] = new()
+        {
+            [LangEn] = "Ignore",
+            [LangEs] = "Ignorar",
+        },
         ["NotifInstalledTitle"] = new()
         {
             [LangEn] = "Installation complete",

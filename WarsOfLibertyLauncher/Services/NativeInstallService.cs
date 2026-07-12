@@ -923,8 +923,48 @@ public class NativeInstallService
             extractProgress?.Report(new ExtractProgress(done, total, bytesDone, bytesTotal));
 
             DiagnosticLog.Write($"Extraction complete: {done} entries.");
-            return extractFolder;
+            // Some mods package their payload INSIDE a single wrapper folder
+            // (e.g. "Knights and Barbarians/data/…" instead of "data/…"). The
+            // overlay copy is relative to the returned root, so without this the
+            // mod files land one level too deep (…\install\Knights and Barbarians\data)
+            // and never merge over the cloned AoE3. Descend into a lone wrapper.
+            return NormalizePayloadRoot(extractFolder);
         }, ct);
+    }
+
+    /// <summary>
+    /// Resolve the effective payload root: if <paramref name="extractedFolder"/>
+    /// contains EXACTLY one subdirectory and NO loose files, the zip wrapped its
+    /// contents in a single folder — descend into it so the overlay copies
+    /// <c>data\</c>/<c>art\</c>/… at the install root, not nested. Bounded loop
+    /// (a normal, flat payload has several top-level dirs or top-level files, so it
+    /// returns immediately — no-op for WoL/Improvement Mod). Pure + testable.
+    /// </summary>
+    internal static string NormalizePayloadRoot(string extractedFolder)
+    {
+        var current = extractedFolder;
+        for (int depth = 0; depth < 4; depth++)
+        {
+            string[] files, dirs;
+            try
+            {
+                files = Directory.GetFiles(current);
+                dirs = Directory.GetDirectories(current);
+            }
+            catch { break; }
+
+            // A lone wrapper folder = one subdir, zero loose files. Anything else
+            // (a flat payload, or a wrapper that also drops files at the root) stops.
+            if (files.Length == 0 && dirs.Length == 1)
+            {
+                DiagnosticLog.Write(
+                    $"Payload wrapped in a single folder '{Path.GetFileName(dirs[0])}' — using its contents as the root.");
+                current = dirs[0];
+                continue;
+            }
+            break;
+        }
+        return current;
     }
 
     /// <summary>

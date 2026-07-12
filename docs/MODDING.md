@@ -837,6 +837,77 @@ Typical cases that have come up on the roadmap:
 
 ---
 
+## 13. What every catalog mod gets automatically
+
+The launcher treats your mod the same way it treats the first-party ones —
+almost everything is **generic, not WoL-specific**. Two lists: what you get for
+free, and what a single `mod.json` field switches on.
+
+### Free, app-wide — you declare nothing
+
+Once your mod is in the catalog and a user installs it, it inherits all of this
+with **zero extra config**:
+
+- **Feedback sounds** — a chat blip, a notification ding, and a "someone
+  connected" pop (a global on/off in Settings).
+- **Notification bell + toasts** — "update available", "installed", "update
+  finished", and "new translation" fire for *your* mod, including a background
+  sweep of installed-but-not-active mods.
+- **Offline mode** — the mod stays playable with no internet; the update check
+  never hard-fails, and the UI renders PLAY from local state.
+- **Multiplayer** — Discord sign-in, lobbies + global chat, the Radmin VPN
+  assistant, the room-mismatch mod fingerprint (localization-invariant), the
+  Discord room webhook + `wol-launcher://join/<id>` deep link, and unranked
+  match history.
+- **Copy management** — "install another copy", switch/remove copies, the
+  "already installed?" search, all with content-based detection.
+- **Content-based install detection** — the mod is recognised by its files, not
+  its folder name, so a user can rename/move it (see `install.marker` below).
+- **Verify + Repair** — per-file integrity check and a re-overlay repair, driven
+  by the per-file hashes captured in `install-manifest.json` at install time.
+- **Diagnostics** — the "Share diagnostics" bundle (logs + game OOS/sync
+  artifacts, never the config/session token).
+- **Low-disk-space warning**, **desktop/Start-Menu shortcuts with a real
+  `.ico`**, **HiDPI/rounded-window chrome**, **EN/ES localization of the shell**,
+  and **base-AoE3 detection** (including a manually-pinned, non-standard AoE3
+  folder, reused for your install too — no need to re-find it per mod).
+
+### Switched on by one `mod.json` field
+
+- `install.marker` — a file/dir unique to your mod, needed **only** when your
+  `install.probe` file also ships in vanilla AoE3 (see §3.4 / §4). If your probe
+  is already exclusive (e.g. your own `.exe`), you don't need a marker.
+- `update.github.followLatest` — track the modder's newest stable GitHub release
+  instead of the catalog-pinned tag (§5.1).
+- `update.github.deltaPatches` — ship optional "changed-files-only" incremental
+  patches with a guaranteed full fallback (§5.1).
+- `translations.folderRepo` — let the community publish translations for your mod
+  (folder-based, with a per-language version picker).
+- `icon` / `banner` / `heroImage` / `heroImages` / `screenshots` — branding: the
+  dashboard hero (single or rotating), Workshop tiles, and a detail gallery that
+  animates GIFs (§3.2).
+
+### What stays first-party-specific (you do NOT inherit — and shouldn't)
+
+- WoL's `WolPatcher` + `UpdateInfo.xml` + `.tar.xz` pipeline and its
+  `aoe3wol.com` server, plus its `art\zulushield` marker and legacy Inno-Setup
+  registry entry — those are WoL's identity. **Use `GitHubReleases` and declare
+  your own `install.marker`.**
+- The **stock `aoe3-tad`** entry is a special *detect-only* built-in (no version
+  tracked, never installed/updated/uninstalled). Community mods are the opposite:
+  they DO carry a tracked version and a real update mechanism.
+
+### Packaging tip
+
+Package your payload **flat** — put `data\`, `art\`, `sound\`, your `.exe`, etc. at
+the **root** of the `.zip`, not inside a wrapper folder. The launcher overlays the
+zip's contents onto the cloned AoE3, so a flat layout merges correctly. As a
+convenience the launcher DOES auto-flatten a zip whose only top-level entry is a
+single folder (so `MyMod/data/…` still works), but a flat zip is the reliable shape
+and avoids surprises.
+
+---
+
 **One-paragraph summary**: your mod enters the launcher through a PR
 to the central catalog repo carrying a `mod.json` that describes
 identity, install layout and update mechanism; CI validates the JSON

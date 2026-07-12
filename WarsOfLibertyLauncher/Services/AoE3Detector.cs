@@ -509,6 +509,29 @@ public static class AoE3Detector
         catch { return false; }
     }
 
+    /// <summary>
+    /// Build an <see cref="Installation"/> from the user's durably-pinned AoE3 base
+    /// folder (<see cref="Models.LauncherConfig.Aoe3ManualPath"/>) so the INSTALL flow
+    /// can reuse a manually-confirmed, non-standard AoE3 that <see cref="FindAll"/> /
+    /// <see cref="FindAllDeep"/> can't auto-locate — instead of making the user
+    /// re-find it for every mod install. Returns null when <paramref name="root"/> is
+    /// empty or doesn't look like a clean, cloneable AoE3 (<see cref="IsCleanAoE3Folder"/>
+    /// already rejects mod folders + anything without <c>age3y.exe</c> + <c>data\</c>).
+    /// <c>ModRoot = root</c> is the clone source (correct in both the standard
+    /// game-root layout and the atypical <c>…\bin</c>-holds-everything layout);
+    /// <c>GameFolder</c> is where <c>age3y.exe</c> actually lives (flat or <c>bin\</c>).
+    /// </summary>
+    public static Installation? InstallationFromManualRoot(string? root)
+    {
+        if (string.IsNullOrWhiteSpace(root)) return null;
+        var trimmed = root.TrimEnd('\\', '/');
+        if (!IsCleanAoE3Folder(trimmed)) return null;
+        var gameFolder = File.Exists(Path.Combine(trimmed, "age3y.exe"))
+            ? trimmed
+            : Path.Combine(trimmed, "bin");
+        return new Installation(gameFolder, trimmed, "manual");
+    }
+
     /// <summary>Non-empty content markers of every known mod (built-in + catalog).</summary>
     private static IReadOnlyList<string> KnownModMarkers()
     {

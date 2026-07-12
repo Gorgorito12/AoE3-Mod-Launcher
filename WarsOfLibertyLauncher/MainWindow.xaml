@@ -1362,6 +1362,18 @@
 
         </Grid>   <!-- /Content host (root Grid.Column=1) -->
 
+        <!-- In-app toast notifications (AppToast): non-modal, stacked, auto-dismiss
+             cards in the bottom-right that float over ANY tab. Spans all rows;
+             Background is null so it only intercepts clicks on the cards themselves
+             (empty areas stay click-through to the content below). -->
+        <StackPanel x:Name="ToastHost"
+                    Grid.Row="0" Grid.RowSpan="3"
+                    VerticalAlignment="Bottom"
+                    HorizontalAlignment="Right"
+                    Margin="0,0,16,16"
+                    Background="{x:Null}"
+                    IsHitTestVisible="True"/>
+
         <!-- Hidden compatibility shim. The old layout had an "AoE3PathRow" that
              code-behind sometimes referenced; the new design folds that info
              into the game footer, so this is just a placeholder so the existing
