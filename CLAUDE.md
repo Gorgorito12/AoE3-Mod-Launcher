@@ -1955,6 +1955,46 @@ Two cheap gates beyond a green build:
   `MainWindow.CreateUserDataBackupCore`/`RestoreUserDataCore` (the gear menu
   items call the same cores).
 
+- **A mod can get an EXCLUSIVE My Games save folder via a launch-time JUNCTION
+  redirect — `Services/AoE3UserDataRedirect.cs`, gated by
+  `ModProfile.UserDataRedirect` (`install.userDataRedirect` in `mod.json`).** The
+  AoE3 engine writes to the fixed `My Games\Age of Empires 3\`. WoL / Improvement
+  Mod ship builds that already write to their OWN `My Games\<name>` folder (so they
+  need nothing — verified: those folders exist on disk next to `Age of Empires 3`).
+  But some mods (**King's Return**, `age3k.exe`) write to the SHARED
+  `Age of Empires 3` folder, mixing saves with vanilla. For those, `GameLauncher`
+  (both `Launch` and `LaunchAndWatch`, via `ApplyUserDataRedirect`) calls
+  `EnsureRedirected(profile.UserDataFolder)` right before launch — it moves the real
+  `Age of Empires 3` aside (once, to `Age of Empires 3 (AoE3 vanilla)`) and makes
+  `Age of Empires 3` a directory JUNCTION to the mod's exclusive folder — and calls
+  `EnsureDefault()` for every NON-redirect launch (vanilla / WoL / IM) to restore the
+  real folder. `App.OnStartup` also calls `EnsureDefault()` (self-heal if a prior
+  session was killed mid-play). **So the junction is only active while a redirect-mod
+  plays; anything else undoes it — no game-exit hook needed** (the dashboard `Launch`
+  is fire-and-forget). **Safety is load-bearing:** it NEVER deletes a real folder —
+  only moves it aside + creates/removes a junction, and the junction is removed with
+  `Directory.Delete(std, recursive:false)` (drops ONLY the link, never the target);
+  if an aside already exists it bails rather than clobber; every op is best-effort
+  try/caught so it can never block a launch. Junctions use `mklink /J` (no elevation).
+  **CAVEAT:** this touches the user's My Games — it's clean on a NON-OneDrive Documents
+  (junctions inside OneDrive-synced Documents are risky); the maintainer's machine is
+  physical `C:\Users\…\Documents`. Pinned by `AoE3UserDataRedirectTests` (real→junction
+  →restore preserves vanilla data + isolates the mod's; idempotent; no-vanilla case).
+  **King's Return catalog note:** KR ships as an Inno `setup.exe` (the launcher CAN'T run
+  installers — that flow was removed), so the catalog hosts the mod's overlay files
+  (the installed `mod\` folder, flat, minus `_backupfiles\`/uninstaller — ~375 MB) as a
+  **GitHubReleases** asset (`papillo12/Age-of-Empires-3-The-King-s-Return`, tag `1.0.0`).
+  It installs as `IsolatedFolder`: the launcher CLONES AoE3 (for the engine — KR ships
+  NO engine, only `age3k.exe`+`UHC.DLL`+`data\`(k-suffixed)+`art\`) and overlays KR on
+  top, detected/launched by its EXCLUSIVE probe/exe `age3k.exe` (like IM's `age3m.exe`,
+  no marker). **UNVERIFIED risk:** KR normally runs from `…\Age of Empires III\mod\` with
+  the UHC loader pointing at a separate Steam AoE3; whether `age3k.exe`/UHC works from a
+  launcher CLONE (engine in the same folder) needs a Windows smoke test — if it doesn't,
+  fall back to `DelegatedExternal` (detect+launch a user-installed copy; `launcherCanInstall`
+  = WolPatcher/GitHubReleases only, so that keeps Install/Repair off). Either way it keeps
+  `userDataRedirect:true` (KR writes to the shared `Age of Empires 3` My Games regardless
+  of install location — the folder name is engine-product-derived, not path-derived).
+
 - **The notification bell (Steam-style) is a persistent, deduped history fed by
   detection hooks — NOT a second toast pipeline.** `Services/NotificationCenter.cs`
   is the UI-free backing store (testable: `NotificationCenterTests`): owns the
@@ -3351,6 +3391,25 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   losing must NOT be able to kill everyone's game — abort is time-boxed to the
   start (a bad/desynced launch). To restrict abort to host-only later, it's a
   one-line guard in `handleCancelGame`.
+  **(b2) Natural game-exit resets the room — `game_ended` (host, NO grace window).**
+  The grace-gated `cancel_game` only reverts `in_game → open` inside 65 s AND only
+  when the user aborts; when the HOST's game process just EXITS, nothing told the
+  backend, so the room (and the Discord embed) stayed stuck **"In game"** forever —
+  the reported bug ("started a match, closed it, Discord still In game"). Fix: on
+  `OnGameExitedAsync` the HOST sends `game_ended` **only when the match wasn't
+  reported+closed** (`TryReportMatchAsync` now returns a bool — a real ≥2-player /
+  ≥3-min match still REPORTS + CLOSES the room via `POST /matches` as before; a
+  solo/short/failed report falls through). `LobbyRoom.handleGameEnded` (host-only,
+  idempotent on `startedAtMs`, **no grace check** — a host's own game ending is
+  always legitimate, and the launcher only sends it on a real process exit, not a
+  spammable button) sets `status='open'` + `startedAtMs=null` and broadcasts a
+  `game_cancelled {reason:'ended'}` **excluding the sender** (the host already left
+  the in-game phase locally) → `reflectToDiscord` maps it to status `open` →
+  Discord "Waiting" + `refreshPlayers`, and any peer still in-game returns to the
+  lobby (chat line `MpChatHostEndedMatch`). No game-exit process watch is needed
+  (the dashboard launch is fire-and-forget). Forward-compatible: an old backend
+  answers `game_ended` with `unknown_type` (swallowed → room stays as today until
+  deploy). Deploy: `git pull` + `npm run build` + `systemctl restart wol-lobby`.
   **(c) Kick.** The host can expel a member: `kick { user_id }` (host-only,
   validated in `LobbyRoom.handleKick`) sends the target a `kicked` frame then
   closes its socket — the existing `ws.on('close')` cleanup drops it from the

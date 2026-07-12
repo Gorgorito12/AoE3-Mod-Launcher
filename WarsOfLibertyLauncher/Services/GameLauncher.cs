@@ -227,6 +227,28 @@ public static class GameLauncher
     }
 
     /// <summary>
+    /// Apply the per-mod My Games redirect just before launch: a redirect-mod
+    /// (writes to the shared <c>Age of Empires 3</c> folder) gets its exclusive
+    /// folder junctioned in; anything else restores the real vanilla folder. This
+    /// runs on EVERY launch so the junction is only active while a redirect-mod
+    /// plays and is undone the moment vanilla / another mod launches. Best-effort.
+    /// </summary>
+    private static void ApplyUserDataRedirect(ModProfile profile)
+    {
+        try
+        {
+            if (profile.UserDataRedirect && !string.IsNullOrWhiteSpace(profile.UserDataFolder))
+                AoE3UserDataRedirect.EnsureRedirected(profile.UserDataFolder);
+            else
+                AoE3UserDataRedirect.EnsureDefault();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ApplyUserDataRedirect failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Launch the active mod's game. If we can't find the executable anywhere,
     /// throws so the UI can surface a friendly "please point us to your AoE3
     /// install" dialog.
@@ -251,6 +273,10 @@ public static class GameLauncher
         }
 
         DiagnosticLog.Write($"Launching game: {exePath} (profile '{profile.Id}')");
+
+        // Give a redirect-mod its exclusive My Games folder (junction); restore the
+        // default for everything else. Best-effort — never blocks the launch.
+        ApplyUserDataRedirect(profile);
 
         var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
             ? profile.GameArguments
@@ -325,6 +351,10 @@ public static class GameLauncher
             config.GameExecutable = exePath;
             config.Save();
         }
+
+        // Give a redirect-mod its exclusive My Games folder (junction); restore the
+        // default for everything else. Best-effort — never blocks the launch.
+        ApplyUserDataRedirect(profile);
 
         var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
             ? profile.GameArguments

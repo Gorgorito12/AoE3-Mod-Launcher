@@ -123,6 +123,11 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     public Task SendCancelGameAsync(string reason = "host_cancelled", CancellationToken ct = default) =>
         SendAsync(new { type = "cancel_game", reason }, ct);
 
+    /// <summary>Host tells the server its game process exited so the room reverts
+    /// from in_game → open (no grace window; the game actually ended).</summary>
+    public Task SendGameEndedAsync(CancellationToken ct = default) =>
+        SendAsync(new { type = "game_ended" }, ct);
+
     /// <summary>
     /// Report our Radmin VPN IP (26.x) so the server can put it in
     /// <c>room_state</c> / broadcast <c>member_net</c>, letting every peer

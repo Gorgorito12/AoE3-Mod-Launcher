@@ -387,6 +387,7 @@ public static class ModRegistry
             InstallMarker = m.Install.Marker ?? "",
             GameExecutable = m.Install.Executable ?? "",
             GameArguments = m.Install.Arguments ?? "",
+            UserDataRedirect = m.Install.UserDataRedirect,
             UpdateMechanism = updateMechanism,
         };
 

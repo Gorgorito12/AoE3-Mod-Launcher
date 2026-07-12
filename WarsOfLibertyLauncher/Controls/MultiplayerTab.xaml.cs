@@ -1261,9 +1261,12 @@ public partial class MultiplayerTab : UserControl
                         var reason = e.Json.TryGetProperty("reason", out var r)
                             ? (r.GetString() ?? "host_cancelled")
                             : "host_cancelled";
-                        AppendChatSystem(reason is "host_cancelled" or "aborted"
-                            ? Strings.Get("MpChatGameAborted")
-                            : Strings.Format("MpChatGameCancelledReason", reason));
+                        AppendChatSystem(reason switch
+                        {
+                            "host_cancelled" or "aborted" => Strings.Get("MpChatGameAborted"),
+                            "ended" => Strings.Get("MpChatHostEndedMatch"),
+                            _ => Strings.Format("MpChatGameCancelledReason", reason),
+                        });
                         // Kill local AoE3 if running and exit the
                         // InGame phase. We don't send a follow-up
                         // frame back — the server already cleared
@@ -4010,31 +4013,56 @@ public partial class MultiplayerTab : UserControl
             });
             PlayersPanel.Children.Add(headerRow);
 
+            // Show the per-row invite affordance only while I'm actually in a room
+            // (there's something to invite people TO).
+            bool inRoom = !string.IsNullOrEmpty(_session?.CurrentLobbyId);
+
             foreach (var u in members)
             {
-                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 1, 0, 1) };
+                // Grid: [avatar][name *][action] so the invite icon / "you" tag
+                // sits flush-right regardless of name length.
+                var row = new Grid { Margin = new Thickness(6, 1, 0, 1) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
                 var disc = BuildAvatarDisc(u.login, u.avatarUrl, 20);
                 disc.Margin = new Thickness(0, 0, 7, 0);
+                Grid.SetColumn(disc, 0);
                 row.Children.Add(disc);
-                row.Children.Add(new TextBlock
+
+                var nameText = new TextBlock
                 {
                     Text = u.login,
                     Foreground = R("TextPrimary"),
                     FontSize = F("FontSizeCaption"),
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxWidth = 200,
-                });
+                };
+                Grid.SetColumn(nameText, 1);
+                row.Children.Add(nameText);
+
                 if (IsMe(u))
-                    row.Children.Add(new TextBlock
+                {
+                    var youTag = new TextBlock
                     {
-                        Text = "  · " + Strings.Get("MpOnlinePlayersYou"),
+                        Text = "· " + Strings.Get("MpOnlinePlayersYou"),
                         Foreground = R("TextSecondary"),
                         FontSize = F("FontSizeCaption"),
                         VerticalAlignment = VerticalAlignment.Center,
-                    });
+                        Margin = new Thickness(6, 0, 4, 0),
+                    };
+                    Grid.SetColumn(youTag, 2);
+                    row.Children.Add(youTag);
+                }
                 else if (!string.IsNullOrEmpty(u.userId))
-                    AttachInviteContextMenu(row, u.userId, u.login);
+                {
+                    // Always show the invite icon (active in a room, dimmed otherwise)
+                    // — no more hidden/ugly right-click menu.
+                    var inviteBtn = BuildInviteIconButton(u.userId, u.login, enabled: inRoom);
+                    Grid.SetColumn(inviteBtn, 2);
+                    row.Children.Add(inviteBtn);
+                }
                 PlayersPanel.Children.Add(row);
             }
         }
@@ -4046,30 +4074,55 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Right-click "Invite to my room" on another player's row. Enabled only while
-    /// I'm in a room (I have a lobby to invite them to) and the global socket is up.
-    /// The result (delivered / offline / rate-limited) comes back as an invite_sent
-    /// or error frame over the same socket.
+    /// A compact, discoverable "invite" icon (person +) shown on every OTHER player's
+    /// row in the Players panel. <paramref name="enabled"/> = I'm currently in a room
+    /// (something to invite them TO): active = subtle at rest, brightens on hover,
+    /// clickable, "Invite to your room" tooltip; disabled = dimmed, no hover, not
+    /// clickable, "Join a room to invite" tooltip. Built as a Border (not a Button) to
+    /// dodge the global gold Button style. Replaced the old right-click menu (whose
+    /// default MenuItem icon gutter rendered as an ugly white box).
     /// </summary>
-    private void AttachInviteContextMenu(FrameworkElement row, string targetUserId, string targetLogin)
+    private Border BuildInviteIconButton(string targetUserId, string targetLogin, bool enabled)
     {
         Brush Res(string k) => (Brush)Application.Current.FindResource(k);
-        // No app-wide ContextMenu style exists, so theme it minimally to match the
-        // dark UI instead of the default light WPF menu.
-        var menu = new ContextMenu
+        var glyph = new TextBlock
         {
-            Background = Res("BgPanel"),
-            Foreground = Res("TextPrimary"),
-            BorderBrush = Res("MpDivider"),
+            Text = "\uE8FA",   // Segoe MDL2 AddFriend (person with +)
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 14,
+            Foreground = Res(enabled ? "MpBlue" : "TextSecondary"),
         };
-        var invite = new MenuItem { Header = Strings.Get("MpInviteMenuItem"), Foreground = Res("TextPrimary") };
-        void RefreshEnabled() =>
-            invite.IsEnabled = !string.IsNullOrEmpty(_session?.CurrentLobbyId) && _globalChatSocket != null;
-        RefreshEnabled();
-        invite.Click += (_, _) => SendInvite(targetUserId, targetLogin);
-        menu.Items.Add(invite);
-        menu.Opened += (_, _) => RefreshEnabled();   // in-room state may have changed
-        row.ContextMenu = menu;
+        var btn = new Border
+        {
+            Child = glyph,
+            Background = Res("MpSurfaceAlt"),               // visible chip (was transparent)
+            BorderBrush = Res(enabled ? "MpCardBorder" : "MpDivider"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5),
+            Padding = new Thickness(6, 3, 6, 3),
+            Margin = new Thickness(4, 0, 2, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = enabled ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
+            Opacity = enabled ? 1.0 : 0.55,                // active: crisp; disabled: muted but visible
+            ToolTip = Strings.Get(enabled ? "MpInviteTooltip" : "MpInviteTooltipDisabled"),
+        };
+        if (enabled)
+        {
+            btn.MouseEnter += (_, _) =>
+            {
+                btn.Background = Res("MpBlue");             // illuminate: solid blue + white glyph
+                btn.BorderBrush = Res("MpBlue");
+                glyph.Foreground = System.Windows.Media.Brushes.White;
+            };
+            btn.MouseLeave += (_, _) =>
+            {
+                btn.Background = Res("MpSurfaceAlt");
+                btn.BorderBrush = Res("MpCardBorder");
+                glyph.Foreground = Res("MpBlue");
+            };
+            btn.MouseLeftButtonUp += (_, _) => SendInvite(targetUserId, targetLogin);
+        }
+        return btn;
     }
 
     /// <summary>Send a room invite for the CURRENT room to <paramref name="targetUserId"/>.</summary>
@@ -5417,7 +5470,20 @@ public partial class MultiplayerTab : UserControl
 
         // Report the match FIRST — before the replay block's early return on a
         // missing user-data folder, which would otherwise skip reporting.
-        await TryReportMatchAsync(profile);
+        var roomClosedByReport = await TryReportMatchAsync(profile);
+
+        // If the match wasn't reported+closed (solo / short / failed report), the
+        // HOST tells the server the game ended so the room reverts in_game → open
+        // (and Discord flips back to "Waiting") instead of staying stuck "In game".
+        // A reported match already CLOSED the room, so skip it then.
+        if (!roomClosedByReport
+            && _isHostInCurrentRoom
+            && _session?.RoomSocket != null
+            && !string.IsNullOrEmpty(_session.CurrentLobbyId))
+        {
+            try { await _session.RoomSocket.SendGameEndedAsync(); }
+            catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.OnGameExitedAsync: SendGameEnded — {ex.Message}"); }
+        }
 
         try
         {
@@ -5449,7 +5515,10 @@ public partial class MultiplayerTab : UserControl
     /// (offline, room already GC'd, non-host) is swallowed with a log line so
     /// the post-match flow is unaffected.
     /// </summary>
-    private async Task TryReportMatchAsync(ModProfile profile)
+    /// <returns>True only when a successful report CLOSED the room; false on any
+    /// skip (not host / &lt;2 players / &lt;3 min) or failure — the caller then sends
+    /// game_ended so the room reverts to open instead of staying stuck in_game.</returns>
+    private async Task<bool> TryReportMatchAsync(ModProfile profile)
     {
         // Every skip below is LOGGED with its reason — before this, a match that
         // didn't record looked identical whether it was skipped (not host, too
@@ -5464,12 +5533,12 @@ public partial class MultiplayerTab : UserControl
         if (!_isHostInCurrentRoom)
         {
             DiagnosticLog.Write("MultiplayerTab.TryReportMatchAsync: skipped — not host of this room");
-            return;
+            return false;
         }
         if (_session?.CurrentUser == null || _computeModFingerprint == null)
         {
             DiagnosticLog.Write("MultiplayerTab.TryReportMatchAsync: skipped — no session / fingerprint hook");
-            return;
+            return false;
         }
 
         var lobbyId = _session.CurrentLobbyId;
@@ -5477,7 +5546,7 @@ public partial class MultiplayerTab : UserControl
         {
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryReportMatchAsync: skipped — lobbyId='{lobbyId}' modId='{_currentLobbyModId}'");
-            return;
+            return false;
         }
 
         // Anti-noise gates: the server rejects < 2 participants anyway, and a
@@ -5492,7 +5561,7 @@ public partial class MultiplayerTab : UserControl
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryReportMatchAsync: skipped — only {participantIds.Count} participant(s), " +
                 "need >= 2 (multiplayer match, not a solo launch)");
-            return;
+            return false;
         }
 
         var endedAt = DateTime.UtcNow;
@@ -5502,7 +5571,7 @@ public partial class MultiplayerTab : UserControl
         {
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryReportMatchAsync: skipped — duration {durationSeconds}s < {MinReportableSeconds}s");
-            return;
+            return false;
         }
 
         try
@@ -5537,6 +5606,7 @@ public partial class MultiplayerTab : UserControl
             // the lobby window is about to disappear — but the History tab
             // populating is the real confirmation; this chat line is a bonus.
             AppendChatSystem(Strings.Format("MpChatMatchRecorded", participantIds.Count));
+            return true;   // report succeeded → backend closed the room
         }
         catch (LobbyApiException apiEx)
         {
@@ -5547,12 +5617,14 @@ public partial class MultiplayerTab : UserControl
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryReportMatchAsync: report FAILED status={apiEx.Status} code={apiEx.Code} — {apiEx.Message}");
             AppendChatSystem(Strings.Format("MpChatMatchNotRecorded", apiEx.Status, apiEx.Code));
+            return false;   // report failed → room stayed open (caller sends game_ended)
         }
         catch (Exception ex)
         {
             // Offline / transient (no HTTP status). Still surface it.
             DiagnosticLog.Write($"MultiplayerTab.TryReportMatchAsync: report FAILED — {ex.Message}");
             AppendChatSystem(Strings.Format("MpChatMatchNotRecorded", 0, "offline"));
+            return false;
         }
         finally
         {

@@ -368,6 +368,18 @@ public class ModProfile
     public string UserDataFolder { get; set; } = "";
 
     /// <summary>
+    /// When true, this mod WRITES its user data to the SHARED vanilla
+    /// <c>My Games\Age of Empires 3\</c> folder (it doesn't isolate itself like
+    /// WoL / Improvement Mod, which ship builds that write to their own folder).
+    /// So to give it an exclusive save folder the launcher redirects the standard
+    /// folder to <see cref="UserDataFolder"/> with a directory junction around
+    /// launch (see <see cref="Services.AoE3UserDataRedirect"/>). Requires a
+    /// non-empty <see cref="UserDataFolder"/>. Default false — most mods either
+    /// isolate natively or share vanilla's folder on purpose.
+    /// </summary>
+    public bool UserDataRedirect { get; set; } = false;
+
+    /// <summary>
     /// True for the launcher's built-in "stock Age of Empires III" profile.
     /// The launcher only DETECTS this game on disk — it never downloads,
     /// installs, updates, or uninstalls it. The base game is the user's own

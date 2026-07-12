@@ -172,6 +172,16 @@ public class ModCatalogInstall
     public string Arguments { get; set; } = "";
 
     /// <summary>
+    /// When true, the mod writes to the SHARED vanilla <c>My Games\Age of Empires 3\</c>
+    /// folder; the launcher junction-redirects the standard folder to
+    /// <c>userDataFolder</c> around launch to give it an exclusive save folder.
+    /// Projected into <see cref="ModProfile.UserDataRedirect"/>. Requires a non-empty
+    /// top-level <c>userDataFolder</c>. Default false.
+    /// </summary>
+    [JsonPropertyName("userDataRedirect")]
+    public bool UserDataRedirect { get; set; } = false;
+
+    /// <summary>
     /// Initial-install payload URLs, agnostic of the update mechanism. Used
     /// for first-time installs where the mod ships its files as one or
     /// more archives. Multi-part archives (.zip.001 / .zip.002 / ...)

@@ -2326,6 +2326,11 @@ public static class Strings
             [LangEn] = "The match was aborted. Returning to lobby.",
             [LangEs] = "La partida fue abortada. Volviendo a la sala.",
         },
+        ["MpChatHostEndedMatch"] = new()
+        {
+            [LangEn] = "The host ended the match. Back to the lobby.",
+            [LangEs] = "El anfitrión terminó la partida. De vuelta a la sala.",
+        },
         // Abort confirmation card (within the grace window).
         ["MpConfirmAbortTitle"] = new()
         {
@@ -2897,6 +2902,16 @@ public static class Strings
         {
             [LangEn] = "Invite to my room",
             [LangEs] = "Invitar a mi sala",
+        },
+        ["MpInviteTooltip"] = new()
+        {
+            [LangEn] = "Invite to your room",
+            [LangEs] = "Invitar a tu sala",
+        },
+        ["MpInviteTooltipDisabled"] = new()
+        {
+            [LangEn] = "Join or create a room to invite someone",
+            [LangEs] = "Entrá o creá una sala para invitar",
         },
         ["MpInviteToastTitle"] = new()
         {

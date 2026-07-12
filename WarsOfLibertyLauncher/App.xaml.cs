@@ -108,6 +108,12 @@ public partial class App : System.Windows.Application
         // BEFORE anything reads config or writes the debug log (MainWindow's ctor).
         Services.AppPaths.EnsureReady();
 
+        // Self-heal the My Games redirect: if a previous session left the standard
+        // AoE3 save folder junctioned to a redirect-mod's folder (e.g. the launcher
+        // was killed while King's Return was up), restore the real vanilla folder.
+        // A redirect-mod re-applies its junction when it next launches. Best-effort.
+        try { Services.AoE3UserDataRedirect.EnsureDefault(); } catch { /* never block startup */ }
+
         // Global crash net. Before this existed, an unhandled exception killed the
         // process with ZERO in-app trace: no global handler wrote anything, the
         // debug log is truncated each launch, and there was no persistent crash
