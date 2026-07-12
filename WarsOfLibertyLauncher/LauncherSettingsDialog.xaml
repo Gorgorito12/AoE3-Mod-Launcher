@@ -257,17 +257,21 @@
                         <CheckBox x:Name="CloseOnGameCheck"/>
                         <TextBlock x:Name="CloseOnGameHint" Style="{StaticResource HintText}"/>
 
-                        <!-- Folded into the single "Run in background" toggle
-                             (StartWithWindowsCheck). Kept (collapsed) so code-behind
-                             references still compile; don't re-surface it. -->
-                        <CheckBox x:Name="MinimizeToTrayCheck" Visibility="Collapsed"/>
-                        <TextBlock x:Name="MinimizeToTrayHint" Style="{StaticResource HintText}" Visibility="Collapsed"/>
+                        <!-- Close-to-tray opt-out. Independent of the "Run in
+                             background" bundle above: this governs ONLY the X /
+                             close-button behaviour, bound to config.CloseToTray
+                             (default on). Unchecking it restores "X = quit". -->
+                        <CheckBox x:Name="MinimizeToTrayCheck"/>
+                        <TextBlock x:Name="MinimizeToTrayHint" Style="{StaticResource HintText}"/>
 
                         <CheckBox x:Name="ShowToastsCheck"/>
                         <TextBlock x:Name="ShowToastsHint" Style="{StaticResource HintText}"/>
 
                         <CheckBox x:Name="NotifyNewRoomsCheck"/>
                         <TextBlock x:Name="NotifyNewRoomsHint" Style="{StaticResource HintText}"/>
+
+                        <CheckBox x:Name="SoundsCheck"/>
+                        <TextBlock x:Name="SoundsHint" Style="{StaticResource HintText}"/>
 
                         <Border Style="{StaticResource DialogDivider}"/>
 
@@ -553,9 +557,11 @@
                         <!-- Lightweight self-install: copy the portable exe to a
                              stable per-user location + shortcuts, then relaunch.
                              Hidden as a whole when already running from the
-                             installed path. The pre-checked "run in background"
-                             box makes installing = staying connected (offered, not
-                             silent — the visible check is the AV-safe pattern). -->
+                             installed path. Whether the install also enables
+                             "run in background" (auto-start) is governed by the
+                             single GENERAL toggle (StartWithWindowsCheck) — there
+                             is deliberately NO separate checkbox here anymore, to
+                             avoid two competing controls for the same setting. -->
                         <StackPanel x:Name="SelfInstallRow">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -573,9 +579,6 @@
                                            VerticalAlignment="Center"
                                            Margin="12,0,0,0"/>
                             </Grid>
-                            <CheckBox x:Name="InstallRunInBackgroundCheck"
-                                      IsChecked="True"
-                                      Margin="0,8,0,0"/>
                         </StackPanel>
                     </StackPanel>
 

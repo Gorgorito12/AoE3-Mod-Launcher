@@ -774,20 +774,20 @@
                                  header reads as a single status line. -->
                             <StackPanel Grid.Row="0"
                                         Orientation="Horizontal"
-                                        Margin="14,10,14,8"
+                                        Margin="14,8,14,6"
                                         VerticalAlignment="Center">
                                 <TextBlock Text="💬"
-                                           FontSize="{StaticResource FontSizeBody}"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            VerticalAlignment="Center"
                                            Margin="0,0,7,0"/>
                                 <TextBlock x:Name="GlobalChatHeaderText"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="{StaticResource FontSizeBodyStrong}"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Text="·"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeBodyStrong}"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            Margin="7,0,7,0"
                                            VerticalAlignment="Center"/>
                                 <Ellipse Width="7" Height="7"
@@ -816,11 +816,11 @@
                                 </ScrollViewer>
                                 <TextBlock x:Name="GlobalChatEmptyHint"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeBody}"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            FontStyle="Italic"
                                            TextWrapping="Wrap"
                                            TextAlignment="Center"
-                                           Margin="24"
+                                           Margin="18"
                                            VerticalAlignment="Center"
                                            Visibility="Collapsed"/>
                             </Grid>
@@ -829,7 +829,7 @@
                             <Border Grid.Row="3"
                                     BorderBrush="{DynamicResource MpDivider}"
                                     BorderThickness="0,1,0,0"
-                                    Padding="10,7">
+                                    Padding="10,6">
                                 <StackPanel>
                                     <!-- Throttle / slow-mode hint: shown when the
                                          server drops a message, cleared on next keystroke. -->
@@ -847,14 +847,14 @@
                                     <Grid Grid.Column="0" Margin="0,0,8,0">
                                         <TextBox x:Name="GlobalChatInput"
                                                  MaxLength="500"
-                                                 MinHeight="34"
+                                                 MinHeight="32"
                                                  Padding="10,0,0,0"
                                                  VerticalContentAlignment="Center"
                                                  TextChanged="GlobalChatInput_TextChanged"
                                                  KeyDown="GlobalChatInput_KeyDown"/>
                                         <TextBlock x:Name="GlobalChatPlaceholder"
                                                    Foreground="{DynamicResource TextSecondary}"
-                                                   FontSize="{StaticResource FontSizeBody}"
+                                                   FontSize="{StaticResource FontSizeCaption}"
                                                    Margin="12,0,0,0"
                                                    VerticalAlignment="Center"
                                                    IsHitTestVisible="False"/>
@@ -866,12 +866,12 @@
                                             Grid.Column="1"
                                             Click="GlobalChatSendButton_Click"
                                             Style="{StaticResource MpPrimaryButton}"
-                                            Width="38"
-                                            Height="34"
+                                            Width="34"
+                                            Height="32"
                                             Padding="0">
                                         <TextBlock Text="&#xE724;"
                                                    FontFamily="Segoe MDL2 Assets"
-                                                   FontSize="15"
+                                                   FontSize="14"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
                                     </Button>
@@ -905,15 +905,15 @@
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0"
                                         Orientation="Horizontal"
-                                        Margin="14,10,14,8"
+                                        Margin="14,8,14,6"
                                         VerticalAlignment="Center">
                                 <TextBlock Text="👥"
-                                           FontSize="{StaticResource FontSizeBody}"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            VerticalAlignment="Center"
                                            Margin="0,0,7,0"/>
                                 <TextBlock x:Name="PlayersPanelTitle"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="{StaticResource FontSizeBodyStrong}"
+                                           FontSize="{StaticResource FontSizeBody}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
@@ -924,7 +924,7 @@
                             <ScrollViewer Grid.Row="2"
                                           x:Name="PlayersScroll"
                                           VerticalScrollBarVisibility="Auto"
-                                          Padding="10,6,10,6">
+                                          Padding="10,4,10,4">
                                 <StackPanel x:Name="PlayersPanel"/>
                             </ScrollViewer>
                         </Grid>

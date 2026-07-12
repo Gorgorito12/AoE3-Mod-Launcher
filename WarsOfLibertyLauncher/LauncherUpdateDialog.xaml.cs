@@ -101,6 +101,11 @@ public partial class LauncherUpdateDialog : Window
                 return;
             }
             DialogResult = true;
+            // Real exit — the updated binary is taking over. Bypass MainWindow's
+            // close-to-tray interception or this Shutdown would hide to the tray
+            // instead of quitting, and the relaunched exe would be blocked by the
+            // single-instance guard.
+            WarsOfLibertyLauncher.MainWindow.HardExitRequested = true;
             Application.Current.Shutdown();
             return;
         }

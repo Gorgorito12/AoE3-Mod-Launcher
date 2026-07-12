@@ -723,6 +723,21 @@ public class LauncherConfig
     [JsonPropertyName("gameExecutable")]
     public string GameExecutable { get; set; } = "";
 
+    /// <summary>
+    /// The AoE3 base-game FOLDER the user confirmed by hand via "Change AoE3
+    /// folder" — the root that contains <c>data\</c> (or the folder holding
+    /// <c>age3y.exe</c>). Unlike <see cref="GameExecutable"/> (a volatile launch
+    /// cache cleared on every mod switch), this is DURABLE: it survives switches
+    /// so a manually-pointed, non-standard AoE3 install (e.g.
+    /// <c>…\Microsoft Studios\Age of Empires III - Complete Collection</c>, which
+    /// <see cref="Services.AoE3Detector.FindAll"/> can't auto-locate) stays
+    /// recognized — including the detect-only stock <c>aoe3-tad</c> profile, whose
+    /// install detection resolves through it. Empty = never set manually (auto-
+    /// detection only). See <c>GameLauncher.FindAoe3InstallRoot</c>.
+    /// </summary>
+    [JsonPropertyName("aoe3ManualPath")]
+    public string Aoe3ManualPath { get; set; } = "";
+
     /// <summary>Optional command-line arguments for the game.</summary>
     [JsonPropertyName("gameArguments")]
     public string GameArguments { get; set; } = "";
@@ -777,6 +792,35 @@ public class LauncherConfig
     public bool MinimizeToTray { get; set; } = false;
 
     /// <summary>
+    /// When true (default), clicking the window's X (or Alt+F4) hides the
+    /// launcher to the system tray instead of quitting — the process keeps
+    /// running (so the user stays shown as connected) and the only way to
+    /// fully exit is the tray icon → Exit (Discord/Steam pattern). The
+    /// minimise button is unaffected (it still goes to the taskbar).
+    ///
+    /// Independent of the "Run in background" bundle (<see cref="MinimizeToTray"/>
+    /// / <see cref="StartMinimized"/> / <see cref="StartWithWindows"/>): this
+    /// governs ONLY the close-button behaviour and is toggled by its own
+    /// "Minimize to tray on close" checkbox in Launcher Settings. Default true
+    /// gives everyone close-to-tray with a one-click opt-out; turning it off
+    /// restores the conventional "X = quit". Read by
+    /// <c>MainWindow.OnClosing</c>. Adds NO antivirus signal (no registry key,
+    /// no persistence) — the AV-weighted auto-start lives in the separate
+    /// "Run in background" toggle.
+    /// </summary>
+    [JsonPropertyName("closeToTray")]
+    public bool CloseToTray { get; set; } = true;
+
+    /// <summary>
+    /// Set to true after the launcher has shown the one-time "still running in
+    /// the tray" balloon the first time <see cref="CloseToTray"/> hid the
+    /// window on close — so the onboarding hint fires exactly once and never
+    /// nags again. Written by <c>MainWindow.OnClosing</c>.
+    /// </summary>
+    [JsonPropertyName("closedToTrayHintShown")]
+    public bool ClosedToTrayHintShown { get; set; } = false;
+
+    /// <summary>
     /// When true, an AUTO-START launch (Windows login, recognised by the
     /// <c>--minimized</c> argument the Run-key registration appends) opens the
     /// launcher straight to the system tray instead of showing the window — so
@@ -811,6 +855,18 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("notifyNewRooms")]
     public bool NotifyNewRooms { get; set; } = true;
+
+    /// <summary>
+    /// When true (default), the launcher plays short feedback sounds — a chat
+    /// blip on an incoming message, a ding on a bell notification, and a pop
+    /// when someone connects (joins your room / a new room appears / a player
+    /// comes online). Independent of <see cref="ShowToastNotifications"/> and
+    /// <see cref="NotifyNewRooms"/> so a user can keep visual notifications but
+    /// silence audio. Wired to <see cref="Services.SoundService.Enabled"/> at
+    /// startup and on settings save.
+    /// </summary>
+    [JsonPropertyName("enableSounds")]
+    public bool EnableSounds { get; set; } = true;
 
     /// <summary>
     /// When true (default), the launcher runs the standard "check for

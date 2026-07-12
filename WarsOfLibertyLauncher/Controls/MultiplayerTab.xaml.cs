@@ -209,6 +209,15 @@ public partial class MultiplayerTab : UserControl
     private MatchPhase _matchPhase = MatchPhase.Lobby;
 
     /// <summary>
+    /// Set true when the host has auto-triggered the start because everyone
+    /// marked ready, and cleared on return to the lobby (<see cref="ExitInGamePhase"/>).
+    /// Guards <see cref="MaybeAutoStartOnAllReady"/> against firing twice in the
+    /// brief window between <c>SendStartAsync</c> and the <c>game_countdown</c>
+    /// echo that actually flips <see cref="_matchPhase"/> to Starting.
+    /// </summary>
+    private bool _autoStartInFlight;
+
+    /// <summary>
     /// Abort grace window (ms) AFTER AoE3 launches. Within it, ANY member can
     /// abort the match for everyone (covers a bad/desynced start while the map
     /// loads). After it, "leave" only removes yourself. Must stay ≤ the backend's
@@ -1204,10 +1213,12 @@ public partial class MultiplayerTab : UserControl
                         var durationMs = e.Json.TryGetProperty("duration_ms", out var dm)
                             && dm.ValueKind == System.Text.Json.JsonValueKind.Number
                                 ? dm.GetInt32()
-                                : 3000;
-                        // Floor at 10 s so the countdown is always long enough
-                        // to read and to cancel, whatever the server sends.
-                        durationMs = Math.Max(10000, durationMs);
+                                : 10000;
+                        // OBEY the server's duration (backend LobbyRoom.COUNTDOWN_MS) —
+                        // no launcher-side floor, so redeploying the backend to 5000
+                        // makes the countdown 5 s automatically. StartCountdown applies
+                        // its own small sanity floor. The 10000 default only covers a
+                        // malformed frame with no duration_ms (the backend always sends it).
                         StartCountdown(durationMs);
                         AppendChatSystem(Strings.Format("MpChatGameStartingIn", durationMs / 1000));
                         break;
@@ -1341,6 +1352,7 @@ public partial class MultiplayerTab : UserControl
 
         RenderRoomMembers();
         RenderRoomPanel();
+        MaybeAutoStartOnAllReady();
     }
 
     /// <summary>
@@ -1383,6 +1395,11 @@ public partial class MultiplayerTab : UserControl
         var line = JsonSerializer.Deserialize<WsChatLine>(lineJson.GetRawText());
         if (line == null) return;
         AppendChatLine(line);
+        // Live incoming lobby message → chat blip, unless it's our own. Only the
+        // live frame reaches here; ReplayChatRing (history) calls AppendChatLine
+        // directly, so replayed history stays silent.
+        if (!string.Equals(line.UserId, _session?.CurrentUser?.Id, StringComparison.Ordinal))
+            Services.SoundService.PlayChat();
     }
 
     private void HandleMemberJoined(JsonElement json)
@@ -1404,6 +1421,9 @@ public partial class MultiplayerTab : UserControl
         }
         AppendChatSystem(Strings.Format("MpChatMemberJoined", login));
         RenderRoomMembers();
+        // Someone joined your room → connect pop (never for our own id).
+        if (!string.Equals(userId, _session?.CurrentUser?.Id, StringComparison.Ordinal))
+            Services.SoundService.PlayConnect();
 
         // n2n discovery is supernode-mediated: edges find each other
         // by community, not by per-room signaling. The session's
@@ -1431,6 +1451,7 @@ public partial class MultiplayerTab : UserControl
         if (_roomMembers.TryGetValue(userId, out var entry))
             entry.Ready = ready;
         RenderRoomMembers();
+        MaybeAutoStartOnAllReady();
     }
 
     /// <summary>
@@ -3007,16 +3028,18 @@ public partial class MultiplayerTab : UserControl
         // path via the same registry the rest of the launcher uses,
         // then fall back to "any non-empty install probe file under
         // the default folder".
-        var saved = WarsOfLibertyLauncher.Models.LauncherConfig
-            .Load().GetState(profile.Id).InstallPath;
+        var cfg = WarsOfLibertyLauncher.Models.LauncherConfig.Load();
+        var saved = cfg.GetState(profile.Id).InstallPath;
         if (!string.IsNullOrEmpty(saved)) return saved;
 
         // The stock Age of Empires III profile is never "installed" through
-        // the launcher, so it has no saved path. Resolve it from the detected
-        // AoE3 install on disk so it still shows up as host-able / join-able
-        // and can be fingerprinted for the version-parity check.
+        // the launcher, so it has no saved path. Resolve it CONFIG-AWARE from the
+        // detected AoE3 install (honours a manually-pointed / non-standard folder
+        // via config.GameExecutable + the durable config.Aoe3ManualPath, which the
+        // bare AoE3Detector.FindInstallRoot() can't see) so it still shows up as
+        // host-able / join-able and can be fingerprinted for the version-parity check.
         if (profile.IsStockGame)
-            return AoE3Detector.FindInstallRoot();
+            return GameLauncher.FindAoe3InstallRoot(cfg);
 
         return null;
     }
@@ -3412,7 +3435,16 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "chat":
                         if (e.Json.TryGetProperty("line", out var line))
+                        {
                             AppendGlobalChatLine(line, scroll: true);
+                            // Live incoming message → chat blip, unless it's our own.
+                            // (History is replayed via RenderGlobalChatState, which
+                            // never reaches this frame handler, so it stays silent.)
+                            var lineUserId = line.TryGetProperty("userId", out var luid)
+                                ? (luid.GetString() ?? "") : "";
+                            if (!string.Equals(lineUserId, _session?.CurrentUser?.Id, StringComparison.Ordinal))
+                                Services.SoundService.PlayChat();
+                        }
                         break;
                     case "presence":
                         ParseOnlineUsers(e.Json);
@@ -3463,6 +3495,8 @@ public partial class MultiplayerTab : UserControl
         if (frame.TryGetProperty("onlineUsers", out var arr) && arr.ValueKind == JsonValueKind.Array)
         {
             _globalOnlineUsers.Clear();
+            var myId = _session?.CurrentUser?.Id;
+            bool playedConnect = false;
             foreach (var u in arr.EnumerateArray())
             {
                 var userId = u.TryGetProperty("userId", out var idEl) ? (idEl.GetString() ?? "") : "";
@@ -3470,7 +3504,25 @@ public partial class MultiplayerTab : UserControl
                 var avatarUrl = u.TryGetProperty("avatarUrl", out var avEl) ? avEl.GetString() : null;
                 var status = u.TryGetProperty("status", out var stEl) ? (stEl.GetString() ?? "idle") : "idle";
                 _globalOnlineUsers.Add((userId, login, avatarUrl, status));
+
+                // A genuinely new arrival (after the baseline, not us) pops once.
+                if (_presenceBaselineSeeded
+                    && !string.IsNullOrEmpty(userId)
+                    && !_presenceSeenIds.Contains(userId)
+                    && !string.Equals(userId, myId, StringComparison.Ordinal)
+                    && !playedConnect)
+                {
+                    Services.SoundService.PlayConnect();
+                    playedConnect = true;   // one pop per frame; throttle covers the rest
+                }
             }
+
+            // Refresh the seen-set to this frame's roster; the first frame just
+            // seeds the baseline silently.
+            _presenceSeenIds.Clear();
+            foreach (var user in _globalOnlineUsers)
+                if (!string.IsNullOrEmpty(user.userId)) _presenceSeenIds.Add(user.userId);
+            _presenceBaselineSeeded = true;
         }
         RenderPlayersPanel();
     }
@@ -3512,15 +3564,15 @@ public partial class MultiplayerTab : UserControl
         var bubble = new Border
         {
             Background = bubbleBg,
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(9, 5, 9, 6),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8, 4, 8, 5),
             HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(0, sameAuthor ? 0 : 3, 0, 0),
+            Margin = new Thickness(0, sameAuthor ? 0 : 2, 0, 0),
             Child = new TextBlock
             {
                 Text = body,
                 Foreground = textPrimary,
-                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 TextWrapping = TextWrapping.Wrap,
             },
         };
@@ -3528,9 +3580,9 @@ public partial class MultiplayerTab : UserControl
         var grid = new Grid
         {
             // Tight gap for a continuation, a clearer gap when the author changes.
-            Margin = new Thickness(0, sameAuthor ? 1 : 7, 0, 0),
+            Margin = new Thickness(0, sameAuthor ? 1 : 5, 0, 0),
         };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         if (sameAuthor)
@@ -3550,13 +3602,13 @@ public partial class MultiplayerTab : UserControl
                 Text = Monogram(login),
                 Foreground = textSecondary,
                 FontWeight = FontWeights.Bold,
-                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             });
             if (!string.IsNullOrEmpty(avatarUrl))
             {
-                var photo = new System.Windows.Shapes.Ellipse { Width = 26, Height = 26 };
+                var photo = new System.Windows.Shapes.Ellipse { Width = 24, Height = 24 };
                 try
                 {
                     photo.Fill = new ImageBrush(
@@ -3570,9 +3622,9 @@ public partial class MultiplayerTab : UserControl
             }
             var avatar = new Border
             {
-                Width = 26,
-                Height = 26,
-                CornerRadius = new CornerRadius(13),
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
                 Background = bubbleBg,
                 VerticalAlignment = VerticalAlignment.Top,
                 Child = avatarInner,
@@ -3589,7 +3641,7 @@ public partial class MultiplayerTab : UserControl
                 Text = string.IsNullOrWhiteSpace(login) ? "—" : login,
                 Foreground = textPrimary,
                 FontWeight = FontWeights.SemiBold,
-                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 VerticalAlignment = VerticalAlignment.Center,
             });
             if (atMs > 0)
@@ -3767,6 +3819,14 @@ public partial class MultiplayerTab : UserControl
     // Status: "in_game" / "in_room" / "idle". Rendered by RenderPlayersPanel.
     private readonly List<(string userId, string login, string? avatarUrl, string status)> _globalOnlineUsers = new();
 
+    // Presence "someone came online" sound: the set of userIds seen in the last
+    // presence frame + a one-time baseline flag. The FIRST frame seeds the set
+    // silently (no burst of pops when we first connect and receive the whole
+    // roster); afterwards a userId that's genuinely new (and not our own) plays
+    // the connect sound. SoundService's own Connect throttle smooths clusters.
+    private readonly HashSet<string> _presenceSeenIds = new(StringComparer.Ordinal);
+    private bool _presenceBaselineSeeded;
+
     private void UpdateTopBarCounts()
     {
         int players = _lastGlobalOnline ?? _lastQuotaPlayers;
@@ -3800,7 +3860,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = Strings.Get("MpOnlinePlayersEmpty"),
                 Foreground = R("TextSecondary"),
-                FontSize = F("FontSizeBody"),
+                FontSize = F("FontSizeCaption"),
                 Margin = new Thickness(4, 6, 0, 0),
             });
             return;
@@ -3817,7 +3877,7 @@ public partial class MultiplayerTab : UserControl
         {
             var members = _globalOnlineUsers.Where(u => u.status == statusKey).ToList();
             // Category header: a status dot + "<label> · N" (always shown).
-            var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 3) };
+            var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 2) };
             headerRow.Children.Add(new System.Windows.Shapes.Ellipse
             {
                 Width = 7, Height = 7, Fill = R(dotBrushKey),
@@ -3836,14 +3896,14 @@ public partial class MultiplayerTab : UserControl
             foreach (var u in members)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 1, 0, 1) };
-                var disc = BuildAvatarDisc(u.login, u.avatarUrl, 22);
+                var disc = BuildAvatarDisc(u.login, u.avatarUrl, 20);
                 disc.Margin = new Thickness(0, 0, 7, 0);
                 row.Children.Add(disc);
                 row.Children.Add(new TextBlock
                 {
                     Text = u.login,
                     Foreground = R("TextPrimary"),
-                    FontSize = F("FontSizeBody"),
+                    FontSize = F("FontSizeCaption"),
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     MaxWidth = 200,
@@ -4564,7 +4624,7 @@ public partial class MultiplayerTab : UserControl
             // disk instead so stock rooms aren't greyed out or blocked at join.
             var profile = ModRegistry.Find(modId);
             if (profile is { IsStockGame: true })
-                return !string.IsNullOrEmpty(AoE3Detector.FindInstallRoot());
+                return !string.IsNullOrEmpty(GameLauncher.FindAoe3InstallRoot(cfg));
 
             return false;
         }
@@ -4829,6 +4889,8 @@ public partial class MultiplayerTab : UserControl
         if (_roomMembers.TryGetValue(meId, out var entry))
             entry.Ready = ready;
         RenderRoomMembers();
+        // If I'm the host and this readied me up as the last one, auto-start.
+        MaybeAutoStartOnAllReady();
 
         if (_session.RoomSocket == null)
         {
@@ -4853,22 +4915,24 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        // Host-side semantics:
-        //   1. Tell the Worker to start the game. The Worker will
-        //      broadcast `game_countdown` back to every member,
-        //      including us. The countdown handler in OnRoomFrame
-        //      runs the local 3-second timer and launches AoE3 at
-        //      the end — same path for host AND joiners, so the
-        //      pre-game UX is symmetric.
-        //   2. If the WS is dead (rare — tunnel idle drop, network
-        //      blink) we won't get a server echo back. After a
-        //      short grace window we start the countdown locally so
-        //      the host can still launch a solo session for testing.
-        //
-        // This replaces the older "launch AoE3 immediately and just
-        // signal peers" path, which made the host bypass the
-        // 3-second countdown entirely (countdown overlay never
-        // showed, AoE3 spawned on Start press instantly).
+        await BeginHostStart();
+    }
+
+    /// <summary>
+    /// Host-side "start the game" flow, shared by the manual Start button and
+    /// the auto-start-when-all-ready path (<see cref="MaybeAutoStartOnAllReady"/>).
+    /// Semantics:
+    ///   1. Tell the Worker to start. It broadcasts `game_countdown` back to
+    ///      every member (host + joiners), whose handler runs the local
+    ///      countdown timer and launches AoE3 at 0 — symmetric pre-game UX.
+    ///   2. If the WS is dead (tunnel idle drop, network blink) we won't get an
+    ///      echo, so after a short grace window we start the countdown locally
+    ///      so a solo host can still launch. The countdown handler is a no-op
+    ///      once phase is already Starting, so a late server echo can't double.
+    /// </summary>
+    private async Task BeginHostStart()
+    {
+        if (_session == null) return;
         AppendChatSystem(Strings.Get("MpChatStartingGame"));
 
         if (_session.RoomSocket != null)
@@ -4876,13 +4940,6 @@ public partial class MultiplayerTab : UserControl
             try
             {
                 await _session.RoomSocket.SendStartAsync();
-                // Grace fallback: if the server's game_countdown
-                // hasn't landed in 2 s (e.g. WS dropped right after
-                // our send), kick off a local countdown so the host
-                // isn't left frozen with nothing happening. The
-                // countdown handler is idempotent — if the server
-                // frame still arrives later, the duplicate
-                // StartCountdown is a no-op (phase already Starting).
                 _ = Dispatcher.InvokeAsync(async () =>
                 {
                     await Task.Delay(2000);
@@ -4909,6 +4966,28 @@ public partial class MultiplayerTab : UserControl
         // local countdown so the host can launch solo. Peers won't
         // hear about it but a single-player test session works.
         StartCountdown(10000);
+    }
+
+    /// <summary>
+    /// Auto-start the countdown when EVERY member in the room (host included) is
+    /// marked ready — only the host triggers it (so a single start), only from
+    /// the Lobby phase, and only with ≥2 members (a solo host readying up must
+    /// not launch). Reuses <see cref="BeginHostStart"/>, so the manual Start
+    /// button still works and the two paths share one flow. Guarded by
+    /// <see cref="_autoStartInFlight"/> so it fires once per ready-up.
+    /// </summary>
+    private void MaybeAutoStartOnAllReady()
+    {
+        if (!_isHostInCurrentRoom) return;          // only the host triggers the start
+        if (_matchPhase != MatchPhase.Lobby) return; // not during countdown / in a match
+        if (_autoStartInFlight) return;              // already triggered this ready-up
+        if (_roomMembers.Count < 2) return;          // don't auto-launch a solo room
+        foreach (var m in _roomMembers.Values)
+            if (!m.Ready) return;                    // everyone (host too) must be ready
+
+        _autoStartInFlight = true;
+        AppendChatSystem(Strings.Get("MpChatAutoStartAllReady"));
+        _ = BeginHostStart();
     }
 
     private async void LeaveRoomButton_Click(object sender, RoutedEventArgs e)
@@ -5676,6 +5755,9 @@ public partial class MultiplayerTab : UserControl
         _inGameTickTimer?.Stop();
         _inGameTickTimer = null;
         CancelLocalCountdownIfRunning();
+        // Allow the auto-start to fire again for the next ready-up (e.g. after a
+        // cancelled countdown or a returned-from-match room).
+        _autoStartInFlight = false;
         ApplyMatchPhaseUi();
     }
 

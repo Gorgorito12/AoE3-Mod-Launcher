@@ -1012,6 +1012,24 @@ public class UpdateService
             }
         }
 
+        // 2b. Stock game (aoe3-tad) — detect-only, no saved InstallPath. Resolve
+        //     the base AoE3 root CONFIG-AWARE so a manually-pointed / non-standard
+        //     install is recognized (FindAll alone misses e.g. "Microsoft Studios\
+        //     …Complete Collection" and never reads config.GameExecutable /
+        //     Aoe3ManualPath). We do NOT persist it into state.InstallPath — the
+        //     stock game deliberately keeps no saved path (uninstall safety); it's
+        //     resolved fresh each check.
+        if (_profile.IsStockGame)
+        {
+            var stockRoot = GameLauncher.FindAoe3InstallRoot(_config);
+            if (!string.IsNullOrEmpty(stockRoot))
+            {
+                DiagnosticLog.Write(
+                    $"Resolved stock game '{_profile.Id}' base root: {stockRoot}");
+                return stockRoot.TrimEnd('\\', '/');
+            }
+        }
+
         // 3. Disk scan — strategy depends on whether the mod lives in its
         //    own folder or on top of AoE3.
         var aoe3Installs = AoE3Detector.FindAll();

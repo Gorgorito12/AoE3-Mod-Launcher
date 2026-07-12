@@ -194,7 +194,12 @@ Two cheap gates beyond a green build:
   "simplify" `DetectServiceRunning` back to adapter-only, and don't gate green on the
   stale membership parser. (`GetAdapterBytes`, the in-match traffic meter, stays
   adapter-only on purpose — it measures real bytes, and the app is in the tray during
-  a match.) Pinned by `RadminPowerStateTests`. The launcher is
+  a match.) Pinned by `RadminPowerStateTests`. **The create-room dialog
+  (`CreateLobbyDialog`) surfaces a NON-BLOCKING amber warning (`RadminWarning`,
+  `MpCreateDialogRadminWarning`) when `RadminVpnService.GetStatus().IsServiceRunning`
+  is false at open** — the host can still create the room (peers just can't join until
+  Radmin is on); it never disables Create and a probe failure just hides the warning.
+  The launcher is
   the *meta layer* (sign-in, lobbies, chat, mod-hash gating) over a **self-hosted
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
   Worker. Sign-in is **Discord OAuth** (a state flow shaped like device flow),
@@ -1622,15 +1627,48 @@ Two cheap gates beyond a green build:
   `MenuRepairInstall_Click` / `MenuVerifyFiles_Click`) early-return; and
   `ModPropertiesDialog` hides the Maintenance + Danger Zone sections.
   **Don't remove these guards.** Detection: because the launcher never wrote a
-  saved `InstallPath` for it, multiplayer host/join (`MultiplayerTab.GetInstallPath`
-  / `IsModInstalledLocally`) and the mod-fingerprint compute fall back to
-  `AoE3Detector.FindInstallRoot()` (first detected AoE3 root containing `data\`);
-  `ModHashService` then fingerprints the same TAD data files
-  (`protoy/techtreey/stringtabley.xml`), so two stock players on the same game
-  version match and can share a lobby. The host launch appends
-  `OverrideAddress="<ip>"` exactly like the mods. Like WoL, the entry is mirrored in
-  the catalog repo (`mods/aoe3-tad/mod.json`) for the public listing, but the
-  built-in **shadows** it at runtime (built-in wins on id collision).
+  saved `InstallPath` for it, the stock game's install is resolved fresh each check
+  by **`GameLauncher.FindAoe3InstallRoot(config)` — CONFIG-AWARE, not the bare
+  `AoE3Detector.FindInstallRoot()`** — used by `UpdateService.ResolveInstallPath`'s
+  stock branch (dashboard), `MainWindow.IsModInstalled`, and the multiplayer
+  host/join + fingerprint callbacks. **Why config-aware is load-bearing (a real
+  bug):** `AoE3Detector.FindInstallRoot()`/`FindAll()` only cover known folder-name
+  variants (Steam/GOG/"Microsoft Games") and **never read `config.GameExecutable`**,
+  so a non-standard install like
+  `…\Microsoft Studios\Age of Empires III - Complete Collection` — even after the
+  user pointed the "Change AoE3 folder" picker straight at its `age3y.exe` — read as
+  "AoE3 not installed" for `aoe3-tad` (while the *general* "AoE3 found" badge, which
+  DID go through `GameLauncher.FindAoe3Install`, worked — the two detections
+  disagreed). `FindAoe3InstallRoot` derives the `data\`-containing root
+  (`GameLauncher.DeriveAoe3RootFromExe`, pure + unit-tested `GameLauncherRootTests`:
+  parent-of-`bin\` else the exe folder, whichever has `data\`) from
+  `FindAoe3Install(config)`, which consults `config.GameExecutable` **and the durable
+  `config.Aoe3ManualPath`** and every `FindAll` pass, falling back to the bare
+  auto-scan. **`config.Aoe3ManualPath` is a SEPARATE durable field on purpose:**
+  `config.GameExecutable` is a volatile launch cache **cleared on every mod switch**
+  (`MainWindow` line ~1325, so the wrong game can't launch after a switch), so
+  relying on it alone loses a manually-pointed non-standard AoE3 the moment you
+  switch mods and back. The manual picker (`BrowseAoE3Button_Click`) writes BOTH:
+  `GameExecutable` (volatile) and `Aoe3ManualPath` (the derived root, never cleared),
+  and `GameLauncher.EnumerateCandidates` yields `Aoe3ManualPath\age3y.exe` +
+  `\bin\age3y.exe` so the general finder survives switches too. **That candidate is
+  GATED on `modInstallPath` being empty — it's a BASE-game resolver, NEVER for a mod
+  launch.** `Aoe3ManualPath` is the *base* AoE3, which also ships `age3y.exe`; WoL is
+  an isolated clone with its OWN `age3y.exe` and launches with an empty
+  `GameExecutable` (relying on the walk-up from `modInstallPath`, step 2), so if the
+  base path were preferred over the mod's own folder, PLAY would launch **vanilla AoE3
+  instead of the mod** (the same filename-match hijack the `GameExecutable`
+  clear-on-switch guards against). The stock game + the general `FindAoe3Install` badge
+  both call with `modInstallPath: null`, so they still resolve the manual base; any mod
+  launch passes its own folder and the base candidate is skipped. Pinned by
+  `GameLauncherFindTests`. **The stock game still gets NO saved `ModState.InstallPath`**
+  (resolved read-time only — preserving the uninstall-safety invariant above; don't
+  "fix" detection by persisting a stock InstallPath). `ModHashService` then
+  fingerprints the same TAD data files (`protoy/techtreey/stringtabley.xml`), so two
+  stock players on the same game version match and can share a lobby. The host launch
+  appends `OverrideAddress="<ip>"` exactly like the mods. Like WoL, the entry is
+  mirrored in the catalog repo (`mods/aoe3-tad/mod.json`) for the public listing, but
+  the built-in **shadows** it at runtime (built-in wins on id collision).
 
 - **Mod icons come from two different places — don't assume the catalog.**
   Community mods and the stock game (`aoe3-tad`) get their icon from the
@@ -2023,6 +2061,40 @@ Two cheap gates beyond a green build:
   **Future:** the efficient path is a backend `lobby_created` WS push + an app-level
   persistent `/global/ws`; that needs the separate backend repo, so the poll is the
   launcher-only MVP.
+
+- **Feedback sounds are a tiny dependency-free layer — `Services/SoundService.cs`
+  playing embedded WAVs via `SoundPlayer` — gated by one config toggle, and the
+  "don't sound on history / on my own message" rules are load-bearing.** Three
+  short synthesized WAVs (`Assets/Sounds/{chat,notify,connect}.wav`, shipped as
+  `<Resource>` next to the icons) map to three categories: **Chat** ("blip"),
+  **Notification** ("ding"), **Connect** ("pop", shared). `SoundService` is
+  static/UI-free: caches each WAV's bytes once (`Application.GetResourceStream`),
+  and each `Play` spins a FRESH `SoundPlayer` over a new `MemoryStream` so sounds
+  overlap and any thread can call it (no `MediaPlayer` — it needs a UI-thread
+  Dispatcher + first-play latency; no NAudio). Every play is best-effort
+  try/caught (audio must never kill the app), no-op when `!Enabled`, and
+  **throttled per category** via `Environment.TickCount64` (Chat/Notify 300 ms,
+  Connect 900 ms — presence altas cluster). `Enabled` is wired to
+  `LauncherConfig.EnableSounds` (default true, independent of
+  `ShowToastNotifications`/`NotifyNewRooms`) at MainWindow ctor startup + re-applied
+  on `LauncherSettingsDialog` save (same pattern as `MultiplayerTelemetry.Enabled`);
+  the toggle is the "Sounds" checkbox in Settings (`DlgSettingsSounds*` strings).
+  **Event wiring (load-bearing rules):** (1) **Notification** — `PlayNotification`
+  on `NotificationCenter.ItemAdded` (the single add path, already deduped), NOT
+  gated on the toast's "user is looking" rule so it plays in-window too. (2)
+  **Chat** — `PlayChat` only in the LIVE frame handlers (global `OnGlobalChatFrame`
+  `case "chat"`, lobby `HandleChat`), NEVER inside `AppendGlobalChatLine` /
+  `AppendChatLine` / `ReplayChatRing` / `RenderGlobalChatState` (those replay
+  HISTORY on join and must stay silent), and skipped when the line's `userId` ==
+  `_session.CurrentUser.Id` (no sound for your own message). (3) **Connect** —
+  `PlayConnect` on `HandleMemberJoined` (someone joins your room, not you), in
+  `MainWindow.PollNewRoomsAsync` (a new room appears), and in `ParseOnlineUsers`
+  for a genuinely-new presence `userId`. The presence path is the noisy one:
+  `_presenceSeenIds` + `_presenceBaselineSeeded` seed a SILENT baseline on the
+  first frame (so connecting and receiving the whole roster doesn't machine-gun
+  pops), then one pop per frame for a new non-self id (the Connect throttle
+  smooths the rest). Don't move the chat sound into the shared append helpers, and
+  don't drop the presence baseline seed — both re-introduce a sound flood.
 
 - **The BACKEND announces rooms to Discord CHANNEL(s) via webhook, with LIVE
   message editing — separate from the in-app bell above, and launcher-
@@ -2500,8 +2572,10 @@ Two cheap gates beyond a green build:
   arg, not the config.** The single `StartWithWindowsCheck` in Launcher Settings
   (relabelled "Run in background" / "Ejecutar en segundo plano") drives all three
   config flags together on save: `StartWithWindows` + `MinimizeToTray` +
-  `StartMinimized` (the standalone MinimizeToTray checkbox is collapsed in XAML, kept
-  only for compile parity). `StartupRegistrationService.Apply(enabled, startMinimized)`
+  `StartMinimized`. **(The old standalone MinimizeToTray checkbox is NO LONGER
+  collapsed — it was re-surfaced and rewired to the independent `CloseToTray` flag;
+  see the close-to-tray bullet below. It is NOT part of this bundle anymore.)**
+  `StartupRegistrationService.Apply(enabled, startMinimized)`
   appends **`--minimized`** to the HKCU Run-key command when `startMinimized` — so
   the **Windows-login** launch opens to the tray, while a **manual double-click**
   (no arg) still shows the window. `App.OnStartup` parses `--minimized` into
@@ -2511,6 +2585,33 @@ Two cheap gates beyond a green build:
   Don't split the toggle back into separate checkboxes (the user asked for one), and
   keep `--minimized` on the registration side (not a config field) so manual launches
   aren't affected.
+
+- **Closing the window (X / Alt+F4) hides the launcher to the tray by default —
+  governed by `LauncherConfig.CloseToTray` (default TRUE), with a one-click opt-out —
+  and EVERY intentional `Application.Current.Shutdown()` MUST set the static
+  `MainWindow.HardExitRequested = true` first, or it hides instead of quitting.**
+  `MainWindow.OnClosing` intercepts a bare user close when `!HardExitRequested &&
+  _config.CloseToTray` → `e.Cancel = true; HideToTray()` + a ONE-TIME onboarding
+  balloon (`MaybeShowClosedToTrayHint`, guarded by `ClosedToTrayHintShown`, fires the
+  `TrayClosedHint*` balloon directly regardless of `ShowToastNotifications`). The tray
+  icon's → **Exit** (`RequestHardExit`) is the way to fully quit; the minimize button
+  is untouched (it never hits `OnClosing`, still goes to the taskbar). **`HardExitRequested`
+  is STATIC on purpose** because two real-exit paths live OUTSIDE MainWindow —
+  `LauncherUpdateDialog` (self-update relaunch) and `SelfInstallService` (self-install
+  relaunch) — and must signal a hard exit before their `Shutdown()`; without it the
+  relaunch would hide the old instance to the tray and the new copy would hang on the
+  single-instance mutex. The invariant "set `HardExitRequested` before any intentional
+  `Shutdown()`" covers all six real-exit sites: tray Exit + game-start-close (via
+  `RequestHardExit`), brand-menu Exit, the two elevated relaunches (install/update),
+  self-update, self-install. (`App.OnStartup`'s second-instance `Shutdown()` is exempt —
+  it runs before a MainWindow exists.) `CloseToTray` is **INDEPENDENT of the "Run in
+  background" bundle** (it adds NO registry/persistence, so no new AV signal) and is
+  toggled by its own re-surfaced "Minimize to tray on close" checkbox
+  (`MinimizeToTrayCheck`, wired to `_config.CloseToTray` in `LauncherSettingsDialog`
+  load/save — NOT to `MinimizeToTray`); `MinimizeToTray` now only feeds the bundle +
+  `UpdateTrayIconVisibility` keepResident (which also ORs in `CloseToTray`). Don't
+  re-collapse the checkbox, don't fold `CloseToTray` back into the run-in-background
+  toggle, and don't add a `Shutdown()` without the hard-exit flag.
 
 - **The portable single-file exe can self-install to a stable location —
   `Services/SelfInstallService.cs`, opt-in, NOT a return to Inno Setup.** The launcher
@@ -2527,19 +2628,20 @@ Two cheap gates beyond a green build:
   the installed path. Exposed via a "Install on this PC" button in Launcher Settings →
   Maintenance, hidden when already `IsInstalled()`. Don't reintroduce an installer
   toolchain — this is the deliberate lightweight alternative.
-  **Install OFFERS "run in background" with a PRE-CHECKED box (never silent opt-out).**
-  Next to the install button sits `InstallRunInBackgroundCheck` (checked by default). When
-  kept, the install handler enables the three background flags + `_config.Save()` + registers
-  auto-start — and MUST pass `StartupRegistrationService.Apply(..., exePathOverride:
-  SelfInstallService.CanonicalExe)` because it still runs from the PORTABLE exe, so
-  `Environment.ProcessPath` (the default) would register the wrong path. The installed
-  instance reads the same `%LocalAppData%` config after relaunch, so the Settings toggle
-  reads checked and its own save (using ProcessPath = the installed exe) stays consistent.
-  **Why offered-and-visible, not automatic:** silently adding a Run-key persistence entry
-  is the pattern AV behavioural heuristics score highest **while the binary is self-signed**
-  (untrusted cert + persistence + background sockets ≈ backdoor profile); a user-visible,
-  pre-checked box is the normal, AV-safe pattern (Steam/Discord). The durable fix for the
-  whole class is the SignPath trusted signature. Don't turn this into a silent opt-out.
+  **Whether the install ALSO enables "run in background" (auto-start) is governed by the
+  SINGLE GENERAL toggle `StartWithWindowsCheck`, NOT a separate install-time checkbox.**
+  There USED to be a second, pre-checked `InstallRunInBackgroundCheck` next to the install
+  button — it was REMOVED because it duplicated / contradicted the GENERAL "Ejecutar en
+  segundo plano" toggle (two competing controls for the same setting, shown in disagreement).
+  Now `SelfInstallButton_Click` reads `StartWithWindowsCheck.IsChecked`: if on, it enables
+  the three background flags + `_config.Save()` + registers auto-start — and MUST pass
+  `StartupRegistrationService.Apply(..., exePathOverride: SelfInstallService.CanonicalExe)`
+  because it still runs from the PORTABLE exe, so `Environment.ProcessPath` (the default)
+  would register the wrong path. If the toggle is off, the install registers NOTHING (no
+  Run-key). **AV note:** this is still AV-safe (arguably safer) — background/auto-start is
+  never silent, it requires the user's explicit, single, visible GENERAL toggle (default
+  OFF = no Run-key persistence at all). The durable fix for the whole self-signed-binary AV
+  class is the SignPath trusted signature. Don't re-add a second run-in-background checkbox.
 
 - **Global chat is a process-wide WebSocket room — separate from the per-lobby
   chat, and the launcher's first real server-push channel.** The Multiplayer
@@ -3106,12 +3208,37 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   the `InGame*` x:Names are preserved so `RefreshInGamePanel` needs no
   change. Don't move it back out to a top-level full-content cover — that
   re-hides the chat and breaks the "chat siempre accesible" rule.
-  **(4) Countdown duration is 10 s, agreed by BOTH ends.** `game_countdown`'s
-  handler does `durationMs = Math.Max(10000, durationMs)` and both offline-host
-  fallbacks call `StartCountdown(10000)`; the chat-line's XAML default
-  `CountdownNumber` is "10". The **backend's `LobbyRoom.COUNTDOWN_MS` is now also
-  10000** (was 3000 — they MUST agree, because the abort-grace window below is
-  measured off the same Start moment). Bump all together if you change it.
+  **(4) Countdown duration is SERVER-DRIVEN (no launcher floor) — the backend's
+  `LobbyRoom.COUNTDOWN_MS` is the single source of truth — and the countdown
+  auto-starts when everyone is ready.** `game_countdown`'s handler OBEYS the server's
+  `duration_ms` as-is (`StartCountdown(durationMs)`, no `Math.Max(10000,…)` floor — only
+  StartCountdown's 500 ms sanity floor), so redeploying the backend changes the countdown
+  everywhere with no launcher change. The backend `LobbyRoom.COUNTDOWN_MS` is set to
+  **5000** in the SEPARATE repo `wol-launcher-lobby-node` (`src/lobbies/LobbyRoom.ts`) →
+  a live room counts **5 s once that backend is redeployed** (`git pull` +
+  `systemctl restart wol-lobby`); an OLD backend still sending 10000 counts 10 s (the
+  launcher obeys either). The `game_countdown` missing-`duration_ms` default (10000) and
+  the two offline-host fallbacks (`StartCountdown(10000)`) are LOCAL safety values only
+  (the backend always sends `duration_ms`); the chat-line's XAML default `CountdownNumber`
+  is "10" (a placeholder repainted on the first tick to the real remaining seconds).
+  Backend + launcher stay coupled by the abort-grace window (`COUNTDOWN_MS + 60s`).
+  (A launcher-side 5 s CAP was tried and reverted — the maintainer wanted the countdown
+  tied to the server value, i.e. controlled from the backend, not forced by the client.) **Auto-start:** `MaybeAutoStartOnAllReady`
+  (`MultiplayerTab`) fires `BeginHostStart` — the SHARED host-start flow the manual
+  Start button also calls — when EVERY `_roomMembers` entry is `.Ready` (host
+  included), gated **host-only** (one start), Lobby-phase-only, `_roomMembers.Count >= 2`
+  (no solo auto-launch), and once per ready-up via `_autoStartInFlight` (reset in
+  `ExitInGamePhase`). Called from `HandleMemberReady` / `HandleRoomState` /
+  `ReadyButton_Click`. The manual "Start game" button still works (force-start before
+  all ready). **Auto-start:** `MaybeAutoStartOnAllReady`
+  (`MultiplayerTab`) fires `BeginHostStart` — the SHARED host-start flow the manual
+  Start button also calls — when EVERY `_roomMembers` entry is `.Ready` (host
+  included), gated **host-only** (one start), Lobby-phase-only, `_roomMembers.Count >= 2`
+  (no solo auto-launch), and once per ready-up via `_autoStartInFlight` (reset in
+  `ExitInGamePhase`). Called from `HandleMemberReady` / `HandleRoomState` /
+  `ReadyButton_Click`. The manual "Start game" button still works (force-start before
+  all ready). Bump the launcher default + XAML + backend `COUNTDOWN_MS` together if
+  you change the duration.
 - **Host migration + abort-grace window — the lobby outlives its creator, and
   aborting a launched match is time-boxed.** Two coupled multiplayer rules added
   together; backend = `wol-launcher-lobby-node` (`src/lobbies/LobbyRoom.ts`,

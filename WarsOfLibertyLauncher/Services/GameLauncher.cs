@@ -81,6 +81,59 @@ public static class GameLauncher
         return null;
     }
 
+    /// <summary>
+    /// Resolve the AoE3 base-game ROOT folder (the one containing <c>data\</c>),
+    /// CONFIG-AWARE — used by the detect-only stock <c>aoe3-tad</c> profile so a
+    /// manually-pointed, non-standard install is recognized. It derives the root
+    /// from <see cref="FindAoe3Install"/> (which consults
+    /// <see cref="LauncherConfig.GameExecutable"/> + the durable
+    /// <see cref="LauncherConfig.Aoe3ManualPath"/> + every <see cref="AoE3Detector.FindAll"/>
+    /// pass), falling back to the bare <see cref="AoE3Detector.FindInstallRoot"/>
+    /// auto-scan. Returns null when no AoE3 with a <c>data\</c> dir is found.
+    ///
+    /// This exists because <see cref="AoE3Detector.FindInstallRoot"/> alone can't
+    /// see <c>config.GameExecutable</c>/<c>Aoe3ManualPath</c> and misses folders
+    /// <see cref="AoE3Detector.FindAll"/> doesn't know (e.g.
+    /// <c>…\Microsoft Studios\Age of Empires III - Complete Collection</c>).
+    /// </summary>
+    public static string? FindAoe3InstallRoot(LauncherConfig config)
+    {
+        var exe = FindAoe3Install(config);
+        if (!string.IsNullOrEmpty(exe))
+        {
+            var root = DeriveAoe3RootFromExe(exe, Directory.Exists);
+            if (!string.IsNullOrEmpty(root)) return root;
+        }
+        return AoE3Detector.FindInstallRoot();
+    }
+
+    /// <summary>
+    /// Pure derivation of the AoE3 root (the folder holding <c>data\</c>) from an
+    /// <c>age3y.exe</c> path: prefer the parent of a <c>bin\</c> folder, else the
+    /// exe's own folder — whichever actually contains a <c>data\</c> subdir per
+    /// <paramref name="dirExists"/>. Returns null if neither has <c>data\</c>.
+    /// <paramref name="dirExists"/> is injected so the logic is unit-testable
+    /// without touching the filesystem.
+    /// </summary>
+    internal static string? DeriveAoe3RootFromExe(string exePath, Func<string, bool> dirExists)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return null;
+        var exeDir = Path.GetDirectoryName(exePath);
+        if (string.IsNullOrEmpty(exeDir)) return null;
+
+        // Steam-style layout: age3y.exe lives in bin\, data\ sits one level up.
+        if (string.Equals(Path.GetFileName(exeDir), "bin", StringComparison.OrdinalIgnoreCase))
+        {
+            var parent = Path.GetDirectoryName(exeDir);
+            if (!string.IsNullOrEmpty(parent) && dirExists(Path.Combine(parent, "data")))
+                return parent.TrimEnd('\\', '/');
+        }
+        // Retail layout (or bin\ without a sibling data\): exe and data\ share a folder.
+        if (dirExists(Path.Combine(exeDir, "data")))
+            return exeDir.TrimEnd('\\', '/');
+        return null;
+    }
+
     /// <summary>Lazy enumeration of likely paths, in priority order.</summary>
     private static IEnumerable<string> EnumerateCandidates(
         LauncherConfig config,
@@ -105,6 +158,25 @@ public static class GameLauncher
                 StringComparison.OrdinalIgnoreCase))
         {
             yield return config.GameExecutable;
+        }
+
+        // 1b. Durable manually-confirmed AoE3 BASE folder (config.Aoe3ManualPath).
+        //     Unlike GameExecutable (cleared on every mod switch), this survives —
+        //     so a non-standard AoE3 the user pointed us at (which FindAll can't
+        //     auto-locate) keeps resolving after switching mods.
+        //     GATED on modInstallPath being empty: this is a BASE-game resolver,
+        //     only relevant when there's no specific mod folder (the stock aoe3-tad
+        //     profile and the general FindAoe3Install badge both pass null). A MOD
+        //     launch always passes its own modInstallPath, and its own age3y.exe
+        //     (step 2) MUST win — WoL is an isolated clone with its OWN age3y.exe,
+        //     so yielding the base exe here would launch vanilla AoE3 instead of
+        //     the mod (both declare age3y.exe → filename match hijack). Never
+        //     let the base path reach a mod launch.
+        if (string.IsNullOrWhiteSpace(modInstallPath)
+            && !string.IsNullOrWhiteSpace(config.Aoe3ManualPath))
+        {
+            yield return Path.Combine(config.Aoe3ManualPath, exeName);
+            yield return Path.Combine(config.Aoe3ManualPath, "bin", exeName);
         }
 
         // 2. Walk up from the mod install folder, checking each level for

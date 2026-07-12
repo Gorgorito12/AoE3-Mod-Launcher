@@ -233,6 +233,10 @@ public partial class MainWindow : Window
         // LauncherSettingsDialog re-applies it on Save.
         Services.Multiplayer.MultiplayerTelemetry.Enabled = _config.MultiplayerTelemetryEnabled;
 
+        // Feedback sounds (chat / notification / connection). Apply the saved
+        // choice at startup; LauncherSettingsDialog re-applies it on Save.
+        Services.SoundService.Enabled = _config.EnableSounds;
+
         // Workshop migration — first launch with the new UserModIds
         // field on an old config. Seed the personal collection from
         // whatever the user already had installed, so the Dashboard's
@@ -285,7 +289,14 @@ public partial class MainWindow : Window
         // (which itself no-ops when the user is already looking at the window).
         _notifications = new NotificationCenter(_config);
         _notifications.Changed += (_, _) => Dispatcher.Invoke(RefreshNotificationBadge);
-        _notifications.ItemAdded += (_, _) => Dispatcher.Invoke(PulseNotificationBell);
+        _notifications.ItemAdded += (_, _) => Dispatcher.Invoke(() =>
+        {
+            PulseNotificationBell();
+            // Audible "ding" for any bell notification. Fires once per real add
+            // (the NotificationCenter dedups), and — unlike the tray toast — is
+            // NOT gated on "user is looking", so the sound plays even in-window.
+            Services.SoundService.PlayNotification();
+        });
         _notifications.ToastRequested += (title, body) => Dispatcher.Invoke(() => ShowToast(title, body));
         NotificationList.ItemsSource = _notifications.Items;
         // The popup is StaysOpen=True (never auto-closes) so the bell can be a
@@ -335,7 +346,7 @@ public partial class MainWindow : Window
                 // be fingerprinted for the version-parity check when hosting /
                 // joining a stock-game lobby.
                 if (string.IsNullOrEmpty(installPath) && profile.IsStockGame)
-                    installPath = Services.AoE3Detector.FindInstallRoot();
+                    installPath = GameLauncher.FindAoe3InstallRoot(_config);
                 if (string.IsNullOrEmpty(installPath))
                     throw new InvalidOperationException(
                         "The active mod is not installed on this PC. Install it before joining or hosting.");
@@ -371,7 +382,7 @@ public partial class MainWindow : Window
                     // the detected install so the launch points at the real game,
                     // mirroring the fingerprint callback above.
                     if (string.IsNullOrEmpty(installPath) && profile.IsStockGame)
-                        installPath = Services.AoE3Detector.FindInstallRoot();
+                        installPath = GameLauncher.FindAoe3InstallRoot(_config);
                     // trustConfigCache:false — the room's mod may differ from the
                     // active dashboard mod, and both AoE3 and WoL ship age3y.exe,
                     // so the global GameExecutable cache (the active mod's) would
@@ -721,6 +732,7 @@ public partial class MainWindow : Window
                         Strings.Format("MpNotifRoomCreatedBody", title, hostName));
                     if (_activeTopTab != TopTab.Multiplayer) SetMultiplayerTabDot(true);
                     MultiplayerView?.SetNewRoomIndicator(true);
+                    Services.SoundService.PlayConnect();
                 }
             }
         }
@@ -744,7 +756,7 @@ public partial class MainWindow : Window
             if (!string.IsNullOrEmpty(state.InstallPath)) return true;
             var profile = ModRegistry.Find(modId);
             if (profile is { IsStockGame: true })
-                return !string.IsNullOrEmpty(AoE3Detector.FindInstallRoot());
+                return !string.IsNullOrEmpty(GameLauncher.FindAoe3InstallRoot(_config));
             return false;
         }
         catch { return false; }
@@ -1777,25 +1789,37 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Set to true whenever something has decided "this Close is a real
-    /// exit, not a minimize-to-tray hide". Read by <see cref="OnClosing"/>
-    /// to bypass the MinimizeToTray interception. Drivers:
-    ///   * Tray menu → Exit
+    /// exit, not a close-to-tray hide". Read by <see cref="OnClosing"/> to
+    /// bypass the <see cref="LauncherConfig.CloseToTray"/> interception.
+    /// STATIC on purpose: two real-exit paths live OUTSIDE MainWindow
+    /// (self-update relaunch in <c>LauncherUpdateDialog</c>, self-install
+    /// relaunch in <c>SelfInstallService</c>) and must be able to signal a
+    /// hard exit before calling <c>Application.Current.Shutdown()</c> —
+    /// otherwise OnClosing would divert that shutdown into the tray and the
+    /// relaunch would hang (the single-instance guard blocks the new copy).
+    /// Invariant: every intentional <c>Shutdown()</c> sets this first.
+    /// Drivers:
+    ///   * Tray menu → Exit / brand menu → Exit
     ///   * Game launched while CloseLauncherOnGameStart is on
+    ///   * Elevated relaunch (install / update)
+    ///   * Self-update / self-install relaunch
     /// </summary>
-    private bool _requestedHardExit;
+    internal static bool HardExitRequested;
 
     /// <summary>
     /// Window.OnClosing override (wired up in the constructor). When
-    /// MinimizeToTray is on, swallow the close request and hide the
-    /// window instead, leaving the tray icon as the way back. When off,
-    /// fall through to the default close behaviour.
+    /// <see cref="LauncherConfig.CloseToTray"/> is on (default), swallow the
+    /// close request and hide the window to the tray instead, leaving the
+    /// tray icon as the way back (and its → Exit as the way out). When the
+    /// user turned it off, fall through to the conventional close.
     /// </summary>
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        if (!_requestedHardExit && _config.MinimizeToTray)
+        if (!HardExitRequested && _config.CloseToTray)
         {
             e.Cancel = true;
             HideToTray();
+            MaybeShowClosedToTrayHint();
             return;
         }
 
@@ -1983,7 +2007,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void UpdateTrayIconVisibility()
     {
-        bool keepResident = _config.MinimizeToTray || _config.ShowToastNotifications;
+        bool keepResident = _config.MinimizeToTray || _config.ShowToastNotifications || _config.CloseToTray;
         // If the window is currently hidden (we're sitting in the tray),
         // never hide the icon — the user would have no way back.
         if (!IsVisible) keepResident = true;
@@ -2047,7 +2071,15 @@ public partial class MainWindow : Window
         Show();
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
+        // Reliably pull the window to the FRONT on a single click. A hidden
+        // WPF window's Activate() alone frequently loses to Windows' foreground
+        // lock (the window comes back but stays behind others / flashes in the
+        // taskbar). The Topmost on→off nudge is the standard idiom to win the
+        // foreground without permanently pinning the window on top.
         Activate();
+        Topmost = true;
+        Topmost = false;
+        Focus();
         // The tray icon stays visible so the user can re-hide via Close;
         // hiding it on restore would force them to discover the close-to-
         // tray flow over and over. Their preference, sticky behaviour.
@@ -2343,6 +2375,12 @@ public partial class MainWindow : Window
         return !string.Equals(from, to, StringComparison.OrdinalIgnoreCase);
     }
 
+    // Single left-click restores the window (users expect one click, like
+    // Discord/Steam). Double-click still works — ShowFromTray is idempotent —
+    // and right-click still opens the ContextMenu.
+    private void TrayIcon_LeftClick(object sender, RoutedEventArgs e)
+        => ShowFromTray();
+
     private void TrayIcon_DoubleClick(object sender, RoutedEventArgs e)
         => ShowFromTray();
 
@@ -2364,9 +2402,40 @@ public partial class MainWindow : Window
     /// </summary>
     private void RequestHardExit()
     {
-        _requestedHardExit = true;
+        HardExitRequested = true;
         try { TrayIcon.Dispose(); } catch { /* best-effort */ }
         System.Windows.Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// The first time the launcher hides to the tray on close, show a single
+    /// balloon so the user knows it's still running there (and how to fully
+    /// quit) instead of thinking the app crashed/vanished. Fires exactly once
+    /// — guarded by <see cref="LauncherConfig.ClosedToTrayHintShown"/> — and
+    /// bypasses the <c>ShowToastNotifications</c> gate on purpose: this is
+    /// one-time onboarding, not an operational toast. Called from OnClosing
+    /// right after <see cref="HideToTray"/> (so the icon is already visible).
+    /// </summary>
+    private void MaybeShowClosedToTrayHint()
+    {
+        if (_config.ClosedToTrayHintShown) return;
+        _config.ClosedToTrayHintShown = true;
+        try { _config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Save close-to-tray hint flag failed: {ex.Message}"); }
+
+        try
+        {
+            TrayIcon.ShowBalloonTip(
+                WarsOfLibertyLauncher.Localization.Strings.Get("TrayClosedHintTitle"),
+                WarsOfLibertyLauncher.Localization.Strings.Get("TrayClosedHintBody"),
+                Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            // Balloons can be policy-disabled on locked-down systems; the
+            // tray icon + its Exit menu still work, so this is non-fatal.
+            DiagnosticLog.Write($"Close-to-tray hint balloon failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -2698,12 +2767,19 @@ public partial class MainWindow : Window
 
         // Save and update UI
         _config.GameExecutable = resolvedExe;
+        // Persist the AoE3 base folder DURABLY too (survives mod switches, which
+        // clear GameExecutable). This is what makes a non-standard, manually-
+        // pointed AoE3 — including the detect-only stock aoe3-tad profile — stay
+        // recognized. Derive the data\-containing root from the picked exe.
+        var aoe3Root = GameLauncher.DeriveAoe3RootFromExe(resolvedExe, Directory.Exists);
+        if (!string.IsNullOrEmpty(aoe3Root))
+            _config.Aoe3ManualPath = aoe3Root;
         // Manual path picker invalidates the cached AoE3 detection — the
         // next StatusCard refresh re-scans so the badge flips from
         // "AoE3 not found" to ready immediately.
         InvalidateAoe3DetectedCache();
         _config.Save();
-        DiagnosticLog.Write($"User manually set AoE3 path: {resolvedExe}");
+        DiagnosticLog.Write($"User manually set AoE3 path: {resolvedExe} (root='{aoe3Root ?? "(none)"}')");
 
         RefreshIdlePanel();
         // Keep an open Mod Properties window in sync with the new AoE3 path.
@@ -4766,6 +4842,8 @@ public partial class MainWindow : Window
             click: () =>
             {
                 popup.IsOpen = false;
+                // Real exit — bypass the close-to-tray interception in OnClosing.
+                HardExitRequested = true;
                 System.Windows.Application.Current.Shutdown();
             }));
 
@@ -6717,7 +6795,9 @@ public partial class MainWindow : Window
         if (relaunched)
         {
             // The elevated process is starting; close this one to avoid
-            // having two launchers open simultaneously.
+            // having two launchers open simultaneously. Real exit — bypass
+            // the close-to-tray interception so we don't hide instead of quit.
+            HardExitRequested = true;
             Application.Current.Shutdown();
         }
         else
@@ -8510,6 +8590,8 @@ public partial class MainWindow : Window
             var relaunched = ElevationService.RelaunchElevated();
             if (relaunched)
             {
+                // Real exit — bypass the close-to-tray interception.
+                HardExitRequested = true;
                 Application.Current.Shutdown();
                 return;
             }

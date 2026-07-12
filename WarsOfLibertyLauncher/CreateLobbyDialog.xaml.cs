@@ -135,6 +135,24 @@ public partial class CreateLobbyDialog : Window
                     item.IsEnabled = false;
             }
         }
+
+        // Non-blocking heads-up if Radmin VPN isn't recognised as active — the
+        // room can still be created, but peers can't join until Radmin is on.
+        // Same signal the Multiplayer-tab banner uses (GetStatus().IsServiceRunning
+        // = GUI alive + not powered off + Up 26.x adapter). Best-effort: a probe
+        // failure just leaves the warning hidden, never blocks the dialog.
+        try
+        {
+            if (!RadminVpnService.GetStatus().IsServiceRunning)
+            {
+                RadminWarning.Text = Strings.Get("MpCreateDialogRadminWarning");
+                RadminWarning.Visibility = Visibility.Visible;
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"CreateLobbyDialog: Radmin status probe failed (non-fatal): {ex.Message}");
+        }
     }
 
     /// <summary>

@@ -2523,6 +2523,11 @@ public static class Strings
             [LangEn] = "Starting game…",
             [LangEs] = "Iniciando partida…",
         },
+        ["MpChatAutoStartAllReady"] = new()
+        {
+            [LangEn] = "Everyone's ready — starting the game…",
+            [LangEs] = "Todos están listos — empezando la partida…",
+        },
         ["MpChatCannotLaunchNoProfile"] = new()
         {
             [LangEn] = "Cannot launch — no active mod profile.",
@@ -2595,6 +2600,15 @@ public static class Strings
         },
         ["MpCreateDialogCreate"] = new() { [LangEn] = "Create", [LangEs] = "Crear" },
         ["MpCreateDialogCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
+        ["MpCreateDialogRadminWarning"] = new()
+        {
+            [LangEn] = "⚠ Radmin VPN isn't active. You can still create the room, but other players "
+                     + "won't be able to join until you turn Radmin on (see the Radmin banner in the "
+                     + "Multiplayer tab).",
+            [LangEs] = "⚠ Radmin VPN no está activo. Podés crear la sala igual, pero los demás "
+                     + "jugadores no podrán unirse hasta que actives Radmin (mirá el banner de Radmin "
+                     + "en la pestaña Multijugador).",
+        },
         ["MpModNotInstalled"] = new()
         {
             [LangEn] = "Install the mod first to host or join a room for it.",
@@ -2678,6 +2692,17 @@ public static class Strings
             [LangEn] = "Closing the window keeps the launcher running in the tray. Right-click the tray icon → Exit to fully quit.",
             [LangEs] = "Cerrar la ventana mantiene el launcher en la bandeja. Click derecho en el icono → Salir para cerrarlo del todo.",
         },
+        ["DlgLauncherSettingsMinimizeToTrayTip"] = new()
+        {
+            [LangEn] = "On by default: the X sends the launcher to the system tray so it keeps running "
+                     + "(and you stay shown as connected). Double-click the tray icon to reopen it, or "
+                     + "right-click → Exit to fully quit. The minimize button is unaffected. Turn this off "
+                     + "to make the X quit the launcher like before.",
+            [LangEs] = "Activado por defecto: la X manda el launcher a la bandeja del sistema para que siga "
+                     + "corriendo (y aparezcas conectado). Doble clic en el ícono para volver a abrirlo, o "
+                     + "clic derecho → Salir para cerrarlo del todo. El botón minimizar no cambia. Desactivalo "
+                     + "para que la X cierre el launcher como antes.",
+        },
         ["DlgLauncherSettingsShowToasts"] = new()
         {
             [LangEn] = "Notify me when updates finish",
@@ -2711,6 +2736,25 @@ public static class Strings
                      + "have installed. Only shows while the launcher window isn't in focus.",
             [LangEs] = "Una notificación de Windows cuando cualquier jugador crea una sala multijugador de un "
                      + "mod que tenés instalado. Solo aparece cuando la ventana del launcher no está en foco.",
+        },
+        ["DlgSettingsSounds"] = new()
+        {
+            [LangEn] = "Play sounds (chat, notifications, connections)",
+            [LangEs] = "Reproducir sonidos (chat, notificaciones, conexiones)",
+        },
+        ["DlgSettingsSoundsHint"] = new()
+        {
+            [LangEn] = "A short sound on an incoming chat message, a bell notification, or when someone connects.",
+            [LangEs] = "Un sonido breve al llegar un mensaje de chat, una notificación, o cuando alguien se conecta.",
+        },
+        ["DlgSettingsSoundsTip"] = new()
+        {
+            [LangEn] = "Discord-style audio cues: a blip for chat, a ding for notifications, and a pop when a "
+                     + "player joins your room or a new room appears. Never plays for your own message. Turn "
+                     + "this off for a fully silent launcher.",
+            [LangEs] = "Señales de audio estilo Discord: un blip para el chat, un ding para las notificaciones, y "
+                     + "un pop cuando un jugador entra a tu sala o aparece una sala nueva. Nunca suena por tu propio "
+                     + "mensaje. Desactivalo para un launcher totalmente silencioso.",
         },
         ["DlgLauncherSettingsSectionPrivacy"] = new()
         {
@@ -2775,6 +2819,16 @@ public static class Strings
         {
             [LangEn] = "Exit",
             [LangEs] = "Salir",
+        },
+        ["TrayClosedHintTitle"] = new()
+        {
+            [LangEn] = "Still running in the tray",
+            [LangEs] = "Sigue activo en la bandeja",
+        },
+        ["TrayClosedHintBody"] = new()
+        {
+            [LangEn] = "The launcher keeps running here so you stay online. Right-click this icon → Exit to fully quit, or turn this off in Settings.",
+            [LangEs] = "El launcher sigue corriendo acá para que sigas en línea. Clic derecho en este ícono → Salir para cerrarlo del todo, o desactivalo en Ajustes.",
         },
 
         // --- Notification bell (Steam-style) ---
@@ -3258,18 +3312,6 @@ public static class Strings
             [LangEs] = "Copia el launcher a una carpeta fija para no perderlo si movés o borrás este archivo — y "
                      + "para que 'Ejecutar en segundo plano' siga funcionando. No hace falta para actualizar "
                      + "(ya se actualiza solo), pero es la forma prolija de tenerlo.",
-        },
-        ["DlgLauncherSettingsInstallRunInBackground"] = new()
-        {
-            [LangEn] = "Start with Windows and appear online to my friends",
-            [LangEs] = "Iniciar con Windows y aparecer conectado a mis amigos",
-        },
-        ["DlgLauncherSettingsInstallRunInBackgroundTip"] = new()
-        {
-            [LangEn] = "When you turn on the PC, the launcher starts by itself in the system tray and shows "
-                     + "you as connected to other players. You can turn this off anytime in Settings.",
-            [LangEs] = "Al encender la PC, el launcher arranca solo en la bandeja del sistema y te muestra "
-                     + "conectado a los demás jugadores. Lo podés apagar cuando quieras desde Configuración.",
         },
         ["DlgLauncherSettingsInstallDone"] = new()
         {

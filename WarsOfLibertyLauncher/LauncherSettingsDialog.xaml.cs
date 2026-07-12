@@ -164,12 +164,16 @@ public partial class LauncherSettingsDialog : Window
         SetTip(CloseOnGameCheck, "DlgLauncherSettingsCloseOnGameTip");
         MinimizeToTrayCheck.Content = Strings.Get("DlgLauncherSettingsMinimizeToTray");
         MinimizeToTrayHint.Text = Strings.Get("DlgLauncherSettingsMinimizeToTrayHint");
+        SetTip(MinimizeToTrayCheck, "DlgLauncherSettingsMinimizeToTrayTip");
         ShowToastsCheck.Content = Strings.Get("DlgLauncherSettingsShowToasts");
         ShowToastsHint.Text = Strings.Get("DlgLauncherSettingsShowToastsHint");
         SetTip(ShowToastsCheck, "DlgLauncherSettingsShowToastsTip");
         NotifyNewRoomsCheck.Content = Strings.Get("DlgSettingsNotifyRooms");
         NotifyNewRoomsHint.Text = Strings.Get("DlgSettingsNotifyRoomsHint");
         SetTip(NotifyNewRoomsCheck, "DlgSettingsNotifyRoomsTip");
+        SoundsCheck.Content = Strings.Get("DlgSettingsSounds");
+        SoundsHint.Text = Strings.Get("DlgSettingsSoundsHint");
+        SetTip(SoundsCheck, "DlgSettingsSoundsTip");
 
         // Radmin assistant mode picker. Combo items tagged with the
         // raw enum strings ("Auto"/"OnRequest"/"Never") so saving is
@@ -241,8 +245,6 @@ public partial class LauncherSettingsDialog : Window
         SelfInstallButton.Content = Strings.Get("DlgLauncherSettingsInstall");
         SelfInstallHint.Text = Strings.Get("DlgLauncherSettingsInstallHint");
         SetTip(SelfInstallButton, "DlgLauncherSettingsInstallTip");
-        InstallRunInBackgroundCheck.Content = Strings.Get("DlgLauncherSettingsInstallRunInBackground");
-        SetTip(InstallRunInBackgroundCheck, "DlgLauncherSettingsInstallRunInBackgroundTip");
         // Hide the whole row once we're running from the installed location —
         // there's nothing to install then.
         SelfInstallRow.Visibility = Services.SelfInstallService.IsInstalled()
@@ -284,14 +286,15 @@ public partial class LauncherSettingsDialog : Window
         // "Run in background" master toggle: on when auto-start is registered
         // (the registry is the source of truth — the user may have removed our
         // entry via Task Manager). Saving re-derives all three background flags
-        // from this one checkbox. The old standalone MinimizeToTray checkbox is
-        // collapsed in XAML (its behaviour folded into this toggle).
+        // from this one checkbox.
         StartWithWindowsCheck.IsChecked = StartupRegistrationService.IsRegistered();
         EnableJoinLinksCheck.IsChecked = _config.EnableJoinLinks;
         CloseOnGameCheck.IsChecked = _config.CloseLauncherOnGameStart;
-        MinimizeToTrayCheck.IsChecked = _config.MinimizeToTray;   // hidden; kept for compile parity
+        // Close-to-tray opt-out — independent of the master toggle above.
+        MinimizeToTrayCheck.IsChecked = _config.CloseToTray;
         ShowToastsCheck.IsChecked = _config.ShowToastNotifications;
         NotifyNewRoomsCheck.IsChecked = _config.NotifyNewRooms;
+        SoundsCheck.IsChecked = _config.EnableSounds;
         AutoCheckCheck.IsChecked = _config.CheckUpdatesOnStartup;
         OpenPostUpdateCheck.IsChecked = _config.OpenPostUpdatePages;
         TelemetryCheck.IsChecked = _config.MultiplayerTelemetryEnabled;
@@ -459,13 +462,16 @@ public partial class LauncherSettingsDialog : Window
         SelfInstallHint.Text = Strings.Format(
             "DlgLauncherSettingsInstallDone", Services.SelfInstallService.CanonicalExe);
 
-        // "Run in background" was offered pre-checked with the install. When kept,
+        // Whether the install also enables "run in background" (auto-start) is
+        // governed by the SINGLE GENERAL toggle — there's no separate install-time
+        // checkbox anymore (it duplicated / contradicted this one). If it's on,
         // enable the three background flags AND register auto-start pointing at the
         // INSTALLED exe (we're still running the portable one, so ProcessPath would
         // be wrong — pass the canonical path explicitly). The installed instance
         // reads the same %LocalAppData% config after relaunch, so the Settings
-        // toggle shows checked and its own save stays consistent.
-        if (InstallRunInBackgroundCheck.IsChecked == true)
+        // toggle stays consistent. If it's off, the install registers nothing (no
+        // silent Run-key — AV-safe).
+        if (StartWithWindowsCheck.IsChecked == true)
         {
             _config.StartWithWindows = true;
             _config.MinimizeToTray = true;
@@ -475,8 +481,6 @@ public partial class LauncherSettingsDialog : Window
             StartupRegistrationService.Apply(
                 enabled: true, startMinimized: true,
                 exePathOverride: Services.SelfInstallService.CanonicalExe);
-            // Reflect the change in the (repurposed) master toggle immediately.
-            StartWithWindowsCheck.IsChecked = true;
         }
 
         var relaunch = MessageBox.Show(
@@ -823,6 +827,8 @@ public partial class LauncherSettingsDialog : Window
         _config.CloseLauncherOnGameStart = CloseOnGameCheck.IsChecked == true;
         _config.ShowToastNotifications = ShowToastsCheck.IsChecked == true;
         _config.NotifyNewRooms = NotifyNewRoomsCheck.IsChecked == true;
+        _config.EnableSounds = SoundsCheck.IsChecked == true;
+        Services.SoundService.Enabled = _config.EnableSounds;
         _config.CheckUpdatesOnStartup = AutoCheckCheck.IsChecked == true;
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
@@ -830,12 +836,15 @@ public partial class LauncherSettingsDialog : Window
         _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();
         _config.CommunityTranslationsDisabled = TxDisabledCheck.IsChecked == true;
         // Single "Run in background" toggle drives the three background flags
-        // together: auto-start with Windows, X-minimises-to-tray, and auto-start
-        // opens straight to the tray. See DlgLauncherSettingsStartWithWindows.
+        // together: auto-start with Windows, keep the tray icon resident, and
+        // auto-start opens straight to the tray. See DlgLauncherSettingsStartWithWindows.
         var runInBackground = StartWithWindowsCheck.IsChecked == true;
         _config.StartWithWindows = runInBackground;
         _config.MinimizeToTray = runInBackground;
         _config.StartMinimized = runInBackground;
+        // Close-to-tray is INDEPENDENT of the master toggle: it governs only the
+        // X / close-button behaviour (default on; unchecking restores "X = quit").
+        _config.CloseToTray = MinimizeToTrayCheck.IsChecked == true;
         _config.EnableJoinLinks = EnableJoinLinksCheck.IsChecked == true;
 
         // Top-tab order (Interface section). Persist the working copy;

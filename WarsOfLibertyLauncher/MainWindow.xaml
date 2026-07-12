@@ -1379,6 +1379,7 @@
         <tb:TaskbarIcon x:Name="TrayIcon"
                         IconSource="pack://application:,,,/AppIcon.ico"
                         Visibility="Collapsed"
+                        TrayLeftMouseUp="TrayIcon_LeftClick"
                         TrayMouseDoubleClick="TrayIcon_DoubleClick">
             <tb:TaskbarIcon.ContextMenu>
                 <ContextMenu>

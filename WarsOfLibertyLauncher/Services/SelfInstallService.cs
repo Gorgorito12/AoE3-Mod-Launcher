@@ -122,8 +122,11 @@ public static class SelfInstallService
             });
             DiagnosticLog.Write("SelfInstall: relaunched installed copy; shutting down portable instance.");
 
-            // Shut down HARD (bypasses MinimizeToTray's OnClosing intercept) so the
-            // mutex frees and the child can take over.
+            // Shut down HARD (bypass the close-to-tray OnClosing intercept) so the
+            // mutex frees and the child can take over — otherwise this Shutdown would
+            // hide the portable instance to the tray and the child would time out on
+            // the single-instance mutex.
+            WarsOfLibertyLauncher.MainWindow.HardExitRequested = true;
             System.Windows.Application.Current?.Shutdown();
             return true;
         }

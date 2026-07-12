@@ -161,6 +161,12 @@
     <Resource Include="AppIcon.png" />
     <Resource Include="WoL.ico" />
 
+    <!-- Short UI feedback sounds (chat / notification / connection). Embedded as
+         resources and played by Services/SoundService.cs via SoundPlayer. -->
+    <Resource Include="Assets\Sounds\chat.wav" />
+    <Resource Include="Assets\Sounds\notify.wav" />
+    <Resource Include="Assets\Sounds\connect.wav" />
+
     <!--
       No sibling native binaries to ship right now. (Previous launcher
       versions bundled a Detours-based hook DLL + injector, and later

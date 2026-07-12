@@ -437,6 +437,17 @@
                            TextWrapping="Wrap"
                            Margin="0,12,0,0"
                            Visibility="Collapsed"/>
+
+                <!-- Non-blocking heads-up: Radmin VPN not recognised active.
+                     The room can still be created, but peers can't join until
+                     Radmin is on. Shown only when GetStatus().IsServiceRunning
+                     is false; never disables the Create button. -->
+                <TextBlock x:Name="RadminWarning"
+                           Foreground="{DynamicResource MpStatusFull}"
+                           FontSize="{StaticResource FontSizeCaption}"
+                           TextWrapping="Wrap"
+                           Margin="0,12,0,0"
+                           Visibility="Collapsed"/>
             </StackPanel>
 
             <!-- Advanced details: the fingerprint demoted from
