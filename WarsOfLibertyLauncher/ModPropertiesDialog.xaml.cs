@@ -284,10 +284,23 @@ public partial class ModPropertiesDialog : Window
         // "installed, version unknown" from genuinely-not-installed by the resolved
         // install path, so this never contradicts the dashboard's Play.
         bool hasInstall = !string.IsNullOrWhiteSpace(_service.InstallPath);
+        // The stock game is detect-only (Manual): the launcher never tracks its version
+        // by design, so a detected base game shows a reassuring "ready to play" instead of
+        // the alarming "version not verified" (which reads as a transient failure).
         ValVersion.Text = hasVersion ? ver!
+            : _profile.IsStockGame && hasInstall ? Strings.Get("ModPropStockVersion")
             : hasInstall ? Strings.Get("ModPropVersionUnknown")
             : Strings.Get("ModPropNotInstalled");
         ValWebsite.Text = string.IsNullOrWhiteSpace(_profile.OfficialWebsite) ? "—" : _profile.OfficialWebsite;
+
+        // The launcher doesn't manage the base game's updates (detect-only) — hide the
+        // "Check for updates" action + its result line for the stock game, mirroring how
+        // Verify/Repair/Uninstall are hidden for it.
+        if (_profile.IsStockGame)
+        {
+            CheckUpdatesBtn.Visibility = Visibility.Collapsed;
+            CheckUpdatesResult.Visibility = Visibility.Collapsed;
+        }
 
         // Mirror the version into the header's pill badge so the
         // user sees "v1.2.0c2" at the top regardless of which tab
@@ -449,18 +462,43 @@ public partial class ModPropertiesDialog : Window
         foreach (var o in st.OtherInstalls)
             rows.Add((o.Id, DeriveLeaf(o.InstallPath), o.InstallPath, o.LastKnownVersion, false));
 
+        // STABLE ORDER by install folder (not active-first): switching the active copy
+        // must NOT reorder the list — otherwise the chosen card jumps to the top, which
+        // reads as abrupt/ambiguous. With a fixed order only the gold highlight moves to
+        // the clicked card in place (animated below). Ordinal so it's deterministic.
+        rows.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
+
         var uniqueLabels = PathDisplay.DisambiguateLabels(
             rows.Select(r => (r.Label, r.Path)).ToList());
 
         for (int i = 0; i < rows.Count; i++)
             ManageInstallsHost.Children.Add(BuildInstallCard(
                 rows[i].Id, uniqueLabels[i], rows[i].Label, rows[i].Path, rows[i].Version, rows[i].IsActive));
+
+        // Consume the "just switched" marker so a plain RefreshData doesn't re-animate.
+        _recentlyActivatedInstallId = null;
     }
+
+    /// <summary>
+    /// Id of the copy the user just made active via "Switch", so the rebuilt list can
+    /// play a one-shot gold-tint pulse on that card (the highlight "moves" to it in
+    /// place instead of the card jumping to the top). Set before the switch await,
+    /// consumed + cleared by <see cref="LoadManageInstalls"/>.
+    /// </summary>
+    private string? _recentlyActivatedInstallId;
 
     private static string DeriveLeaf(string? path)
     {
         var leaf = System.IO.Path.GetFileName((path ?? "").TrimEnd('\\', '/'));
         return string.IsNullOrEmpty(leaf) ? (path ?? "") : leaf;
+    }
+
+    /// <summary>Reads a resource brush's <see cref="Color"/>, falling back if it's
+    /// missing or not a solid colour (so the switch pulse can never throw).</summary>
+    private Color ResourceColor(string key, Color fallback)
+    {
+        try { return TryFindResource(key) is SolidColorBrush b ? b.Color : fallback; }
+        catch { return fallback; }
     }
 
     private Border BuildInstallCard(
@@ -475,6 +513,30 @@ public partial class ModPropertiesDialog : Window
             Padding = new Thickness(12, 10, 12, 10),
             Margin = new Thickness(0, 0, 0, 8),
         };
+
+        // "The gold highlight moved here": if this is the card the user just switched to,
+        // start its background at the gold tint and fade it to the normal panel colour on
+        // load, so the eye follows the change (the list order is fixed, so nothing jumps).
+        if (isActive && id == _recentlyActivatedInstallId)
+        {
+            var goldColor = ResourceColor("TintGoldHover", Color.FromRgb(0x3A, 0x30, 0x14));
+            var baseColor = ResourceColor("BgBase", Color.FromRgb(0x14, 0x14, 0x16));
+            var pulse = new SolidColorBrush(goldColor);
+            card.Background = pulse;
+            card.Loaded += (_, _) =>
+            {
+                var anim = new System.Windows.Media.Animation.ColorAnimation
+                {
+                    To = baseColor,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(450)),
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase
+                    {
+                        EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut,
+                    },
+                };
+                pulse.BeginAnimation(SolidColorBrush.ColorProperty, anim);
+            };
+        }
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -544,6 +606,9 @@ public partial class ModPropertiesDialog : Window
             };
             switchBtn.Click += async (_, _) =>
             {
+                // Mark this copy so the rebuilt list pulses its (now active) card in place
+                // instead of the card silently jumping to the top.
+                _recentlyActivatedInstallId = id;
                 if (_switchInstall != null) await _switchInstall(id);
             };
             actions.Children.Add(switchBtn);

@@ -1087,7 +1087,17 @@ Two cheap gates beyond a green build:
   re-add a rename textbox.) Names are made UNIQUE for display by
   `PathDisplay.DisambiguateLabels` (append parent folder, then a stable `#N` when copies share
   both name and parent), used by both the switcher popup and the manager. The stock game hides
-  the whole section.
+  the whole section. **The manager list is ordered by install FOLDER (stable), NOT active-first
+  — on purpose.** Active-first made a middle copy JUMP to the top when you Switched it (abrupt /
+  ambiguous); a fixed order means only the gold highlight moves. `LoadManageInstalls` sorts rows
+  by `r.Path` (Ordinal) before `DisambiguateLabels` + card build, and the Switch button stamps
+  `_recentlyActivatedInstallId` before its `await` so the rebuilt list plays a one-shot gold-tint
+  pulse on the now-active card (a `SolidColorBrush` `ColorAnimation` from `TintGoldHover` →
+  `BgBase`, started on `card.Loaded`, ~450 ms EaseOut) — the "highlight moved here" cue. The flag
+  is consumed + cleared inside `LoadManageInstalls` so a plain `RefreshData` doesn't re-animate.
+  Don't revert the manager to active-first ordering. (The dashboard switcher POPUP
+  `AppendInstallCopiesToModPopup` keeps its own active-first order — it's a quick selector, not
+  the manager.)
 
 - **Long ops (install / update) run in the BACKGROUND — the user can switch to another
   installed mod and PLAY it while one installs. Still ONE op at a time.** The op is owned by
@@ -1626,7 +1636,15 @@ Two cheap gates beyond a green build:
   `NotAValidInstall`); the gear-menu handlers (`UninstallMenuItem_Click` /
   `MenuRepairInstall_Click` / `MenuVerifyFiles_Click`) early-return; and
   `ModPropertiesDialog` hides the Maintenance + Danger Zone sections.
-  **Don't remove these guards.** Detection: because the launcher never wrote a
+  **Don't remove these guards.** **Version display:** the stock game (Manual, detect-only)
+  has NO launcher-tracked version by design, so `CurrentVersion` is always null — that is
+  NOT a failure. Properties → GENERAL therefore shows `ModPropStockVersion`
+  ("detected — ready to play") for a detected stock game, NOT the alarming
+  `ModPropVersionUnknown` ("version not verified"), and **hides "Check for updates"**
+  (`CheckUpdatesBtn`/`CheckUpdatesResult`) — the launcher doesn't manage the base game's
+  updates. The dashboard already collapses the version chip when there's no version and
+  shows `StatusStockReady`. Don't "fix" the null version by trying to detect a patch
+  level (fragile — see the `AoE3Detector` no-SHA note). Detection: because the launcher never wrote a
   saved `InstallPath` for it, the stock game's install is resolved fresh each check
   by **`GameLauncher.FindAoe3InstallRoot(config)` — CONFIG-AWARE, not the bare
   `AoE3Detector.FindInstallRoot()`** — used by `UpdateService.ResolveInstallPath`'s

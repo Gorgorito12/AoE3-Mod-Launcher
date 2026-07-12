@@ -918,6 +918,11 @@ public static class Strings
             [LangEn] = "installed — version not verified",
             [LangEs] = "instalado — versión sin verificar",
         },
+        ["ModPropStockVersion"] = new()
+        {
+            [LangEn] = "detected — ready to play",
+            [LangEs] = "detectado — listo para jugar",
+        },
         ["ModPropNoTranslations"] = new()
         {
             [LangEn] = "This mod ships no translation packs.",
