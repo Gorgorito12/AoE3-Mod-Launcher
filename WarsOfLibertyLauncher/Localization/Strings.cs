@@ -1874,6 +1874,11 @@ public static class Strings
             [LangEn] = "In Radmin, click \"Join network\" → \"Gaming\", then paste \"Age of Empires III: The Asian Dynasties\" (we'll copy it for you) and click Join.",
             [LangEs] = "En Radmin, clic en \"Unirse a la red\" → \"Gaming\", pega \"Age of Empires III: The Asian Dynasties\" (te lo copiamos al portapapeles) y clic Unirse.",
         },
+        ["MpRadminNotConnectedBodyIp"] = new()
+        {
+            [LangEn] = "Your Radmin IP is already {0}. In Radmin, click \"Join network\" → \"Gaming\", paste \"Age of Empires III: The Asian Dynasties\" (we'll copy it for you) and click Join.",
+            [LangEs] = "Tu IP de Radmin ya es {0}. En Radmin, clic en \"Unirse a la red\" → \"Gaming\", pega \"Age of Empires III: The Asian Dynasties\" (te lo copiamos al portapapeles) y clic Unirse.",
+        },
         ["MpRadminOpenButton"] = new() { [LangEn] = "Open Radmin VPN", [LangEs] = "Abrir Radmin VPN" },
         ["MpRadminLaunchFailed"] = new()
         {
@@ -2553,6 +2558,16 @@ public static class Strings
             [LangEn] = "Game launched. In AoE3: Multiplayer → LAN.",
             [LangEs] = "Partida lanzada. En AoE3: Multijugador → LAN.",
         },
+        ["MpChatRadminNoAdapter"] = new()
+        {
+            [LangEn] = "ℹ No Radmin VPN adapter detected, so we couldn't set your network IP. Install/enable Radmin VPN to play with others.",
+            [LangEs] = "ℹ No se detectó el adaptador de Radmin VPN, así que no pudimos fijar tu IP de red. Instalá/activá Radmin VPN para jugar con otros.",
+        },
+        ["MpChatRadminNotReady"] = new()
+        {
+            [LangEn] = "ℹ Set your Radmin IP for the game. To play, open Radmin and connect to the AoE3 network.",
+            [LangEs] = "ℹ Fijamos tu IP de Radmin para el juego. Para jugar, abrí Radmin y conectate a la red de AoE3.",
+        },
         ["MpChatLaunchFailed"] = new()
         {
             [LangEn] = "Launch failed: {0}",
@@ -2612,12 +2627,19 @@ public static class Strings
         ["MpCreateDialogCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
         ["MpCreateDialogRadminWarning"] = new()
         {
-            [LangEn] = "⚠ Radmin VPN isn't active. You can still create the room, but other players "
-                     + "won't be able to join until you turn Radmin on (see the Radmin banner in the "
-                     + "Multiplayer tab).",
-            [LangEs] = "⚠ Radmin VPN no está activo. Podés crear la sala igual, pero los demás "
-                     + "jugadores no podrán unirse hasta que actives Radmin (mirá el banner de Radmin "
-                     + "en la pestaña Multijugador).",
+            [LangEn] = "ℹ Radmin VPN isn't active. You can still create the room and players can join it — "
+                     + "to actually play, install/enable Radmin and join the AoE3 network (every player needs it).",
+            [LangEs] = "ℹ Radmin VPN no está activo. Podés crear la sala igual y los jugadores pueden unirse — "
+                     + "para jugar, instalá/activá Radmin y unite a la red de AoE3 (todos los jugadores lo necesitan).",
+        },
+        ["MpCreateDialogRadminInfo"] = new()
+        {
+            [LangEn] = "ℹ Radmin VPN isn't active, but the room is created normally and your Radmin IP ({0}) "
+                     + "is injected automatically. To actually play, open Radmin and connect to the AoE3 network "
+                     + "(every player needs it).",
+            [LangEs] = "ℹ Radmin VPN no está activo, pero la sala se crea igual y tu IP de Radmin ({0}) se "
+                     + "inyecta automáticamente. Para jugar, abrí Radmin y conectate a la red de AoE3 (todos "
+                     + "los jugadores lo necesitan).",
         },
         ["MpModNotInstalled"] = new()
         {

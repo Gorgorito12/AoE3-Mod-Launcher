@@ -121,6 +121,10 @@ public partial class MultiplayerTab : UserControl
     // launch) to take without re-querying.
     private System.Windows.Threading.DispatcherTimer? _radminTimer;
     private RadminStatus? _lastRadminStatus;
+    // Last Radmin state signature written to the diagnostic log; the banner
+    // poll only logs when this changes, so the log records transitions, not
+    // one line every 3 seconds. See RefreshRadminBanner.
+    private string? _lastRadminLogSig;
 
     // (Pre-Radmin: there used to be n2n bootstrap status here for the
     //  header badge. With the n2n stack removed and Radmin as the
@@ -387,6 +391,19 @@ public partial class MultiplayerTab : UserControl
         var status = RadminVpnService.GetStatus();
         _lastRadminStatus = status;
 
+        // Record every Radmin state TRANSITION to the diagnostic log so a
+        // bundle can show WHY IsServiceRunning was false (open-but-Desconectado,
+        // closed, wrong GUI process name, no 26.x adapter). The banner poll is
+        // every 3 s but we only write on change, so the log stays quiet. Before
+        // this, GetStatus was never logged and "Radmin wasn't recognized" was
+        // undiagnosable from a bundle.
+        var radminSig = RadminVpnService.DescribeStateForLog();
+        if (!string.Equals(radminSig, _lastRadminLogSig, StringComparison.Ordinal))
+        {
+            _lastRadminLogSig = radminSig;
+            DiagnosticLog.Write($"RadminState: {radminSig}");
+        }
+
         // Three-way switch driven by (InstallState, IsServiceRunning):
         //   * NotInstalled              → red    "Install"
         //   * Installed, service off    → blue   "Open Radmin"
@@ -429,7 +446,14 @@ public partial class MultiplayerTab : UserControl
             RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#8c3a3a")!;
             RadminStatusGlyph.Text = "!";
             RadminBannerTitle.Text = Strings.Get("MpRadminNotConnectedTitle");
-            RadminBannerBody.Text = Strings.Get("MpRadminNotConnectedBody");
+            // The 26.x adapter keeps its IP even while Radmin is closed /
+            // "Desconectado" (RvControlSvc), so show it here too — it tells the
+            // user the launcher already sees their Radmin IP (and that AoE3 will
+            // bind to it) even though the banner is red / action-required.
+            var offIp = RadminVpnService.TryGetAdapterIp();
+            RadminBannerBody.Text = string.IsNullOrEmpty(offIp)
+                ? Strings.Get("MpRadminNotConnectedBody")
+                : Strings.Format("MpRadminNotConnectedBodyIp", offIp);
             RadminBannerBody.Visibility = Visibility.Visible;
             RadminPrimaryButton.Content = Strings.Get("MpRadminOpenButton");
             RadminPrimaryButton.Visibility = Visibility.Visible;
@@ -5378,6 +5402,23 @@ public partial class MultiplayerTab : UserControl
                 return null;
             }
 
+            // Surface the Radmin state so a launch that can't see the host's
+            // LAN game isn't a silent failure (the DeLos diagnostic bundle:
+            // AoE3 launched with no OverrideAddress → bound to the wrong NIC →
+            // couldn't join). Two levels, keyed off whether we actually got the
+            // flag in: NO OverrideAddress ⇒ no 26.x adapter at all (strong
+            // warning); flag present but Radmin not "ready" (GUI closed / powered
+            // off) ⇒ soft warning — we bound the right NIC but the VPN link isn't up.
+            var injectedOverride = extraArgs.Contains("OverrideAddress", StringComparison.Ordinal);
+            if (!injectedOverride)
+            {
+                AppendChatSystem(Strings.Get("MpChatRadminNoAdapter"));
+            }
+            else if (!RadminVpnService.GetStatus().IsServiceRunning)
+            {
+                AppendChatSystem(Strings.Get("MpChatRadminNotReady"));
+            }
+
             // n2n virtual-LAN flow: every peer's edge.exe presents the
             // room as a real LAN segment on 10.99.0.0/24, so both host
             // and joiner just walk through AoE3's stock LAN UI — no
@@ -5446,10 +5487,27 @@ public partial class MultiplayerTab : UserControl
         //     adapter IP it finds first (the VirtualBox NIC, here).
         //   * The skip-intro switches above (`+noIntroCinematics`, etc.)
         //     legitimately ARE `+` cvars and stay prefixed — they work.
-        var radmin = RadminVpnService.GetStatus();
-        if (radmin.IsServiceRunning && !string.IsNullOrEmpty(radmin.AdapterIp))
+        //
+        // Bind to the adapter IP directly (RadminVpnService.TryGetAdapterIp),
+        // NOT to the readiness-gated RadminStatus.AdapterIp. The background
+        // RvControlSvc keeps the 26.x adapter Up even with the Radmin app
+        // closed or powered off, so the IP is readable — and worth injecting —
+        // regardless of the "ready to play" banner. This is the fix for the
+        // silent-omission bug (a joiner whose Radmin GUI was closed launched
+        // AoE3 with no OverrideAddress → it bound to VirtualBox/wifi → couldn't
+        // see the host's LAN game). The chat warnings live in LaunchActiveModGame.
+        var adapterIp = RadminVpnService.TryGetAdapterIp();
+        // Snapshot the full Radmin state at the launch instant so the bundle
+        // shows exactly why the flag went in or not (app/power/adapter).
+        var radminState = RadminVpnService.DescribeStateForLog();
+        if (!string.IsNullOrEmpty(adapterIp))
         {
-            sb.Append(" OverrideAddress=\"").Append(radmin.AdapterIp).Append('"');
+            sb.Append(" OverrideAddress=\"").Append(adapterIp).Append('"');
+            DiagnosticLog.Write($"MultiplayerTab.BuildMultiplayerLaunchArgs: OverrideAddress injected 26.x={adapterIp} [{radminState}]");
+        }
+        else
+        {
+            DiagnosticLog.Write($"MultiplayerTab.BuildMultiplayerLaunchArgs: OverrideAddress OMITTED — no 26.x Radmin adapter Up [{radminState}]");
         }
 
         return sb.ToString();

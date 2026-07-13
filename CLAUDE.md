@@ -210,6 +210,66 @@ Two cheap gates beyond a green build:
   `WinDivert` / `PeerMesh` / `n2n` / `ZeroTier` mentions are historical comments.
   **Trust the code over both the README and stale comments here.**
 
+- **The game-launch `OverrideAddress` injection binds to the Radmin ADAPTER IP,
+  NOT the readiness-gated `RadminStatus.AdapterIp` — and a launch that can't bind
+  it WARNS in the chat instead of failing silently.** The MP launch
+  (`MultiplayerTab.BuildMultiplayerLaunchArgs`) appends `OverrideAddress="<26.x>"`
+  so AoE3's LAN discovery binds to the Radmin NIC. It USED to gate that on
+  `RadminVpnService.GetStatus().IsServiceRunning` (which requires the GUI process
+  ALIVE + power ON + adapter Up), so a joiner whose Radmin app was merely CLOSED
+  launched with **no** `OverrideAddress` → AoE3 auto-picked the first NIC
+  (VirtualBox/wifi) → never saw the host's LAN game — a **silent** failure (a real
+  diagnostic bundle: user DeLos, `extraArgs='+noIntroCinematics +disableESOProfile
+  +dontDetectNAT'`, no OverrideAddress). Fix: bind to
+  `RadminVpnService.TryGetAdapterIp()` — a NEW helper that enumerates the 26.x
+  Radmin NIC WITHOUT the app/power gates (the background `RvControlSvc` keeps the
+  adapter Up with its static 26.x identity IP even when the app is closed or
+  "Desconectado", so the IP is readable and worth injecting regardless of the
+  banner). `DetectServiceRunning` now calls the same helper AFTER its gates
+  (banner semantics unchanged — zero regression). `BuildMultiplayerLaunchArgs`
+  LOGS the outcome both ways (`OverrideAddress injected 26.x=<ip>` /
+  `OverrideAddress OMITTED — no 26.x Radmin adapter Up`) so the next bundle is
+  diagnosable. `LaunchActiveModGame` surfaces two chat warnings, keyed off whether
+  the flag actually went in: NO `OverrideAddress` (no 26.x adapter at all) →
+  strong `MpChatRadminNoAdapter`; flag present but `IsServiceRunning == false`
+  (Radmin closed / powered off) → soft `MpChatRadminNotReady` ("bound your IP but
+  Radmin isn't active — connect it"). Don't re-gate the injection on
+  `IsServiceRunning`, and don't bind to `RadminStatus.AdapterIp` (null unless the
+  full gate passes). The injection FORM is untouched (`OverrideAddress="<ip>"`, no
+  `+`, double quotes — verified in-game; see the launch-args doc-comment).
+  **Radmin state is now LOGGED (on change + at launch) and the "not ready" banner
+  shows the adapter IP even while Radmin is off** — because a bundle where "Radmin
+  was open but wasn't recognized" gave ZERO clue why (`GetStatus()` was never
+  logged, so nothing recorded WHICH gate — GUI process / power / adapter — rejected
+  it). `RadminVpnService.DescribeStateForLog()` composes a one-line English summary
+  of every sub-signal (`installed=… app=running|NOT-running(Rv procs: …) power=On|Off|Unknown
+  adapter=<26.x|none> serviceRunning=…`); when the GUI process isn't detected it
+  lists the running `Rv*` process names (`ListRunningRvProcessNames`) — that's what
+  would surface a Radmin version whose GUI binary isn't the exactly-matched
+  `RvRvpnGui.exe`. `RefreshRadminBanner` writes it to the diagnostic log **only on
+  a state CHANGE** (guarded by `_lastRadminLogSig`, so the 3 s poll stays quiet but
+  records every transition), and `BuildMultiplayerLaunchArgs` appends it to the
+  launch line so the launch instant is captured. Separately, the RED "not
+  ready" banner branch (`!IsServiceRunning`) now shows the 26.x IP via
+  `TryGetAdapterIp()` (`MpRadminNotConnectedBodyIp`) when the adapter has one — the
+  launcher already sees the user's Radmin IP even when the banner is red. The
+  detection gate (`IsServiceRunning`, `RvRvpnGui.exe` process name) was
+  deliberately NOT relaxed — get the log first; a confirmed process-name mismatch
+  in a future bundle is a separate, targeted fix.
+  **Radmin-off messaging is INFORMATIONAL, never a blocker — creating and JOINING
+  rooms are NOT gated on Radmin.** Joining (`JoinLobbyCoreAsync`) is gated only by
+  the mod fingerprint; Create is never disabled. So a room is created AND joinable
+  with Radmin off, and the game auto-injects the 26.x IP regardless — Radmin's
+  tunnel is only needed for actual in-game peer connectivity. The old
+  `CreateLobbyDialog` warning ("other players won't be able to join until you turn
+  Radmin on") was FALSE and scared testers off; it's now an ℹ info note chosen by
+  `RadminVpnService.TryGetAdapterIp()`: IP present → `MpCreateDialogRadminInfo`
+  (room created, IP `{0}` injected automatically, connect Radmin to play); IP
+  absent → `MpCreateDialogRadminWarning` (install/enable Radmin to play). Same
+  softening on the two launch chat lines (`MpChatRadminNoAdapter` /
+  `MpChatRadminNotReady`). Don't reword these back to imply Radmin blocks
+  create/join, and don't add a Radmin gate to the join path.
+
 - **The History subtab is fed by a HOST-ONLY, unranked match report at game
   exit — don't re-add per-player reporting or an ELO/win-loss display.** The
   Multiplayer → History tab (`RefreshHistoryAsync`/`BuildHistoryRow`) was fully

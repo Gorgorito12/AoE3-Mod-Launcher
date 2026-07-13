@@ -136,16 +136,28 @@ public partial class CreateLobbyDialog : Window
             }
         }
 
-        // Non-blocking heads-up if Radmin VPN isn't recognised as active — the
-        // room can still be created, but peers can't join until Radmin is on.
-        // Same signal the Multiplayer-tab banner uses (GetStatus().IsServiceRunning
-        // = GUI alive + not powered off + Up 26.x adapter). Best-effort: a probe
-        // failure just leaves the warning hidden, never blocks the dialog.
+        // INFORMATIONAL (not blocking, not discouraging) heads-up when Radmin
+        // isn't recognised as active. Creating the room and joining it are NEVER
+        // gated on Radmin (join is gated only by the mod fingerprint; Create is
+        // never disabled), and the game already auto-injects the 26.x IP via
+        // OverrideAddress — so the old "other players won't be able to join"
+        // copy was FALSE and scared testers off. The real requirement is only
+        // for actual in-game play (peers need Radmin's tunnel up on the AoE3
+        // network). Two tones by whether we can read an injectable 26.x IP:
+        //   * IP present (adapter Up even with the app closed / "Desconectado")
+        //     → info note WITH the IP (it's injected automatically).
+        //   * IP absent (not installed / adapter down) → info note to
+        //     install/enable Radmin.
+        // Best-effort: a probe failure just leaves the note hidden.
         try
         {
-            if (!RadminVpnService.GetStatus().IsServiceRunning)
+            var status = RadminVpnService.GetStatus();
+            if (!status.IsServiceRunning)
             {
-                RadminWarning.Text = Strings.Get("MpCreateDialogRadminWarning");
+                var ip = RadminVpnService.TryGetAdapterIp();
+                RadminWarning.Text = string.IsNullOrEmpty(ip)
+                    ? Strings.Get("MpCreateDialogRadminWarning")
+                    : Strings.Format("MpCreateDialogRadminInfo", ip);
                 RadminWarning.Visibility = Visibility.Visible;
             }
         }

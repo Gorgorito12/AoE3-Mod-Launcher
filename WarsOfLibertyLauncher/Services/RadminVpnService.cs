@@ -206,17 +206,8 @@ public static class RadminVpnService
             // Radmin is switched off. See RadminLogService.GetPowerState.
             if (s_powerState == RadminPowerState.Off) return (false, null);
 
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (!nic.Name.Contains("Radmin", StringComparison.OrdinalIgnoreCase)) continue;
-                if (nic.OperationalStatus != OperationalStatus.Up) continue;
-                foreach (var uni in nic.GetIPProperties().UnicastAddresses)
-                {
-                    if (uni.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
-                    var ipStr = uni.Address.ToString();
-                    if (ipStr.StartsWith("26.", StringComparison.Ordinal)) return (true, ipStr);
-                }
-            }
+            var ip = TryGetAdapterIp();
+            if (ip != null) return (true, ip);
         }
         catch (Exception ex)
         {
@@ -226,6 +217,110 @@ public static class RadminVpnService
             DiagnosticLog.Write($"RadminVpnService.DetectServiceRunning: {ex.Message}");
         }
         return (false, null);
+    }
+
+    /// <summary>
+    /// The IPv4 address (26.0.0.0/8) of an "up" Radmin adapter, or null when
+    /// there's none — WITHOUT the GUI-running / power-state gates that
+    /// <see cref="DetectServiceRunning"/> applies. The background service
+    /// <c>RvControlSvc</c> keeps the adapter Up with its static 26.x identity
+    /// IP whether the Radmin app is open, closed, or powered off
+    /// ("Desconectado"), so this reads the IP that the game should bind to
+    /// even when the "ready to play" banner would be red.
+    ///
+    /// This is why AoE3's <c>OverrideAddress</c> is bound to this IP rather
+    /// than to <see cref="RadminStatus.AdapterIp"/> (which is null unless the
+    /// full readiness gate passes): ligar el juego al NIC 26.x correcto es
+    /// siempre mejor que dejarlo auto-elegir la wifi / VirtualBox, y si el
+    /// usuario prende Radmin justo después ya queda ligado al adaptador bueno.
+    /// Never throws — returns null on any enumeration error.
+    /// </summary>
+    public static string? TryGetAdapterIp()
+    {
+        try
+        {
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (!nic.Name.Contains("Radmin", StringComparison.OrdinalIgnoreCase)) continue;
+                if (nic.OperationalStatus != OperationalStatus.Up) continue;
+                foreach (var uni in nic.GetIPProperties().UnicastAddresses)
+                {
+                    if (uni.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
+                    var ipStr = uni.Address.ToString();
+                    if (ipStr.StartsWith("26.", StringComparison.Ordinal)) return ipStr;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"RadminVpnService.TryGetAdapterIp: {ex.Message}");
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// One-line, English summary of every sub-signal behind
+    /// <see cref="RadminStatus.IsServiceRunning"/> — for the diagnostic log.
+    /// The record only exposes the collapsed <c>IsServiceRunning</c> boolean,
+    /// so a bundle where Radmin "was open but wasn't recognized" gives no clue
+    /// WHICH gate rejected it. This spells out all three: the GUI process, the
+    /// log power toggle, and the 26.x adapter — plus, when the GUI process
+    /// isn't detected, the list of Rv* processes that ARE running (which
+    /// surfaces a process-name mismatch across Radmin versions, since the
+    /// detection matches EXACTLY <c>RvRvpnGui.exe</c>). Never throws.
+    /// </summary>
+    public static string DescribeStateForLog()
+    {
+        try
+        {
+            var (exe, _) = FindInstallation();
+            if (exe == null) return "installed=NotInstalled";
+
+            var app = IsAppRunning();
+            var appPart = app
+                ? "app=running"
+                : $"app=NOT-running(Rv procs: {ListRunningRvProcessNames()})";
+            var power = s_powerState;      // cached; refreshed off-thread by MaybeRefreshPowerState
+            var ip = TryGetAdapterIp();
+            var serviceRunning = app && power != RadminPowerState.Off && ip != null;
+            return $"installed=Installed {appPart} power={power} adapter={ip ?? "none"} serviceRunning={serviceRunning}";
+        }
+        catch (Exception ex)
+        {
+            return $"state-probe-failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Comma-separated names of the currently-running processes that look like
+    /// Radmin's (name starts with "Rv" or contains "radmin"), or "none". Used
+    /// only by <see cref="DescribeStateForLog"/> when the exact
+    /// <c>RvRvpnGui.exe</c> gate fails, to reveal a version whose GUI process
+    /// is named differently. Never throws.
+    /// </summary>
+    private static string ListRunningRvProcessNames()
+    {
+        try
+        {
+            var names = new System.Collections.Generic.SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in Process.GetProcesses())
+            {
+                try
+                {
+                    var n = p.ProcessName;
+                    if (n.StartsWith("Rv", StringComparison.OrdinalIgnoreCase) ||
+                        n.Contains("radmin", StringComparison.OrdinalIgnoreCase))
+                        names.Add(n);
+                }
+                catch { /* process exited between enumeration and read */ }
+                finally { p.Dispose(); }
+            }
+            return names.Count == 0 ? "none" : string.Join(", ", names);
+        }
+        catch (Exception ex)
+        {
+            return $"enum-failed: {ex.Message}";
+        }
     }
 
     /// <summary>
