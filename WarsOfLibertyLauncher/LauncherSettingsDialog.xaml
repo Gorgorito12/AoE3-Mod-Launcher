@@ -273,6 +273,9 @@
                         <CheckBox x:Name="SoundsCheck"/>
                         <TextBlock x:Name="SoundsHint" Style="{StaticResource HintText}"/>
 
+                        <CheckBox x:Name="ReceiveInvitesCheck"/>
+                        <TextBlock x:Name="ReceiveInvitesHint" Style="{StaticResource HintText}"/>
+
                         <Border Style="{StaticResource DialogDivider}"/>
 
                         <!-- Radmin assistant mode — decides whether the

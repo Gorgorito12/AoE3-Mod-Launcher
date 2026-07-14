@@ -3518,9 +3518,23 @@ public partial class MultiplayerTab : UserControl
             }
         });
 
+    /// <summary>Cooldown window between accepted invites from the SAME sender (anti-spam).</summary>
+    private const long InviteCooldownMs = 60_000;
+    /// <summary>Last-accepted invite tick per sender key, for the cooldown gate.</summary>
+    private readonly Dictionary<string, long> _inviteCooldownByUser = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Senders the user chose to silence THIS session (in-memory, cleared on restart).</summary>
+    private readonly HashSet<string> _ignoredInviters = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// A room invite arrived (someone invited me to their room). Show an in-app
-    /// toast with Join / Ignore. Join reuses the same path as the deep link.
+    /// toast with Join / Mute. Join reuses the same path as the deep link.
+    ///
+    /// Receiver-side anti-spam (complements the backend's sender-side rate-limit +
+    /// room-membership validation): three gates drop the invite SILENTLY (no toast,
+    /// no sound) — the global <c>ReceiveInvites</c> opt-out, a per-sender ~60 s
+    /// cooldown (kills a flood), and a session-only "silence this player" set. The
+    /// sender key is <c>from.userId</c> (fallback <c>from.id</c>, fallback login) so
+    /// it stays stable across a griefer's repeat invites.
     /// </summary>
     private void HandleInviteFrame(JsonElement json)
     {
@@ -3529,15 +3543,45 @@ public partial class MultiplayerTab : UserControl
         var roomName = json.TryGetProperty("roomName", out var rn) ? (rn.GetString() ?? "") : "";
         var modId = json.TryGetProperty("modId", out var m) ? (m.GetString() ?? "") : "";
         var fromLogin = "";
+        var fromId = "";
         if (json.TryGetProperty("from", out var from) && from.ValueKind == JsonValueKind.Object)
+        {
             fromLogin = from.TryGetProperty("login", out var fl) ? (fl.GetString() ?? "") : "";
+            fromId = from.TryGetProperty("userId", out var fu) ? (fu.GetString() ?? "") : "";
+            if (string.IsNullOrEmpty(fromId))
+                fromId = from.TryGetProperty("id", out var fi2) ? (fi2.GetString() ?? "") : "";
+        }
         if (string.IsNullOrWhiteSpace(fromLogin)) fromLogin = Strings.Get("MpRoomTitleGeneric");
+        // Stable identity for the anti-spam gates: userId when present, else the login.
+        var senderKey = !string.IsNullOrEmpty(fromId) ? fromId : fromLogin;
+
+        // Gate 1: global opt-out (Settings → "Receive invitations").
+        if (!(_config?.ReceiveInvites ?? true))
+        {
+            DiagnosticLog.Write($"Invite from '{fromLogin}' dropped — invitations disabled in settings.");
+            return;
+        }
+        // Gate 2: session mute of this sender.
+        if (_ignoredInviters.Contains(senderKey))
+        {
+            DiagnosticLog.Write($"Invite from '{fromLogin}' dropped — sender silenced this session.");
+            return;
+        }
+        // Gate 3: per-sender cooldown (anti-flood).
+        var now = Environment.TickCount64;
+        if (_inviteCooldownByUser.TryGetValue(senderKey, out var last) && now - last < InviteCooldownMs)
+        {
+            DiagnosticLog.Write($"Invite from '{fromLogin}' dropped — within {InviteCooldownMs / 1000}s cooldown.");
+            return;
+        }
+        _inviteCooldownByUser[senderKey] = now;
 
         var modName = ResolveModDisplayName(modId);
         var body = string.IsNullOrWhiteSpace(roomName)
             ? modName
             : $"{roomName}  ·  {modName}";
 
+        var muteLabel = fromLogin;   // capture for the confirmation toast
         _showAppToast?.Invoke(new AppToast.ToastOptions(
             "📨",   // 📨
             Strings.Format("MpInviteToastTitle", fromLogin),
@@ -3546,7 +3590,15 @@ public partial class MultiplayerTab : UserControl
             {
                 new AppToast.ToastAction(Strings.Get("MpToastJoin"), true,
                     () => _ = JoinByLobbyIdAsync(lobbyId)),
-                new AppToast.ToastAction(Strings.Get("MpToastIgnore"), false, () => { }),
+                // "Mute" silences this sender for the session (the ✕ / auto-dismiss
+                // still handle "ignore just this one").
+                new AppToast.ToastAction(Strings.Get("MpToastMute"), false, () =>
+                {
+                    _ignoredInviters.Add(senderKey);
+                    _showAppToast?.Invoke(new AppToast.ToastOptions(
+                        "🔕", Strings.Format("MpInviteMutedConfirm", muteLabel), null,
+                        System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 4000));
+                }),
             }));
         Services.SoundService.PlayConnect();
     }
@@ -5776,6 +5828,15 @@ public partial class MultiplayerTab : UserControl
             RefreshRosterHealthDots();
         };
         _lobbyPingTimer.Start();
+        // Re-announce our Radmin IP to THIS room's socket immediately. The dedup
+        // guard is per-launcher-session (only reset in EnterInGamePhase), so
+        // entering a SECOND room in one session with the same IP would otherwise
+        // early-return in MaybeReportRadminIp (Equals true) → set_radmin_ip never
+        // reaches the new socket → we'd read "Esperando VPN" forever in room #2.
+        // Clearing it here makes every room re-report; the immediate call also
+        // kills the ~2.5 s "Esperando VPN" flicker before the first timer Tick.
+        _lastReportedRadminIp = null;
+        MaybeReportRadminIp();
         KickConnectionPing();
         UpdateLobbyPing();
 
@@ -6221,11 +6282,24 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// Report our current Radmin VPN IP (26.x) to the room so peers can ping us,
     /// but only when it's known AND changed since last time. Cheap no-op when the
-    /// user isn't on Radmin yet (AdapterIp null) or hasn't changed.
+    /// user isn't on Radmin yet (no 26.x adapter) or hasn't changed.
+    ///
+    /// Reads the IP via <see cref="RadminVpnService.TryGetAdapterIp"/> — the
+    /// GATE-FREE enumeration of the 26.x NIC — NOT <c>GetStatus().AdapterIp</c>,
+    /// which is null unless the full readiness gate passes (GUI RvRvpnGui.exe
+    /// alive + power ≠ Off + adapter Up). This is the SAME IP the game binds
+    /// <c>OverrideAddress</c> to at launch, so the roster's health-dot reflects
+    /// the address that actually plays: a user whose Radmin GUI is merely closed
+    /// (but the background RvControlSvc keeps the 26.x adapter Up) would otherwise
+    /// launch bound to the correct NIC yet be reported to everyone as
+    /// "Esperando VPN" — a real diagnostic bundle (serviceRunning=False,
+    /// adapter=26.58.19.45). Gating this on GetStatus was the exact bug the
+    /// OverrideAddress injection already fixed; keep the two paths reading the
+    /// same IP. "Esperando VPN" now only means "no 26.x adapter at all".
     /// </summary>
     private void MaybeReportRadminIp()
     {
-        var ip = RadminVpnService.GetStatus().AdapterIp;
+        var ip = RadminVpnService.TryGetAdapterIp();
         if (string.IsNullOrEmpty(ip) || string.Equals(ip, _lastReportedRadminIp, StringComparison.Ordinal))
             return;
         var sock = _session?.RoomSocket;

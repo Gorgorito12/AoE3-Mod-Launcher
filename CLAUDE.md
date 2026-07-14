@@ -2222,7 +2222,20 @@ Two cheap gates beyond a green build:
   lobbyId, roomName, modId}` to the target's one socket + acks the sender
   `invite_sent`. The recipient's `HandleInviteFrame` shows an AppToast whose Join runs
   the SAME `JoinByLobbyIdAsync` as the deep link. Invite errors (`invite_*`) surface as a
-  toast, not the chat composer notice. (2) **lobby_created** — POST /lobbies broadcasts it
+  toast, not the chat composer notice. **Receiver-side anti-spam (3 client-only gates in
+  `HandleInviteFrame`, complement the backend's sender-side rate-limit + room-membership
+  validation — no backend change):** each incoming invite is dropped SILENTLY (no toast, no
+  `PlayConnect` sound, logged) when (a) the global opt-out `LauncherConfig.ReceiveInvites` is
+  off (Settings → "Let players invite me…" / `DlgSettingsReceiveInvites`, default true), (b)
+  the sender is in the session-only mute set `_ignoredInviters` (the toast's **"Mute"** action
+  = the old no-op "Ignore" repurposed; adds the sender + shows a 🔕 confirm; NOT persisted, so
+  a restart clears it — the global toggle is the durable opt-out), or (c) the sender is within
+  the per-sender `InviteCooldownMs` (60 s) window tracked in `_inviteCooldownByUser` (kills a
+  flood). All three key off a stable `senderKey` = `from.userId` (fallback `from.id`, fallback
+  `from.login`) so a griefer's repeat invites collapse to one identity; the toast's ✕ /
+  auto-dismiss still handle "ignore just this one". Don't persist the mute set or drop the
+  cooldown; if the community grows, THEN lower `globalChatInvitesPerMin` / add backend
+  strike-timeout (like the global chat), not now. (2) **lobby_created** — POST /lobbies broadcasts it
   (backend `announceLobbyCreated`, **skips private rooms**); `HandleLobbyCreatedFrame`
   hands it to `MainWindow.OnNewRoomFromWs`, which SHARES the poll's dedup (`_knownLobbyIds`
   + `NotifiedRoomIds.TryMarkRoomNotified`), gates (not my room, mod installed), shows the
@@ -2463,9 +2476,9 @@ Two cheap gates beyond a green build:
   "—".) **The in-game per-peer RTT column is now REAL (not a placeholder).** It
   used to be `…` because the launcher couldn't map a Discord login to a Radmin IP.
   That's solved end-to-end: each launcher reports its own Radmin IP (26.x) via the
-  `set_radmin_ip` WS frame at `EnterInGamePhase` (NOT at join — the user often
-  isn't on the VPN yet then; re-sent each tick if it changes, `MaybeReportRadminIp`);
-  the backend stores it on the room member and broadcasts `member_net` + includes
+  `set_radmin_ip` WS frame — sent on room ENTRY (`OpenLobbyWindow`) and at
+  `EnterInGamePhase`, re-sent each tick if it changes (`MaybeReportRadminIp`); the
+  backend stores it on the room member and broadcasts `member_net` + includes
   it in `room_state.members[x].radminIp`; `HandleMemberNet`/`HandleRoomState` save
   it on `RoomMemberEntry.RadminIp`; and `KickPeerPings` (off the 1s in-game tick,
   parallel, guarded by `_peerPingInFlight`) ICMP-pings every peer's Radmin IP via
@@ -2499,6 +2512,26 @@ Two cheap gates beyond a green build:
   `MaybeReportRadminIp`/`KickPeerPings`/`RefreshRosterHealthDots`, which recolours the
   roster's per-member dot (Tagged with the userId in `BuildMemberRow`) in place — the old
   always-green dot was static. Your own row is always green / "vos".
+  **Two load-bearing rules keep the reported IP consistent with the game — both were the
+  SAME "Esperando VPN despite the game working" bug.** (1) `MaybeReportRadminIp` reads
+  `RadminVpnService.TryGetAdapterIp()` (the GATE-FREE 26.x enumeration), NOT
+  `GetStatus().AdapterIp` (null unless the full readiness gate passes: GUI `RvRvpnGui.exe`
+  alive + power ≠ Off + adapter Up). It MUST match what `OverrideAddress` binds at launch —
+  else a user whose Radmin GUI is merely CLOSED (background `RvControlSvc` keeps the adapter
+  Up) launches bound to the correct NIC yet is reported to everyone as `WaitingVpn`
+  "Esperando VPN" the whole match (real bundle: `serviceRunning=False adapter=26.58.19.45`,
+  game played ~30 min fine). This is the exact class of bug the `OverrideAddress` injection
+  already fixed; don't re-gate the report on `GetStatus`. "Esperando VPN" now means only
+  "no 26.x adapter at all". **Semantics nuance:** a player with the adapter Up but Radmin
+  *powered off* now shows red "Sin conexión" (peers' ICMP gets no reply through the dead
+  tunnel) instead of grey "Esperando VPN" — genuinely unreachable, so honest. (2) The dedup
+  guard `_lastReportedRadminIp` is reset **on every room ENTRY** (`OpenLobbyWindow`, plus an
+  immediate `MaybeReportRadminIp()` there to kill the ~2.5 s pre-first-Tick flicker), not
+  only in `EnterInGamePhase`. The guard is per-launcher-session, so without the entry reset
+  a user entering a SECOND room with an unchanged IP would `Equals`-short-circuit → never
+  `set_radmin_ip` to the new socket → stuck "Esperando VPN" in room #2 (100% reproducible:
+  create a room, leave, join another). Don't drop either the entry reset or the immediate
+  report.
 
 - **The rooms browser auto-refreshes its LIST on a quiet diff — separate from the
   PING timer above.** New / closed rooms now appear without pressing *Actualizar*:

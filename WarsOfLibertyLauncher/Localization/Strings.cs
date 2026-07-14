@@ -2788,6 +2788,27 @@ public static class Strings
                      + "un pop cuando un jugador entra a tu sala o aparece una sala nueva. Nunca suena por tu propio "
                      + "mensaje. Desactivalo para un launcher totalmente silencioso.",
         },
+        ["DlgSettingsReceiveInvites"] = new()
+        {
+            [LangEn] = "Let players invite me to their rooms",
+            [LangEs] = "Permitir que me inviten a sus salas",
+        },
+        ["DlgSettingsReceiveInvitesHint"] = new()
+        {
+            [LangEn] = "Get a toast when someone invites you to their match. Repeat invites are throttled.",
+            [LangEs] = "Recibí un aviso cuando alguien te invita a su partida. Las invitaciones repetidas se limitan.",
+        },
+        ["DlgSettingsReceiveInvitesTip"] = new()
+        {
+            [LangEn] = "An in-app toast (with a Join button) when another player invites you to their "
+                     + "multiplayer room. Repeated invites from the same player are silenced for ~60s, and "
+                     + "each toast has a Mute button to stop that player for the session. Turn this off to "
+                     + "refuse all invites.",
+            [LangEs] = "Un aviso in-app (con botón Unirse) cuando otro jugador te invita a su sala "
+                     + "multijugador. Las invitaciones repetidas del mismo jugador se silencian ~60s, y cada "
+                     + "aviso tiene un botón Silenciar para frenar a ese jugador durante la sesión. Desactivalo "
+                     + "para rechazar todas las invitaciones.",
+        },
         ["DlgLauncherSettingsSectionPrivacy"] = new()
         {
             [LangEn] = "PRIVACY",
@@ -2984,6 +3005,16 @@ public static class Strings
         {
             [LangEn] = "Ignore",
             [LangEs] = "Ignorar",
+        },
+        ["MpToastMute"] = new()
+        {
+            [LangEn] = "Mute",
+            [LangEs] = "Silenciar",
+        },
+        ["MpInviteMutedConfirm"] = new()
+        {
+            [LangEn] = "You won't get invites from {0} this session",
+            [LangEs] = "No recibirás más invitaciones de {0} esta sesión",
         },
         ["NotifInstalledTitle"] = new()
         {

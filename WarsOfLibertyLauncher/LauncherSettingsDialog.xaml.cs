@@ -174,6 +174,9 @@ public partial class LauncherSettingsDialog : Window
         SoundsCheck.Content = Strings.Get("DlgSettingsSounds");
         SoundsHint.Text = Strings.Get("DlgSettingsSoundsHint");
         SetTip(SoundsCheck, "DlgSettingsSoundsTip");
+        ReceiveInvitesCheck.Content = Strings.Get("DlgSettingsReceiveInvites");
+        ReceiveInvitesHint.Text = Strings.Get("DlgSettingsReceiveInvitesHint");
+        SetTip(ReceiveInvitesCheck, "DlgSettingsReceiveInvitesTip");
 
         // Radmin assistant mode picker. Combo items tagged with the
         // raw enum strings ("Auto"/"OnRequest"/"Never") so saving is
@@ -295,6 +298,7 @@ public partial class LauncherSettingsDialog : Window
         ShowToastsCheck.IsChecked = _config.ShowToastNotifications;
         NotifyNewRoomsCheck.IsChecked = _config.NotifyNewRooms;
         SoundsCheck.IsChecked = _config.EnableSounds;
+        ReceiveInvitesCheck.IsChecked = _config.ReceiveInvites;
         AutoCheckCheck.IsChecked = _config.CheckUpdatesOnStartup;
         OpenPostUpdateCheck.IsChecked = _config.OpenPostUpdatePages;
         TelemetryCheck.IsChecked = _config.MultiplayerTelemetryEnabled;
@@ -829,6 +833,7 @@ public partial class LauncherSettingsDialog : Window
         _config.NotifyNewRooms = NotifyNewRoomsCheck.IsChecked == true;
         _config.EnableSounds = SoundsCheck.IsChecked == true;
         Services.SoundService.Enabled = _config.EnableSounds;
+        _config.ReceiveInvites = ReceiveInvitesCheck.IsChecked == true;
         _config.CheckUpdatesOnStartup = AutoCheckCheck.IsChecked == true;
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;

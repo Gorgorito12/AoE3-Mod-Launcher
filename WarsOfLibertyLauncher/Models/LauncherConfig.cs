@@ -857,6 +857,17 @@ public class LauncherConfig
     public bool NotifyNewRooms { get; set; } = true;
 
     /// <summary>
+    /// When true (default), the launcher shows an in-app toast (+ sound) when
+    /// another player invites you to their multiplayer room. A durable global
+    /// opt-out for the invite feature; the receiver-side anti-spam (per-sender
+    /// cooldown + session mute) lives in <see cref="Controls.MultiplayerTab"/>.
+    /// Independent of <see cref="NotifyNewRooms"/> and
+    /// <see cref="ShowToastNotifications"/>. Default true.
+    /// </summary>
+    [JsonPropertyName("receiveInvites")]
+    public bool ReceiveInvites { get; set; } = true;
+
+    /// <summary>
     /// When true (default), the launcher plays short feedback sounds — a chat
     /// blip on an incoming message, a ding on a bell notification, and a pop
     /// when someone connects (joins your room / a new room appears / a player
