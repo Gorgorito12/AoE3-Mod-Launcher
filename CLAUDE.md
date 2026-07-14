@@ -3306,6 +3306,18 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
   literal in XAML/code. A missing key renders as the key itself (a visible
   signal). `Strings.SetLanguage` raises `LanguageChanged` for live refresh.
+  **The `es` register is NEUTRAL LATIN AMERICAN SPANISH with tuteo — NOT voseo,
+  NOT peninsular.** Write new `[LangEs]` values with `tú` forms (`instálalo`,
+  `descárgalo`, `selecciona`, `haz clic`, `tienes`, `mantén`, `ciérralo`), watching
+  the enclitic accents (imperative + pronoun is esdrújula: `instálalo`, `cancélala`,
+  `búscalo`). Don't reintroduce Argentine voseo (`instalá`, `descargá`, `tenés`,
+  `mantené`, `esperá`, `cancelala`, `hacé`, `vos`) or Spain markers (`Pulsa`,
+  `ordenador`, `fichero`, `vale`, `rellenar`, `vosotros`); use `archivo`, `PC`,
+  `haz clic`, `aquí`. The whole table was normalized to this in one pass — a
+  sanity sweep is
+  `git grep -nE "(Instalá|Descargá|Esperá|Mantené|tenés|podés|Pulsa)" Localization/Strings.cs`
+  returning nothing. This applies to the few hardcoded ES literals outside the
+  table too (e.g. the mod blurbs in `Services/ModRegistry.cs`).
   **This includes hover TOOLTIPS — they are localized too, never hardcoded.** A
   newcomer-onboarding pass gave the interactive controls in Settings, the dashboard
   mod buttons, the gear menu / Mod Properties, and the Workshop a clear label + a

@@ -109,14 +109,14 @@ public static class Strings
         {
             [LangEn] = "An operation is in progress. Wait for it to finish " +
                        "(or cancel it from the toolbar) before switching mods.",
-            [LangEs] = "Hay una operación en curso. Esperá a que termine " +
-                       "(o cancelala desde la barra) antes de cambiar de mod.",
+            [LangEs] = "Hay una operación en curso. Espera a que termine " +
+                       "(o cancélala desde la barra) antes de cambiar de mod.",
         },
         ["DlgModSwitchGameRunningBody"] = new()
         {
             [LangEn] = "The game is currently running. Close it before " +
                        "switching to another mod.",
-            [LangEs] = "El juego está abierto. Cerralo antes de cambiar a otro mod.",
+            [LangEs] = "El juego está abierto. Ciérralo antes de cambiar a otro mod.",
         },
         // -------- New layout: top mods bar, sidebar labels, tabs --------
         ["ModsBarLabel"] = new()
@@ -153,7 +153,7 @@ public static class Strings
                        "sidebar — it has tools to verify files, swap folders, " +
                        "back up your user data, and uninstall.",
             [LangEs] = "Todavía no hay ayuda adicional para este mod. Si " +
-                       "tenés algún problema, abrí el menú de configuración " +
+                       "tienes algún problema, abre el menú de configuración " +
                        "en la barra lateral — tiene herramientas para " +
                        "verificar archivos, cambiar carpetas, hacer backup " +
                        "de tus datos y desinstalar.",
@@ -349,7 +349,7 @@ public static class Strings
         ["ProgressCancelledMessage"] = new()
         {
             [LangEn] = "The operation was cancelled. You can resume by retrying.",
-            [LangEs] = "La operación fue cancelada. Podés reintentar para retomarla.",
+            [LangEs] = "La operación fue cancelada. Puedes reintentar para retomarla.",
         },
         // Sub-step phrases used as the panel's subtitle.
         ["ProgressSubDownloading"] = new()
@@ -390,7 +390,7 @@ public static class Strings
         ["StatusModNotInstalledExternal"] = new()
         {
             [LangEn] = "{0} isn't installed yet. Install it from its own site, then come back here to play.",
-            [LangEs] = "{0} todavía no está instalado. Instalalo desde su sitio y volvé acá para jugar.",
+            [LangEs] = "{0} todavía no está instalado. Instálalo desde su sitio y vuelve aquí para jugar.",
         },
         ["StatusStockReady"] = new()
         {
@@ -400,7 +400,7 @@ public static class Strings
         ["StatusStockNotDetected"] = new()
         {
             [LangEn] = "{0} wasn't found on this PC. Install it from Steam, GOG or your retail disc, then reopen the launcher.",
-            [LangEs] = "No se encontró {0} en esta PC. Instalalo desde Steam, GOG o tu disco original y volvé a abrir el launcher.",
+            [LangEs] = "No se encontró {0} en esta PC. Instálalo desde Steam, GOG o tu disco original y vuelve a abrir el launcher.",
         },
         ["Subtitle"] = new()
         {
@@ -673,22 +673,22 @@ public static class Strings
         ["TipCtaPlay"] = new()
         {
             [LangEn] = "Launch the mod and start playing.",
-            [LangEs] = "Abrí el mod y empezá a jugar.",
+            [LangEs] = "Abre el mod y empieza a jugar.",
         },
         ["TipCtaInstall"] = new()
         {
             [LangEn] = "Download and install this mod on your PC. Needs your Age of Empires III installed first.",
-            [LangEs] = "Descargá e instalá este mod en tu PC. Necesita tu Age of Empires III ya instalado.",
+            [LangEs] = "Descarga e instala este mod en tu PC. Necesita tu Age of Empires III ya instalado.",
         },
         ["TipCtaUpdate"] = new()
         {
             [LangEn] = "Install the latest version. Keep your mod current to play online with everyone.",
-            [LangEs] = "Instalá la última versión. Mantené tu mod al día para jugar online con todos.",
+            [LangEs] = "Instala la última versión. Mantén tu mod al día para jugar online con todos.",
         },
         ["TipCtaStop"] = new()
         {
             [LangEn] = "The game is running. Close it to play again.",
-            [LangEs] = "El juego está abierto. Cerralo para volver a jugar.",
+            [LangEs] = "El juego está abierto. Ciérralo para volver a jugar.",
         },
         ["TipGearButton"] = new()
         {
@@ -698,12 +698,12 @@ public static class Strings
         ["TipChangeMod"] = new()
         {
             [LangEn] = "Switch between your installed mods.",
-            [LangEs] = "Cambiá entre tus mods instalados.",
+            [LangEs] = "Cambia entre tus mods instalados.",
         },
         ["TipSearchInstall"] = new()
         {
             [LangEn] = "Already have this mod? Search your PC for it instead of downloading again.",
-            [LangEs] = "¿Ya tenés este mod? Buscalo en tu PC en vez de descargarlo de nuevo.",
+            [LangEs] = "¿Ya tienes este mod? Búscalo en tu PC en vez de descargarlo de nuevo.",
         },
         ["TipPauseResume"] = new()
         {
@@ -720,22 +720,22 @@ public static class Strings
         ["TipMpInstallVersion"] = new()
         {
             [LangEn] = "Install the version selected above. Useful to go back to an older version.",
-            [LangEs] = "Instalá la versión elegida arriba. Útil para volver a una versión anterior.",
+            [LangEs] = "Instala la versión elegida arriba. Útil para volver a una versión anterior.",
         },
         ["TipMpOpenFolder"] = new()
         {
             [LangEn] = "Open the mod's install folder in Explorer.",
-            [LangEs] = "Abrí la carpeta donde está instalado el mod en el Explorador.",
+            [LangEs] = "Abre la carpeta donde está instalado el mod en el Explorador.",
         },
         ["TipMpChangeModFolder"] = new()
         {
             [LangEn] = "Point the launcher at the mod's folder if you moved it or installed it elsewhere.",
-            [LangEs] = "Indicale al launcher dónde está la carpeta del mod si la moviste o la instalaste en otro lado.",
+            [LangEs] = "Indícale al launcher dónde está la carpeta del mod si la moviste o la instalaste en otro lado.",
         },
         ["TipMpAddExistingFolder"] = new()
         {
             [LangEn] = "Register a mod folder you already have on disk, without downloading it again.",
-            [LangEs] = "Registrá una carpeta de mod que ya tenés en el disco, sin volver a descargarla.",
+            [LangEs] = "Registra una carpeta de mod que ya tienes en el disco, sin volver a descargarla.",
         },
         ["TipMpShareDiagnostics"] = new()
         {
@@ -747,22 +747,22 @@ public static class Strings
         ["TipWsRefreshCatalog"] = new()
         {
             [LangEn] = "Get the newest list of community mods.",
-            [LangEs] = "Traé la lista más nueva de mods de la comunidad.",
+            [LangEs] = "Trae la lista más nueva de mods de la comunidad.",
         },
         ["TipWsAddLocal"] = new()
         {
             [LangEn] = "Add a mod you already have in a folder on your PC.",
-            [LangEs] = "Agregá un mod que ya tenés en una carpeta de tu PC.",
+            [LangEs] = "Agrega un mod que ya tienes en una carpeta de tu PC.",
         },
         ["TipWsPublish"] = new()
         {
             [LangEn] = "For mod authors: submit your mod to the community catalog.",
-            [LangEs] = "Para autores de mods: enviá tu mod al catálogo de la comunidad.",
+            [LangEs] = "Para autores de mods: envía tu mod al catálogo de la comunidad.",
         },
         ["TipWsSubTabMyMods"] = new()
         {
             [LangEn] = "The mods you have installed.",
-            [LangEs] = "Los mods que tenés instalados.",
+            [LangEs] = "Los mods que tienes instalados.",
         },
         ["TipWsSubTabCatalog"] = new()
         {
@@ -777,7 +777,7 @@ public static class Strings
         ["TipWsFilterInstalled"] = new()
         {
             [LangEn] = "Show only the mods you have installed.",
-            [LangEs] = "Mostrar solo los mods que tenés instalados.",
+            [LangEs] = "Mostrar solo los mods que tienes instalados.",
         },
         ["TipWsFilterNotInstalled"] = new()
         {
@@ -954,7 +954,7 @@ public static class Strings
         ["ModPropStayOnVersionHint"] = new()
         {
             [LangEn] = "Keeps you on your current version: the launcher won't push updates. Nothing is auto-updated; uncheck to resume. Updates that fix multiplayer compatibility may be needed to play with others.",
-            [LangEs] = "Te mantiene en tu versión actual: el launcher no te empujará a actualizar. Nada se actualiza solo; destildá para reanudar. Algunas actualizaciones arreglan la compatibilidad multijugador y pueden ser necesarias para jugar con otros.",
+            [LangEs] = "Te mantiene en tu versión actual: el launcher no te empujará a actualizar. Nada se actualiza solo; desmarca para reanudar. Algunas actualizaciones arreglan la compatibilidad multijugador y pueden ser necesarias para jugar con otros.",
         },
         ["ModPropVersionSection"] = new()
         {
@@ -964,7 +964,7 @@ public static class Strings
         ["ModPropVersionHint"] = new()
         {
             [LangEn] = "Install or roll back to a specific published version. Older versions may lack fixes and can break multiplayer compatibility with players on the recommended version.",
-            [LangEs] = "Instalá o volvé a una versión publicada específica. Las versiones anteriores pueden no tener correcciones y romper la compatibilidad multijugador con quienes usan la recomendada.",
+            [LangEs] = "Instala o vuelve a una versión publicada específica. Las versiones anteriores pueden no tener correcciones y romper la compatibilidad multijugador con quienes usan la recomendada.",
         },
         ["ModPropVersionInstallBtn"] = new()
         {
@@ -979,7 +979,7 @@ public static class Strings
         ["ModPropVersionsFailed"] = new()
         {
             [LangEn] = "Couldn't load the version list. Check your connection and try again.",
-            [LangEs] = "No se pudo cargar la lista de versiones. Revisá tu conexión e intentá de nuevo.",
+            [LangEs] = "No se pudo cargar la lista de versiones. Revisa tu conexión e intenta de nuevo.",
         },
         ["ModPropVersionsNone"] = new()
         {
@@ -1687,7 +1687,7 @@ public static class Strings
         ["PublishNextStepsBody"] = new()
         {
             [LangEn] = "1. Click \"Open PR on GitHub\" — it opens the catalog's new-file editor with this mod.json pre-filled at mods/<id>/mod.json.\n2. Commit it and create the pull request (GitHub forks the repo for you).\n3. Add your icon.png / banner.png to the same folder in the PR.\n4. Automated checks validate the schema and images. Cosmetic edits and version bumps merge automatically; first-time mods and changes to install/update fields get a manual review.\n5. Once merged, your mod appears in the Catalog after pressing \"Refresh catalog\".\n\nPublishing an UPDATE (GitHubReleases): upload your new build as a .zip on a new GitHub release, then open a tiny PR that only bumps \"approvedReleaseTag\" — that auto-merges. The launcher then shows an Update button; updating adds/overwrites your files and deletes the ones you dropped (see the deletion note on the Updates step). Full guide: https://github.com/Gorgorito12/Updater/blob/main/docs/MODDING.md",
-            [LangEs] = "1. Pulsa \"Abrir PR en GitHub\": abre el editor de archivo nuevo del catálogo con este mod.json ya rellenado en mods/<id>/mod.json.\n2. Confírmalo y crea la pull request (GitHub bifurca el repo por ti).\n3. Agrega tu icon.png / banner.png a la misma carpeta de la PR.\n4. Comprobaciones automáticas validan el esquema y las imágenes. Los cambios cosméticos y de versión se fusionan solos; los mods nuevos y los cambios en campos de instalación/actualización pasan por revisión manual.\n5. Una vez fusionado, tu mod aparece en el Catálogo tras pulsar \"Actualizar catálogo\".\n\nPublicar una ACTUALIZACIÓN (GitHubReleases): sube tu nueva versión como .zip en un release nuevo de GitHub y abre una PR pequeña que solo cambie \"approvedReleaseTag\": se fusiona sola. El launcher mostrará un botón Actualizar; al actualizar añade/sobrescribe tus archivos y borra los que quitaste (ver la nota de borrado en el paso Actualizaciones). Guía completa: https://github.com/Gorgorito12/Updater/blob/main/docs/MODDING.md",
+            [LangEs] = "1. Haz clic en \"Abrir PR en GitHub\": abre el editor de archivo nuevo del catálogo con este mod.json ya cargado en mods/<id>/mod.json.\n2. Confírmalo y crea la pull request (GitHub bifurca el repo automáticamente).\n3. Agrega tu icon.png / banner.png a la misma carpeta de la PR.\n4. Comprobaciones automáticas validan el esquema y las imágenes. Los cambios cosméticos y de versión se fusionan solos; los mods nuevos y los cambios en campos de instalación/actualización pasan por revisión manual.\n5. Una vez fusionado, tu mod aparece en el Catálogo después de hacer clic en \"Actualizar catálogo\".\n\nPublicar una ACTUALIZACIÓN (GitHubReleases): sube tu nueva versión como .zip en un release nuevo de GitHub y abre una PR pequeña que solo cambie \"approvedReleaseTag\": se fusiona sola. El launcher mostrará un botón Actualizar; al actualizar añade/sobrescribe tus archivos y borra los que quitaste (ver la nota de borrado en el paso Actualizaciones). Guía completa: https://github.com/Gorgorito12/Updater/blob/main/docs/MODDING.md",
         },
         // --- Schema-completeness pass: fields the wizard previously omitted. ---
         ["PublishFieldMarker"] = new() { [LangEn] = "Content marker (optional)", [LangEs] = "Marcador de contenido (opcional)" },
@@ -1826,7 +1826,7 @@ public static class Strings
         ["MpHistoryEmpty"] = new()
         {
             [LangEn] = "No matches yet — your first game will appear here.",
-            [LangEs] = "Todavía no hay partidas — tu primera partida aparecerá acá.",
+            [LangEs] = "Todavía no hay partidas — tu primera partida aparecerá aquí.",
         },
         ["MpHistoryPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
         ["MpHistoryReplay"] = new() { [LangEn] = "Replay", [LangEs] = "Repetición" },
@@ -2146,10 +2146,10 @@ public static class Strings
         ["MpGlobalChatSend"] = new() { [LangEn] = "Send", [LangEs] = "Enviar" },
         ["MpGlobalChatEmpty"] = new() { [LangEn] = "No messages yet. Say hi! 👋", [LangEs] = "Todavía no hay mensajes. ¡Saluda! 👋" },
         ["MpGlobalChatConnecting"] = new() { [LangEn] = "Connecting…", [LangEs] = "Conectando…" },
-        ["MpGlobalChatSlowMode"] = new() { [LangEn] = "You're sending too fast — wait a moment.", [LangEs] = "Estás enviando muy rápido, esperá un momento." },
-        ["MpGlobalChatRateLimited"] = new() { [LangEn] = "Too many messages — slow down.", [LangEs] = "Demasiados mensajes, esperá un momento." },
+        ["MpGlobalChatSlowMode"] = new() { [LangEn] = "You're sending too fast — wait a moment.", [LangEs] = "Estás enviando muy rápido, espera un momento." },
+        ["MpGlobalChatRateLimited"] = new() { [LangEn] = "Too many messages — slow down.", [LangEs] = "Demasiados mensajes, espera un momento." },
         ["MpGlobalChatMuted"] = new() { [LangEn] = "You're muted for a moment.", [LangEs] = "Estás silenciado por un momento." },
-        ["MpGlobalChatTimedOut"] = new() { [LangEn] = "Muted for spamming — try again shortly.", [LangEs] = "Silenciado por spam. Probá de nuevo en un rato." },
+        ["MpGlobalChatTimedOut"] = new() { [LangEn] = "Muted for spamming — try again shortly.", [LangEs] = "Silenciado por spam. Prueba de nuevo en un rato." },
         ["MpGlobalChatTooLong"] = new() { [LangEn] = "Message too long (max 500).", [LangEs] = "Mensaje demasiado largo (máx 500)." },
         ["MpRoomJoin"] = new() { [LangEn] = "Join", [LangEs] = "Unirse" },
         ["MpRoomReenter"] = new() { [LangEn] = "Re-enter", [LangEs] = "Reingresar" },
@@ -2180,11 +2180,11 @@ public static class Strings
         ["MpRoomPeekTitle"] = new() { [LangEn] = "Players in room", [LangEs] = "Jugadores en la sala" },
         ["MpRoomPeekLoading"] = new() { [LangEn] = "Loading players…", [LangEs] = "Cargando jugadores…" },
         ["MpRoomPeekEmpty"] = new() { [LangEn] = "No players in this room.", [LangEs] = "No hay jugadores en esta sala." },
-        ["MpRoomPeekError"] = new() { [LangEn] = "Couldn't load the players. Try again.", [LangEs] = "No se pudieron cargar los jugadores. Probá de nuevo." },
+        ["MpRoomPeekError"] = new() { [LangEn] = "Couldn't load the players. Try again.", [LangEs] = "No se pudieron cargar los jugadores. Prueba de nuevo." },
         ["MpOnlinePlayersTitle"] = new() { [LangEn] = "Online players · {0}", [LangEs] = "Jugadores conectados · {0}" },
         ["MpOnlinePlayersEmpty"] = new() { [LangEn] = "No one online.", [LangEs] = "Nadie conectado." },
         ["MpOnlinePlayersTooltip"] = new() { [LangEn] = "See who's online", [LangEs] = "Ver quién está conectado" },
-        ["MpOnlinePlayersYou"] = new() { [LangEn] = "you", [LangEs] = "vos" },
+        ["MpOnlinePlayersYou"] = new() { [LangEn] = "you", [LangEs] = "tú" },
         ["MpPlayersPanelTitle"] = new() { [LangEn] = "Players · {0}", [LangEs] = "Jugadores · {0}" },
         ["MpPlayersInGame"] = new() { [LangEn] = "In game · {0}", [LangEs] = "En partida · {0}" },
         ["MpPlayersInRoom"] = new() { [LangEn] = "In a room · {0}", [LangEs] = "En una sala · {0}" },
@@ -2323,7 +2323,7 @@ public static class Strings
         ["MpChatAbortWindowClosed"] = new()
         {
             [LangEn] = "The abort window has passed — leaving only removes you, the others keep playing.",
-            [LangEs] = "Ya pasó la ventana para abortar; al salir solo te retiras vos y los demás siguen jugando.",
+            [LangEs] = "Ya pasó la ventana para abortar; al salir solo te retiras tú y los demás siguen jugando.",
         },
         // Match aborted by some member within the grace window (was host-only before).
         ["MpChatGameAborted"] = new()
@@ -2447,7 +2447,7 @@ public static class Strings
         ["MpDeepLinkSignInBody"] = new()
         {
             [LangEn] = "You need to sign in with Discord before joining a room from a link.",
-            [LangEs] = "Necesitás iniciar sesión con Discord antes de unirte a una sala desde un enlace.",
+            [LangEs] = "Necesitas iniciar sesión con Discord antes de unirte a una sala desde un enlace.",
         },
         ["MpDeepLinkNotFoundTitle"] = new()
         {
@@ -2516,7 +2516,7 @@ public static class Strings
         ["MpPeerYou"] = new()
         {
             [LangEn] = "you",
-            [LangEs] = "vos",
+            [LangEs] = "tú",
         },
         ["MpPeerWaitingVpn"] = new()
         {
@@ -2561,12 +2561,12 @@ public static class Strings
         ["MpChatRadminNoAdapter"] = new()
         {
             [LangEn] = "ℹ No Radmin VPN adapter detected, so we couldn't set your network IP. Install/enable Radmin VPN to play with others.",
-            [LangEs] = "ℹ No se detectó el adaptador de Radmin VPN, así que no pudimos fijar tu IP de red. Instalá/activá Radmin VPN para jugar con otros.",
+            [LangEs] = "ℹ No se detectó el adaptador de Radmin VPN, así que no pudimos fijar tu IP de red. Instala/activa Radmin VPN para jugar con otros.",
         },
         ["MpChatRadminNotReady"] = new()
         {
             [LangEn] = "ℹ Set your Radmin IP for the game. To play, open Radmin and connect to the AoE3 network.",
-            [LangEs] = "ℹ Fijamos tu IP de Radmin para el juego. Para jugar, abrí Radmin y conectate a la red de AoE3.",
+            [LangEs] = "ℹ Fijamos tu IP de Radmin para el juego. Para jugar, abre Radmin y conéctate a la red de AoE3.",
         },
         ["MpChatLaunchFailed"] = new()
         {
@@ -2616,7 +2616,7 @@ public static class Strings
         ["MpCreateDialogCopyHintReadonly"] = new()
         {
             [LangEn] = "This is the mod's active copy. To host with another copy, switch the active copy from the Library first.",
-            [LangEs] = "Es la copia activa del mod. Para hostear con otra copia, cambiá la copia activa desde la Biblioteca primero.",
+            [LangEs] = "Es la copia activa del mod. Para hostear con otra copia, cambia la copia activa desde la Biblioteca primero.",
         },
         ["MpCreateDialogHashLabel"] = new()
         {
@@ -2629,8 +2629,8 @@ public static class Strings
         {
             [LangEn] = "ℹ Radmin VPN isn't active. You can still create the room and players can join it — "
                      + "to actually play, install/enable Radmin and join the AoE3 network (every player needs it).",
-            [LangEs] = "ℹ Radmin VPN no está activo. Podés crear la sala igual y los jugadores pueden unirse — "
-                     + "para jugar, instalá/activá Radmin y unite a la red de AoE3 (todos los jugadores lo necesitan).",
+            [LangEs] = "ℹ Radmin VPN no está activo. Puedes crear la sala igual y los jugadores pueden unirse — "
+                     + "para jugar, instala/activa Radmin y únete a la red de AoE3 (todos los jugadores lo necesitan).",
         },
         ["MpCreateDialogRadminInfo"] = new()
         {
@@ -2638,7 +2638,7 @@ public static class Strings
                      + "is injected automatically. To actually play, open Radmin and connect to the AoE3 network "
                      + "(every player needs it).",
             [LangEs] = "ℹ Radmin VPN no está activo, pero la sala se crea igual y tu IP de Radmin ({0}) se "
-                     + "inyecta automáticamente. Para jugar, abrí Radmin y conectate a la red de AoE3 (todos "
+                     + "inyecta automáticamente. Para jugar, abre Radmin y conéctate a la red de AoE3 (todos "
                      + "los jugadores lo necesitan).",
         },
         ["MpModNotInstalled"] = new()
@@ -2669,7 +2669,7 @@ public static class Strings
         ["DlgLauncherSettingsStartWithWindowsHint"] = new()
         {
             [LangEn] = "Stay shown as connected to your friends, even without the window open.",
-            [LangEs] = "Aparecés conectado a tus amigos aunque no tengas la ventana abierta.",
+            [LangEs] = "Apareces conectado a tus amigos aunque no tengas la ventana abierta.",
         },
         ["DlgLauncherSettingsStartWithWindowsTip"] = new()
         {
@@ -2678,7 +2678,7 @@ public static class Strings
                      + "→ Exit to fully quit. You can turn this off anytime.",
             [LangEs] = "Se inicia con Windows directo a la bandeja del sistema, y al cerrar la ventana sigue "
                      + "corriendo ahí para que los demás jugadores te sigan viendo conectado. Clic derecho "
-                     + "en el ícono de la bandeja → Salir para cerrarlo del todo. Lo podés apagar cuando quieras.",
+                     + "en el ícono de la bandeja → Salir para cerrarlo del todo. Lo puedes apagar cuando quieras.",
         },
         ["DlgLauncherSettingsJoinLinks"] = new()
         {
@@ -2688,14 +2688,14 @@ public static class Strings
         ["DlgLauncherSettingsJoinLinksHint"] = new()
         {
             [LangEn] = "Click a room's Join link on Discord to open the launcher and jump straight into the room.",
-            [LangEs] = "Tocá el enlace Unirme de una sala en Discord y el launcher se abre y entra directo a la sala.",
+            [LangEs] = "Haz clic en el enlace Unirme de una sala en Discord y el launcher se abre y entra directo a la sala.",
         },
         ["DlgLauncherSettingsJoinLinksTip"] = new()
         {
             [LangEn] = "Registers a wol-launcher:// handler for your user only (no admin needed). "
                      + "Turn off if you'd rather leave no entry in the Windows registry.",
             [LangEs] = "Registra un handler wol-launcher:// solo para tu usuario (sin admin). "
-                     + "Desactivalo si preferís no dejar ninguna entrada en el registro de Windows.",
+                     + "Desactívalo si prefieres no dejar ninguna entrada en el registro de Windows.",
         },
         ["DlgLauncherSettingsCloseOnGame"] = new()
         {
@@ -2705,14 +2705,14 @@ public static class Strings
         ["DlgLauncherSettingsCloseOnGameHint"] = new()
         {
             [LangEn] = "Frees up resources while you play.",
-            [LangEs] = "Libera recursos mientras jugás.",
+            [LangEs] = "Libera recursos mientras juegas.",
         },
         ["DlgLauncherSettingsCloseOnGameTip"] = new()
         {
             [LangEn] = "The launcher closes itself once the game opens. You reopen it by hand after "
                      + "the game closes. Leave off if you want the launcher (and multiplayer chat) to stay open.",
-            [LangEs] = "El launcher se cierra solo cuando abre el juego. Lo volvés a abrir a mano cuando el "
-                     + "juego cierra. Dejalo apagado si querés que el launcher (y el chat multijugador) siga abierto.",
+            [LangEs] = "El launcher se cierra solo cuando abre el juego. Lo vuelves a abrir a mano cuando el "
+                     + "juego cierra. Déjalo apagado si quieres que el launcher (y el chat multijugador) siga abierto.",
         },
         ["DlgLauncherSettingsMinimizeToTray"] = new()
         {
@@ -2732,7 +2732,7 @@ public static class Strings
                      + "to make the X quit the launcher like before.",
             [LangEs] = "Activado por defecto: la X manda el launcher a la bandeja del sistema para que siga "
                      + "corriendo (y aparezcas conectado). Doble clic en el ícono para volver a abrirlo, o "
-                     + "clic derecho → Salir para cerrarlo del todo. El botón minimizar no cambia. Desactivalo "
+                     + "clic derecho → Salir para cerrarlo del todo. El botón minimizar no cambia. Desactívalo "
                      + "para que la X cierre el launcher como antes.",
         },
         ["DlgLauncherSettingsShowToasts"] = new()
@@ -2743,14 +2743,14 @@ public static class Strings
         ["DlgLauncherSettingsShowToastsHint"] = new()
         {
             [LangEn] = "Get a heads-up when a download or update is done.",
-            [LangEs] = "Te enterás cuando termina una descarga o actualización.",
+            [LangEs] = "Te enteras cuando termina una descarga o actualización.",
         },
         ["DlgLauncherSettingsShowToastsTip"] = new()
         {
             [LangEn] = "A small system-tray notification appears when an update finishes while the "
                      + "launcher window is hidden or minimised — so you can step away and come back when it's ready.",
             [LangEs] = "Aparece una notificación chica en la bandeja cuando termina una actualización y la "
-                     + "ventana está oculta o minimizada — así podés hacer otra cosa y volver cuando esté lista.",
+                     + "ventana está oculta o minimizada — así puedes hacer otra cosa y volver cuando esté lista.",
         },
         ["DlgSettingsNotifyRooms"] = new()
         {
@@ -2760,14 +2760,14 @@ public static class Strings
         ["DlgSettingsNotifyRoomsHint"] = new()
         {
             [LangEn] = "Never miss a match — get pinged when a room opens for a mod you have.",
-            [LangEs] = "No te perdés ninguna partida — te avisa cuando se abre una sala de un mod que tenés.",
+            [LangEs] = "No te pierdes ninguna partida — te avisa cuando se abre una sala de un mod que tienes.",
         },
         ["DlgSettingsNotifyRoomsTip"] = new()
         {
             [LangEn] = "A Windows notification when any player creates a multiplayer room for a mod you "
                      + "have installed. Only shows while the launcher window isn't in focus.",
             [LangEs] = "Una notificación de Windows cuando cualquier jugador crea una sala multijugador de un "
-                     + "mod que tenés instalado. Solo aparece cuando la ventana del launcher no está en foco.",
+                     + "mod que tienes instalado. Solo aparece cuando la ventana del launcher no está en foco.",
         },
         ["DlgSettingsSounds"] = new()
         {
@@ -2786,7 +2786,7 @@ public static class Strings
                      + "this off for a fully silent launcher.",
             [LangEs] = "Señales de audio estilo Discord: un blip para el chat, un ding para las notificaciones, y "
                      + "un pop cuando un jugador entra a tu sala o aparece una sala nueva. Nunca suena por tu propio "
-                     + "mensaje. Desactivalo para un launcher totalmente silencioso.",
+                     + "mensaje. Desactívalo para un launcher totalmente silencioso.",
         },
         ["DlgSettingsReceiveInvites"] = new()
         {
@@ -2841,7 +2841,7 @@ public static class Strings
                      + "it to a bug report.",
             [LangEs] = "Escribe un multiplayer-events.log local con contadores simples (inicios de sesión, entradas "
                      + "a salas, códigos de error). Sin red ni terceros: nunca sale de tu PC. Solo sirve si lo "
-                     + "adjuntás a un reporte de error.",
+                     + "adjuntas a un reporte de error.",
         },
         ["DlgLauncherSettingsViewPrivacy"] = new()
         {
@@ -2881,7 +2881,7 @@ public static class Strings
         ["TrayClosedHintBody"] = new()
         {
             [LangEn] = "The launcher keeps running here so you stay online. Right-click this icon → Exit to fully quit, or turn this off in Settings.",
-            [LangEs] = "El launcher sigue corriendo acá para que sigas en línea. Clic derecho en este ícono → Salir para cerrarlo del todo, o desactivalo en Ajustes.",
+            [LangEs] = "El launcher sigue corriendo aquí para que sigas en línea. Clic derecho en este ícono → Salir para cerrarlo del todo, o desactívalo en Ajustes.",
         },
 
         // --- Notification bell (Steam-style) ---
@@ -2954,7 +2954,7 @@ public static class Strings
         ["MpInviteTooltipDisabled"] = new()
         {
             [LangEn] = "Join or create a room to invite someone",
-            [LangEs] = "Entrá o creá una sala para invitar",
+            [LangEs] = "Entra o crea una sala para invitar",
         },
         ["MpInviteToastTitle"] = new()
         {
@@ -2974,7 +2974,7 @@ public static class Strings
         ["MpInviteErrRate"] = new()
         {
             [LangEn] = "Too many invites — slow down",
-            [LangEs] = "Demasiadas invitaciones — esperá un momento",
+            [LangEs] = "Demasiadas invitaciones — espera un momento",
         },
         ["MpInviteErrNotInRoom"] = new()
         {
@@ -3389,7 +3389,7 @@ public static class Strings
             [LangEn] = "Deletes the downloaded icon/banner images. They download again by themselves the next "
                      + "time you open the launcher. Safe — it doesn't touch your installed mods.",
             [LangEs] = "Borra las imágenes (íconos/portadas) descargadas. Se vuelven a bajar solas la próxima "
-                     + "vez que abrís el launcher. Es seguro — no toca tus mods instalados.",
+                     + "vez que abres el launcher. Es seguro — no toca tus mods instalados.",
         },
         ["DlgLauncherSettingsClearTemp"] = new()
         {
@@ -3438,7 +3438,7 @@ public static class Strings
             [LangEn] = "Copies the launcher to a fixed folder so you never lose it if you move or delete this "
                      + "file — and so 'Run in background' keeps working. You don't need this to get updates "
                      + "(it already updates itself), but it's the tidy way to keep it.",
-            [LangEs] = "Copia el launcher a una carpeta fija para no perderlo si movés o borrás este archivo — y "
+            [LangEs] = "Copia el launcher a una carpeta fija para no perderlo si mueves o borras este archivo — y "
                      + "para que 'Ejecutar en segundo plano' siga funcionando. No hace falta para actualizar "
                      + "(ya se actualiza solo), pero es la forma prolija de tenerlo.",
         },
@@ -4104,7 +4104,7 @@ public static class Strings
                        "Pick a different folder for the new copy, or switch to the existing " +
                        "one from Mod Properties.",
             [LangEs] = "Ya hay una copia registrada de este mod en:\n{0}\n\n" +
-                       "Elegí otra carpeta para la copia nueva, o cambiá a la existente " +
+                       "Elige otra carpeta para la copia nueva, o cambia a la existente " +
                        "desde Propiedades del mod.",
         },
         ["MenuInstallAnotherCopy"] = new()
@@ -4157,7 +4157,7 @@ public static class Strings
         ["SearchInstallNotFound"] = new()
         {
             [LangEn] = "No existing {0} install was found on your drives. If you have it installed, use “Change mod folder” and point it at the folder.",
-            [LangEs] = "No se encontró una instalación de {0} en tus discos. Si la tenés instalada, usá «Cambiar carpeta del mod» y apuntá a la carpeta.",
+            [LangEs] = "No se encontró una instalación de {0} en tus discos. Si la tienes instalada, usa «Cambiar carpeta del mod» y apunta a la carpeta.",
         },
         ["SearchInstallFound"] = new()
         {
@@ -4167,7 +4167,7 @@ public static class Strings
         ["SearchInstallFoundMultiple"] = new()
         {
             [LangEn] = "Found your install:\n{0}\n\n({1} other install(s) were also found — pick a specific one with “Change mod folder”.)",
-            [LangEs] = "Se encontró tu instalación:\n{0}\n\n(También se encontraron {1} instalación(es) más — elegí una específica con «Cambiar carpeta del mod».)",
+            [LangEs] = "Se encontró tu instalación:\n{0}\n\n(También se encontraron {1} instalación(es) más — elige una específica con «Cambiar carpeta del mod».)",
         },
         ["RenameInstallHint"] = new()
         {
@@ -4236,7 +4236,7 @@ public static class Strings
         ["InstallDefenderBlocked"] = new()
         {
             [LangEn] = "Windows Defender (or your antivirus) blocked a mod file during install: {0}. This is a known false positive — the mod is safe. Add an exclusion for the install folder AND the temp folder (%TEMP%), or turn off real-time protection briefly, then install again.",
-            [LangEs] = "Windows Defender (o tu antivirus) bloqueó un archivo del mod durante la instalación: {0}. Es un falso positivo conocido — el mod es seguro. Agregá una exclusión para la carpeta de instalación Y la carpeta temporal (%TEMP%), o desactivá la protección en tiempo real un momento, y volvé a instalar.",
+            [LangEs] = "Windows Defender (o tu antivirus) bloqueó un archivo del mod durante la instalación: {0}. Es un falso positivo conocido — el mod es seguro. Agrega una exclusión para la carpeta de instalación Y la carpeta temporal (%TEMP%), o desactiva la protección en tiempo real un momento, y vuelve a instalar.",
         },
 
         // -------- Download corruption retry (NativeInstall) --------
@@ -4265,7 +4265,7 @@ public static class Strings
         ["StatusInstallCorruptedGaveUp"] = new()
         {
             [LangEn] = "Download kept arriving corrupted after {0} attempts. Try again later or from a different network.",
-            [LangEs] = "La descarga siguió llegando corrupta después de {0} intentos. Probá de nuevo más tarde o desde otra red.",
+            [LangEs] = "La descarga siguió llegando corrupta después de {0} intentos. Prueba de nuevo más tarde o desde otra red.",
         },
 
         // -------- Verification --------
@@ -4400,7 +4400,7 @@ public static class Strings
         ["LanguageBusyHint"] = new()
         {
             [LangEn] = "⏳ You can't change the language while the mod is installing or updating. Wait for it to finish.",
-            [LangEs] = "⏳ No podés cambiar el idioma mientras el mod se está instalando o actualizando. Esperá a que termine.",
+            [LangEs] = "⏳ No puedes cambiar el idioma mientras el mod se está instalando o actualizando. Espera a que termine.",
         },
         ["TranslationRevertedBody"] = new()
         {
@@ -4410,7 +4410,7 @@ public static class Strings
         ["StatusUpdateAvailableGh"] = new()
         {
             [LangEn] = "Update available: {0}. Click Update to install it.",
-            [LangEs] = "Actualización disponible: {0}. Pulsa Actualizar para instalarla.",
+            [LangEs] = "Actualización disponible: {0}. Haz clic en Actualizar para instalarla.",
         },
         ["StatusUpdatePausedPinned"] = new()
         {
@@ -4960,7 +4960,7 @@ public static class Strings
             [LangEn] = "Version of YOUR translation pack — bump this when you " +
                        "publish changes (1.0 → 1.1 → 1.2...). NOT the mod version " +
                        "— that goes in the 'Compatibility' field below.",
-            [LangEs] = "Versión de TU paquete de traducción — subila al publicar " +
+            [LangEs] = "Versión de TU paquete de traducción — súbela al publicar " +
                        "cambios (1.0 → 1.1 → 1.2...). NO es la versión del mod " +
                        "— eso va en el campo 'Compatibilidad' abajo.",
         },
@@ -4969,7 +4969,7 @@ public static class Strings
             [LangEn] = "⚠ \"{0}\" looks like a mod version. The translation version is " +
                        "yours — start with 1.0 and bump it on each release.",
             [LangEs] = "⚠ \"{0}\" parece una versión del mod. La versión de la " +
-                       "traducción es tuya — empezá con 1.0 y subila en cada release.",
+                       "traducción es tuya — empieza con 1.0 y súbela en cada release.",
         },
         ["DlgPackagerFieldFolder"] = new()
         {
@@ -5080,12 +5080,12 @@ public static class Strings
                        "• Release (legacy): create a release and upload the .zip + " +
                        "translation.json as assets.\n" +
                        "Either way, players see it the next time the launcher refreshes its list.",
-            [LangEs] = "ⓘ Cómo publicar (elegí una):\n" +
-                       "• Carpeta (recomendado): commiteá la carpeta translations/ de arriba " +
-                       "a github.com/{0} (push a main o abrí un PR). Ya viene con el layout " +
+            [LangEs] = "ⓘ Cómo publicar (elige una):\n" +
+                       "• Carpeta (recomendado): haz commit de la carpeta translations/ de arriba " +
+                       "a github.com/{0} (push a main o abre un PR). Ya viene con el layout " +
                        "translations/<id>/<version>/, así cada export agrega una versión " +
                        "nueva al historial — las viejas quedan.\n" +
-                       "• Release (legacy): creá una release y subí el .zip + " +
+                       "• Release (legacy): crea una release y sube el .zip + " +
                        "translation.json como assets.\n" +
                        "En cualquier caso, los jugadores la verán la próxima vez que el " +
                        "launcher refresque la lista.",
@@ -5176,7 +5176,7 @@ public static class Strings
         ["DlgLangApplyCompatWarn"] = new()
         {
             [LangEn] = "Made for mod {1}, but you have {0}. Some text may stay in English, and it can cause multiplayer sync problems (out-of-sync) with other players.",
-            [LangEs] = "Hecha para mod {1}, pero tenés {0}. Algunos textos pueden quedar en inglés y puede causar problemas de sincronización en multijugador (desincronización) con otros jugadores.",
+            [LangEs] = "Hecha para mod {1}, pero tienes {0}. Algunos textos pueden quedar en inglés y puede causar problemas de sincronización en multijugador (desincronización) con otros jugadores.",
         },
         ["DlgLangApplyDownloading"] = new()
         {
@@ -5217,7 +5217,7 @@ public static class Strings
             [LangEs] = "Esta traducción se hizo para una versión diferente del mod. " +
                        "Algunos textos pueden quedar incorrectos, faltantes o en inglés, y puede causar " +
                        "PROBLEMAS DE SINCRONIZACIÓN EN MULTIJUGADOR (versión distinta / desincronización) con otros jugadores. " +
-                       "Podés usarla igual bajo tu propia responsabilidad.\n\n¿Aplicar igual?",
+                       "Puedes usarla igual bajo tu propia responsabilidad.\n\n¿Aplicar igual?",
         },
         ["DlgLangApplyFailedTitle"] = new()
         {
