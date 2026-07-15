@@ -136,6 +136,8 @@ public class FolderCloneService
         // Step 2: copy with progress
         long bytesCopied = 0;
         int filesCopied = 0;
+        int skippedAccess = 0;
+        int skippedLocked = 0;
         var startTime = DateTime.UtcNow;
 
         foreach (var srcInfo in files)
@@ -162,26 +164,43 @@ public class FolderCloneService
                     srcInfo.FullName, destPath, srcInfo.Length,
                     bytesCopied, totalBytes, filesCopied, files.Count,
                     relativePath, startTime, progress, ct);
+
+                // Only a file that actually landed counts. Incrementing outside the
+                // try (as this used to) made "Clone complete: N/N" mean
+                // ATTEMPTED/enumerated, not copied — so a skip was invisible, and the
+                // caller's `if (clonedFiles == 0) throw InstallBaseGameMissingException`
+                // gate read an inflated number: a clone where EVERY file failed would
+                // have returned the full count and sailed straight past the gate.
+                filesCopied++;
             }
             catch (UnauthorizedAccessException ex)
             {
                 // Some files (e.g. _CommonRedist on Steam) can be read-only
                 // for the launcher even though they're readable. Skip them
                 // and continue — they're not critical for the engine.
+                skippedAccess++;
                 DiagnosticLog.Write($"Skipping (access denied): {relativePath} — {ex.Message}");
             }
             catch (IOException ex) when (ex.HResult == unchecked((int)0x80070020))
             {
                 // ERROR_SHARING_VIOLATION — file is locked by Steam/GOG client
+                skippedLocked++;
                 DiagnosticLog.Write($"Skipping (file locked): {relativePath}");
             }
 
             bytesCopied += srcInfo.Length;
-            filesCopied++;
         }
 
-        DiagnosticLog.Write($"Clone complete: {filesCopied}/{files.Count} files, " +
-                            $"{FormatBytes(bytesCopied)}");
+        // Report skips as their own number rather than folding them into the
+        // copied count — same accounting FlattenBinSubfolder already does. Skips
+        // stay non-fatal on purpose: the catches above exist because some files
+        // are legitimately unreadable (Steam's read-only _CommonRedist), and
+        // those installs work today.
+        DiagnosticLog.Write($"Clone complete: {filesCopied}/{files.Count} files copied, " +
+                            $"{FormatBytes(bytesCopied)}" +
+                            (skippedAccess + skippedLocked > 0
+                                ? $" — SKIPPED {skippedAccess} (access denied) + {skippedLocked} (locked)"
+                                : ""));
         return filesCopied;
     }
 

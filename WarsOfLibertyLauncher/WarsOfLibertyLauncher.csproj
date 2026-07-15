@@ -167,6 +167,24 @@
     <Resource Include="Assets\Sounds\notify.wav" />
     <Resource Include="Assets\Sounds\connect.wav" />
 
+    <!-- AoE3 taunts (1..33) for the lobby chat: typing "11" plays taunt 11 for
+         everyone in the room, each in THEIR launcher's language — see
+         Services/TauntService.cs.
+
+         Both sets are embedded (~2 MB) rather than read from the mod install
+         because the WoL payload ships the SPANISH set only; English exists
+         nowhere on disk. Embedding also keeps this working with no mod
+         installed and independent of what a future payload ships.
+
+         Glob on purpose: 66 files, and a wildcard cannot drift out of sync with
+         the folder the way 66 hand-written lines would. Named NNN.mp3 because
+         the number IS the key — the original names carry spaces and apostrophes
+         ("016 I'm in Ur Base Killin Ur Doodz.mp3") that make for awful pack://
+         URIs, and they are in ENGLISH IN BOTH SETS, so the name says nothing
+         about the language. The FOLDER is the only language marker. -->
+    <Resource Include="Assets\Taunts\en\*.mp3" />
+    <Resource Include="Assets\Taunts\es\*.mp3" />
+
     <!--
       No sibling native binaries to ship right now. (Previous launcher
       versions bundled a Detours-based hook DLL + injector, and later

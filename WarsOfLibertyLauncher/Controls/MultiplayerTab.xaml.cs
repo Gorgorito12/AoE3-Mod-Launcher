@@ -1434,6 +1434,21 @@ public partial class MultiplayerTab : UserControl
         var line = JsonSerializer.Deserialize<WsChatLine>(lineJson.GetRawText());
         if (line == null) return;
         AppendChatLine(line);
+
+        // A bare number (1..33) is an AoE3 taunt, not chat. The "11" already
+        // reached every member through the normal chat broadcast, so each client
+        // plays it from its OWN embedded set — that is what lets every player hear
+        // it in THEIR launcher's language, and it needs nothing from the backend.
+        // Unlike the blip below, this fires for our own line too: in AoE3 you hear
+        // your own taunt (the server echoes it back to us, which is exactly why the
+        // blip has to filter on UserId). Returning early keeps the taunt from being
+        // stacked on top of a chat blip — the taunt IS the sound.
+        if (Services.TauntService.TryParseTaunt(line.Body, out int taunt))
+        {
+            Services.TauntService.Play(taunt, line.UserId);
+            return;
+        }
+
         // Live incoming lobby message → chat blip, unless it's our own. Only the
         // live frame reaches here; ReplayChatRing (history) calls AppendChatLine
         // directly, so replayed history stays silent.
@@ -1581,6 +1596,39 @@ public partial class MultiplayerTab : UserControl
         // bug where an incremental member_joined rebuilt the roster but left the
         // count text stale (it was only refreshed by RenderRoomPanel).
         RefreshRoomPlayerCount();
+        // Same reasoning: the big Ready button is derived from the roster, so
+        // refresh it wherever the roster is refreshed.
+        RefreshReadyButton();
+    }
+
+    /// <summary>
+    /// Repaint the big Ready toggle from the roster: glyph + label, plus the
+    /// <c>Tag="ready"</c> that the MpReadyButton style's trigger keys off to go
+    /// green.
+    ///
+    /// Called from <see cref="RenderRoomMembers"/> — which EVERY room frame runs
+    /// — for exactly the reason <see cref="RefreshRoomPlayerCount"/> is: this used
+    /// to live inline in <see cref="RenderRoomPanel"/> ALONE, and neither the
+    /// local click (<see cref="ReadyButton_Click"/>) nor the server's
+    /// `member_ready` echo (<c>HandleMemberReady</c>) calls RenderRoomPanel — both
+    /// only rebuild the roster. So readying up tinted your roster row and left the
+    /// button frozen on "○ Marcar listo" until some unrelated full `room_state`
+    /// frame happened by (a join, a host change). That's the reported bug: "la
+    /// opción de marcar como listo funciona, pero el botón grande no se pone
+    /// verde". Deriving it from the roster here means button and roster can never
+    /// diverge.
+    /// </summary>
+    private void RefreshReadyButton()
+    {
+        if (_lobbyWindow == null) return;
+        var me = _session?.CurrentUser;
+        var iAmReady = me != null
+            && _roomMembers.TryGetValue(me.Id, out var meEntry)
+            && meEntry.Ready;
+        _lobbyWindow.ReadyButton.Content = iAmReady
+            ? "✓  " + Strings.Get("MpRoomReady")
+            : "○  " + Strings.Get("MpRoomReadyMark");
+        _lobbyWindow.ReadyButton.Tag = iAmReady ? "ready" : "";
     }
 
     /// <summary>
@@ -2460,17 +2508,7 @@ public partial class MultiplayerTab : UserControl
             : Visibility.Collapsed;
 
         // ---------- Action buttons ----------
-        // Ready toggle visual: glyph + label so the state is obvious.
-        // The roster-side ready flag lives in the room-state frame; the
-        // local user is found via session.CurrentUser.
-        var me = s.CurrentUser;
-        var iAmReady = me != null
-            && _roomMembers.TryGetValue(me.Id, out var meEntry)
-            && meEntry.Ready;
-        _lobbyWindow!.ReadyButton.Content = iAmReady
-            ? "✓  " + Strings.Get("MpRoomReady")
-            : "○  " + Strings.Get("MpRoomReadyMark");
-        _lobbyWindow!.ReadyButton.Tag = iAmReady ? "ready" : "";
+        RefreshReadyButton();
 
         // The Start button only appears for the host; enabled once the
         // P2P bridge is ready so AoE3 launches into a working network.
@@ -5254,12 +5292,25 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Auto-start the countdown when EVERY member in the room (host included) is
-    /// marked ready — only the host triggers it (so a single start), only from
-    /// the Lobby phase, and only with ≥2 members (a solo host readying up must
-    /// not launch). Reuses <see cref="BeginHostStart"/>, so the manual Start
-    /// button still works and the two paths share one flow. Guarded by
-    /// <see cref="_autoStartInFlight"/> so it fires once per ready-up.
+    /// Auto-start the countdown when the room is FULL and EVERY member (host
+    /// included) is marked ready — only the host triggers it (so a single
+    /// start), only from the Lobby phase, and only with ≥2 members (a solo
+    /// host readying up must not launch). Reuses <see cref="BeginHostStart"/>,
+    /// so the manual Start button still works and the two paths share one flow.
+    /// Guarded by <see cref="_autoStartInFlight"/> so it fires once per ready-up.
+    ///
+    /// The FULL-room gate exists because "everyone present is ready" launched a
+    /// 6-slot room with 3 players the moment those 3 readied up, stranding the
+    /// other 3 — the host had no way to wait. Auto-start is now strictly the
+    /// convenience for a room that filled up; the manual Start button is the
+    /// host's deliberate early/force-start (it never checked ready state), so
+    /// playing 3-of-6 is still one click.
+    ///
+    /// Capacity comes from <see cref="TryGetCurrentLobbyMaxPlayers"/> — the SAME
+    /// resolution behind the "3 / 6" stat and the roster's open-slot rows, so the
+    /// gate can never contradict what the host is looking at. An UNKNOWN capacity
+    /// must NOT auto-start: without that guard a max of 0 makes "Count >= max"
+    /// trivially true and this would fire more eagerly than the bug it replaces.
     /// </summary>
     private void MaybeAutoStartOnAllReady()
     {
@@ -5267,6 +5318,8 @@ public partial class MultiplayerTab : UserControl
         if (_matchPhase != MatchPhase.Lobby) return; // not during countdown / in a match
         if (_autoStartInFlight) return;              // already triggered this ready-up
         if (_roomMembers.Count < 2) return;          // don't auto-launch a solo room
+        if (!TryGetCurrentLobbyMaxPlayers(out var max) || max <= 0) return; // capacity unknown
+        if (_roomMembers.Count < max) return;        // room not full — host starts manually
         foreach (var m in _roomMembers.Values)
             if (!m.Ready) return;                    // everyone (host too) must be ready
 

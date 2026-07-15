@@ -7921,6 +7921,15 @@ public partial class MainWindow : Window
 
         try
         {
+            // Integrity summary of the ACTIVE install, written next to the logs so
+            // ExportBundle's *snapshot* glob stages it. This is what makes a report
+            // closable without asking the user to run commands by hand: it records
+            // whether a manifest-tracked file is simply GONE (the Defender
+            // false-positive class) and whether the live stringtabley.xml still
+            // matches the _originals snapshot version detection hashes. Best-effort
+            // — a diagnostics extra must never block the export it feeds.
+            TryWriteInstallSnapshot();
+
             // Also fold in the active mod's game user-data OOS/sync/log artifacts
             // (My Games\<folder>), so an in-game OUT-OF-SYNC report is diagnosable —
             // a sim desync is written by AoE3, not the launcher log. Read-only; null
@@ -7945,6 +7954,45 @@ public partial class MainWindow : Window
                 Strings.Format("ModPropShareDiagnosticsFailed", ex.Message),
                 Strings.Get("ModPropShareDiagnostics"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Write <see cref="InstallSnapshot.FileName"/> into the data dir so the next
+    /// <see cref="DiagnosticLog.ExportBundle"/> stages it. Blocking by design: the
+    /// export runs immediately after and needs the file already on disk. Measured
+    /// ~2 s on a real WoL install (3 key-file MD5s + ~43 000 existence probes),
+    /// which is acceptable for an explicit user action that already blocks.
+    ///
+    /// The Task.Run is load-bearing, NOT ceremony: this runs on the UI thread, and
+    /// blocking on a Task whose awaits capture the WPF SynchronizationContext
+    /// deadlocks (the continuation needs the very thread we are blocking).
+    /// Task.Run moves the whole chain onto the pool, where there is no context to
+    /// capture. Unit tests would NOT catch this — they run without a context.
+    ///
+    /// Swallows everything: a diagnostics extra must never be why a bundle fails.
+    /// </summary>
+    private void TryWriteInstallSnapshot()
+    {
+        try
+        {
+            var installPath = _updateService.InstallPath;
+            if (string.IsNullOrWhiteSpace(installPath)) return;
+
+            var st = _config.GetState(_updateService.Profile.Id);
+            var modId = _updateService.Profile.Id;
+            var txId = st.ActiveTranslationId;
+            var txVer = st.ActiveTranslationVersion;
+
+            var text = Task.Run(() =>
+                InstallSnapshot.BuildAsync(modId, installPath, txId, txVer)).GetAwaiter().GetResult();
+
+            File.WriteAllText(Path.Combine(AppPaths.DataDir, InstallSnapshot.FileName), text);
+            DiagnosticLog.Write($"Install snapshot written for bundle ('{modId}').");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Install snapshot failed (non-fatal): {ex.Message}");
         }
     }
 

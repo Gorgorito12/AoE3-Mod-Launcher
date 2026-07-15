@@ -712,7 +712,7 @@ Two cheap gates beyond a green build:
   AV behavioural radar. A mod on a bare drive root (`D:\WoL`) is instead found via use (4) below. (3) The manual folder picker
   (`MainWindow.ResolvePickedModInstall`, used by "Change mod folder" + "Add existing
   folder") deep-scans the CHOSEN tree (maxDepth 4) after the shallow candidates miss —
-  point at any reasonable ancestor and it's found. (4) A hero **"¿YA LO TENÉS?" / "ALREADY
+  point at any reasonable ancestor and it's found. (4) A hero **"¿YA LO TIENES?" / "ALREADY
   INSTALLED?"** button (`DashboardSearchInstallButton`, shown next to Install only when an
   isolated-folder non-stock mod reads not-installed) + the ModProperties → LOCAL FILES
   **"Search for my install…"** button both call `MainWindow.SearchInstallAsync` →
@@ -808,7 +808,7 @@ Two cheap gates beyond a green build:
   `FindAll()` returned nothing, pre-filling `aoe3SourcePath`; (b) **manual** — a
   "Buscar mi Asian Dynasties…" button in `InstallFolderDialog` (shown only when no
   source) runs `FindAllDeep(includeDriveRoots:true, maxDirs:20_000)` (exhaustive,
-  user-initiated), the base-game analog of WoL's "¿YA LO TENÉS?" search. Backstops
+  user-initiated), the base-game analog of WoL's "¿YA LO TIENES?" search. Backstops
   if the scan ever picked a bad source: the existing `CountCloneableFiles`
   preflight + `InstallBaseGameMissingException` (0-file abort) + the 3-key-file
   `data\` verify. **`InstallAsync` ALSO reuses the durable manual AoE3 pin as a LAST
@@ -1282,6 +1282,47 @@ Two cheap gates beyond a green build:
   the durable fixes are the SignPath signature (suppresses the AV heuristic) + reporting the file to
   Microsoft as a false positive. Don't widen the catch to all `IOException` (a real disk/sharing
   error must still surface its own message).
+  **That catch alone only covers the RACE (blocked mid-`File.Copy`) — the likelier, SILENT case is
+  the AV quarantining the file AFTER a successful write, which threw nothing and produced an install
+  missing it, permanently and invisibly.** `CopyPayloadToDestinationAsync` enumerates the DISK
+  (`Directory.GetFiles(extractedFolder)`) with no expected-file list, so a vanished file is simply
+  never copied; `WriteManifest` then records only what WAS copied, so the file stops being
+  "expected" and **Verify reports the install intact forever** while Repair never restores it. That
+  is the silent path a mid-game OOS traces back to (a missing AI file only loads once the match is
+  under way — hence 8-40 min, not instant). Closed by three guards, all raising the SAME
+  `PayloadFileBlockedException`: (1) `entry.ExtractToFile` now carries the same HRESULT catch as the
+  copy (an AV block during EXTRACTION used to surface as a raw IOException); (2)
+  `ExtractPayloadAsync` returns `PayloadExtract(Root, Written)` and `VerifyExtractIntact` re-checks
+  every written path post-extract (fails fast, before the multi-minute clone); (3) the SAME check
+  runs again at the top of `CopyPayloadToDestinationAsync` — **this is the one that matters**,
+  because `InstallAsync`'s order is extract → **clone (~2 min on a real payload)** → flatten →
+  overlay copy, so the extract sits in `%TEMP%` for MINUTES with the AV free to act. **Load-bearing:
+  the expected set is built by COLLECTING the `destPath`s the extract loop actually writes — never
+  reconstructed from `archive.Entries`.** Rebuilding it would have to re-derive the
+  `NormalizePayloadRoot` wrapper rebasing, the directory entries (`entry.Name` empty) and the
+  zip-slip rejects; get any subtly wrong and **every healthy install aborts with an antivirus
+  message — worse than the bug**. The loop `continue`s past those before writing, so they can never
+  enter the list. Existence-only (a quarantined file IS a deleted file), ~1 s per pass. This
+  ENFORCES the byte-faithful invariant rather than conflicting with it: `RemoveStaleBuildArtifacts`
+  stays the documented no-op, and nothing here deletes or strips. Pinned by `PayloadIntegrityTests`
+  — where the **no-op tests are the important ones** (intact flat payload + wrapped payload with
+  directory entries must NOT abort); if those ever fail, the guard is breaking real installs.
+  (Caveat: the message names the antivirus, but "Clear temporary files"
+  (`ModPropertiesDialog.ClearTempBtn_Click`) is NOT gated on `_isBusy`, so a user wiping `%TEMP%`
+  mid-install would get the same, misattributed error — still better than today's silent
+  zero-overlay install.)
+
+- **`FolderCloneService.CloneAsync` returns files actually COPIED — keep `filesCopied++` INSIDE the
+  try.** It used to sit after the try/catch, so a file skipped for `UnauthorizedAccessException`
+  (Steam's read-only `_CommonRedist`) or a sharing violation (`0x80070020`, file locked by the Steam
+  client) still counted. That made `Clone complete: N/N` mean **attempted/enumerated**, not copied —
+  and it is not cosmetic: `InstallAsync` gates on `if (clonedFiles == 0) throw
+  InstallBaseGameMissingException`, so **a clone where every file failed would return the full count
+  and sail straight past the gate** that exists to stop a mod overlaying an empty base game. Skips
+  are now counted separately (`skippedAccess`/`skippedLocked`) and reported in the summary — the
+  same accounting `FlattenBinSubfolder` already does. **Skips stay NON-fatal on purpose**: the
+  catches exist because some files are legitimately unreadable, and those installs work today. Don't
+  make a skip fail the install; just count it honestly. Pinned by `CloneCountTests`.
 
 - **`ModState.PinnedVersion` pauses update PROMPTS, it never auto-updates — and it
   self-corrects when stale.** Empty (default) = follow the latest, normal
@@ -2248,8 +2289,8 @@ Two cheap gates beyond a green build:
   `rest.ts` POST /lobbies reads the host once and calls both `announceLobbyCreated`
   (in-app, all non-private) and the Discord webhook; `env.ts` `globalChatInvitesPerMin`
   (default 10). Forward-compatible: an old launcher ignores the new frames; an old backend
-  answers the `invite` with `unknown_type` (swallowed). Deploy: `git pull` + `npm run
-  build` + `systemctl restart wol-lobby`.
+  answers the `invite` with `unknown_type` (swallowed). Deploy: `git pull` +
+  `systemctl restart wol-lobby`.
 
 - **Feedback sounds are a tiny dependency-free layer — `Services/SoundService.cs`
   playing embedded WAVs via `SoundPlayer` — gated by one config toggle, and the
@@ -2285,11 +2326,55 @@ Two cheap gates beyond a green build:
   smooths the rest). Don't move the chat sound into the shared append helpers, and
   don't drop the presence baseline seed — both re-introduce a sound flood.
 
+- **AoE3 taunts in the LOBBY chat — `Services/TauntService.cs`. A message whose body
+  is JUST a number (1..33) plays that taunt for everyone in the room, each in THEIR
+  launcher's language. Nothing is sent over the wire and the backend is untouched.**
+  The `"11"` already travels as an ordinary lobby chat message, so every client
+  detects it in `MultiplayerTab.HandleChat` and plays it from its OWN embedded set.
+  **That indirection is the whole point**: shipping the audio would force ONE language
+  on everybody, which is exactly what the feature must not do. Load-bearing rules:
+  (1) **The parse is strict — digits ONLY** (`TauntService.TryParseTaunt`, pure +
+  pinned by `TauntServiceTests`): `"11"` is a taunt, `"gg 11"`/`"11 gg"`/`"11!"` are
+  ordinary chat. A looser "contains a number" rule would blast taunts at the room
+  during normal conversation — the explicit ask was "just the number, not something
+  that ends up appending the number". (2) **The hook lives in `HandleChat` (the LIVE
+  frame) and nowhere else** — history replays via `ReplayChatRing` → `AppendChatLine`
+  without passing through it, so joining a room whose backlog has numbers does NOT
+  machine-gun taunts (the same reason the chat blip lives there). (3) It fires for
+  YOUR OWN line too (AoE3 plays your own taunt; the server echoes it back, which is
+  why the blip has to filter on `UserId`) and `return`s before the blip — the taunt
+  IS the sound. (4) **The throttle is PER-SENDER (`userId`), never global**: a global
+  one would make two players taunting within the window collapse into one — you'd hear
+  A's `5` and silently lose B's `20`. That breaks the feature it is meant to protect.
+  (5) **Both language sets are embedded** (`Assets/Taunts/{en,es}/NNN.mp3`, ~2 MB,
+  globbed in the `.csproj`) — NOT read from `<install>\Sound\taunts\`: the WoL payload
+  ships the **Spanish** set only (verified 33/33 by hash against a canonical install;
+  English matches only 5/33 — the five with no speech: Wololo/Laugh/Charge/Laugh
+  Redux/Zing), so English exists nowhere on disk. **The filenames are English in BOTH
+  sets** (`011 Are You Ready.mp3`) — the language is ONLY the folder they came from,
+  so never infer it from a name; they are renamed to `NNN.mp3` because the number is
+  the key and the originals carry spaces/apostrophes that make poor `pack://` URIs.
+  (6) **`MediaPlayer`, not `SoundPlayer`** — taunts are MP3 and SoundPlayer decodes
+  WAV only (converting would cost ~9-20 MB vs ~2 MB). SoundService's "no MediaPlayer"
+  rule targets background-thread sounds; taunts come off `HandleChat`, already on the
+  UI thread. Two MediaPlayer traps are handled and must stay: it **cannot open a
+  `pack://` URI** (hence `EnsureOnDisk` materialising the resource once into
+  `%LocalAppData%\AoE3ModLauncher\taunts\<lang>\`, which is not a convenience), and an
+  unreferenced instance **gets GC'd mid-playback and the audio cuts off** (hence the
+  `s_playing` list, cleared on `MediaEnded`/`MediaFailed`). Gated by
+  `SoundService.Enabled`, so turning off "play sounds" also turns off taunts.
+  **Testing note:** a test host cannot resolve `pack://` (WPF's Application never
+  initialises, so the scheme is unregistered and `new Uri` throws "Invalid port
+  specified") — `TauntServiceTests` reads the assembly's `.g.resources` table directly
+  to pin that all 33×2 files are embedded, since a missing one is silent at runtime.
+
 - **The BACKEND announces rooms to Discord CHANNEL(s) via webhook, with LIVE
   message editing — separate from the in-app bell above, and launcher-
   independent.** In `wol-launcher-lobby-node`, `src/lobbies/discordAnnounce.ts` is
-  a small **stateful module** (in-memory `Map<lobbyId, RoomAnnounceState>`, no
-  SQLite column, no migration). `POST /lobbies` (`src/lobbies/rest.ts`, after
+  a small **stateful module** (in-memory `Map<lobbyId, RoomAnnounceState>` as a hot
+  cache, **backed by the persisted `lobbies.discord_targets`** — see the
+  restart/rehydration bullet below; it USED to be memory-only and that was a real
+  bug). `POST /lobbies` (`src/lobbies/rest.ts`, after
   `ctx.rooms.getOrCreate`) fire-and-forgets `announceLobbyCreated`, which POSTs an
   embed to **every configured webhook** with `?wait=true` to capture each
   `message_id`. Then the message is **edited in place** as the room changes:
@@ -2338,12 +2423,69 @@ Two cheap gates beyond a green build:
   config; `DISCORD_PLAYERS_ROLE_ID` overrides it for another server and `"none"`
   disables the ping. (Multi-server caveat: a role id belongs to one server, so with
   multiple webhooks the ping only lands on the server that has it.)
-  Deploy is code-only (`git pull` + set the comma-separated `DISCORD_WEBHOOK_URL`
-  [+ optional `DISCORD_PLAYERS_ROLE_ID`] in `.env` + `systemctl restart wol-lobby`) — **no migration** (message ids are in-memory), no
-  `npm install` (`undici` already ships), no launcher rebuild. Trade-off: a server
-  restart with an active room freezes that message at its last state (rooms are
-  ephemeral, restarts rare). Deferred: a full Discord bot (a persistent gateway
-  would blow the 1 GB VM's RAM).
+  Deploy: `git pull` + set the comma-separated `DISCORD_WEBHOOK_URL`
+  [+ optional `DISCORD_PLAYERS_ROLE_ID`] in `.env` + `systemctl restart wol-lobby`;
+  **the `0002` migration auto-applies at startup** (`db.migrate` runs every unseen
+  `migrations/*.sql` in lexicographic order and tracks them in `_migrations`), no
+  `npm install` (`undici` already ships), no launcher rebuild. Deferred: a full
+  Discord bot (a persistent gateway would blow the 1 GB VM's RAM).
+
+- **The Discord announcement SURVIVES a server restart — message ids are persisted
+  and the state REHYDRATES from the DB; and orphaned rooms are swept.** The
+  message ids used to live only in `discordAnnounce`'s process-local `Map`, on the
+  theory that "rooms are ephemeral and restarts rare — accepted trade-off". That
+  trade-off was wrong in practice and produced a permanent ghost (the reported bug:
+  an embed still reading `🟢 Open · 1/8 · hace 35 minutos` long after the room had
+  closed and the server had been restarted). Two independent faults, both fixed:
+  **(1) `finalizeRoom` no-op'd after a restart.** It did `rooms.get(id)` → miss →
+  early `return`, so the embed was never edited to Closed. This silently broke even
+  the paths that ALREADY called it — notably the "creating a room closes my prior
+  one" loop (`rest.ts`). Fix: **migration `0002_lobby_discord_targets.sql`** adds a
+  nullable `lobbies.discord_targets` (JSON `[{"w":"<webhookId>","m":"<messageId>"}]`),
+  `announceLobbyCreated` persists it, and the internal **`ensureState`** rehydrates
+  the whole `RoomAnnounceState` from `lobbies` JOIN `users` on a cache miss (every
+  embed field already lived on those rows; only the ids needed the column). So any
+  close path — and a REVIVED room's live edits — work across a restart.
+  **Load-bearing details:** only the webhook's **id** is stored, never the token
+  (the id is the public half of `.../webhooks/<id>/<token>`; the token is re-paired
+  from `cfg.discordWebhookUrls` at edit time), so a leaked/backed-up DB can't post
+  to the channel — don't "simplify" this by storing the whole URL. `notifyRoomChanged`
+  / `finalizeRoom` keep their **synchronous** signatures (6 call sites, one on the WS
+  broadcast path) and rehydrate fire-and-forget; a `rehydrating` in-flight map stops
+  two concurrent closes from double-PATCHing. `normaliseSqliteTimestamp` exists
+  because `datetime('now')` yields `'YYYY-MM-DD HH:MM:SS'` with no zone, which
+  `Date.parse` reads as LOCAL — without it the rehydrated "Opened `<t:unix:R>`"
+  drifts by the host's UTC offset.
+  **(2) Nothing ever closed rooms orphaned by the restart** (there was no startup
+  sweep), so the `lobbies` row stayed `open` forever and the room also lingered as
+  joinable in every launcher's browser. Fix: `src/lobbies/orphanSweep.ts` —
+  `sweepOrphanLobbies` closes each candidate lobby with **no attached sockets** (row
+  → `closed`, `lobby_members` deleted, `ctx.rooms.close`, `finalizeRoom` → embed to
+  Closed), then one `ctx.globalChat.refreshPlayers()` (the players panel derives
+  status from `lobbies JOIN lobby_members`, so without it everyone keeps reading "in
+  a room"). It also re-checks each candidate's status and skips one already
+  `closed` — a candidate can close normally DURING the grace window, and re-closing
+  would stomp its real `closed_at` and re-edit its embed.
+  **The candidate list is a SNAPSHOT taken at startup (`snapshotOrphanCandidates`),
+  never a re-query when the timer fires** — this is load-bearing. The sweep's intent
+  is "lobbies from the PREVIOUS process"; re-querying "everything still open" at
+  T+90 s would also match a room created by the CURRENT process at ~T+85 s, whose
+  host has its 201 but whose WS hasn't attached yet (zero sockets, very much alive)
+  → a brand-new room killed seconds after creation. Lobby ids are random, so the
+  snapshot is exact.
+  **The `ORPHAN_SWEEP_GRACE_MS` (90 s) delay is load-bearing — do NOT sweep at
+  startup directly.** A restart kills every socket but NOT the room: the launcher's
+  `LobbyWebSocket` auto-reconnects (backoff to 30 s), `GET /lobbies/:id/ws` rebuilds
+  the room via `rooms.getOrCreate` from the lobby row, and `hello` re-admits the
+  member against `lobby_members` (which survives). **Rooms genuinely revive**, so an
+  immediate sweep would close live rooms out from under the players sitting in them;
+  90 s = the client's max backoff plus margin. The predicate is "no sockets" applied
+  uniformly, **including `in_game`**: an in-game room WITH sockets is people actually
+  playing (the match is P2P over Radmin and needs no backend), so closing it would
+  tear down their lobby window for nothing. Pinned by
+  `scripts/test-discord-restart.ts` (fake webhook HTTP server + a re-imported module
+  to simulate the fresh process: persistence, token-not-stored, post-restart
+  finalize, sweep closes an orphan, **sweep leaves a revived room open**).
 
 - **The Discord room announcement carries a "Join" DEEP LINK that opens the
   launcher and AUTO-JOINS the room — and this made the launcher SINGLE-INSTANCE.**
@@ -2436,6 +2578,31 @@ Two cheap gates beyond a green build:
   `BgBase` — a **global** brush change across every multiplayer surface (rooms
   table included), not a per-dialog recolour.
 
+- **The big Ready button is refreshed from the ROSTER (`RefreshReadyButton`, called
+  by `RenderRoomMembers`), and turns green ONLY via the `Tag="ready"` trigger in the
+  `MpReadyButton` style.** It took BOTH halves to fix "la opción de marcar como listo
+  funciona, pero el botón grande no se pone verde", and either alone is useless:
+  **(1) Nothing refreshed the button on a ready toggle.** The label + `Tag` used to be
+  set inline in `RenderRoomPanel` ALONE — but neither `ReadyButton_Click` nor the
+  server's `member_ready` echo (`HandleMemberReady`) calls RenderRoomPanel; both only
+  call `RenderRoomMembers`. So readying up tinted your roster row and left the button
+  frozen on "○ Marcar listo" until an unrelated full `room_state` frame (a join, a
+  host change) happened by. This is the SAME shape as the "roster 2, stat 1/8" bug,
+  and it has the same fix: `RefreshReadyButton` is derived from `_roomMembers` and
+  called from `RenderRoomMembers` (which EVERY room frame runs), exactly like
+  `RefreshRoomPlayerCount`. Don't move it back inline into `RenderRoomPanel`.
+  **(2) The `Tag="ready"` trigger didn't exist** in `Styles/Buttons.xaml`, while the
+  style's own comment described a green active state — so even a correctly-set Tag
+  painted nothing. ALL the colour lives in the style; the code-behind only sets the
+  Tag. A green build proves nothing here (both halves compile fine either way).
+  **Trigger ORDER is load-bearing** (last active trigger wins per property):
+  `IsMouseOver` → `Tag="ready"` (solid `#15803D` + `MpStatusReady` border + white
+  text) → the ready+hover `MultiTrigger` (`#16A34A`, so a ready button still reacts
+  to the mouse) → `IsEnabled=False` LAST so disabled always overrides. It also only
+  works because `LobbyWindow.xaml` sets **no local `Background`/`Foreground`** on
+  the button — a local value beats every `ControlTemplate` trigger (the same WPF
+  precedence trap documented for the title-bar brand button).
+
 - **`LobbyWindow` is an INDEPENDENT top-level window with its own Windows taskbar
   button.** It's `WindowStyle="None"` + `WindowChrome` + **`ShowInTaskbar="True"`**
   and has **no `Owner`** (`OpenLobbyWindow` deliberately does NOT set one), so it
@@ -2511,7 +2678,7 @@ Two cheap gates beyond a green build:
   run in the LOBBY (pre-match): the `_lobbyPingTimer` tick calls
   `MaybeReportRadminIp`/`KickPeerPings`/`RefreshRosterHealthDots`, which recolours the
   roster's per-member dot (Tagged with the userId in `BuildMemberRow`) in place — the old
-  always-green dot was static. Your own row is always green / "vos".
+  always-green dot was static. Your own row is always green / "tú".
   **Two load-bearing rules keep the reported IP consistent with the game — both were the
   SAME "Esperando VPN despite the game working" bug.** (1) `MaybeReportRadminIp` reads
   `RadminVpnService.TryGetAdapterIp()` (the GATE-FREE 26.x enumeration), NOT
@@ -3290,7 +3457,34 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   seconds" (see `ModFingerprint`) — so a mid-game OOS is a simulation desync the
   3-file MP fingerprint can't catch, and these artifacts are the only in-bundle
   evidence. Recorded games (ideal for replay-diffing) stay a manual ask — too large
-  to auto-bundle. Pinned by `DiagnosticLogTests`. Separately, `MultiplayerTelemetry`
+  to auto-bundle. Pinned by `DiagnosticLogTests`.
+  **The bundle also carries `install-snapshot.txt` — an INTEGRITY summary of the
+  active install (`Services/InstallSnapshot.cs`, written by
+  `MainWindow.TryWriteInstallSnapshot` right before `ExportBundle`).** It exists
+  because a real report — "the launcher says 1.2.0e but the game's menu shows
+  1.2.0c2" — was **unclosable from a bundle**: the log only ever carried the
+  `_originals` MD5, never the LIVE `data\stringtabley.xml`, which is the file the
+  game actually reads for that string (`_locID='18459'` / `cStringAoMVersion`), and
+  nothing recorded whether a manifest-tracked file was simply GONE. It reports:
+  manifest version + counts, `KeyFileHashes` baseline **vs the live MD5s** (drift is
+  what makes recognition distrust the baseline), live **vs** `_originals`
+  stringtabley, the active translation, the engine files, and **how many
+  manifest-tracked files are missing**. Three rules are load-bearing: (1) the file
+  NAME must keep containing `snapshot` — `ExportBundle`'s `*.log`/`*snapshot*` glob
+  is the only thing that stages it, so a rename silently drops it from every bundle
+  (pinned in `DiagnosticLogTests`); (2) the missing-file sweep is **existence-only
+  (`File.Exists`), never hashing** — a real verify re-reads multi-GB and takes
+  minutes while the user waits, and a quarantined file IS a deleted file, so
+  existence already catches the Defender class this is for (measured ~2.1 s over
+  43k paths on a real WoL install); (3) `TryWriteInstallSnapshot` wraps the call in
+  **`Task.Run`** — it runs on the UI thread and blocking on a Task whose awaits
+  capture the WPF SynchronizationContext **deadlocks**; unit tests would NOT catch
+  it (no context there). The config stays excluded (token) — never add it.
+  `DetectCurrentVersionAsync` additionally logs the live stringtabley MD5 alongside
+  the snapshot one when they differ, and `ResolveInstallPath` logs the active
+  translation id/version (`ModState.ActiveTranslationId`, which the bundle otherwise
+  has no way to see since the config is excluded). Pinned by `InstallSnapshotTests`.
+  Separately, `MultiplayerTelemetry`
   appends a plaintext `multiplayer-events.log` next to the `.exe`. It is now
   **opt-in and OFF by default** (`LauncherConfig.MultiplayerTelemetryEnabled`,
   wired to `MultiplayerTelemetry.Enabled` in `MainWindow`'s ctor at startup and
@@ -3306,6 +3500,36 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
   literal in XAML/code. A missing key renders as the key itself (a visible
   signal). `Strings.SetLanguage` raises `LanguageChanged` for live refresh.
+  **The `es` register is NEUTRAL LATIN-AMERICAN (es-419): TUTEO** (`tú`, `tienes`,
+  `haz clic`) — **never voseo** (`vos`, `tenés`, `Descargá`, `Instalalo`) and
+  **never peninsular** (`Pulsa`, `Ajustes`, `ordenador`, `fichero`, `rellenar`).
+  Prefer `Configuración` over `Ajustes`, `PC` over `equipo` (the computer sense —
+  `PublishFieldAuthorHint` legitimately means *team*), `aquí` over `acá`, `clic`
+  over `click`, `Verificar`/`Consultar` over `Comprobar`. This is a real, twice-repeated
+  drift: the table shipped MIXED (a large voseo minority inside a tuteo majority) until
+  it was unified, because the maintainer writes Rioplatense — so a new string in voseo
+  reintroduces exactly the bug that was fixed. Note the trap that made the mix invisible:
+  **the tuteo majority is what a Rioplatense ear misreads as "Spanish from Spain"**, even
+  though `instálalo`/`inténtalo` are standard in MX/CO/PE; the actual peninsular tells were
+  only ~5 strings. **Audit with STRUCTURAL patterns, never a word list** — voseo is
+  generative, so every closed list leaks (a "complete" 45-line inventory missed `Descargá`,
+  `empezá`, `Mantené`, `Indicale`, `subila`, `cancelala`, `Apagalo`, `Reanudalas`…). Use
+  the **Grep tool (ripgrep)**, NOT bash `grep`: under locale C, `á` is multibyte so `\b`
+  **fails after an accented final vowel** (`\busá\b` never matches `usá`). Two patterns,
+  eyeballed — the false positives are a closed, recognisable set:
+  `\b\w+(ás|és|ís)\b` (FPs: `más`, `después`, `través`, `inglés`, `estás`/`Estás` = valid
+  tuteo, and tuteo futures `podrás`/`recibirás`) and `\b\w+[áéí]\b` (FPs: `está`, `aquí`,
+  `así`, `qué`, `caché`, `Sé` = tuteo of *ser*, and 3rd-person futures `será`/`aparecerá`).
+  Beware: filtering `-rás$` to drop futures also **eats legitimate voseo** whose stem ends
+  in `r` (`borrás`, `enterás` are present, not future). Unaccented enclitics
+  (`Instalalo` → `Instálalo`) are invisible to BOTH patterns and need their own
+  sweep — and they come in three separate classes, each needing its own grep, or
+  you will miss one: accusative `-alo/-ala/-elo/-ela` (`Apagalo`, `subila`,
+  `Reanudalas`), reflexive `-ate/-ete/-ite` (`conectate`, `unite`), and dative
+  `-ale/-ele/-ile` (`Indicale` — this one hid the longest, because the first two
+  sweeps don't cover it). FPs for the dative are the plural nouns
+  (`portapapeles`, `temporales`, `perfiles`). Mind the tilde moving with the
+  stress (`Mantené` → `Mantén`, `Desactivalo` → `Desactívalo`).
   **This includes hover TOOLTIPS — they are localized too, never hardcoded.** A
   newcomer-onboarding pass gave the interactive controls in Settings, the dashboard
   mod buttons, the gear menu / Mod Properties, and the Workshop a clear label + a
@@ -3432,22 +3656,28 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   is "10" (a placeholder repainted on the first tick to the real remaining seconds).
   Backend + launcher stay coupled by the abort-grace window (`COUNTDOWN_MS + 60s`).
   (A launcher-side 5 s CAP was tried and reverted — the maintainer wanted the countdown
-  tied to the server value, i.e. controlled from the backend, not forced by the client.) **Auto-start:** `MaybeAutoStartOnAllReady`
-  (`MultiplayerTab`) fires `BeginHostStart` — the SHARED host-start flow the manual
-  Start button also calls — when EVERY `_roomMembers` entry is `.Ready` (host
-  included), gated **host-only** (one start), Lobby-phase-only, `_roomMembers.Count >= 2`
-  (no solo auto-launch), and once per ready-up via `_autoStartInFlight` (reset in
-  `ExitInGamePhase`). Called from `HandleMemberReady` / `HandleRoomState` /
-  `ReadyButton_Click`. The manual "Start game" button still works (force-start before
-  all ready). **Auto-start:** `MaybeAutoStartOnAllReady`
-  (`MultiplayerTab`) fires `BeginHostStart` — the SHARED host-start flow the manual
-  Start button also calls — when EVERY `_roomMembers` entry is `.Ready` (host
-  included), gated **host-only** (one start), Lobby-phase-only, `_roomMembers.Count >= 2`
-  (no solo auto-launch), and once per ready-up via `_autoStartInFlight` (reset in
-  `ExitInGamePhase`). Called from `HandleMemberReady` / `HandleRoomState` /
-  `ReadyButton_Click`. The manual "Start game" button still works (force-start before
-  all ready). Bump the launcher default + XAML + backend `COUNTDOWN_MS` together if
+  tied to the server value, i.e. controlled from the backend, not forced by the client.)
+  Bump the launcher default + XAML + backend `COUNTDOWN_MS` together if
   you change the duration.
+- **Auto-start requires a FULL room, not just "everyone present is ready".**
+  `MaybeAutoStartOnAllReady` (`MultiplayerTab`) fires `BeginHostStart` — the SHARED
+  host-start flow the manual Start button also calls — when EVERY `_roomMembers`
+  entry is `.Ready` (host included), gated **host-only** (one start),
+  Lobby-phase-only, `_roomMembers.Count >= 2` (no solo auto-launch), **and the room
+  is FULL**, once per ready-up via `_autoStartInFlight` (reset in `ExitInGamePhase`).
+  Called from `HandleMemberReady` / `HandleRoomState` / `ReadyButton_Click`. The
+  manual "Start game" button still works and never checked ready state, so it stays
+  the host's deliberate early/force-start.
+  **The full-room gate is a bug fix, don't drop it:** "everyone present is ready"
+  launched a 6-slot room the moment the 3 players in it readied up, stranding the
+  other 3 with no way for the host to wait. Capacity comes from
+  `TryGetCurrentLobbyMaxPlayers` — the SAME resolution behind the "3 / 6" stat and
+  the roster's open-slot rows (`_lastBrowserList` → the `_currentLobbyMaxPlayers`
+  stash, since the host is absent from the browser snapshot) — so the gate can never
+  contradict what the host is looking at. **An UNKNOWN capacity must NOT auto-start**
+  (`!TryGetCurrentLobbyMaxPlayers(out var max) || max <= 0` returns): without that
+  guard a max of 0 makes `Count >= max` trivially true and it would fire MORE eagerly
+  than the bug it replaces — the existing `Count < 2` guard doesn't cover it.
 - **Host migration + abort-grace window — the lobby outlives its creator, and
   aborting a launched match is time-boxed.** Two coupled multiplayer rules added
   together; backend = `wol-launcher-lobby-node` (`src/lobbies/LobbyRoom.ts`,
@@ -3502,7 +3732,7 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   lobby (chat line `MpChatHostEndedMatch`). No game-exit process watch is needed
   (the dashboard launch is fire-and-forget). Forward-compatible: an old backend
   answers `game_ended` with `unknown_type` (swallowed → room stays as today until
-  deploy). Deploy: `git pull` + `npm run build` + `systemctl restart wol-lobby`.
+  deploy). Deploy: `git pull` + `systemctl restart wol-lobby`.
   **(c) Kick.** The host can expel a member: `kick { user_id }` (host-only,
   validated in `LobbyRoom.handleKick`) sends the target a `kicked` frame then
   closes its socket — the existing `ws.on('close')` cleanup drops it from the

@@ -1010,11 +1010,27 @@
         </Setter>
     </Style>
 
-    <!-- Ready button (room sidebar). Looks like a "checkbox in
-         button form": dark filled background with a green left
-         accent stripe when active, neutral when not. Toggled by
-         the code-behind via Tag="ready" / Tag="" so we keep one
-         visual style and one click handler. -->
+    <!-- Ready button (room sidebar). Looks like a "checkbox in button
+         form": green-outlined and transparent when idle, SOLID GREEN
+         when active. Toggled by the code-behind via Tag="ready" /
+         Tag="" (RenderRoomPanel) so we keep one visual style and one
+         click handler.
+
+         The Tag="ready" trigger is the ONLY thing that paints the
+         active state — it was missing for a long time, so the button
+         set its Tag, swapped its ✓/○ label, and never turned green
+         ("el botón grande de marcar no se pone verde"). If the green
+         ever disappears again, suspect this trigger, not the
+         code-behind.
+
+         Trigger ORDER is load-bearing: for a given property the LAST
+         active trigger wins, so Tag="ready" must come AFTER IsMouseOver
+         (else hovering a ready button would wash the green away), the
+         ready+hover MultiTrigger after both (so a ready button still
+         reacts to the mouse instead of feeling dead), and IsEnabled
+         last so disabled always overrides. This works without a local
+         Background/Foreground on the button (LobbyWindow.xaml sets
+         neither) — a local value would beat every trigger here. -->
     <Style x:Key="MpReadyButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="#dadde2"/>
@@ -1042,6 +1058,18 @@
                             <Setter TargetName="border" Property="Background" Value="#152a1d"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
+                        <Trigger Property="Tag" Value="ready">
+                            <Setter TargetName="border" Property="Background" Value="#15803D"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpStatusReady}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="Tag" Value="ready"/>
+                                <Condition Property="IsMouseOver" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="border" Property="Background" Value="#16A34A"/>
+                        </MultiTrigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BgNeutral}"/>
                             <Setter Property="Foreground" Value="#666"/>

@@ -41,6 +41,9 @@ public class DiagnosticLogTests : IDisposable
         File.WriteAllText(Path.Combine(src, "launcher-debug.log"), "log contents");
         File.WriteAllText(Path.Combine(src, "multiplayer-events.log"), "telemetry");
         File.WriteAllText(Path.Combine(src, "UpdateInfo-snapshot.xml"), "<xml/>");
+        // The install integrity summary rides the same *snapshot* glob — its NAME
+        // is the only thing that gets it into the bundle, so pin that here.
+        File.WriteAllText(Path.Combine(src, InstallSnapshot.FileName), "=== Install snapshot ===");
         File.WriteAllText(Path.Combine(src, "launcher-config.json"), "{\"sessionToken\":\"SECRET\"}");
         // A subfolder must be ignored (TopDirectoryOnly).
         Directory.CreateDirectory(Path.Combine(src, "mod-assets"));
@@ -56,6 +59,7 @@ public class DiagnosticLogTests : IDisposable
         Assert.Contains("launcher-debug.log", names);
         Assert.Contains("multiplayer-events.log", names);
         Assert.Contains("UpdateInfo-snapshot.xml", names);
+        Assert.Contains(InstallSnapshot.FileName, names);
         // Privacy: the config (Discord token) is never bundled.
         Assert.DoesNotContain("launcher-config.json", names);
         // Subfolders are not included.

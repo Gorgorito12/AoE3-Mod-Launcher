@@ -929,6 +929,17 @@ public class UpdateService
             $"'{state.InstallPath}', forced='{forced ?? "(none)"}', " +
             $"hasMultiple={state.HasMultipleInstalls}.");
 
+        // Which translation pack is applied. A pack overwrites the live
+        // stringtabley.xml, so it explains both a non-English UI and an in-menu
+        // version string that lags the installed build (the pack carries the
+        // strings of whatever version it was built from). The config is excluded
+        // from diagnostic bundles on purpose (it holds the Discord token), so
+        // without this line a bundle has no way to tell a pack is even active.
+        DiagnosticLog.Write(string.IsNullOrWhiteSpace(state.ActiveTranslationId)
+            ? "  active translation: (none — English)"
+            : $"  active translation: '{state.ActiveTranslationId}'" +
+              $" v{(string.IsNullOrWhiteSpace(state.ActiveTranslationVersion) ? "?" : state.ActiveTranslationVersion)}");
+
         // 0. User-picked folder (manual folder picker). The picker already
         //    content-validated it (probe + marker), so adopt it DIRECTLY here
         //    instead of relying on the cached-path read below — that read was
@@ -1254,12 +1265,32 @@ public class UpdateService
         var strHashPath = translations.ResolveHashableFile(StrRelativePath);
         var strMd5 = await HashService.ComputeMd5Async(strHashPath, ct);
 
+        var strLivePath = Path.Combine(installPath, StrRelativePath);
+        bool usedSnapshot = !string.Equals(strHashPath, strLivePath, StringComparison.OrdinalIgnoreCase);
+
         DiagnosticLog.Write("MD5 of local files:");
         DiagnosticLog.Write($"  protoy.xml       = {protoMd5}");
         DiagnosticLog.Write($"  techtreey.xml    = {techMd5}");
-        DiagnosticLog.Write(strHashPath == Path.Combine(installPath, StrRelativePath)
-            ? $"  stringtabley.xml = {strMd5}"
-            : $"  stringtabley.xml = {strMd5}  (from _originals snapshot)");
+        if (!usedSnapshot)
+        {
+            DiagnosticLog.Write($"  stringtabley.xml = {strMd5}");
+        }
+        else
+        {
+            DiagnosticLog.Write($"  stringtabley.xml = {strMd5}  (from _originals snapshot)");
+
+            // Also record the LIVE file, which detection deliberately ignores.
+            // The game reads the live file — the version string it prints in the
+            // main menu (stringtabley's cStringAoMVersion) comes from there — so a
+            // bundle that only carries the snapshot hash is blind to the exact file
+            // a "the launcher says X but the game shows an older Y" report is about.
+            // Diagnostics only: the match below still uses the snapshot, keeping
+            // version detection localization-invariant.
+            var strLiveMd5 = await HashService.ComputeMd5Async(strLivePath, ct);
+            DiagnosticLog.Write(string.Equals(strLiveMd5, strMd5, StringComparison.OrdinalIgnoreCase)
+                ? $"  live file        = {strLiveMd5}  (same as snapshot — no translation applied)"
+                : $"  live file        = {strLiveMd5}  (DIFFERS — translation active, or drift)");
+        }
         DiagnosticLog.Write($"Searching for a match among {knownVersions.Count} known versions...");
 
         var match = knownVersions.FirstOrDefault(v =>

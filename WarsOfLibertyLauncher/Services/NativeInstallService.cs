@@ -207,7 +207,8 @@ public class NativeInstallService
         // ---- Phase 2: Extract payload to temp ----
         phaseProgress?.Report(InstallPhase.Extract);
         statusProgress?.Report("Extracting mod files...");
-        var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
+        var payload = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
+        var extractedFolder = payload.Root;
 
         // ---- Phase 3: Clone AoE3 to destination ----
         // extraExcludedSubtrees carries the install paths of every OTHER
@@ -246,7 +247,7 @@ public class NativeInstallService
         phaseProgress?.Report(InstallPhase.ModOverlay);
         statusProgress?.Report($"Installing {profile.DisplayName} mod files...");
         var overlayCapture = await CopyPayloadToDestinationAsync(
-            extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
+            extractedFolder, destinationFolder, statusProgress, overlayProgress, ct, payload.Written);
         // Just-cloned base + overlay: existence at copy time classifies net-new
         // vs base-shadowing. A re-install over an existing one inherits status
         // stickily via the prior manifest. No update-time deletion here — that's
@@ -480,7 +481,8 @@ public class NativeInstallService
         // ---- Phase 2: Extract ----
         phaseProgress?.Report(InstallPhase.Extract);
         statusProgress?.Report("Extracting mod files...");
-        var extractedFolder = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
+        var payload = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
+        var extractedFolder = payload.Root;
 
         // ---- Phase 3: Copy mod on top (no Clone phase in mod-only) ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
@@ -490,7 +492,7 @@ public class NativeInstallService
         // is untouched until WriteManifest below.
         var previousManifest = InstallManifest.TryLoad(destinationFolder);
         var overlayCapture = await CopyPayloadToDestinationAsync(
-            extractedFolder, destinationFolder, statusProgress, overlayProgress, ct);
+            extractedFolder, destinationFolder, statusProgress, overlayProgress, ct, payload.Written);
 
         // Update-time file deletion: ONLY for a GitHubReleases re-overlay — i.e.
         // a previous manifest that actually tracked an overlay exists. This is
@@ -857,7 +859,46 @@ public class NativeInstallService
         long BytesDone,
         long BytesTotal);
 
-    private Task<string> ExtractPayloadAsync(
+    /// <summary>
+    /// The extracted payload: its effective root (post <see cref="NormalizePayloadRoot"/>)
+    /// and the ABSOLUTE path of every file the extraction actually wrote.
+    ///
+    /// <para><b>Why carry the written list.</b> It is the ground truth for "what the
+    /// payload contains". Rebuilding that set from <c>archive.Entries</c> would have to
+    /// re-derive the wrapper rebasing, the directory entries and the zip-slip rejects —
+    /// get any of those subtly wrong and every HEALTHY install aborts, which is worse
+    /// than the bug being fixed. Collecting what the loop wrote cannot drift from it.</para>
+    /// </summary>
+    internal sealed record PayloadExtract(string Root, IReadOnlyList<string> Written);
+
+    /// <summary>
+    /// Verify every file the extraction wrote is still on disk.
+    ///
+    /// Real-time AV scans a file when it is closed and quarantines it a moment LATER —
+    /// the extraction loop has already moved on, so nothing throws and the file is just
+    /// gone. Without this, <see cref="CopyPayloadToDestinationAsync"/> (which enumerates
+    /// the DISK, not the zip) never sees it, the install is born without it, and
+    /// WriteManifest records only what was copied — so Verify reports "intact" forever.
+    /// That is the silent path a mid-game OOS report traces back to.
+    ///
+    /// Existence-only: a quarantined file IS a deleted file. ~1 s over a WoL payload.
+    /// </summary>
+    internal static void VerifyExtractIntact(IReadOnlyList<string> written, string phase)
+    {
+        var missing = written.Where(p => !File.Exists(p)).ToList();
+        if (missing.Count == 0) return;
+
+        DiagnosticLog.Write(
+            $"Payload integrity FAILED ({phase}): {missing.Count} of {written.Count} extracted " +
+            "file(s) vanished from %TEMP% after being written — real-time antivirus is the " +
+            "overwhelmingly likely cause. Aborting instead of installing an incomplete mod.");
+        foreach (var p in missing.Take(20)) DiagnosticLog.Write($"  vanished: {p}");
+        if (missing.Count > 20) DiagnosticLog.Write($"  (… {missing.Count - 20} more)");
+
+        throw new PayloadFileBlockedException(Path.GetFileName(missing[0]));
+    }
+
+    internal Task<PayloadExtract> ExtractPayloadAsync(
         string zipPath,
         IProgress<string>? statusProgress,
         IProgress<ExtractProgress>? extractProgress,
@@ -884,6 +925,11 @@ public class NativeInstallService
 
             int done = 0;
             long bytesDone = 0;
+            // Absolute paths this loop actually writes. Built HERE (not from
+            // archive.Entries) so it can never disagree with what landed: the
+            // directory entries and zip-slip rejects below `continue` out before
+            // reaching the write, so they simply never enter the list.
+            var written = new List<string>(total);
 
             foreach (var entry in archive.Entries)
             {
@@ -915,20 +961,41 @@ public class NativeInstallService
                 if (!string.IsNullOrEmpty(destDir))
                     Directory.CreateDirectory(destDir);
 
-                entry.ExtractToFile(destPath, overwrite: true);
+                try
+                {
+                    entry.ExtractToFile(destPath, overwrite: true);
+                }
+                catch (IOException ioex) when (
+                    ioex.HResult == unchecked((int)0x800700E1) ||   // ERROR_VIRUS_INFECTED
+                    ioex.HResult == unchecked((int)0x800700E2))     // ERROR_VIRUS_DELETED
+                {
+                    // Same recipe the overlay copy already uses, applied to the OTHER
+                    // phase: without it an AV block here surfaces as a raw, cryptic
+                    // IOException instead of the actionable "add an exclusion" message.
+                    // Deliberately NOT widened to all IOException — a full disk or a
+                    // real I/O error must keep showing its own message.
+                    DiagnosticLog.Write($"Payload file blocked by antivirus during extraction: {entry.FullName}");
+                    throw new PayloadFileBlockedException(entry.FullName, ioex);
+                }
+                written.Add(destPath);
                 bytesDone += entry.Length;
             }
 
             // Final 100% report so the bar tops out cleanly before the next phase.
             extractProgress?.Report(new ExtractProgress(done, total, bytesDone, bytesTotal));
 
-            DiagnosticLog.Write($"Extraction complete: {done} entries.");
+            DiagnosticLog.Write($"Extraction complete: {done} entries, {written.Count} files written.");
+
+            // Fail FAST: the caller runs a multi-minute AoE3 clone before it ever
+            // copies the overlay, so catching a loss now saves the user that work.
+            // (The clone window itself is covered by the re-check at copy time.)
+            VerifyExtractIntact(written, "post-extract");
             // Some mods package their payload INSIDE a single wrapper folder
             // (e.g. "Knights and Barbarians/data/…" instead of "data/…"). The
             // overlay copy is relative to the returned root, so without this the
             // mod files land one level too deep (…\install\Knights and Barbarians\data)
             // and never merge over the cloned AoE3. Descend into a lone wrapper.
-            return NormalizePayloadRoot(extractFolder);
+            return new PayloadExtract(NormalizePayloadRoot(extractFolder), written);
         }, ct);
     }
 
@@ -1103,8 +1170,18 @@ public class NativeInstallService
         string destinationFolder,
         IProgress<string>? statusProgress,
         IProgress<ModOverlayProgress>? overlayProgress,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<string>? extractedFiles = null)
     {
+        // THE check that matters. This method enumerates the DISK, so a payload file
+        // the AV quarantined is simply absent — no error, and the manifest below then
+        // records only what was copied, making the loss permanent and invisible to
+        // Verify. The exposure is not a race but MINUTES: InstallAsync runs the whole
+        // AoE3 clone (~2 min on a real payload) between extraction and this copy.
+        // Re-checking here covers that window; the post-extract check only covers the
+        // extraction itself. Null = no list to check against (legacy/test callers).
+        if (extractedFiles != null) VerifyExtractIntact(extractedFiles, "pre-overlay-copy");
+
         return await Task.Run(() =>
         {
             var files = Directory.GetFiles(extractedFolder, "*", SearchOption.AllDirectories);
