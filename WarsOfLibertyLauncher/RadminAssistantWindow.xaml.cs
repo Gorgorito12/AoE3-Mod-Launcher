@@ -34,6 +34,11 @@ namespace WarsOfLibertyLauncher;
 /// Caller owns the close lifecycle: closing the window is fine
 /// (Window_Closing flushes config), and reopening it is just
 /// `new RadminAssistantWindow(config).Show()`.
+///
+/// The <c>autoOpened</c> ctor flag says who opened it, and gates the
+/// auto-close: only a window the LAUNCHER opened may close itself once
+/// the checklist goes green. One the user summoned stays until they
+/// close it — see Refresh().
 /// </summary>
 public partial class RadminAssistantWindow : Window
 {
@@ -41,9 +46,17 @@ public partial class RadminAssistantWindow : Window
     private DispatcherTimer? _pollTimer;
     private RadminStage _lastStage = (RadminStage)(-1);
 
-    public RadminAssistantWindow(LauncherConfig config)
+    /// <summary>
+    /// True only when the launcher opened this itself (Radmin wasn't ready).
+    /// Gates the auto-close in <see cref="Refresh"/> — see the comment there for
+    /// why a window the USER asked for must never close on its own.
+    /// </summary>
+    private readonly bool _autoOpened;
+
+    public RadminAssistantWindow(LauncherConfig config, bool autoOpened = false)
     {
         _config = config;
+        _autoOpened = autoOpened;
         InitializeComponent();
         ApplyStrings();
         DontShowAgainCheck.IsChecked = _config.RadminAssistantSkipped;
@@ -135,13 +148,19 @@ public partial class RadminAssistantWindow : Window
 
             ApplyStage(stage, snap.Status);
 
-            // Auto-close once we're confirmed in the network. The
-            // user already did the work; no point keeping the
-            // overlay in their face. Only happens when the seed-
-            // peer ping reports InAoE3Network — until that's
-            // wired, LoggedIn is as high as we get so the overlay
-            // stays open and waits for the user to verify manually.
-            if (stage == RadminStage.InAoE3Network)
+            // Auto-close once we're confirmed in the network — but ONLY when we
+            // opened ourselves. That path fires exclusively while Radmin is NOT
+            // ready (MaybeAutoOpenAssistant bails at >= LoggedIn), so reaching
+            // InAoE3Network means the tutorial did its job and can get out of the
+            // way.
+            //
+            // A window the USER opened ("Show steps") must never do this: it can be
+            // summoned at any stage, so with everything already green the very first
+            // Refresh saw InAoE3Network and slammed it shut ~1.2s later — taking the
+            // copy-network-name button with it, which is the ONLY thing the window
+            // is good for once the checklist is green. Rule: they opened it, they
+            // close it.
+            if (stage == RadminStage.InAoE3Network && _autoOpened)
             {
                 // Tiny delay so the user sees the final ✓ flash
                 // before the window disappears — feels like a

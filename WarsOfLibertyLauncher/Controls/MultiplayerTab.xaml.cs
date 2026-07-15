@@ -694,7 +694,10 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        ShowRadminAssistant();
+        // The ONLY caller that passes autoOpened. Reaching here means Radmin was
+        // below LoggedIn (the guard above), so this window is a tutorial we pushed
+        // — it earns the right to close itself once the user gets to the network.
+        ShowRadminAssistant(autoOpened: true);
     }
 
     /// <summary>
@@ -702,8 +705,13 @@ public partial class MultiplayerTab : UserControl
     /// a second click brings the existing window to front instead of
     /// opening a duplicate that would race the first one on the 3s
     /// poll timer.
+    ///
+    /// <paramref name="autoOpened"/> is true ONLY for the launcher's own
+    /// auto-open path; it is what lets the window close itself once the
+    /// checklist goes green. Defaults to false so every user-initiated
+    /// entry point stays open until the user closes it.
     /// </summary>
-    private void ShowRadminAssistant()
+    private void ShowRadminAssistant(bool autoOpened = false)
     {
         if (_config == null) return;
         if (_radminAssistantWindow != null)
@@ -724,7 +732,7 @@ public partial class MultiplayerTab : UserControl
             }
         }
 
-        var win = new RadminAssistantWindow(_config);
+        var win = new RadminAssistantWindow(_config, autoOpened);
         win.Closed += (_, _) =>
         {
             if (ReferenceEquals(_radminAssistantWindow, win))

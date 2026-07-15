@@ -1246,7 +1246,7 @@ public class UpdateService
     /// the canonical English snapshot in <c>translations\_originals\</c>
     /// instead. <see cref="TranslationService"/> manages that snapshot.
     /// </summary>
-    private static async Task<VersionInfo?> DetectCurrentVersionAsync(
+    internal static async Task<VersionInfo?> DetectCurrentVersionAsync(
         string installPath,
         List<VersionInfo> knownVersions,
         CancellationToken ct)
@@ -1267,6 +1267,9 @@ public class UpdateService
 
         var strLivePath = Path.Combine(installPath, StrRelativePath);
         bool usedSnapshot = !string.Equals(strHashPath, strLivePath, StringComparison.OrdinalIgnoreCase);
+        // Hash of the LIVE file — only computed when a snapshot shadowed it. Used
+        // for diagnostics AND for the stale-snapshot fallback further down.
+        string strLiveMd5 = "";
 
         DiagnosticLog.Write("MD5 of local files:");
         DiagnosticLog.Write($"  protoy.xml       = {protoMd5}");
@@ -1284,9 +1287,10 @@ public class UpdateService
             // main menu (stringtabley's cStringAoMVersion) comes from there — so a
             // bundle that only carries the snapshot hash is blind to the exact file
             // a "the launcher says X but the game shows an older Y" report is about.
-            // Diagnostics only: the match below still uses the snapshot, keeping
-            // version detection localization-invariant.
-            var strLiveMd5 = await HashService.ComputeMd5Async(strLivePath, ct);
+            // The match below still prefers the snapshot, keeping version detection
+            // localization-invariant; the live hash is a diagnostic AND the input to
+            // the stale-snapshot fallback below.
+            strLiveMd5 = await HashService.ComputeMd5Async(strLivePath, ct);
             DiagnosticLog.Write(string.Equals(strLiveMd5, strMd5, StringComparison.OrdinalIgnoreCase)
                 ? $"  live file        = {strLiveMd5}  (same as snapshot — no translation applied)"
                 : $"  live file        = {strLiveMd5}  (DIFFERS — translation active, or drift)");
@@ -1302,6 +1306,53 @@ public class UpdateService
         {
             DiagnosticLog.Write($"Match: version {match.Ver}, MinReqDownload={match.MinReqDownload}");
             return match;
+        }
+
+        // ---- Fallback: the _originals snapshot may be STALE ----
+        // The snapshot is a copy of the live file taken at install/patch/pack time.
+        // A patch applied BY HAND (copy-pasting the files, a workaround that circulates
+        // in the community) refreshes data\ but never touches translations\_originals\,
+        // leaving a snapshot from an older version. Detection then hashes that stale
+        // file and matches NOTHING — which is not cosmetic: the install becomes
+        // unusable. It reports no version, so the UI queues the ENTIRE patch chain
+        // (44 downloads from 1.0.13) instead of offering a real update, and
+        // ModHashService — which hashes the same three files through the same snapshot
+        // — produces a hybrid fingerprint that matches no peer, so every lobby join is
+        // rejected as a version mismatch. Seen in the wild: proto+tech at 1.2.0e with
+        // an _originals stringtabley still at 1.2.0c2.
+        //
+        // So when the snapshot matched nothing, retry with the LIVE file.
+        if (usedSnapshot && !string.IsNullOrEmpty(strLiveMd5))
+        {
+            var liveMatch = knownVersions.FirstOrDefault(v =>
+                string.Equals(v.ProtoMd5, protoMd5, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(v.TechMd5, techMd5, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(v.StrMd5, strLiveMd5, StringComparison.OrdinalIgnoreCase));
+
+            if (liveMatch != null)
+            {
+                // The live file matching a KNOWN version is what proves it is the
+                // canonical English one — so re-snapshotting it is correct, and it
+                // also repairs the multiplayer fingerprint (same snapshot, no change
+                // needed in ModHashService).
+                //
+                // That condition is load-bearing: with a translation applied the live
+                // file is the TRANSLATED one and matches no version, so we never get
+                // here and never refresh. Refreshing unconditionally would copy the
+                // translated file over _originals and permanently destroy both the
+                // revert-to-English backup and the fingerprint.
+                DiagnosticLog.Write(
+                    $"Stale _originals snapshot: it matched no version, but the LIVE " +
+                    $"stringtabley.xml matches v{liveMatch.Ver} (snapshot={strMd5}, " +
+                    $"live={strLiveMd5}). A hand-applied patch updates data\\ but not " +
+                    $"translations\\_originals\\. Re-syncing the snapshot from the live file.");
+                translations.RefreshOriginalsSnapshot();
+
+                DiagnosticLog.Write(
+                    $"Match: version {liveMatch.Ver}, MinReqDownload={liveMatch.MinReqDownload} " +
+                    "(via live-file fallback)");
+                return liveMatch;
+            }
         }
 
         DiagnosticLog.Write("No exact match. Per-version comparison:");

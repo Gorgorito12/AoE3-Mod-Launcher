@@ -41,6 +41,31 @@
          step takes 1-2 minutes longer, but the launcher feels noticeably
          snappier when the user double-clicks the icon. -->
     <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Ship only the framework satellite resources we can actually use.
+         A self-contained WPF publish bundles localized resources for 13
+         languages (ru, ja, ko, de, pl, fr, it, es, pt-BR, cs, tr, zh-Hant,
+         zh-Hans) — 221 .resources.dll files, ~15.5 MB — belonging to the
+         FRAMEWORK's own assemblies (UIAutomationClient, System.Xaml,
+         WindowsBase, WindowsFormsIntegration, …).
+
+         Dropping them is free: none of them holds a single launcher string.
+         Our UI text lives in Localization/Strings.cs, compiled straight into
+         Aoe3ModLauncher.dll — the .exe stays fully bilingual. All these carry
+         is .NET's own exception/accessibility text, which falls back to the
+         NEUTRAL English resources already embedded in each assembly (that's
+         why listing "en" costs nothing — it isn't a satellite).
+
+         "es" is kept on purpose (~1.2 of the 15.5 MB, so the net win is
+         ~14 MB): .NET picks a satellite from CurrentUICulture — the WINDOWS
+         language, not our Strings.Language — and the WoL player base is
+         mostly Spanish-speaking, so a Spanish Windows keeps getting .NET's
+         messages in Spanish. Everything else falls back to English, which
+         also matches the "diagnostic logs are always English" rule.
+
+         Add a language here only if the launcher itself gains that UI
+         language. NOT a substitute for the real win: see the compression
+         TODO right below (~70 MB, blocked on SignPath). -->
+    <SatelliteResourceLanguages>en;es</SatelliteResourceLanguages>
     <!-- Single-file bundle compression is DELIBERATELY OFF to dodge an
          antivirus false positive. When ON (~30-40% smaller .exe, ~190 MB →
          ~120-130 MB), the runtime decompresses the embedded assemblies into a

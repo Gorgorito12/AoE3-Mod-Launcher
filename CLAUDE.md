@@ -47,15 +47,35 @@ All commands run from `WarsOfLibertyLauncher/`.
 | CI release build (unsigned → SignPath) | push a `vX.Y.Z` tag, or run `.github/workflows/release.yml` manually |
 
 - Dev build output: `bin/Release/net8.0-windows/Aoe3ModLauncher.exe`.
-- Release output: `publish/Aoe3ModLauncher.exe` (~190 MB, self-contained). The
+- Release output: `publish/Aoe3ModLauncher.exe` (~165 MB, self-contained). The
   `publish/` folder is git-ignored — release binaries go to GitHub Releases.
   **Single-file compression is OFF on purpose** (`EnableCompressionInSingleFile=false`
   in the `.csproj`, ~line 50): the self-extracting decompression was the #1
   trigger for Defender's `Win32/Injector` packer heuristic, which quarantined the
-  `.exe`. That's why the binary is ~190 MB instead of the old ~120-130 MB.
+  `.exe`. That's why the binary is this big instead of the old ~120-130 MB.
   **Re-enable compression (`true`, recovers ~70 MB) only once the binary is signed
   by a REAL trusted cert (SignPath)** — a trust-valid signature suppresses the
-  packer FP; the self-signed `CN=Gorgorito` cert does not.
+  packer FP; the self-signed `CN=Gorgorito` cert does not. **That is still THE size
+  lever; everything below is small change.**
+- **Size, measured — don't re-litigate the dead ends.** The bundle is **98 % runtime**
+  (`Aoe3ModLauncher.dll` is only ~4 MB of ~165), so optimising launcher code cannot
+  move the number; only removing runtime pieces can. What was actually tried:
+  **`SatelliteResourceLanguages=en;es` is IN and pays ~14.7 MB** (measured
+  179.9 → 165.2) — a self-contained WPF publish ships 221 `.resources.dll` for 13
+  languages (~15.5 MB) belonging to the FRAMEWORK's assemblies (UIAutomationClient,
+  System.Xaml, WindowsBase…). Dropping them is free: they hold no launcher string
+  (our UI is `Strings.cs`, compiled into the exe — it stays bilingual), only .NET's
+  own exception/accessibility text, which falls back to the neutral English already
+  embedded. `es` is kept because .NET picks satellites by `CurrentUICulture` (the
+  WINDOWS language, not `Strings.Language`) and the player base is mostly
+  Spanish-speaking. Dead ends, all verified: **`InvariantGlobalization` gains
+  NOTHING** (no `icudt.dat` in the bundle — .NET uses the OS ICU on Windows);
+  **`PublishTrimmed` is unsupported for WPF** on .NET 8 (it is also what makes the
+  ~21 MB of WinForms — `System.Windows.Forms` + `.Design` + `.Primitives`, pulled in
+  by the WindowsDesktop runtime pack even though this is pure WPF — unremovable);
+  **framework-dependent** would cut ~150 MB but forces users to install the .NET
+  runtime, killing the "one .exe and done" premise. `PublishReadyToRun=false` would
+  recover ~30 MB but costs 1-2 s of cold start — deliberately kept ON.
 - `--update-now` is a launch argument that auto-resumes the update flow elevated
   (used after a UAC relaunch).
 - **`build-release.ps1 -Version` accepts a WoL-style LETTER suffix and splits it
@@ -269,6 +289,24 @@ Two cheap gates beyond a green build:
   softening on the two launch chat lines (`MpChatRadminNoAdapter` /
   `MpChatRadminNotReady`). Don't reword these back to imply Radmin blocks
   create/join, and don't add a Radmin gate to the join path.
+
+- **`RadminAssistantWindow` auto-closes at `InAoE3Network` ONLY when the launcher
+  opened it — the `autoOpened` ctor flag is load-bearing, don't drop it back to an
+  unconditional close.** The auto-open path (`MultiplayerTab.MaybeAutoOpenAssistant`)
+  fires *exclusively* while Radmin is NOT ready (`if (snap.Stage >= RadminStage.LoggedIn)
+  return;` — "don't teach someone something that already works"), so a window we pushed
+  reaching `InAoE3Network` means the tutorial finished and the ~1.2 s close is a
+  celebration. The **"Show steps" button** (and the public `OpenRadminAssistantWindow`)
+  can summon it at ANY stage: with the checklist already green, `Refresh()`'s first tick
+  (`_lastStage` starts at `-1`, so it always runs once) saw `InAoE3Network` and slammed
+  the window shut ~1.2 s later. That's not just annoying — **once everything is green
+  the ONLY thing that window offers is the copy-network-name button**, so the auto-close
+  destroyed the exact reason to open it. Rule: *they opened it, they close it* —
+  `ShowRadminAssistant(bool autoOpened = false)` defaults to manual so every
+  user-initiated entry point is safe by construction, and only
+  `MaybeAutoOpenAssistant` passes `true`. Deliberately NOT smarter (e.g. "auto-close a
+  manual window only if it wasn't green on open"): that is unpredictable — it would
+  close sometimes and not others depending on Radmin's state at open time.
 
 - **The History subtab is fed by a HOST-ONLY, unranked match report at game
   exit — don't re-add per-player reporting or an ELO/win-loss display.** The
@@ -648,6 +686,38 @@ Two cheap gates beyond a green build:
   philosophy as the offline fallback: a mod on disk stays playable regardless of a
   flaky/stale UpdateInfo; Repair/reinstall stays available via the gear menu but is never
   pushed, and every surface agrees.
+
+- **A STALE `translations\_originals\` snapshot used to brick an install — detection
+  falls back to the LIVE stringtabley when the snapshot matches nothing, and re-syncs
+  it. The refresh's guard is load-bearing.** `_originals` is only a COPY of the live
+  file taken by `RefreshOriginalsSnapshot` at install/patch/pack time, so **a patch
+  applied BY HAND** (copy-pasting the files — a workaround that circulates in the
+  community) refreshes `data\` and leaves the snapshot on the OLD version. Since
+  `DetectCurrentVersionAsync` hashes the snapshot on purpose (localization invariance),
+  it then matches NOTHING — and that is not cosmetic, it makes the mod unusable in three
+  ways at once, all from the one cause: (a) no version → the UI queues the **ENTIRE**
+  patch chain (44 downloads from 1.0.13, 142 MB) instead of a real update, so "there's
+  an update but it won't update"; (b) `ModHashService` hashes the same three files
+  through the same snapshot → a HYBRID fingerprint matching no peer → **every lobby join
+  is rejected as a version mismatch**; (c) the mod reads as unrecognized. Seen in the
+  wild (user 69metal69): `proto=OK tech=OK` for 1.2.0e with an `_originals` stringtabley
+  still at 1.2.0c2 — confirmed against his own `UpdateInfo.xml` snapshot. Fix: when the
+  snapshot matched no version, retry the triple with the **live** file; on a match, use
+  it and call `RefreshOriginalsSnapshot()` — which also repairs the MP fingerprint for
+  free, since `ModHashService` reads that same snapshot (no change needed there).
+  **The guard: only refresh when the live file MATCHES a known version** — that is what
+  proves it is the canonical English one. With a translation applied the live file is
+  the TRANSLATED one and matches nothing, so the fallback never fires and the snapshot
+  is left alone; refreshing unconditionally would copy the translated file over the only
+  canonical-English backup and permanently destroy BOTH revert-to-English and the
+  fingerprint. The snapshot stays the PRIMARY source (that invariance is what lets a
+  Spanish install play with English peers) — this is strictly a fallback for the case
+  that currently just breaks. The **mirror case is deliberately NOT auto-healed**: live
+  stale + snapshot correct (the game then shows an old version string) is left alone,
+  because the live file may be NEWER than the snapshot — exactly what a hand-pasted
+  patch produces — and auto-reverting would undo the user's own fix. Pinned by
+  `StaleOriginalsFallbackTests`, where the **translation-applied case is the important
+  one** (it's what protects the backup).
 
 - **Install detection is by CONTENT, never by folder name —
   `InstallProbeFile` + an optional `InstallMarker`, unified in
