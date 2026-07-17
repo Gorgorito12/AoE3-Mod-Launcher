@@ -220,6 +220,34 @@ public partial class MainWindow : Window
 
         _config = LauncherConfig.Load();
 
+        // "Run in background" defaults ON, but the flags are inert on their own — the
+        // Settings checkbox reads the REGISTRY, and only StartupRegistrationService
+        // writes the Run key. So the default has to be seeded once, here. The decision
+        // is pure and unit-tested (StartupRegistrationService.PlanStartup); this block
+        // only executes it. The marker is what keeps an opt-out final — see PlanStartup.
+        var startupPlan = StartupRegistrationService.PlanStartup(
+            _config.BackgroundDefaultSeeded,
+            _config.StartWithWindows,
+            StartupRegistrationService.IsRegistered());
+        if (startupPlan.SeedNow)
+        {
+            // Marker FIRST: a failed registry write (managed-PC policy, AV) must not
+            // leave the seed retrying on every launch. Forcing the flags — rather than
+            // reading them — is what carries the new default to EXISTING configs, whose
+            // persisted `false` predates it and means "never chose".
+            _config.BackgroundDefaultSeeded = true;
+            _config.StartWithWindows = true;
+            _config.MinimizeToTray = true;
+            _config.StartMinimized = true;
+            _pendingBackgroundSeedNotice = startupPlan.ShowNotice;
+            DiagnosticLog.Write(
+                $"Run in background: seeding the ON default (notice={startupPlan.ShowNotice}). " +
+                "One-time per config; the user's opt-out is honoured from here on.");
+            try { _config.Save(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Background default seed: config save failed: {ex.Message}"); }
+        }
+        StartupRegistrationService.Apply(startupPlan.Register, startMinimized: _config.StartMinimized);
+
         // Register (or, if the user opted out, clear) the wol-launcher:// deep-link
         // scheme. Re-applying each launch self-heals the exe path for the portable
         // binary (the registered path follows wherever the user last ran it).
@@ -505,6 +533,9 @@ public partial class MainWindow : Window
                 DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
                 HideToTray();
             }
+            // After the hide, so the balloon anchors to a tray icon that's already
+            // there — and so an auto-started launch explains itself on the spot.
+            MaybeShowBackgroundSeedNotice();
         };
 
         Loaded += async (_, _) =>
@@ -2484,6 +2515,41 @@ public partial class MainWindow : Window
         HardExitRequested = true;
         try { TrayIcon.Dispose(); } catch { /* best-effort */ }
         System.Windows.Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// Set by the ctor when this launch seeded the ON-by-default "run in background"
+    /// preference (see <see cref="StartupRegistrationService.PlanStartup"/>). Drained
+    /// once by the Loaded handler, which is where the tray icon exists to hang a
+    /// balloon on.
+    /// </summary>
+    private bool _pendingBackgroundSeedNotice;
+
+    /// <summary>
+    /// Announce, exactly once, that the launcher now starts with Windows and lives in
+    /// the tray. Auto-start is ON by default — this balloon is what keeps that default
+    /// from being SILENT, which is the part of the old opt-in rule worth keeping: the
+    /// user is told what changed and where to undo it. Bypasses the
+    /// <c>ShowToastNotifications</c> gate for the same reason
+    /// <see cref="MaybeShowClosedToTrayHint"/> does — it's one-time onboarding, not an
+    /// operational toast.
+    /// </summary>
+    private void MaybeShowBackgroundSeedNotice()
+    {
+        if (!_pendingBackgroundSeedNotice) return;
+        _pendingBackgroundSeedNotice = false;
+
+        try
+        {
+            TrayIcon.ShowBalloonTip(
+                WarsOfLibertyLauncher.Localization.Strings.Get("TrayBackgroundSeedTitle"),
+                WarsOfLibertyLauncher.Localization.Strings.Get("TrayBackgroundSeedBody"),
+                Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Background seed balloon failed: {ex.Message}");
+        }
     }
 
     /// <summary>

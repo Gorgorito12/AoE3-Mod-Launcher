@@ -747,17 +747,31 @@ public class LauncherConfig
     // "Launcher Settings" dialog. Default values match the previous
     // hard-coded behaviour, so upgrading from an older launcher config
     // doesn't change what the user sees out of the box.
+    //
+    // Deliberate exception: the "run in background" trio (StartWithWindows /
+    // MinimizeToTray / StartMinimized) defaults ON and IS applied to existing
+    // configs, once, via BackgroundDefaultSeeded — a pre-existing `false` there
+    // means "never chose", not "declined", because the toggle used to default off.
+    // The one-time tray notice is what keeps that from being a silent change.
     // ------------------------------------------------------------------------
 
     /// <summary>
-    /// When true, the launcher registers itself in
+    /// When true (default), the launcher registers itself in
     /// <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c> so Windows
-    /// starts it automatically at login. Off by default — opt-in.
-    /// <see cref="Services.StartupRegistrationService"/> applies / clears
-    /// the registry key whenever this flag is saved.
+    /// starts it automatically at login — the "run in background" experience,
+    /// which is what keeps a player shown as connected to their friends without
+    /// having to open the launcher.
+    ///
+    /// <see cref="Services.StartupRegistrationService"/> applies / clears the
+    /// registry key whenever this flag is saved, AND <c>MainWindow</c> re-applies
+    /// it each launch (self-heals the exe path for the portable binary).
+    ///
+    /// This default is ON but it is NOT self-executing: the Settings checkbox reads
+    /// the REGISTRY, not this flag, so the default only becomes real once
+    /// <see cref="BackgroundDefaultSeeded"/> drives the one-time Run-key write.
     /// </summary>
     [JsonPropertyName("startWithWindows")]
-    public bool StartWithWindows { get; set; } = false;
+    public bool StartWithWindows { get; set; } = true;
 
     /// <summary>
     /// When true (default), the launcher registers the <c>wol-launcher://</c> URI
@@ -781,15 +795,17 @@ public class LauncherConfig
     public bool CloseLauncherOnGameStart { get; set; } = false;
 
     /// <summary>
-    /// When true, closing the main window minimises the launcher to the
-    /// system tray instead of exiting the process. Useful for users who
-    /// keep the launcher running in the background (e.g. waiting on a
-    /// long download). Right-click the tray icon → Exit to actually
-    /// terminate. False by default — the conventional "X = quit"
-    /// behaviour is what most users expect.
+    /// When true (default), the tray icon stays resident so the launcher has a
+    /// home to sit in while it runs in the background. Right-click the tray icon
+    /// → Exit to actually terminate. Set together with
+    /// <see cref="StartWithWindows"/> + <see cref="StartMinimized"/> by the single
+    /// "Run in background" toggle.
+    ///
+    /// NOT the close-button behaviour — that is the independent
+    /// <see cref="CloseToTray"/>, which has its own checkbox.
     /// </summary>
     [JsonPropertyName("minimizeToTray")]
-    public bool MinimizeToTray { get; set; } = false;
+    public bool MinimizeToTray { get; set; } = true;
 
     /// <summary>
     /// When true (default), clicking the window's X (or Alt+F4) hides the
@@ -821,6 +837,26 @@ public class LauncherConfig
     public bool ClosedToTrayHintShown { get; set; } = false;
 
     /// <summary>
+    /// Set to true the first time the launcher acted on the ON-by-default
+    /// "run in background" preference by writing the Run key (see
+    /// <see cref="StartWithWindows"/>). Written once by <c>MainWindow</c>'s ctor.
+    ///
+    /// LOAD-BEARING — this marker is the only thing that makes the default
+    /// distinguishable from a re-arm. The Settings checkbox reads the REGISTRY,
+    /// so the flags alone are inert; something has to write the Run key for a new
+    /// user. But if that write were driven by "the key is missing" instead of this
+    /// marker, then unchecking the toggle (which deletes the key) would silently
+    /// re-enable auto-start at the next launch — a default that refuses to stay off
+    /// is malware behaviour, not a default. With the marker, the seed happens
+    /// exactly once per config and the user's opt-out is final.
+    ///
+    /// Written BEFORE the registry write is attempted, so a failed write (managed-PC
+    /// policy, AV) doesn't leave the seed retrying on every launch.
+    /// </summary>
+    [JsonPropertyName("backgroundDefaultSeeded")]
+    public bool BackgroundDefaultSeeded { get; set; } = false;
+
+    /// <summary>
     /// When true, an AUTO-START launch (Windows login, recognised by the
     /// <c>--minimized</c> argument the Run-key registration appends) opens the
     /// launcher straight to the system tray instead of showing the window — so
@@ -828,10 +864,10 @@ public class LauncherConfig
     /// A MANUAL double-click still shows the window (it carries no
     /// <c>--minimized</c> arg). Set together with <see cref="StartWithWindows"/>
     /// + <see cref="MinimizeToTray"/> by the single "Run in background" toggle.
-    /// Off by default — opt-in.
+    /// On by default, with that toggle.
     /// </summary>
     [JsonPropertyName("startMinimized")]
-    public bool StartMinimized { get; set; } = false;
+    public bool StartMinimized { get; set; } = true;
 
     /// <summary>
     /// When true, the launcher shows a system-tray balloon notification

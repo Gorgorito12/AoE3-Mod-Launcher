@@ -143,8 +143,11 @@ snapshot hashing, deterministic ordering — see the file-verify gotcha),
 `ManifestRecognitionTests` (`UpdateService.RecognizeFromManifestData` baseline
 vs migration paths + `ResolveVersionInfo` — see the manifest-recognition
 gotcha), `DiagnosticLogTests` (`ExportBundle` includes `*.log`/`*snapshot*`,
-**excludes the config**, overwrites a stale zip), and `LauncherUpdateServiceTests`
-(letter-version comparison + the informational-tag self-recognition fallback).
+**excludes the config**, overwrites a stale zip), `LauncherUpdateServiceTests`
+(letter-version comparison + the informational-tag self-recognition fallback), and
+`BackgroundStartupPlanTests` (`StartupRegistrationService.PlanStartup` — the
+ON-by-default auto-start seed; `OptedOut_NeverReArms` is the one that matters, it
+guards against silently re-enabling auto-start after the user turned it off).
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -3013,12 +3016,14 @@ Two cheap gates beyond a green build:
   vCPU only past ~300-500 (where you'd switch to delta presence). Don't re-gate the
   presence socket on visibility, and don't drop the 200-row render cap.
 
-- **"Run in background" is ONE opt-in toggle that bundles auto-start + minimise-to-tray
-  + start-to-tray — and auto-start opens straight to the tray via a `--minimized`
-  arg, not the config.** The single `StartWithWindowsCheck` in Launcher Settings
-  (relabelled "Run in background" / "Ejecutar en segundo plano") drives all three
-  config flags together on save: `StartWithWindows` + `MinimizeToTray` +
-  `StartMinimized`. **(The old standalone MinimizeToTray checkbox is NO LONGER
+- **"Run in background" is ONE toggle that bundles auto-start + minimise-to-tray
+  + start-to-tray, it is now ON BY DEFAULT, and the default is real only because a
+  MARKER-gated one-time seed writes the Run key — auto-start opens straight to the
+  tray via a `--minimized` arg, not the config.** The single `StartWithWindowsCheck`
+  in Launcher Settings ("Start with Windows in the background" / "Iniciar con Windows
+  en segundo plano") drives all three config flags together on save:
+  `StartWithWindows` + `MinimizeToTray` + `StartMinimized` (**all three now default
+  `true`**). **(The old standalone MinimizeToTray checkbox is NO LONGER
   collapsed — it was re-surfaced and rewired to the independent `CloseToTray` flag;
   see the close-to-tray bullet below. It is NOT part of this bundle anymore.)**
   `StartupRegistrationService.Apply(enabled, startMinimized)`
@@ -3031,6 +3036,61 @@ Two cheap gates beyond a green build:
   Don't split the toggle back into separate checkboxes (the user asked for one), and
   keep `--minimized` on the registration side (not a config field) so manual launches
   aren't affected.
+  **The default-ON mechanics — three coupled facts, none optional:**
+  (1) **Flipping the config defaults alone does NOTHING visible.** `LoadFromConfig`
+  sets the checkbox from `StartupRegistrationService.IsRegistered()` — the **REGISTRY**,
+  not the config — and the Run key is only ever written by `Apply`. A config default of
+  `true` with no Run key yields the *identical* unchecked checkbox plus a silent
+  divergence (`MinimizeToTray=true` keeps the tray icon resident while the checkbox
+  reads off). This is the trap: the reported "why does it appear to activate?" was
+  exactly the registry and the config agreeing on OFF.
+  (2) **The seed is keyed off `LauncherConfig.BackgroundDefaultSeeded`, NEVER off "the
+  Run key is missing".** `MainWindow`'s ctor (right before the `EnableJoinLinks` line —
+  the mirror pattern) calls the pure `StartupRegistrationService.PlanStartup(seeded,
+  startWithWindows, alreadyRegistered)` → `BackgroundStartupPlan(SeedNow, Register,
+  ShowNotice)`, then executes it: on `SeedNow` it sets the marker **FIRST** (so a failed
+  registry write — managed-PC policy, AV — can't leave the seed retrying every launch),
+  **FORCES** the three flags true, saves, and `Apply`s. Keying it off the missing key
+  would silently re-enable auto-start the launch after an opt-out — **a default that
+  won't stay off is malware behaviour**, and it's the single worst bug this feature
+  could ship. Pinned by `BackgroundStartupPlanTests.OptedOut_NeverReArms`.
+  (3) **The seed FORCES the flags instead of reading them, and that's what reaches
+  EXISTING users** — their config has a persisted `startWithWindows:false` that
+  overrides the new `= true` default at deserialisation, so reading it would seed
+  nobody. A pre-existing `false` is treated as "never chose" (the toggle used to default
+  off), not "declined". Once seeded, the flag is obeyed literally and forever;
+  `Apply(plan.Register)` runs every launch, which self-heals the registered exe path
+  (the portable binary moves) and clears a stale key after an opt-out.
+  **Two registry facts that mislead:** Task Manager's Startup tab **disables without
+  deleting** our Run value (it writes `Explorer\StartupApproved\Run`), so a TM-disabled
+  entry still reads as registered by `IsRegistered()` and the checkbox shows checked —
+  deliberately not parsed (Windows honours its own disable no matter what we write). And
+  because `Apply` re-runs each launch, a Run value deleted by an external cleaner (NOT
+  via our checkbox, which sets the flag) does come back — that's the same self-heal
+  contract `DeepLinkService.EnsureRegistered` has, and the flag remains the opt-out.
+  **Why default-ON is defensible despite the old AV rule it replaces:** the observed
+  Defender FP (`Win32/Injector`) came from the **compression packer**, not the Run key —
+  no FP was ever traced to auto-start; Steam/Discord/Epic/OneDrive all ship a Run key;
+  and the project already ships a default-ON HKCU write (`EnableJoinLinks`). The risk is
+  **speculative, not measured**. What survives from the old rule is the part worth
+  keeping — **it is never SILENT**: the seed fires a one-time tray balloon
+  (`MainWindow.MaybeShowBackgroundSeedNotice`, `_pendingBackgroundSeedNotice`,
+  `TrayBackgroundSeed{Title,Body}`) naming the change and where to undo it. **Don't
+  remove that balloon** — it is what makes the default legitimate rather than sneaky.
+  (SignPath remains the durable mitigation for the whole unsigned-binary AV class.)
+  **The Settings save no longer discards `Apply`'s return value.** It runs in
+  `SaveButton_Click` **step 1b, BEFORE any `_config` mutation** (same "validate first,
+  don't half-apply" shape as the catalog-repo check), and a `false` shows the red
+  `DlgLauncherSettingsStartupFailed` hint + switches to the General tab + returns
+  without closing. Discarding it produced a self-contradicting silent failure: config
+  saying "on" while the registry-backed checkbox came back unchecked, unexplained.
+  **The label/hint say what the toggle DOES (start with Windows) — don't revert them to
+  the presence claim.** The old copy ("stay shown as connected even without the window
+  open") described what the user ALREADY had: presence rides an always-on `/global/ws`
+  socket gated only on `SignedIn`, and `CloseToTray` defaults on — so it read as "isn't
+  this already happening?", which is what made the toggle look broken. Same trap in the
+  tooltip: "closing the window keeps it running" belongs to `CloseToTray`, a different
+  checkbox.
 
 - **Closing the window (X / Alt+F4) hides the launcher to the tray by default —
   governed by `LauncherConfig.CloseToTray` (default TRUE), with a one-click opt-out —
@@ -3084,10 +3144,15 @@ Two cheap gates beyond a green build:
   `StartupRegistrationService.Apply(..., exePathOverride: SelfInstallService.CanonicalExe)`
   because it still runs from the PORTABLE exe, so `Environment.ProcessPath` (the default)
   would register the wrong path. If the toggle is off, the install registers NOTHING (no
-  Run-key). **AV note:** this is still AV-safe (arguably safer) — background/auto-start is
-  never silent, it requires the user's explicit, single, visible GENERAL toggle (default
-  OFF = no Run-key persistence at all). The durable fix for the whole self-signed-binary AV
-  class is the SignPath trusted signature. Don't re-add a second run-in-background checkbox.
+  Run-key). **AV note (REVISED — the toggle now defaults ON):** auto-start is no longer
+  opt-in, so "default OFF = no Run-key persistence at all" is dead. What replaced it is
+  "never SILENT": the one-time seed announces itself with a tray balloon and the toggle
+  stays one visible click away — see the run-in-background bullet for why default-ON is
+  defensible (the observed Defender FP was the compression packer, not the Run key). By
+  the time the user reaches this button the seed has already registered auto-start, so
+  the `exePathOverride` here is what re-points the Run key from the portable exe to the
+  installed copy. The durable fix for the whole self-signed-binary AV class is still the
+  SignPath trusted signature. Don't re-add a second run-in-background checkbox.
 
 - **Global chat is a process-wide WebSocket room — separate from the per-lobby
   chat, and the launcher's first real server-push channel.** The Multiplayer

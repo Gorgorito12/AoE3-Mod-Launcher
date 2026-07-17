@@ -286,10 +286,16 @@ public partial class LauncherSettingsDialog : Window
         if (LanguageCombo.SelectedItem == null)
             LanguageCombo.SelectedIndex = 0;
 
-        // "Run in background" master toggle: on when auto-start is registered
-        // (the registry is the source of truth — the user may have removed our
-        // entry via Task Manager). Saving re-derives all three background flags
-        // from this one checkbox.
+        // "Run in background" master toggle: on when auto-start is registered. The
+        // REGISTRY is the source of truth here, not the config — which is why the
+        // ON-by-default preference needs the one-time Run-key seed in MainWindow's
+        // ctor to be visible at all (a config flag alone leaves this reading off).
+        // Saving re-derives all three background flags from this one checkbox.
+        //
+        // Caveat: Task Manager's Startup tab DISABLES without deleting our value (it
+        // writes Explorer\StartupApproved\Run instead), so a TM-disabled entry still
+        // reads as registered here. We deliberately don't parse that blob — Windows
+        // honours its own disable regardless of what we write.
         StartWithWindowsCheck.IsChecked = StartupRegistrationService.IsRegistered();
         EnableJoinLinksCheck.IsChecked = _config.EnableJoinLinks;
         CloseOnGameCheck.IsChecked = _config.CloseLauncherOnGameStart;
@@ -816,6 +822,23 @@ public partial class LauncherSettingsDialog : Window
         // (Translations extra-repo list is validated at Add time, so nothing to
         //  validate here — the working copy is committed below.)
 
+        // 1b. Auto-start registry write. Done BEFORE any config mutation, for the
+        //     same reason as step 1: it's the one side effect that can genuinely
+        //     fail (managed-PC policy, AV blocking the Run key), and failing here
+        //     leaves nothing half-applied.
+        //
+        //     This return value used to be discarded, which made the failure
+        //     invisible AND self-contradicting: the config kept saying "on" while
+        //     the checkbox — which reads the REGISTRY, not the config — came back
+        //     UNCHECKED next open, with no explanation. Say it out loud instead.
+        var wantBackground = StartWithWindowsCheck.IsChecked == true;
+        if (!StartupRegistrationService.Apply(wantBackground, startMinimized: wantBackground))
+        {
+            SetHint(StartWithWindowsHint, Strings.Get("DlgLauncherSettingsStartupFailed"), success: false);
+            SetActiveTab(TabGeneralBtn);
+            return;
+        }
+
         // 2. Language: persist + apply live so the launcher main window
         //    re-localises on close without a restart. Strings.SetLanguage
         //    raises the LanguageChanged event the rest of the app listens
@@ -872,10 +895,10 @@ public partial class LauncherSettingsDialog : Window
         _config.RadminAssistantMode = newMode;
 
         // 4. Side effects beyond the config file:
-        //    * Registry write for the autostart entry.
+        //    * (The autostart registry write already happened in step 1b — it has
+        //      to run before the config is touched so a failure can abort cleanly.)
         //    * Language change goes through Strings so the rest of the
         //      app updates immediately.
-        StartupRegistrationService.Apply(_config.StartWithWindows, startMinimized: _config.StartMinimized);
         if (_config.EnableJoinLinks) Services.DeepLinkService.EnsureRegistered();
         else Services.DeepLinkService.EnsureUnregistered();
         Strings.SetLanguage(newLang);

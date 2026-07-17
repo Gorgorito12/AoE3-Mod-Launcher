@@ -2661,23 +2661,40 @@ public static class Strings
             [LangEn] = "Open settings",
             [LangEs] = "Abrir configuración",
         },
+        // The label/hint name the thing this toggle actually DOES: start with
+        // Windows. The old copy ("stay shown as connected even without the window
+        // open") described something the user already had — presence rides an
+        // always-on socket while signed in, and CloseToTray defaults on — so it read
+        // as "isn't this already happening?" and made the toggle look broken.
         ["DlgLauncherSettingsStartWithWindows"] = new()
         {
-            [LangEn] = "Run in background (recommended)",
-            [LangEs] = "Ejecutar en segundo plano (recomendado)",
+            [LangEn] = "Start with Windows in the background (recommended)",
+            [LangEs] = "Iniciar con Windows en segundo plano (recomendado)",
         },
         ["DlgLauncherSettingsStartWithWindowsHint"] = new()
         {
-            [LangEn] = "Stay shown as connected to your friends, even without the window open.",
-            [LangEs] = "Apareces conectado a tus amigos aunque no tengas la ventana abierta.",
+            [LangEn] = "The launcher starts on its own with your PC and waits in the system tray, "
+                     + "so you show up as connected without having to open it.",
+            [LangEs] = "El launcher arranca solo al prender la PC y queda en la bandeja del sistema, "
+                     + "así apareces conectado sin tener que abrirlo.",
         },
+        ["DlgLauncherSettingsStartupFailed"] = new()
+        {
+            [LangEn] = "Windows would not let the launcher register itself to start automatically. "
+                     + "This can be a PC policy or your antivirus blocking it.",
+            [LangEs] = "Windows no dejó que el launcher se registrara para iniciarse automáticamente. "
+                     + "Puede ser una política de la PC o tu antivirus bloqueándolo.",
+        },
+        // Careful: "closing the window keeps it running" belongs to the SEPARATE
+        // close-to-tray checkbox (LauncherConfig.CloseToTray), not to this toggle.
+        // This one is auto-start only; don't merge the two descriptions again.
         ["DlgLauncherSettingsStartWithWindowsTip"] = new()
         {
-            [LangEn] = "Starts with Windows straight to the system tray, and closing the window keeps it "
-                     + "running there so other players keep seeing you online. Right-click the tray icon "
+            [LangEn] = "Windows opens the launcher at login, straight to the system tray — no window pops up, "
+                     + "and other players see you online without you doing anything. Right-click the tray icon "
                      + "→ Exit to fully quit. You can turn this off anytime.",
-            [LangEs] = "Se inicia con Windows directo a la bandeja del sistema, y al cerrar la ventana sigue "
-                     + "corriendo ahí para que los demás jugadores te sigan viendo conectado. Clic derecho "
+            [LangEs] = "Windows abre el launcher al iniciar sesión, directo a la bandeja del sistema: no aparece "
+                     + "ninguna ventana, y los demás jugadores te ven conectado sin que hagas nada. Clic derecho "
                      + "en el ícono de la bandeja → Salir para cerrarlo del todo. Lo puedes apagar cuando quieras.",
         },
         ["DlgLauncherSettingsJoinLinks"] = new()
@@ -2882,6 +2899,19 @@ public static class Strings
         {
             [LangEn] = "The launcher keeps running here so you stay online. Right-click this icon → Exit to fully quit, or turn this off in Settings.",
             [LangEs] = "El launcher sigue corriendo aquí para que sigas en línea. Clic derecho en este ícono → Salir para cerrarlo del todo, o desactívalo en Configuración.",
+        },
+        // Shown once, when the ON-by-default "run in background" preference is first
+        // applied. This balloon is the whole reason a default-on auto-start is
+        // defensible: it is announced and it says where to undo it. Don't drop it.
+        ["TrayBackgroundSeedTitle"] = new()
+        {
+            [LangEn] = "Launcher runs in the background",
+            [LangEs] = "El launcher queda en segundo plano",
+        },
+        ["TrayBackgroundSeedBody"] = new()
+        {
+            [LangEn] = "It now starts with Windows and waits here, so your friends see you connected. You can turn this off in Settings → General.",
+            [LangEs] = "Ahora arranca con Windows y espera aquí, así tus amigos te ven conectado. Lo puedes apagar en Configuración → General.",
         },
 
         // --- Notification bell (Steam-style) ---

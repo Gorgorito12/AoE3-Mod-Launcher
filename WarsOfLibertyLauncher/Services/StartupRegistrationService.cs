@@ -36,6 +36,56 @@ public static class StartupRegistrationService
     private const string ValueName = "Aoe3ModLauncher";
 
     /// <summary>
+    /// What the launcher should do about auto-start on this launch. Produced by
+    /// <see cref="PlanStartup"/>; executed by <c>MainWindow</c>'s ctor.
+    /// </summary>
+    /// <param name="SeedNow">
+    /// Apply the ON-by-default "run in background" preference to this config: force
+    /// the three flags on, set <c>BackgroundDefaultSeeded</c>, and save. The caller
+    /// must set the marker BEFORE attempting the registry write, so a failed write
+    /// doesn't leave the seed retrying every launch.
+    /// </param>
+    /// <param name="Register">Write the Run key (true) or clear it (false).</param>
+    /// <param name="ShowNotice">Fire the one-time "running in the background" balloon.</param>
+    public readonly record struct BackgroundStartupPlan(bool SeedNow, bool Register, bool ShowNotice);
+
+    /// <summary>
+    /// Decides auto-start for this launch. Pure — no registry, no config writes — so
+    /// the invariants below are unit-testable (<c>BackgroundStartupPlanTests</c>).
+    ///
+    /// "Run in background" defaults ON, but the flags alone are inert: the Settings
+    /// checkbox reads the REGISTRY (<see cref="IsRegistered"/>), and the Run key is
+    /// only ever written by <see cref="Apply"/>. So a config that has never been
+    /// seeded gets the key written once, which is what makes the default real. A
+    /// pre-existing <c>startWithWindows:false</c> is treated as "never chose" rather
+    /// than "declined", because the toggle used to default off — hence the seed
+    /// FORCES the flags rather than reading them.
+    ///
+    /// THE INVARIANT: once seeded, the user's flag is obeyed literally and forever.
+    /// Keying the write off "the Run key is missing" instead of the marker would
+    /// silently re-enable auto-start the launch after an opt-out — a default that
+    /// won't stay off is malware behaviour. That is what <paramref name="alreadySeeded"/>
+    /// exists to prevent; it is not an optimisation.
+    /// </summary>
+    /// <param name="alreadySeeded">The config's <c>BackgroundDefaultSeeded</c>.</param>
+    /// <param name="startWithWindows">The config's <c>StartWithWindows</c>.</param>
+    /// <param name="alreadyRegistered">
+    /// <see cref="IsRegistered"/>. Only used to suppress the notice for someone who
+    /// had already switched auto-start on by hand — for them the seed is a no-op and
+    /// announcing it would be noise.
+    /// </param>
+    public static BackgroundStartupPlan PlanStartup(bool alreadySeeded, bool startWithWindows, bool alreadyRegistered)
+    {
+        if (!alreadySeeded)
+            return new BackgroundStartupPlan(SeedNow: true, Register: true, ShowNotice: !alreadyRegistered);
+
+        // Seeded: the flag is the user's own answer. Re-applying it each launch
+        // self-heals the registered path (the portable exe moves) and clears a stale
+        // key after an opt-out; it can never re-arm, because Register mirrors the flag.
+        return new BackgroundStartupPlan(SeedNow: false, Register: startWithWindows, ShowNotice: false);
+    }
+
+    /// <summary>
     /// True if the registry currently contains an autostart entry for this
     /// launcher (regardless of whether the path it points at still exists).
     /// Used by the Settings dialog to pre-populate the checkbox.
