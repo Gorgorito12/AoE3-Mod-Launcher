@@ -81,6 +81,9 @@ public partial class LobbyWindow : Window
     /// <summary>"Cancel game" / "Leave game" while a match is running.</summary>
     public Action? OnInGameCancel { get; set; }
 
+    /// <summary>Pencil beside the room name — rename the room (host only).</summary>
+    public Action? OnRenameRoom { get; set; }
+
     /// <summary>"Clear chat" — wipes the local chat log only.</summary>
     public Action? OnClearChat { get; set; }
 
@@ -127,6 +130,7 @@ public partial class LobbyWindow : Window
     private void ReadyButton_Click(object sender, RoutedEventArgs e) => OnReady?.Invoke();
     private void StartButton_Click(object sender, RoutedEventArgs e) => OnStart?.Invoke();
     private void InGameCancelButton_Click(object sender, RoutedEventArgs e) => OnInGameCancel?.Invoke();
+    private void RenameRoomButton_Click(object sender, RoutedEventArgs e) => OnRenameRoom?.Invoke();
     private void ClearChatButton_Click(object sender, RoutedEventArgs e) => OnClearChat?.Invoke();
     private void ChatSendButton_Click(object sender, RoutedEventArgs e) => OnSendChat?.Invoke();
     private void ChatEmojiButton_Click(object sender, RoutedEventArgs e) => OnEmoji?.Invoke();

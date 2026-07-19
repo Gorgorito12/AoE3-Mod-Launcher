@@ -155,9 +155,12 @@ Two cheap gates beyond a green build:
   `{StaticResource}` that fails to resolve throws at *runtime*, not compile (this
   bit us once with `RadiusMd`). Run `dotnet
   bin/Release/net8.0-windows/Aoe3ModLauncher.dll` for ~10 s — it stays up
-  (timeout-kill = OK) or prints the unhandled exception + stack. The `.exe` needs
-  UAC, so run the `.dll` via the dotnet host to capture startup crashes from a
-  plain (non-elevated) shell.
+  (timeout-kill = OK) or prints the unhandled exception + stack. **The `.exe` now
+  runs `asInvoker` (no UAC), so you can run it directly**; running the `.dll` via
+  the dotnet host still works and keeps stdout in the current shell for capturing
+  startup crashes. (Before the auto-start fix the `.exe` was
+  `requireAdministrator` and needed the `.dll` route to avoid the UAC prompt — see
+  the run-in-background gotcha.)
 - **Install** — the installer can produce a broken-but-"successful" result
   (missing base game), so a real install needs an actual AoE3 + payload download;
   the integrity gate (below) is the in-process backstop.
@@ -1540,6 +1543,114 @@ Two cheap gates beyond a green build:
   `/releases/latest`; the active mod's check and the sweep's per-mod fallback
   resolve the real latest.
 
+- **`ActionPanelControl` (and everything else in `LegacyPlayContent`) is INVISIBLE
+  — setting a control's `Visibility` there paints NOTHING on screen. Only what
+  `SetPrimaryAction`/`Refresh*` MIRROR into the dashboard is real UI.**
+  `MainWindow.xaml`'s `LegacyPlayContent` Grid is `Visibility="Collapsed"` and
+  exists purely so the old code-behind keeps compiling/working (`ActionPanel`,
+  `StatusCard`, `ProgressPanel`, `MainTabs`, `HeroBanner`); the cinema dashboard
+  above it mirrors selected pieces. **A `Visibility = Visible` on a child of a
+  Collapsed parent is a no-op** — that's how GitHubReleases mods ended up with NO
+  reachable way to update: `ApplyCheckResult` dutifully set
+  `ActionPanelControl.UpdateButton.Visibility = Visible` while the user only ever
+  saw PLAY (reported for Improvement Mod sitting on `05.07.2026` with `19.07.2026`
+  released, correctly resolved in the log and still unofferable). `SetPrimaryAction`
+  mirrors ONLY the primary button into `DashboardPlayButton`/`DashboardPlayButtonText`;
+  there is **no dashboard mirror for `UpdateButton`**. Fix: GitHubReleases now flips
+  the PRIMARY CTA to `PrimaryAction.Update` when an update is on offer — the same
+  rule WolPatcher already followed ("when patches are pending, the primary CTA IS
+  update"). **Paired and mandatory:** `PlayButton_Click`'s `case PrimaryAction.Update`
+  routes on the MECHANISM (`GitHubReleases` → `RepairInstallAsync(asUpdate:true)`,
+  else `ApplyUpdateWithElevationCheckAsync`) — the latter applies `_pendingDownloads`,
+  which is ALWAYS empty for GitHubReleases, so without the split the new CTA would
+  do nothing. Gate on the mechanism, NOT on `GitHubUpdateAvailable()`: that predicate
+  needs a known installed version and is false for the detected-install case that
+  also raises this CTA. When adding any new affordance, mirror it into the dashboard
+  — don't just unhide something in the legacy panel.
+
+- **The follow-latest cache (`LastKnownLatestVersion` + `LatestReleaseETag`) is
+  TIED to `ModState.LatestReleaseRepo` and discarded when the catalog moves a mod
+  to a different repo — without that, a repo migration strands every existing user
+  on the OLD version, silently.** The cached tag+ETag pair belongs to ONE repo but
+  used to record only the values, never the source. When Improvement Mod moved from
+  `papillo12/Improvement-Mod` to `mandosrex/AoE3ImpMod_New`, the stale ETag still
+  MATCHED the old repo, so `GET /releases/latest` there answered **304** →
+  `GetLatestReleaseTagAsync` returned a null tag → `CheckCoreAsync`'s fallback chain
+  (fresh → cached → approved) served the **cached old-repo tag**, so the launcher
+  reported `LatestVersion='Improvement-Mod'` while the catalog already said
+  `19.07.2026`. Nothing errored and nothing was logged: indistinguishable from "no
+  newer version". Fix: `LatestReleaseRepo` records where the pair came from; on a
+  mismatch the whole pair is ignored (no `If-None-Match`, no cached-tag fallback)
+  and the tag resolves fresh, mirroring `ModCatalogService.LoadFromCache`, which
+  already discards its cache when `cache.Repo` != the active repo. An empty
+  `LatestReleaseRepo` (pre-existing configs) reads as "doesn't match", which is the
+  safe direction. **The 304 branch now LOGS** — it was the only path that returned
+  without a trace, and that silence is what hid this. **Second half of the same
+  incident, deliberately NOT fixed (known gap):** a catalog refresh does NOT rebuild
+  the ACTIVE `UpdateService`'s `ModProfile`, so a launcher left running across a
+  catalog change keeps querying the OLD `sourceRepo` until restarted; the cache fix
+  bounds the damage (it can no longer get stuck on a wrong-repo tag) but seeing a
+  migrated repo still needs a restart.
+
+- **`GitHubReleases` mods now IDENTIFY the installed version by CRC-matching a few
+  local files against each release's zip index, read remotely over HTTP range
+  requests — no download, no modder cooperation.** This is the GitHubReleases
+  answer to what WoL gets from `UpdateInfo.xml`'s per-version MD5s: a
+  GitHubReleases version is otherwise just a string the launcher stamps when IT
+  installs, so a mod detected on disk, updated by hand, or migrated to another repo
+  has no usable version and can never be compared against the latest.
+  `Services/RemoteZipIndex.cs` fetches the archive tail (~64 KB), finds the EOCD,
+  then pulls the central directory (~250 KB for ~2200 entries) and parses
+  `name → (CRC-32, size)`; `Services/ModVersionFingerprint.cs` indexes up to
+  `MaxCandidates` (4) newest non-prerelease releases, keeps entries whose CRC
+  DIFFERS across them (an identical file proves nothing), CRC-32s the **12
+  smallest** such files locally (≤25 MB total) via `HashService.ComputeCrc32Async`,
+  and `Decide` requires ≥60 % agreement AND a strict margin over the runner-up —
+  "unknown" beats a wrong version. **Measured on the real Improvement Mod:** 2006
+  common entries, only 15 discriminating, smallest 10.8 KB, verdict 15-0 correct.
+  **Load-bearing details:** (a) range reads hit the **asset CDN**, not
+  `api.github.com`, so they cost nothing against the 60/h limit — the only API call
+  is `ListReleaseCandidatesAsync`, which reuses the SAME listing endpoint the
+  version picker already calls; a ranged GET returns **206** and the github.com→CDN
+  redirect preserves the Range header (verified: 100 bytes of a 1.19 GB asset).
+  (b) The pass is **self-terminating**: it runs only when the stored version is
+  empty or is not a real tag of the current repo, and persisting the identified tag
+  makes that condition false — without that property it would re-fingerprint on
+  every check for anyone merely behind. (c) A **single** indexable release returns
+  null on purpose: with nothing to discriminate against, a match would only prove
+  "some version of this mod". (d) **Zip64** (>4 GB payloads) is not parsed —
+  `TryLocateCentralDirectory` returns false on the 0xFFFFFFFF sentinels and the
+  whole chain degrades to the previous behaviour, like every other failure here.
+  WoL/`WolPatcher` is untouched (it has MD5 detection) and the stock game never
+  enters this path.
+
+- **A DETECTED `GitHubReleases` install has NO version, and that used to mean it
+  could never be updated — so a valid install with an unknown version is offered
+  the Update button anyway.** A GitHubReleases mod's installed version is a plain
+  string stamped ONLY when the launcher itself installs/updates/repairs it
+  (`MainWindow` install tail + `RepairInstallAsync`'s post-verify tail); unlike
+  WolPatcher there are no file hashes to deduce it from, and
+  `UpdateService`'s `LastKnownVersion` write is circular for this mechanism
+  (`current` IS `LastKnownVersion`), so it can never bootstrap itself. Any mod the
+  launcher merely **finds** on disk — the content probe, `ModInstallScanner`, the
+  "¿YA LO TIENES?" search, a manual folder pick — therefore keeps
+  `LastKnownVersion == ""` forever. `ApplyCheckResult`'s GitHubReleases branch
+  compares installed-vs-latest, so an empty installed version made `ghHasNewer`
+  false and **hid the Update button permanently** (reported for a detected
+  Improvement Mod: PLAY worked, a new release existed, nothing was ever offered).
+  Fix: `ghUnknownInstalled` (valid install + empty `ghCur` + known `ghLatest`)
+  also raises the Update CTA, with the neutral `StatusGhVersionUnknownCanUpdate`
+  instead of "update available" — we don't know their copy is old, only that a
+  release exists. **This does NOT violate the "never push a destructive
+  reinstall" invariant**: for GitHubReleases the update is a re-overlay IN PLACE
+  (`RepairInstallAsync(asUpdate:true)`), not a from-scratch install into a new
+  folder, and PLAY stays the primary action. It is also **self-healing** — the
+  repair tail stamps `LastKnownVersion` with the effective tag, so after one click
+  the mod joins the normal follow-latest cycle and this branch stops firing. The
+  **bell is deliberately NOT changed**: `MaybeNotifyUpdateAvailable` keeps its
+  `versionKnown` gate, so a detected mod shows the button but never spams a
+  notification.
+
 - **`GitHubReleases` mods can ship OPT-IN incremental delta patches — a small
   "changed files only" update that's a best-effort shortcut with a GUARANTEED
   full fallback. Never make the delta path a hard requirement.** Owned by
@@ -2468,12 +2579,19 @@ Two cheap gates beyond a green build:
   room is active the 4th field is `Opened: <t:<unixSeconds>:R>` — Discord's native
   relative-time markdown, which each CLIENT renders as "5 minutes ago" and updates
   live on its own (localised per viewer), so there is NO polling / periodic edit /
-  timer on the backend (`renderKey` stays `players|status`, so the constant
-  timestamp triggers no extra flushes). On close, `buildEmbed` swaps it to a STATIC
+  timer on the backend (the constant timestamp is absent from `renderKey`, so it
+  triggers no extra flushes). On close, `buildEmbed` swaps it to a STATIC
   `Lasted: <formatDuration(now-createdAt)>` (compact `1h 5m`/`12m`/`45s`) so a closed
   room shows its final duration frozen instead of an ever-growing "opened N ago".
   Don't "improve" the live counter by editing the message on a timer — that would
   burn the per-webhook edit rate limit + CPU for what Discord already does client-side.
+  **`renderKey` is `players|status|title`, and the title being in it is
+  load-bearing.** `notifyRoomChanged` DISCARDS an edit whose key is unchanged
+  (that's what coalesces a burst of joins), so any embed field that can change
+  while a room is open MUST be in the key. The title can: the host renames a live
+  room via the `rename_room` WS frame (below). Drop `title` from the key and the
+  rename updates every launcher but **silently never reaches Discord** — the
+  worst kind of bug here, since nothing errors.
   **Multi-channel:**
   `DISCORD_WEBHOOK_URL` is a **comma-separated list** (parsed by `urlListEnv` in
   `env.ts` into `config.discordWebhookUrls: string[]`), so several channels/servers
@@ -2490,12 +2608,19 @@ Two cheap gates beyond a green build:
   `allowed_mentions:{parse:[],roles:[id]}` so a "Players"/"Jugadores" role gets
   notified (the mention MUST be in `content`, not the embed; the `allowed_mentions`
   restriction stops a room name from @everyone-ing). It's ONLY on the create POST —
-  the PATCH edits never re-ping. The role id **DEFAULTS to the WoL community
-  "Players" role, hardcoded in `env.ts`** (a role id is a public identifier, not a
-  secret — same pattern as the other hardcoded server defaults), so it works with no
-  config; `DISCORD_PLAYERS_ROLE_ID` overrides it for another server and `"none"`
-  disables the ping. (Multi-server caveat: a role id belongs to one server, so with
-  multiple webhooks the ping only lands on the server that has it.)
+  the PATCH edits never re-ping. **The ping is PER-SERVER: `DISCORD_PLAYERS_ROLE_ID`
+  is a comma list aligned POSITIONALLY with `DISCORD_WEBHOOK_URL`** (`roleIdListEnv`
+  in `env.ts` keeps empty slots as placeholders — unlike `urlListEnv` which drops
+  them — so the alignment holds; `announceLobbyCreated` builds the payload PER webhook
+  via `roleIdFor(i)`). So `webhook[i]` pings `roleId[i]`; an empty / `"none"` slot
+  skips that server's ping (a role belongs to ONE server, so each server must name its
+  own role). The role id **DEFAULTS to the WoL community "Players" role at index 0,
+  hardcoded in `env.ts`** (a role id is a public identifier, not a secret — same
+  pattern as the other hardcoded server defaults), so it works with no config. Example
+  for two servers: `DISCORD_WEBHOOK_URL=<wol>,<server2>` +
+  `DISCORD_PLAYERS_ROLE_ID=1088344884882194563,1087729644989579374` (WoL first, same
+  order). Keep the two lists in the SAME order and don't leave empty webhook slots
+  (`urlListEnv` drops them, shifting the alignment).
   Deploy: `git pull` + set the comma-separated `DISCORD_WEBHOOK_URL`
   [+ optional `DISCORD_PLAYERS_ROLE_ID`] in `.env` + `systemctl restart wol-lobby`;
   **the `0002` migration auto-applies at startup** (`db.migrate` runs every unseen
@@ -2576,11 +2701,23 @@ Two cheap gates beyond a green build:
   **Single-instance (NEW behaviour):** a deep link fired while the launcher is open
   must route into the RUNNING instance, not spawn a second window. `App.OnStartup`
   takes a per-session `Mutex` (`Local\WarsOfLibertyLauncher.SingleInstance.v1`); the
-  SECOND launch forwards its lobby id over a **named pipe**
+  SECOND launch forwards its intent over a **named pipe**
   (`WarsOfLibertyLauncher.DeepLink.v1`) to the primary and `Shutdown()`s WITHOUT
-  showing a window; the PRIMARY runs a background pipe-server loop that, on a valid
-  id, marshals to the dispatcher, `Activate()`s the window, and raises
-  `App.JoinRequested`. **Load-bearing: `StartupUri` was REMOVED from `App.xaml`** so
+  showing a window; the PRIMARY runs a background pipe-server loop that marshals to
+  the dispatcher. The pipe carries one of two payloads: a valid lobby id →
+  `DispatchJoin` (raises `App.JoinRequested`), or the sentinel `__show__` →
+  `DispatchShow`. **A plain relaunch of the .exe while the launcher sits in the
+  tray now RESTORES the window** (the Steam/Discord behaviour): the second instance,
+  with no deep link, forwards `__show__` (UNLESS it carried `--minimized` — a
+  duplicate auto-start stays in the tray), and the primary calls the new public
+  `MainWindow.BringToForeground()` → `ShowFromTray()`. Both dispatch paths now go
+  through `BringToForeground()` (not a bare `Activate()`), which `Show()`s a window
+  hidden to the tray — a bare `Activate()` can't un-hide a `Hide()`'d window, so a
+  deep link arriving while the launcher was tray-hidden previously never surfaced it.
+  The `ShowCommand`/`__show__` sentinel is deliberately an INVALID lobby id (the
+  underscores) so it can't collide with a real join payload; `--minimized` is
+  detected once in `OnStartup` and shared by the primary path (`StartMinimized`) and
+  the second-instance branch. **Load-bearing: `StartupUri` was REMOVED from `App.xaml`** so
   the guard can suppress a second window — the primary creates `new MainWindow()`
   itself in `OnStartup` (don't re-add `StartupUri`; `ShutdownMode=OnMainWindowClose`
   still works because we set `Application.MainWindow`). A COLD-START link (this
@@ -2611,7 +2748,23 @@ Two cheap gates beyond a green build:
   `MpRoomTitleFallback`; `MpRoomTitleGeneric` until the host is known) — **not**
   the raw lobby id, which already shows under the ROOM ID stat (that stat carries
   a 📋 `CopyRoomIdButton`, handled locally in `LobbyWindow.xaml.cs` — pure
-  clipboard, no session round-trip); (2) there is **no HOST stat** — the roster's
+  clipboard, no session round-trip). **The title is RENAMEABLE mid-room by the
+  host** via a ✏ `RenameRoomButton` beside it (mirrors the 📋; opens
+  `RenameRoomDialog`, a `PasswordPromptDialog` clone with a TextBox). Three rules:
+  (a) **the client never paints the new name itself** — it sends the `rename_room`
+  WS frame and waits for the server's `room_renamed` broadcast
+  (`HandleRoomRenamed` → `MultiplayerSession.SetCurrentLobbyTitle` +
+  `RenderRoomPanel` + a chat line), which is sent with `exclude: null` so host and
+  peers can never disagree and a REJECTED rename can't leave the host showing a
+  name nobody else has; (b) the 3-80 length rule is the SERVER's (identical to
+  room creation in `rest.ts`) — the dialog repeats it only for instant feedback,
+  and the backend also gates host-only + a 2 s per-room throttle; (c) button
+  visibility is set in `RenderRoomPanel` (not once at open) so a **host migration**
+  moves it to the new host. `room_state` does NOT carry the title — that's why the
+  dedicated frame exists; don't "simplify" by expecting a room_state refresh to
+  deliver it. The rooms-browser row needs nothing (`BuildRoomsSignature` already
+  includes the title, so the 5 s quiet refresh repaints it) and Discord follows via
+  `renderKey` (see the webhook bullet). (2) there is **no HOST stat** — the roster's
   per-row badge is the canonical host marker; (3) the info card (`RoomInfoCard`)
   is **Mod + Password only** (the old "Connection" cell duplicated the P2P status
   in the meta subtitle and "Max players" duplicated the PLAYERS stat), collapsing
@@ -2936,8 +3089,19 @@ Two cheap gates beyond a green build:
   shows so the header tracks the rows. The row shows: a **leading mod-icon disc**
   (the room's mod icon, resolved by `ResolveRoomModIcon` = cached catalog
   `icon.png` → built-in packed icon, cached per mod id and decoded once; **gold ★
-  fallback** when the mod ships no resolvable icon), the title (+ a small 🔒 /
-  "not installed" sub-line under it), the **MOD chip** (own column), the host with
+  fallback** when the mod ships no resolvable icon), the title (with a purple
+  **"Privada" chip** beside it when private, + small muted sub-lines under it: an
+  optional "not installed" note and a **live "open for X"** counter — how long the
+  room has been open, ticked in place by `RefreshRoomAgeCells` on the ~3 s rooms
+  ping timer, registered in `_roomAgeCells`; the open time is parsed from
+  `LobbySummary.CreatedAt` via the pure `Services/RoomAgeFormat.cs`
+  (`ParseCreatedUtc` handles SQLite's zone-less UTC + ISO; `Compact` →
+  "5 min"/"1 h 20 min", `RoomAgeFormatTests`). The lobby window shows the same
+  counter in its header meta line (`RenderRoomPanel` appends an "open for X" Run,
+  `RefreshLobbyOpenAge` on the ~2.5 s lobby ping timer; the open time is
+  `_currentLobbyCreatedUtc`, mirroring `_currentLobbyMaxPlayers` — set to now on
+  create / parsed from the joined summary, cleared on leave)), the **MOD chip**
+  (own column), the host with
   a **name-colored** monogram circle (`HostMonogramBrush`, hashed palette + white
   initial), players, ping, a status cell, and the **ACTION-column
   action button** whose caption + enabled-ness pick per room in this **priority
@@ -2965,7 +3129,14 @@ Two cheap gates beyond a green build:
   **In Game > Full > Private > Waiting**: **In Game** (green `MpStatusInGame`, bold
   label), **Full** (amber `MpStatusFull`), **Private** (purple `MpStatusLocked`,
   string `MpRoomStatusLocked` = "Private"/"Privada", shown for `IsPrivate` rooms
-  that aren't in-game/full), **Waiting** (blue `MpStatusWaiting`). **The purple
+  that aren't in-game/full), **Waiting** (blue `MpStatusWaiting`). **A purple "Privada"
+     CHIP next to the room NAME marks every private room ALWAYS** (`BuildRoomCard`
+     title row: a `Grid{*, Auto}` with the name in `*` (ellipsizes) + a
+     `BuildRoomChip(MpRoomStatusLocked, low-alpha-purple #228B5CF6, MpStatusLocked)`
+     in `Auto`) — needed because the purple Private DOT only shows at Waiting rank
+     (In Game / Full outrank it), so an in-game/full private room would otherwise
+     show no hint it's private. (An earlier 🔒-emoji prefix on the name was rejected —
+     it looked ugly; the chip is the accepted form.) **The purple
   Private dot is COSMETIC — the ACTION stays an enabled `Join`** because private
   rooms ARE joinable (the click handler prompts for the password via
   `PasswordPromptDialog`); do NOT turn it into a disabled "Locked" (that would
@@ -3016,6 +3187,39 @@ Two cheap gates beyond a green build:
   vCPU only past ~300-500 (where you'd switch to delta presence). Don't re-gate the
   presence socket on visibility, and don't drop the 200-row render cap.
 
+- **THE PREREQUISITE for auto-start: the launcher runs `asInvoker` (un-elevated).
+  A Run-key registration can NEVER auto-start a `requireAdministrator` binary — this
+  was the real, forensically-confirmed reason "Start with Windows" did nothing.**
+  Windows processes the HKCU `Run` key (and the Startup folder) at logon with the
+  user's NORMAL, non-elevated token and **silently skips** any entry whose target
+  requires elevation — no UAC prompt, no error, no launch. So under the old
+  `app.manifest` `requireAdministrator` the whole chain below could be perfect (Run
+  value present + pointing at a good exe, `StartupApproved` enabled, config seeded)
+  and Windows still launched nothing. Two earlier rounds of fixes (point the Run key
+  at the stable canonical copy; copy the whole framework-dependent folder so that
+  copy is runnable — see the self-install bullet) were **necessary but not
+  sufficient**; the manifest was the blocker. The fix flipped the manifest to
+  `asInvoker` (Steam model): the client runs un-elevated so the Run key actually
+  fires for everyone, there's no UAC on daily use, and privileged operations
+  (any WRITE into a protected install folder) elevate ON DEMAND via
+  `ElevationService.CanWriteTo` + `RelaunchElevated`. **Every write path is
+  guarded** (a protected NON-Steam folder — e.g. retail/GOG AoE3 in Program Files —
+  is the case that needs it; a Steam-library or user-chosen folder is already
+  writable and never prompts): install (`InstallAsync:8797`), WoL-patch update
+  (`ApplyUpdateWithElevationCheckAsync`, uses `--update-now` auto-resume), uninstall
+  (`UninstallMenuItem_Click`), and — via the shared `MainWindow.EnsureInstallWritableOrElevate`
+  helper — **Repair / GitHubReleases update / version-pick** (`RepairInstallAsync`, guard
+  placed right before each `InstallModOnlyAsync` write so an intact repair that skips the
+  write never prompts) and **applying a translation** (`ApplyTranslationAsync`, before the
+  `data\`/`_originals\` write). Detection/recognition is READ-only (probes, marker,
+  `data\*.xml`, HKLM/HKCU reads, `FindAllDeep`/`ModInstallScanner`, "Change folder"),
+  so it never needs admin in any folder. The elevate-on-demand relaunch has NO
+  auto-resume except the WoL update path — the user re-triggers the action in the
+  elevated instance (same as install/uninstall). The only ways to auto-start an *elevated* app silently are a Scheduled
+  Task (highest-privilege logon trigger — the Voobly model) or a Service; both are
+  heavier and a stronger AV persistence signal on an unsigned binary, so they were
+  deliberately rejected. **Don't restore `requireAdministrator`** — it re-breaks
+  Run-key auto-start (and everything below becomes inert again).
 - **"Run in background" is ONE toggle that bundles auto-start + minimise-to-tray
   + start-to-tray, it is now ON BY DEFAULT, and the default is real only because a
   MARKER-gated one-time seed writes the Run key — auto-start opens straight to the
@@ -3061,6 +3265,30 @@ Two cheap gates beyond a green build:
   off), not "declined". Once seeded, the flag is obeyed literally and forever;
   `Apply(plan.Register)` runs every launch, which self-heals the registered exe path
   (the portable binary moves) and clears a stale key after an opt-out.
+  **The Run key targets the STABLE installed copy when one exists, NOT the volatile
+  running exe — this closed a confirmed "auto-start did nothing" bug.** The self-heal
+  used to write `Environment.ProcessPath`, so launching a portable/dev build
+  (`publish\`, `bin\Debug\`, a moved download) re-pointed the key at THAT path — and
+  if it was gone by the next Windows login (a `build-release.ps1` that wiped `publish\`,
+  a `dotnet clean`, a re-downloaded exe), login silently launched nothing (forensically
+  confirmed: Run key → deleted `publish\` exe, no auto-start session logged, no crash).
+  Both `Apply` call sites (the ctor self-heal at `MainWindow` ~249 and the Settings save
+  `SaveButton_Click` step 1b) now pass `exePathOverride: SelfInstallService.ResolveAutoStartExe()`,
+  whose pure core `SelectAutoStartExe` (unit-tested `AutoStartTargetTests`) returns
+  `CanonicalExe` when `File.Exists(CanonicalExe)` else `Environment.ProcessPath`. So once
+  a stable copy exists (the user did "Install on this PC", or accepted the opt-in prompt
+  below), running ANY volatile build heals the key back to the durable canonical path
+  instead of clobbering it. **This does NOT auto-install** — it only PREFERS an existing
+  canonical copy, so a not-installed portable user is byte-for-byte unchanged. Dev
+  trade-off (accepted): login opens the canonical copy (possibly an older build than the
+  one you run by hand); to change what auto-starts, re-run "Install on this PC" from the
+  build you want. **Enabling the toggle from a portable exe with NO canonical copy yet
+  OFFERS an opt-in self-install** (`SaveButton_Click`: `MessageBox` YesNo, keys
+  `DlgSettingsBgInstallPrompt{Title,Body}` / `DlgSettingsBgInstallFailed`) — Yes runs
+  `SelfInstallService.Install()` and the Run key then points at the canonical copy; No
+  registers the portable path as before (fragile, their choice; a failed install falls
+  back the same way). The prompt is explicit consent, so it respects SelfInstallService's
+  OPT-IN contract — don't turn it into a silent auto-copy.
   **Two registry facts that mislead:** Task Manager's Startup tab **disables without
   deleting** our Run value (it writes `Explorer\StartupApproved\Run`), so a TM-disabled
   entry still reads as registered by `IsRegistered()` and the checkbox shows checked —
@@ -3153,6 +3381,125 @@ Two cheap gates beyond a green build:
   the `exePathOverride` here is what re-points the Run key from the portable exe to the
   installed copy. The durable fix for the whole self-signed-binary AV class is still the
   SignPath trusted signature. Don't re-add a second run-in-background checkbox.
+  **The auto-start Run key now PREFERS this canonical copy whenever it exists, and the
+  toggle OFFERS this install opt-in when it doesn't** (see the run-in-background bullet's
+  Run-key-target paragraph): `SelfInstallService.ResolveAutoStartExe()` (pure core
+  `SelectAutoStartExe`, pinned by `AutoStartTargetTests`) returns `CanonicalExe` when it's
+  on disk else `Environment.ProcessPath`, and BOTH background `Apply` call sites (ctor
+  self-heal, Settings save) feed it through `exePathOverride`. So a stable copy protects
+  auto-start from being clobbered by a volatile launch, and enabling the toggle from a
+  never-installed portable exe prompts (opt-in, `MessageBox` YesNo) to create one. This
+  keeps SelfInstallService's "nothing runs automatically" contract intact — the copy is
+  only ever made by an explicit "Install on this PC" click OR an explicit Yes on that
+  prompt, never silently.
+  **A THIRD entry point makes this automatic for players who never open Settings: a
+  ONE-TIME first-launch offer (`MainWindow.MaybeOfferSelfInstall`, called from the Loaded
+  handler right before `MaybeShowBackgroundSeedNotice`).** Auto-start is default-ON but a
+  portable exe the player later moves/deletes silently breaks the Run key — the exact
+  `publish\` bug the maintainer hit — and a player won't think to run "Install on this
+  PC". So the first time we're running a portable build with auto-start on, the launcher
+  OFFERS the same install: gated on `!App.StartMinimized && _config.StartWithWindows &&
+  !SelfInstallService.CanonicalLooksRunnable() && !_config.SelfInstallPromptShown` (a
+  VISIBLE/manual launch — never a `--minimized` tray launch, where a modal over a
+  tray-hidden window would be wrong; auto-start on; no runnable canonical copy yet; not
+  offered before). It sets `SelfInstallPromptShown = true` + `Save()` **FIRST** (same
+  rationale as the seed marker — a failed/declined attempt must never re-nag), then a
+  `MessageBox` YesNo reusing the SAME strings as the Settings prompt
+  (`DlgSettingsBgInstallPrompt{Title,Body}` / `DlgSettingsBgInstallFailed` — zero new
+  strings; that copy already reads "runs from this .exe, auto-start breaks if you move/
+  delete it, install a stable copy?"). Yes → `SelfInstallService.Install()` → on success
+  `RelaunchInstalledAndExit()` (hard-exits; the canonical instance self-heals the Run key
+  to the canonical exe via its ctor `Apply(ResolveAutoStartExe())`), on failure a warning
+  and stay portable; No → stay portable. It returns true when it showed the dialog, and
+  the Loaded handler then sets `_pendingBackgroundSeedNotice = false` so the tray seed
+  balloon doesn't ALSO fire — first-launch onboarding is one popup, not two. If a runnable
+  canonical copy already exists (the maintainer, a returning installed user) it stays
+  silent (auto-start is already durable). Still opt-in — an explicit Yes — so the
+  "nothing installs itself" contract holds. Don't key the offer off the missing Run key
+  (that's the `SelfInstallPromptShown` marker's job), and don't drop the `!StartMinimized`
+  gate (no modal over the tray).
+  **The offer is a THEMED dialog, not the white OS `MessageBox` — and the first-run UI
+  language is auto-derived from the Windows display language.** The onboarding used to pop
+  the raw Windows `MessageBox`, which (a) clashed with the dark "dorado imperial" theme and
+  (b) showed in ENGLISH — the config default `Language="en"` didn't look at the OS, so a
+  mostly-Spanish audience's very first screen was English. Two coupled fixes: **(1) the UI
+  language FOLLOWS the Windows display language until the user overrides it in Settings.**
+  `MainWindow.ApplyStartupLanguage()` (called in the ctor where `Strings.SetLanguage` used to
+  be, ~:309): while `LauncherConfig.LanguageExplicitlyChosen` is false, it re-derives
+  `Language = DefaultLanguageForCulture(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName)`
+  every launch (pure, unit-tested `DefaultLanguageTests`: `"es"` → `"es"`, else → `"en"` — only
+  two ship), saves if it changed, then `Strings.SetLanguage`. This applies to **fresh AND
+  existing configs** (an existing config predates the flag → deserializes false → follows the
+  OS), which is the whole point — a "fresh-config only" version was tried first and DIDN'T
+  work, because every existing user's config already said `en` so it never applied.
+  `LanguageExplicitlyChosen` flips to true ONLY in `LauncherSettingsDialog.SaveButton_Click`
+  and ONLY when the picked language actually differs from the current one (saving Settings
+  without touching the language must not silently lock it); after that the launcher holds the
+  user's pick and stops following the OS. There is NO first-run popup (an earlier
+  `FirstRunLanguageDialog` chooser was removed — the ask was "just start in the Windows
+  language", silently). Use `CurrentUICulture` (the Windows DISPLAY language), not
+  `CurrentCulture` (regional format); the detected culture is logged for diagnosis. Don't move
+  the derivation back into `Load()` (it's centralized at startup so it covers existing configs
+  and is idempotent), and don't drop the "only on actual change" guard on the explicit-choice
+  flag. **(2) `SelfInstallPromptDialog`** — the themed version of the install offer (modeled on
+  `PasswordPromptDialog`: `WindowStyle=None` + shared `controls:TitleBar` + `BgBase`, modal
+  `ShowDialog` so `DialogResult` is valid), reusing the SAME Tarea-H strings
+  (`DlgSettingsBgInstallPrompt{Title,Body}`) plus button labels
+  `DlgSettingsBgInstallPrompt{Yes,No}`; `MaybeOfferSelfInstall` shows it (`ShowDialog() ==
+  true` = install) instead of the `MessageBox`. The rare install-FAILURE path keeps its
+  `MessageBox` (edge case). Don't re-add a first-run language popup. **Existing-user
+  transition:** they get all of this via the normal self-update (the exe is swapped in place
+  at their current path); their next manual launch follows the OS display language (unless
+  they'd picked one in Settings) and shows the themed install offer in that language.
+  **`Install()` copies the WHOLE build folder for a framework-dependent build, not just
+  the exe — and auto-start only registers a canonical copy that's actually RUNNABLE.**
+  A confirmed second cause of "auto-start launched nothing": `Install()` used to
+  `File.Copy` only the exe, on the assumption it's always the self-contained single-file
+  build. But self-installing from a dev `bin\Debug\`/`bin\Release\` build (a ~0.29 MB
+  **framework-dependent apphost** that needs `Aoe3ModLauncher.dll` + the dependency DLLs
+  beside it) copied only the stub → a canonical copy that fails before .NET starts (no
+  log, no crash). Fix: the copy logic is the testable seam
+  `SelfInstallService.CopyPayload(sourceExe, destDir)` — framework-dependent (a sibling
+  `Aoe3ModLauncher.dll` sits next to the exe) copies the whole output folder recursively
+  (`CopyDirectory`: exe + DLLs + `*.runtimeconfig.json` + `*.deps.json` + `runtimes\`);
+  self-contained single-file (no sibling DLL, e.g. `publish\`) copies just the exe as
+  before. Paired with it, `ResolveAutoStartExe` now gates on the pure
+  `SelfInstallService.CanonicalRunnable(exeExists, siblingDllExists, exeLength)` (via
+  `CanonicalLooksRunnable`): a canonical exe counts only when it exists AND (a sibling DLL
+  is present OR the exe is ≥ `SelfContainedMinBytes`=50 MiB — the apphost is ~0.29 MB, the
+  single-file ~165 MB, so it separates cleanly). A present-but-broken apphost is NOT
+  registered — auto-start falls back to the running exe, and the Settings toggle's opt-in
+  prompt fires (its gate is `!CanonicalLooksRunnable()`, so a broken copy re-offers the
+  install). Pinned by `AutoStartTargetTests` (`CanonicalRunnable` cases + `CopyPayload`
+  FD-copies-all / single-file-copies-only-exe). Self-update caveat (dev-only): it swaps
+  the single self-contained exe in place, so upgrading a framework-dependent canonical
+  install leaves stale sibling DLLs the single-file exe just ignores — harmless.
+  **The counterpart is `SelfInstallService.UninstallAndExit(removeUserData)` — a clean
+  "Uninstall from my PC" for the self-installed copy (there is no MSI/Inno, so the app
+  never appears in Windows "Add or remove programs").** In-process it removes the
+  auto-start Run key (`StartupRegistrationService.Apply(enabled:false)`), the
+  `wol-launcher://` deep-link scheme (`DeepLinkService.EnsureUnregistered`) and the
+  Desktop + Start-Menu shortcuts (`RemoveShortcuts`, keyed to the shared `ShortcutName`
+  const so it deletes exactly what `CreateShortcuts` wrote) — none of which touch the
+  running exe. The install FOLDER can't be deleted while its exe runs, so a detached
+  `cmd` (pure, testable `BuildDeferredDeleteScript(pid, canonicalDir, dataDir?)`: waits
+  on the PID via `tasklist`, delays with `ping` NOT `timeout` — `timeout` needs a console
+  stdin and fails detached — then `rmdir /s /q`, self-deletes with `del "%~f0"`) does it
+  after the hard-exit. **Load-bearing invariants:** (1) it NEVER touches installed MODS
+  (WoL / AoE3) — those are the user's own game folders, uninstalled separately via
+  `UninstallService`; (2) `removeUserData` is an explicit CHOICE surfaced as a YesNoCancel
+  confirm (`DlgLauncherSettingsUninstallConfirmBody`): Yes = uninstall + delete
+  `%LocalAppData%\AoE3ModLauncher` (settings/logs/cache), No = uninstall but KEEP settings
+  (the safe default, so a reinstall keeps preferences), Cancel = nothing — "keep" is the
+  reason `dataDir` is nullable in the script; (3) the `DangerButton` "Uninstall from my
+  PC" row in Launcher Settings → Maintenance shows ONLY when `IsInstalled()` (the exact
+  counterpart of the "Install on this PC" row, which hides then) — a portable exe has no
+  "installation" to remove, you just delete the file. On success it hard-exits
+  (`HardExitRequested = true` so the close-to-tray intercept doesn't hide+lock the exe);
+  a failed script write/launch returns false WITHOUT exiting so the UI reports it (the
+  already-done Run-key/shortcut removals are a harmless partial state). Pinned by
+  `AutoStartTargetTests` (`BuildDeferredDeleteScript`: waits-on-pid + self-deletes;
+  null dataDir keeps user data; non-null removes both).
 
 - **Global chat is a process-wide WebSocket room — separate from the per-lobby
   chat, and the launcher's first real server-push channel.** The Multiplayer
@@ -3163,8 +3510,18 @@ Two cheap gates beyond a green build:
   message list, composer). The client renders each message as a subtle rounded
   **bubble** and **dedupes the avatar/name for consecutive messages from the same
   author** (`_lastGlobalChatAuthor`, reset whenever the panel clears); Send is a
-  compact paper-plane icon button (caption on its ToolTip). That's all cosmetic —
-  the WS protocol + anti-spam below are untouched. Server side it's a single `GlobalChatRoom` **singleton** on
+  compact paper-plane icon button (caption on its ToolTip). **The header stamp
+  shows the DATE, not just the time**, so old messages don't read as recent (and
+  the midnight wrap-around stops looking out of order): today → `HH:mm`, yesterday
+  → `Ayer HH:mm`, older → `15 jul HH:mm` (with the year if it's a different one),
+  via the pure/WPF-free **`Services/ChatTimeFormat.cs`** (unit-tested
+  `ChatTimeFormatTests`; month names follow `Strings.Language`, NOT the OS locale),
+  with the full date+time on the timestamp's hover tooltip. A message on a NEW day
+  **forces a fresh dated header even for the same author** (`_lastGlobalChatDate`,
+  reset with `_lastGlobalChatAuthor` at both panel-clear sites) so a same-author
+  run crossing midnight can't hide the date. `AppendGlobalChatRow` is the single
+  choke point for both live messages and the history replay, so this covers both.
+  That's all cosmetic — the WS protocol + anti-spam below are untouched. Server side it's a single `GlobalChatRoom` **singleton** on
   the Node backend (`src/global/GlobalChatRoom.ts`, mounted at `/global/ws` in
   `index.ts`, held on `AppContext.globalChat`) — modelled on `LobbyRoom`'s
   broadcast / idle-kick / throttle but with **almost no DB**: membership IS
@@ -3444,7 +3801,15 @@ engine** and the UI binds to it.
    "hard-coded base-game protection" claim is false.) The lone hard-coded
    exception is the stock-game profile: `UninstallService.Plan` refuses any
    `IsStockGame` profile outright (its "install folder" is the user's real AoE3
-   install — see the `IsStockGame` gotcha).
+   install — see the `IsStockGame` gotcha). **Uninstall ELEVATES ON DEMAND:** since
+   the launcher runs `asInvoker`, deleting an install under a protected folder
+   (Program Files) needs admin, so `MainWindow.UninstallMenuItem_Click` probes
+   `ElevationService.CanWriteTo(InstallPath)` before it starts and, if it can't
+   write, prompts (`DlgElevationRequired*`) → `RelaunchElevated()` → hard-exit, the
+   SAME guard install uses (a Steam-library folder is usually already user-writable,
+   so this won't fire for it). The registry-cleanup step is best-effort per hive
+   (`RemoveRegistryEntries` swallows an `UnauthorizedAccessException` on HKLM), so a
+   non-elevated cleanup of an old HKLM entry just logs and continues.
 2. **Update** — 100% compatible with the original Java updater: fetch
    `UpdateInfo.xml`, MD5 three key files (`data/protoy.xml`, `techtreey.xml`,
    `stringtabley.xml`) to identify the installed version (falling back to the
@@ -3699,6 +4064,22 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   shows beside the item instead of covering the menu. Don't re-add an implicit
   `ToolTip` style to a single Window, and don't assign a raw long string to
   `.ToolTip` (use `TooltipHelper.Wrap`).
+  (3) **`TooltipHelper.Wrap` pins a LOCAL `FontFamily`/`FontSize` on its TextBlock —
+  load-bearing, and the ToolTip style's font setters are NOT enough on their own.** A
+  WPF `ToolTip` INHERITS its font from the control it's attached to. The title-bar
+  caption buttons (`TitleBarButton` in `Chrome.xaml`) use `FontFamily="Segoe MDL2
+  Assets"` — an ICON font with no letter glyphs — at the tiny `GlyphSize` (8-10px), so
+  a raw-string tooltip on min/max/close rendered its WORDS ("Maximizar"/"Restaurar")
+  as missing-glyph boxes ("tofu"). Setting `FontFamily` on the app-wide `ToolTip`
+  *style* did NOT fix it (font inheritance into the ToolTip's CONTENT is unreliable —
+  the owner's icon font still leaked through); the reliable fix is a **LOCAL**
+  `FontFamily`/`FontSize` on the content TextBlock (a local value beats any
+  inheritance). So `Wrap` sets them (`BodyFont` / `FontSizeBody`, via
+  `TryFindResource`), and `TitleBar.RefreshChrome` routes its caption-button tooltips
+  through `Wrap` instead of assigning the raw string. Rule: a tooltip on a control
+  that carries an icon font MUST go through `Wrap` (or bring its own TextBlock with a
+  local font); don't assign a raw string there. The `ToolTip` style keeps its font
+  setters as a harmless default for non-Wrapped tooltips.
   The lobby window (`LobbyWindow`) splits its localisation across **two**
   methods in `MultiplayerTab.xaml.cs`: `ApplyLobbyStaticLabels()` for static
   labels (section/field headers, button captions, chat placeholder, copy

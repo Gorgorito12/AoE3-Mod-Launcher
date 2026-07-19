@@ -411,7 +411,27 @@ public class UpdateService
                     && string.IsNullOrEmpty(gh.ExternalAssetUrlTemplate);
                 if (followLatest)
                 {
-                    var cachedTag = ghState.LastKnownLatestVersion;
+                    // The cached tag+ETag belong to ONE repo. When the catalog
+                    // migrates a mod elsewhere, that pair is stale in the worst
+                    // possible way: the old ETag still matches the OLD repo, so
+                    // asking it again returns 304 → no fresh tag → we fall back to
+                    // the cached (old-repo) tag and the user NEVER sees the new
+                    // version, with nothing logged as wrong. Discard the pair when
+                    // the repo changed and resolve fresh — the same rule
+                    // ModCatalogService.LoadFromCache applies to the catalog cache.
+                    bool cacheMatchesRepo = string.Equals(
+                        ghState.LatestReleaseRepo, gh!.SourceRepo, StringComparison.OrdinalIgnoreCase);
+                    if (!cacheMatchesRepo
+                        && (!string.IsNullOrEmpty(ghState.LastKnownLatestVersion)
+                            || !string.IsNullOrEmpty(ghState.LatestReleaseETag)))
+                    {
+                        DiagnosticLog.Write(
+                            $"GitHubReleases: cached latest-release pair belongs to " +
+                            $"'{ghState.LatestReleaseRepo}' but the mod now points at " +
+                            $"'{gh.SourceRepo}' — discarding it and resolving fresh.");
+                    }
+
+                    var cachedTag = cacheMatchesRepo ? ghState.LastKnownLatestVersion : "";
                     // Only send the ETag when we still hold the tag it vouches
                     // for — a 304 has no body, so a lone ETag would leave us
                     // tagless.
@@ -426,6 +446,35 @@ public class UpdateService
                     else if (!string.IsNullOrEmpty(cachedTag))
                     {
                         ghTag = cachedTag; // 304-confirmed, or last known good
+                    }
+                }
+
+                // The installed version of a GitHubReleases mod is only ever a
+                // string WE stamped at install time — there's no manifest to read
+                // it back from, so a mod detected on disk, updated by hand, or
+                // migrated to another repo has no usable version and can never be
+                // compared against the latest (i.e. never gets offered an update).
+                // Identify it for real by CRC-matching a few local files against
+                // the releases' zip indexes, read remotely via range requests
+                // (~250 KB per release, on the asset CDN — no API budget).
+                //
+                // Runs ONLY when the stored version is missing or isn't a real tag
+                // of the current repo, so it costs nothing on a healthy install and
+                // never repeats: the identified tag is persisted below.
+                if (valid && !string.IsNullOrWhiteSpace(gh?.SourceRepo)
+                    && string.IsNullOrEmpty(gh!.ExternalAssetUrlTemplate)
+                    && NeedsVersionIdentification(ghInstalled, ghTag))
+                {
+                    var identified = await TryIdentifyInstalledVersionAsync(gh, ct);
+                    if (!string.IsNullOrEmpty(identified))
+                    {
+                        ghInstalled = identified!;
+                        ghState.LastKnownVersion = identified!;
+                        try { _config.Save(); }
+                        catch (Exception ex)
+                        {
+                            DiagnosticLog.Write($"Failed to persist identified version: {ex.Message}");
+                        }
                     }
                 }
 
@@ -451,6 +500,16 @@ public class UpdateService
                 if (!string.IsNullOrEmpty(newETag) && ghState.LatestReleaseETag != newETag)
                 {
                     ghState.LatestReleaseETag = newETag;
+                    ghDirty = true;
+                }
+                // Stamp WHICH repo the pair above came from, so a later catalog
+                // migration can tell the cache is stale. Only for follow-latest
+                // mods — they're the only ones that populate the pair.
+                var ghRepo = _profile.GitHubReleases?.SourceRepo ?? "";
+                if (!string.IsNullOrEmpty(ghTag) && !string.IsNullOrEmpty(ghRepo)
+                    && ghState.LatestReleaseRepo != ghRepo)
+                {
+                    ghState.LatestReleaseRepo = ghRepo;
                     ghDirty = true;
                 }
                 if (ghDirty)
@@ -544,6 +603,65 @@ public class UpdateService
     /// unreachable. Gathers the local inputs (cached ModState + install manifest) and
     /// delegates to the pure <see cref="BuildOfflineResultData"/>.
     /// </summary>
+    /// <summary>
+    /// Cheap pre-gate for the fingerprint pass, so a healthy install pays NOTHING
+    /// (not even an API call). Only an unknown version, or one that isn't the
+    /// latest, is worth investigating — the deeper "is this even a real tag of
+    /// this repo?" test needs the release list and lives in
+    /// <see cref="TryIdentifyInstalledVersionAsync"/>.
+    /// </summary>
+    private static bool NeedsVersionIdentification(string installed, string latest)
+    {
+        if (string.IsNullOrEmpty(installed)) return true;
+        return !string.Equals(installed, latest, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Work out which release is actually installed. Returns null when it can't
+    /// tell, or when the stored version is already a genuine tag of this repo
+    /// (nothing to fix).
+    ///
+    /// SELF-TERMINATING by design: the caller persists whatever we return, which
+    /// makes the stored version a real tag, so the next check exits at the
+    /// membership test below instead of fingerprinting again. Without that
+    /// property this would re-run on every single check for anyone who simply
+    /// hasn't updated yet.
+    ///
+    /// Non-fatal throughout — a failure here must never break a version check.
+    /// </summary>
+    private async Task<string?> TryIdentifyInstalledVersionAsync(
+        GitHubReleasesSettings gh, CancellationToken ct)
+    {
+        try
+        {
+            var installPath = InstallPath;
+            if (string.IsNullOrEmpty(installPath)) return null;
+
+            var candidates = await new GitHubReleaseDownloader()
+                .ListReleaseCandidatesAsync(
+                    gh.SourceRepo, ModVersionFingerprint.MaxCandidates, ct);
+            if (candidates.Count == 0) return null;
+
+            // Already a real tag of THIS repo → the stored version is trustworthy
+            // (the user is simply behind), so don't spend range reads on it.
+            var installed = _config.GetState(_profile.Id).LastKnownVersion;
+            if (!string.IsNullOrEmpty(installed)
+                && candidates.Any(c => string.Equals(c.Tag, installed, StringComparison.OrdinalIgnoreCase)))
+                return null;
+
+            return await ModVersionFingerprint.IdentifyAsync(installPath, candidates, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Version identification failed for '{_profile.Id}': {ex.Message}");
+            return null;
+        }
+    }
+
     private CheckResult BuildOfflineResult(bool valid)
     {
         var state = _config.GetState(_profile.Id);

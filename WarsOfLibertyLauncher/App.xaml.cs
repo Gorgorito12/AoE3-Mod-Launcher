@@ -156,6 +156,12 @@ public partial class App : System.Windows.Application
         var joinId = Services.DeepLinkService.FindJoinLobbyId(Environment.GetCommandLineArgs());
         bool fromInstall = Array.Exists(e.Args, a =>
             string.Equals(a, Services.SelfInstallService.FromInstallArg, StringComparison.OrdinalIgnoreCase));
+        // Detected once here so BOTH the primary path (StartMinimized) and the
+        // second-instance branch below can read it: a manual double-click (no
+        // --minimized) that lands on an already-running tray instance should
+        // SHOW the window, but a duplicate auto-start (--minimized) should not.
+        bool minimized = Array.Exists(e.Args, a =>
+            string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
         bool primary;
         try { _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out primary); }
         catch (Exception ex)
@@ -181,10 +187,15 @@ public partial class App : System.Windows.Application
 
         if (!primary)
         {
-            // Another instance owns the app — hand it our deep link (if any) and
-            // exit WITHOUT creating a second MainWindow.
+            // Another instance owns the app — hand off our intent and exit WITHOUT
+            // creating a second MainWindow. A deep link routes into the running
+            // instance (join that room); a plain manual relaunch (double-click the
+            // .exe while it sits in the tray) asks the running instance to SHOW its
+            // window — the Steam/Discord behaviour the user expects. A duplicate
+            // auto-start (--minimized) does neither: it wanted the tray.
             if (joinId != null) ForwardJoinToRunningInstance(joinId);
-            else Services.DiagnosticLog.Write("SingleInstance: second launch with no deep link; exiting.");
+            else if (!minimized) ForwardShowToRunningInstance();
+            else Services.DiagnosticLog.Write("SingleInstance: duplicate --minimized launch; staying in tray.");
             Shutdown();
             return;
         }
@@ -195,13 +206,12 @@ public partial class App : System.Windows.Application
         PendingJoinLobbyId = joinId;
         StartDeepLinkPipeServer();
 
-        // Detect the auto-start-to-tray flag. The Run-key registration (see
-        // StartupRegistrationService) appends --minimized so a Windows-login
-        // launch opens straight to the tray; a manual double-click carries no
-        // arg and shows the window normally. MainWindow's Loaded handler reads
-        // this and hides to the tray before it paints.
-        StartMinimized = Array.Exists(e.Args, a =>
-            string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
+        // The auto-start-to-tray flag (detected above). The Run-key registration
+        // (see StartupRegistrationService) appends --minimized so a Windows-login
+        // launch opens straight to the tray; a manual double-click carries no arg
+        // and shows the window normally. MainWindow's Loaded handler reads this and
+        // hides to the tray before it paints.
+        StartMinimized = minimized;
 
         // StartupUri was removed from App.xaml so this guard can suppress a second
         // window; create + show the main window ourselves for the primary instance.
@@ -228,6 +238,10 @@ public partial class App : System.Windows.Application
     // block a second Windows user on a shared PC.
     private const string MutexName = @"Local\WarsOfLibertyLauncher.SingleInstance.v1";
     private const string PipeName = "WarsOfLibertyLauncher.DeepLink.v1";
+    // Pipe sentinel: "bring the running window to the front" (a plain relaunch,
+    // no deep link). The underscores make it an invalid lobby id, so it can never
+    // collide with a real join payload in DeepLinkPipeLoop.
+    private const string ShowCommand = "__show__";
     private static Mutex? _instanceMutex;
 
     /// <summary>Cold-start join deep link (set before MainWindow exists); MainWindow
@@ -259,9 +273,11 @@ public partial class App : System.Windows.Application
                     PipeTransmissionMode.Byte, PipeOptions.None);
                 server.WaitForConnection();
                 using var reader = new StreamReader(server, Encoding.UTF8);
-                var id = reader.ReadLine()?.Trim();
-                if (Services.DeepLinkService.IsValidLobbyId(id))
-                    DispatchJoin(id!);
+                var line = reader.ReadLine()?.Trim();
+                if (line == ShowCommand)
+                    DispatchShow();
+                else if (Services.DeepLinkService.IsValidLobbyId(line))
+                    DispatchJoin(line!);
                 else
                     Services.DiagnosticLog.Write($"DeepLink pipe: ignored invalid payload.");
             }
@@ -279,20 +295,34 @@ public partial class App : System.Windows.Application
         {
             try
             {
-                if (MainWindow is { } mw)
-                {
-                    if (mw.WindowState == WindowState.Minimized)
-                        mw.WindowState = WindowState.Normal;
-                    mw.Activate();
-                    // Nudge to the foreground without staying topmost.
-                    mw.Topmost = true;
-                    mw.Topmost = false;
-                }
+                // BringToForeground() SHOWS a window that was hidden to the tray
+                // (a bare Activate() can't un-hide a Hide()'d window) as well as
+                // un-minimising + fronting it, so a join link works whether the
+                // launcher is in the tray, minimised, or just buried behind others.
+                (MainWindow as WarsOfLibertyLauncher.MainWindow)?.BringToForeground();
                 JoinRequested?.Invoke(lobbyId);
             }
             catch (Exception ex)
             {
                 Services.DiagnosticLog.Write($"DeepLink dispatch failed: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>Restore + foreground the running window — a plain relaunch of the
+    /// .exe while the launcher sits in the tray.</summary>
+    private void DispatchShow()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                (MainWindow as WarsOfLibertyLauncher.MainWindow)?.BringToForeground();
+                Services.DiagnosticLog.Write("SingleInstance: relaunch — brought running window to front.");
+            }
+            catch (Exception ex)
+            {
+                Services.DiagnosticLog.Write($"SingleInstance: show dispatch failed: {ex.Message}");
             }
         });
     }
@@ -310,6 +340,24 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             Services.DiagnosticLog.Write($"DeepLink: forward to running instance failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Ask the already-running instance to bring its window to the front
+    /// (the user relaunched the .exe while it sat in the tray).</summary>
+    private static void ForwardShowToRunningInstance()
+    {
+        try
+        {
+            using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+            client.Connect(2000);
+            using var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true };
+            writer.WriteLine(ShowCommand);
+            Services.DiagnosticLog.Write("SingleInstance: forwarded show request to running instance.");
+        }
+        catch (Exception ex)
+        {
+            Services.DiagnosticLog.Write($"SingleInstance: forward show failed: {ex.Message}");
         }
     }
 

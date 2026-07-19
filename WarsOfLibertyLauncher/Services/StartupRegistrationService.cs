@@ -15,6 +15,18 @@ namespace WarsOfLibertyLauncher.Services;
 ///   * It's the same mechanism most modern apps use, so the user can audit
 ///     and remove it through Task Manager → Startup tab.
 ///
+/// LOAD-BEARING: this Run-key auto-start only actually FIRES because the
+/// launcher runs <c>asInvoker</c> (un-elevated — see <c>app.manifest</c>).
+/// Windows processes the Run key at logon with the user's NORMAL token and
+/// silently skips any entry whose target requires elevation, so under the old
+/// <c>requireAdministrator</c> manifest this registration was written
+/// correctly yet Windows launched nothing at login (no prompt, no error). That
+/// was the real reason "Start with Windows" did nothing; dropping the admin
+/// requirement is what makes this mechanism work. Do NOT restore
+/// requireAdministrator — it re-breaks Run-key auto-start (an elevated app can
+/// only auto-start via a Scheduled Task or Service, which we deliberately
+/// avoid; see the manifest comment).
+///
 /// All operations are best-effort. If the registry write fails (e.g. policy
 /// restriction on a managed PC), the launcher logs and continues — the
 /// setting just doesn't take effect, the rest of the app still works.

@@ -140,6 +140,44 @@ public class GitHubReleaseDownloader
     }
 
     /// <summary>
+    /// Newest releases that ship a downloadable asset, WITH its URL and size —
+    /// what <see cref="ModVersionFingerprint"/> needs to read each release's zip
+    /// index remotely and work out which one the user actually has installed.
+    ///
+    /// Deliberately separate from <see cref="ListReleasesAsync"/> (which returns
+    /// display info only) but backed by the SAME single API call, so adding this
+    /// costs no extra rate-limit budget beyond the one listing.
+    /// Prereleases and drafts are skipped: a user's install should never be
+    /// identified as an unpublished build.
+    /// </summary>
+    public async Task<IReadOnlyList<ModVersionFingerprint.Candidate>> ListReleaseCandidatesAsync(
+        string sourceRepo, int maxCount, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceRepo) || maxCount <= 0)
+            return Array.Empty<ModVersionFingerprint.Candidate>();
+
+        var apiUrl = $"https://api.github.com/repos/{sourceRepo}/releases?per_page=100";
+        var releases = await Http.GetFromJsonAsync<List<GitHubRelease>>(apiUrl, ct)
+            ?? new List<GitHubRelease>();
+
+        var list = new List<ModVersionFingerprint.Candidate>();
+        foreach (var r in releases)
+        {
+            if (list.Count >= maxCount) break;
+            if (r.Draft || r.Prerelease) continue;
+            if (string.IsNullOrWhiteSpace(r.TagName) || r.Assets == null) continue;
+
+            var asset = PickAsset(r.Assets, null);
+            if (asset == null || asset.Size <= 0
+                || string.IsNullOrWhiteSpace(asset.BrowserDownloadUrl)) continue;
+
+            list.Add(new ModVersionFingerprint.Candidate(
+                r.TagName, asset.BrowserDownloadUrl, asset.Size));
+        }
+        return list;
+    }
+
+    /// <summary>
     /// Result of resolving <c>/releases/latest</c>. <see cref="NotModified"/>
     /// means "the caller's cached tag is still the latest" (HTTP 304).
     /// <see cref="Tag"/> null WITHOUT NotModified = failure — the caller falls
@@ -185,7 +223,16 @@ public class GitHubReleaseDownloader
             ConnectivityState.ReportSuccess();
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotModified)
+            {
+                // Log it: this used to be the ONE branch that returned no tag and
+                // left no trace, so the caller's silent fall-back to the cached tag
+                // was indistinguishable from "there is no newer version" — which is
+                // exactly what hid a stale cross-repo cache for hours.
+                DiagnosticLog.Write(
+                    $"GitHubReleases: /releases/latest for '{sourceRepo}' returned 304 " +
+                    $"(unchanged) — caller keeps its cached tag.");
                 return new LatestReleaseResult(null, cachedETag, true);
+            }
 
             if (!response.IsSuccessStatusCode)
             {

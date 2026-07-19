@@ -4,18 +4,37 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- requireAdministrator: Windows triggers a UAC prompt every time
-             the launcher is started, even by double-click. The shortcut on
-             Desktop / Start Menu and the executable itself both show the
-             UAC shield in Explorer.
+        <!-- asInvoker: the launcher runs UN-ELEVATED (normal user token).
+             This is load-bearing for auto-start.
 
-             Why: the launcher writes into the install folder (often inside
-             Program Files), creates registry entries under HKLM, and
-             modifies system shortcuts — all of which need admin. Doing
-             this up-front via the manifest is simpler and more predictable
-             than the runtime "elevate now" prompts we used to do.
+             Why NOT requireAdministrator: Windows processes the HKCU "Run"
+             key (and the Startup folder) at logon with the user's NORMAL,
+             non-elevated token, and SILENTLY SKIPS any entry whose target
+             requires elevation — it never shows a UAC prompt at login. So a
+             requireAdministrator binary can NEVER auto-start via the Run key:
+             everything else can be perfect (Run value present, StartupApproved
+             enabled, canonical exe good) and Windows still launches nothing,
+             with no error. That was the real, forensically-confirmed reason
+             "Start with Windows" did nothing. Only a Scheduled Task (highest
+             privileges, logon trigger — the Voobly model) or a Service can
+             auto-start an ELEVATED app silently; both are heavier and a
+             stronger AV persistence signal on an unsigned binary. Dropping the
+             manifest admin requirement is the Steam model: the client runs
+             un-elevated (Run-key auto-start works for everyone, no UAC on daily
+             use) and privileges are acquired ON DEMAND.
+
+             The privileged operations (install/update/uninstall into a
+             protected folder like Program Files, HKLM writes, all-users
+             shortcuts) elevate on demand via ElevationService.CanWriteTo +
+             RelaunchElevated — plumbing that already exists and is wired into
+             the install/update/uninstall flows. Most writes are already
+             per-user (shortcuts under the user profile, install registry with
+             an HKLM->HKCU fallback), and a mod that lives inside a Steam
+             library folder is usually already user-writable, so many users see
+             no UAC even on update. Do NOT put requireAdministrator back — it
+             re-breaks Run-key auto-start.
         -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>

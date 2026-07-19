@@ -583,6 +583,31 @@
                                            Margin="12,0,0,0"/>
                             </Grid>
                         </StackPanel>
+
+                        <!-- Uninstall the CANONICAL launcher copy (not the mods).
+                             The exact counterpart of SelfInstallRow: shown ONLY when
+                             running from the installed location. Destructive → its own
+                             divider + DangerButton + a confirm dialog that offers to
+                             keep or delete user data. -->
+                        <StackPanel x:Name="UninstallRow">
+                            <Border Style="{StaticResource DialogDivider}"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0"
+                                        x:Name="UninstallButton"
+                                        Style="{StaticResource DangerButton}"
+                                        MinWidth="180"
+                                        Click="UninstallButton_Click"/>
+                                <TextBlock Grid.Column="1"
+                                           x:Name="UninstallHint"
+                                           Style="{StaticResource HintText}"
+                                           VerticalAlignment="Center"
+                                           Margin="12,0,0,0"/>
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- ===================================================

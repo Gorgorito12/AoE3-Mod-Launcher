@@ -246,7 +246,17 @@ public partial class MainWindow : Window
             try { _config.Save(); }
             catch (Exception ex) { DiagnosticLog.Write($"Background default seed: config save failed: {ex.Message}"); }
         }
-        StartupRegistrationService.Apply(startupPlan.Register, startMinimized: _config.StartMinimized);
+        // Register the STABLE installed copy when one exists, not the volatile
+        // running exe — otherwise launching a portable/dev build here would heal the
+        // Run key onto a path (publish\, bin\Debug\, a moved download) that can be
+        // gone by the next login, which is exactly how auto-start silently did
+        // nothing. ResolveAutoStartExe falls back to the running exe when there's no
+        // canonical copy, so a not-installed portable user is unchanged. Never
+        // auto-installs (that stays opt-in).
+        StartupRegistrationService.Apply(
+            startupPlan.Register,
+            startMinimized: _config.StartMinimized,
+            exePathOverride: Services.SelfInstallService.ResolveAutoStartExe());
 
         // Register (or, if the user opted out, clear) the wol-launcher:// deep-link
         // scheme. Re-applying each launch self-heals the exe path for the portable
@@ -296,7 +306,7 @@ public partial class MainWindow : Window
             }
         }
 
-        Strings.SetLanguage(_config.Language);
+        ApplyStartupLanguage();
         Strings.LanguageChanged += ApplyLanguage;
         RestoreWindowState();
 
@@ -533,6 +543,11 @@ public partial class MainWindow : Window
                 DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
                 HideToTray();
             }
+            // First-launch durable-install offer. If it fired, it already explained
+            // the background behaviour, so suppress the seed balloon to avoid two
+            // popups in the same launch (one onboarding moment).
+            if (MaybeOfferSelfInstall())
+                _pendingBackgroundSeedNotice = false;
             // After the hide, so the balloon anchors to a tray icon that's already
             // there — and so an auto-started launch explains itself on the spot.
             MaybeShowBackgroundSeedNotice();
@@ -2173,6 +2188,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Restore + foreground the window from OUTSIDE MainWindow — used by the
+    /// single-instance handoff when the user relaunches the .exe while the
+    /// launcher sits in the tray (App forwards a "show" command over the pipe),
+    /// and by the deep-link dispatch so a join link also un-hides a tray window.
+    /// Reuses <see cref="ShowFromTray"/> (idempotent).
+    /// </summary>
+    public void BringToForeground() => ShowFromTray();
+
+    /// <summary>
     /// Bring the window back into view. Restores from minimised state if
     /// needed and gives it focus.
     /// </summary>
@@ -2550,6 +2574,103 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write($"Background seed balloon failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Resolve the UI language at startup and apply it. "Follow the Windows display
+    /// language until the user overrides it in Settings": while
+    /// <see cref="LauncherConfig.LanguageExplicitlyChosen"/> is false (a fresh config,
+    /// or any config predating that flag) the language is re-derived from
+    /// <see cref="System.Globalization.CultureInfo.CurrentUICulture"/> each launch, so
+    /// a Spanish Windows shows Spanish without the player touching anything. Once they
+    /// pick a language in Settings the flag is set and this leaves it alone. The OS
+    /// culture is logged so a "still English" report is diagnosable.
+    /// </summary>
+    private void ApplyStartupLanguage()
+    {
+        try
+        {
+            if (!_config.LanguageExplicitlyChosen)
+            {
+                var osLang = LauncherConfig.DefaultLanguageForCulture(
+                    System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
+                DiagnosticLog.Write(
+                    $"Startup language: following OS — CurrentUICulture={System.Globalization.CultureInfo.CurrentUICulture.Name} → {osLang} (was {_config.Language}).");
+                if (!string.Equals(_config.Language, osLang, StringComparison.Ordinal))
+                {
+                    _config.Language = osLang;
+                    try { _config.Save(); }
+                    catch (Exception ex) { DiagnosticLog.Write($"Startup language save failed: {ex.Message}"); }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ApplyStartupLanguage failed: {ex.Message}");
+        }
+        Strings.SetLanguage(_config.Language);
+    }
+
+    /// <summary>
+    /// First-launch offer to make auto-start DURABLE by installing a stable copy
+    /// on this PC. Auto-start (default-ON) registers whatever exe is running; a
+    /// portable exe that the player later moves/deletes silently breaks the Run
+    /// key (the exact bug the maintainer hit with <c>publish\</c>). So the first
+    /// time we're running a portable build with auto-start on, offer the same
+    /// "Install on this PC" the Settings button does — copy to the canonical
+    /// <c>%LocalAppData%\Programs</c> location (no admin) and re-point auto-start
+    /// there for good.
+    ///
+    /// Opt-in (an explicit Yes), so it respects <see cref="Services.SelfInstallService"/>'s
+    /// "nothing installs itself" contract, and shown exactly ONCE
+    /// (<see cref="LauncherConfig.SelfInstallPromptShown"/>, set BEFORE the attempt
+    /// so a failure/decline can't re-nag). Gated so it only fires when it can
+    /// actually help: a visible (manual) launch — never a <c>--minimized</c>
+    /// tray launch — with auto-start on and no runnable canonical copy yet. If one
+    /// already exists (the maintainer, or a returning installed user), auto-start
+    /// is already durable and this stays silent.
+    ///
+    /// Returns true when the dialog was shown, so the caller can suppress the seed
+    /// balloon and keep first-launch onboarding to a single popup. On a successful
+    /// install the process relaunches from the canonical copy and exits, so the
+    /// return value only matters on the decline / failed paths.
+    /// </summary>
+    private bool MaybeOfferSelfInstall()
+    {
+        if (App.StartMinimized) return false;
+        if (!_config.StartWithWindows) return false;
+        if (_config.SelfInstallPromptShown) return false;
+        if (Services.SelfInstallService.CanonicalLooksRunnable()) return false;
+
+        // Mark it shown FIRST — one offer per config, even if the install fails or
+        // the user declines or this launch is killed mid-dialog.
+        _config.SelfInstallPromptShown = true;
+        try { _config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"SelfInstall offer: config save failed: {ex.Message}"); }
+
+        // Themed dialog (not the white OS MessageBox) so the first thing a player
+        // sees matches the launcher's look. By now the first-run language chooser
+        // has already set the UI language, so it shows localized.
+        var accepted = new SelfInstallPromptDialog { Owner = this }.ShowDialog() == true;
+        if (!accepted)
+            return true; // stay portable (auto-start keeps pointing at this exe)
+
+        var (ok, msg) = Services.SelfInstallService.Install();
+        if (!ok)
+        {
+            DiagnosticLog.Write($"First-launch self-install failed: {msg}");
+            MessageBox.Show(this,
+                Strings.Get("DlgSettingsBgInstallFailed"),
+                Strings.Get("DlgSettingsBgInstallPromptTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return true; // stay portable
+        }
+
+        // Installed. Relaunch from the canonical copy (hard-exits this portable
+        // instance); the relaunched instance self-heals the Run key to the
+        // canonical exe via its ctor Apply(ResolveAutoStartExe()).
+        Services.SelfInstallService.RelaunchInstalledAndExit();
+        return true;
     }
 
     /// <summary>
@@ -6671,6 +6792,11 @@ public partial class MainWindow : Window
                 else
                 {
                     // Damaged — re-lay the WHOLE overlay (not just the damaged set).
+                    // We're about to WRITE the overlay: elevate on demand if the
+                    // install folder isn't writable (asInvoker + protected non-Steam
+                    // folder). Placed here (not for the intact branch above) so an
+                    // intact repair never prompts. Returns → the finally resets busy.
+                    if (!EnsureInstallWritableOrElevate(installPath)) return;
                     // This re-downloads the payload, so warn on low disk space first.
                     if (!ConfirmRepairSpaceOk(installPath))
                         throw new OperationCanceledException();
@@ -6693,6 +6819,13 @@ public partial class MainWindow : Window
             }
             else
             {
+                // This branch ALWAYS writes (delta patch or full re-overlay) — a
+                // GitHubReleases update, a version pick, or a repair of an install
+                // with no per-file hashes. Elevate on demand if the folder isn't
+                // writable (asInvoker + protected non-Steam folder). Returns → the
+                // finally resets busy.
+                if (!EnsureInstallWritableOrElevate(installPath)) return;
+
                 // Incremental delta patch first (only for a normal update to the approved tag, when
                 // the mod opted in): downloads/apply just the changed files. Any doubt returns false
                 // and we fall through to the full re-overlay below — the delta can never make an
@@ -6891,6 +7024,51 @@ public partial class MainWindow : Window
         SetStatus(body);
         MessageBox.Show(this, body, Strings.Get("TranslationRevertedTitle"),
             MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    /// <summary>
+    /// Ensure the install folder is writable, elevating on demand when it isn't.
+    /// Returns true when the caller may proceed with a write; false when it must
+    /// bail — either we relaunched elevated (this process is shutting down) or the
+    /// user declined the UAC prompt. The launcher runs <c>asInvoker</c>, so a
+    /// protected NON-Steam folder (Program Files) needs this before Repair /
+    /// GitHubReleases update / version-pick / translation writes; a Steam-library
+    /// or user-chosen folder is already writable, so the prompt never fires. Same
+    /// plumbing + strings as the install/uninstall guards; no auto-resume (the user
+    /// re-triggers the action in the elevated instance).
+    /// </summary>
+    private bool EnsureInstallWritableOrElevate(string installPath)
+    {
+        if (ElevationService.CanWriteTo(installPath)) return true;
+
+        DiagnosticLog.Write(
+            $"Cannot write to install folder '{installPath}'. Prompting user to relaunch elevated.");
+
+        var elevateResult = MessageBox.Show(
+            this,
+            Strings.Format("DlgElevationRequiredBody", installPath),
+            Strings.Get("DlgElevationRequiredTitle"),
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Information);
+
+        if (elevateResult != MessageBoxResult.OK)
+        {
+            SetStatus(Strings.Get("StatusElevationDenied"));
+            return false;
+        }
+
+        var relaunched = ElevationService.RelaunchElevated();
+        if (relaunched)
+        {
+            // Real exit — bypass the close-to-tray interception.
+            HardExitRequested = true;
+            Application.Current.Shutdown();
+        }
+        else
+        {
+            SetStatus(Strings.Get("StatusElevationDenied"));
+        }
+        return false;
     }
 
     /// <summary>
@@ -7265,27 +7443,59 @@ public partial class MainWindow : Window
 
             if (result.IsValidInstall)
             {
-                SetPrimaryAction(PrimaryAction.Play);
-
-                // GitHubReleases: surface a dedicated Update button when the
-                // installed tag differs from the catalog's approved tag. The
-                // re-overlay (download + extract on top + deletion) runs through
-                // UpdateButton_Click → RepairInstallAsync(asUpdate: true).
+                // GitHubReleases: surface the update on the PRIMARY CTA when the
+                // installed tag differs from the effective latest. The re-overlay
+                // (download + extract on top + deletion) runs through
+                // RepairInstallAsync(asUpdate: true).
                 var ghCur = result.CurrentVersion?.Ver;
                 var ghLatest = result.LatestVersion?.Ver;
+                bool isGh =
+                    _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases;
                 bool ghHasNewer =
-                    _updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases
+                    isGh
                     && !string.IsNullOrEmpty(ghCur) && !string.IsNullOrEmpty(ghLatest)
                     && !string.Equals(ghCur, ghLatest, StringComparison.OrdinalIgnoreCase);
-                // The user can pause the prompt by pinning their version (Fase 0).
-                bool ghPaused = ghHasNewer && IsUpdatePausedByPin(result);
-                bool ghUpdate = ghHasNewer && !ghPaused;
 
+                // Installed version UNKNOWN on a valid install. This is the normal
+                // state of a DETECTED GitHubReleases mod: the version is only ever
+                // stamped when the launcher itself installs/updates/repairs (there
+                // are no file hashes to deduce it from, unlike WolPatcher), so a mod
+                // found on disk by the content probe has an empty LastKnownVersion —
+                // and with nothing to compare, the Update button used to stay hidden
+                // FOREVER. Offer the update anyway: for GitHubReleases it's a
+                // re-overlay in PLACE (RepairInstallAsync(asUpdate:true)), not the
+                // destructive from-scratch reinstall we never push, and its tail
+                // stamps LastKnownVersion — so one click also self-heals the state.
+                bool ghUnknownInstalled =
+                    isGh && string.IsNullOrEmpty(ghCur) && !string.IsNullOrEmpty(ghLatest);
+                bool ghOffer = ghHasNewer || ghUnknownInstalled;
+                // The user can pause the prompt by pinning their version (Fase 0).
+                // (Never fires for ghUnknownInstalled: IsUpdatePausedByPin needs a
+                // known CurrentVersion, so the ghCur! below stays safe.)
+                bool ghPaused = ghOffer && IsUpdatePausedByPin(result);
+                bool ghUpdate = ghOffer && !ghPaused;
+
+                // The primary CTA BECOMES "Update" — same rule WolPatcher already
+                // follows ("when patches are pending, the primary CTA IS update").
+                // This is load-bearing, not cosmetic: ActionPanelControl lives
+                // inside LegacyPlayContent, which is Collapsed, so its UpdateButton
+                // can NEVER be seen. Only what SetPrimaryAction mirrors into the
+                // dashboard is on screen — without this line a GitHubReleases mod
+                // has no reachable way to update at all.
+                SetPrimaryAction(ghUpdate ? PrimaryAction.Update : PrimaryAction.Play);
+
+                // Kept in sync for the (hidden) legacy panel + the menus that read it.
                 ActionPanelControl.UpdateButton.Visibility =
                     ghUpdate ? Visibility.Visible : Visibility.Collapsed;
 
                 SetStatus(ghUpdate
-                    ? Strings.Format("StatusUpdateAvailableGh", ghLatest!)
+                    ? Strings.Format(
+                        // Don't claim their copy is outdated when we don't know what
+                        // they have — only that a newer-or-equal release exists.
+                        ghUnknownInstalled
+                            ? "StatusGhVersionUnknownCanUpdate"
+                            : "StatusUpdateAvailableGh",
+                        ghLatest!)
                     : ghPaused
                         ? Strings.Format("StatusUpdatePausedPinned", ghCur!)
                         : Strings.Format(
@@ -9642,7 +9852,21 @@ public partial class MainWindow : Window
                 break;
             case PrimaryAction.Update:
                 if (!EnsureGameNotRunning()) return;
-                await ApplyUpdateWithElevationCheckAsync();
+                // Route by mechanism, mirroring UpdateButton_Click: a
+                // GitHubReleases update is a re-overlay of the release zip, while
+                // ApplyUpdateWithElevationCheckAsync applies _pendingDownloads —
+                // which is ALWAYS empty for GitHubReleases, so sending it there
+                // would leave the button doing nothing at all.
+                // Gate on the MECHANISM, not on GitHubUpdateAvailable(): that
+                // predicate needs a KNOWN installed version, so it's false for a
+                // detected install whose version we don't know — the very case
+                // that also raises this CTA. ApplyCheckResult only sets
+                // PrimaryAction.Update for a GitHubReleases mod when an update is
+                // genuinely on offer, so the mechanism alone is the right switch.
+                if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
+                    await RepairInstallAsync(asUpdate: true);
+                else
+                    await ApplyUpdateWithElevationCheckAsync();
                 break;
             case PrimaryAction.Stop:
                 StopButton_Click(sender, e);
@@ -10919,6 +11143,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Applying a translation WRITES into the install folder (data\ + the
+        // translations\_originals\ snapshot). Under asInvoker a protected non-Steam
+        // folder (Program Files) needs elevation first; a Steam/user folder is
+        // writable so this never prompts.
+        if (!EnsureInstallWritableOrElevate(_updateService.InstallPath)) return;
+
         var translations = new TranslationService(
             _updateService.InstallPath, _updateService.Profile.Translations?.CoveredFiles);
         var registry = new TranslationRegistryService();
@@ -11168,6 +11398,47 @@ public partial class MainWindow : Window
 
         if (plan.Mode != UninstallMode.Valid)
             return;
+
+        // ---- Permission check ----
+        // Uninstall is a blanket recursive delete of the install folder. When
+        // that folder lives under a protected location (e.g. Program Files),
+        // deleting it needs admin. The launcher runs un-elevated (asInvoker),
+        // so probe first and, if we can't write there, elevate on demand —
+        // the SAME pattern install already uses. Steam-library installs are
+        // usually already user-writable, so this prompt won't fire for them.
+        if (!ElevationService.CanWriteTo(_updateService.InstallPath))
+        {
+            DiagnosticLog.Write(
+                $"Cannot write to install folder '{_updateService.InstallPath}'. " +
+                "Prompting user to relaunch elevated for uninstall.");
+
+            var elevateResult = MessageBox.Show(
+                this,
+                Strings.Format("DlgElevationRequiredBody", _updateService.InstallPath),
+                Strings.Get("DlgElevationRequiredTitle"),
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Information);
+
+            if (elevateResult != MessageBoxResult.OK)
+            {
+                SetStatus(Strings.Get("StatusElevationDenied"));
+                return;
+            }
+
+            // Relaunch elevated; the fresh instance starts un-busy and the user
+            // re-runs Uninstall with admin rights (same as the install flow —
+            // no auto-resume arg).
+            var relaunched = ElevationService.RelaunchElevated();
+            if (relaunched)
+            {
+                // Real exit — bypass the close-to-tray interception.
+                HardExitRequested = true;
+                Application.Current.Shutdown();
+                return;
+            }
+            SetStatus(Strings.Get("StatusElevationDenied"));
+            return;
+        }
 
         SetBusy(true);
         StartProgressPanel(

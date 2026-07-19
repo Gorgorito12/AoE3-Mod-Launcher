@@ -253,6 +253,14 @@ public partial class LauncherSettingsDialog : Window
         SelfInstallRow.Visibility = Services.SelfInstallService.IsInstalled()
             ? Visibility.Collapsed : Visibility.Visible;
 
+        UninstallButton.Content = Strings.Get("DlgLauncherSettingsUninstall");
+        UninstallHint.Text = Strings.Get("DlgLauncherSettingsUninstallHint");
+        SetTip(UninstallButton, "DlgLauncherSettingsUninstallTip");
+        // Exact counterpart of SelfInstallRow: only offer to uninstall when we're
+        // actually running from the installed copy (a portable exe isn't "installed").
+        UninstallRow.Visibility = Services.SelfInstallService.IsInstalled()
+            ? Visibility.Visible : Visibility.Collapsed;
+
         PrivacyHeader.Text = Strings.Get("DlgLauncherSettingsPrivacyHeader");
         PrivacyDescription.Text = Strings.Get("DlgLauncherSettingsPrivacyDescription");
         TelemetryCheck.Content = Strings.Get("DlgLauncherSettingsTelemetry");
@@ -501,6 +509,32 @@ public partial class LauncherSettingsDialog : Window
             Services.SelfInstallService.RelaunchInstalledAndExit();
         else
             SelfInstallButton.IsEnabled = true;
+    }
+
+    /// <summary>
+    /// Uninstall the canonical launcher copy (the counterpart of "Install on this
+    /// PC"). A YesNoCancel confirm maps to the three outcomes: Yes = uninstall AND
+    /// delete settings/data; No = uninstall but KEEP settings; Cancel = do nothing.
+    /// Installed MODS are never touched. On a real uninstall the process hard-exits
+    /// (the deferred script removes the folder after we're gone), so only the
+    /// failure path keeps the window open.
+    /// </summary>
+    private void UninstallButton_Click(object sender, RoutedEventArgs e)
+    {
+        var choice = MessageBox.Show(
+            Strings.Get("DlgLauncherSettingsUninstallConfirmBody"),
+            Strings.Get("DlgLauncherSettingsUninstallConfirmTitle"),
+            MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+        if (choice == MessageBoxResult.Cancel) return;
+
+        var removeUserData = choice == MessageBoxResult.Yes;
+        UninstallButton.IsEnabled = false;
+        if (!Services.SelfInstallService.UninstallAndExit(removeUserData))
+        {
+            SetHint(UninstallHint, Strings.Get("DlgLauncherSettingsUninstallFailed"), success: false);
+            UninstallButton.IsEnabled = true;
+        }
+        // On success the app shuts down; nothing more to do here.
     }
 
     /// <summary>
@@ -832,7 +866,42 @@ public partial class LauncherSettingsDialog : Window
         //     the checkbox — which reads the REGISTRY, not the config — came back
         //     UNCHECKED next open, with no explanation. Say it out loud instead.
         var wantBackground = StartWithWindowsCheck.IsChecked == true;
-        if (!StartupRegistrationService.Apply(wantBackground, startMinimized: wantBackground))
+
+        // Reliability for the portable exe: auto-start is a Run key that points at a
+        // specific file. If that file is the portable/dev exe (Downloads, publish\,
+        // bin\Debug\) it can be moved/deleted/rebuilt, and then login launches nothing
+        // — the confirmed "auto-start did nothing" cause. So when enabling background
+        // with NO USABLE stable copy yet, OFFER (opt-in — never silent, per
+        // SelfInstallService's contract) to install one; the Run key then points at
+        // the durable canonical path. Declining registers the portable path as before.
+        // The gate is CanonicalLooksRunnable, not mere existence: a canonical copy that
+        // exists but is a broken framework-dependent apphost (no DLLs) must ALSO trigger
+        // the offer, or the toggle would register a copy that launches nothing.
+        if (wantBackground && !SelfInstallService.CanonicalLooksRunnable())
+        {
+            var choice = MessageBox.Show(
+                Strings.Get("DlgSettingsBgInstallPromptBody"),
+                Strings.Get("DlgSettingsBgInstallPromptTitle"),
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (choice == MessageBoxResult.Yes)
+            {
+                var (ok, msg) = SelfInstallService.Install();
+                if (!ok)
+                {
+                    DiagnosticLog.Write($"Background install (opt-in) failed: {msg}");
+                    SetHint(StartWithWindowsHint, Strings.Get("DlgSettingsBgInstallFailed"), success: false);
+                    // Fall through: register the portable path so the toggle still
+                    // takes effect (fragile, but no worse than before this change).
+                }
+            }
+        }
+
+        // Point the Run key at the STABLE installed copy when one exists (the opt-in
+        // install above may have just created it), else the running exe.
+        if (!StartupRegistrationService.Apply(
+                wantBackground,
+                startMinimized: wantBackground,
+                exePathOverride: SelfInstallService.ResolveAutoStartExe()))
         {
             SetHint(StartWithWindowsHint, Strings.Get("DlgLauncherSettingsStartupFailed"), success: false);
             SetActiveTab(TabGeneralBtn);
@@ -850,6 +919,12 @@ public partial class LauncherSettingsDialog : Window
         //  the next save; nothing reads it anymore.)
 
         // 3. Write all the bools / strings into the config object.
+        // Mark the language as EXPLICITLY chosen only when it actually changes, so
+        // the launcher stops following the OS display language and holds this pick.
+        // (Saving Settings without touching the language must NOT lock it — see
+        // MainWindow.ApplyStartupLanguage.)
+        if (!string.Equals(newLang, _config.Language, StringComparison.Ordinal))
+            _config.LanguageExplicitlyChosen = true;
         _config.Language = newLang;
         _config.CloseLauncherOnGameStart = CloseOnGameCheck.IsChecked == true;
         _config.ShowToastNotifications = ShowToastsCheck.IsChecked == true;

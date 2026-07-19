@@ -220,15 +220,18 @@ public class TitleBar : ContentControl
             // Maximize glyph (E922) <-> Restore glyph (E923). Char-from-hex
             // keeps the source pure ASCII.
             _maxButton.Content = ((char)(maximized ? 0xE923 : 0xE922)).ToString();
-            _maxButton.ToolTip = Strings.Get(maximized ? "TitleBarRestore" : "TitleBarMaximize");
+            // Route tooltips through Wrap so the text carries a LOCAL normal font —
+            // otherwise it inherits the button's "Segoe MDL2 Assets" icon font and
+            // renders the words as missing-glyph boxes (tofu). See TooltipHelper.Wrap.
+            _maxButton.ToolTip = TooltipHelper.Wrap(Strings.Get(maximized ? "TitleBarRestore" : "TitleBarMaximize"));
         }
         if (_closeButton != null)
         {
             _closeButton.Visibility = ShowClose ? Visibility.Visible : Visibility.Collapsed;
-            _closeButton.ToolTip = Strings.Get("TitleBarClose");
+            _closeButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TitleBarClose"));
         }
         if (_minButton != null)
-            _minButton.ToolTip = Strings.Get("TitleBarMinimize");
+            _minButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TitleBarMinimize"));
     }
 
     private void MinButton_Click(object sender, RoutedEventArgs e)

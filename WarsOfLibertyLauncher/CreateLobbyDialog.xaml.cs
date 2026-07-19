@@ -102,6 +102,12 @@ public partial class CreateLobbyDialog : Window
         // Keep the resource lookup for future re-localisation but
         // don't try to assign to a removed control.
         var _passwordLabel = Strings.Get("MpCreateDialogPassword");
+        // Localise the "Private room" toggle and surface the consequence right
+        // there: a private room is deliberately NOT announced (Discord + in-app
+        // popup), so the host chooses knowingly. See MpCreateDialogPrivateHint.
+        PrivateRoomCheck.Content = Strings.Get("MpCreateDialogPrivate");
+        PrivateHint.Text = Strings.Get("MpCreateDialogPrivateHint");
+        PrivateRoomCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogPrivateHint"));
         CancelButton.Content = Strings.Get("MpCreateDialogCancel");
         CreateButton.Content = Strings.Get("MpCreateDialogCreate");
 

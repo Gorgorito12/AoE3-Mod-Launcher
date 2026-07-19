@@ -145,6 +145,15 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     public Task SendKickAsync(string userId, CancellationToken ct = default) =>
         SendAsync(new { type = "kick", user_id = userId }, ct);
 
+    /// <summary>
+    /// Host-only: rename the room while it's already open. The server validates
+    /// (host + 3-80 chars), writes the new name and broadcasts
+    /// <c>room_renamed</c> to EVERYONE including us — so the caller must not
+    /// paint the new name locally, or host and peers could disagree.
+    /// </summary>
+    public Task SendRenameRoomAsync(string title, CancellationToken ct = default) =>
+        SendAsync(new { type = "rename_room", title }, ct);
+
     // (Pre-n2n: a SendGameRelayAsync helper here tunneled UDP packets
     //  through the lobby WS when peer-to-peer hole-punching failed.
     //  With n2n the supernode handles all relaying transparently at

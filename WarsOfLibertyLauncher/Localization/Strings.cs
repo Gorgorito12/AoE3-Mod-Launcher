@@ -2157,6 +2157,10 @@ public static class Strings
         ["MpRoomFull"] = new() { [LangEn] = "Full", [LangEs] = "Llena" },
         ["MpRoomStatusWaiting"] = new() { [LangEn] = "Waiting", [LangEs] = "Esperando" },
         ["MpRoomStatusLocked"] = new() { [LangEn] = "Private", [LangEs] = "Privada" },
+        // How long a room has been open — live "count-up" in the rooms list
+        // sub-line and the lobby header meta. {0} = a compact duration ("5 min",
+        // "1 h 20 min"), formatted by RoomAgeFormat.Compact.
+        ["MpRoomOpenedAgo"] = new() { [LangEn] = "open for {0}", [LangEs] = "abierta hace {0}" },
         // Room cards (BuildRoomCard) + empty state + "last updated" header.
         ["MpRoomModNotInstalled"] = new() { [LangEn] = "Mod not installed", [LangEs] = "Mod no instalado" },
         ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms available right now", [LangEs] = "No hay salas disponibles ahora" },
@@ -2206,6 +2210,31 @@ public static class Strings
         ["MpRoomPlayersHeader"] = new() { [LangEn] = "PLAYERS", [LangEs] = "JUGADORES" },
         ["MpRoomIdHeader"] = new() { [LangEn] = "ROOM ID", [LangEs] = "ID DE SALA" },
         ["MpRoomCopyCode"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
+        ["MpRoomRenameTooltip"] = new()
+        {
+            [LangEn] = "Change the room name",
+            [LangEs] = "Cambiar el nombre de la sala",
+        },
+        ["MpRenameDialogTitle"] = new()
+        {
+            [LangEn] = "Change the name",
+            [LangEs] = "Cambiar el nombre",
+        },
+        ["MpRenameDialogPrompt"] = new()
+        {
+            [LangEn] = "Type the new room name (3 to 80 characters). Everyone in the room — and the Discord announcement — will see it.",
+            [LangEs] = "Escribe el nuevo nombre de la sala (de 3 a 80 caracteres). Lo van a ver todos los que estén en la sala y también el anuncio de Discord.",
+        },
+        ["MpChatRoomRenamed"] = new()
+        {
+            [LangEn] = "The host changed the room name to “{0}”.",
+            [LangEs] = "El anfitrión cambió el nombre de la sala a “{0}”.",
+        },
+        ["MpRenameFailed"] = new()
+        {
+            [LangEn] = "The room name couldn't be changed. Try again in a moment.",
+            [LangEs] = "No se pudo cambiar el nombre de la sala. Vuelve a intentarlo en un momento.",
+        },
         ["MpRoomInfoHeader"] = new() { [LangEn] = "ROOM INFO", [LangEs] = "INFO DE LA SALA" },
         ["MpRoomFieldMod"] = new() { [LangEn] = "Mod", [LangEs] = "Mod" },
         ["MpRoomFieldPassword"] = new() { [LangEn] = "Password", [LangEs] = "Contraseña" },
@@ -2318,6 +2347,13 @@ public static class Strings
         {
             [LangEn] = "{0} is now the host.",
             [LangEs] = "Ahora {0} es el anfitrión.",
+        },
+        // Global-chat timestamp: the "yesterday" prefix shown on a message
+        // written the day before (older messages show the date instead).
+        ["MpChatYesterday"] = new()
+        {
+            [LangEn] = "Yesterday",
+            [LangEs] = "Ayer",
         },
         // Shown when a member tries to abort after the grace window has passed.
         ["MpChatAbortWindowClosed"] = new()
@@ -2601,6 +2637,20 @@ public static class Strings
             [LangEn] = "Password (optional)",
             [LangEs] = "Contraseña (opcional)",
         },
+        ["MpCreateDialogPrivate"] = new()
+        {
+            [LangEn] = "Private room (optional)",
+            [LangEs] = "Sala privada (opcional)",
+        },
+        // Heads-up shown next to the "Private room" toggle so the host chooses
+        // knowingly: a private room is deliberately NOT announced (backend skips
+        // it for Discord AND the in-app popup), it's only reachable by browsing
+        // + entering the password.
+        ["MpCreateDialogPrivateHint"] = new()
+        {
+            [LangEn] = "A private room isn't announced (on Discord or in-app) and needs the password to join.",
+            [LangEs] = "Una sala privada no se anuncia (ni en Discord ni como aviso) y se une con la contraseña.",
+        },
         ["MpCreateDialogModLabel"] = new()
         {
             [LangEn] = "Mod",
@@ -2684,6 +2734,45 @@ public static class Strings
                      + "This can be a PC policy or your antivirus blocking it.",
             [LangEs] = "Windows no dejó que el launcher se registrara para iniciarse automáticamente. "
                      + "Puede ser una política de la PC o tu antivirus bloqueándolo.",
+        },
+        // Opt-in prompt shown when enabling "start with Windows" from a portable exe
+        // that hasn't been installed to a stable location yet — auto-start needs a
+        // durable path or it silently breaks when the .exe is moved/deleted.
+        ["DlgSettingsBgInstallPromptTitle"] = new()
+        {
+            [LangEn] = "Install a stable copy?",
+            [LangEs] = "¿Instalar una copia estable?",
+        },
+        ["DlgSettingsBgInstallPromptBody"] = new()
+        {
+            [LangEn] = "For \"start with Windows\" to keep working, the launcher should run from a "
+                     + "fixed location. Right now it runs from this .exe, and auto-start will break if "
+                     + "you move or delete it.\n\n"
+                     + "Install a stable copy on this PC now? (You can keep using this .exe; nothing "
+                     + "else changes.)",
+            [LangEs] = "Para que \"iniciar con Windows\" siga funcionando, el launcher debería ejecutarse "
+                     + "desde una ubicación fija. Ahora se ejecuta desde este .exe, y el inicio automático "
+                     + "se romperá si lo mueves o lo borras.\n\n"
+                     + "¿Instalar ahora una copia estable en esta PC? (Puedes seguir usando este .exe; no "
+                     + "cambia nada más.)",
+        },
+        ["DlgSettingsBgInstallFailed"] = new()
+        {
+            [LangEn] = "Couldn't install the stable copy. Auto-start was set up to use this .exe instead — "
+                     + "it may stop working if you move or delete it.",
+            [LangEs] = "No se pudo instalar la copia estable. El inicio automático quedó apuntando a este "
+                     + ".exe — puede dejar de funcionar si lo mueves o lo borras.",
+        },
+        // Buttons for the themed first-launch install dialog (SelfInstallPromptDialog).
+        ["DlgSettingsBgInstallPromptYes"] = new()
+        {
+            [LangEn] = "Install a copy",
+            [LangEs] = "Instalar una copia",
+        },
+        ["DlgSettingsBgInstallPromptNo"] = new()
+        {
+            [LangEn] = "Not now",
+            [LangEs] = "Ahora no",
         },
         // Careful: "closing the window keeps it running" belongs to the SEPARATE
         // close-to-tray checkbox (LauncherConfig.CloseToTray), not to this toggle.
@@ -3491,6 +3580,51 @@ public static class Strings
         {
             [LangEn] = "The launcher was installed. Restart it now from the installed location? This closes the current window and reopens it from the new path.",
             [LangEs] = "El launcher se instaló. ¿Reiniciarlo ahora desde la ubicación instalada? Esto cierra la ventana actual y la reabre desde la nueva ruta.",
+        },
+        ["DlgLauncherSettingsUninstall"] = new()
+        {
+            [LangEn] = "Uninstall from my PC",
+            [LangEs] = "Desinstalar de mi PC",
+        },
+        ["DlgLauncherSettingsUninstallHint"] = new()
+        {
+            [LangEn] = "Removes the launcher from this PC. Your installed mods are NOT touched.",
+            [LangEs] = "Quita el launcher de esta PC. Tus mods instalados NO se tocan.",
+        },
+        ["DlgLauncherSettingsUninstallTip"] = new()
+        {
+            [LangEn] = "Deletes the installed launcher copy, its shortcuts and its start-with-Windows entry. "
+                     + "It does NOT remove your installed mods (Wars of Liberty, Asian Dynasties) — those are "
+                     + "uninstalled separately from each mod's menu. You choose whether to also delete your "
+                     + "settings.",
+            [LangEs] = "Borra la copia instalada del launcher, sus accesos directos y el inicio con Windows. NO "
+                     + "quita tus mods instalados (Wars of Liberty, Asian Dynasties) — esos se desinstalan aparte "
+                     + "desde el menú de cada mod. Tú eliges si borrar también tu configuración.",
+        },
+        ["DlgLauncherSettingsUninstallConfirmTitle"] = new()
+        {
+            [LangEn] = "Uninstall the launcher",
+            [LangEs] = "Desinstalar el launcher",
+        },
+        ["DlgLauncherSettingsUninstallConfirmBody"] = new()
+        {
+            [LangEn] = "The launcher will be removed from this PC: the app, its shortcuts and start-with-Windows. "
+                     + "Your installed mods (Wars of Liberty, Asian Dynasties) are NOT touched.\n\n"
+                     + "Also delete your settings and data (preferences, logs, icon cache)?\n\n"
+                     + "• Yes — uninstall and delete everything\n"
+                     + "• No — uninstall but keep my settings\n"
+                     + "• Cancel — do nothing",
+            [LangEs] = "Se quitará el launcher de esta PC: la app, sus accesos directos y el inicio con Windows. "
+                     + "Tus mods instalados (Wars of Liberty, Asian Dynasties) NO se tocan.\n\n"
+                     + "¿Borrar también tu configuración y datos (preferencias, registros, caché de íconos)?\n\n"
+                     + "• Sí — desinstalar y borrar todo\n"
+                     + "• No — desinstalar pero conservar mi configuración\n"
+                     + "• Cancelar — no hacer nada",
+        },
+        ["DlgLauncherSettingsUninstallFailed"] = new()
+        {
+            [LangEn] = "Couldn't uninstall. Try again, or delete the launcher folder manually.",
+            [LangEs] = "No se pudo desinstalar. Vuelve a intentarlo o borra la carpeta del launcher a mano.",
         },
         ["DlgLauncherSettingsAssetsCleared"] = new()
         {
@@ -4441,6 +4575,11 @@ public static class Strings
         {
             [LangEn] = "Update available: {0}. Click Update to install it.",
             [LangEs] = "Actualización disponible: {0}. Haz clic en Actualizar para instalarla.",
+        },
+        ["StatusGhVersionUnknownCanUpdate"] = new()
+        {
+            [LangEn] = "Installed — version not verified. You can update to {0}.",
+            [LangEs] = "Instalado — versión sin verificar. Puedes actualizar a {0}.",
         },
         ["StatusUpdatePausedPinned"] = new()
         {

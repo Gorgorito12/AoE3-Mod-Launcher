@@ -163,6 +163,21 @@ public class ModState
     public string LatestReleaseETag { get; set; } = "";
 
     /// <summary>
+    /// The <c>owner/repo</c> that <see cref="LastKnownLatestVersion"/> and
+    /// <see cref="LatestReleaseETag"/> were cached FROM. Load-bearing when the
+    /// catalog migrates a mod to a different repository: the old ETag still
+    /// matches the OLD repo, so re-sending it there yields a 304 and the launcher
+    /// silently keeps serving the old repo's tag — the user simply never sees the
+    /// new version, with no error anywhere. On a mismatch the pair is discarded
+    /// and the tag is resolved fresh (same rule
+    /// <c>ModCatalogService.LoadFromCache</c> applies to the catalog cache).
+    /// Empty on configs written before this field existed, which reads as
+    /// "doesn't match" — exactly the safe direction.
+    /// </summary>
+    [JsonPropertyName("latestReleaseRepo")]
+    public string LatestReleaseRepo { get; set; } = "";
+
+    /// <summary>
     /// Version the user explicitly chose to STAY ON for this mod. Empty (the
     /// default) means "follow the latest" — the normal behaviour. When it equals
     /// the installed version, the launcher PAUSES update prompts for this mod: the
@@ -857,6 +872,21 @@ public class LauncherConfig
     public bool BackgroundDefaultSeeded { get; set; } = false;
 
     /// <summary>
+    /// Marks that the first-launch "Install a stable copy on this PC?" offer has
+    /// already been shown, so it is offered exactly ONCE (never nagged on every
+    /// launch, not even if the install failed or the user declined). It is a
+    /// separate marker from <see cref="BackgroundDefaultSeeded"/> because the two
+    /// answer different questions: that one is "did we seed auto-start", this one
+    /// is "did we offer the durable install". The offer only fires while
+    /// auto-start is on (<see cref="StartWithWindows"/>) and there is no runnable
+    /// canonical copy yet (a portable exe) — the moment for making auto-start
+    /// durable. Set BEFORE the install is attempted, same rationale as the seed
+    /// marker: a failed/declined attempt must not retry forever.
+    /// </summary>
+    [JsonPropertyName("selfInstallPromptShown")]
+    public bool SelfInstallPromptShown { get; set; } = false;
+
+    /// <summary>
     /// When true, an AUTO-START launch (Windows login, recognised by the
     /// <c>--minimized</c> argument the Run-key registration appends) opens the
     /// launcher straight to the system tray instead of showing the window — so
@@ -954,9 +984,31 @@ public class LauncherConfig
     public const string PrivacyPolicyUrl =
         "https://github.com/Gorgorito12/Updater/blob/main/PRIVACY.md";
 
-    /// <summary>UI language: "en" (default) or "es".</summary>
+    /// <summary>UI language: "en" or "es". While <see cref="LanguageExplicitlyChosen"/>
+    /// is false the launcher FOLLOWS the Windows display language on every launch
+    /// (see <see cref="DefaultLanguageForCulture"/>); once the user picks a language
+    /// in Settings this holds their choice.</summary>
     [JsonPropertyName("language")]
     public string Language { get; set; } = "en";
+
+    /// <summary>
+    /// True once the user has explicitly picked a UI language in Settings. Until
+    /// then (the default, and every existing config that predates this flag) the
+    /// launcher follows the OS display language each launch — "follow the system
+    /// until you override it". Set ONLY when the Settings language actually changes,
+    /// so saving Settings without touching the language doesn't silently lock it.
+    /// </summary>
+    [JsonPropertyName("languageExplicitlyChosen")]
+    public bool LanguageExplicitlyChosen { get; set; }
+
+    /// <summary>
+    /// Map the OS display language to a shipped UI language. Only two ship, so a
+    /// Spanish Windows ("es-*") → "es", everything else → "en". Pure (no
+    /// <c>CultureInfo</c> lookup) so it's unit-testable; the caller passes
+    /// <c>CultureInfo.CurrentUICulture.TwoLetterISOLanguageName</c>.
+    /// </summary>
+    internal static string DefaultLanguageForCulture(string? twoLetterIsoLang)
+        => string.Equals(twoLetterIsoLang, "es", StringComparison.OrdinalIgnoreCase) ? "es" : "en";
 
     // (Theme property removed — the launcher is dorado-imperial
     //  dark-only by design now. Old configs with a "theme" key
@@ -1320,6 +1372,9 @@ public class LauncherConfig
         var path = Services.AppPaths.ConfigFile;
         if (!File.Exists(path))
         {
+            // A fresh config leaves Language at its "en" default with
+            // LanguageExplicitlyChosen=false; the startup step
+            // (MainWindow.ApplyStartupLanguage) then follows the OS display language.
             var defaults = new LauncherConfig();
             defaults.Save();
             return defaults;

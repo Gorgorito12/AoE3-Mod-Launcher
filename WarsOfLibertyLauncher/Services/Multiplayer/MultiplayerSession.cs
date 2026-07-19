@@ -68,6 +68,18 @@ public sealed class MultiplayerSession : IAsyncDisposable
     public string? LastError { get; private set; }
 
     /// <summary>
+    /// Adopt a room name pushed by the server (the <c>room_renamed</c> frame,
+    /// after a host rename). The server owns the name — this is the ONLY way it
+    /// changes mid-room, so clients can never drift apart. Normalises blank to
+    /// null, matching how create/join seed it.
+    /// </summary>
+    public void SetCurrentLobbyTitle(string? title)
+    {
+        CurrentLobbyTitle = string.IsNullOrWhiteSpace(title) ? null : title;
+        Raise();
+    }
+
+    /// <summary>
     /// The cached session JWT, or null when signed out. Exposed so the
     /// global-chat WebSocket (lifecycle owned by <c>MultiplayerTab</c>,
     /// since it's gated on tab visibility) can authenticate its <c>hello</c>

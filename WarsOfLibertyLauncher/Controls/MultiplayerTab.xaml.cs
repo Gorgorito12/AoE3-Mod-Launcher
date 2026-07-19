@@ -113,6 +113,11 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private readonly System.Collections.Generic.List<StackPanel> _roomPingCells = new();
 
+    /// <summary>Per-room "open for X" sub-line cells + each room's UTC creation
+    /// time, so <see cref="RefreshRoomAgeCells"/> ticks them up in place (no
+    /// rebuild). Rebuilt with the rooms list, same as <see cref="_roomPingCells"/>.</summary>
+    private readonly System.Collections.Generic.List<(TextBlock Text, DateTime CreatedUtc)> _roomAgeCells = new();
+
     // Radmin banner state. The timer polls the install/connection
     // status every 3 s while the tab is visible so the user gets
     // immediate feedback when they finish installing or starting
@@ -896,7 +901,7 @@ public partial class MultiplayerTab : UserControl
         {
             Interval = TimeSpan.FromSeconds(3),
         };
-        _roomsPingTimer.Tick += (_, _) => { KickConnectionPing(); RefreshRoomPingCells(); UpdateRoomsUpdatedLabel(); };
+        _roomsPingTimer.Tick += (_, _) => { KickConnectionPing(); RefreshRoomPingCells(); RefreshRoomAgeCells(); UpdateRoomsUpdatedLabel(); };
         _roomsPingTimer.Start();
         KickConnectionPing();
 
@@ -1120,6 +1125,7 @@ public partial class MultiplayerTab : UserControl
             {
                 _currentLobbyModId = null;
                 _currentLobbyMaxPlayers = 0;
+                _currentLobbyCreatedUtc = null;
                 _matchParticipantSnapshot.Clear();
             }
             UpdateConnectionStatus();
@@ -1245,6 +1251,9 @@ public partial class MultiplayerTab : UserControl
                     case "kicked":
                         HandleKicked();
                         break;
+                    case "room_renamed":
+                        HandleRoomRenamed(e.Json);
+                        break;
                     case "game_countdown":
                     {
                         // Host pressed Start — server broadcasts the
@@ -1324,6 +1333,10 @@ public partial class MultiplayerTab : UserControl
                         // localized note instead of the raw English server text.
                         if (code == "grace_window_closed")
                             AppendChatSystem(Strings.Get("MpChatAbortWindowClosed"));
+                        // Rename rejections: the dialog already mirrors the
+                        // length rule, so these are the race/spam cases.
+                        else if (code == "bad_title" || code == "rename_too_fast")
+                            AppendChatSystem(Strings.Get("MpRenameFailed"));
                         else
                             AppendChatSystem($"[{code}] {msg}");
                         break;
@@ -1553,6 +1566,53 @@ public partial class MultiplayerTab : UserControl
             Strings.Get("MpKickedTitle"),
             Strings.Get("MpKickedBody"),
             Strings.Get("MpAlertOk"));
+    }
+
+    /// <summary>
+    /// The host renamed the room. The server broadcasts this to EVERYONE
+    /// (including the host, who deliberately doesn't paint the new name
+    /// locally), so this is the single point where the name changes mid-room
+    /// and every client is guaranteed to show the same thing.
+    /// </summary>
+    private void HandleRoomRenamed(JsonElement json)
+    {
+        var title = json.TryGetProperty("title", out var t) ? t.GetString() : null;
+        if (string.IsNullOrWhiteSpace(title)) return;
+
+        _session?.SetCurrentLobbyTitle(title);
+        RenderRoomPanel();   // repaints RoomTitleText from CurrentLobbyTitle
+        AppendChatSystem(Strings.Format("MpChatRoomRenamed", title));
+    }
+
+    /// <summary>
+    /// Host action: ask for a new room name and send it. The name is NOT
+    /// applied locally — we wait for the server's <c>room_renamed</c> echo, so
+    /// a rejected rename (not host / too short / too fast) can't leave this
+    /// client showing a name nobody else has.
+    /// </summary>
+    private async Task RenameRoomAsync()
+    {
+        if (_lobbyWindow == null || _session?.RoomSocket == null) return;
+
+        var dlg = new RenameRoomDialog(_session.CurrentLobbyTitle ?? "")
+        {
+            Owner = _lobbyWindow,
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            await _session.RoomSocket.SendRenameRoomAsync(dlg.EnteredName);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.RenameRoom: {ex.Message}");
+            await MpAlertOverlay.NoticeAsync(
+                _lobbyWindow.LobbyRootGrid,
+                Strings.Get("MpRenameDialogTitle"),
+                Strings.Get("MpRenameFailed"),
+                Strings.Get("MpAlertOk"));
+        }
     }
 
     /// <summary>A peer reported (or changed) its Radmin IP — store it so the
@@ -2371,6 +2431,7 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.RoomIdStatHeader.Text = Strings.Get("MpRoomIdHeader");
         _lobbyWindow.RoomConnHeader.Text = Strings.Get("MpInGameConnectionHeader");
         _lobbyWindow.CopyRoomIdButton.ToolTip = Strings.Get("MpRoomCopyCode");
+        _lobbyWindow.RenameRoomButton.ToolTip = Strings.Get("MpRoomRenameTooltip");
         _lobbyWindow.PlayersListHeader.Text = Strings.Get("MpRoomPlayersHeader");
         _lobbyWindow.RoomInfoHeaderText.Text = Strings.Get("MpRoomInfoHeader");
         _lobbyWindow.RoomModLabel.Text = Strings.Get("MpRoomFieldMod");
@@ -2445,6 +2506,22 @@ public partial class MultiplayerTab : UserControl
                 p2pReady ? "MpStatusOnline" : "MpStatusReconnect"),
             FontWeight = FontWeights.SemiBold,
         });
+        // "· open for X" — a live count-up of how long the room has been open. The
+        // Run is stashed so RefreshLobbyOpenAge (lobby ping timer, ~2.5 s) ticks it
+        // up without rebuilding the line. Only when we know the open time.
+        _lobbyAgeRun = null;
+        if (_currentLobbyCreatedUtc.HasValue)
+        {
+            _lobbyWindow!.RoomMetaText.Inlines.Add(new System.Windows.Documents.Run("  ·  ")
+            {
+                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+            });
+            _lobbyAgeRun = new System.Windows.Documents.Run(LobbyOpenAgeText())
+            {
+                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+            };
+            _lobbyWindow!.RoomMetaText.Inlines.Add(_lobbyAgeRun);
+        }
 
         // ---------- Host (drives the title fallback only) ----------
         // The roster below marks the host with a badge, so there's no
@@ -2475,6 +2552,13 @@ public partial class MultiplayerTab : UserControl
                 : Strings.Get("MpRoomTitleGeneric");
         }
         _lobbyWindow!.RoomTitleText.Text = title;
+
+        // Renaming is host-only. Evaluated here (not once at open) so a host
+        // migration — which calls RenderRoomPanel — hands the button to the
+        // new host and takes it away from the old one.
+        _lobbyWindow!.RenameRoomButton.Visibility = _isHostInCurrentRoom
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // ---------- Players ----------
         RefreshRoomPlayerCount();
@@ -2658,6 +2742,17 @@ public partial class MultiplayerTab : UserControl
     /// PLAYERS stat and the players-list open-slot rows. 0 = unknown.
     /// </summary>
     private int _currentLobbyMaxPlayers;
+
+    /// <summary>UTC time the CURRENT room opened, mirroring <see cref="_currentLobbyMaxPlayers"/>
+    /// (set on create/join, cleared on leave). Drives the lobby header's live "open for X".
+    /// On create it's ~now (the POST returns no created_at); on join it's parsed from the
+    /// joined <c>LobbySummary.CreatedAt</c>. Null = unknown → no age shown.</summary>
+    private DateTime? _currentLobbyCreatedUtc;
+
+    /// <summary>The inline Run inside the lobby meta line that shows "open for X", so
+    /// <see cref="RefreshLobbyOpenAge"/> ticks it up without rebuilding the whole line.
+    /// Recreated by each <see cref="RenderRoomPanel"/>; null when no age is shown.</summary>
+    private System.Windows.Documents.Run? _lobbyAgeRun;
 
     private void RenderProfileTab()
     {
@@ -3078,6 +3173,9 @@ public partial class MultiplayerTab : UserControl
             // it from the dialog's selected profile.
             _currentLobbyModId = createdModId;
             _currentLobbyMaxPlayers = dlg.CreatedLobbyMaxPlayers;
+            // We just created it — the POST returns no created_at, so ~now is the
+            // room's open time (good to the second). Drives the "open for X" counter.
+            _currentLobbyCreatedUtc = DateTime.UtcNow;
             await _session.EnterHostedLobbyAsync(dlg.CreatedLobby, dlg.CreatedLobbyTitle);
             // Optimistic host flag — we created the room, so we ARE the
             // host. The WS room_state frame will reaffirm this when it
@@ -3240,6 +3338,7 @@ public partial class MultiplayerTab : UserControl
             RoomsListPanel.Children.Clear();
             RoomsErrorBox.Visibility = Visibility.Collapsed;
             _roomPingCells.Clear();
+            _roomAgeCells.Clear();
 
             if (list.Lobbies.Count == 0)
             {
@@ -3409,6 +3508,7 @@ public partial class MultiplayerTab : UserControl
         RoomsEmptyState.Visibility = Visibility.Collapsed;
         RoomsListPanel.Children.Clear();
         _roomPingCells.Clear();
+        _roomAgeCells.Clear();
         var ordered = ApplyRoomSort(_lastBrowserList);
         int idx = 0;
         foreach (var lobby in ordered)
@@ -3497,6 +3597,7 @@ public partial class MultiplayerTab : UserControl
         _globalChatRendered = false;
         GlobalChatPanel.Children.Clear();
         _lastGlobalChatAuthor = null;
+        _lastGlobalChatDate = null;
         GlobalChatPresenceText.Text = "";
         GlobalChatNotice.Visibility = Visibility.Collapsed;
         UpdateGlobalChatEmptyHint();
@@ -3710,6 +3811,7 @@ public partial class MultiplayerTab : UserControl
     {
         GlobalChatPanel.Children.Clear();
         _lastGlobalChatAuthor = null;
+        _lastGlobalChatDate = null;
         _globalChatRendered = true;
         if (json.TryGetProperty("history", out var hist) && hist.ValueKind == JsonValueKind.Array)
         {
@@ -3785,6 +3887,11 @@ public partial class MultiplayerTab : UserControl
     /// messages from the same person render as continuations (no repeated
     /// avatar/name). Reset to null whenever the panel is cleared.</summary>
     private string? _lastGlobalChatAuthor;
+    // Local date of the last rendered message. A message on a NEW day forces a
+    // full header (avatar + name + dated timestamp) even if it's the same
+    // author, so the first message of each day always shows its date — this is
+    // what keeps a same-author run that crosses midnight from hiding the date.
+    private DateTime? _lastGlobalChatDate;
 
     /// <summary>
     /// Build one chat row as a subtle left-aligned bubble: avatar (real Discord
@@ -3799,7 +3906,16 @@ public partial class MultiplayerTab : UserControl
         var textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
         var bubbleBg = (Brush)Application.Current.FindResource("MpSurfaceAlt");
 
-        bool sameAuthor = !string.IsNullOrEmpty(login)
+        // A message written on a different day than the previous one breaks the
+        // "same author = continuation" grouping, so the new day's first message
+        // renders a fresh, dated header.
+        DateTime? msgDate = atMs > 0
+            ? DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime.Date
+            : (DateTime?)null;
+        bool dayChanged = msgDate != null && _lastGlobalChatDate != null && msgDate != _lastGlobalChatDate;
+
+        bool sameAuthor = !dayChanged
+            && !string.IsNullOrEmpty(login)
             && string.Equals(login, _lastGlobalChatAuthor, StringComparison.Ordinal);
 
         // The message body, rendered as a rounded bubble.
@@ -3891,6 +4007,8 @@ public partial class MultiplayerTab : UserControl
                 header.Children.Add(new TextBlock
                 {
                     Text = FormatChatTime(atMs),
+                    // Full date + time on hover, for precision.
+                    ToolTip = FormatChatTimeFull(atMs),
                     Foreground = textSecondary,
                     FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                     Margin = new Thickness(8, 1, 0, 0),
@@ -3904,6 +4022,7 @@ public partial class MultiplayerTab : UserControl
 
         GlobalChatPanel.Children.Add(grid);
         _lastGlobalChatAuthor = login;
+        if (msgDate != null) _lastGlobalChatDate = msgDate;
 
         // Cap the rendered chat to the last N rows. The presence socket is now
         // always-on (see SyncGlobalChat), so while the launcher sits in the tray
@@ -4043,8 +4162,28 @@ public partial class MultiplayerTab : UserControl
         return disc;
     }
 
-    private static string FormatChatTime(long atMs) =>
-        DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime.ToString("HH:mm");
+    // Header stamp for a chat message: shows the DATE (not just the time) once
+    // a message isn't from today, so old messages don't read as recent. The
+    // formatting core is the pure, WPF-free ChatTimeFormat (unit-tested).
+    private static string FormatChatTime(long atMs)
+    {
+        var local = DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime;
+        return ChatTimeFormat.Format(
+            local, DateTime.Today, Strings.Get("MpChatYesterday"), ChatDateCulture());
+    }
+
+    // Full date + time for the hover tooltip on a message's timestamp.
+    private static string FormatChatTimeFull(long atMs)
+    {
+        var local = DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime;
+        return ChatTimeFormat.FormatFull(local, ChatDateCulture());
+    }
+
+    // Month/day names follow the app's UI language (Strings.Language), not the
+    // OS culture, so a Spanish UI shows "15 jul" and an English one "15 Jul".
+    private static System.Globalization.CultureInfo ChatDateCulture()
+        => System.Globalization.CultureInfo.GetCultureInfo(
+            Strings.Language == Strings.LangEs ? "es" : "en");
 
     // Top-bar count sources. "players online" prefers the LIVE global-chat
     // presence (the same number the chat shows as "N connected" — the users
@@ -4519,17 +4658,40 @@ public partial class MultiplayerTab : UserControl
         salaCell.Children.Add(disc);
 
         var salaText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        salaText.Children.Add(new TextBlock
+
+        // Title row: the room name (ellipsizes) + an optional purple "Private" chip.
+        // A private room whose STATUS is In game / Full outranks the purple "Private"
+        // dot in the STATUS column, so without this chip it would give NO hint it's
+        // private. The chip is always visible; the name is in the '*' column so it
+        // ellipsizes while the Auto chip stays put.
+        var titleRow = new Grid();
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var titleBlock = new TextBlock
         {
             Text = lobby.Title,
             Foreground = textPrimary,
             FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
             FontWeight = FontWeights.SemiBold,
-            // Single line, ellipsized (compact rows). A private room is conveyed
-            // by the purple "Private" dot in the STATUS column, not a lock here.
+            VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
-        });
+        };
+        Grid.SetColumn(titleBlock, 0);
+        titleRow.Children.Add(titleBlock);
+        if (lobby.IsPrivate)
+        {
+            // Same rounded-pill look as the MOD chip, tinted purple: a low-alpha
+            // purple fill (mirrors the "Ready" pill idiom #223FB950) + the solid
+            // MpStatusLocked purple text. Reuses MpRoomStatusLocked ("Private"/"Privada").
+            var lockedBrush = (Brush)Application.Current.FindResource("MpStatusLocked");
+            var privadaBg = new SolidColorBrush(Color.FromArgb(0x22, 0x8B, 0x5C, 0xF6));
+            var privateChip = BuildRoomChip(Strings.Get("MpRoomStatusLocked"), privadaBg, lockedBrush);
+            privateChip.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(privateChip, 1);
+            titleRow.Children.Add(privateChip);
+        }
+        salaText.Children.Add(titleRow);
         if (!modInstalled)
         {
             salaText.Children.Add(new TextBlock
@@ -4541,6 +4703,24 @@ public partial class MultiplayerTab : UserControl
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 2, 0, 0),
             });
+        }
+        // "open for X" — a live count-up sub-line, ticked in place by
+        // RefreshRoomAgeCells (rooms ping timer). Registered so it stays live
+        // without re-rendering the row. Only when we can parse the open time.
+        var roomCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
+        if (roomCreatedUtc.HasValue)
+        {
+            var ageTb = new TextBlock
+            {
+                Text = Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(DateTime.UtcNow - roomCreatedUtc.Value)),
+                Foreground = textSecondary,
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 2, 0, 0),
+            };
+            salaText.Children.Add(ageTb);
+            _roomAgeCells.Add((ageTb, roomCreatedUtc.Value));
         }
         Grid.SetColumn(salaText, 1);
         salaCell.Children.Add(salaText);
@@ -4874,6 +5054,30 @@ public partial class MultiplayerTab : UserControl
             FillPingCell(cell, p);
     }
 
+    /// <summary>Tick the per-room "open for X" sub-lines up in place (rooms ping
+    /// timer, ~3 s) so the counter is live without re-rendering the whole list.</summary>
+    private void RefreshRoomAgeCells()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var (text, createdUtc) in _roomAgeCells)
+            text.Text = Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(now - createdUtc));
+    }
+
+    /// <summary>"open for X" text for the CURRENT lobby, or "" when the open time
+    /// is unknown.</summary>
+    private string LobbyOpenAgeText()
+        => _currentLobbyCreatedUtc.HasValue
+            ? Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(DateTime.UtcNow - _currentLobbyCreatedUtc.Value))
+            : "";
+
+    /// <summary>Tick the lobby header's "open for X" run up in place (lobby ping
+    /// timer, ~2.5 s), without rebuilding the whole meta line.</summary>
+    private void RefreshLobbyOpenAge()
+    {
+        if (_lobbyAgeRun != null && _currentLobbyCreatedUtc.HasValue)
+            _lobbyAgeRun.Text = LobbyOpenAgeText();
+    }
+
     /// <summary>Which status a room row is showing (drives the dot colour).</summary>
     private enum RoomStatusKind { Waiting, InGame, Full, Locked }
 
@@ -5101,6 +5305,8 @@ public partial class MultiplayerTab : UserControl
             // the same step in the create-room path above.
             _currentLobbyModId = lobby.ModId;
             _currentLobbyMaxPlayers = lobby.MaxPlayers;
+            // We joined from the browser summary, which carries the real open time.
+            _currentLobbyCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
             // Host vs joiner is decided by the WS room_state frame that
             // arrives once we connect — clearing it here is just for the
             // brief window before that frame lands.
@@ -5851,6 +6057,7 @@ public partial class MultiplayerTab : UserControl
             OnReady = () => ReadyButton_Click(this, new RoutedEventArgs()),
             OnStart = () => StartButton_Click(this, new RoutedEventArgs()),
             OnInGameCancel = () => InGameCancelButton_Click(this, new RoutedEventArgs()),
+            OnRenameRoom = () => _ = RenameRoomAsync(),
             OnClearChat = () => ClearChatButton_Click(this, new RoutedEventArgs()),
             OnSendChat = () => ChatSendButton_Click(this, new RoutedEventArgs()),
             OnEmoji = () => ChatEmojiButton_Click(this, new RoutedEventArgs()),
@@ -5882,6 +6089,7 @@ public partial class MultiplayerTab : UserControl
         {
             KickConnectionPing();
             UpdateLobbyPing();
+            RefreshLobbyOpenAge();
             // Also probe peers pre-match so the roster health dots are live before
             // anyone hits Start (needs our own IP reported first).
             MaybeReportRadminIp();

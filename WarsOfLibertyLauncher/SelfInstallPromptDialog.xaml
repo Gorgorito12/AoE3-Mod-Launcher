@@ -1,0 +1,54 @@
+<Window x:Class="WarsOfLibertyLauncher.SelfInstallPromptDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
+        Width="460"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Background="{DynamicResource BgBase}"
+        ShowInTaskbar="False">
+  <Grid>
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <controls:TitleBar x:Name="Chrome" Grid.Row="0"
+                       ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
+    <StackPanel Grid.Row="1" Margin="24,20">
+        <Grid Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="&#x2139;"
+                       FontSize="{StaticResource FontSizeHeading}"
+                       Foreground="{DynamicResource AccentBrush}"
+                       VerticalAlignment="Top"
+                       Margin="0,0,14,0"/>
+            <TextBlock Grid.Column="1"
+                       x:Name="BodyText"
+                       Foreground="{DynamicResource TextSecondary}"
+                       FontSize="{StaticResource FontSizeBody}"
+                       TextWrapping="Wrap"/>
+        </Grid>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="NoButton"
+                    Click="NoButton_Click"
+                    Style="{StaticResource SidebarPrimaryButton}"
+                    Background="#3a3d44"
+                    Padding="18,6"
+                    MinWidth="110"
+                    Margin="0,0,10,0"/>
+            <Button x:Name="YesButton"
+                    Click="YesButton_Click"
+                    IsDefault="True"
+                    Style="{StaticResource SidebarPrimaryButton}"
+                    Padding="18,6"
+                    MinWidth="140"/>
+        </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

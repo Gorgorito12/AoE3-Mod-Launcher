@@ -160,11 +160,34 @@
                         <StackPanel Grid.Column="1"
                                     VerticalAlignment="Center"
                                     Margin="18,16,24,16">
-                            <TextBlock x:Name="RoomTitleText"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="{StaticResource FontSizeHeading}"
-                                       FontWeight="Bold"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <!-- Title + host-only rename button. The name must
+                                 stay in a bounded '*' column so it ellipsises
+                                 instead of pushing the button off-screen; the
+                                 ✏ mirrors the 📋 beside ROOM ID below, and is
+                                 shown only for the host (RenderRoomPanel). -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="RoomTitleText"
+                                           Grid.Column="0"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           FontSize="{StaticResource FontSizeHeading}"
+                                           FontWeight="Bold"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <Button x:Name="RenameRoomButton"
+                                        Grid.Column="1"
+                                        Click="RenameRoomButton_Click"
+                                        Style="{StaticResource MpIconButton}"
+                                        Width="26" Height="22"
+                                        Padding="0"
+                                        Margin="8,0,0,0"
+                                        FontSize="{StaticResource FontSizeBody}"
+                                        Content="✏"
+                                        VerticalAlignment="Center"
+                                        Visibility="Collapsed"/>
+                            </Grid>
                             <!-- RoomMetaText kept for compatibility
                                  with the existing RenderRoomPanel
                                  — renders "In lobby · P2P LAN ready"

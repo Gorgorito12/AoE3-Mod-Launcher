@@ -420,7 +420,6 @@
                     <StackPanel Grid.Column="2">
                         <CheckBox x:Name="PrivateRoomCheck"
                                   Style="{StaticResource MpCheckBox}"
-                                  Content="Private room (optional)"
                                   Margin="0,0,0,8"
                                   Checked="PrivateRoomCheck_Changed"
                                   Unchecked="PrivateRoomCheck_Changed"/>
@@ -428,6 +427,14 @@
                                      Style="{StaticResource MpFormPasswordBox}"
                                      MaxLength="50"
                                      IsEnabled="False"/>
+                        <!-- Always-visible heads-up: a private room is NOT
+                             announced (Discord + in-app popup). Text set from
+                             MpCreateDialogPrivateHint in the ctor. -->
+                        <TextBlock x:Name="PrivateHint"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,6,0,0"/>
                     </StackPanel>
                 </Grid>
 

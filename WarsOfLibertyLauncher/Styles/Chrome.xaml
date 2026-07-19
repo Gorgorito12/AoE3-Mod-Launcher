@@ -185,6 +185,15 @@
         <Setter Property="Padding" Value="14,10"/>
         <Setter Property="HasDropShadow" Value="True"/>
         <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <!-- FONT is load-bearing: a ToolTip INHERITS FontFamily/FontSize/FontWeight
+             from the control it's attached to. The title-bar caption buttons use
+             "Segoe MDL2 Assets" (an ICON font with no letters) at an 8-10px glyph
+             size, so without these a tooltip on the min/max/close buttons rendered
+             its words as missing-glyph boxes (tofu) at a tiny size. Pin a normal UI
+             font + readable size on EVERY tooltip so no icon-font owner can leak in. -->
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
+        <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToolTip">
