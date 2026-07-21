@@ -152,6 +152,7 @@ public partial class ModPropertiesDialog : Window
         LoadUserData();
         LoadLanguage();
         LoadVersions();
+        LoadAddons();
         SetActiveTab(TabGeneralBtn);
         ApplyConnectivityGate();
 
@@ -181,6 +182,7 @@ public partial class ModPropertiesDialog : Window
         TabLocalFilesLabel.Text = Strings.Get("ModPropTabLocalFiles");
         TabUserDataLabel.Text = Strings.Get("ModPropTabUserData");
         TabLanguageLabel.Text = Strings.Get("ModPropTabLanguage");
+        TabAddonsLabel.Text = Strings.Get("ModPropTabAddons");
 
         // GENERAL tab
         LblAboutSection.Text = Strings.Get("ModPropAboutSection");
@@ -257,6 +259,9 @@ public partial class ModPropertiesDialog : Window
 
         // LANGUAGE tab
         LblLanguageSectionTitle.Text = Strings.Get("ModPropLanguageSectionTitle");
+        LblAddonsSectionTitle.Text = Strings.Get("AddonsSectionTitle");
+        LblAddonsSectionHint.Text = Strings.Get("AddonsSectionHint");
+        ImportAddonBtn.Content = Strings.Get("AddonImportButton");
         LblLanguageDesc.Text = Strings.Get("ModPropLanguageDesc");
         RefreshTranslationsBtn.Content = Strings.Get("DlgLangRefreshButton");
         LblLanguageCurrent.Text = Strings.Get("ModPropLanguageCurrent");
@@ -1062,17 +1067,20 @@ public partial class ModPropertiesDialog : Window
         TabLocalFilesBtn.Tag = ReferenceEquals(activeBtn, TabLocalFilesBtn) ? "active" : null;
         TabUserDataBtn.Tag = ReferenceEquals(activeBtn, TabUserDataBtn) ? "active" : null;
         TabLanguageBtn.Tag = ReferenceEquals(activeBtn, TabLanguageBtn) ? "active" : null;
+        TabAddonsBtn.Tag = ReferenceEquals(activeBtn, TabAddonsBtn) ? "active" : null;
 
         GeneralPanel.Visibility = ReferenceEquals(activeBtn, TabGeneralBtn) ? Visibility.Visible : Visibility.Collapsed;
         LocalFilesPanel.Visibility = ReferenceEquals(activeBtn, TabLocalFilesBtn) ? Visibility.Visible : Visibility.Collapsed;
         UserDataPanel.Visibility = ReferenceEquals(activeBtn, TabUserDataBtn) ? Visibility.Visible : Visibility.Collapsed;
         LanguagePanel.Visibility = ReferenceEquals(activeBtn, TabLanguageBtn) ? Visibility.Visible : Visibility.Collapsed;
+        AddonsPanel.Visibility = ReferenceEquals(activeBtn, TabAddonsBtn) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void TabGeneralBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabGeneralBtn);
     private void TabLocalFilesBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabLocalFilesBtn);
     private void TabUserDataBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUserDataBtn);
     private void TabLanguageBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabLanguageBtn);
+    private void TabAddonsBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabAddonsBtn);
 
     /// <summary>Opens the dialog directly on the Language tab (used by the
     /// "new translation" notification so a click lands where packs are applied).</summary>
@@ -1113,6 +1121,7 @@ public partial class ModPropertiesDialog : Window
         LoadGeneral();
         LoadLocalFiles();
         LoadUserData();
+        LoadAddons();
     }
 
     /// <summary>
@@ -1530,4 +1539,246 @@ public partial class ModPropertiesDialog : Window
         RefreshData();
     }
 
+    // -- Addons -------------------------------------------------------------
+    //
+    // Optional community overlays (transparent UI, gun-smoke effects, …). The
+    // engine lives in AddonService / AddonRisk; this is only the list.
+    //
+    // Everything here goes through AddonService, never a plain file copy, so the
+    // three invariants it enforces hold no matter which button was pressed: an
+    // addon may not write the files version detection and the multiplayer
+    // fingerprint read, the originals are backed up so it can be reverted, and
+    // the manifest is re-captured so "Verify files" doesn't report the install
+    // as corrupt afterwards.
+
+    /// <summary>
+    /// Rebuilds the addon list. Hidden entirely for the stock game — the
+    /// launcher never modifies the user's own copy of Age of Empires III.
+    /// </summary>
+    private void LoadAddons()
+    {
+        if (_profile.IsStockGame)
+        {
+            TabAddonsBtn.Visibility = Visibility.Collapsed;
+            return;
+        }
+        TabAddonsBtn.Visibility = Visibility.Visible;
+
+        AddonCardList.Children.Clear();
+        AddonsResultText.Visibility = Visibility.Collapsed;
+        ImportAddonBtn.IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath);
+
+        var enabled = new HashSet<string>(
+            _config.GetActiveState().EnabledAddons ?? new List<string>(),
+            StringComparer.OrdinalIgnoreCase);
+
+        var imported = _config.ImportedAddons ?? new List<ImportedAddon>();
+        foreach (var addon in imported)
+            AddonCardList.Children.Add(BuildAddonCard(addon, enabled.Contains(addon.Id)));
+
+        bool empty = AddonCardList.Children.Count == 0;
+        AddonsEmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        if (empty) AddonsEmptyHint.Text = Strings.Get("AddonsEmptyHint");
+    }
+
+    private Border BuildAddonCard(ImportedAddon addon, bool isEnabled)
+    {
+        var risk = ParseRisk(addon.Risk);
+        bool blocked = risk == AddonRiskLevel.Blocked;
+
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(addon.Name) ? addon.FileName : addon.Name,
+            Foreground = (Brush)FindResource("TextPrimary"),
+            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        // Name the offending files rather than asserting a vague danger — the
+        // user can only judge (or fix) an addon they can see the contents of.
+        if (blocked || risk == AddonRiskLevel.SimulationRisk)
+        {
+            var files = addon.RiskFiles is { Count: > 0 }
+                ? string.Join(", ", addon.RiskFiles.Take(3))
+                : "";
+            stack.Children.Add(new TextBlock
+            {
+                Text = Strings.Format(
+                    blocked ? "AddonRiskBlockedHint" : "AddonRiskSimulationHint", files),
+                Foreground = blocked
+                    ? (Brush)FindResource("MpStatusOffline")
+                    : (Brush)FindResource("AccentBrush"),
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+        }
+
+        var toggle = new CheckBox
+        {
+            Content = Strings.Get(isEnabled ? "AddonEnabled" : "AddonEnable"),
+            IsChecked = isEnabled,
+            IsEnabled = !blocked && !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        toggle.Checked += async (_, _) => await ToggleAddonAsync(addon, true);
+        toggle.Unchecked += async (_, _) => await ToggleAddonAsync(addon, false);
+        stack.Children.Add(toggle);
+
+        return new Border
+        {
+            Background = (Brush)FindResource("BgPanelAlt"),
+            BorderBrush = (Brush)FindResource(isEnabled ? "AccentBrush" : "BorderSubtle"),
+            BorderThickness = new Thickness(isEnabled ? 2 : 1),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
+            Padding = new Thickness(14, 12, 14, 12),
+            Margin = new Thickness(0, 0, 0, 8),
+            Child = stack,
+        };
+    }
+
+    private static AddonRiskLevel ParseRisk(string? raw) =>
+        Enum.TryParse<AddonRiskLevel>(raw, ignoreCase: true, out var v) ? v : AddonRiskLevel.Cosmetic;
+
+    private async Task ToggleAddonAsync(ImportedAddon addon, bool enable)
+    {
+        var install = _service.InstallPath;
+        if (string.IsNullOrEmpty(install)) return;
+
+        var state = _config.GetActiveState();
+        state.EnabledAddons ??= new List<string>();
+
+        try
+        {
+            if (enable)
+            {
+                var zip = await AddonStore.ResolveAsync(addon.Id);
+                if (zip == null)
+                {
+                    ShowAddonResult(Strings.Get("AddonArchiveMissing"), ok: false);
+                    LoadAddons();
+                    return;
+                }
+
+                // A simulation-risk addon passes the lobby check and can still
+                // desync a match, so it needs an explicit yes — the launcher
+                // cannot detect the problem later.
+                bool allowRisk = ParseRisk(addon.Risk) != AddonRiskLevel.SimulationRisk;
+                if (!allowRisk)
+                {
+                    allowRisk = MessageBox.Show(this,
+                        Strings.Get("AddonSimulationConfirmBody"),
+                        Strings.Get("AddonSimulationConfirmTitle"),
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                }
+                if (!allowRisk) { LoadAddons(); return; }
+
+                var result = await AddonService.ApplyAsync(
+                    install, addon.Id, zip, _profile, allowSimulationRisk: true);
+
+                if (result.Status != AddonApplyStatus.Applied)
+                {
+                    ShowAddonResult(DescribeFailure(result), ok: false);
+                    LoadAddons();
+                    return;
+                }
+
+                if (!state.EnabledAddons.Contains(addon.Id, StringComparer.OrdinalIgnoreCase))
+                    state.EnabledAddons.Add(addon.Id);
+                ShowAddonResult(Strings.Get("AddonApplied"), ok: true);
+            }
+            else
+            {
+                await AddonService.DisableAsync(install, addon.Id, _profile);
+                state.EnabledAddons.RemoveAll(id =>
+                    string.Equals(id, addon.Id, StringComparison.OrdinalIgnoreCase));
+                ShowAddonResult(Strings.Get("AddonDisabled"), ok: true);
+            }
+
+            _config.Save();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Addon toggle failed for '{addon.Id}': {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonFailed"), ok: false);
+        }
+
+        LoadAddons();
+    }
+
+    private string DescribeFailure(AddonApplyResult result) => result.Status switch
+    {
+        AddonApplyStatus.Blocked => Strings.Format(
+            "AddonRiskBlockedHint", string.Join(", ", result.OffendingFiles.Take(3))),
+        AddonApplyStatus.Empty => Strings.Get("AddonArchiveEmpty"),
+        AddonApplyStatus.Conflict => Strings.Format(
+            "AddonConflict", result.ConflictingAddonId ?? "?"),
+        _ => Strings.Get("AddonFailed"),
+    };
+
+    private void ShowAddonResult(string text, bool ok)
+    {
+        AddonsResultText.Text = text;
+        AddonsResultText.Foreground = ok
+            ? (Brush)FindResource("MpStatusOnline")
+            : (Brush)FindResource("MpStatusOffline");
+        AddonsResultText.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Imports an addon archive the user downloaded themselves.
+    ///
+    /// This is not a convenience path, it is the only one that works today: the
+    /// community pages these addons come from hand out session-bound download
+    /// links, verified to return the site's generic listing page to any client
+    /// other than the browser that requested them. So the launcher cannot fetch
+    /// them, and the alternatives are a re-hosted catalog copy (which needs the
+    /// author's permission) or a file the user already has.
+    /// </summary>
+    private async void ImportAddonBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = Strings.Get("AddonImportFilter"),
+            CheckFileExists = true,
+        };
+        if (dlg.ShowDialog(this) != true) return;
+
+        try
+        {
+            // Classify BEFORE storing anything, so a refused archive leaves no
+            // trace and the reason can name the files that caused it.
+            var entries = await Task.Run(() => AddonService.ReadArchiveEntries(dlg.FileName));
+            var risk = AddonRisk.Assess(entries);
+
+            var id = await AddonStore.ImportAsync(dlg.FileName);
+            _config.ImportedAddons ??= new List<ImportedAddon>();
+            _config.ImportedAddons.RemoveAll(a =>
+                string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase));
+            _config.ImportedAddons.Add(new ImportedAddon
+            {
+                Id = id,
+                Name = Path.GetFileNameWithoutExtension(dlg.FileName),
+                FileName = Path.GetFileName(dlg.FileName),
+                Risk = risk.Level.ToString(),
+                RiskFiles = risk.BlockingFiles.Concat(risk.SimulationFiles).Take(5).ToList(),
+            });
+            _config.Save();
+
+            ShowAddonResult(
+                risk.Level == AddonRiskLevel.Blocked
+                    ? Strings.Format("AddonRiskBlockedHint", string.Join(", ", risk.BlockingFiles.Take(3)))
+                    : Strings.Get("AddonImported"),
+                ok: risk.Level != AddonRiskLevel.Blocked);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Addon import failed: {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonImportFailed"), ok: false);
+        }
+
+        LoadAddons();
+    }
 }

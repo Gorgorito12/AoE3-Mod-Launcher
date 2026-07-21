@@ -586,6 +586,21 @@ public class LauncherConfig
     public List<string> UserModIds { get; set; } = new();
 
     /// <summary>
+    /// Addon archives the user imported from a file, as opposed to ones the
+    /// catalog offers. Launcher-wide on purpose: these overlay the stock AoE3
+    /// files every mod clones, so one import is usable by every install. WHICH
+    /// installs currently have it applied is <see cref="ModState.EnabledAddons"/>.
+    ///
+    /// Importing exists because the community pages these addons come from
+    /// (AoE3 Heaven) hand out session-bound download links — verified: the same
+    /// URL returns the generic listing page to any client but the browser that
+    /// requested it. So the launcher cannot fetch them, and the only paths to
+    /// disk are a re-hosted catalog copy or a file the user already has.
+    /// </summary>
+    [JsonPropertyName("importedAddons")]
+    public List<ImportedAddon> ImportedAddons { get; set; } = new();
+
+    /// <summary>
     /// True when the given mod id belongs to the user's collection
     /// (either explicitly added via Workshop or a built-in profile
     /// like WoL). Drives the Dashboard's MODS popup filter and the
@@ -1583,4 +1598,40 @@ public class LauncherConfig
         var options = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(path, JsonSerializer.Serialize(this, options));
     }
+}
+
+/// <summary>
+/// One addon archive the user imported from a file. The archive itself lives in
+/// <see cref="Services.AddonStore"/>; this is only the bookkeeping needed to
+/// list it and to recognise a re-import of the same file.
+/// </summary>
+public class ImportedAddon
+{
+    /// <summary>Content-derived (<c>local-&lt;sha12&gt;</c>), so re-importing doesn't duplicate.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    /// <summary>Shown in the list. Defaults to the archive's file name.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    /// <summary>Original file name, so the user can tell which download this was.</summary>
+    [JsonPropertyName("fileName")]
+    public string FileName { get; set; } = "";
+
+    [JsonPropertyName("sha256")]
+    public string Sha256 { get; set; } = "";
+
+    /// <summary>
+    /// Risk level recorded at import time (the string form of
+    /// <c>Services.AddonRiskLevel</c>). Cached so listing the tab doesn't reopen
+    /// every archive on each render; the authoritative check still runs inside
+    /// <c>AddonService.ApplyAsync</c>, which reads the zip again.
+    /// </summary>
+    [JsonPropertyName("risk")]
+    public string Risk { get; set; } = "";
+
+    /// <summary>Files that made it Blocked or SimulationRisk, so the UI can name them.</summary>
+    [JsonPropertyName("riskFiles")]
+    public List<string> RiskFiles { get; set; } = new();
 }

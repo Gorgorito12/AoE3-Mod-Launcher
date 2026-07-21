@@ -6769,6 +6769,31 @@ public partial class MainWindow : Window
     /// Repairs the installation by re-downloading the WoL payload and
     /// re-copying the mod files over the existing install.
     /// </summary>
+    /// <summary>
+    /// Re-applies the install's enabled addons after a full overlay re-lay.
+    ///
+    /// Best-effort: a cosmetic overlay failing to come back must never turn a
+    /// successful repair into a failed one, so every failure is logged rather
+    /// than surfaced. Runs BEFORE the success branch reports "repaired" so the
+    /// state the user is told about is the final one.
+    /// </summary>
+    private async Task ReapplyAddonsAfterOverlayAsync(string installPath, ModProfile profile)
+    {
+        try
+        {
+            var enabled = _config.GetState(profile.Id).EnabledAddons;
+            if (enabled == null || enabled.Count == 0) return;
+
+            SetStatus(Strings.Get("StatusReapplyingAddons"));
+            await AddonService.ReapplyAllAsync(
+                installPath, enabled.ToList(), AddonStore.ResolveAsync, profile);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Post-repair addon re-apply failed: {ex.Message}");
+        }
+    }
+
     private async Task RepairInstallAsync(bool asUpdate = false, string? targetReleaseTag = null)
     {
         if (_isBusy) return;
@@ -7038,6 +7063,12 @@ public partial class MainWindow : Window
 
             ProgressPanelControl.PatchProgress.Value = 100;
             ProgressPanelControl.OverallProgress.Value = 100;
+
+            // Put the user's addons back before reporting success. A repair or a
+            // GitHubReleases update re-lays the WHOLE overlay, so every addon file
+            // was just overwritten with the payload's version — without this the
+            // user silently loses their addons as a side effect of "repairing".
+            await ReapplyAddonsAfterOverlayAsync(installPath, recheckProfile);
 
             if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
             {

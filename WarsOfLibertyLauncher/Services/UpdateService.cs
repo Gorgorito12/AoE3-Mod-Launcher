@@ -1014,6 +1014,13 @@ public class UpdateService
                     $"{engine.Count} engine ({touchedByPatches.Count} files touched); " +
                     $"baseline re-stamped to version {manifest.Version}.");
             }
+
+            // Put the user's addons back. A patch can overwrite files an addon
+            // owned, which would otherwise leave it half-applied with no warning
+            // — the worst outcome, since the install looks fine. Runs AFTER the
+            // hash refresh above because re-applying re-captures those files
+            // again with the addon's bytes.
+            await ReapplyAddonsAsync(ct);
         }
         catch (Exception ex)
         {
@@ -1644,5 +1651,30 @@ public class UpdateService
         if (a.Length == 0) a = "0";
         if (e.Length == 0) e = "0";
         return a == e;
+    }
+
+    /// <summary>
+    /// Re-applies the addons this install had enabled, after patches have
+    /// re-laid files they owned.
+    ///
+    /// Non-fatal by construction: a cosmetic overlay failing to come back must
+    /// never turn a successful update into a failed one, so
+    /// <see cref="AddonService.ReapplyAllAsync"/> swallows and logs per addon
+    /// and this wrapper catches whatever is left.
+    /// </summary>
+    private async Task ReapplyAddonsAsync(CancellationToken ct)
+    {
+        try
+        {
+            var enabled = _config.GetState(_profile.Id).EnabledAddons;
+            if (enabled == null || enabled.Count == 0) return;
+
+            await AddonService.ReapplyAllAsync(
+                InstallPath, enabled.ToList(), AddonStore.ResolveAsync, _profile, ct);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Post-update addon re-apply failed: {ex.Message}");
+        }
     }
 }
