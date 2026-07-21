@@ -129,6 +129,20 @@ public class ModState
     public string ActiveTranslationVersion { get; set; } = "";
 
     /// <summary>
+    /// Ids of the community addons currently applied to this install (the
+    /// transparent-UI overlay, gun-smoke effects, and so on).
+    ///
+    /// Lives beside <see cref="ActiveTranslationId"/> because it is the same
+    /// kind of state: a user choice that modifies files inside ONE install and
+    /// has to be re-applied after an update or a repair re-lays the overlay.
+    /// The authoritative record of WHICH files each addon owns is the install
+    /// manifest's <c>addonFiles</c>, not this list — this only answers "what
+    /// should be on".
+    /// </summary>
+    [JsonPropertyName("enabledAddons")]
+    public List<string> EnabledAddons { get; set; } = new();
+
+    /// <summary>
     /// Last mod version we detected, stored so the UI can show "Installed"
     /// with the right version number immediately after the user switches to
     /// this mod, without waiting for the async CheckAsync MD5-and-XML pass
