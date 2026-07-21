@@ -2875,6 +2875,7 @@ public partial class MainWindow : Window
         ModsBrowserView.BtnAddToCollectionLabel = Strings.Get("ModsBrowserBtnAdd");
         ModsBrowserView.BtnRemoveFromCollectionLabel = Strings.Get("ModsBrowserBtnRemove");
         ModsBrowserView.BtnBuiltinLabel = Strings.Get("ModsBrowserBtnBuiltin");
+        ModsBrowserView.BtnInCollectionLabel = Strings.Get("ModsBrowserInCollection");
 
         // Header ⋯ menu is empty now — publish was promoted to its own
         // accent-outlined header button (PublishModButton), so the overflow
@@ -4254,13 +4255,52 @@ public partial class MainWindow : Window
     /// "Built-in" pill and never raises this event), but
     /// LauncherConfig.RemoveUserMod no-ops on built-ins anyway as
     /// a defensive backstop.
+    ///
+    /// Confirmed first, ALWAYS. The removal itself is cheap and fully
+    /// reversible — no file is deleted and the per-mod state survives, so
+    /// re-adding restores the install — but none of that is visible: an
+    /// installed mod simply disappears from the MODS popup while its multi-GB
+    /// folder stays on disk, which reads as an uninstall. The dialog is where
+    /// that gets said, and it's the single gate for BOTH entry points (the
+    /// per-row toggle and the detail panel raise this same event).
     /// </summary>
     private void ModsBrowserView_RemoveFromCollectionRequested(object? sender, ModProfile profile)
     {
         if (profile == null) return;
+
+        bool installed = IsProfileInstalledLocally(profile);
+        var dialog = new RemoveFromCollectionDialog(
+            profile.DisplayName,
+            installed,
+            installed ? ResolveDisplayInstallPath(profile) : null)
+        {
+            Owner = this,
+        };
+        if (dialog.ShowDialog() != true) return;
+
         _config.RemoveUserMod(profile.Id);
         PersistConfigInBackground();
         RefreshModsBrowser();
+    }
+
+    /// <summary>
+    /// Best-effort install folder for display only. Mirrors
+    /// <see cref="IsProfileInstalledLocally"/>'s resolution order (active
+    /// service first, then the saved per-mod path, then the disk probe) so the
+    /// path shown can't contradict the "installed" badge that put it there.
+    /// </summary>
+    private string? ResolveDisplayInstallPath(ModProfile profile)
+    {
+        bool isActive = string.Equals(
+            profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
+        if (isActive && !string.IsNullOrEmpty(_updateService.InstallPath))
+            return _updateService.InstallPath;
+
+        var saved = _config.GetState(profile.Id).InstallPath;
+        if (!string.IsNullOrEmpty(saved)) return saved;
+
+        var probed = ResolveProbedInstallPath(profile);
+        return string.IsNullOrEmpty(probed) ? null : probed;
     }
 
     /// <summary>

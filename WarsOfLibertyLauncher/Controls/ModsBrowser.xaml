@@ -467,6 +467,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="DetailPrimaryButton"
                                         Grid.Column="0"
@@ -488,8 +489,24 @@
                                         FontSize="{StaticResource FontSizeBody}"
                                         Cursor="Hand"
                                         Margin="0,0,6,0"/>
-                                <Button x:Name="DetailMoreButton"
+                                <!-- Removing from the collection lives here, not in
+                                     the primary slot: it's the one destructive-looking
+                                     action in the panel and shouldn't be the easiest
+                                     button to hit. Collapsed unless the mod is in the
+                                     collection. -->
+                                <Button x:Name="DetailRemoveButton"
                                         Grid.Column="2"
+                                        Visibility="Collapsed"
+                                        Background="{DynamicResource BgPanelAlt}"
+                                        Foreground="{DynamicResource TextSecondary}"
+                                        BorderBrush="{DynamicResource BorderSubtle}"
+                                        BorderThickness="1"
+                                        Padding="12,10"
+                                        FontSize="{StaticResource FontSizeBody}"
+                                        Cursor="Hand"
+                                        Margin="0,0,6,0"/>
+                                <Button x:Name="DetailMoreButton"
+                                        Grid.Column="3"
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextPrimary}"
                                         BorderBrush="{DynamicResource BorderSubtle}"

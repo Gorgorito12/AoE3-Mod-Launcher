@@ -316,6 +316,11 @@ public partial class ModsBrowser : UserControl
     /// </summary>
     public string BtnAddToCollectionLabel { get; set; } = "Add to my mods";
     public string BtnRemoveFromCollectionLabel { get; set; } = "Remove from my mods";
+    /// <summary>
+    /// Detail-panel primary button once the mod is in the collection — a
+    /// disabled status pill, since removing moved to its own secondary button.
+    /// </summary>
+    public string BtnInCollectionLabel { get; set; } = "In my mods";
     public string BtnBuiltinLabel { get; set; } = "Built-in";
 
     /// <summary>Status badge labels (localised text shown inside each badge).</summary>
@@ -1136,10 +1141,13 @@ public partial class ModsBrowser : UserControl
 
     private void BuildDetailActions(ModProfile profile, ModRowState state)
     {
-        // Workshop redesign — primary CTA mirrors the per-row button:
-        // Built-in (disabled "Built-in" pill) / Add to my mods (primary)
-        // / Remove from my mods (ghost). Install / Update / Repair /
-        // Uninstall live on the Dashboard via PLAY + gear menu.
+        // Workshop redesign — the primary CTA is Add to my mods (primary blue)
+        // or, once the mod is in the collection, a disabled STATUS pill: the
+        // same treatment as a built-in. Removing is deliberately NOT here — it
+        // sits in the secondary DetailRemoveButton below, so the destructive
+        // option isn't the biggest, easiest-to-hit target in the panel.
+        // Install / Update / Repair / Uninstall live on the Dashboard via
+        // PLAY + gear menu.
         string label;
         Action? click;
         bool enabled;
@@ -1154,9 +1162,9 @@ public partial class ModsBrowser : UserControl
         }
         else if (state.IsInUserCollection)
         {
-            label = BtnRemoveFromCollectionLabel;
-            click = () => RemoveFromCollectionRequested?.Invoke(this, profile);
-            enabled = true;
+            label = BtnInCollectionLabel;
+            click = null;
+            enabled = false;
             primaryStyle = false;
         }
         else
@@ -1165,6 +1173,23 @@ public partial class ModsBrowser : UserControl
             click = () => AddToCollectionRequested?.Invoke(this, profile);
             enabled = true;
             primaryStyle = true;
+        }
+
+        // Remove — only for a non-built-in mod already in the collection.
+        // Built-ins can't be removed at all (the launcher needs a fallback), and
+        // a mod that isn't added has nothing to remove.
+        if (state.IsInUserCollection && !state.IsBuiltIn)
+        {
+            DetailRemoveButton.Content = BtnRemoveFromCollectionLabel;
+            DetailRemoveButton.Visibility = Visibility.Visible;
+            DetailRemoveButton.Click -= OnRemoveClick;
+            _removeAction = () => RemoveFromCollectionRequested?.Invoke(this, profile);
+            DetailRemoveButton.Click += OnRemoveClick;
+        }
+        else
+        {
+            DetailRemoveButton.Visibility = Visibility.Collapsed;
+            _removeAction = null;
         }
 
         DetailPrimaryButton.Content = label;
@@ -1200,8 +1225,10 @@ public partial class ModsBrowser : UserControl
     }
 
     private Action? _primaryAction;
+    private Action? _removeAction;
     private string _secondaryUrl = "";
     private void OnPrimaryClick(object sender, RoutedEventArgs e) => _primaryAction?.Invoke();
+    private void OnRemoveClick(object sender, RoutedEventArgs e) => _removeAction?.Invoke();
     private void OnSecondaryClick(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrEmpty(_secondaryUrl))

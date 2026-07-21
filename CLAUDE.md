@@ -2058,6 +2058,36 @@ Two cheap gates beyond a green build:
   the schema would reject so a modder's first PR isn't red. Pinned by `ModLinkTests`
   + the `Links_*` cases in `BuildModJsonTests`.
 
+- **"Remove from my mods" is a VISIBILITY toggle — it never deletes a file — and it is
+  confirmed ALWAYS, from a secondary button, precisely because none of that is visible.**
+  `LauncherConfig.RemoveUserMod` only drops the id from `UserModIds`; `_config.Mods[id]`
+  (install path, `LastKnownVersion`, active translation, registered copies) is untouched,
+  so re-adding from the Workshop restores the install with nothing re-downloaded. The
+  problem it caused is perceptual, not data loss: an INSTALLED mod vanishes from the
+  dashboard MODS popup while its multi-GB folder sits on disk, which reads as an
+  uninstall — and nobody guesses re-adding brings it back. Three parts: (1) **one gate,
+  both entry points** — the per-row toggle (`ModsBrowser.BuildRowAction`) and the detail
+  panel both raise `RemoveFromCollectionRequested`, so confirming inside
+  `MainWindow.ModsBrowserView_RemoveFromCollectionRequested` covers both; don't add a
+  second check at either call site. (2) **`RemoveFromCollectionDialog`** (themed, modeled
+  on `SelfInstallPromptDialog`) picks one of TWO bodies off `IsProfileInstalledLocally` —
+  the installed one promises files stay and shows the folder (`ResolveDisplayInstallPath`,
+  which mirrors that same resolution order so the path can't contradict the badge that
+  produced it); the not-installed one is short because nothing is at stake. Keep them
+  separate: one hedged paragraph for both cases is what trains users to click through the
+  warning that matters. **Cancel is `IsDefault`** — on a destructive confirm, Enter must
+  not act. It shows the PATH, not a folder size: sizing ~40k files takes seconds and
+  would need to leave the UI thread, while the path is free and is where you'd go look.
+  (3) **The detail panel's PRIMARY button is a disabled "In my mods" status pill** (the
+  same treatment as the built-in pill), with removal moved to the secondary
+  `DetailRemoveButton`; the destructive action must not sit in the biggest slot. The
+  dialog's copy is only honest as long as `RemoveUserMod` keeps its hands off
+  `config.Mods` — that invariant is pinned by `UserModCollectionTests`, so if someone
+  makes removal clear the per-mod state, those fail rather than the launcher silently
+  lying to the user. Unrelated-but-adjacent: removing the ACTIVE mod doesn't make it
+  disappear mid-session — the popup keeps it via the `|| p.Id == activeId` fallback in
+  `BuildModSwitchRow`'s source list.
+
 - **Mod icons come from two different places — don't assume the catalog.**
   Community mods and the stock game (`aoe3-tad`) get their icon from the
   catalog repo (`mods/<id>/icon.png` → `ModProfile.IconUrl`; INSTALLED/active

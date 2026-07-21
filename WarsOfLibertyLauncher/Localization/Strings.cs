@@ -1258,6 +1258,64 @@ public static class Strings
             [LangEn] = "Built-in",
             [LangEs] = "Integrado",
         },
+        // Detail-panel PRIMARY button once the mod is in the collection: a
+        // disabled status pill, not an action. Removing moved to a secondary
+        // ghost button so the destructive option no longer sits in the most
+        // prominent slot.
+        ["ModsBrowserInCollection"] = new()
+        {
+            [LangEn] = "In my mods",
+            [LangEs] = "En mis mods",
+        },
+
+        // -- "Remove from my mods" confirmation -------------------------------
+        // Removing only drops the id from userModIds; no file is ever deleted
+        // and the per-mod state (install path, version, translation) survives,
+        // so re-adding restores everything. The dialog exists to say that,
+        // because an installed mod disappearing from the MODS popup otherwise
+        // reads as an uninstall.
+        ["DlgRemoveModTitle"] = new()
+        {
+            [LangEn] = "Remove from my mods",
+            [LangEs] = "Quitar de mis mods",
+        },
+        ["DlgRemoveModBodyInstalled"] = new()
+        {
+            [LangEn] = "This mod will stop appearing in your MODS list, but it "
+                     + "stays installed: no file is deleted and nothing is "
+                     + "downloaded again if you add it back from the Workshop. "
+                     + "To free up disk space you have to uninstall it instead, "
+                     + "from the gear menu.",
+            [LangEs] = "Este mod va a dejar de aparecer en tu lista de MODS, pero "
+                     + "sigue instalado: no se borra ningún archivo y no se "
+                     + "descarga nada de nuevo si lo vuelves a agregar desde el "
+                     + "Workshop. Para liberar espacio en disco tienes que "
+                     + "desinstalarlo, desde el menú de configuración.",
+        },
+        ["DlgRemoveModBodyNotInstalled"] = new()
+        {
+            [LangEn] = "This mod will stop appearing in your MODS list. It isn't "
+                     + "installed, so nothing is deleted — you can add it back "
+                     + "from the Workshop whenever you want.",
+            [LangEs] = "Este mod va a dejar de aparecer en tu lista de MODS. No "
+                     + "está instalado, así que no se borra nada — puedes volver "
+                     + "a agregarlo desde el Workshop cuando quieras.",
+        },
+        ["DlgRemoveModPathLabel"] = new()
+        {
+            [LangEn] = "Its files stay here:",
+            [LangEs] = "Sus archivos quedan aquí:",
+        },
+        ["DlgRemoveModConfirm"] = new()
+        {
+            [LangEn] = "Remove",
+            [LangEs] = "Quitar",
+        },
+        ["DlgRemoveModCancel"] = new()
+        {
+            [LangEn] = "Cancel",
+            [LangEs] = "Cancelar",
+        },
         ["ModsBrowserEmpty"] = new()
         {
             [LangEn] = "No mods match your filters.",
