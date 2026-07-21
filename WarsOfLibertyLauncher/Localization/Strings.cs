@@ -896,6 +896,239 @@ public static class Strings
             [LangEn] = "LANGUAGE",
             [LangEs] = "IDIOMA",
         },
+
+        // -- Addons tab -------------------------------------------------------
+        // Optional community overlays (transparent UI, gun smoke, …). Applied
+        // through AddonService, which backs up the originals, refuses anything
+        // that would break version detection or multiplayer, and re-captures the
+        // manifest so "Verify files" stays clean afterwards.
+        ["StatusReapplyingAddons"] = new()
+        {
+            [LangEn] = "Re-applying your addons...",
+            [LangEs] = "Volviendo a aplicar tus addons...",
+        },
+        ["ModPropTabAddons"] = new()
+        {
+            [LangEn] = "ADDONS",
+            [LangEs] = "ADDONS",
+        },
+        ["AddonsSectionTitle"] = new()
+        {
+            [LangEn] = "Optional addons",
+            [LangEs] = "Addons opcionales",
+        },
+        ["AddonsSectionHint"] = new()
+        {
+            [LangEn] = "Small community tweaks — a transparent interface, gun smoke, "
+                     + "and the like. They stay applied when the mod updates, and "
+                     + "turning one off puts the original files back.",
+            [LangEs] = "Retoques pequeños de la comunidad — interfaz transparente, humo "
+                     + "de armas y cosas así. Se mantienen cuando el mod se actualiza, y "
+                     + "al desactivar uno vuelven los archivos originales.",
+        },
+        ["AddonsEmptyHint"] = new()
+        {
+            [LangEn] = "No addons yet. Download one and add it with the button below.",
+            [LangEs] = "Todavía no hay addons. Descarga uno y agrégalo con el botón de abajo.",
+        },
+        ["AddonImportButton"] = new()
+        {
+            [LangEn] = "Add addon from file…",
+            [LangEs] = "Agregar addon desde archivo…",
+        },
+        ["AddonImportFilter"] = new()
+        {
+            [LangEn] = "Addon archive (*.zip)|*.zip",
+            [LangEs] = "Archivo de addon (*.zip)|*.zip",
+        },
+        ["AddonEnable"] = new()
+        {
+            [LangEn] = "Enable",
+            [LangEs] = "Activar",
+        },
+        ["AddonEnabled"] = new()
+        {
+            [LangEn] = "Enabled",
+            [LangEs] = "Activado",
+        },
+        ["AddonImported"] = new()
+        {
+            [LangEn] = "Addon added.",
+            [LangEs] = "Addon agregado.",
+        },
+        ["AddonApplied"] = new()
+        {
+            [LangEn] = "Addon enabled.",
+            [LangEs] = "Addon activado.",
+        },
+        ["AddonDisabled"] = new()
+        {
+            [LangEn] = "Addon disabled — the original files are back.",
+            [LangEs] = "Addon desactivado — los archivos originales volvieron.",
+        },
+        ["AddonImportFailed"] = new()
+        {
+            [LangEn] = "That file could not be read as an addon archive.",
+            [LangEs] = "No se pudo leer ese archivo como un addon.",
+        },
+        ["AddonFailed"] = new()
+        {
+            [LangEn] = "The addon could not be applied. See the logs for details.",
+            [LangEs] = "No se pudo aplicar el addon. Revisa los registros para más detalles.",
+        },
+        ["AddonArchiveMissing"] = new()
+        {
+            [LangEn] = "The addon's file is missing. Add it again from the original archive.",
+            [LangEs] = "Falta el archivo del addon. Vuelve a agregarlo desde el archivo original.",
+        },
+        ["AddonArchiveEmpty"] = new()
+        {
+            [LangEn] = "That archive has no files to apply.",
+            [LangEs] = "Ese archivo no tiene nada que aplicar.",
+        },
+        ["AddonConflict"] = new()
+        {
+            [LangEn] = "Another addon ({0}) already changes the same files. Turn it off first.",
+            [LangEs] = "Otro addon ({0}) ya modifica los mismos archivos. Desactívalo primero.",
+        },
+        // Naming the files matters: "this addon is dangerous" is unactionable,
+        // "it replaces data\protoy.xml" tells the user (or its author) exactly why.
+        ["AddonRiskBlockedHint"] = new()
+        {
+            [LangEn] = "Can't be used: it replaces files the launcher needs to identify "
+                     + "your version and to let you into multiplayer rooms ({0}).",
+            [LangEs] = "No se puede usar: reemplaza archivos que el launcher necesita para "
+                     + "identificar tu versión y para dejarte entrar a las salas ({0}).",
+        },
+        ["AddonRiskSimulationHint"] = new()
+        {
+            [LangEn] = "Changes game data ({0}). Rooms won't reject you, but a match with "
+                     + "players who don't have it can desync.",
+            [LangEs] = "Modifica datos del juego ({0}). Las salas no te van a rechazar, pero "
+                     + "una partida con jugadores que no lo tengan puede desincronizarse.",
+        },
+        ["AddonDownloadAndEnable"] = new()
+        {
+            [LangEn] = "Download and enable",
+            [LangEs] = "Descargar y activar",
+        },
+        ["AddonDisable"] = new()
+        {
+            [LangEn] = "Disable",
+            [LangEs] = "Desactivar",
+        },
+        ["AddonOpenPage"] = new()
+        {
+            [LangEn] = "Open its page",
+            [LangEs] = "Abrir su página",
+        },
+        ["AddonSourcePage"] = new()
+        {
+            [LangEn] = "Page",
+            [LangEs] = "Página",
+        },
+        ["AddonDownloading"] = new()
+        {
+            [LangEn] = "Downloading {0}...",
+            [LangEs] = "Descargando {0}...",
+        },
+        ["AddonDownloadFailed"] = new()
+        {
+            [LangEn] = "The download failed. Its page may have changed — open it and "
+                     + "add the file by hand.",
+            [LangEs] = "La descarga falló. Puede que su página haya cambiado — ábrela y "
+                     + "agrega el archivo a mano.",
+        },
+        ["AddonAppliedSkipped"] = new()
+        {
+            [LangEn] = "Addon enabled. Not copied into the game: {0} — the launcher never "
+                     + "installs programs, only game files.",
+            [LangEs] = "Addon activado. No se copió al juego: {0} — el launcher nunca "
+                     + "instala programas, solo archivos del juego.",
+        },
+        ["AddonNeedsAdmin"] = new()
+        {
+            [LangEn] = "This game folder can only be changed with administrator rights. "
+                     + "Close the launcher and reopen it as administrator to use addons here.",
+            [LangEs] = "Esta carpeta del juego solo se puede modificar con permisos de "
+                     + "administrador. Cierra el launcher y ábrelo como administrador para "
+                     + "usar addons aquí.",
+        },
+        ["AddonRunCancelled"] = new()
+        {
+            [LangEn] = "You declined the permission prompt, so nothing was changed.",
+            [LangEs] = "Rechazaste el permiso, así que no se cambió nada.",
+        },
+        ["AddonUnpacking"] = new()
+        {
+            [LangEn] = "Unpacking {0}...",
+            [LangEs] = "Desempaquetando {0}...",
+        },
+        ["AddonRunInstallerTitle"] = new()
+        {
+            [LangEn] = "Unpack this addon's installer?",
+            [LangEs] = "¿Desempaquetar el instalador de este addon?",
+        },
+        ["AddonRunInstallerBody"] = new()
+        {
+            [LangEn] = "{0} is distributed as an installer by its author, so the launcher has "
+                     + "to run it to get at the files.\n\nIt runs into a temporary folder, "
+                     + "never into your game. The launcher then applies the files the normal "
+                     + "way, so they are backed up and can be undone.\n\nWindows will ask you "
+                     + "for permission first, because that installer requests it.\n\nContinue?",
+            [LangEs] = "{0} lo distribuye su autor como instalador, así que el launcher tiene "
+                     + "que ejecutarlo para obtener los archivos.\n\nSe ejecuta hacia una "
+                     + "carpeta temporal, nunca sobre tu juego. Después el launcher aplica los "
+                     + "archivos de la forma normal, con respaldo y posibilidad de deshacer."
+                     + "\n\nWindows te va a pedir permiso primero, porque ese instalador lo "
+                     + "exige.\n\n¿Continuar?",
+        },
+        ["AddonUnpackFailed"] = new()
+        {
+            [LangEn] = "The installer could not be unpacked automatically. Open its page and "
+                     + "install it by hand instead.",
+            [LangEs] = "No se pudo desempaquetar el instalador automáticamente. Abre su página "
+                     + "e instálalo a mano.",
+        },
+        ["AddonInstallerMissing"] = new()
+        {
+            [LangEn] = "The download did not contain an installer.",
+            [LangEs] = "La descarga no contenía ningún instalador.",
+        },
+        ["AddonMultiplayerConfirmTitle"] = new()
+        {
+            [LangEn] = "This addon can affect multiplayer",
+            [LangEs] = "Este addon puede afectar el multijugador",
+        },
+        ["AddonVersionMatchConfirmBody"] = new()
+        {
+            [LangEn] = "This addon replaces {0} precompiled game files (.xmb). Age of "
+                     + "Empires III checks those when matching versions between players, "
+                     + "so you may not be able to play with people who don't have the "
+                     + "addon. The launcher cannot detect this, which is why you are being "
+                     + "asked now.\n\nEnable it anyway?",
+            [LangEs] = "Este addon reemplaza {0} archivos precompilados del juego (.xmb). "
+                     + "Age of Empires III los usa para comparar versiones entre jugadores, "
+                     + "así que puede que no puedas jugar con quien no tenga el addon. El "
+                     + "launcher no puede detectarlo, por eso te preguntamos ahora."
+                     + "\n\n¿Lo activas de todos modos?",
+        },
+        ["AddonSimulationConfirmTitle"] = new()
+        {
+            [LangEn] = "This addon can break matches",
+            [LangEs] = "Este addon puede romper partidas",
+        },
+        ["AddonSimulationConfirmBody"] = new()
+        {
+            [LangEn] = "This addon changes game data, not just visuals. You will still be "
+                     + "able to join rooms — the launcher can't detect this kind of change "
+                     + "— but a match with players who don't have the addon may desync.\n\n"
+                     + "Enable it anyway?",
+            [LangEs] = "Este addon modifica datos del juego, no solo lo visual. Vas a poder "
+                     + "entrar a las salas igual — el launcher no puede detectar este tipo de "
+                     + "cambio — pero una partida con jugadores que no tengan el addon puede "
+                     + "desincronizarse.\n\n¿Lo activas de todos modos?",
+        },
         ["ModPropName"] = new()
         {
             [LangEn] = "Name",

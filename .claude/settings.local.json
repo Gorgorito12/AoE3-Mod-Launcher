@@ -68,7 +68,14 @@
       "Read(//c/Users/Jeison/**)",
       "Bash(jq -r '.env // {} | keys[]' ~/.claude/settings.json)",
       "Bash(python -)",
-      "Bash(jq -r '{deny:\\(.permissions.deny//[]|length\\), ask:\\(.permissions.ask//[]|length\\)}' .claude/settings.local.json)"
+      "Bash(jq -r '{deny:\\(.permissions.deny//[]|length\\), ask:\\(.permissions.ask//[]|length\\)}' .claude/settings.local.json)",
+      "Bash(mkdir -p C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/addons)",
+      "Bash(curl -sL -o C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/addons/1932.bin -w 'http=%{http_code} type=%{content_type} size=%{size_download}\\\\n' 'https://aoe3.heavengames.com/downloads/getfile.php?id=1932&dd=1&s=499a6328c0d57fa3bf675991eb3ebfbb')",
+      "Bash(python3 *)",
+      "Bash(curl -sL -o C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/addons/1932b.bin -H 'Referer: https://aoe3.heavengames.com/downloads/showfile.php?fileid=1932' -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 Chrome/120 Safari/537.36' -w 'http=%{http_code} type=%{content_type} size=%{size_download}\\\\n' 'https://aoe3.heavengames.com/downloads/getfile.php?id=1932&dd=1&s=499a6328c0d57fa3bf675991eb3ebfbb')",
+      "Bash(grep -oE \"'[0-9a-f]{16,}'\")",
+      "Bash(curl -sL -A 'Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36' -H 'Referer: https://aoe3.heavengames.com/downloads/getfile.php?id=1932&s=caf2c858986c325ae0bc4928b56d16c8' -o C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/addons/rot2.bin -w 'http=%{http_code} type=%{content_type} size=%{size_download}\\\\n' 'https://aoe3.heavengames.com/downloads/getfile.php?id=1932&dd=1&s=caf2c858986c325ae0bc4928b56d16c8')",
+      "Bash(awk '{print \"bytes:\", $5}')"
     ]
   }
 }

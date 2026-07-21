@@ -187,6 +187,23 @@ public class InstallManifest
     [JsonPropertyName("engineFileHashes")]
     public Dictionary<string, FileFingerprint> EngineFileHashes { get; set; } = new();
 
+    /// <summary>
+    /// Install-relative paths each enabled community addon owns, keyed by addon
+    /// id. Written when an addon is applied and cleared when it is disabled.
+    ///
+    /// This is what makes an addon reversible: disabling one has to know exactly
+    /// which files to restore from <c>addons\_originals\&lt;id&gt;\</c> and which
+    /// files it ADDED (those have no original to restore and must simply be
+    /// deleted). Deriving the list from the addon's zip at disable time would be
+    /// wrong — the zip may be gone, or a later version of it may ship a different
+    /// file set than the one actually on disk.
+    ///
+    /// Empty for manifests written before addons existed, which reads correctly
+    /// as "no addon owns anything here".
+    /// </summary>
+    [JsonPropertyName("addonFiles")]
+    public Dictionary<string, List<string>> AddonFiles { get; set; } = new();
+
     public static string GetManifestPath(string installPath) =>
         Path.Combine(installPath, FileName);
 
