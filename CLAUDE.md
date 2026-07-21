@@ -2028,14 +2028,28 @@ Two cheap gates beyond a green build:
   glyph (`\uE71B`) for every type; `type` only picks the caption. (4) The section is
   **collapsed when `Links` is empty**, so every built-in and every pre-`links`
   manifest renders byte-for-byte as before. (5) A link equal to `OfficialWebsite` is
-  skipped — the action bar's "view mod page" button already covers it. **(6) Built-ins
-  get NO links, and that's the shadow rule, not a bug:** `wol` / `aoe3-tad` are
-  constructed directly in `ModRegistry._builtIn` and never go through
-  `ProjectToProfile`, and the built-in wins on id collision — so `links` in
-  `mods/wol/mod.json` is inert (same as `IconUrl`, which is hardcoded on the built-in
-  for exactly this reason). Give a first-party entry links by hardcoding `Links` on
-  the built-in; `docs/MODDING.md` calls the limitation out so a modder doesn't file it
-  as a bug. Catalog side:
+  skipped — the action bar's "view mod page" button already covers it. **(6) `links` is
+  the ONE field a catalog entry may contribute to a BUILT-IN — the single documented
+  exception to the shadow rule, via `ModRegistry.ApplyBuiltInCosmeticOverlay`.** `wol` /
+  `aoe3-tad` are constructed directly in `ModRegistry._builtIn` and never go through
+  `ProjectToProfile`, and the built-in wins on id collision, so everything else in
+  `mods/wol/mod.json` stays inert. Without an exception WoL could only get links by
+  hardcoding them here — meaning a **new release for every Discord-invite change**. So
+  `ApplyMerged`'s shadow branch calls the overlay before its `continue`: the entry is
+  still never projected (it can't touch install paths, payload urls or the update
+  mechanism), it just supplies `Links`. Safe because the field is cosmetic and defended
+  twice — the catalog CI's per-mod ownership gate and `ModLink.Sanitize` on this side,
+  which runs regardless of what CI did. **The assignment is UNCONDITIONAL, including for
+  a manifest with no links** — `_builtIn` is a `static readonly` list and `ApplyMerged`
+  copies the LIST, not the profiles, so the overlay mutates the singleton and survives
+  every later merge; always assigning is what makes it idempotent, so dropping a link
+  from the manifest drops it from the UI on the next refresh. An
+  `if (manifest.Links != null)` guard would strand phantom links until restart (pinned by
+  the `Overlay_*` cases in `ModLinkTests`). Keep the whitelist at exactly one field —
+  widening it is what would put the shadow rule's security property back in play. Note
+  the sibling asset rule is unchanged: `IconUrl` is still hardcoded on the built-in and
+  points at the catalog's raw `icon.png`, which is the same "editable without a release"
+  idea applied to assets rather than manifest data. Catalog side:
   `links` is in `classify_pr.py`'s `TIER_1_FIELDS`, so it inherits the per-mod
   **ownership gate** (only the mod's `maintainers` auto-merge it) — that gate plus the
   visible URL IS the abuse control; a per-type host allowlist was considered and

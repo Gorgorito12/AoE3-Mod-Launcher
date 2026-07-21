@@ -235,8 +235,14 @@ public static class ModRegistry
 
             if (builtInIds.Contains(entry.Manifest.Id))
             {
+                // The built-in still wins on everything that matters — the entry
+                // is never projected, so it cannot redirect downloads or paths.
+                // `links` is the one whitelisted exception: cosmetic, sanitised,
+                // and already gated by the catalog CI's per-mod ownership check.
+                ApplyBuiltInCosmeticOverlay(entry.Manifest);
                 DiagnosticLog.Write(
-                    $"ModRegistry: catalog entry '{entry.Manifest.Id}' shadows a built-in — ignoring (built-in wins).");
+                    $"ModRegistry: catalog entry '{entry.Manifest.Id}' shadows a built-in — " +
+                    "ignoring everything but links (built-in wins).");
                 continue;
             }
 
@@ -272,6 +278,54 @@ public static class ModRegistry
             $"ModRegistry: refresh complete — {_builtIn.Count} built-in + " +
             $"{merged.Count - _builtIn.Count} community = {merged.Count} total.");
         return merged;
+    }
+
+    /// <summary>
+    /// Lets a catalog entry that shadows a built-in contribute its
+    /// <c>links</c> — and nothing else — to that built-in profile.
+    ///
+    /// Built-ins are hard-coded and never pass through
+    /// <see cref="ProjectToProfile"/>, so without this the community-links row
+    /// could only be given to WoL by editing this file and shipping a release —
+    /// a Discord invite change would need a new binary. Widening the shadow rule
+    /// by exactly one COSMETIC field keeps the property the rule exists for: the
+    /// entry is still never projected, so it cannot touch install paths, payload
+    /// urls or the update mechanism. The field is safe to accept because it is
+    /// already defended twice over — the catalog CI's per-mod ownership gate
+    /// (only a mod's declared <c>maintainers</c> can auto-merge it) and
+    /// <see cref="ModLink.Sanitize"/> on this side, which the launcher applies
+    /// regardless of what CI did.
+    /// </summary>
+    private static void ApplyBuiltInCosmeticOverlay(ModCatalogManifest manifest)
+        => ApplyCosmeticOverlay(_builtIn, manifest);
+
+    /// <summary>
+    /// The pure half of <see cref="ApplyBuiltInCosmeticOverlay"/>, split out so
+    /// it can be tested without touching the static built-in list.
+    /// </summary>
+    /// <remarks>
+    /// The assignment is UNCONDITIONAL on purpose — including when the manifest
+    /// ships no links at all. <c>_builtIn</c> is a <c>static readonly</c> list
+    /// built once, and <see cref="ApplyMerged"/> copies the LIST but not the
+    /// profiles, so this mutates the singleton and the value survives every
+    /// later merge. Always assigning makes the overlay idempotent and
+    /// self-correcting: dropping a link from the manifest drops it from the UI
+    /// on the next refresh. Guarding this with <c>if (manifest.Links != null)</c>
+    /// would leave phantom links alive until the process restarts.
+    /// </remarks>
+    internal static void ApplyCosmeticOverlay(
+        IEnumerable<ModProfile> targets, ModCatalogManifest? manifest)
+    {
+        if (manifest == null || string.IsNullOrWhiteSpace(manifest.Id)) return;
+
+        foreach (var profile in targets)
+        {
+            if (!string.Equals(profile.Id, manifest.Id, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            profile.Links = ModLink.Sanitize(manifest.Links);
+            return;
+        }
     }
 
     /// <summary>
@@ -502,6 +556,9 @@ public static class ModRegistry
             // Templated into error / status messages that tell the user
             // where to re-download the mod from when an update fails.
             OfficialWebsite = "http://aoe3wol.com/",
+            // Links are deliberately NOT set here: they come from the catalog's
+            // mods/wol/mod.json via ApplyBuiltInCosmeticOverlay, so changing a
+            // Discord invite is a manifest edit, not a new release.
             // Shown on the dashboard hero + Workshop detail, and mirrored in
             // the catalog's mods/wol/mod.json. Without it the dashboard would
             // fall back to the bare "Launcher" subtitle as its description.

@@ -161,11 +161,14 @@ Two things to know before you fill this in:
 Editing `links` is a tier 1 (cosmetic) change, so once you're listed in
 `maintainers` you can update your Discord invite without waiting for a review.
 
-> **Not available for the two first-party entries.** `wol` and `aoe3-tad` are
-> built into the launcher and their built-in profile *shadows* the catalog
-> manifest on id collision, so `links` in `mods/wol/mod.json` is ignored at
-> runtime. This only affects those two — every community mod reads its `links`
-> from the catalog as documented above.
+> **`links` also works for the two first-party entries — it's the only field that
+> does.** `wol` and `aoe3-tad` are built into the launcher, and their built-in
+> profile *shadows* the catalog manifest on id collision, so everything else in
+> `mods/wol/mod.json` is ignored at runtime. `links` is the single whitelisted
+> exception: it's cosmetic, it goes through the same sanitisation as any other
+> mod's, and it's still covered by the ownership gate. That way a first-party
+> Discord invite can change with a manifest edit instead of a new launcher
+> release. Nothing else about a built-in can be set from the catalog.
 
 The launcher re-validates every entry on its own side (HTTPS, no embedded
 credentials, control characters stripped from the label, capped at 4) — so an

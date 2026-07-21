@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using WarsOfLibertyLauncher.Models;
+using WarsOfLibertyLauncher.Services;
 using Xunit;
 
 namespace WarsOfLibertyLauncher.Tests;
@@ -119,5 +120,124 @@ public class ModLinkTests
         var raw = new List<ModLinkManifest?> { null, Raw("forum", "https://example.com/forum") };
 
         Assert.Single(ModLink.Sanitize(raw!));
+    }
+
+    // -- Built-in cosmetic overlay --------------------------------------------
+    //
+    // Built-ins never pass through ProjectToProfile, so the catalog entry that
+    // shadows one is allowed to contribute its `links` and nothing else. These
+    // pin that "and nothing else", plus the idempotence the overlay depends on.
+
+    private static ModProfile Profile(string id) => new()
+    {
+        Id = id,
+        DisplayName = "Built-in " + id,
+        OfficialWebsite = "http://example.org/",
+    };
+
+    private static ModCatalogManifest Manifest(string id, params ModLinkManifest[] links)
+        => new() { Id = id, Links = links.Length == 0 ? null : links.ToList() };
+
+    [Fact]
+    public void Overlay_AppliesLinksToTheMatchingProfile()
+    {
+        var profiles = new[] { Profile("wol"), Profile("aoe3-tad") };
+
+        ModRegistry.ApplyCosmeticOverlay(
+            profiles, Manifest("wol", Raw("discord", "https://discord.gg/example")));
+
+        Assert.Single(profiles[0].Links);
+        Assert.Equal(ModLinkType.Discord, profiles[0].Links[0].Type);
+        Assert.Empty(profiles[1].Links);   // the other built-in is untouched
+    }
+
+    [Fact]
+    public void Overlay_MatchesIdCaseInsensitively()
+    {
+        var profiles = new[] { Profile("wol") };
+
+        ModRegistry.ApplyCosmeticOverlay(
+            profiles, Manifest("WOL", Raw("moddb", "https://www.moddb.com/mods/example")));
+
+        Assert.Single(profiles[0].Links);
+    }
+
+    /// <summary>
+    /// The whole point of widening the shadow rule by exactly ONE field: a
+    /// shadowing manifest must not be able to reach anything else on the
+    /// built-in — an install path or a payload url above all.
+    /// </summary>
+    [Fact]
+    public void Overlay_TouchesNothingButLinks()
+    {
+        var profile = Profile("wol");
+        var manifest = Manifest("wol", Raw("discord", "https://discord.gg/example"));
+        manifest.DisplayName = "Totally Different Mod";
+        manifest.OfficialWebsite = "https://attacker.example/";
+
+        ModRegistry.ApplyCosmeticOverlay(new[] { profile }, manifest);
+
+        Assert.Equal("Built-in wol", profile.DisplayName);
+        Assert.Equal("http://example.org/", profile.OfficialWebsite);
+    }
+
+    /// <summary>
+    /// The overlay mutates the process-wide built-in singleton, so a manifest
+    /// that drops its links must CLEAR them rather than leave the previous set
+    /// alive until restart. Guarding the assignment on a non-null manifest list
+    /// is exactly the bug this pins.
+    /// </summary>
+    [Fact]
+    public void Overlay_ClearsStaleLinks_WhenTheManifestDropsThem()
+    {
+        var profiles = new[] { Profile("wol") };
+        ModRegistry.ApplyCosmeticOverlay(
+            profiles, Manifest("wol", Raw("discord", "https://discord.gg/example")));
+        Assert.Single(profiles[0].Links);
+
+        ModRegistry.ApplyCosmeticOverlay(profiles, Manifest("wol"));   // links now absent
+
+        Assert.Empty(profiles[0].Links);
+    }
+
+    [Fact]
+    public void Overlay_SanitisesJustLikeProjection()
+    {
+        var profiles = new[] { Profile("wol") };
+
+        ModRegistry.ApplyCosmeticOverlay(profiles, Manifest(
+            "wol",
+            Raw("discord", "http://insecure.example/"),          // not HTTPS
+            Raw("website", "https://user:pass@evil.example/"),   // embedded credentials
+            Raw("wiki",    "https://example.com/wiki")));
+
+        Assert.Single(profiles[0].Links);
+        Assert.Equal(ModLinkType.Wiki, profiles[0].Links[0].Type);
+    }
+
+    [Fact]
+    public void Overlay_IsANoOp_WhenNoProfileMatches()
+    {
+        var profiles = new[] { Profile("wol") };
+
+        ModRegistry.ApplyCosmeticOverlay(
+            profiles, Manifest("some-community-mod", Raw("discord", "https://discord.gg/x")));
+
+        Assert.Empty(profiles[0].Links);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Overlay_IgnoresManifestWithoutAnId(string? id)
+    {
+        var profiles = new[] { Profile("wol") };
+        profiles[0].Links.Add(new ModLink { Type = ModLinkType.Wiki, Url = "https://kept.example/" });
+
+        ModRegistry.ApplyCosmeticOverlay(
+            profiles, new ModCatalogManifest { Id = id!, Links = new List<ModLinkManifest>() });
+
+        Assert.Single(profiles[0].Links);   // untouched, not cleared
     }
 }
