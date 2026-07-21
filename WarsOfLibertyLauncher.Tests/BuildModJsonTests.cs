@@ -168,4 +168,65 @@ public class BuildModJsonTests
         var list = PublishModDialog.SplitLines("  a \n\n b \r\n   \nc");
         Assert.Equal(new[] { "a", "b", "c" }, list);
     }
+
+    [Fact]
+    public void Links_EmittedAsArrayOfTypedObjects()
+    {
+        var root = Build(new()
+        {
+            Id = "m", DisplayName = "M",
+            LinkLines = new[]
+            {
+                "discord|https://discord.gg/my-mod",
+                "https://www.moddb.com/mods/my-mod",   // no pipe → typed "other"
+            },
+        });
+
+        var links = root.GetProperty("links");
+        Assert.Equal(2, links.GetArrayLength());
+        Assert.Equal("discord", Str(links[0], "type"));
+        Assert.Equal("https://discord.gg/my-mod", Str(links[0], "url"));
+        Assert.Equal("other", Str(links[1], "type"));
+    }
+
+    /// <summary>
+    /// The wizard exists to produce a manifest that passes catalog CI first try,
+    /// so it must not emit what the schema would reject: non-HTTPS urls, an
+    /// unknown type outside the enum, or more entries than the cap.
+    /// </summary>
+    [Fact]
+    public void Links_DropInvalid_NormaliseUnknownType_AndCap()
+    {
+        var root = Build(new()
+        {
+            Id = "m", DisplayName = "M",
+            LinkLines = new[]
+            {
+                "website|http://insecure.example/",     // not HTTPS
+                "website|file:///C:/x.exe",             // not a web url
+                "telegram|https://example.com/a",       // type outside the enum
+                "wiki|https://example.com/b",
+                "forum|https://example.com/c",
+                "video|https://example.com/d",
+                "other|https://example.com/e",          // past the cap of 4
+            },
+        });
+
+        var links = root.GetProperty("links");
+        Assert.Equal(4, links.GetArrayLength());
+        Assert.Equal("other", Str(links[0], "type"));   // telegram normalised
+        Assert.Equal("https://example.com/a", Str(links[0], "url"));
+    }
+
+    [Fact]
+    public void Links_OmittedWhenNoneValid()
+    {
+        var root = Build(new()
+        {
+            Id = "m", DisplayName = "M",
+            LinkLines = new[] { "website|http://insecure.example/" },
+        });
+
+        Assert.False(Has(root, "links"));
+    }
 }

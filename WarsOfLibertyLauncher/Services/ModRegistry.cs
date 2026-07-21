@@ -116,6 +116,72 @@ public static class ModRegistry
 
     // -- Catalog refresh -------------------------------------------------------
 
+    /// <summary>The catalog the launcher ships with when the config doesn't name one.</summary>
+    public const string DefaultCatalogRepo = "Gorgorito12/aoe3-mods-catalog";
+
+    /// <summary>
+    /// Turns the config's <c>modsCatalogRepo</c> into the repo to actually query:
+    /// empty → the shipped default, <c>"none"</c> → null (opt-out), anything else
+    /// → itself. Shared by <see cref="PrimeFromCache"/> and the async refresh so the
+    /// two can never disagree about WHICH catalog they're talking about — a
+    /// divergence there would make the startup prime read a different cache file
+    /// than the refresh writes, and the saved mod would silently fail to resolve.
+    /// </summary>
+    public static string? ResolveCatalogRepo(string? configured)
+    {
+        if (string.IsNullOrWhiteSpace(configured)) return DefaultCatalogRepo;
+        if (string.Equals(configured, "none", StringComparison.OrdinalIgnoreCase)) return null;
+        return configured;
+    }
+
+    /// <summary>
+    /// Publishes the merged list from the ON-DISK cache only — no network, no
+    /// background refresh — so <see cref="All"/> already knows the community mods
+    /// before the first caller needs to resolve one. Returns true when a cache was
+    /// applied.
+    ///
+    /// WHY this exists: the saved active mod is resolved through <see cref="Find"/>
+    /// in MainWindow's constructor, but the catalog refresh only runs later (the
+    /// Loaded handler's Task.WhenAll). Until then <see cref="All"/> is built-ins
+    /// only, so a COMMUNITY mod id never resolved and <see cref="Default"/> (WoL)
+    /// was used instead — silently, and never reconciled once the catalog landed.
+    /// The launcher therefore could not open on a community mod at all.
+    ///
+    /// Deliberately IGNORES the cache TTL: this pass only resolves mod IDENTITY, and
+    /// the normal refresh right afterwards re-merges and handles staleness (including
+    /// kicking the background fetch). Safe by construction with respect to
+    /// <c>ClearVanishedAssets</c>: that only runs when a PREVIOUS merge existed, and
+    /// this is always the first one. Never throws — a corrupt cache must not stop the
+    /// launcher from starting.
+    /// </summary>
+    public static bool PrimeFromCache(string? repo)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(repo)) return false;
+
+            var cache = new ModCatalogService().LoadFromCache(repo);
+            if (cache == null || cache.Manifests.Count == 0)
+            {
+                DiagnosticLog.Write(
+                    "ModRegistry: no catalog cache to prime from — community mods " +
+                    "resolve only after the startup refresh.");
+                return false;
+            }
+
+            ApplyMerged(cache.Manifests, default);
+            DiagnosticLog.Write(
+                $"ModRegistry: primed from cache ({cache.Manifests.Count} entries) so the " +
+                "saved active mod can resolve before the catalog refresh.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModRegistry: prime from cache failed: {ex.Message}");
+            return false;
+        }
+    }
+
     /// <summary>
     /// Fetches the community mods catalog and merges it with the built-in
     /// list. Returns the merged list (also accessible via <see cref="All"/>
@@ -235,8 +301,14 @@ public static class ModRegistry
 
             if (builtInIds.Contains(entry.Manifest.Id))
             {
+                // The built-in still wins on everything that matters — the entry
+                // is never projected, so it cannot redirect downloads or paths.
+                // `links` is the one whitelisted exception: cosmetic, sanitised,
+                // and already gated by the catalog CI's per-mod ownership check.
+                ApplyBuiltInCosmeticOverlay(entry.Manifest);
                 DiagnosticLog.Write(
-                    $"ModRegistry: catalog entry '{entry.Manifest.Id}' shadows a built-in — ignoring (built-in wins).");
+                    $"ModRegistry: catalog entry '{entry.Manifest.Id}' shadows a built-in — " +
+                    "ignoring everything but links (built-in wins).");
                 continue;
             }
 
@@ -272,6 +344,54 @@ public static class ModRegistry
             $"ModRegistry: refresh complete — {_builtIn.Count} built-in + " +
             $"{merged.Count - _builtIn.Count} community = {merged.Count} total.");
         return merged;
+    }
+
+    /// <summary>
+    /// Lets a catalog entry that shadows a built-in contribute its
+    /// <c>links</c> — and nothing else — to that built-in profile.
+    ///
+    /// Built-ins are hard-coded and never pass through
+    /// <see cref="ProjectToProfile"/>, so without this the community-links row
+    /// could only be given to WoL by editing this file and shipping a release —
+    /// a Discord invite change would need a new binary. Widening the shadow rule
+    /// by exactly one COSMETIC field keeps the property the rule exists for: the
+    /// entry is still never projected, so it cannot touch install paths, payload
+    /// urls or the update mechanism. The field is safe to accept because it is
+    /// already defended twice over — the catalog CI's per-mod ownership gate
+    /// (only a mod's declared <c>maintainers</c> can auto-merge it) and
+    /// <see cref="ModLink.Sanitize"/> on this side, which the launcher applies
+    /// regardless of what CI did.
+    /// </summary>
+    private static void ApplyBuiltInCosmeticOverlay(ModCatalogManifest manifest)
+        => ApplyCosmeticOverlay(_builtIn, manifest);
+
+    /// <summary>
+    /// The pure half of <see cref="ApplyBuiltInCosmeticOverlay"/>, split out so
+    /// it can be tested without touching the static built-in list.
+    /// </summary>
+    /// <remarks>
+    /// The assignment is UNCONDITIONAL on purpose — including when the manifest
+    /// ships no links at all. <c>_builtIn</c> is a <c>static readonly</c> list
+    /// built once, and <see cref="ApplyMerged"/> copies the LIST but not the
+    /// profiles, so this mutates the singleton and the value survives every
+    /// later merge. Always assigning makes the overlay idempotent and
+    /// self-correcting: dropping a link from the manifest drops it from the UI
+    /// on the next refresh. Guarding this with <c>if (manifest.Links != null)</c>
+    /// would leave phantom links alive until the process restarts.
+    /// </remarks>
+    internal static void ApplyCosmeticOverlay(
+        IEnumerable<ModProfile> targets, ModCatalogManifest? manifest)
+    {
+        if (manifest == null || string.IsNullOrWhiteSpace(manifest.Id)) return;
+
+        foreach (var profile in targets)
+        {
+            if (!string.Equals(profile.Id, manifest.Id, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            profile.Links = ModLink.Sanitize(manifest.Links);
+            return;
+        }
     }
 
     /// <summary>
@@ -370,6 +490,10 @@ public static class ModRegistry
             AccentColor = string.IsNullOrEmpty(m.AccentColor) ? "#3a8cd9" : m.AccentColor,
             Author = m.Author ?? "",
             OfficialWebsite = m.OfficialWebsite ?? "",
+            // Sanitised HERE, not at render time, so every consumer can treat
+            // profile.Links as already-safe. See ModLink.Sanitize for why this
+            // repeats the catalog CI's rules.
+            Links = ModLink.Sanitize(m.Links),
             Description = m.Description,
             ProductGuid = m.InstallProductGuid ?? "",
             UserDataFolder = m.UserDataFolder ?? "",
@@ -498,6 +622,9 @@ public static class ModRegistry
             // Templated into error / status messages that tell the user
             // where to re-download the mod from when an update fails.
             OfficialWebsite = "http://aoe3wol.com/",
+            // Links are deliberately NOT set here: they come from the catalog's
+            // mods/wol/mod.json via ApplyBuiltInCosmeticOverlay, so changing a
+            // Discord invite is a manifest edit, not a new release.
             // Shown on the dashboard hero + Workshop detail, and mirrored in
             // the catalog's mods/wol/mod.json. Without it the dashboard would
             // fall back to the bare "Launcher" subtitle as its description.

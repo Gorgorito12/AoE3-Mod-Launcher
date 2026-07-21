@@ -69,8 +69,8 @@ wizard asks for every schema field with inline validation:
    GitHub subpanel (`sourceRepo`, `approvedReleaseTag`, and Advanced
    `externalAssetUrlTemplate` / `externalAssetSha256`), **and the `translations`
    block (`repo`, `coveredFiles`) — collected here, not on a separate step**.
-5. **Description & website** — `description.en`, `description.es`,
-   `officialWebsite`.
+5. **Description & links** — `description.en`, `description.es`,
+   `officialWebsite`, and `links` (one `type|url` per line).
 6. **Review** — preview of the generated `mod.json`. Two buttons:
    **Copy JSON** (copy to clipboard) and **Open PR on GitHub** (opens
    `https://github.com/Gorgorito12/aoe3-mods-catalog/new/main` with
@@ -128,6 +128,51 @@ with the real constraints the schema enforces.
 | `subtitle` | no | ≤ 50 chars | Small line under the title (e.g. *"AoE3:TAD overhaul"*). |
 | `author` | no | ≤ 100 chars | Team or author name. |
 | `officialWebsite` | no | `^https?://` | Opened in the user's browser, nothing is downloaded from here. HTTP allowed for legacy sites; HTTPS preferred. |
+| `links` | no | ≤ 4 entries, each `{type, url, label?}` | Community links (Discord, ModDB, forum, wiki, videos) shown as a row of pills in the launcher's Workshop detail panel. See §3.1.1. |
+
+#### 3.1.1. Community links
+
+Give players a way to reach your Discord or mod page from inside the launcher:
+
+```json
+"links": [
+  { "type": "discord", "url": "https://discord.gg/your-mod" },
+  { "type": "moddb",   "url": "https://www.moddb.com/mods/your-mod" },
+  { "type": "video",   "url": "https://youtube.com/@your-mod", "label": "Trailers" }
+]
+```
+
+- `type` — one of `website`, `discord`, `moddb`, `forum`, `wiki`, `video`,
+  `other`. It only picks the default caption; the launcher never renders a brand
+  logo. An unknown value degrades to `other` instead of hiding the link.
+- `url` — **HTTPS only** (unlike `officialWebsite`, whose HTTP allowance is a
+  legacy concession). Anything else is dropped.
+- `label` — optional, ≤ 24 characters. Omit it and the launcher shows the type's
+  name in the player's language ("Discord", "Foro", …).
+
+Two things to know before you fill this in:
+
+- **The launcher shows the full URL in the button's tooltip.** A label can claim
+  anything, so the destination is always visible before the player clicks. Don't
+  bother with a label that contradicts the url.
+- **A link that just repeats `officialWebsite` is not rendered twice** — the
+  action bar already has a "view mod page" button for that one.
+
+Editing `links` is a tier 1 (cosmetic) change, so once you're listed in
+`maintainers` you can update your Discord invite without waiting for a review.
+
+> **`links` also works for the two first-party entries — it's the only field that
+> does.** `wol` and `aoe3-tad` are built into the launcher, and their built-in
+> profile *shadows* the catalog manifest on id collision, so everything else in
+> `mods/wol/mod.json` is ignored at runtime. `links` is the single whitelisted
+> exception: it's cosmetic, it goes through the same sanitisation as any other
+> mod's, and it's still covered by the ownership gate. That way a first-party
+> Discord invite can change with a manifest edit instead of a new launcher
+> release. Nothing else about a built-in can be set from the catalog.
+
+The launcher re-validates every entry on its own side (HTTPS, no embedded
+credentials, control characters stripped from the label, capped at 4) — so an
+entry that slips past CI still can't reach a player.
 
 ### 3.2. Look & feel
 
@@ -583,7 +628,7 @@ touches:
 | Tier | Fields modified | Action |
 |---|---|---|
 | **invalid** | Files outside `/mods/`, multiple mods at once, malformed JSON, unknown filenames | PR is blocked with an explanatory comment |
-| **tier1** | Only: `displayName`, `subtitle`, `description`, `accentColor`, `author`, `officialWebsite`, `icon`, `banner`, `heroImage`, `screenshots` | **Auto-merge** after validation |
+| **tier1** | Only: `displayName`, `subtitle`, `description`, `accentColor`, `author`, `officialWebsite`, `links`, `icon`, `banner`, `heroImage`, `screenshots` | **Auto-merge** after validation |
 | **tier2** | Only: `approvedReleaseTag` (version bump) | **Auto-merge** after validation |
 | **tier3** | Anything in: `id`, `sourceRepo`, `install.*`, `update.*`, `translations`, OR a first-time submission | Labelled `needs-manual-review` + comment; maintainer reviews manually |
 

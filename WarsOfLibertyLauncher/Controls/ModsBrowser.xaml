@@ -415,6 +415,23 @@
                                            Visibility="Collapsed"/>
                                 <StackPanel x:Name="DetailFeaturesPanel"/>
 
+                                <!-- Community links (Discord / ModDB / forum /
+                                     …) declared by the mod's manifest. Built
+                                     in code-behind so the whole block can be
+                                     collapsed when a mod declares none — which
+                                     is every built-in and every manifest that
+                                     predates the field, so the panel is
+                                     unchanged in the common case. -->
+                                <TextBlock x:Name="DetailLinksTitle"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,16,0,6"
+                                           Visibility="Collapsed"/>
+                                <WrapPanel x:Name="DetailLinksPanel"
+                                           Orientation="Horizontal"
+                                           Visibility="Collapsed"/>
+
                                 <!-- Compatibility banner. Shown only when a
                                      blocker (incompatible AoE3 version,
                                      missing dependency, …) applies — empty
@@ -450,6 +467,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="DetailPrimaryButton"
                                         Grid.Column="0"
@@ -471,8 +489,24 @@
                                         FontSize="{StaticResource FontSizeBody}"
                                         Cursor="Hand"
                                         Margin="0,0,6,0"/>
-                                <Button x:Name="DetailMoreButton"
+                                <!-- Removing from the collection lives here, not in
+                                     the primary slot: it's the one destructive-looking
+                                     action in the panel and shouldn't be the easiest
+                                     button to hit. Collapsed unless the mod is in the
+                                     collection. -->
+                                <Button x:Name="DetailRemoveButton"
                                         Grid.Column="2"
+                                        Visibility="Collapsed"
+                                        Background="{DynamicResource BgPanelAlt}"
+                                        Foreground="{DynamicResource TextSecondary}"
+                                        BorderBrush="{DynamicResource BorderSubtle}"
+                                        BorderThickness="1"
+                                        Padding="12,10"
+                                        FontSize="{StaticResource FontSizeBody}"
+                                        Cursor="Hand"
+                                        Margin="0,0,6,0"/>
+                                <Button x:Name="DetailMoreButton"
+                                        Grid.Column="3"
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextPrimary}"
                                         BorderBrush="{DynamicResource BorderSubtle}"

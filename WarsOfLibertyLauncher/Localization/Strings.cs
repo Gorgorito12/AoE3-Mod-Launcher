@@ -662,6 +662,19 @@ public static class Strings
             [LangEn] = "SWITCH GAME",
             [LangEs] = "CAMBIAR JUEGO",
         },
+        // Per-row recency hint in the SWITCH GAME popup. {0} is a compact single-unit
+        // duration from RoomAgeFormat.Coarse ("5 min", "2 h", "3 d") — the units read
+        // the same in both languages, so only this wrapper is translated.
+        ["ModSwitchPlayedAgo"] = new()
+        {
+            [LangEn] = "Played {0} ago",
+            [LangEs] = "Jugado hace {0}",
+        },
+        ["ModSwitchNeverPlayed"] = new()
+        {
+            [LangEn] = "Not played yet",
+            [LangEs] = "Sin jugar",
+        },
         // Tooltip on the hero's active-copy chip (shown only with 2+ installed copies).
         ["DashboardActiveCopyTooltip"] = new()
         {
@@ -1258,6 +1271,57 @@ public static class Strings
             [LangEn] = "Built-in",
             [LangEs] = "Integrado",
         },
+        // Detail-panel PRIMARY button once the mod is in the collection: a
+        // disabled status pill, not an action. Removing moved to a secondary
+        // ghost button so the destructive option no longer sits in the most
+        // prominent slot.
+        ["ModsBrowserInCollection"] = new()
+        {
+            [LangEn] = "In my mods",
+            [LangEs] = "En mis mods",
+        },
+
+        // -- "Remove from my mods" confirmation -------------------------------
+        // Removing only drops the id from userModIds; no file is ever deleted
+        // and the per-mod state (install path, version, translation) survives,
+        // so re-adding restores everything. The dialog exists to say that,
+        // because an installed mod disappearing from the MODS popup otherwise
+        // reads as an uninstall. Shown ONLY for an installed mod — removing one
+        // that isn't installed risks nothing, and confirming harmless actions
+        // is what trains users to click through the prompt that matters.
+        ["DlgRemoveModTitle"] = new()
+        {
+            [LangEn] = "Remove from my mods",
+            [LangEs] = "Quitar de mis mods",
+        },
+        ["DlgRemoveModBodyInstalled"] = new()
+        {
+            [LangEn] = "This mod will stop appearing in your MODS list, but it "
+                     + "stays installed: no file is deleted and nothing is "
+                     + "downloaded again if you add it back from the Workshop. "
+                     + "To free up disk space you have to uninstall it instead, "
+                     + "from the gear menu.",
+            [LangEs] = "Este mod va a dejar de aparecer en tu lista de MODS, pero "
+                     + "sigue instalado: no se borra ningún archivo y no se "
+                     + "descarga nada de nuevo si lo vuelves a agregar desde el "
+                     + "Workshop. Para liberar espacio en disco tienes que "
+                     + "desinstalarlo, desde el menú de configuración.",
+        },
+        ["DlgRemoveModPathLabel"] = new()
+        {
+            [LangEn] = "Its files stay here:",
+            [LangEs] = "Sus archivos quedan aquí:",
+        },
+        ["DlgRemoveModConfirm"] = new()
+        {
+            [LangEn] = "Remove",
+            [LangEs] = "Quitar",
+        },
+        ["DlgRemoveModCancel"] = new()
+        {
+            [LangEn] = "Cancel",
+            [LangEs] = "Cancelar",
+        },
         ["ModsBrowserEmpty"] = new()
         {
             [LangEn] = "No mods match your filters.",
@@ -1413,6 +1477,48 @@ public static class Strings
             [LangEn] = "Screenshots",
             [LangEs] = "Capturas",
         },
+        // Community links section of the Workshop detail panel. The per-type
+        // captions are only used when a mod's manifest entry ships no label.
+        ["ModsBrowserDetailLinks"] = new()
+        {
+            [LangEn] = "Community links",
+            [LangEs] = "Enlaces de la comunidad",
+        },
+        ["ModLinkTypeWebsite"] = new()
+        {
+            [LangEn] = "Website",
+            [LangEs] = "Sitio web",
+        },
+        ["ModLinkTypeDiscord"] = new()
+        {
+            [LangEn] = "Discord",
+            [LangEs] = "Discord",
+        },
+        ["ModLinkTypeModDb"] = new()
+        {
+            [LangEn] = "ModDB",
+            [LangEs] = "ModDB",
+        },
+        ["ModLinkTypeForum"] = new()
+        {
+            [LangEn] = "Forum",
+            [LangEs] = "Foro",
+        },
+        ["ModLinkTypeWiki"] = new()
+        {
+            [LangEn] = "Wiki",
+            [LangEs] = "Wiki",
+        },
+        ["ModLinkTypeVideo"] = new()
+        {
+            [LangEn] = "Videos",
+            [LangEs] = "Videos",
+        },
+        ["ModLinkTypeOther"] = new()
+        {
+            [LangEn] = "Link",
+            [LangEs] = "Enlace",
+        },
         ["ModsBrowserActionInstall"] = new()
         {
             [LangEn] = "Install mod",
@@ -1540,13 +1646,13 @@ public static class Strings
         },
         ["PublishWizardStep5Title"] = new()
         {
-            [LangEn] = "Description & website",
-            [LangEs] = "Descripción y sitio web",
+            [LangEn] = "Description & links",
+            [LangEs] = "Descripción y enlaces",
         },
         ["PublishWizardStep5Hint"] = new()
         {
-            [LangEn] = "Per-language description and the mod's homepage URL.",
-            [LangEs] = "Descripción por idioma y la URL del sitio del mod.",
+            [LangEn] = "Per-language description, the mod's homepage URL and your community links.",
+            [LangEs] = "Descripción por idioma, la URL del sitio del mod y tus enlaces de comunidad.",
         },
         ["PublishWizardStep6Title"] = new()
         {
@@ -1666,6 +1772,16 @@ public static class Strings
         {
             [LangEn] = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod",
             [LangEs] = "La página de tu mod, Discord o ModDB. Ejemplo: https://discord.gg/tu-mod",
+        },
+        ["PublishFieldLinks"] = new()
+        {
+            [LangEn] = "Community links (optional)",
+            [LangEs] = "Enlaces de la comunidad (opcional)",
+        },
+        ["PublishFieldLinksHint"] = new()
+        {
+            [LangEn] = "One per line, as type|url. Up to 4, HTTPS only. Types: website, discord, moddb, forum, wiki, video, other. Example: discord|https://discord.gg/your-mod",
+            [LangEs] = "Uno por línea, con el formato tipo|url. Hasta 4, solo HTTPS. Tipos: website, discord, moddb, forum, wiki, video, other. Ejemplo: discord|https://discord.gg/tu-mod",
         },
         ["PublishCopyJson"] = new() { [LangEn] = "Copy JSON", [LangEs] = "Copiar JSON" },
         ["PublishOpenPr"] = new() { [LangEn] = "Open PR on GitHub", [LangEs] = "Abrir PR en GitHub" },

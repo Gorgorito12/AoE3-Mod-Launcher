@@ -141,6 +141,24 @@ public class ModState
     public string LastKnownVersion { get; set; } = "";
 
     /// <summary>
+    /// When this mod's game was last LAUNCHED (UTC), or null when it has never
+    /// been played. Stamped at both launch sites — the dashboard PLAY button and
+    /// the multiplayer in-lobby launch (which runs the ROOM's mod, not necessarily
+    /// the displayed one). Drives the "most recently played first" ordering and the
+    /// "Played 2 h ago" hint in the MODS switcher.
+    ///
+    /// Nullable ON PURPOSE: "never played" has to be distinguishable from a zero
+    /// date so the switcher can say "Not played yet" instead of an absurd age.
+    /// Absent in configs written before this field existed → null → same thing.
+    ///
+    /// It does NOT decide which mod the launcher opens on — that stays
+    /// <see cref="LauncherConfig.ActiveModId"/> (the mod you last had on screen),
+    /// so a multiplayer match in someone else's mod can't move your dashboard.
+    /// </summary>
+    [JsonPropertyName("lastPlayedUtc")]
+    public DateTime? LastPlayedUtc { get; set; }
+
+    /// <summary>
     /// Last "latest version" we got from the mod's update server, cached so
     /// the "Latest version" row in the status card has a value to show
     /// immediately after a mod switch instead of waiting for the async

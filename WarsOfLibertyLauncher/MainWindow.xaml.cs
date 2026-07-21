@@ -310,9 +310,26 @@ public partial class MainWindow : Window
         Strings.LanguageChanged += ApplyLanguage;
         RestoreWindowState();
 
+        // Publish the cached catalog BEFORE resolving the saved active mod. Without
+        // this, ModRegistry.All is built-ins only at this point, so a saved COMMUNITY
+        // mod id doesn't resolve and GetActiveProfile falls back to WoL — and nothing
+        // ever reconciles it once the catalog loads a moment later, so the launcher
+        // could never open on a community mod. Cache-only: no network here.
+        ModRegistry.PrimeFromCache(ModRegistry.ResolveCatalogRepo(_config.ModsCatalogRepo));
+
         var activeProfile = _config.GetActiveProfile();
         DiagnosticLog.Write(
             $"Active mod profile: '{activeProfile.Id}' ({activeProfile.DisplayName}).");
+        // The fallback used to be completely silent, which is what hid the bug above.
+        // If the saved id didn't resolve, say so — the Loaded handler reconciles it
+        // once the catalog refresh lands (cold-cache path).
+        if (!string.IsNullOrEmpty(_config.ActiveModId)
+            && !string.Equals(activeProfile.Id, _config.ActiveModId, StringComparison.OrdinalIgnoreCase))
+        {
+            DiagnosticLog.Write(
+                $"  saved active mod '{_config.ActiveModId}' did NOT resolve (not in the registry " +
+                $"yet — catalog cache missing?); opening on '{activeProfile.Id}' for now.");
+        }
         DiagnosticLog.Write($"Config loaded. updateInfoUrl={_config.UpdateInfoUrl}");
         DiagnosticLog.Write($"  modInstallPath={_config.GetActiveState().InstallPath}");
         DiagnosticLog.Write($"  gameExecutable={_config.GameExecutable}");
@@ -427,9 +444,17 @@ public partial class MainWindow : Window
                     // launch the WRONG game (hosted a WoL room while AoE3 active →
                     // it opened AoE3). Resolve purely from this room mod's folder
                     // and don't write the result back to the shared cache.
-                    return GameLauncher.LaunchAndWatch(
+                    var proc = GameLauncher.LaunchAndWatch(
                         _config, installPath, profile, onExited,
                         extraArgs: extraArgs, trustConfigCache: false);
+
+                    // Record the ROOM's mod as last played — that's the game that
+                    // actually started, which needn't be the mod on the dashboard.
+                    // Only the play stamp: deliberately NOT ActiveModId, or a
+                    // multiplayer match would yank the dashboard to another mod
+                    // mid-session (and desync _updateService from the config).
+                    if (proc != null) MarkModPlayed(profile.Id);
+                    return proc;
                 }
                 catch (Exception ex)
                 {
@@ -584,6 +609,14 @@ public partial class MainWindow : Window
                     RefreshTranslationIndexAsync(),
                     RefreshCatalogAsync(),
                     RefreshNewsAsync());
+
+                // Cold-cache backstop for the saved active mod: with no catalog cache
+                // on disk (fresh install, cache cleared) the constructor's prime found
+                // nothing, so a saved community mod fell back to WoL. The catalog has
+                // now loaded — if the saved id resolves, switch to it. No-op in the
+                // common case (the prime already got it, so the ids match) and
+                // LoadModProfile early-returns on a same-id call.
+                ReconcileSavedActiveMod();
 
                 // The catalog fetch may have surfaced new community mods
                 // that weren't visible during the initial RefreshModCards()
@@ -1357,6 +1390,42 @@ public partial class MainWindow : Window
             if (File.Exists(probe)) return profile.DefaultInstallFolder;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Backstop for "the launcher opened on the wrong mod because the saved id
+    /// couldn't be resolved yet". The constructor picks the active profile from
+    /// <see cref="ModRegistry.All"/>, which only knows community mods once the
+    /// catalog has been primed from cache or refreshed online; with NO cache on
+    /// disk the prime finds nothing and a saved community mod silently degrades
+    /// to WoL. Called right after the startup catalog refresh: if the saved id now
+    /// resolves and isn't what we're showing, switch to it.
+    ///
+    /// Deliberately routes through <see cref="LoadModProfile"/> (the same path the
+    /// MODS switcher uses) rather than re-implementing the swap, and is a no-op in
+    /// the common case where the cache prime already resolved the mod.
+    /// </summary>
+    private void ReconcileSavedActiveMod()
+    {
+        try
+        {
+            var savedId = _config.ActiveModId;
+            if (string.IsNullOrEmpty(savedId)) return;
+            if (string.Equals(_updateService.Profile.Id, savedId, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var target = ModRegistry.Find(savedId);
+            if (target == null) return;   // still unknown (catalog offline) — keep what we show
+
+            DiagnosticLog.Write(
+                $"Saved active mod '{savedId}' resolved after the catalog refresh — " +
+                $"switching from '{_updateService.Profile.Id}'.");
+            LoadModProfile(target);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ReconcileSavedActiveMod failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -2855,6 +2924,14 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailWebsiteLabel = Strings.Get("ModsBrowserDetailWebsite");
         ModsBrowserView.DetailLanguagesLabel = Strings.Get("ModsBrowserDetailLanguages");
         ModsBrowserView.GalleryTitleText = Strings.Get("WorkshopGalleryTitle");
+        ModsBrowserView.DetailLinksTitleText = Strings.Get("ModsBrowserDetailLinks");
+        ModsBrowserView.LinkTypeWebsiteLabel = Strings.Get("ModLinkTypeWebsite");
+        ModsBrowserView.LinkTypeDiscordLabel = Strings.Get("ModLinkTypeDiscord");
+        ModsBrowserView.LinkTypeModDbLabel = Strings.Get("ModLinkTypeModDb");
+        ModsBrowserView.LinkTypeForumLabel = Strings.Get("ModLinkTypeForum");
+        ModsBrowserView.LinkTypeWikiLabel = Strings.Get("ModLinkTypeWiki");
+        ModsBrowserView.LinkTypeVideoLabel = Strings.Get("ModLinkTypeVideo");
+        ModsBrowserView.LinkTypeOtherLabel = Strings.Get("ModLinkTypeOther");
         ModsBrowserView.DetailInstallLabel = Strings.Get("ModsBrowserActionInstall");
         ModsBrowserView.DetailUpdateLabel = Strings.Get("ModsBrowserActionUpdate");
         ModsBrowserView.DetailPlayLabel = Strings.Get("ModsBrowserActionPlay");
@@ -2867,6 +2944,7 @@ public partial class MainWindow : Window
         ModsBrowserView.BtnAddToCollectionLabel = Strings.Get("ModsBrowserBtnAdd");
         ModsBrowserView.BtnRemoveFromCollectionLabel = Strings.Get("ModsBrowserBtnRemove");
         ModsBrowserView.BtnBuiltinLabel = Strings.Get("ModsBrowserBtnBuiltin");
+        ModsBrowserView.BtnInCollectionLabel = Strings.Get("ModsBrowserInCollection");
 
         // Header ⋯ menu is empty now — publish was promoted to its own
         // accent-outlined header button (PublishModButton), so the overflow
@@ -4173,26 +4251,14 @@ public partial class MainWindow : Window
     private void TopTabMods_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Mods);
     private void TopTabMultiplayer_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Multiplayer);
     /// <summary>
-    /// Opens the mod's <c>OfficialWebsite</c> in the user's default browser.
-    /// The url has already been validated by the catalog schema (or the
-    /// hard-coded built-in profile) before getting to this point.
+    /// Opens a mod-supplied url (its <c>OfficialWebsite</c> or one of its
+    /// community <c>Links</c>) in the user's default browser. The string comes
+    /// from the catalog — or from a hard-coded built-in profile, which never
+    /// passes through the catalog CI — so it goes through <see cref="SafeUrl"/>
+    /// rather than straight to the shell.
     /// </summary>
     private void ModsBrowserView_OpenWebsiteRequested(object? sender, string url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return;
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"OpenWebsite failed for '{url}': {ex.Message}");
-        }
-    }
+        => SafeUrl.TryOpen(url);
 
     /// <summary>
     /// Refresh the community catalog and repaint the browser. Forwards to
@@ -4258,13 +4324,58 @@ public partial class MainWindow : Window
     /// "Built-in" pill and never raises this event), but
     /// LauncherConfig.RemoveUserMod no-ops on built-ins anyway as
     /// a defensive backstop.
+    ///
+    /// Confirmed first, but ONLY when the mod is actually installed. The
+    /// removal is cheap and fully reversible either way — no file is deleted
+    /// and the per-mod state survives, so re-adding restores the install — and
+    /// for a mod that was never installed there is genuinely nothing at stake,
+    /// so a prompt there would be pure friction. Worse than useless, actually:
+    /// confirming something harmless over and over is what teaches people to
+    /// click through the prompt that does matter.
+    ///
+    /// It matters when the mod IS installed, because the consequence is
+    /// invisible: the mod disappears from the MODS popup while its multi-GB
+    /// folder stays on disk, which reads as an uninstall. The dialog is where
+    /// that gets said, and it's the single gate for BOTH entry points (the
+    /// per-row toggle and the detail panel raise this same event).
     /// </summary>
     private void ModsBrowserView_RemoveFromCollectionRequested(object? sender, ModProfile profile)
     {
         if (profile == null) return;
+
+        if (IsProfileInstalledLocally(profile))
+        {
+            var dialog = new RemoveFromCollectionDialog(
+                profile.DisplayName, ResolveDisplayInstallPath(profile))
+            {
+                Owner = this,
+            };
+            if (dialog.ShowDialog() != true) return;
+        }
+
         _config.RemoveUserMod(profile.Id);
         PersistConfigInBackground();
         RefreshModsBrowser();
+    }
+
+    /// <summary>
+    /// Best-effort install folder for display only. Mirrors
+    /// <see cref="IsProfileInstalledLocally"/>'s resolution order (active
+    /// service first, then the saved per-mod path, then the disk probe) so the
+    /// path shown can't contradict the "installed" badge that put it there.
+    /// </summary>
+    private string? ResolveDisplayInstallPath(ModProfile profile)
+    {
+        bool isActive = string.Equals(
+            profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
+        if (isActive && !string.IsNullOrEmpty(_updateService.InstallPath))
+            return _updateService.InstallPath;
+
+        var saved = _config.GetState(profile.Id).InstallPath;
+        if (!string.IsNullOrEmpty(saved)) return saved;
+
+        var probed = ResolveProbedInstallPath(profile);
+        return string.IsNullOrEmpty(probed) ? null : probed;
     }
 
     /// <summary>
@@ -4518,6 +4629,8 @@ public partial class MainWindow : Window
         dlg.LblDescriptionEsText = Strings.Get("PublishFieldDescriptionEs");
         dlg.LblWebsiteText = Strings.Get("PublishFieldWebsite");
         dlg.HintWebsiteText = Strings.Get("PublishFieldWebsiteHint");
+        dlg.LblLinksText = Strings.Get("PublishFieldLinks");
+        dlg.HintLinksText = Strings.Get("PublishFieldLinksHint");
         dlg.CopyJsonLabel = Strings.Get("PublishCopyJson");
         dlg.OpenPrLabel = Strings.Get("PublishOpenPr");
         dlg.IntroBodyText = Strings.Get("PublishWizardIntro");
@@ -5636,16 +5749,15 @@ public partial class MainWindow : Window
         // is never empty — covers the edge case where the user
         // removed their last added mod while it was active.
         //
-        // Ordering: favorites first (in the order they were starred),
-        // then the rest alphabetically by display name. Mirrors
-        // Steam's library where favorites pin to the top.
+        // Ordering: favorites first (Steam-style pin), then most recently
+        // played, then alphabetically — see ModOrdering.OrderForSwitcher, which
+        // holds the rule so it can be unit-tested off the UI thread.
         var activeId = _updateService?.Profile?.Id;
-        var collection = ModRegistry.All
-            .Where(p => _config.IsUserMod(p.Id)
-                        || string.Equals(p.Id, activeId, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(p => _config.IsFavoriteMod(p.Id))
-            .ThenBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
+        var collection = ModOrdering.OrderForSwitcher(
+            ModRegistry.All.Where(p => _config.IsUserMod(p.Id)
+                        || string.Equals(p.Id, activeId, StringComparison.OrdinalIgnoreCase)),
+            _config.IsFavoriteMod,
+            LastPlayedOf);
 
         if (collection.Count == 0)
         {
@@ -5674,84 +5786,7 @@ public partial class MainWindow : Window
                 Background = isActive
                     ? (System.Windows.Media.Brush)FindResource("TintGoldHover")
                     : System.Windows.Media.Brushes.Transparent,
-                Content = new System.Windows.Controls.StackPanel
-                {
-                    Orientation = System.Windows.Controls.Orientation.Horizontal,
-                    Children =
-                    {
-                        new System.Windows.Controls.TextBlock
-                        {
-                            Text = isActive ? "" : "",   // CheckMark when active, GridView otherwise
-                            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                            FontSize = 12,
-                            Width = 18,
-                            Margin = new Thickness(0, 0, 10, 0),
-                            VerticalAlignment = VerticalAlignment.Center,
-                            Foreground = isActive
-                                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                        },
-                        // Label + subtitle stacked vertically so each
-                        // mod entry shows its display name plus the
-                        // short Subtitle from ModProfile ("Launcher",
-                        // "Asian Dynasties overhaul", etc.). Matches
-                        // the per-row "what is this?" affordance of
-                        // the SETTINGS popup so the two read as a
-                        // pair stylistically.
-                        new System.Windows.Controls.StackPanel
-                        {
-                            VerticalAlignment = VerticalAlignment.Center,
-                            Children =
-                            {
-                                new System.Windows.Controls.TextBlock
-                                {
-                                    Text = p.DisplayName,
-                                    FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
-                                    FontSize = (double)FindResource("FontSizeBody"),
-                                    FontWeight = isActive ? FontWeights.Bold : FontWeights.Medium,
-                                    // Active row reads dorado; inactive
-                                    // rows use the cool secondary so
-                                    // the gold/cool tonal contrast
-                                    // matches the main UI.
-                                    Foreground = isActive
-                                        ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                                        : (System.Windows.Media.Brush)FindResource("SecondaryFixed"),
-                                    TextTrimming = TextTrimming.CharacterEllipsis,
-                                },
-                                new System.Windows.Controls.TextBlock
-                                {
-                                    Text = p.Subtitle ?? "",
-                                    FontSize = (double)FindResource("FontSizeCaption"),
-                                    FontWeight = FontWeights.Normal,
-                                    Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                                    Opacity = 0.85,
-                                    Margin = new Thickness(0, 1, 0, 0),
-                                    TextTrimming = TextTrimming.CharacterEllipsis,
-                                    Visibility = string.IsNullOrWhiteSpace(p.Subtitle)
-                                        ? Visibility.Collapsed
-                                        : Visibility.Visible,
-                                },
-                            },
-                        },
-                        // Favorite star — small dorado pin to the
-                        // right of the label when the user has
-                        // starred this mod via the right-click
-                        // context menu. Collapsed (no horizontal
-                        // gap consumed) when not favourited.
-                        new System.Windows.Controls.TextBlock
-                        {
-                            Text = "",
-                            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                            FontSize = 12,
-                            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
-                            Margin = new Thickness(8, 0, 2, 0),
-                            VerticalAlignment = VerticalAlignment.Center,
-                            Visibility = _config.IsFavoriteMod(p.Id)
-                                ? System.Windows.Visibility.Visible
-                                : System.Windows.Visibility.Collapsed,
-                        },
-                    },
-                },
+                Content = BuildModSwitchRow(p, isActive),
             };
             var profile = p;
             item.Click += (_, _) =>
@@ -5772,6 +5807,119 @@ public partial class MainWindow : Window
         AppendInstallCopiesToModPopup(stack, popup);
 
         popup.IsOpen = true;
+    }
+
+    /// <summary>
+    /// One row of the MODS switcher: state glyph, name + subtitle, "Played X ago",
+    /// favourite star.
+    ///
+    /// A GRID, not the horizontal StackPanel this used to be, for two reasons: the
+    /// recency text has to sit hard right (a StackPanel can only pack left), and a
+    /// horizontal StackPanel measures its children with INFINITE width, which makes
+    /// the name's CharacterEllipsis inert — a long mod name grew the popup instead of
+    /// trimming. In a star-sized column the trimming finally works. (Same lesson as
+    /// the rooms table.)
+    /// </summary>
+    private FrameworkElement BuildModSwitchRow(ModProfile p, bool isActive)
+    {
+        var row = new System.Windows.Controls.Grid();
+        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+        { Width = GridLength.Auto });                                   // state glyph
+        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+        { Width = new GridLength(1, GridUnitType.Star) });               // name + subtitle
+        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+        { Width = GridLength.Auto });                                   // played-ago
+        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+        { Width = GridLength.Auto });                                   // favourite star
+
+        //  CheckMark when active,  otherwise.
+        var glyph = new System.Windows.Controls.TextBlock
+        {
+            Text = isActive ? "" : "",
+            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+            FontSize = 12,
+            Width = 18,
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = isActive
+                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+        };
+        System.Windows.Controls.Grid.SetColumn(glyph, 0);
+        row.Children.Add(glyph);
+
+        // Label + subtitle stacked vertically so each mod entry shows its display
+        // name plus the short Subtitle from ModProfile ("Launcher", "Asian Dynasties
+        // overhaul", etc.). Matches the per-row "what is this?" affordance of the
+        // SETTINGS popup so the two read as a pair stylistically.
+        var labels = new System.Windows.Controls.StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new System.Windows.Controls.TextBlock
+                {
+                    Text = p.DisplayName,
+                    FontFamily = (System.Windows.Media.FontFamily)FindResource("DisplayFont"),
+                    FontSize = (double)FindResource("FontSizeBody"),
+                    FontWeight = isActive ? FontWeights.Bold : FontWeights.Medium,
+                    // Active row reads dorado; inactive rows use the cool secondary
+                    // so the gold/cool tonal contrast matches the main UI.
+                    Foreground = isActive
+                        ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                        : (System.Windows.Media.Brush)FindResource("SecondaryFixed"),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                },
+                new System.Windows.Controls.TextBlock
+                {
+                    Text = p.Subtitle ?? "",
+                    FontSize = (double)FindResource("FontSizeCaption"),
+                    FontWeight = FontWeights.Normal,
+                    Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                    Opacity = 0.85,
+                    Margin = new Thickness(0, 1, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Visibility = string.IsNullOrWhiteSpace(p.Subtitle)
+                        ? Visibility.Collapsed
+                        : Visibility.Visible,
+                },
+            },
+        };
+        System.Windows.Controls.Grid.SetColumn(labels, 1);
+        row.Children.Add(labels);
+
+        // Recency hint — the "why is this one at the top" explanation for the
+        // most-recently-played ordering. Quiet on purpose: it's context, not a label.
+        var played = new System.Windows.Controls.TextBlock
+        {
+            Text = LastPlayedLabel(p.Id),
+            FontSize = (double)FindResource("FontSizeCaption"),
+            Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+            Opacity = 0.75,
+            Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        System.Windows.Controls.Grid.SetColumn(played, 2);
+        row.Children.Add(played);
+
+        // Favorite star () — small dorado pin when the user has starred this
+        // mod. Collapsed (no horizontal gap consumed) when not favourited.
+        var star = new System.Windows.Controls.TextBlock
+        {
+            Text = "",
+            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+            FontSize = 12,
+            Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            Margin = new Thickness(8, 0, 2, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = _config.IsFavoriteMod(p.Id)
+                ? System.Windows.Visibility.Visible
+                : System.Windows.Visibility.Collapsed,
+        };
+        System.Windows.Controls.Grid.SetColumn(star, 3);
+        row.Children.Add(star);
+
+        return row;
     }
 
     /// <summary>
@@ -5796,6 +5944,28 @@ public partial class MainWindow : Window
         {
             DashboardCopyChip.Visibility = Visibility.Collapsed;
         }
+    }
+
+    /// <summary>
+    /// When the given mod was last played, or null if never.
+    ///
+    /// Reads the dictionary DIRECTLY instead of going through
+    /// <c>_config.GetState(id)</c>: GetState CREATES the entry when it's missing, so
+    /// merely rendering the switcher would write a blank ModState into the config for
+    /// every mod the user has never touched.
+    /// </summary>
+    private DateTime? LastPlayedOf(string modId)
+        => _config.Mods.TryGetValue(modId, out var st) ? st.LastPlayedUtc : null;
+
+    /// <summary>
+    /// "Played 2 h ago" / "Not played yet" for a switcher row.
+    /// </summary>
+    private string LastPlayedLabel(string modId)
+    {
+        var played = LastPlayedOf(modId);
+        if (played == null) return Strings.Get("ModSwitchNeverPlayed");
+        return Strings.Format("ModSwitchPlayedAgo",
+            RoomAgeFormat.Coarse(DateTime.UtcNow - played.Value));
     }
 
     /// <summary>
@@ -5958,26 +6128,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Shell out to the OS default browser. Best-effort: a logged
-    /// failure beats a crash if the user's system has no default
-    /// browser registered (rare on Windows but possible on stripped
-    /// down installs).
+    /// Shell out to the OS default browser. Best-effort: a logged failure beats a
+    /// crash if the user's system has no default browser registered (rare on
+    /// Windows but possible on stripped down installs). Routed through
+    /// <see cref="SafeUrl"/> because one caller passes
+    /// <c>config.OfficialWebsite</c>, which lives in a user-writable JSON file.
     /// </summary>
-    private static void OpenExternalUrl(string url)
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"OpenExternalUrl({url}) failed: {ex.Message}");
-        }
-    }
+    private static void OpenExternalUrl(string url) => SafeUrl.TryOpen(url);
     // (end of REDESIGN-2 sidebar + dashboard handlers)
 
     /// <summary>
@@ -9877,6 +10034,32 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Stamps "this mod was played just now" on the mod's own state. Feeds the
+    /// most-recently-played ordering + the "Played X ago" hint in the MODS switcher;
+    /// it never changes which mod is ACTIVE (see <see cref="ModState.LastPlayedUtc"/>).
+    ///
+    /// Saves SYNCHRONOUSLY, unlike the fire-and-forget save on a mod switch: the
+    /// dashboard launch can be followed immediately by a hard exit
+    /// (CloseLauncherOnGameStart), which would race a backgrounded write and lose the
+    /// stamp. It's one small JSON write, once per game launch — not a hot path.
+    /// Whole body is best-effort: bookkeeping must never break launching a game.
+    /// </summary>
+    private void MarkModPlayed(string? modId)
+    {
+        if (string.IsNullOrWhiteSpace(modId)) return;
+        try
+        {
+            _config.GetState(modId!).LastPlayedUtc = DateTime.UtcNow;
+            _config.Save();
+            DiagnosticLog.Write($"Marked '{modId}' as last played.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MarkModPlayed('{modId}') failed (non-fatal): {ex.Message}");
+        }
+    }
+
     /// <summary>The actual "launch the game" flow — extracted so the
     /// primary-button dispatcher can call it without re-running the
     /// state-mode check it already did.</summary>
@@ -9887,6 +10070,11 @@ public partial class MainWindow : Window
         try
         {
             GameLauncher.Launch(_config, _updateService.InstallPath, _updateService.Profile);
+
+            // Only after Launch returned without throwing — a failed launch (missing
+            // exe) must not count as "played". Before the CloseLauncherOnGameStart
+            // early-return below, or that path would never record it.
+            MarkModPlayed(_updateService.Profile.Id);
 
             // CloseLauncherOnGameStart: user opted to fully quit the
             // launcher once the game's running. Skip StartGameMonitor
@@ -11060,16 +11248,9 @@ public partial class MainWindow : Window
     /// </summary>
     private async Task RefreshCatalogAsync(bool force = false)
     {
-        const string defaultRepo = "Gorgorito12/aoe3-mods-catalog";
-
-        var raw = _config.ModsCatalogRepo;
-        string? repo;
-        if (string.IsNullOrEmpty(raw))
-            repo = defaultRepo;
-        else if (string.Equals(raw, "none", StringComparison.OrdinalIgnoreCase))
-            repo = null;
-        else
-            repo = raw;
+        // Shared with the startup cache prime (ModRegistry.PrimeFromCache) so both
+        // always target the same catalog — see ResolveCatalogRepo.
+        var repo = ModRegistry.ResolveCatalogRepo(_config.ModsCatalogRepo);
 
         await ModRegistry.RefreshFromCatalogAsync(repo, force: force);
         MaybeNotifyNewMods();

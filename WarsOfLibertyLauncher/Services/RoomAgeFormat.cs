@@ -57,4 +57,22 @@ public static class RoomAgeFormat
         long hrs = (s % 86400) / 3600;
         return hrs > 0 ? $"{days} d {hrs} h" : $"{days} d";
     }
+
+    /// <summary>
+    /// Single-unit elapsed duration: <c>"1 min"</c> / <c>"5 min"</c> / <c>"2 h"</c> /
+    /// <c>"3 d"</c>. Never negative (clamped to 0); anything under a minute rounds UP
+    /// to <c>"1 min"</c> so a just-now event never reads as <c>"0 min"</c>.
+    ///
+    /// Separate from <see cref="Compact"/> — which keeps a second unit
+    /// (<c>"1 d 3 h"</c>) because a lobby's exact age matters — because for "last
+    /// played" that precision is noise. Same shared EN/ES units, so no culture.
+    /// </summary>
+    public static string Coarse(TimeSpan elapsed)
+    {
+        long s = (long)elapsed.TotalSeconds;
+        if (s < 0) s = 0;
+        if (s < 3600) return $"{Math.Max(1, s / 60)} min";
+        if (s < 86400) return $"{s / 3600} h";
+        return $"{s / 86400} d";
+    }
 }

@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Models;
 
 namespace WarsOfLibertyLauncher;
 
@@ -131,6 +132,8 @@ public partial class PublishModDialog : Window
     public string HintApprovedTagText { get => HintApprovedTag.Text; set => HintApprovedTag.Text = value; }
     public string HintDescriptionText { get => HintDescription.Text; set => HintDescription.Text = value; }
     public string HintWebsiteText { get => HintWebsite.Text; set => HintWebsite.Text = value; }
+    public string LblLinksText { get => LblLinks.Text; set => LblLinks.Text = value; }
+    public string HintLinksText { get => HintLinks.Text; set => HintLinks.Text = value; }
 
     // Guidance copy — the wizard intro, the "filenames aren't files" reminder
     // on the look & feel step, and the post-publish flow on the review step.
@@ -410,6 +413,8 @@ public partial class PublishModDialog : Window
         public string? Icon { get; init; }
         public string? Banner { get; init; }
         public string? OfficialWebsite { get; init; }
+        /// <summary>Raw "type|url" lines from the community-links field.</summary>
+        public IReadOnlyList<string>? LinkLines { get; init; }
         public string? DescriptionEn { get; init; }
         public string? DescriptionEs { get; init; }
         // install.*  (nested under "install")
@@ -455,6 +460,7 @@ public partial class PublishModDialog : Window
         Icon = FieldIcon.Text,
         Banner = FieldBanner.Text,
         OfficialWebsite = FieldWebsite.Text,
+        LinkLines = SplitLines(FieldLinks.Text),
         DescriptionEn = FieldDescriptionEn.Text,
         DescriptionEs = FieldDescriptionEs.Text,
         InstallType = SelectedTag(FieldInstallType) ?? "IsolatedFolder",
@@ -506,6 +512,9 @@ public partial class PublishModDialog : Window
         AddIfPresent(doc, "icon", input.Icon);
         AddIfPresent(doc, "banner", input.Banner);
         AddIfPresent(doc, "officialWebsite", input.OfficialWebsite);
+
+        var links = ParseLinkLines(input.LinkLines);
+        if (links.Count > 0) doc["links"] = links;
 
         var descriptions = new Dictionary<string, string>();
         AddDescription(descriptions, "en", input.DescriptionEn);
@@ -586,6 +595,46 @@ public partial class PublishModDialog : Window
         if (values == null) return;
         var cleaned = values.Select(v => v?.Trim() ?? "").Where(v => v.Length > 0).ToArray();
         if (cleaned.Length > 0) doc[key] = cleaned;
+    }
+
+    /// <summary>
+    /// Turns the community-links field's <c>type|url</c> lines into the schema's
+    /// <c>links</c> array. A line with no pipe is read as a bare url and typed
+    /// <c>other</c>, so a modder who just pastes links still gets valid JSON.
+    ///
+    /// Silently drops what the schema would reject anyway (non-HTTPS, empties)
+    /// and caps at <see cref="ModLink.MaxLinks"/>: this wizard exists to produce
+    /// a manifest that passes catalog CI on the first try, so emitting something
+    /// known-invalid would only hand the modder a red PR.
+    /// </summary>
+    internal static List<Dictionary<string, string>> ParseLinkLines(IReadOnlyList<string>? lines)
+    {
+        var result = new List<Dictionary<string, string>>();
+        if (lines == null) return result;
+
+        foreach (var line in lines)
+        {
+            if (result.Count >= ModLink.MaxLinks) break;
+
+            var raw = (line ?? "").Trim();
+            if (raw.Length == 0) continue;
+
+            string type = "other", url = raw;
+            var pipe = raw.IndexOf('|');
+            if (pipe >= 0)
+            {
+                type = raw[..pipe].Trim().ToLowerInvariant();
+                url = raw[(pipe + 1)..].Trim();
+            }
+
+            if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) continue;
+            // Normalise an unrecognised type rather than emitting one the schema's
+            // enum would reject.
+            if (ModLink.ParseType(type) == ModLinkType.Other) type = "other";
+
+            result.Add(new Dictionary<string, string> { ["type"] = type, ["url"] = url });
+        }
+        return result;
     }
 
     /// <summary>Splits one-per-line textbox text into a trimmed, non-empty list.</summary>
@@ -672,7 +721,7 @@ public partial class PublishModDialog : Window
         SetStepTitle(4, "Updates");
         SetStepHint(4, "How the launcher pulls new versions: WoL patcher, GitHub Releases, external updater, or manual.");
         SetStepTitle(5, "Description & website");
-        SetStepHint(5, "Per-language description and the mod's homepage URL.");
+        SetStepHint(5, "Per-language description, the mod's homepage URL and your community links.");
         SetStepTitle(6, "Review & publish");
         SetStepHint(6, "Inspect the generated mod.json, copy it to the clipboard, and open the catalog PR template on GitHub.");
 
@@ -697,6 +746,8 @@ public partial class PublishModDialog : Window
         LblDescriptionEn.Text = "Description (English)"; HintDescription.Text = "1–2 sentences on what your mod does. Example: A total conversion set during the Napoleonic Wars.";
         LblDescriptionEs.Text = "Descripción (Español)";
         LblWebsite.Text = "Official website (optional)"; HintWebsite.Text = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod";
+        LblLinks.Text = "Community links (optional)";
+        HintLinks.Text = "One per line, as type|url. Up to 4, HTTPS only. Types: website, discord, moddb, forum, wiki, video, other. Example: discord|https://discord.gg/your-mod";
         CopyJsonButton.Content = "Copy JSON";
         OpenPrButton.Content = "Open PR on GitHub";
 

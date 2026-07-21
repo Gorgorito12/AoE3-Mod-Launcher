@@ -118,6 +118,113 @@ public class TranslationsSettings
 }
 
 /// <summary>
+/// Kind of community link. Only drives the default caption — the launcher never
+/// renders a brand logo (trademark) or an emoji (house rule), so every pill uses
+/// the same generic glyph. An unrecognised value from the catalog degrades to
+/// <see cref="Other"/> instead of dropping the link.
+/// </summary>
+public enum ModLinkType
+{
+    Website,
+    Discord,
+    ModDb,
+    Forum,
+    Wiki,
+    Video,
+    Other,
+}
+
+/// <summary>
+/// A single community link declared by a mod (<c>links</c> in <c>mod.json</c>).
+/// Instances only ever reach the UI through <see cref="Sanitize"/>, so a
+/// <see cref="ModLink"/> in a <see cref="ModProfile"/> is always safe to render
+/// and to hand to <c>SafeUrl.TryOpen</c>.
+/// </summary>
+public sealed class ModLink
+{
+    /// <summary>Hard cap on how many links one mod can show. A links row is a
+    /// footer, not a link farm — and bounding it bounds the abuse surface.</summary>
+    public const int MaxLinks = 4;
+
+    /// <summary>Label cap. Matches the catalog schema's <c>maxLength</c>.</summary>
+    public const int MaxLabelLength = 24;
+
+    public ModLinkType Type { get; init; } = ModLinkType.Other;
+
+    /// <summary>Absolute HTTPS url. Guaranteed non-empty and shell-safe.</summary>
+    public string Url { get; init; } = "";
+
+    /// <summary>
+    /// Author-supplied caption, already trimmed / length-capped / stripped of
+    /// control characters. Empty means "use the type's localized name".
+    /// </summary>
+    public string Label { get; init; } = "";
+
+    /// <summary>
+    /// Projects raw manifest entries into safe runtime links.
+    ///
+    /// This runs even though the catalog CI validates the same rules, because CI
+    /// is not the only way a manifest reaches here: built-in profiles are
+    /// hard-coded and never see it, and a cached manifest on disk is
+    /// user-writable. Rejecting here is the guarantee; the schema is the
+    /// early warning.
+    ///
+    /// Rules: HTTPS-only (stricter than <c>officialWebsite</c>, whose HTTP
+    /// allowance is legacy), no shell-executable strings, no embedded
+    /// credentials, deduped by url, capped at <see cref="MaxLinks"/> preserving
+    /// the author's order.
+    /// </summary>
+    public static List<ModLink> Sanitize(IEnumerable<ModLinkManifest>? raw)
+    {
+        var result = new List<ModLink>();
+        if (raw is null) return result;
+
+        var seen = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in raw)
+        {
+            if (entry is null) continue;
+            if (result.Count >= MaxLinks) break;
+
+            var url = (entry.Url ?? "").Trim();
+            if (!Services.SafeUrl.IsAllowed(url)) continue;
+            if (!url.StartsWith("https://", System.StringComparison.OrdinalIgnoreCase)) continue;
+            if (!seen.Add(url)) continue;
+
+            result.Add(new ModLink
+            {
+                Type = ParseType(entry.Type),
+                Url = url,
+                Label = CleanLabel(entry.Label),
+            });
+        }
+        return result;
+    }
+
+    /// <summary>Unknown / missing type is not an error — it's <see cref="ModLinkType.Other"/>.</summary>
+    public static ModLinkType ParseType(string? raw) => (raw ?? "").Trim().ToLowerInvariant() switch
+    {
+        "website" => ModLinkType.Website,
+        "discord" => ModLinkType.Discord,
+        "moddb"   => ModLinkType.ModDb,
+        "forum"   => ModLinkType.Forum,
+        "wiki"    => ModLinkType.Wiki,
+        "video"   => ModLinkType.Video,
+        _         => ModLinkType.Other,
+    };
+
+    /// <summary>
+    /// Control characters are dropped before the length cap so a label padded
+    /// with them can't push the visible text past the limit.
+    /// </summary>
+    public static string CleanLabel(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        var cleaned = new string(raw.Where(c => !char.IsControl(c)).ToArray()).Trim();
+        return cleaned.Length <= MaxLabelLength ? cleaned : cleaned[..MaxLabelLength].Trim();
+    }
+}
+
+/// <summary>
 /// Everything that distinguishes one mod from another in the launcher.
 /// All hard-coded "Wars of Liberty"-specific values live in a profile
 /// instead of in the launcher's code so adding a new mod is just a new
@@ -165,6 +272,15 @@ public class ModProfile
     /// field; payload URLs are HTTPS-only).
     /// </summary>
     public string OfficialWebsite { get; set; } = "";
+
+    /// <summary>
+    /// Community links (Discord, ModDB, forum, …) shown as pills in the
+    /// Workshop detail panel. Always sanitised — see <see cref="ModLink.Sanitize"/>
+    /// — so consumers can render these without re-validating. Empty for every
+    /// built-in profile and for any manifest that predates the field, which is
+    /// what keeps the detail panel byte-for-byte unchanged in the common case.
+    /// </summary>
+    public List<ModLink> Links { get; set; } = new();
 
     /// <summary>
     /// Per-language descriptions keyed by ISO 639-1 ("en", "es", …).

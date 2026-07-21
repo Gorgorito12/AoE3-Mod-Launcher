@@ -62,7 +62,13 @@
       "PowerShell(Get-Process *)",
       "Bash(awk '{print $5, $9}')",
       "Bash(curl -sSL -H \"Accept: application/vnd.github+json\" \"https://api.github.com/repos/Gorgorito12/Updater/releases/latest\")",
-      "Bash(grep -v '^$')"
+      "Bash(grep -v '^$')",
+      "Bash(claude --version)",
+      "Read(//c/Users/Jeison/.claude/**)",
+      "Read(//c/Users/Jeison/**)",
+      "Bash(jq -r '.env // {} | keys[]' ~/.claude/settings.json)",
+      "Bash(python -)",
+      "Bash(jq -r '{deny:\\(.permissions.deny//[]|length\\), ask:\\(.permissions.ask//[]|length\\)}' .claude/settings.local.json)"
     ]
   }
 }
