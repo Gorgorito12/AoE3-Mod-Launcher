@@ -662,6 +662,19 @@ public static class Strings
             [LangEn] = "SWITCH GAME",
             [LangEs] = "CAMBIAR JUEGO",
         },
+        // Per-row recency hint in the SWITCH GAME popup. {0} is a compact single-unit
+        // duration from RoomAgeFormat.Coarse ("5 min", "2 h", "3 d") — the units read
+        // the same in both languages, so only this wrapper is translated.
+        ["ModSwitchPlayedAgo"] = new()
+        {
+            [LangEn] = "Played {0} ago",
+            [LangEs] = "Jugado hace {0}",
+        },
+        ["ModSwitchNeverPlayed"] = new()
+        {
+            [LangEn] = "Not played yet",
+            [LangEs] = "Sin jugar",
+        },
         // Tooltip on the hero's active-copy chip (shown only with 2+ installed copies).
         ["DashboardActiveCopyTooltip"] = new()
         {
@@ -1273,7 +1286,9 @@ public static class Strings
         // and the per-mod state (install path, version, translation) survives,
         // so re-adding restores everything. The dialog exists to say that,
         // because an installed mod disappearing from the MODS popup otherwise
-        // reads as an uninstall.
+        // reads as an uninstall. Shown ONLY for an installed mod — removing one
+        // that isn't installed risks nothing, and confirming harmless actions
+        // is what trains users to click through the prompt that matters.
         ["DlgRemoveModTitle"] = new()
         {
             [LangEn] = "Remove from my mods",
@@ -1291,15 +1306,6 @@ public static class Strings
                      + "descarga nada de nuevo si lo vuelves a agregar desde el "
                      + "Workshop. Para liberar espacio en disco tienes que "
                      + "desinstalarlo, desde el menú de configuración.",
-        },
-        ["DlgRemoveModBodyNotInstalled"] = new()
-        {
-            [LangEn] = "This mod will stop appearing in your MODS list. It isn't "
-                     + "installed, so nothing is deleted — you can add it back "
-                     + "from the Workshop whenever you want.",
-            [LangEs] = "Este mod va a dejar de aparecer en tu lista de MODS. No "
-                     + "está instalado, así que no se borra nada — puedes volver "
-                     + "a agregarlo desde el Workshop cuando quieras.",
         },
         ["DlgRemoveModPathLabel"] = new()
         {

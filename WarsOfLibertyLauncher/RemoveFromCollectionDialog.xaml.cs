@@ -12,31 +12,34 @@ namespace WarsOfLibertyLauncher;
 /// vanishes from the dashboard MODS popup while its multi-GB folder stays on
 /// disk, which reads as "it uninstalled itself" or, worse, as lost data.
 /// Nobody guesses that re-adding it from the Workshop brings everything back,
-/// so the copy says it — and shows the folder for an installed mod, so the
-/// promise is verifiable rather than merely asserted.
+/// so the copy says it — and shows the folder, so the promise is verifiable
+/// rather than merely asserted.
+///
+/// Only shown for an INSTALLED mod. The caller
+/// (<c>MainWindow.ModsBrowserView_RemoveFromCollectionRequested</c>) removes a
+/// non-installed mod outright: nothing is at stake there, and confirming
+/// harmless things is what trains users to click through the prompt that
+/// matters. That's why the body is unconditional here — don't add a
+/// not-installed variant without moving that gate too.
 ///
 /// Returns the choice via <c>ShowDialog()</c> (<c>true</c> = remove).
 /// </summary>
 public partial class RemoveFromCollectionDialog : Window
 {
-    public RemoveFromCollectionDialog(string modName, bool isInstalled, string? installPath)
+    public RemoveFromCollectionDialog(string modName, string? installPath)
     {
         InitializeComponent();
 
         Chrome.Title = Strings.Get("DlgRemoveModTitle");
         ModNameText.Text = modName;
+        BodyText.Text = Strings.Get("DlgRemoveModBodyInstalled");
         ConfirmButton.Content = Strings.Get("DlgRemoveModConfirm");
         CancelButton.Content = Strings.Get("DlgRemoveModCancel");
 
-        // Two bodies rather than one hedged paragraph: for a mod that isn't
-        // installed there is genuinely nothing at stake, and claiming otherwise
-        // is what teaches people to click through the warning that does matter.
-        bool showPath = isInstalled && !string.IsNullOrWhiteSpace(installPath);
-        BodyText.Text = Strings.Get(isInstalled
-            ? "DlgRemoveModBodyInstalled"
-            : "DlgRemoveModBodyNotInstalled");
-
-        if (showPath)
+        // Defensive: the mod is installed, but path resolution can still come
+        // up empty (a probe-only detection that later fails). Better to drop
+        // the row than to render an empty box under "its files stay here".
+        if (!string.IsNullOrWhiteSpace(installPath))
         {
             PathLabel.Text = Strings.Get("DlgRemoveModPathLabel");
             PathText.Text = installPath;

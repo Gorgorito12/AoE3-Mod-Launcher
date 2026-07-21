@@ -116,6 +116,72 @@ public static class ModRegistry
 
     // -- Catalog refresh -------------------------------------------------------
 
+    /// <summary>The catalog the launcher ships with when the config doesn't name one.</summary>
+    public const string DefaultCatalogRepo = "Gorgorito12/aoe3-mods-catalog";
+
+    /// <summary>
+    /// Turns the config's <c>modsCatalogRepo</c> into the repo to actually query:
+    /// empty → the shipped default, <c>"none"</c> → null (opt-out), anything else
+    /// → itself. Shared by <see cref="PrimeFromCache"/> and the async refresh so the
+    /// two can never disagree about WHICH catalog they're talking about — a
+    /// divergence there would make the startup prime read a different cache file
+    /// than the refresh writes, and the saved mod would silently fail to resolve.
+    /// </summary>
+    public static string? ResolveCatalogRepo(string? configured)
+    {
+        if (string.IsNullOrWhiteSpace(configured)) return DefaultCatalogRepo;
+        if (string.Equals(configured, "none", StringComparison.OrdinalIgnoreCase)) return null;
+        return configured;
+    }
+
+    /// <summary>
+    /// Publishes the merged list from the ON-DISK cache only — no network, no
+    /// background refresh — so <see cref="All"/> already knows the community mods
+    /// before the first caller needs to resolve one. Returns true when a cache was
+    /// applied.
+    ///
+    /// WHY this exists: the saved active mod is resolved through <see cref="Find"/>
+    /// in MainWindow's constructor, but the catalog refresh only runs later (the
+    /// Loaded handler's Task.WhenAll). Until then <see cref="All"/> is built-ins
+    /// only, so a COMMUNITY mod id never resolved and <see cref="Default"/> (WoL)
+    /// was used instead — silently, and never reconciled once the catalog landed.
+    /// The launcher therefore could not open on a community mod at all.
+    ///
+    /// Deliberately IGNORES the cache TTL: this pass only resolves mod IDENTITY, and
+    /// the normal refresh right afterwards re-merges and handles staleness (including
+    /// kicking the background fetch). Safe by construction with respect to
+    /// <c>ClearVanishedAssets</c>: that only runs when a PREVIOUS merge existed, and
+    /// this is always the first one. Never throws — a corrupt cache must not stop the
+    /// launcher from starting.
+    /// </summary>
+    public static bool PrimeFromCache(string? repo)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(repo)) return false;
+
+            var cache = new ModCatalogService().LoadFromCache(repo);
+            if (cache == null || cache.Manifests.Count == 0)
+            {
+                DiagnosticLog.Write(
+                    "ModRegistry: no catalog cache to prime from — community mods " +
+                    "resolve only after the startup refresh.");
+                return false;
+            }
+
+            ApplyMerged(cache.Manifests, default);
+            DiagnosticLog.Write(
+                $"ModRegistry: primed from cache ({cache.Manifests.Count} entries) so the " +
+                "saved active mod can resolve before the catalog refresh.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModRegistry: prime from cache failed: {ex.Message}");
+            return false;
+        }
+    }
+
     /// <summary>
     /// Fetches the community mods catalog and merges it with the built-in
     /// list. Returns the merged list (also accessible via <see cref="All"/>
