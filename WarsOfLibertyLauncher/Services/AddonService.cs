@@ -84,9 +84,18 @@ public static class AddonService
     public static List<string> ReadArchiveEntries(string zipPath)
     {
         using var zip = ZipFile.OpenRead(zipPath);
-        return zip.Entries
+        var raw = zip.Entries
             .Where(e => !string.IsNullOrEmpty(e.Name))   // "" == directory entry
             .Select(e => e.FullName)
+            .ToList();
+
+        // Report the paths the files will actually LAND on, not the ones the
+        // packager happened to nest them under, so the risk check and the extract
+        // agree on what is being written.
+        var prefix = AddonPaths.StripCommonRoot(raw);
+        return raw
+            .Select(n => AddonPaths.RemovePrefix(n, prefix))
+            .Where(n => n.Length > 0)
             .ToList();
     }
 
@@ -98,8 +107,8 @@ public static class AddonService
     /// reversible; re-capturing last is what stops verify from calling the result
     /// corrupt.
     /// </summary>
-    /// <param name="allowSimulationRisk">
-    /// Set only after the user confirmed a <see cref="AddonRiskLevel.SimulationRisk"/>
+    /// <param name="allowMultiplayerRisk">
+    /// Set only after the user confirmed a <see cref="AddonRiskLevel.MultiplayerRisk"/>
     /// addon. Never bypasses <see cref="AddonRiskLevel.Blocked"/>.
     /// </param>
     /// <param name="includeOnly">
@@ -117,7 +126,7 @@ public static class AddonService
         string addonId,
         string zipPath,
         ModProfile profile,
-        bool allowSimulationRisk,
+        bool allowMultiplayerRisk,
         IReadOnlyList<string>? includeOnly = null,
         CancellationToken ct = default)
     {
@@ -128,7 +137,7 @@ public static class AddonService
             return new AddonApplyResult(AddonApplyStatus.Blocked, Array.Empty<string>(), risk.BlockingFiles);
         if (risk.Level == AddonRiskLevel.Empty)
             return new AddonApplyResult(AddonApplyStatus.Empty, Array.Empty<string>(), Array.Empty<string>());
-        if (risk.Level == AddonRiskLevel.SimulationRisk && !allowSimulationRisk)
+        if (risk.Level == AddonRiskLevel.MultiplayerRisk && !allowMultiplayerRisk)
             return new AddonApplyResult(AddonApplyStatus.Blocked, Array.Empty<string>(), risk.SimulationFiles);
 
         var include = BuildIncludeSet(includeOnly);
@@ -274,7 +283,7 @@ public static class AddonService
                     continue;
                 }
 
-                // allowSimulationRisk: the user already accepted this addon's risk
+                // allowMultiplayerRisk: the user already accepted this addon's risk
                 // when they enabled it; re-prompting mid-update isn't possible.
                 var result = await ApplyAsync(
                     installPath, id, zip, profile, true, previouslyOwned, ct);
@@ -305,12 +314,17 @@ public static class AddonService
         var skipped = new List<string>();
         using var zip = ZipFile.OpenRead(zipPath);
 
+        // Same wrapper-folder rule the risk check used, or the two would disagree
+        // about which paths this archive writes.
+        var prefix = AddonPaths.StripCommonRoot(
+            zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName));
+
         foreach (var entry in zip.Entries)
         {
             ct.ThrowIfCancellationRequested();
             if (string.IsNullOrEmpty(entry.Name)) continue;   // directory entry
 
-            var rel = NormalizeRelative(entry.FullName);
+            var rel = AddonPaths.RemovePrefix(entry.FullName, prefix);
             if (rel.Length == 0) continue;
 
             if (!ShouldApply(rel, include)) { skipped.Add(rel); continue; }
@@ -421,12 +435,7 @@ public static class AddonService
     /// <see cref="Path.Combine"/> either way on Windows.
     /// </summary>
     private static string NormalizeRelative(string entryName)
-    {
-        if (string.IsNullOrWhiteSpace(entryName)) return "";
-        var s = entryName.Trim().Replace('\\', '/');
-        while (s.StartsWith("./", StringComparison.Ordinal)) s = s[2..];
-        return s.TrimStart('/');
-    }
+        => AddonPaths.Normalize(entryName);
 
     private static string Sanitize(string id)
     {

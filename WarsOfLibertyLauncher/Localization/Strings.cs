@@ -1007,6 +1007,63 @@ public static class Strings
             [LangEs] = "Modifica datos del juego ({0}). Las salas no te van a rechazar, pero "
                      + "una partida con jugadores que no lo tengan puede desincronizarse.",
         },
+        ["AddonDownloadAndEnable"] = new()
+        {
+            [LangEn] = "Download and enable",
+            [LangEs] = "Descargar y activar",
+        },
+        ["AddonDisable"] = new()
+        {
+            [LangEn] = "Disable",
+            [LangEs] = "Desactivar",
+        },
+        ["AddonOpenPage"] = new()
+        {
+            [LangEn] = "Open its page",
+            [LangEs] = "Abrir su página",
+        },
+        ["AddonSourcePage"] = new()
+        {
+            [LangEn] = "Page",
+            [LangEs] = "Página",
+        },
+        ["AddonDownloading"] = new()
+        {
+            [LangEn] = "Downloading {0}...",
+            [LangEs] = "Descargando {0}...",
+        },
+        ["AddonDownloadFailed"] = new()
+        {
+            [LangEn] = "The download failed. Its page may have changed — open it and "
+                     + "add the file by hand.",
+            [LangEs] = "La descarga falló. Puede que su página haya cambiado — ábrela y "
+                     + "agrega el archivo a mano.",
+        },
+        ["AddonAppliedSkipped"] = new()
+        {
+            [LangEn] = "Addon enabled. Not copied into the game: {0} — the launcher never "
+                     + "installs programs, only game files.",
+            [LangEs] = "Addon activado. No se copió al juego: {0} — el launcher nunca "
+                     + "instala programas, solo archivos del juego.",
+        },
+        ["AddonMultiplayerConfirmTitle"] = new()
+        {
+            [LangEn] = "This addon can affect multiplayer",
+            [LangEs] = "Este addon puede afectar el multijugador",
+        },
+        ["AddonVersionMatchConfirmBody"] = new()
+        {
+            [LangEn] = "This addon replaces {0} precompiled game files (.xmb). Age of "
+                     + "Empires III checks those when matching versions between players, "
+                     + "so you may not be able to play with people who don't have the "
+                     + "addon. The launcher cannot detect this, which is why you are being "
+                     + "asked now.\n\nEnable it anyway?",
+            [LangEs] = "Este addon reemplaza {0} archivos precompilados del juego (.xmb). "
+                     + "Age of Empires III los usa para comparar versiones entre jugadores, "
+                     + "así que puede que no puedas jugar con quien no tenga el addon. El "
+                     + "launcher no puede detectarlo, por eso te preguntamos ahora."
+                     + "\n\n¿Lo activas de todos modos?",
+        },
         ["AddonSimulationConfirmTitle"] = new()
         {
             [LangEn] = "This addon can break matches",

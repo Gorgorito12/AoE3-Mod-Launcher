@@ -81,14 +81,14 @@ public class AddonRiskTests
     [InlineData(@"data\abilities\powers.xml")]
     [InlineData(@"My Addon\data\tactics\sarna.tactics")]
     public void OtherDataFiles_AreSimulationRisk(string entry)
-        => Assert.Equal(AddonRiskLevel.SimulationRisk, Level(entry));
+        => Assert.Equal(AddonRiskLevel.MultiplayerRisk, Level(entry));
 
     [Fact]
     public void SimulationFiles_AreReported_SoTheUiCanNameThem()
     {
         var result = AddonRisk.Assess(new[] { @"art\x.ddt", @"data\civs.xml" });
 
-        Assert.Equal(AddonRiskLevel.SimulationRisk, result.Level);
+        Assert.Equal(AddonRiskLevel.MultiplayerRisk, result.Level);
         Assert.Equal(new[] { @"data\civs.xml" }, result.SimulationFiles);
         Assert.Empty(result.BlockingFiles);
     }
@@ -223,4 +223,51 @@ public class AddonRiskTests
     [InlineData(@"Sound\musket.wav")]
     public void GameFiles_AreNotSkipped(string entry)
         => Assert.False(AddonRisk.IsSkippable(entry));
+
+    // -- .xmb and the engine's own version check -------------------------------
+    //
+    // Modelled on the gun-smoke addon, which replaces 77 .xmb files. AoE3 hashes
+    // these for its LAN version match, so peers without the addon may not be able
+    // to play — and the launcher's fingerprint covers three data\ files, so it
+    // cannot detect this afterwards. Saying so before applying is the only chance.
+
+    [Theory]
+    [InlineData(@"art\effects\explosions\1exp_flash.particle.xmb")]
+    [InlineData("AO3/art/effects/chiefpower.xml.xmb")]
+    public void XmbFiles_AreAMultiplayerRisk(string entry)
+    {
+        var result = AddonRisk.Assess(new[] { entry });
+
+        Assert.Equal(AddonRiskLevel.MultiplayerRisk, result.Level);
+        Assert.Single(result.VersionMatchFiles);
+        Assert.Empty(result.SimulationFiles);
+    }
+
+    /// <summary>
+    /// The two causes are reported separately because the symptoms differ: a
+    /// data\ change desyncs a match in progress, an .xmb change can stop it from
+    /// starting. The warning names whichever applies.
+    /// </summary>
+    [Fact]
+    public void SimulationAndVersionMatch_AreReportedSeparately()
+    {
+        var result = AddonRisk.Assess(new[] { @"data\playercolors.xml", @"art\x.particle.xmb" });
+
+        Assert.Equal(AddonRiskLevel.MultiplayerRisk, result.Level);
+        Assert.Single(result.SimulationFiles);
+        Assert.Single(result.VersionMatchFiles);
+    }
+
+    [Fact]
+    public void PlainArtAssets_StayCosmetic()
+        => Assert.Equal(AddonRiskLevel.Cosmetic, Level(@"art\ui\panel.ddt", @"Sound\shot.wav"));
+
+    /// <summary>
+    /// An archive of nothing but an installer and its docs has no game files, so
+    /// there is nothing to apply — reporting Empty stops it being offered as a
+    /// working addon. This is the real "transparent UI" archive: one .exe.
+    /// </summary>
+    [Fact]
+    public void InstallerOnlyArchive_IsEmpty()
+        => Assert.Equal(AddonRiskLevel.Empty, Level("Ekanta TAD UI.exe"));
 }

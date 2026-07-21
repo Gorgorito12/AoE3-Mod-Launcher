@@ -1572,6 +1572,10 @@ public partial class ModPropertiesDialog : Window
             _config.GetActiveState().EnabledAddons ?? new List<string>(),
             StringComparer.OrdinalIgnoreCase);
 
+        // Offered addons first — these are the one-click ones.
+        foreach (var entry in AddonRegistry.All)
+            AddonCardList.Children.Add(BuildOfferedAddonCard(entry, enabled.Contains(entry.Id)));
+
         var imported = _config.ImportedAddons ?? new List<ImportedAddon>();
         foreach (var addon in imported)
             AddonCardList.Children.Add(BuildAddonCard(addon, enabled.Contains(addon.Id)));
@@ -1579,6 +1583,207 @@ public partial class ModPropertiesDialog : Window
         bool empty = AddonCardList.Children.Count == 0;
         AddonsEmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
         if (empty) AddonsEmptyHint.Text = Strings.Get("AddonsEmptyHint");
+    }
+
+    /// <summary>
+    /// A card for an addon the launcher knows how to fetch. The whole point of
+    /// the feature: one button that downloads and applies, instead of the player
+    /// finding the file, downloading it and importing it.
+    /// </summary>
+    private Border BuildOfferedAddonCard(AddonEntry entry, bool isEnabled)
+    {
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = entry.Name,
+            Foreground = (Brush)FindResource("TextPrimary"),
+            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = entry.DescriptionFor(Strings.Language),
+            Foreground = (Brush)FindResource("TextSecondary"),
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+        });
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+
+        if (entry.ExternalInstallerOnly)
+        {
+            // No checkbox: this archive holds an installer and no game files, so
+            // there is nothing to overlay and a toggle would be a lie.
+            var open = new Button { Content = Strings.Get("AddonOpenPage"), Padding = new Thickness(14, 5, 14, 5) };
+            open.Click += (_, _) => SafeUrl.TryOpen(entry.SourceUrl);
+            actions.Children.Add(open);
+        }
+        else if (isEnabled)
+        {
+            var off = new Button
+            {
+                Content = Strings.Get("AddonDisable"),
+                Padding = new Thickness(14, 5, 14, 5),
+                IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
+            };
+            off.Click += async (_, _) => await DisableOfferedAddonAsync(entry);
+            actions.Children.Add(off);
+        }
+        else
+        {
+            var get = new Button
+            {
+                Content = Strings.Get("AddonDownloadAndEnable"),
+                Padding = new Thickness(14, 5, 14, 5),
+                IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
+            };
+            get.Click += async (_, _) => await DownloadAndEnableAsync(entry, get);
+            actions.Children.Add(get);
+        }
+
+        var page = new Button
+        {
+            Content = Strings.Get("AddonSourcePage"),
+            Padding = new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(8, 0, 0, 0),
+            Background = (Brush)FindResource("BgPanel"),
+        };
+        page.ToolTip = TooltipHelper.Wrap(entry.SourceUrl);
+        page.Click += (_, _) => SafeUrl.TryOpen(entry.SourceUrl);
+        if (!entry.ExternalInstallerOnly) actions.Children.Add(page);
+
+        stack.Children.Add(actions);
+
+        return new Border
+        {
+            Background = (Brush)FindResource("BgPanelAlt"),
+            BorderBrush = (Brush)FindResource(isEnabled ? "AccentBrush" : "BorderSubtle"),
+            BorderThickness = new Thickness(isEnabled ? 2 : 1),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
+            Padding = new Thickness(14, 12, 14, 12),
+            Margin = new Thickness(0, 0, 0, 8),
+            Child = stack,
+        };
+    }
+
+    /// <summary>
+    /// Download → risk check → apply, in one click.
+    ///
+    /// The risk verdict is computed from the DOWNLOADED archive, never from what
+    /// the registry declares: the registry is a copy of what was true when it was
+    /// written, and the file is what will actually be extracted.
+    /// </summary>
+    private async Task DownloadAndEnableAsync(AddonEntry entry, Button trigger)
+    {
+        var install = _service.InstallPath;
+        if (string.IsNullOrEmpty(install)) return;
+
+        trigger.IsEnabled = false;
+        ShowAddonResult(Strings.Format("AddonDownloading", entry.Name), ok: true);
+
+        try
+        {
+            var zip = AddonStore.PathFor(entry.Id);
+            if (!File.Exists(zip))
+                await HeavenDownloader.DownloadAsync(entry.HeavenFileId, zip);
+
+            var risk = AddonRisk.Assess(await Task.Run(() => AddonService.ReadArchiveEntries(zip)));
+
+            if (risk.Level == AddonRiskLevel.Blocked)
+            {
+                ShowAddonResult(
+                    Strings.Format("AddonRiskBlockedHint", string.Join(", ", risk.BlockingFiles.Take(3))),
+                    ok: false);
+                return;
+            }
+
+            if (risk.Level == AddonRiskLevel.MultiplayerRisk && !ConfirmMultiplayerRisk(risk))
+                return;
+
+            var result = await AddonService.ApplyAsync(
+                install, entry.Id, zip, _profile,
+                allowMultiplayerRisk: true, includeOnly: entry.IncludeOnly);
+
+            if (result.Status != AddonApplyStatus.Applied)
+            {
+                ShowAddonResult(DescribeFailure(result), ok: false);
+                return;
+            }
+
+            var state = _config.GetActiveState();
+            state.EnabledAddons ??= new List<string>();
+            if (!state.EnabledAddons.Contains(entry.Id, StringComparer.OrdinalIgnoreCase))
+                state.EnabledAddons.Add(entry.Id);
+            _config.Save();
+
+            // Name what was left out. "1 file skipped" is useless when the addon
+            // then doesn't behave as its page describes.
+            ShowAddonResult(
+                result.SkippedFiles.Count > 0
+                    ? Strings.Format("AddonAppliedSkipped", string.Join(", ", result.SkippedFiles.Take(3)))
+                    : Strings.Get("AddonApplied"),
+                ok: true);
+        }
+        catch (HeavenDownloadException ex)
+        {
+            DiagnosticLog.Write($"Addon '{entry.Id}' download failed: {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonDownloadFailed"), ok: false);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Addon '{entry.Id}' failed: {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonFailed"), ok: false);
+        }
+        finally
+        {
+            LoadAddons();
+        }
+    }
+
+    private async Task DisableOfferedAddonAsync(AddonEntry entry)
+    {
+        var install = _service.InstallPath;
+        if (string.IsNullOrEmpty(install)) return;
+
+        try
+        {
+            await AddonService.DisableAsync(install, entry.Id, _profile);
+            var state = _config.GetActiveState();
+            state.EnabledAddons?.RemoveAll(id =>
+                string.Equals(id, entry.Id, StringComparison.OrdinalIgnoreCase));
+            _config.Save();
+            ShowAddonResult(Strings.Get("AddonDisabled"), ok: true);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Addon '{entry.Id}' failed to disable: {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonFailed"), ok: false);
+        }
+
+        LoadAddons();
+    }
+
+    /// <summary>
+    /// Names the concrete danger rather than warning in the abstract — the two
+    /// causes have different symptoms and the player can only weigh the one that
+    /// applies.
+    /// </summary>
+    private bool ConfirmMultiplayerRisk(AddonRiskAssessment risk)
+    {
+        var files = risk.VersionMatchFiles.Count > 0 ? risk.VersionMatchFiles : risk.SimulationFiles;
+        var body = risk.VersionMatchFiles.Count > 0
+            ? Strings.Format("AddonVersionMatchConfirmBody", risk.VersionMatchFiles.Count)
+            : Strings.Format("AddonSimulationConfirmBody", string.Join(", ", files.Take(3)));
+
+        return MessageBox.Show(this, body,
+            Strings.Get("AddonMultiplayerConfirmTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
     }
 
     private Border BuildAddonCard(ImportedAddon addon, bool isEnabled)
@@ -1598,7 +1803,7 @@ public partial class ModPropertiesDialog : Window
 
         // Name the offending files rather than asserting a vague danger — the
         // user can only judge (or fix) an addon they can see the contents of.
-        if (blocked || risk == AddonRiskLevel.SimulationRisk)
+        if (blocked || risk == AddonRiskLevel.MultiplayerRisk)
         {
             var files = addon.RiskFiles is { Count: > 0 }
                 ? string.Join(", ", addon.RiskFiles.Take(3))
@@ -1665,7 +1870,7 @@ public partial class ModPropertiesDialog : Window
                 // A simulation-risk addon passes the lobby check and can still
                 // desync a match, so it needs an explicit yes — the launcher
                 // cannot detect the problem later.
-                bool allowRisk = ParseRisk(addon.Risk) != AddonRiskLevel.SimulationRisk;
+                bool allowRisk = ParseRisk(addon.Risk) != AddonRiskLevel.MultiplayerRisk;
                 if (!allowRisk)
                 {
                     allowRisk = MessageBox.Show(this,
@@ -1676,7 +1881,7 @@ public partial class ModPropertiesDialog : Window
                 if (!allowRisk) { LoadAddons(); return; }
 
                 var result = await AddonService.ApplyAsync(
-                    install, addon.Id, zip, _profile, allowSimulationRisk: true);
+                    install, addon.Id, zip, _profile, allowMultiplayerRisk: true);
 
                 if (result.Status != AddonApplyStatus.Applied)
                 {

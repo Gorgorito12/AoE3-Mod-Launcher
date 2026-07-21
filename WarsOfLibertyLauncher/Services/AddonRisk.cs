@@ -13,11 +13,13 @@ public enum AddonRiskLevel
     /// <summary>Only art / sound / UI. Safe to apply without a prompt.</summary>
     Cosmetic,
     /// <summary>
-    /// Touches <c>data\</c> outside the three identity files. The lobby's
-    /// fingerprint will NOT catch it, so the player joins normally and can then
-    /// desync mid-match. Warned about, not blocked.
+    /// Can break playing with others, in one of two ways the launcher's own
+    /// fingerprint cannot detect: a <c>data\</c> file outside the three identity
+    /// files (the player joins fine and then desyncs mid-match), or a <c>.xmb</c>
+    /// (which AoE3 hashes for its own LAN version check, so peers without the
+    /// addon may not be able to play at all). Warned about, not blocked.
     /// </summary>
-    SimulationRisk,
+    MultiplayerRisk,
     /// <summary>
     /// Touches one of the three files the launcher's identity depends on.
     /// Refused outright.
@@ -33,7 +35,18 @@ public sealed record AddonRiskAssessment(
     AddonRiskLevel Level,
     IReadOnlyList<string> BlockingFiles,
     IReadOnlyList<string> SimulationFiles,
-    IReadOnlyList<string> ExecutableFiles);
+    IReadOnlyList<string> ExecutableFiles,
+    IReadOnlyList<string>? VersionMatchFiles = null)
+{
+    /// <summary>
+    /// <c>.xmb</c> entries. Kept apart from <see cref="SimulationFiles"/> because
+    /// the symptom differs and the warning should name it: a <c>data\</c> change
+    /// desyncs a match already in progress, while an <c>.xmb</c> change can stop
+    /// the match from starting with peers who don't have the addon.
+    /// </summary>
+    public IReadOnlyList<string> VersionMatchFiles { get; init; } =
+        VersionMatchFiles ?? Array.Empty<string>();
+}
 
 /// <summary>
 /// Decides whether an addon may be applied, from the file list of its ZIP.
@@ -112,7 +125,9 @@ public static class AddonRisk
         var blocking = new List<string>();
         var simulation = new List<string>();
         var executables = new List<string>();
+        var versionMatch = new List<string>();
         bool anyFile = false;
+        bool anyApplicable = false;
 
         foreach (var raw in entries ?? Enumerable.Empty<string>())
         {
@@ -125,18 +140,39 @@ public static class AddonRisk
             anyFile = true;
 
             if (IsExecutable(norm)) { executables.Add(norm); continue; }
+            if (IsDocument(norm)) continue;
+
+            anyApplicable = true;
+
             if (IsProtected(norm)) blocking.Add(norm);
             else if (IsUnderData(norm)) simulation.Add(norm);
+            else if (IsVersionMatched(norm)) versionMatch.Add(norm);
         }
 
         var level =
             blocking.Count > 0 ? AddonRiskLevel.Blocked
-            : !anyFile ? AddonRiskLevel.Empty
-            : simulation.Count > 0 ? AddonRiskLevel.SimulationRisk
+            : !anyFile || !anyApplicable ? AddonRiskLevel.Empty
+            : simulation.Count > 0 || versionMatch.Count > 0 ? AddonRiskLevel.MultiplayerRisk
             : AddonRiskLevel.Cosmetic;
 
-        return new AddonRiskAssessment(level, blocking, simulation, executables);
+        return new AddonRiskAssessment(level, blocking, simulation, executables, versionMatch);
     }
+
+    /// <summary>
+    /// <c>.xmb</c> — AoE3's precompiled XML. The engine hashes these for its own
+    /// LAN version check (see the byte-faithful-install note in CLAUDE.md, where
+    /// DELETING them caused version mismatches), so replacing them can stop a
+    /// player from playing with peers who don't have the addon.
+    ///
+    /// The launcher's fingerprint covers three <c>data\</c> files and will not
+    /// notice, which is exactly why this has to be said before applying rather
+    /// than detected afterwards. Warned about, not blocked: the precise coverage
+    /// of AoE3's CRC isn't publicly documented, so refusing outright would reject
+    /// legitimate art packs on an assumption.
+    /// </summary>
+    public static bool IsVersionMatched(string path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        Path.GetExtension(path.Trim()).Equals(".xmb", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>True for a file the launcher will never copy into an install.</summary>
     public static bool IsExecutable(string path) => HasExtension(path, ExecutableExtensions);
