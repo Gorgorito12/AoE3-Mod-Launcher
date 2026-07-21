@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace WarsOfLibertyLauncher.Services;
@@ -31,7 +32,8 @@ public enum AddonRiskLevel
 public sealed record AddonRiskAssessment(
     AddonRiskLevel Level,
     IReadOnlyList<string> BlockingFiles,
-    IReadOnlyList<string> SimulationFiles);
+    IReadOnlyList<string> SimulationFiles,
+    IReadOnlyList<string> ExecutableFiles);
 
 /// <summary>
 /// Decides whether an addon may be applied, from the file list of its ZIP.
@@ -80,10 +82,36 @@ public static class AddonRisk
         UpdateService.StrRelativePath,
     };
 
+    /// <summary>
+    /// Extensions the launcher refuses to write into a game folder.
+    ///
+    /// Real addons ship these: the "building rotator" archive carries a
+    /// UPX-packed PE32 alongside the config file that does the actual work. The
+    /// launcher has no business silently placing a third-party binary — least of
+    /// all a packed one, which is the exact heuristic that got this project's own
+    /// executable quarantined by Defender. The addon still applies; the
+    /// executable is skipped and reported.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ExecutableExtensions = new[]
+    {
+        ".exe", ".dll", ".bat", ".cmd", ".com", ".msi", ".scr", ".ps1", ".vbs", ".cpl",
+    };
+
+    /// <summary>
+    /// Author documentation. Belongs to the reader, not the game folder, so it is
+    /// skipped for the same reason: nothing should land in an install that the
+    /// game will never read.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DocumentExtensions = new[]
+    {
+        ".pdf", ".txt", ".doc", ".docx", ".rtf", ".png", ".jpg", ".jpeg", ".gif", ".url", ".html",
+    };
+
     public static AddonRiskAssessment Assess(IEnumerable<string>? entries)
     {
         var blocking = new List<string>();
         var simulation = new List<string>();
+        var executables = new List<string>();
         bool anyFile = false;
 
         foreach (var raw in entries ?? Enumerable.Empty<string>())
@@ -96,6 +124,7 @@ public static class AddonRisk
 
             anyFile = true;
 
+            if (IsExecutable(norm)) { executables.Add(norm); continue; }
             if (IsProtected(norm)) blocking.Add(norm);
             else if (IsUnderData(norm)) simulation.Add(norm);
         }
@@ -106,7 +135,24 @@ public static class AddonRisk
             : simulation.Count > 0 ? AddonRiskLevel.SimulationRisk
             : AddonRiskLevel.Cosmetic;
 
-        return new AddonRiskAssessment(level, blocking, simulation);
+        return new AddonRiskAssessment(level, blocking, simulation, executables);
+    }
+
+    /// <summary>True for a file the launcher will never copy into an install.</summary>
+    public static bool IsExecutable(string path) => HasExtension(path, ExecutableExtensions);
+
+    /// <summary>True for author documentation, skipped like executables.</summary>
+    public static bool IsDocument(string path) => HasExtension(path, DocumentExtensions);
+
+    /// <summary>True when a zip entry should not be written into the game folder at all.</summary>
+    public static bool IsSkippable(string path) => IsExecutable(path) || IsDocument(path);
+
+    private static bool HasExtension(string path, IReadOnlyList<string> extensions)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        var ext = Path.GetExtension(path.Trim());
+        return !string.IsNullOrEmpty(ext)
+            && extensions.Any(e => string.Equals(e, ext, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

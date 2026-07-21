@@ -29,4 +29,14 @@
     <ProjectReference Include="..\WarsOfLibertyLauncher\WarsOfLibertyLauncher.csproj" />
   </ItemGroup>
 
+  <!--
+    Saved copies of real third-party responses. HeavenDownloader.ParseToken
+    scrapes AoE3 Heaven's file page, so the regex is the part that breaks the day
+    they change their markup; testing it against a stored page is the only way to
+    notice without hitting the network from a unit test.
+  -->
+  <ItemGroup>
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

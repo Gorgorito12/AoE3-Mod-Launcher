@@ -152,4 +152,75 @@ public class AddonRiskTests
         Assert.Contains(UpdateService.TechRelativePath, AddonRisk.ProtectedFiles);
         Assert.Contains(UpdateService.StrRelativePath, AddonRisk.ProtectedFiles);
     }
+
+    // -- Executables and documentation ----------------------------------------
+    //
+    // Modelled on the real "building rotator" archive: one config file that does
+    // the work, plus a UPX-packed PE32, a PDF and a screenshot. Copying a packed
+    // binary into a game folder is the exact heuristic that got this project's
+    // own executable quarantined by Defender, so those never get written.
+
+    [Theory]
+    [InlineData("Building Rotator.exe")]
+    [InlineData(@"tools\helper.DLL")]
+    [InlineData("install.bat")]
+    [InlineData("run.cmd")]
+    [InlineData("setup.msi")]
+    [InlineData("script.ps1")]
+    public void Executables_AreReported(string entry)
+    {
+        var result = AddonRisk.Assess(new[] { entry, @"art\ui\panel.ddt" });
+
+        Assert.Single(result.ExecutableFiles);
+        Assert.True(AddonRisk.IsExecutable(entry));
+    }
+
+    /// <summary>
+    /// An executable doesn't condemn the addon — the useful part of a real
+    /// archive is usually one config file sitting next to the author's tool. It
+    /// is skipped, not fatal.
+    /// </summary>
+    [Fact]
+    public void Executable_DoesNotBlockTheAddon()
+    {
+        var result = AddonRisk.Assess(new[] { "Building Rotator.exe", @"startup\gamey.con" });
+
+        Assert.Equal(AddonRiskLevel.Cosmetic, result.Level);
+        Assert.Empty(result.BlockingFiles);
+    }
+
+    /// <summary>
+    /// An archive of nothing but an executable has nothing to apply — reporting
+    /// Empty is what stops it being silently treated as a working addon.
+    /// </summary>
+    [Fact]
+    public void ExecutableOnlyArchive_HasNothingToApply()
+    {
+        var result = AddonRisk.Assess(new[] { "Building Rotator.exe" });
+
+        Assert.Single(result.ExecutableFiles);
+        Assert.Empty(result.BlockingFiles);
+        Assert.Empty(result.SimulationFiles);
+    }
+
+    [Theory]
+    [InlineData("EV Products ReadMe.pdf")]
+    [InlineData("rotated.png")]
+    [InlineData("readme.txt")]
+    public void Documentation_IsSkippable(string entry)
+    {
+        Assert.True(AddonRisk.IsDocument(entry));
+        Assert.True(AddonRisk.IsSkippable(entry));
+    }
+
+    /// <summary>
+    /// Game files must NOT be caught by the skip rules — `.con` startup configs
+    /// are exactly what the rotate-buildings addon actually delivers.
+    /// </summary>
+    [Theory]
+    [InlineData(@"startup\gamey.con")]
+    [InlineData(@"art\ui\panel.ddt")]
+    [InlineData(@"Sound\musket.wav")]
+    public void GameFiles_AreNotSkipped(string entry)
+        => Assert.False(AddonRisk.IsSkippable(entry));
 }

@@ -28,7 +28,18 @@ public sealed record AddonApplyResult(
     AddonApplyStatus Status,
     IReadOnlyList<string> Files,
     IReadOnlyList<string> OffendingFiles,
-    string? ConflictingAddonId = null);
+    string? ConflictingAddonId = null,
+    IReadOnlyList<string>? SkippedFiles = null)
+{
+    /// <summary>
+    /// Entries deliberately not written — executables and author documentation.
+    /// Surfaced by NAME rather than counted: "1 file skipped" is useless when the
+    /// addon then doesn't work, while naming <c>Building Rotator.exe</c> tells the
+    /// user (or its author) exactly what was left out and why.
+    /// </summary>
+    public IReadOnlyList<string> SkippedFiles { get; init; } =
+        SkippedFiles ?? Array.Empty<string>();
+}
 
 /// <summary>
 /// Applies and removes optional community addons inside one mod install.
@@ -91,12 +102,23 @@ public static class AddonService
     /// Set only after the user confirmed a <see cref="AddonRiskLevel.SimulationRisk"/>
     /// addon. Never bypasses <see cref="AddonRiskLevel.Blocked"/>.
     /// </param>
+    /// <param name="includeOnly">
+    /// When given, ONLY these install-relative entries are applied — the addon's
+    /// catalog manifest declaring exactly what it touches. Real archives bundle
+    /// more than the mod: the "building rotator" ships an executable, a PDF and a
+    /// screenshot alongside the one config file that does the work. Declaring the
+    /// list makes a catalog PR auditable, because the reviewer sees precisely
+    /// which game files the addon will write before any player runs it. Null (an
+    /// imported archive, which has no manifest) falls back to the automatic skip
+    /// rules.
+    /// </param>
     public static async Task<AddonApplyResult> ApplyAsync(
         string installPath,
         string addonId,
         string zipPath,
         ModProfile profile,
         bool allowSimulationRisk,
+        IReadOnlyList<string>? includeOnly = null,
         CancellationToken ct = default)
     {
         var entries = await Task.Run(() => ReadArchiveEntries(zipPath), ct);
@@ -108,6 +130,8 @@ public static class AddonService
             return new AddonApplyResult(AddonApplyStatus.Empty, Array.Empty<string>(), Array.Empty<string>());
         if (risk.Level == AddonRiskLevel.SimulationRisk && !allowSimulationRisk)
             return new AddonApplyResult(AddonApplyStatus.Blocked, Array.Empty<string>(), risk.SimulationFiles);
+
+        var include = BuildIncludeSet(includeOnly);
 
         var manifest = InstallManifest.TryLoad(installPath);
         if (manifest == null)
@@ -121,8 +145,12 @@ public static class AddonService
         // There is no merging overlay binaries, so the second one is refused.
         var planned = entries
             .Select(NormalizeRelative)
-            .Where(p => p.Length > 0)
+            .Where(p => p.Length > 0 && ShouldApply(p, include))
             .ToList();
+
+        if (planned.Count == 0)
+            return new AddonApplyResult(
+                AddonApplyStatus.Empty, Array.Empty<string>(), Array.Empty<string>());
 
         foreach (var (otherId, ownedFiles) in manifest.AddonFiles)
         {
@@ -136,16 +164,18 @@ public static class AddonService
 
         try
         {
-            var written = await Task.Run(
-                () => ExtractWithBackup(installPath, addonId, zipPath, ct), ct);
+            var (written, skipped) = await Task.Run(
+                () => ExtractWithBackup(installPath, addonId, zipPath, include, ct), ct);
 
             manifest.AddonFiles[addonId] = written;
             RecaptureInto(manifest, installPath, written, profile, ct);
             manifest.Save();
 
             DiagnosticLog.Write(
-                $"Addon '{addonId}' applied: {written.Count} file(s), risk={risk.Level}.");
-            return new AddonApplyResult(AddonApplyStatus.Applied, written, Array.Empty<string>());
+                $"Addon '{addonId}' applied: {written.Count} file(s), risk={risk.Level}" +
+                (skipped.Count > 0 ? $"; skipped {string.Join(", ", skipped)}" : "") + ".");
+            return new AddonApplyResult(
+                AddonApplyStatus.Applied, written, Array.Empty<string>(), null, skipped);
         }
         catch (Exception ex)
         {
@@ -226,7 +256,15 @@ public static class AddonService
                 // Stale-backup guard — see the remarks above.
                 TryDeleteDirectory(BackupFolderOf(installPath, id));
 
+                // The files the addon owned last time ARE its include list: they
+                // already went through the declared list or the skip rules when it
+                // was first applied, so re-applying reproduces the same set without
+                // needing the catalog manifest here. Captured BEFORE the entry is
+                // cleared.
                 var manifest = InstallManifest.TryLoad(installPath);
+                IReadOnlyList<string>? previouslyOwned = null;
+                if (manifest != null && manifest.AddonFiles.TryGetValue(id, out var owned))
+                    previouslyOwned = owned.ToList();
                 if (manifest != null && manifest.AddonFiles.Remove(id)) manifest.Save();
 
                 var zip = await resolveZip(id, ct);
@@ -238,7 +276,8 @@ public static class AddonService
 
                 // allowSimulationRisk: the user already accepted this addon's risk
                 // when they enabled it; re-prompting mid-update isn't possible.
-                var result = await ApplyAsync(installPath, id, zip, profile, true, ct);
+                var result = await ApplyAsync(
+                    installPath, id, zip, profile, true, previouslyOwned, ct);
                 if (result.Status != AddonApplyStatus.Applied)
                     DiagnosticLog.Write($"Addon '{id}': re-apply returned {result.Status}.");
             }
@@ -255,13 +294,15 @@ public static class AddonService
     /// Extracts every file entry, copying any pre-existing file into the addon's
     /// backup folder first. Returns the install-relative paths written.
     /// </summary>
-    private static List<string> ExtractWithBackup(
-        string installPath, string addonId, string zipPath, CancellationToken ct)
+    private static (List<string> Written, List<string> Skipped) ExtractWithBackup(
+        string installPath, string addonId, string zipPath,
+        HashSet<string>? include, CancellationToken ct)
     {
         var backupRoot = BackupFolderOf(installPath, addonId);
         Directory.CreateDirectory(backupRoot);
 
         var written = new List<string>();
+        var skipped = new List<string>();
         using var zip = ZipFile.OpenRead(zipPath);
 
         foreach (var entry in zip.Entries)
@@ -271,6 +312,8 @@ public static class AddonService
 
             var rel = NormalizeRelative(entry.FullName);
             if (rel.Length == 0) continue;
+
+            if (!ShouldApply(rel, include)) { skipped.Add(rel); continue; }
 
             var dest = Path.GetFullPath(Path.Combine(installPath, rel));
             // Zip-slip: an entry escaping the install root is never legitimate.
@@ -295,8 +338,28 @@ public static class AddonService
             written.Add(rel);
         }
 
-        return written;
+        return (written, skipped);
     }
+
+    /// <summary>
+    /// Normalizes a declared include list for lookup, or null when the addon
+    /// didn't declare one.
+    /// </summary>
+    private static HashSet<string>? BuildIncludeSet(IReadOnlyList<string>? includeOnly)
+    {
+        if (includeOnly == null || includeOnly.Count == 0) return null;
+        return new HashSet<string>(
+            includeOnly.Select(NormalizeRelative).Where(p => p.Length > 0),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A declared list is exhaustive — it overrides the extension rules, because
+    /// the reviewer who wrote it already decided. Without one, skip executables
+    /// and documentation.
+    /// </summary>
+    private static bool ShouldApply(string rel, HashSet<string>? include) =>
+        include != null ? include.Contains(rel) : !AddonRisk.IsSkippable(rel);
 
     private static void RestoreFiles(
         string installPath, string addonId, IReadOnlyList<string> owned, CancellationToken ct)

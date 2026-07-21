@@ -261,6 +261,105 @@ public class AddonServiceTests : IDisposable
         Assert.Equal("V2 ORIGINAL", Read(install, @"art\ui\panel.ddt"));
     }
 
+    // -- What actually gets written -------------------------------------------
+    //
+    // Modelled on the real "building rotator" archive: a UPX-packed executable,
+    // a PDF, a screenshot, and the startup config that does the work.
+
+    /// <summary>
+    /// The assertion that matters: the launcher must never place a third-party
+    /// executable inside the player's game folder. It is skipped and named, and
+    /// the addon still applies.
+    /// </summary>
+    [Fact]
+    public async Task Apply_NeverWritesAnExecutable_AndSaysWhichItSkipped()
+    {
+        var install = MakeInstall((@"startup\gamey.con", "ORIGINAL CONFIG"));
+        var zip = MakeZip(
+            (@"Building Rotator.exe", "MZ fake executable"),
+            (@"EV Products ReadMe.pdf", "docs"),
+            (@"rotated.png", "screenshot"),
+            (@"startup/gamey.con", "ROTATION ENABLED"));
+
+        var result = await AddonService.ApplyAsync(install, "rotator", zip, Profile, false);
+
+        Assert.Equal(AddonApplyStatus.Applied, result.Status);
+        Assert.False(File.Exists(Path.Combine(install, "Building Rotator.exe")));
+        Assert.False(File.Exists(Path.Combine(install, "EV Products ReadMe.pdf")));
+        Assert.False(File.Exists(Path.Combine(install, "rotated.png")));
+        Assert.Equal("ROTATION ENABLED", Read(install, @"startup\gamey.con"));
+
+        Assert.Contains("Building Rotator.exe", result.SkippedFiles);
+        Assert.Equal(new[] { "startup/gamey.con" }, result.Files);
+    }
+
+    /// <summary>
+    /// A declared include list is how a catalog PR states exactly which game
+    /// files an addon touches, so it must be exhaustive — the three .con files
+    /// cover vanilla, WarChiefs and TAD, and only the TAD one belongs on a
+    /// TAD-based mod.
+    /// </summary>
+    [Fact]
+    public async Task Apply_WithIncludeList_AppliesOnlyWhatWasDeclared()
+    {
+        var install = MakeInstall(
+            (@"startup\game.con", "VANILLA"),
+            (@"startup\gamex.con", "WARCHIEFS"),
+            (@"startup\gamey.con", "TAD"));
+        var zip = MakeZip(
+            (@"startup/game.con", "MOD VANILLA"),
+            (@"startup/gamex.con", "MOD WARCHIEFS"),
+            (@"startup/gamey.con", "MOD TAD"));
+
+        var result = await AddonService.ApplyAsync(
+            install, "rotator", zip, Profile, false,
+            includeOnly: new[] { "startup/gamey.con" });
+
+        Assert.Equal(AddonApplyStatus.Applied, result.Status);
+        Assert.Equal("MOD TAD", Read(install, @"startup\gamey.con"));
+        Assert.Equal("VANILLA", Read(install, @"startup\game.con"));
+        Assert.Equal("WARCHIEFS", Read(install, @"startup\gamex.con"));
+    }
+
+    /// <summary>
+    /// An archive holding only an executable and docs has nothing to apply, and
+    /// must say so rather than reporting success over an empty write.
+    /// </summary>
+    [Fact]
+    public async Task Apply_ArchiveWithNothingApplicable_IsEmpty()
+    {
+        var install = MakeInstall((@"art\a.ddt", "A"));
+        var zip = MakeZip((@"tool.exe", "MZ"), (@"readme.pdf", "docs"));
+
+        var result = await AddonService.ApplyAsync(install, "toolonly", zip, Profile, false);
+
+        Assert.Equal(AddonApplyStatus.Empty, result.Status);
+        Assert.False(File.Exists(Path.Combine(install, "tool.exe")));
+    }
+
+    /// <summary>
+    /// Re-applying after an update must reproduce the SAME file set. The manifest
+    /// records what the addon owned, and that list is what gets re-applied — so a
+    /// skipped executable stays skipped rather than sneaking in on the second pass.
+    /// </summary>
+    [Fact]
+    public async Task Reapply_DoesNotResurrectSkippedExecutables()
+    {
+        var install = MakeInstall((@"startup\gamey.con", "V1"));
+        var zip = MakeZip(
+            (@"Building Rotator.exe", "MZ fake executable"),
+            (@"startup/gamey.con", "ROTATION"));
+
+        await AddonService.ApplyAsync(install, "rotator", zip, Profile, false);
+        File.WriteAllText(Path.Combine(install, @"startup\gamey.con"), "V2");
+
+        await AddonService.ReapplyAllAsync(
+            install, new[] { "rotator" }, (_, _) => Task.FromResult<string?>(zip), Profile);
+
+        Assert.Equal("ROTATION", Read(install, @"startup\gamey.con"));
+        Assert.False(File.Exists(Path.Combine(install, "Building Rotator.exe")));
+    }
+
     /// <summary>A missing archive must not throw — an update can't fail over a cosmetic addon.</summary>
     [Fact]
     public async Task Reapply_MissingArchive_IsSurvivable()
