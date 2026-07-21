@@ -1121,7 +1121,6 @@ public partial class ModPropertiesDialog : Window
         LoadGeneral();
         LoadLocalFiles();
         LoadUserData();
-        LoadAddons();
     }
 
     /// <summary>
@@ -1557,11 +1556,11 @@ public partial class ModPropertiesDialog : Window
     /// </summary>
     private void LoadAddons()
     {
-        if (_profile.IsStockGame)
-        {
-            TabAddonsBtn.Visibility = Visibility.Collapsed;
-            return;
-        }
+        // Shown for the stock game too. These are Age of Empires III addons, so
+        // they work on any install, and the launcher's usual "never touch the
+        // player's own copy" rule doesn't apply: an addon is reversible by design
+        // (originals are backed up and restored on disable), unlike the install,
+        // update and uninstall paths that stay refused for the stock profile.
         TabAddonsBtn.Visibility = Visibility.Visible;
 
         AddonCardList.Children.Clear();
@@ -1616,15 +1615,7 @@ public partial class ModPropertiesDialog : Window
             Margin = new Thickness(0, 10, 0, 0),
         };
 
-        if (entry.ExternalInstallerOnly)
-        {
-            // No checkbox: this archive holds an installer and no game files, so
-            // there is nothing to overlay and a toggle would be a lie.
-            var open = new Button { Content = Strings.Get("AddonOpenPage"), Padding = new Thickness(14, 5, 14, 5) };
-            open.Click += (_, _) => SafeUrl.TryOpen(entry.SourceUrl);
-            actions.Children.Add(open);
-        }
-        else if (isEnabled)
+        if (isEnabled)
         {
             var off = new Button
             {
@@ -1656,7 +1647,7 @@ public partial class ModPropertiesDialog : Window
         };
         page.ToolTip = TooltipHelper.Wrap(entry.SourceUrl);
         page.Click += (_, _) => SafeUrl.TryOpen(entry.SourceUrl);
-        if (!entry.ExternalInstallerOnly) actions.Children.Add(page);
+        actions.Children.Add(page);
 
         stack.Children.Add(actions);
 
@@ -1684,6 +1675,14 @@ public partial class ModPropertiesDialog : Window
         var install = _service.InstallPath;
         if (string.IsNullOrEmpty(install)) return;
 
+        // A retail or GOG Age of Empires III under Program Files isn't writable
+        // without elevation, and the raw access-denied error explains nothing.
+        if (!ElevationService.CanWriteTo(install))
+        {
+            ShowAddonResult(Strings.Get("AddonNeedsAdmin"), ok: false);
+            return;
+        }
+
         trigger.IsEnabled = false;
         ShowAddonResult(Strings.Format("AddonDownloading", entry.Name), ok: true);
 
@@ -1693,7 +1692,23 @@ public partial class ModPropertiesDialog : Window
             if (!File.Exists(zip))
                 await HeavenDownloader.DownloadAsync(entry.HeavenFileId, zip);
 
-            var risk = AddonRisk.Assess(await Task.Run(() => AddonService.ReadArchiveEntries(zip)));
+            // An NSIS addon has to be unpacked before anything about it is known —
+            // its archive holds only the installer, so the risk verdict comes from
+            // what the installer produces, not from the download.
+            string? unpackedDir = null;
+            if (entry.Packaging == AddonPackaging.NsisInstaller)
+            {
+                if (!ConfirmRunInstaller(entry)) return;
+
+                ShowAddonResult(Strings.Format("AddonUnpacking", entry.Name), ok: true);
+                unpackedDir = await UnpackInstallerAsync(entry, zip);
+                if (unpackedDir == null) return;
+            }
+
+            var entries = unpackedDir != null
+                ? await Task.Run(() => AddonService.ListFolderEntries(unpackedDir))
+                : await Task.Run(() => AddonService.ReadArchiveEntries(zip));
+            var risk = AddonRisk.Assess(entries);
 
             if (risk.Level == AddonRiskLevel.Blocked)
             {
@@ -1706,9 +1721,13 @@ public partial class ModPropertiesDialog : Window
             if (risk.Level == AddonRiskLevel.MultiplayerRisk && !ConfirmMultiplayerRisk(risk))
                 return;
 
-            var result = await AddonService.ApplyAsync(
-                install, entry.Id, zip, _profile,
-                allowMultiplayerRisk: true, includeOnly: entry.IncludeOnly);
+            var result = unpackedDir != null
+                ? await AddonService.ApplyFromFolderAsync(
+                    install, entry.Id, unpackedDir, _profile,
+                    allowMultiplayerRisk: true, includeOnly: entry.IncludeOnly)
+                : await AddonService.ApplyAsync(
+                    install, entry.Id, zip, _profile,
+                    allowMultiplayerRisk: true, includeOnly: entry.IncludeOnly);
 
             if (result.Status != AddonApplyStatus.Applied)
             {
@@ -1774,6 +1793,57 @@ public partial class ModPropertiesDialog : Window
     /// causes have different symptoms and the player can only weigh the one that
     /// applies.
     /// </summary>
+    /// <summary>
+    /// Unpacks an NSIS addon into a scratch folder and returns it, or null when
+    /// the installer refused to run silently.
+    /// </summary>
+    private async Task<string?> UnpackInstallerAsync(AddonEntry entry, string zipPath)
+    {
+        try
+        {
+            var work = Path.Combine(AddonStore.RootDir, "unpacked", entry.Id);
+            if (Directory.Exists(work)) Directory.Delete(work, recursive: true);
+            Directory.CreateDirectory(work);
+
+            // The download is a zip whose single entry is the installer.
+            var stage = Path.Combine(work, "_installer");
+            Directory.CreateDirectory(stage);
+            await Task.Run(() => System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, stage, true));
+
+            var installer = Directory
+                .EnumerateFiles(stage, "*.exe", SearchOption.AllDirectories)
+                .FirstOrDefault();
+            if (installer == null)
+            {
+                ShowAddonResult(Strings.Get("AddonInstallerMissing"), ok: false);
+                return null;
+            }
+
+            var outDir = Path.Combine(work, "files");
+            await NsisExtractor.ExtractAsync(installer, outDir);
+            return outDir;
+        }
+        catch (NsisExtractionException ex)
+        {
+            DiagnosticLog.Write($"Addon '{entry.Id}': unpack failed — {ex.Message}");
+            ShowAddonResult(
+                Strings.Get(ex.DeclinedByUser ? "AddonRunCancelled" : "AddonUnpackFailed"),
+                ok: false);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Running a third-party binary is a line this launcher doesn't otherwise
+    /// cross, so it is never implicit. The text says what will run and — the part
+    /// that matters — that it runs into a temporary folder rather than the game.
+    /// </summary>
+    private bool ConfirmRunInstaller(AddonEntry entry) =>
+        MessageBox.Show(this,
+            Strings.Format("AddonRunInstallerBody", entry.Name),
+            Strings.Get("AddonRunInstallerTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+
     private bool ConfirmMultiplayerRisk(AddonRiskAssessment risk)
     {
         var files = risk.VersionMatchFiles.Count > 0 ? risk.VersionMatchFiles : risk.SimulationFiles;

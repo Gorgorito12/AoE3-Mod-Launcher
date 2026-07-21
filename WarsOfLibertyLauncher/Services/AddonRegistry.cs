@@ -2,6 +2,19 @@ using System.Collections.Generic;
 
 namespace WarsOfLibertyLauncher.Services;
 
+/// <summary>How an addon's files are packaged inside its download.</summary>
+public enum AddonPackaging
+{
+    /// <summary>Plain archive: the files are extracted directly.</summary>
+    Overlay,
+    /// <summary>
+    /// The archive holds an NSIS self-extracting installer. The launcher runs it
+    /// silently into a scratch folder and applies the result — see
+    /// <see cref="NsisExtractor"/> for why that is safer than the alternative.
+    /// </summary>
+    NsisInstaller,
+}
+
 /// <summary>
 /// One optional addon the launcher can offer.
 /// </summary>
@@ -24,12 +37,8 @@ public sealed class AddonEntry
     /// </summary>
     public IReadOnlyList<string>? IncludeOnly { get; init; }
 
-    /// <summary>
-    /// True when the author ships the addon as an executable installer, so there
-    /// is nothing for the launcher to overlay. Rendered as a link rather than a
-    /// checkbox — see <see cref="AddonRegistry"/> for why it is still listed.
-    /// </summary>
-    public bool ExternalInstallerOnly { get; init; }
+    /// <summary>How the launcher gets this addon's files out of its download.</summary>
+    public AddonPackaging Packaging { get; init; } = AddonPackaging.Overlay;
 
     public string DescriptionFor(string language) =>
         language == "es" && !string.IsNullOrWhiteSpace(DescriptionEs) ? DescriptionEs : DescriptionEn;
@@ -88,18 +97,33 @@ public static class AddonRegistry
         {
             Id = "heaven-1656",
             Name = "Transparent interface (Ekanta UI)",
-            DescriptionEn = "A transparent in-game interface. Its author ships it as an installer, "
-                          + "so it is applied outside the launcher.",
-            DescriptionEs = "Interfaz transparente dentro del juego. Su autor lo distribuye como "
-                          + "instalador, así que se aplica fuera del launcher.",
+            DescriptionEn = "A transparent in-game interface: 25 UI layouts and 11 textures. "
+                          + "It changes files the game compares between players, so it may "
+                          + "affect multiplayer.",
+            DescriptionEs = "Interfaz transparente dentro del juego: 25 diseños de interfaz y 11 "
+                          + "texturas. Modifica archivos que el juego compara entre jugadores, "
+                          + "así que puede afectar el multijugador.",
             HeavenFileId = "1656",
             SourceUrl = "https://aoe3.heavengames.com/downloads/showfile.php?fileid=1656",
-            // The archive holds exactly one file — "Ekanta TAD UI.exe" — and no
-            // game files at all, so there is nothing to overlay and a checkbox
-            // would be a lie. Still listed, with a link: a player looking for it
-            // should find it from the launcher even when the launcher can't be the
-            // one to install it.
-            ExternalInstallerOnly = true,
+            // The download is a single file, "Ekanta TAD UI.exe" — but it is an
+            // NSIS self-extractor whose payload IS ordinary game content: 25
+            // data\ui*.xml.xmb layouts and 11 art\ui\ingame\*.ddt textures. The
+            // obstacle was packaging, not the addon.
+            //
+            // Parsing NSIS in-process was rejected: no existing dependency handles
+            // it (SharpCompress covers zip/rar/7z/tar/gzip) and a hand-written
+            // parser for untrusted input is a poor trade for one addon. Running
+            // the installer against the game folder was rejected too — the files
+            // would land with no backup and no manifest entry, so verify would
+            // call them corrupt and Repair would wipe them.
+            //
+            // Running it into a SCRATCH folder and applying the result through the
+            // normal path avoids both, and is safer than the alternative it
+            // replaces: telling the player to run the same installer themselves,
+            // against their game, with no way to undo it. Verified in silent mode:
+            // exit 0, no window, 39 files, of which the readme, the .url and
+            // uninst.exe are dropped by the existing skip rules.
+            Packaging = AddonPackaging.NsisInstaller,
         },
     };
 

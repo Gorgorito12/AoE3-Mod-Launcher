@@ -360,6 +360,178 @@ public class AddonServiceTests : IDisposable
         Assert.False(File.Exists(Path.Combine(install, "Building Rotator.exe")));
     }
 
+    // -- Applying from a folder ------------------------------------------------
+    //
+    // The shape an unpacked NSIS installer leaves behind. Modelled on the real
+    // transparent-UI payload: 25 data\*.xmb, 11 art\*.ddt, plus a readme, a .url
+    // and uninst.exe that must not reach the game.
+
+    private string MakeFolder(params (string Rel, string Content)[] files)
+    {
+        var root = NewTempDir();
+        foreach (var (rel, content) in files)
+        {
+            var full = Path.Combine(root, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllText(full, content);
+        }
+        return root;
+    }
+
+    /// <summary>
+    /// Same rules as the archive path — that is the point of sharing the core.
+    /// The installer's own leftovers are dropped by the existing filters.
+    /// </summary>
+    [Fact]
+    public async Task ApplyFromFolder_AppliesGameFiles_AndDropsInstallerLeftovers()
+    {
+        var install = MakeInstall((@"data\uimainnew.xml.xmb", "ORIGINAL LAYOUT"));
+        var unpacked = MakeFolder(
+            (@"data\uimainnew.xml.xmb", "TRANSPARENT LAYOUT"),
+            (@"art\ui\ingame\Select.ddt", "TEXTURE"),
+            (@"Ekanta Readme.txt", "docs"),
+            (@"Ekanta TAD UI.url", "shortcut"),
+            (@"uninst.exe", "MZ"));
+
+        var result = await AddonService.ApplyFromFolderAsync(
+            install, "ekanta", unpacked, Profile, allowMultiplayerRisk: true);
+
+        Assert.Equal(AddonApplyStatus.Applied, result.Status);
+        Assert.Equal("TRANSPARENT LAYOUT", Read(install, @"data\uimainnew.xml.xmb"));
+        Assert.True(File.Exists(Path.Combine(install, @"art\ui\ingame\Select.ddt")));
+
+        Assert.False(File.Exists(Path.Combine(install, "uninst.exe")));
+        Assert.False(File.Exists(Path.Combine(install, "Ekanta Readme.txt")));
+        Assert.False(File.Exists(Path.Combine(install, "Ekanta TAD UI.url")));
+    }
+
+    /// <summary>Reverting works the same whether the files came from a zip or a folder.</summary>
+    [Fact]
+    public async Task ApplyFromFolder_ThenDisable_RestoresOriginals()
+    {
+        var install = MakeInstall((@"data\uimainnew.xml.xmb", "ORIGINAL"));
+        var unpacked = MakeFolder((@"data\uimainnew.xml.xmb", "MODIFIED"));
+
+        await AddonService.ApplyFromFolderAsync(
+            install, "ekanta", unpacked, Profile, allowMultiplayerRisk: true);
+        Assert.Equal("MODIFIED", Read(install, @"data\uimainnew.xml.xmb"));
+
+        await AddonService.DisableAsync(install, "ekanta", Profile);
+        Assert.Equal("ORIGINAL", Read(install, @"data\uimainnew.xml.xmb"));
+    }
+
+    /// <summary>
+    /// An installer that unpacks everything under one folder must be treated like
+    /// a wrapped archive, or the files land one level too deep.
+    /// </summary>
+    [Fact]
+    public async Task ApplyFromFolder_StripsAWrapperFolder()
+    {
+        var install = MakeInstall((@"art\panel.ddt", "ORIGINAL"));
+        var unpacked = MakeFolder((@"Ekanta UI\art\panel.ddt", "MODIFIED"));
+
+        await AddonService.ApplyFromFolderAsync(
+            install, "ekanta", unpacked, Profile, allowMultiplayerRisk: true);
+
+        Assert.Equal("MODIFIED", Read(install, @"art\panel.ddt"));
+        Assert.False(Directory.Exists(Path.Combine(install, "Ekanta UI")));
+    }
+
+    /// <summary>
+    /// The transparent UI replaces .xmb files, which AoE3 compares between
+    /// players — so it must need consent, exactly like a data\ change.
+    /// </summary>
+    [Fact]
+    public async Task ApplyFromFolder_XmbFiles_NeedConsent()
+    {
+        var install = MakeInstall((@"data\uimainnew.xml.xmb", "ORIGINAL"));
+        var unpacked = MakeFolder((@"data\uimainnew.xml.xmb", "MODIFIED"));
+
+        var refused = await AddonService.ApplyFromFolderAsync(
+            install, "ekanta", unpacked, Profile, allowMultiplayerRisk: false);
+
+        Assert.Equal(AddonApplyStatus.Blocked, refused.Status);
+        Assert.Equal("ORIGINAL", Read(install, @"data\uimainnew.xml.xmb"));
+    }
+
+    // -- The stock game: an install with no manifest ---------------------------
+    //
+    // These addons are Age of Empires III addons, so they apply to the player's
+    // own unmodded copy too. That install was never created by the launcher, so it
+    // has no install-manifest.json — and one must not be written there, because
+    // AoE3Detector uses that file to rule a folder out as a clone source for new
+    // mod installs.
+
+    /// <summary>A bare game folder: files, no manifest.</summary>
+    private string MakeUnmanagedInstall(params (string Rel, string Content)[] files)
+    {
+        var root = NewTempDir();
+        foreach (var (rel, content) in files)
+        {
+            var full = Path.Combine(root, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllText(full, content);
+        }
+        return root;
+    }
+
+    [Fact]
+    public async Task Apply_WorksWithoutAnInstallManifest()
+    {
+        var install = MakeUnmanagedInstall((@"art\ui\panel.ddt", "STOCK"));
+        var zip = MakeZip((@"art/ui/panel.ddt", "ADDON"));
+
+        var result = await AddonService.ApplyAsync(install, "ui", zip, Profile, false);
+
+        Assert.Equal(AddonApplyStatus.Applied, result.Status);
+        Assert.Equal("ADDON", Read(install, @"art\ui\panel.ddt"));
+    }
+
+    /// <summary>
+    /// Reverting is what makes writing into the player's own game acceptable at
+    /// all, so it has to work without a manifest too.
+    /// </summary>
+    [Fact]
+    public async Task ApplyThenDisable_RestoresOriginals_WithoutAManifest()
+    {
+        var install = MakeUnmanagedInstall((@"art\ui\panel.ddt", "STOCK"));
+        var zip = MakeZip((@"art/ui/panel.ddt", "ADDON"));
+
+        await AddonService.ApplyAsync(install, "ui", zip, Profile, false);
+        Assert.True(await AddonService.DisableAsync(install, "ui", Profile));
+
+        Assert.Equal("STOCK", Read(install, @"art\ui\panel.ddt"));
+    }
+
+    /// <summary>
+    /// Writing a manifest into the game folder would make the launcher stop
+    /// offering that folder as the base for installing new mods. Silent, and very
+    /// hard to trace back.
+    /// </summary>
+    [Fact]
+    public async Task Apply_NeverWritesAnInstallManifestIntoAGameFolder()
+    {
+        var install = MakeUnmanagedInstall((@"art\ui\panel.ddt", "STOCK"));
+
+        await AddonService.ApplyAsync(install, "ui", MakeZip((@"art/ui/panel.ddt", "ADDON")), Profile, false);
+
+        Assert.False(File.Exists(Path.Combine(install, "install-manifest.json")));
+    }
+
+    /// <summary>Conflicts are still caught when the record is the only source.</summary>
+    [Fact]
+    public async Task Conflict_IsDetected_WithoutAManifest()
+    {
+        var install = MakeUnmanagedInstall((@"art\ui\panel.ddt", "STOCK"));
+        await AddonService.ApplyAsync(install, "first", MakeZip((@"art/ui/panel.ddt", "FIRST")), Profile, false);
+
+        var result = await AddonService.ApplyAsync(
+            install, "second", MakeZip((@"art/ui/panel.ddt", "SECOND")), Profile, false);
+
+        Assert.Equal(AddonApplyStatus.Conflict, result.Status);
+        Assert.Equal("FIRST", Read(install, @"art\ui\panel.ddt"));
+    }
+
     /// <summary>A missing archive must not throw — an update can't fail over a cosmetic addon.</summary>
     [Fact]
     public async Task Reapply_MissingArchive_IsSurvivable()

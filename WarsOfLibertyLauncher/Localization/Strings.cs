@@ -1046,6 +1046,55 @@ public static class Strings
             [LangEs] = "Addon activado. No se copió al juego: {0} — el launcher nunca "
                      + "instala programas, solo archivos del juego.",
         },
+        ["AddonNeedsAdmin"] = new()
+        {
+            [LangEn] = "This game folder can only be changed with administrator rights. "
+                     + "Close the launcher and reopen it as administrator to use addons here.",
+            [LangEs] = "Esta carpeta del juego solo se puede modificar con permisos de "
+                     + "administrador. Cierra el launcher y ábrelo como administrador para "
+                     + "usar addons aquí.",
+        },
+        ["AddonRunCancelled"] = new()
+        {
+            [LangEn] = "You declined the permission prompt, so nothing was changed.",
+            [LangEs] = "Rechazaste el permiso, así que no se cambió nada.",
+        },
+        ["AddonUnpacking"] = new()
+        {
+            [LangEn] = "Unpacking {0}...",
+            [LangEs] = "Desempaquetando {0}...",
+        },
+        ["AddonRunInstallerTitle"] = new()
+        {
+            [LangEn] = "Unpack this addon's installer?",
+            [LangEs] = "¿Desempaquetar el instalador de este addon?",
+        },
+        ["AddonRunInstallerBody"] = new()
+        {
+            [LangEn] = "{0} is distributed as an installer by its author, so the launcher has "
+                     + "to run it to get at the files.\n\nIt runs into a temporary folder, "
+                     + "never into your game. The launcher then applies the files the normal "
+                     + "way, so they are backed up and can be undone.\n\nWindows will ask you "
+                     + "for permission first, because that installer requests it.\n\nContinue?",
+            [LangEs] = "{0} lo distribuye su autor como instalador, así que el launcher tiene "
+                     + "que ejecutarlo para obtener los archivos.\n\nSe ejecuta hacia una "
+                     + "carpeta temporal, nunca sobre tu juego. Después el launcher aplica los "
+                     + "archivos de la forma normal, con respaldo y posibilidad de deshacer."
+                     + "\n\nWindows te va a pedir permiso primero, porque ese instalador lo "
+                     + "exige.\n\n¿Continuar?",
+        },
+        ["AddonUnpackFailed"] = new()
+        {
+            [LangEn] = "The installer could not be unpacked automatically. Open its page and "
+                     + "install it by hand instead.",
+            [LangEs] = "No se pudo desempaquetar el instalador automáticamente. Abre su página "
+                     + "e instálalo a mano.",
+        },
+        ["AddonInstallerMissing"] = new()
+        {
+            [LangEn] = "The download did not contain an installer.",
+            [LangEs] = "La descarga no contenía ningún instalador.",
+        },
         ["AddonMultiplayerConfirmTitle"] = new()
         {
             [LangEn] = "This addon can affect multiplayer",

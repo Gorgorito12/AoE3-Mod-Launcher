@@ -138,7 +138,7 @@ public class AddonRegistryTests
         Assert.NotNull(entry.IncludeOnly);
         Assert.All(entry.IncludeOnly!, p => Assert.StartsWith("startup/", p));
         Assert.Contains("startup/gamey.con", entry.IncludeOnly!);   // TAD — what WoL is built on
-        Assert.False(entry.ExternalInstallerOnly);
+        Assert.Equal(AddonPackaging.Overlay, entry.Packaging);
     }
 
     /// <summary>
@@ -147,7 +147,7 @@ public class AddonRegistryTests
     /// </summary>
     [Fact]
     public void TransparentUi_IsInstallerOnly()
-        => Assert.True(Get("heaven-1656").ExternalInstallerOnly);
+        => Assert.Equal(AddonPackaging.NsisInstaller, Get("heaven-1656").Packaging);
 
     /// <summary>
     /// Everything ships under a wrapper folder that AddonPaths strips, and the
@@ -159,7 +159,7 @@ public class AddonRegistryTests
         var entry = Get("heaven-3730");
 
         Assert.Null(entry.IncludeOnly);
-        Assert.False(entry.ExternalInstallerOnly);
+        Assert.Equal(AddonPackaging.Overlay, entry.Packaging);
     }
 
     [Fact]

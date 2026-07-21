@@ -121,7 +121,7 @@ public static class AddonService
     /// imported archive, which has no manifest) falls back to the automatic skip
     /// rules.
     /// </param>
-    public static async Task<AddonApplyResult> ApplyAsync(
+    public static Task<AddonApplyResult> ApplyAsync(
         string installPath,
         string addonId,
         string zipPath,
@@ -129,8 +129,39 @@ public static class AddonService
         bool allowMultiplayerRisk,
         IReadOnlyList<string>? includeOnly = null,
         CancellationToken ct = default)
+        => ApplyCoreAsync(installPath, addonId, new ZipAddonSource(zipPath), profile,
+                          allowMultiplayerRisk, includeOnly, ct);
+
+    /// <summary>
+    /// Applies files already sitting in a folder - the shape an unpacked NSIS
+    /// installer leaves behind (see <see cref="NsisExtractor"/>).
+    ///
+    /// Shares every rule with the archive path: same risk gate, same conflict
+    /// check, same backups, same manifest re-capture. Only where the bytes come
+    /// from differs, which is why the core is shared rather than copied - a second
+    /// implementation would be a second place for the safety rules to drift.
+    /// </summary>
+    public static Task<AddonApplyResult> ApplyFromFolderAsync(
+        string installPath,
+        string addonId,
+        string sourceDir,
+        ModProfile profile,
+        bool allowMultiplayerRisk,
+        IReadOnlyList<string>? includeOnly = null,
+        CancellationToken ct = default)
+        => ApplyCoreAsync(installPath, addonId, new FolderAddonSource(sourceDir), profile,
+                          allowMultiplayerRisk, includeOnly, ct);
+
+    private static async Task<AddonApplyResult> ApplyCoreAsync(
+        string installPath,
+        string addonId,
+        IAddonSource source,
+        ModProfile profile,
+        bool allowMultiplayerRisk,
+        IReadOnlyList<string>? includeOnly,
+        CancellationToken ct)
     {
-        var entries = await Task.Run(() => ReadArchiveEntries(zipPath), ct);
+        var entries = await Task.Run(() => source.ListEntries(), ct);
         var risk = AddonRisk.Assess(entries);
 
         if (risk.Level == AddonRiskLevel.Blocked)
@@ -142,12 +173,11 @@ public static class AddonService
 
         var include = BuildIncludeSet(includeOnly);
 
-        var manifest = InstallManifest.TryLoad(installPath);
-        if (manifest == null)
-        {
-            DiagnosticLog.Write($"Addon '{addonId}': no install manifest at {installPath} — cannot apply.");
-            return new AddonApplyResult(AddonApplyStatus.Failed, Array.Empty<string>(), Array.Empty<string>());
-        }
+        // The manifest is OPTIONAL. Addons apply to the player's own unmodded
+        // Age of Empires III too, and that install has none — the launcher never
+        // installed it. Ownership is tracked separately (see AddonOwnership) so
+        // this path does not depend on it.
+        var owned = AddonOwnership.Load(installPath);
 
         // Two addons writing the same file cannot both be reverted — whoever
         // disabled second would restore the FIRST one's file as the "original".
@@ -161,7 +191,7 @@ public static class AddonService
             return new AddonApplyResult(
                 AddonApplyStatus.Empty, Array.Empty<string>(), Array.Empty<string>());
 
-        foreach (var (otherId, ownedFiles) in manifest.AddonFiles)
+        foreach (var (otherId, ownedFiles) in owned)
         {
             if (string.Equals(otherId, addonId, StringComparison.OrdinalIgnoreCase)) continue;
             var clash = ownedFiles.FirstOrDefault(f =>
@@ -174,11 +204,21 @@ public static class AddonService
         try
         {
             var (written, skipped) = await Task.Run(
-                () => ExtractWithBackup(installPath, addonId, zipPath, include, ct), ct);
+                () => CopyWithBackup(installPath, addonId, source, include, ct), ct);
 
-            manifest.AddonFiles[addonId] = written;
-            RecaptureInto(manifest, installPath, written, profile, ct);
-            manifest.Save();
+            owned[addonId] = written;
+            AddonOwnership.Save(installPath, owned);
+
+            // Only a modded install has a manifest, and re-capturing is what stops
+            // "Verify files" reporting the addon's files as corrupt. The stock game
+            // has no verify, so there is nothing to keep in sync there.
+            var manifest = InstallManifest.TryLoad(installPath);
+            if (manifest != null)
+            {
+                manifest.AddonFiles[addonId] = written;
+                RecaptureInto(manifest, installPath, written, profile, ct);
+                manifest.Save();
+            }
 
             DiagnosticLog.Write(
                 $"Addon '{addonId}' applied: {written.Count} file(s), risk={risk.Level}" +
@@ -203,15 +243,14 @@ public static class AddonService
         ModProfile profile,
         CancellationToken ct = default)
     {
-        var manifest = InstallManifest.TryLoad(installPath);
-        if (manifest == null) return false;
+        var record = AddonOwnership.Load(installPath);
 
-        if (!manifest.AddonFiles.TryGetValue(addonId, out var owned) || owned.Count == 0)
+        if (!record.TryGetValue(addonId, out var owned) || owned.Count == 0)
         {
             // Nothing recorded — treat as already off rather than an error, so a
             // half-applied state can always be cleared from the UI.
-            manifest.AddonFiles.Remove(addonId);
-            manifest.Save();
+            record.Remove(addonId);
+            AddonOwnership.Save(installPath, record);
             return true;
         }
 
@@ -219,10 +258,18 @@ public static class AddonService
         {
             await Task.Run(() => RestoreFiles(installPath, addonId, owned, ct), ct);
 
-            manifest.AddonFiles.Remove(addonId);
-            RecaptureInto(manifest, installPath, owned, profile, ct);
-            manifest.FileHashes = NativeInstallService.PruneMissingHashes(installPath, manifest.FileHashes);
-            manifest.Save();
+            record.Remove(addonId);
+            AddonOwnership.Save(installPath, record);
+
+            // Modded installs only — the stock game has no manifest and no verify.
+            var manifest = InstallManifest.TryLoad(installPath);
+            if (manifest != null)
+            {
+                manifest.AddonFiles.Remove(addonId);
+                RecaptureInto(manifest, installPath, owned, profile, ct);
+                manifest.FileHashes = NativeInstallService.PruneMissingHashes(installPath, manifest.FileHashes);
+                manifest.Save();
+            }
 
             TryDeleteDirectory(BackupFolderOf(installPath, addonId));
             DiagnosticLog.Write($"Addon '{addonId}' disabled: {owned.Count} file(s) reverted.");
@@ -270,11 +317,10 @@ public static class AddonService
                 // was first applied, so re-applying reproduces the same set without
                 // needing the catalog manifest here. Captured BEFORE the entry is
                 // cleared.
-                var manifest = InstallManifest.TryLoad(installPath);
+                var record = AddonOwnership.Load(installPath);
                 IReadOnlyList<string>? previouslyOwned = null;
-                if (manifest != null && manifest.AddonFiles.TryGetValue(id, out var owned))
-                    previouslyOwned = owned.ToList();
-                if (manifest != null && manifest.AddonFiles.Remove(id)) manifest.Save();
+                if (record.TryGetValue(id, out var owned)) previouslyOwned = owned.ToList();
+                if (record.Remove(id)) AddonOwnership.Save(installPath, record);
 
                 var zip = await resolveZip(id, ct);
                 if (string.IsNullOrEmpty(zip) || !File.Exists(zip))
@@ -303,8 +349,8 @@ public static class AddonService
     /// Extracts every file entry, copying any pre-existing file into the addon's
     /// backup folder first. Returns the install-relative paths written.
     /// </summary>
-    private static (List<string> Written, List<string> Skipped) ExtractWithBackup(
-        string installPath, string addonId, string zipPath,
+    private static (List<string> Written, List<string> Skipped) CopyWithBackup(
+        string installPath, string addonId, IAddonSource source,
         HashSet<string>? include, CancellationToken ct)
     {
         var backupRoot = BackupFolderOf(installPath, addonId);
@@ -312,34 +358,27 @@ public static class AddonService
 
         var written = new List<string>();
         var skipped = new List<string>();
-        using var zip = ZipFile.OpenRead(zipPath);
+        var installRoot = Path.GetFullPath(installPath);
 
-        // Same wrapper-folder rule the risk check used, or the two would disagree
-        // about which paths this archive writes.
-        var prefix = AddonPaths.StripCommonRoot(
-            zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName));
-
-        foreach (var entry in zip.Entries)
+        foreach (var rel in source.ListEntries())
         {
             ct.ThrowIfCancellationRequested();
-            if (string.IsNullOrEmpty(entry.Name)) continue;   // directory entry
-
-            var rel = AddonPaths.RemovePrefix(entry.FullName, prefix);
             if (rel.Length == 0) continue;
 
             if (!ShouldApply(rel, include)) { skipped.Add(rel); continue; }
 
             var dest = Path.GetFullPath(Path.Combine(installPath, rel));
-            // Zip-slip: an entry escaping the install root is never legitimate.
-            if (!dest.StartsWith(Path.GetFullPath(installPath), StringComparison.OrdinalIgnoreCase))
+            // Path traversal: an entry escaping the install root is never legitimate.
+            if (!dest.StartsWith(installRoot, StringComparison.OrdinalIgnoreCase))
             {
-                DiagnosticLog.Write($"Addon '{addonId}': rejected entry outside install root: {entry.FullName}");
+                DiagnosticLog.Write("Addon rejected entry outside install root: " + rel);
                 continue;
             }
 
             var destDir = Path.GetDirectoryName(dest);
             if (!string.IsNullOrEmpty(destDir)) Directory.CreateDirectory(destDir);
 
+            // Back up BEFORE overwriting - this is what makes disabling reversible.
             if (File.Exists(dest))
             {
                 var backup = Path.Combine(backupRoot, rel);
@@ -348,11 +387,96 @@ public static class AddonService
                 File.Copy(dest, backup, overwrite: true);
             }
 
-            entry.ExtractToFile(dest, overwrite: true);
+            source.CopyTo(rel, dest);
             written.Add(rel);
         }
 
         return (written, skipped);
+    }
+
+    /// <summary>
+    /// Install-relative paths a folder would contribute, with the wrapper folder
+    /// stripped. Lets a caller classify an unpacked installer's output before
+    /// deciding whether to apply it.
+    /// </summary>
+    public static List<string> ListFolderEntries(string sourceDir)
+        => new FolderAddonSource(sourceDir).ListEntries();
+
+    /// <summary>Where an addon's files come from: an archive, or a folder.</summary>
+    private interface IAddonSource
+    {
+        /// <summary>Install-relative paths, wrapper folder already stripped.</summary>
+        List<string> ListEntries();
+        void CopyTo(string relativePath, string destinationPath);
+    }
+
+    private sealed class ZipAddonSource : IAddonSource
+    {
+        private readonly string _zipPath;
+        public ZipAddonSource(string zipPath) => _zipPath = zipPath;
+
+        public List<string> ListEntries() => ReadArchiveEntries(_zipPath);
+
+        public void CopyTo(string relativePath, string destinationPath)
+        {
+            using var zip = ZipFile.OpenRead(_zipPath);
+            var prefix = AddonPaths.StripCommonRoot(
+                zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName));
+
+            var entry = zip.Entries.FirstOrDefault(e =>
+                !string.IsNullOrEmpty(e.Name) &&
+                string.Equals(AddonPaths.RemovePrefix(e.FullName, prefix), relativePath,
+                              StringComparison.OrdinalIgnoreCase));
+            if (entry == null) throw new FileNotFoundException("Missing zip entry: " + relativePath);
+
+            entry.ExtractToFile(destinationPath, overwrite: true);
+        }
+    }
+
+    private sealed class FolderAddonSource : IAddonSource
+    {
+        private readonly string _root;
+        public FolderAddonSource(string root) => _root = root;
+
+        public List<string> ListEntries()
+        {
+            if (!Directory.Exists(_root)) return new List<string>();
+
+            var all = Directory
+                .EnumerateFiles(_root, "*", SearchOption.AllDirectories)
+                .Select(p => AddonPaths.Normalize(Path.GetRelativePath(_root, p)))
+                .Where(p => p.Length > 0)
+                .ToList();
+
+            // Same wrapper rule as archives: an installer that unpacks everything
+            // under one folder would otherwise write it into the install verbatim.
+            var prefix = AddonPaths.StripCommonRoot(all);
+            return all
+                .Select(p => AddonPaths.RemovePrefix(p, prefix))
+                .Where(p => p.Length > 0)
+                .ToList();
+        }
+
+        public void CopyTo(string relativePath, string destinationPath)
+        {
+            var source = FindSource(relativePath);
+            if (source == null) throw new FileNotFoundException("Missing source file: " + relativePath);
+            File.Copy(source, destinationPath, overwrite: true);
+        }
+
+        /// <summary>Resolves back through the wrapper prefix ListEntries removed.</summary>
+        private string? FindSource(string relativePath)
+        {
+            var direct = Path.Combine(_root, relativePath);
+            if (File.Exists(direct)) return direct;
+
+            foreach (var p in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+            {
+                var rel = AddonPaths.Normalize(Path.GetRelativePath(_root, p));
+                if (rel.EndsWith(relativePath, StringComparison.OrdinalIgnoreCase)) return p;
+            }
+            return null;
+        }
     }
 
     /// <summary>
