@@ -1530,4 +1530,525 @@ public partial class ModPropertiesDialog : Window
         RefreshData();
     }
 
+<<<<<<< Updated upstream
+=======
+    // -- Addons -------------------------------------------------------------
+    //
+    // Optional community overlays (transparent UI, gun-smoke effects, …). The
+    // engine lives in AddonService / AddonRisk; this is only the list.
+    //
+    // Everything here goes through AddonService, never a plain file copy, so the
+    // three invariants it enforces hold no matter which button was pressed: an
+    // addon may not write the files version detection and the multiplayer
+    // fingerprint read, the originals are backed up so it can be reverted, and
+    // the manifest is re-captured so "Verify files" doesn't report the install
+    // as corrupt afterwards.
+
+    /// <summary>
+    /// Rebuilds the addon list. Hidden entirely for the stock game — the
+    /// launcher never modifies the user's own copy of Age of Empires III.
+    /// </summary>
+    private void LoadAddons()
+    {
+        // Shown for the stock game too. These are Age of Empires III addons, so
+        // they work on any install, and the launcher's usual "never touch the
+        // player's own copy" rule doesn't apply: an addon is reversible by design
+        // (originals are backed up and restored on disable), unlike the install,
+        // update and uninstall paths that stay refused for the stock profile.
+        TabAddonsBtn.Visibility = Visibility.Visible;
+
+        AddonCardList.Children.Clear();
+        AddonsResultText.Visibility = Visibility.Collapsed;
+        ImportAddonBtn.IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath);
+
+        var enabled = new HashSet<string>(
+            _config.GetActiveState().EnabledAddons ?? new List<string>(),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Offered addons first — these are the one-click ones.
+        foreach (var entry in AddonRegistry.All)
+            AddonCardList.Children.Add(BuildOfferedAddonCard(entry, enabled.Contains(entry.Id)));
+
+        var imported = _config.ImportedAddons ?? new List<ImportedAddon>();
+        foreach (var addon in imported)
+            AddonCardList.Children.Add(BuildAddonCard(addon, enabled.Contains(addon.Id)));
+
+        bool empty = AddonCardList.Children.Count == 0;
+        AddonsEmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        if (empty) AddonsEmptyHint.Text = Strings.Get("AddonsEmptyHint");
+    }
+
+    /// <summary>
+    /// A card for an addon the launcher knows how to fetch. The whole point of
+    /// the feature: one button that downloads and applies, instead of the player
+    /// finding the file, downloading it and importing it.
+    /// </summary>
+    private Border BuildOfferedAddonCard(AddonEntry entry, bool isEnabled)
+    {
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = entry.Name,
+            Foreground = (Brush)FindResource("TextPrimary"),
+            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = entry.DescriptionFor(Strings.Language),
+            Foreground = (Brush)FindResource("TextSecondary"),
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+        });
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+
+        if (isEnabled)
+        {
+            var off = new Button
+            {
+                Content = Strings.Get("AddonDisable"),
+                Padding = new Thickness(14, 5, 14, 5),
+                IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
+            };
+            off.Click += async (_, _) => await DisableOfferedAddonAsync(entry);
+            actions.Children.Add(off);
+        }
+        else
+        {
+            var get = new Button
+            {
+                Content = Strings.Get("AddonDownloadAndEnable"),
+                Padding = new Thickness(14, 5, 14, 5),
+                IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
+            };
+            get.Click += async (_, _) => await DownloadAndEnableAsync(entry, get);
+            actions.Children.Add(get);
+        }
+
+        var page = new Button
+        {
+            Content = Strings.Get("AddonSourcePage"),
+            Padding = new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(8, 0, 0, 0),
+            Background = (Brush)FindResource("BgPanel"),
+        };
+        page.ToolTip = TooltipHelper.Wrap(entry.SourceUrl);
+        page.Click += (_, _) => SafeUrl.TryOpen(entry.SourceUrl);
+        actions.Children.Add(page);
+
+        stack.Children.Add(actions);
+
+        return new Border
+        {
+            Background = (Brush)FindResource("BgPanelAlt"),
+            BorderBrush = (Brush)FindResource(isEnabled ? "AccentBrush" : "BorderSubtle"),
+            BorderThickness = new Thickness(isEnabled ? 2 : 1),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
+            Padding = new Thickness(14, 12, 14, 12),
+            Margin = new Thickness(0, 0, 0, 8),
+            Child = stack,
+        };
+    }
+
+    /// <summary>
+    /// Download → risk check → apply, in one click.
+    ///
+    /// The risk verdict is computed from the DOWNLOADED archive, never from what
+    /// the registry declares: the registry is a copy of what was true when it was
+    /// written, and the file is what will actually be extracted.
+    /// </summary>
+    private async Task DownloadAndEnableAsync(AddonEntry entry, Button trigger)
+    {
+        var install = _service.InstallPath;
+        if (string.IsNullOrEmpty(install)) return;
+
+        // A retail or GOG Age of Empires III under Program Files isn't writable
+        // without elevation, and the raw access-denied error explains nothing.
+        if (!ElevationService.CanWriteTo(install))
+        {
+            ShowAddonResult(Strings.Get("AddonNeedsAdmin"), ok: false);
+            return;
+        }
+
+        trigger.IsEnabled = false;
+        ShowAddonResult(Strings.Format("AddonDownloading", entry.Name), ok: true);
+
+        try
+        {
+            var zip = AddonStore.PathFor(entry.Id);
+            if (!File.Exists(zip))
+                await HeavenDownloader.DownloadAsync(entry.HeavenFileId, zip);
+
+            // An NSIS addon has to be unpacked before anything about it is known —
+            // its archive holds only the installer, so the risk verdict comes from
+            // what the installer produces, not from the download.
+            string? unpackedDir = null;
+            if (entry.Packaging == AddonPackaging.NsisInstaller)
+            {
+                if (!ConfirmRunInstaller(entry)) return;
+
+                ShowAddonResult(Strings.Format("AddonUnpacking", entry.Name), ok: true);
+                unpackedDir = await UnpackInstallerAsync(entry, zip);
+                if (unpackedDir == null) return;
+            }
+
+            var entries = unpackedDir != null
+                ? await Task.Run(() => AddonService.ListFolderEntries(unpackedDir))
+                : await Task.Run(() => AddonService.ReadArchiveEntries(zip));
+            var risk = AddonRisk.Assess(entries);
+
+            if (risk.Level == AddonRiskLevel.Blocked)
+            {
+                ShowAddonResult(
+                    Strings.Format("AddonRiskBlockedHint", string.Join(", ", risk.BlockingFiles.Take(3))),
+                    ok: false);
+                return;
+            }
+
+            if (risk.Level == AddonRiskLevel.MultiplayerRisk && !ConfirmMultiplayerRisk(risk))
+                return;
+
+            var result = unpackedDir != null
+                ? await AddonService.ApplyFromFolderAsync(
+                    install, entry.Id, unpackedDir, _profile,
+                    allowMultiplayerRisk: true, includeOnly: entry.IncludeOnly)
+                : await AddonService.ApplyAsync(
+                    install, entry.Id, zip, _profile,
+                    allowMultiplayerRisk: true, includeOnly: entry.IncludeOnly);
+
+            if (result.Status != AddonApplyStatus.Applied)
+            {
+                ShowAddonResult(DescribeFailure(result), ok: false);
+                return;
+            }
+
+            var state = _config.GetActiveState();
+            state.EnabledAddons ??= new List<string>();
+            if (!state.EnabledAddons.Contains(entry.Id, StringComparer.OrdinalIgnoreCase))
+                state.EnabledAddons.Add(entry.Id);
+            _config.Save();
+
+            // Name what was left out. "1 file skipped" is useless when the addon
+            // then doesn't behave as its page describes.
+            ShowAddonResult(
+                result.SkippedFiles.Count > 0
+                    ? Strings.Format("AddonAppliedSkipped", string.Join(", ", result.SkippedFiles.Take(3)))
+                    : Strings.Get("AddonApplied"),
+                ok: true);
+        }
+        catch (HeavenDownloadException ex)
+        {
+            DiagnosticLog.Write($"Addon '{entry.Id}' download failed: {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonDownloadFailed"), ok: false);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Addon '{entry.Id}' failed: {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonFailed"), ok: false);
+        }
+        finally
+        {
+            LoadAddons();
+        }
+    }
+
+    private async Task DisableOfferedAddonAsync(AddonEntry entry)
+    {
+        var install = _service.InstallPath;
+        if (string.IsNullOrEmpty(install)) return;
+
+        try
+        {
+            await AddonService.DisableAsync(install, entry.Id, _profile);
+            var state = _config.GetActiveState();
+            state.EnabledAddons?.RemoveAll(id =>
+                string.Equals(id, entry.Id, StringComparison.OrdinalIgnoreCase));
+            _config.Save();
+            ShowAddonResult(Strings.Get("AddonDisabled"), ok: true);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Addon '{entry.Id}' failed to disable: {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonFailed"), ok: false);
+        }
+
+        LoadAddons();
+    }
+
+    /// <summary>
+    /// Names the concrete danger rather than warning in the abstract — the two
+    /// causes have different symptoms and the player can only weigh the one that
+    /// applies.
+    /// </summary>
+    /// <summary>
+    /// Unpacks an NSIS addon into a scratch folder and returns it, or null when
+    /// the installer refused to run silently.
+    /// </summary>
+    private async Task<string?> UnpackInstallerAsync(AddonEntry entry, string zipPath)
+    {
+        try
+        {
+            var work = Path.Combine(AddonStore.RootDir, "unpacked", entry.Id);
+            if (Directory.Exists(work)) Directory.Delete(work, recursive: true);
+            Directory.CreateDirectory(work);
+
+            // The download is a zip whose single entry is the installer.
+            var stage = Path.Combine(work, "_installer");
+            Directory.CreateDirectory(stage);
+            await Task.Run(() => System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, stage, true));
+
+            var installer = Directory
+                .EnumerateFiles(stage, "*.exe", SearchOption.AllDirectories)
+                .FirstOrDefault();
+            if (installer == null)
+            {
+                ShowAddonResult(Strings.Get("AddonInstallerMissing"), ok: false);
+                return null;
+            }
+
+            var outDir = Path.Combine(work, "files");
+            await NsisExtractor.ExtractAsync(installer, outDir);
+            return outDir;
+        }
+        catch (NsisExtractionException ex)
+        {
+            DiagnosticLog.Write($"Addon '{entry.Id}': unpack failed — {ex.Message}");
+            ShowAddonResult(
+                Strings.Get(ex.DeclinedByUser ? "AddonRunCancelled" : "AddonUnpackFailed"),
+                ok: false);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Running a third-party binary is a line this launcher doesn't otherwise
+    /// cross, so it is never implicit. The text says what will run and — the part
+    /// that matters — that it runs into a temporary folder rather than the game.
+    /// </summary>
+    private bool ConfirmRunInstaller(AddonEntry entry) =>
+        MessageBox.Show(this,
+            Strings.Format("AddonRunInstallerBody", entry.Name),
+            Strings.Get("AddonRunInstallerTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+
+    private bool ConfirmMultiplayerRisk(AddonRiskAssessment risk)
+    {
+        var files = risk.VersionMatchFiles.Count > 0 ? risk.VersionMatchFiles : risk.SimulationFiles;
+        var body = risk.VersionMatchFiles.Count > 0
+            ? Strings.Format("AddonVersionMatchConfirmBody", risk.VersionMatchFiles.Count)
+            : Strings.Format("AddonSimulationConfirmBody", string.Join(", ", files.Take(3)));
+
+        return MessageBox.Show(this, body,
+            Strings.Get("AddonMultiplayerConfirmTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+    }
+
+    private Border BuildAddonCard(ImportedAddon addon, bool isEnabled)
+    {
+        var risk = ParseRisk(addon.Risk);
+        bool blocked = risk == AddonRiskLevel.Blocked;
+
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(addon.Name) ? addon.FileName : addon.Name,
+            Foreground = (Brush)FindResource("TextPrimary"),
+            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        // Name the offending files rather than asserting a vague danger — the
+        // user can only judge (or fix) an addon they can see the contents of.
+        if (blocked || risk == AddonRiskLevel.MultiplayerRisk)
+        {
+            var files = addon.RiskFiles is { Count: > 0 }
+                ? string.Join(", ", addon.RiskFiles.Take(3))
+                : "";
+            stack.Children.Add(new TextBlock
+            {
+                Text = Strings.Format(
+                    blocked ? "AddonRiskBlockedHint" : "AddonRiskSimulationHint", files),
+                Foreground = blocked
+                    ? (Brush)FindResource("MpStatusOffline")
+                    : (Brush)FindResource("AccentBrush"),
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+        }
+
+        var toggle = new CheckBox
+        {
+            Content = Strings.Get(isEnabled ? "AddonEnabled" : "AddonEnable"),
+            IsChecked = isEnabled,
+            IsEnabled = !blocked && !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        toggle.Checked += async (_, _) => await ToggleAddonAsync(addon, true);
+        toggle.Unchecked += async (_, _) => await ToggleAddonAsync(addon, false);
+        stack.Children.Add(toggle);
+
+        return new Border
+        {
+            Background = (Brush)FindResource("BgPanelAlt"),
+            BorderBrush = (Brush)FindResource(isEnabled ? "AccentBrush" : "BorderSubtle"),
+            BorderThickness = new Thickness(isEnabled ? 2 : 1),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
+            Padding = new Thickness(14, 12, 14, 12),
+            Margin = new Thickness(0, 0, 0, 8),
+            Child = stack,
+        };
+    }
+
+    private static AddonRiskLevel ParseRisk(string? raw) =>
+        Enum.TryParse<AddonRiskLevel>(raw, ignoreCase: true, out var v) ? v : AddonRiskLevel.Cosmetic;
+
+    private async Task ToggleAddonAsync(ImportedAddon addon, bool enable)
+    {
+        var install = _service.InstallPath;
+        if (string.IsNullOrEmpty(install)) return;
+
+        var state = _config.GetActiveState();
+        state.EnabledAddons ??= new List<string>();
+
+        try
+        {
+            if (enable)
+            {
+                var zip = await AddonStore.ResolveAsync(addon.Id);
+                if (zip == null)
+                {
+                    ShowAddonResult(Strings.Get("AddonArchiveMissing"), ok: false);
+                    LoadAddons();
+                    return;
+                }
+
+                // A simulation-risk addon passes the lobby check and can still
+                // desync a match, so it needs an explicit yes — the launcher
+                // cannot detect the problem later.
+                bool allowRisk = ParseRisk(addon.Risk) != AddonRiskLevel.MultiplayerRisk;
+                if (!allowRisk)
+                {
+                    allowRisk = MessageBox.Show(this,
+                        Strings.Get("AddonSimulationConfirmBody"),
+                        Strings.Get("AddonSimulationConfirmTitle"),
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                }
+                if (!allowRisk) { LoadAddons(); return; }
+
+                var result = await AddonService.ApplyAsync(
+                    install, addon.Id, zip, _profile, allowMultiplayerRisk: true);
+
+                if (result.Status != AddonApplyStatus.Applied)
+                {
+                    ShowAddonResult(DescribeFailure(result), ok: false);
+                    LoadAddons();
+                    return;
+                }
+
+                if (!state.EnabledAddons.Contains(addon.Id, StringComparer.OrdinalIgnoreCase))
+                    state.EnabledAddons.Add(addon.Id);
+                ShowAddonResult(Strings.Get("AddonApplied"), ok: true);
+            }
+            else
+            {
+                await AddonService.DisableAsync(install, addon.Id, _profile);
+                state.EnabledAddons.RemoveAll(id =>
+                    string.Equals(id, addon.Id, StringComparison.OrdinalIgnoreCase));
+                ShowAddonResult(Strings.Get("AddonDisabled"), ok: true);
+            }
+
+            _config.Save();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Addon toggle failed for '{addon.Id}': {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonFailed"), ok: false);
+        }
+
+        LoadAddons();
+    }
+
+    private string DescribeFailure(AddonApplyResult result) => result.Status switch
+    {
+        AddonApplyStatus.Blocked => Strings.Format(
+            "AddonRiskBlockedHint", string.Join(", ", result.OffendingFiles.Take(3))),
+        AddonApplyStatus.Empty => Strings.Get("AddonArchiveEmpty"),
+        AddonApplyStatus.Conflict => Strings.Format(
+            "AddonConflict", result.ConflictingAddonId ?? "?"),
+        _ => Strings.Get("AddonFailed"),
+    };
+
+    private void ShowAddonResult(string text, bool ok)
+    {
+        AddonsResultText.Text = text;
+        AddonsResultText.Foreground = ok
+            ? (Brush)FindResource("MpStatusOnline")
+            : (Brush)FindResource("MpStatusOffline");
+        AddonsResultText.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Imports an addon archive the user downloaded themselves.
+    ///
+    /// This is not a convenience path, it is the only one that works today: the
+    /// community pages these addons come from hand out session-bound download
+    /// links, verified to return the site's generic listing page to any client
+    /// other than the browser that requested them. So the launcher cannot fetch
+    /// them, and the alternatives are a re-hosted catalog copy (which needs the
+    /// author's permission) or a file the user already has.
+    /// </summary>
+    private async void ImportAddonBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = Strings.Get("AddonImportFilter"),
+            CheckFileExists = true,
+        };
+        if (dlg.ShowDialog(this) != true) return;
+
+        try
+        {
+            // Classify BEFORE storing anything, so a refused archive leaves no
+            // trace and the reason can name the files that caused it.
+            var entries = await Task.Run(() => AddonService.ReadArchiveEntries(dlg.FileName));
+            var risk = AddonRisk.Assess(entries);
+
+            var id = await AddonStore.ImportAsync(dlg.FileName);
+            _config.ImportedAddons ??= new List<ImportedAddon>();
+            _config.ImportedAddons.RemoveAll(a =>
+                string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase));
+            _config.ImportedAddons.Add(new ImportedAddon
+            {
+                Id = id,
+                Name = Path.GetFileNameWithoutExtension(dlg.FileName),
+                FileName = Path.GetFileName(dlg.FileName),
+                Risk = risk.Level.ToString(),
+                RiskFiles = risk.BlockingFiles.Concat(risk.SimulationFiles).Take(5).ToList(),
+            });
+            _config.Save();
+
+            ShowAddonResult(
+                risk.Level == AddonRiskLevel.Blocked
+                    ? Strings.Format("AddonRiskBlockedHint", string.Join(", ", risk.BlockingFiles.Take(3)))
+                    : Strings.Get("AddonImported"),
+                ok: risk.Level != AddonRiskLevel.Blocked);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Addon import failed: {ex.Message}");
+            ShowAddonResult(Strings.Get("AddonImportFailed"), ok: false);
+        }
+
+        LoadAddons();
+    }
+>>>>>>> Stashed changes
 }
