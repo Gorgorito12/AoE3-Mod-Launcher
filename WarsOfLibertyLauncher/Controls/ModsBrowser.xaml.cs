@@ -337,6 +337,21 @@ public partial class ModsBrowser : UserControl
     public string GalleryTitleText { get; set; } = "Screenshots";
 
     /// <summary>
+    /// Community-links section: the title plus one default caption per
+    /// <see cref="ModLinkType"/>, used when a manifest entry ships no label of
+    /// its own. Set from MainWindow like every other string here — ModsBrowser
+    /// doesn't import the Localization layer.
+    /// </summary>
+    public string DetailLinksTitleText { get; set; } = "Community links";
+    public string LinkTypeWebsiteLabel { get; set; } = "Website";
+    public string LinkTypeDiscordLabel { get; set; } = "Discord";
+    public string LinkTypeModDbLabel { get; set; } = "ModDB";
+    public string LinkTypeForumLabel { get; set; } = "Forum";
+    public string LinkTypeWikiLabel { get; set; } = "Wiki";
+    public string LinkTypeVideoLabel { get; set; } = "Videos";
+    public string LinkTypeOtherLabel { get; set; } = "Link";
+
+    /// <summary>
     /// Replaces the visible list. <paramref name="stateProvider"/> is
     /// asked for a per-profile <see cref="ModRowState"/> each render —
     /// MainWindow caches what it needs and returns synchronously so
@@ -838,6 +853,7 @@ public partial class ModsBrowser : UserControl
             : Visibility.Visible;
         BuildDetailMeta(profile, state);
         BuildDetailLanguages(profile);
+        BuildDetailLinks(profile);
         BuildDetailActions(profile, state);
 
         // Gallery: render whatever is already cached, then kick the lazy fetch
@@ -1033,6 +1049,90 @@ public partial class ModsBrowser : UserControl
         }
         DetailFeaturesPanel.Children.Add(wrap);
     }
+
+    /// <summary>
+    /// Renders the mod's community links as a row of pills. The <c>Links</c>
+    /// list was already sanitised on projection (<see cref="ModLink.Sanitize"/>),
+    /// so this only has to lay them out.
+    ///
+    /// Two deliberate choices: the full url goes in the tooltip — showing the
+    /// user where a mod-supplied link actually leads is the practical
+    /// anti-phishing measure, since a label can claim anything — and a link
+    /// that merely repeats <c>OfficialWebsite</c> is skipped, because the
+    /// action bar already carries a "view mod page" button for that url.
+    /// </summary>
+    private void BuildDetailLinks(ModProfile profile)
+    {
+        DetailLinksPanel.Children.Clear();
+
+        var website = (profile.OfficialWebsite ?? "").Trim();
+        var links = profile.Links
+            .Where(l => !string.Equals(l.Url, website, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (links.Count == 0)
+        {
+            DetailLinksTitle.Visibility = Visibility.Collapsed;
+            DetailLinksPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        DetailLinksTitle.Text = DetailLinksTitleText;
+        DetailLinksTitle.Visibility = Visibility.Visible;
+        DetailLinksPanel.Visibility = Visibility.Visible;
+
+        foreach (var link in links)
+            DetailLinksPanel.Children.Add(BuildLinkPill(link));
+    }
+
+    private FrameworkElement BuildLinkPill(ModLink link)
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        // One generic glyph for every type: no emojis (house rule) and no brand
+        // logos (trademark), so the type only shapes the caption.
+        content.Children.Add(new TextBlock
+        {
+            Text = "\uE71B",   // Segoe MDL2 Link
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = _fsCaption,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0),
+            Foreground = (Brush)FindResource("TextSecondary"),
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrEmpty(link.Label) ? DefaultLinkLabel(link.Type) : link.Label,
+            FontSize = _fsCaption,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)FindResource("TextPrimary"),
+        });
+
+        var button = new Button
+        {
+            Content = content,
+            Background = (Brush)FindResource("BgBase"),
+            BorderBrush = (Brush)FindResource("BorderSubtle"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(10, 5, 10, 5),
+            Margin = new Thickness(0, 0, 6, 6),
+            Cursor = Cursors.Hand,
+            ToolTip = TooltipHelper.Wrap(link.Url),
+        };
+        button.Click += (_, _) => OpenWebsiteRequested?.Invoke(this, link.Url);
+        return button;
+    }
+
+    private string DefaultLinkLabel(ModLinkType type) => type switch
+    {
+        ModLinkType.Website => LinkTypeWebsiteLabel,
+        ModLinkType.Discord => LinkTypeDiscordLabel,
+        ModLinkType.ModDb   => LinkTypeModDbLabel,
+        ModLinkType.Forum   => LinkTypeForumLabel,
+        ModLinkType.Wiki    => LinkTypeWikiLabel,
+        ModLinkType.Video   => LinkTypeVideoLabel,
+        _                   => LinkTypeOtherLabel,
+    };
 
     private void BuildDetailActions(ModProfile profile, ModRowState state)
     {

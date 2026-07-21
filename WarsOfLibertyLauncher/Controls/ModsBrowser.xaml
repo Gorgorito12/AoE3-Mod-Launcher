@@ -415,6 +415,23 @@
                                            Visibility="Collapsed"/>
                                 <StackPanel x:Name="DetailFeaturesPanel"/>
 
+                                <!-- Community links (Discord / ModDB / forum /
+                                     …) declared by the mod's manifest. Built
+                                     in code-behind so the whole block can be
+                                     collapsed when a mod declares none — which
+                                     is every built-in and every manifest that
+                                     predates the field, so the panel is
+                                     unchanged in the common case. -->
+                                <TextBlock x:Name="DetailLinksTitle"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,16,0,6"
+                                           Visibility="Collapsed"/>
+                                <WrapPanel x:Name="DetailLinksPanel"
+                                           Orientation="Horizontal"
+                                           Visibility="Collapsed"/>
+
                                 <!-- Compatibility banner. Shown only when a
                                      blocker (incompatible AoE3 version,
                                      missing dependency, …) applies — empty

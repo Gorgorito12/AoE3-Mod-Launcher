@@ -43,6 +43,16 @@ public class ModCatalogManifest
     public string OfficialWebsite { get; set; } = "";
 
     /// <summary>
+    /// Optional community links (Discord invite, ModDB page, forum, wiki, …)
+    /// shown as a row of pills in the Workshop detail panel. Separate from
+    /// <see cref="OfficialWebsite"/>, which stays a single field with a legacy
+    /// HTTP allowance; these are HTTPS-only per the schema. Sanitised on
+    /// projection — see <c>ModLink.Sanitize</c>.
+    /// </summary>
+    [JsonPropertyName("links")]
+    public List<ModLinkManifest>? Links { get; set; }
+
+    /// <summary>
     /// Filename of the icon, sitting next to <c>mod.json</c> in the same
     /// folder. The launcher resolves this to a raw GitHub URL and downloads
     /// it through <c>ModAssetCacheService</c> on first use.
@@ -138,6 +148,32 @@ public class ModCatalogManifest
 
     [JsonPropertyName("translations")]
     public ModCatalogTranslations? Translations { get; set; }
+}
+
+/// <summary>
+/// One entry of the manifest's <c>links</c> array. Raw shape only — every field
+/// is untrusted until <c>ModLink.Sanitize</c> has run over it.
+/// </summary>
+public class ModLinkManifest
+{
+    /// <summary>
+    /// Kind of destination ("discord", "moddb", "forum", …). Drives the default
+    /// label and the display order; an unknown value degrades to
+    /// <see cref="ModLinkType.Other"/> rather than being rejected.
+    /// </summary>
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "";
+
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = "";
+
+    /// <summary>
+    /// Optional short caption. Falls back to the type's localized name when
+    /// absent. Length-capped and control-char-stripped on sanitisation — a free
+    /// text field rendered in the UI is an abuse vector of its own.
+    /// </summary>
+    [JsonPropertyName("label")]
+    public string? Label { get; set; }
 }
 
 public class ModCatalogInstall

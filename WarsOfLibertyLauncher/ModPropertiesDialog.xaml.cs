@@ -1221,18 +1221,9 @@ public partial class ModPropertiesDialog : Window
     }
 
     private void ValWebsite_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        var url = _profile.OfficialWebsite;
-        if (string.IsNullOrWhiteSpace(url)) return;
-        try
-        {
-            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"ModPropertiesDialog.ValWebsite: open failed: {ex.Message}");
-        }
-    }
+        // Profile-supplied url — validated at open time by SafeUrl, since a
+        // built-in profile never passes through the catalog's schema check.
+        => SafeUrl.TryOpen(_profile.OfficialWebsite);
 
     /// <summary>
     /// "Check for updates" runs in-place: it does NOT close the dialog

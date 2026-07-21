@@ -323,6 +323,13 @@
                     <TextBox  x:Name="FieldWebsite" Style="{StaticResource FieldInput}"/>
                     <TextBlock x:Name="HintWebsite" Style="{StaticResource FieldHint}"/>
                     <TextBlock x:Name="ErrorWebsite" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+
+                    <!-- Community links: one "type|url" per line, same
+                         line-per-entry idiom as the payload-url fields. -->
+                    <TextBlock x:Name="LblLinks" Style="{StaticResource FieldLabel}"/>
+                    <TextBox  x:Name="FieldLinks" Style="{StaticResource FieldInput}"
+                              AcceptsReturn="True" TextWrapping="NoWrap" Height="70" VerticalScrollBarVisibility="Auto"/>
+                    <TextBlock x:Name="HintLinks" Style="{StaticResource FieldHint}"/>
                 </StackPanel>
 
                 <!-- Step 6 — Review + actions. -->

@@ -370,6 +370,10 @@ public static class ModRegistry
             AccentColor = string.IsNullOrEmpty(m.AccentColor) ? "#3a8cd9" : m.AccentColor,
             Author = m.Author ?? "",
             OfficialWebsite = m.OfficialWebsite ?? "",
+            // Sanitised HERE, not at render time, so every consumer can treat
+            // profile.Links as already-safe. See ModLink.Sanitize for why this
+            // repeats the catalog CI's rules.
+            Links = ModLink.Sanitize(m.Links),
             Description = m.Description,
             ProductGuid = m.InstallProductGuid ?? "",
             UserDataFolder = m.UserDataFolder ?? "",

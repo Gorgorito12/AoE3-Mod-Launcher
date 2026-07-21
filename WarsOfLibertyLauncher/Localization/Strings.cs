@@ -1413,6 +1413,48 @@ public static class Strings
             [LangEn] = "Screenshots",
             [LangEs] = "Capturas",
         },
+        // Community links section of the Workshop detail panel. The per-type
+        // captions are only used when a mod's manifest entry ships no label.
+        ["ModsBrowserDetailLinks"] = new()
+        {
+            [LangEn] = "Community links",
+            [LangEs] = "Enlaces de la comunidad",
+        },
+        ["ModLinkTypeWebsite"] = new()
+        {
+            [LangEn] = "Website",
+            [LangEs] = "Sitio web",
+        },
+        ["ModLinkTypeDiscord"] = new()
+        {
+            [LangEn] = "Discord",
+            [LangEs] = "Discord",
+        },
+        ["ModLinkTypeModDb"] = new()
+        {
+            [LangEn] = "ModDB",
+            [LangEs] = "ModDB",
+        },
+        ["ModLinkTypeForum"] = new()
+        {
+            [LangEn] = "Forum",
+            [LangEs] = "Foro",
+        },
+        ["ModLinkTypeWiki"] = new()
+        {
+            [LangEn] = "Wiki",
+            [LangEs] = "Wiki",
+        },
+        ["ModLinkTypeVideo"] = new()
+        {
+            [LangEn] = "Videos",
+            [LangEs] = "Videos",
+        },
+        ["ModLinkTypeOther"] = new()
+        {
+            [LangEn] = "Link",
+            [LangEs] = "Enlace",
+        },
         ["ModsBrowserActionInstall"] = new()
         {
             [LangEn] = "Install mod",
@@ -1540,13 +1582,13 @@ public static class Strings
         },
         ["PublishWizardStep5Title"] = new()
         {
-            [LangEn] = "Description & website",
-            [LangEs] = "Descripción y sitio web",
+            [LangEn] = "Description & links",
+            [LangEs] = "Descripción y enlaces",
         },
         ["PublishWizardStep5Hint"] = new()
         {
-            [LangEn] = "Per-language description and the mod's homepage URL.",
-            [LangEs] = "Descripción por idioma y la URL del sitio del mod.",
+            [LangEn] = "Per-language description, the mod's homepage URL and your community links.",
+            [LangEs] = "Descripción por idioma, la URL del sitio del mod y tus enlaces de comunidad.",
         },
         ["PublishWizardStep6Title"] = new()
         {
@@ -1666,6 +1708,16 @@ public static class Strings
         {
             [LangEn] = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod",
             [LangEs] = "La página de tu mod, Discord o ModDB. Ejemplo: https://discord.gg/tu-mod",
+        },
+        ["PublishFieldLinks"] = new()
+        {
+            [LangEn] = "Community links (optional)",
+            [LangEs] = "Enlaces de la comunidad (opcional)",
+        },
+        ["PublishFieldLinksHint"] = new()
+        {
+            [LangEn] = "One per line, as type|url. Up to 4, HTTPS only. Types: website, discord, moddb, forum, wiki, video, other. Example: discord|https://discord.gg/your-mod",
+            [LangEs] = "Uno por línea, con el formato tipo|url. Hasta 4, solo HTTPS. Tipos: website, discord, moddb, forum, wiki, video, other. Ejemplo: discord|https://discord.gg/tu-mod",
         },
         ["PublishCopyJson"] = new() { [LangEn] = "Copy JSON", [LangEs] = "Copiar JSON" },
         ["PublishOpenPr"] = new() { [LangEn] = "Open PR on GitHub", [LangEs] = "Abrir PR en GitHub" },

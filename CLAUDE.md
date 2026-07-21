@@ -147,7 +147,9 @@ gotcha), `DiagnosticLogTests` (`ExportBundle` includes `*.log`/`*snapshot*`,
 (letter-version comparison + the informational-tag self-recognition fallback), and
 `BackgroundStartupPlanTests` (`StartupRegistrationService.PlanStartup` — the
 ON-by-default auto-start seed; `OptedOut_NeverReArms` is the one that matters, it
-guards against silently re-enabling auto-start after the user turned it off).
+guards against silently re-enabling auto-start after the user turned it off), and
+`SafeUrlTests` + `ModLinkTests` (the mod-supplied-url gate and the community-links
+sanitisation — the REJECTION cases are the point, see the `SafeUrl` gotcha).
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -1993,6 +1995,54 @@ Two cheap gates beyond a green build:
   appends `OverrideAddress="<ip>"` exactly like the mods. Like WoL, the entry is
   mirrored in the catalog repo (`mods/aoe3-tad/mod.json`) for the public listing, but
   the built-in **shadows** it at runtime (built-in wins on id collision).
+
+- **EVERY url the launcher didn't author goes through `Services/SafeUrl.cs` — never
+  `Process.Start` directly. That's the whole anti-abuse story for mod-supplied links.**
+  Three sites used to shell out with a raw catalog/config string
+  (`MainWindow.ModsBrowserView_OpenWebsiteRequested`, `MainWindow.OpenExternalUrl`,
+  `ModPropertiesDialog.ValWebsite_Click`), and with `UseShellExecute = true` the shell
+  runs whatever it is handed — a `file:///` URI, a UNC path, an `.exe`. The catalog
+  schema's `^https?://` only guards the CI, and **CI is not the only door**: built-in
+  profiles are hard-coded and never pass through it, and `launcher-config.json` is
+  user-writable. So validation has to happen at OPEN time or it doesn't happen.
+  `SafeUrl.IsAllowed` = absolute + scheme ∈ {http,https} + **empty `UserInfo`** (the
+  `https://real-site.com@evil/` display trick) + non-empty host; `TryOpen` logs and
+  returns false instead of throwing. The other ~25 `UseShellExecute = true` sites in
+  the repo open local paths / `explorer.exe` / hardcoded URLs and are deliberately NOT
+  routed. Pinned by `SafeUrlTests`.
+  **A mod can declare community links (`links` in `mod.json`) — Discord / ModDB /
+  forum / wiki / video — rendered as pills in the Workshop detail panel.** Model
+  `Models/ModProfile.cs` (`ModLink`, `ModLinkType`, `ModLink.Sanitize`), DTO
+  `ModLinkManifest` in `ModCatalogManifest.cs`, projection in
+  `ModRegistry.ProjectToProfile`, UI `ModsBrowser.BuildDetailLinks`. Load-bearing:
+  (1) **sanitised at PROJECTION, not at render** — HTTPS-only (stricter than
+  `officialWebsite`, whose HTTP allowance is a legacy concession to `aoe3wol.com`;
+  **don't fold the two fields together**), deduped, capped at `ModLink.MaxLinks` (4),
+  label control-char-stripped then length-capped (stripping first, so control-char
+  padding can't smuggle visible text past the cap), unknown `type` → `Other` rather
+  than dropping the link. It repeats the CI's rules ON PURPOSE — same "CI isn't the
+  only door" reasoning as above. (2) **The pill's tooltip is the full URL**
+  (`TooltipHelper.Wrap`) — a label can claim anything, so showing the destination is
+  the real anti-phishing measure; a Steam-style "you are leaving" interstitial was
+  deliberately NOT built. (3) **No emoji and no brand logos** — one generic Segoe MDL2
+  glyph (`\uE71B`) for every type; `type` only picks the caption. (4) The section is
+  **collapsed when `Links` is empty**, so every built-in and every pre-`links`
+  manifest renders byte-for-byte as before. (5) A link equal to `OfficialWebsite` is
+  skipped — the action bar's "view mod page" button already covers it. **(6) Built-ins
+  get NO links, and that's the shadow rule, not a bug:** `wol` / `aoe3-tad` are
+  constructed directly in `ModRegistry._builtIn` and never go through
+  `ProjectToProfile`, and the built-in wins on id collision — so `links` in
+  `mods/wol/mod.json` is inert (same as `IconUrl`, which is hardcoded on the built-in
+  for exactly this reason). Give a first-party entry links by hardcoding `Links` on
+  the built-in; `docs/MODDING.md` calls the limitation out so a modder doesn't file it
+  as a bug. Catalog side:
+  `links` is in `classify_pr.py`'s `TIER_1_FIELDS`, so it inherits the per-mod
+  **ownership gate** (only the mod's `maintainers` auto-merge it) — that gate plus the
+  visible URL IS the abuse control; a per-type host allowlist was considered and
+  rejected as maintenance the ownership gate already covers. The wizard's
+  `PublishModDialog.ParseLinkLines` (`type|url` per line, pipe optional) drops what
+  the schema would reject so a modder's first PR isn't red. Pinned by `ModLinkTests`
+  + the `Links_*` cases in `BuildModJsonTests`.
 
 - **Mod icons come from two different places — don't assume the catalog.**
   Community mods and the stock game (`aoe3-tad`) get their icon from the

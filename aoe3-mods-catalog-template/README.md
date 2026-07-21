@@ -168,7 +168,7 @@ The single source of truth for what counts as tier 1/2/3 is at the top of `.gith
 
 ```python
 TIER_1_FIELDS = {"displayName", "subtitle", "description", "accentColor",
-                 "author", "officialWebsite", "icon", "banner",
+                 "author", "officialWebsite", "links", "icon", "banner",
                  "heroImage", "screenshots"}
 TIER_2_FIELDS = {"approvedReleaseTag"}
 TIER_3_FIELDS = {"id", "sourceRepo", "install", "update", "translations",

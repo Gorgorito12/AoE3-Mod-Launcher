@@ -2855,6 +2855,14 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailWebsiteLabel = Strings.Get("ModsBrowserDetailWebsite");
         ModsBrowserView.DetailLanguagesLabel = Strings.Get("ModsBrowserDetailLanguages");
         ModsBrowserView.GalleryTitleText = Strings.Get("WorkshopGalleryTitle");
+        ModsBrowserView.DetailLinksTitleText = Strings.Get("ModsBrowserDetailLinks");
+        ModsBrowserView.LinkTypeWebsiteLabel = Strings.Get("ModLinkTypeWebsite");
+        ModsBrowserView.LinkTypeDiscordLabel = Strings.Get("ModLinkTypeDiscord");
+        ModsBrowserView.LinkTypeModDbLabel = Strings.Get("ModLinkTypeModDb");
+        ModsBrowserView.LinkTypeForumLabel = Strings.Get("ModLinkTypeForum");
+        ModsBrowserView.LinkTypeWikiLabel = Strings.Get("ModLinkTypeWiki");
+        ModsBrowserView.LinkTypeVideoLabel = Strings.Get("ModLinkTypeVideo");
+        ModsBrowserView.LinkTypeOtherLabel = Strings.Get("ModLinkTypeOther");
         ModsBrowserView.DetailInstallLabel = Strings.Get("ModsBrowserActionInstall");
         ModsBrowserView.DetailUpdateLabel = Strings.Get("ModsBrowserActionUpdate");
         ModsBrowserView.DetailPlayLabel = Strings.Get("ModsBrowserActionPlay");
@@ -4173,26 +4181,14 @@ public partial class MainWindow : Window
     private void TopTabMods_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Mods);
     private void TopTabMultiplayer_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Multiplayer);
     /// <summary>
-    /// Opens the mod's <c>OfficialWebsite</c> in the user's default browser.
-    /// The url has already been validated by the catalog schema (or the
-    /// hard-coded built-in profile) before getting to this point.
+    /// Opens a mod-supplied url (its <c>OfficialWebsite</c> or one of its
+    /// community <c>Links</c>) in the user's default browser. The string comes
+    /// from the catalog — or from a hard-coded built-in profile, which never
+    /// passes through the catalog CI — so it goes through <see cref="SafeUrl"/>
+    /// rather than straight to the shell.
     /// </summary>
     private void ModsBrowserView_OpenWebsiteRequested(object? sender, string url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return;
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"OpenWebsite failed for '{url}': {ex.Message}");
-        }
-    }
+        => SafeUrl.TryOpen(url);
 
     /// <summary>
     /// Refresh the community catalog and repaint the browser. Forwards to
@@ -4518,6 +4514,8 @@ public partial class MainWindow : Window
         dlg.LblDescriptionEsText = Strings.Get("PublishFieldDescriptionEs");
         dlg.LblWebsiteText = Strings.Get("PublishFieldWebsite");
         dlg.HintWebsiteText = Strings.Get("PublishFieldWebsiteHint");
+        dlg.LblLinksText = Strings.Get("PublishFieldLinks");
+        dlg.HintLinksText = Strings.Get("PublishFieldLinksHint");
         dlg.CopyJsonLabel = Strings.Get("PublishCopyJson");
         dlg.OpenPrLabel = Strings.Get("PublishOpenPr");
         dlg.IntroBodyText = Strings.Get("PublishWizardIntro");
@@ -5958,26 +5956,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Shell out to the OS default browser. Best-effort: a logged
-    /// failure beats a crash if the user's system has no default
-    /// browser registered (rare on Windows but possible on stripped
-    /// down installs).
+    /// Shell out to the OS default browser. Best-effort: a logged failure beats a
+    /// crash if the user's system has no default browser registered (rare on
+    /// Windows but possible on stripped down installs). Routed through
+    /// <see cref="SafeUrl"/> because one caller passes
+    /// <c>config.OfficialWebsite</c>, which lives in a user-writable JSON file.
     /// </summary>
-    private static void OpenExternalUrl(string url)
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"OpenExternalUrl({url}) failed: {ex.Message}");
-        }
-    }
+    private static void OpenExternalUrl(string url) => SafeUrl.TryOpen(url);
     // (end of REDESIGN-2 sidebar + dashboard handlers)
 
     /// <summary>
