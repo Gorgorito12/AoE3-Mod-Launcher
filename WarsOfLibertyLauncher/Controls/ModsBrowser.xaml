@@ -463,9 +463,12 @@
                                 BorderThickness="0,1,0,0"
                                 Padding="20,14">
                             <Grid>
+                                <!-- Three columns since the "view mod page" button was
+                                     removed: the official website is a pill in the
+                                     community-links row now, so every external link
+                                     sits in one place. -->
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
@@ -479,23 +482,13 @@
                                         FontSize="{StaticResource FontSizeBodyStrong}"
                                         Cursor="Hand"
                                         Margin="0,0,8,0"/>
-                                <Button x:Name="DetailSecondaryButton"
-                                        Grid.Column="1"
-                                        Background="{DynamicResource BgPanel}"
-                                        Foreground="{DynamicResource TextPrimary}"
-                                        BorderBrush="{DynamicResource BorderSubtle}"
-                                        BorderThickness="1"
-                                        Padding="12,10"
-                                        FontSize="{StaticResource FontSizeBody}"
-                                        Cursor="Hand"
-                                        Margin="0,0,6,0"/>
                                 <!-- Removing from the collection lives here, not in
                                      the primary slot: it's the one destructive-looking
                                      action in the panel and shouldn't be the easiest
                                      button to hit. Collapsed unless the mod is in the
                                      collection. -->
                                 <Button x:Name="DetailRemoveButton"
-                                        Grid.Column="2"
+                                        Grid.Column="1"
                                         Visibility="Collapsed"
                                         Background="{DynamicResource BgPanelAlt}"
                                         Foreground="{DynamicResource TextSecondary}"
@@ -506,7 +499,7 @@
                                         Cursor="Hand"
                                         Margin="0,0,6,0"/>
                                 <Button x:Name="DetailMoreButton"
-                                        Grid.Column="3"
+                                        Grid.Column="2"
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextPrimary}"
                                         BorderBrush="{DynamicResource BorderSubtle}"

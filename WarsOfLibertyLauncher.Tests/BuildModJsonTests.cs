@@ -90,6 +90,24 @@ public class BuildModJsonTests
     }
 
     [Fact]
+    public void SetupPathRedirect_UnderInstall_OnlyWhenTrue()
+    {
+        // Off by default → omitted (JSON stays clean, like userDataRedirect).
+        var off = Build(new() { Id = "m", DisplayName = "M" });
+        Assert.False(Has(off.GetProperty("install"), "setupPathRedirect"));
+
+        // On → install.setupPathRedirect: true (stock-exe replacement TC, §4).
+        var on = Build(new()
+        {
+            Id = "m", DisplayName = "M",
+            InstallType = "IsolatedFolder",
+            SetupPathRedirect = true,
+        });
+        Assert.True(on.GetProperty("install").GetProperty("setupPathRedirect").GetBoolean());
+        Assert.False(Has(on, "setupPathRedirect"));  // not at top level
+    }
+
+    [Fact]
     public void GitHub_ExternalCdn_UnderUpdateGithub_TagAtTopLevel()
     {
         var root = Build(new()

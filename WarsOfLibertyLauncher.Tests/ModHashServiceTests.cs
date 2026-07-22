@@ -112,4 +112,99 @@ public class ModHashServiceTests : IDisposable
 
         Assert.NotEqual(fpA.CombinedHash, fpB.CombinedHash);
     }
+
+    // -- Per-profile probe files ----------------------------------------------
+    //
+    // A mod that ships its OWN data files instead of the base `y` ones (Napoleonic
+    // Era: proton.xml / techtreen.xml) must fingerprint over THOSE. Hashing the
+    // default `y` files there is inert — the AoE3 clone makes them identical for
+    // every player — so the room's version gate would let two versions share a
+    // match and desync.
+
+    private static ModProfile ProfileWithProbes(params string[] probes) => new()
+    {
+        Id = "napoleonic-era",
+        MultiplayerProbeFiles = new List<string>(probes),
+    };
+
+    /// <summary>Empty list = the three defaults. Zero regression for WoL / IM / stock.</summary>
+    [Fact]
+    public void ProbeFilesFor_EmptyProfile_UsesTheDefaults()
+    {
+        var files = ModHashService.ProbeFilesFor(new ModProfile { Id = "wol" });
+        Assert.Equal(ModHashService.DefaultProbeFiles, files);
+    }
+
+    [Fact]
+    public void ProbeFilesFor_DeclaredProfile_UsesItsOwn()
+    {
+        var files = ModHashService.ProbeFilesFor(
+            ProfileWithProbes(@"data\proton.xml", @"data\techtreen.xml"));
+        Assert.Equal(new[] { @"data\proton.xml", @"data\techtreen.xml" }, files);
+    }
+
+    /// <summary>
+    /// The bug this fixes: two NE installs differing only in proton.xml must get
+    /// DIFFERENT fingerprints. If the launcher hashed the default `y` files, both
+    /// would be identical and the gate would pass a version mismatch.
+    /// </summary>
+    [Fact]
+    public async Task TwoInstalls_DifferentOwnData_ProduceDifferentHashes()
+    {
+        var profile = ProfileWithProbes(@"data\proton.xml", @"data\techtreen.xml");
+
+        var v1 = NewTempDir();
+        Write(v1, @"data\proton.xml", "NE 2.1.7b PROTO");
+        Write(v1, @"data\techtreen.xml", "TECH");
+        var v2 = NewTempDir();
+        Write(v2, @"data\proton.xml", "NE 2.1.8 PROTO");   // only this differs
+        Write(v2, @"data\techtreen.xml", "TECH");
+
+        var fp1 = await ModHashService.FingerprintAsync(profile, v1);
+        var fp2 = await ModHashService.FingerprintAsync(profile, v2);
+
+        Assert.NotEqual(fp1.CombinedHash, fp2.CombinedHash);
+    }
+
+    /// <summary>Same own-data bytes → same fingerprint (two peers on one version join).</summary>
+    [Fact]
+    public async Task TwoInstalls_SameOwnData_ProduceSameHash()
+    {
+        var profile = ProfileWithProbes(@"data\proton.xml", @"data\techtreen.xml");
+
+        var a = NewTempDir();
+        Write(a, @"data\proton.xml", "SAME PROTO");
+        Write(a, @"data\techtreen.xml", "SAME TECH");
+        var b = NewTempDir();
+        Write(b, @"data\proton.xml", "SAME PROTO");
+        Write(b, @"data\techtreen.xml", "SAME TECH");
+
+        var fpA = await ModHashService.FingerprintAsync(profile, a);
+        var fpB = await ModHashService.FingerprintAsync(profile, b);
+
+        Assert.Equal(fpA.CombinedHash, fpB.CombinedHash);
+    }
+
+    /// <summary>
+    /// The whole reason to make this per-profile: NE's fingerprint must NOT be
+    /// decided by the default `y` files, which the clone leaves identical across
+    /// versions. Same `y`, different `n` → still different.
+    /// </summary>
+    [Fact]
+    public async Task IdenticalDefaultFiles_DoNotMaskAnOwnDataDifference()
+    {
+        var profile = ProfileWithProbes(@"data\proton.xml");
+
+        var v1 = NewTempDir();
+        Write(v1, @"data\protoy.xml", "IDENTICAL BASE");   // the default probe
+        Write(v1, @"data\proton.xml", "NE VERSION A");
+        var v2 = NewTempDir();
+        Write(v2, @"data\protoy.xml", "IDENTICAL BASE");
+        Write(v2, @"data\proton.xml", "NE VERSION B");
+
+        var fp1 = await ModHashService.FingerprintAsync(profile, v1);
+        var fp2 = await ModHashService.FingerprintAsync(profile, v2);
+
+        Assert.NotEqual(fp1.CombinedHash, fp2.CombinedHash);
+    }
 }

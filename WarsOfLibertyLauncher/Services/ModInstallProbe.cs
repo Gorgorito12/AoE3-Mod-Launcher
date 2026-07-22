@@ -43,12 +43,42 @@ public enum ProbeOutcome
     ProbeMissing = 1,
     /// <summary>Probe present, but the mod's content marker is absent (looks like the base game).</summary>
     MarkerMissing = 2,
-    /// <summary>Probe (and marker, if declared) present — a real install of this mod.</summary>
-    Match = 3,
+    /// <summary>
+    /// Probe (and marker) present, but the base-game ENGINE is missing — the
+    /// folder holds only the mod's overlay, not a full <see cref="ModInstallType.IsolatedFolder"/>
+    /// install. This is what a leftover manual download of a mod looks like, and
+    /// adopting it would make the launcher offer a bogus "update" for a mod it
+    /// never installed. More install-like than <see cref="MarkerMissing"/>: the
+    /// mod's own files ARE here, just not the cloned game underneath.
+    /// </summary>
+    EngineMissing = 3,
+    /// <summary>All required signals present — a real install of this mod.</summary>
+    Match = 4,
 }
 
 public static class ModInstallProbe
 {
+    /// <summary>
+    /// Base-game engine files an <see cref="ModInstallType.IsolatedFolder"/>
+    /// install always has at its ROOT (that model clones AoE3 and flattens
+    /// <c>bin\</c> into the root). Requiring at least one separates a real
+    /// install from a folder that holds only the mod's overlay — the shape of a
+    /// leftover manual download. These are the non-data engine files; the data
+    /// version-key files are NOT used because a mod may ship its own
+    /// (Napoleonic Era has <c>proton.xml</c>, not <c>protoy.xml</c>).
+    /// </summary>
+    private static readonly string[] EngineFiles =
+    {
+        "RockallDLL.dll", "binkw32.dll", "granny2.dll", "deformerdlly.dll",
+    };
+
+    private static bool HasEngine(string path)
+    {
+        foreach (var dll in EngineFiles)
+            if (File.Exists(Path.Combine(path, dll))) return true;
+        return false;
+    }
+
     /// <summary>
     /// True if <paramref name="marker"/> — a path (file or directory) relative
     /// to <paramref name="installPath"/> — exists on disk. An empty marker
@@ -85,6 +115,15 @@ public static class ModInstallProbe
         if (!string.IsNullOrEmpty(profile.InstallMarker)
             && !MarkerExists(path, profile.InstallMarker))
             return ProbeOutcome.MarkerMissing;
+
+        // Engine: an IsolatedFolder install is a full AoE3 clone + overlay, so
+        // the engine sits at the root. A folder with the probe but no engine is
+        // only the mod's overlay (a leftover manual download), NOT an install —
+        // adopting it makes the launcher offer a bogus "update" for a mod it
+        // never installed. Only IsolatedFolder: an InPlaceOverlay mod's files go
+        // into the base game, whose engine lives in bin\, not the install root.
+        if (profile.InstallType == ModInstallType.IsolatedFolder && !HasEngine(path))
+            return ProbeOutcome.EngineMissing;
 
         return ProbeOutcome.Match;
     }

@@ -2921,7 +2921,6 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailAvailableVersionLabel = Strings.Get("ModsBrowserDetailAvailable");
         ModsBrowserView.DetailInstallTypeLabel = Strings.Get("ModsBrowserDetailInstallType");
         ModsBrowserView.DetailUpdateMechLabel = Strings.Get("ModsBrowserDetailUpdates");
-        ModsBrowserView.DetailWebsiteLabel = Strings.Get("ModsBrowserDetailWebsite");
         ModsBrowserView.DetailLanguagesLabel = Strings.Get("ModsBrowserDetailLanguages");
         ModsBrowserView.GalleryTitleText = Strings.Get("WorkshopGalleryTitle");
         ModsBrowserView.DetailLinksTitleText = Strings.Get("ModsBrowserDetailLinks");
@@ -2937,7 +2936,6 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailPlayLabel = Strings.Get("ModsBrowserActionPlay");
         ModsBrowserView.DetailRepairLabel = Strings.Get("ModsBrowserActionRepair");
         ModsBrowserView.DetailIncompatibleLabel = Strings.Get("ModsBrowserActionIncompatible");
-        ModsBrowserView.DetailViewWebsiteLabel = Strings.Get("ModsBrowserActionViewWebsite");
         ModsBrowserView.DetailSwitchActiveLabel = Strings.Get("ModsBrowserActionSwitchActive");
         ModsBrowserView.DetailUninstallLabel = Strings.Get("ModsBrowserActionUninstall");
         // Workshop redesign: per-row Add/Remove + Built-in labels.
@@ -4608,6 +4606,9 @@ public partial class MainWindow : Window
         dlg.HintBannerText = Strings.Get("PublishFieldBannerHint");
         dlg.LblInstallTypeText = Strings.Get("PublishFieldInstallType");
         dlg.HintInstallTypeText = Strings.Get("PublishFieldInstallTypeHint");
+        dlg.InstallOptUhcText = Strings.Get("PublishInstallOptUhc");
+        dlg.InstallOptAdditiveText = Strings.Get("PublishInstallOptAdditive");
+        dlg.InstallOptReplaceText = Strings.Get("PublishInstallOptReplace");
         dlg.LblDefaultFolderText = Strings.Get("PublishFieldDefaultFolder");
         dlg.HintDefaultFolderText = Strings.Get("PublishFieldDefaultFolderHint");
         dlg.LblProbeFileText = Strings.Get("PublishFieldProbeFile");
@@ -6355,6 +6356,12 @@ public partial class MainWindow : Window
     /// </summary>
     private static string InvalidFolderMessage(ModProfile profile, ProbeOutcome reason)
     {
+        // The mod's own files are here but the base game underneath isn't — the
+        // folder is only the mod's overlay (a leftover manual download), not a
+        // full install. Point the user at installing it properly.
+        if (reason == ProbeOutcome.EngineMissing)
+            return Strings.Format("DlgInvalidFolderEngineBody", profile.DisplayName);
+
         if (reason == ProbeOutcome.MarkerMissing && !string.IsNullOrEmpty(profile.InstallMarker))
             return Strings.Format("DlgInvalidFolderMarkerBody", profile.DisplayName, profile.InstallMarker);
 

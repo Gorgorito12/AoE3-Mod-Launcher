@@ -304,7 +304,6 @@ public partial class ModsBrowser : UserControl
     public string DetailPlayLabel { get; set; } = "Play";
     public string DetailRepairLabel { get; set; } = "Repair";
     public string DetailIncompatibleLabel { get; set; } = "Incompatible";
-    public string DetailViewWebsiteLabel { get; set; } = "View mod page";
     public string DetailSwitchActiveLabel { get; set; } = "Set as active mod";
     public string DetailUninstallLabel { get; set; } = "Uninstall";
 
@@ -336,7 +335,6 @@ public partial class ModsBrowser : UserControl
     public string DetailAvailableVersionLabel { get; set; } = "Available";
     public string DetailInstallTypeLabel { get; set; } = "Install type";
     public string DetailUpdateMechLabel { get; set; } = "Updates";
-    public string DetailWebsiteLabel { get; set; } = "Website";
     public string DetailLanguagesLabel { get; set; } = "Languages";
     public string DetailFeaturesTitleText { get; set; } = "Features";
     public string GalleryTitleText { get; set; } = "Screenshots";
@@ -990,8 +988,9 @@ public partial class ModsBrowser : UserControl
             rows.Add((DetailAvailableVersionLabel, "v" + Strip(state.AvailableVersion)));
         rows.Add((DetailInstallTypeLabel, FormatInstallType(profile.InstallType)));
         rows.Add((DetailUpdateMechLabel, FormatUpdateMechanism(profile.UpdateMechanism)));
-        if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
-            rows.Add((DetailWebsiteLabel, profile.OfficialWebsite));
+        // No "Website" row: the url is a pill now, with the full address in its
+        // tooltip, so a plain-text copy here would repeat it and spend a slot of
+        // the metadata grid.
 
         for (int i = 0; i < rows.Count; i++)
         {
@@ -1070,10 +1069,11 @@ public partial class ModsBrowser : UserControl
     {
         DetailLinksPanel.Children.Clear();
 
-        var website = (profile.OfficialWebsite ?? "").Trim();
-        var links = profile.Links
-            .Where(l => !string.Equals(l.Url, website, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        // The official website is folded in as the first pill — this row is the
+        // only clickable route to it now that the "view mod page" button is gone,
+        // and it is what keeps mods that declare no links from having nothing to
+        // click at all. Rule lives in the model so it can be tested.
+        var links = ModLink.BuildDisplayList(profile.OfficialWebsite, profile.Links);
 
         if (links.Count == 0)
         {
@@ -1093,35 +1093,49 @@ public partial class ModsBrowser : UserControl
     private FrameworkElement BuildLinkPill(ModLink link)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
-        // One generic glyph for every type: no emojis (house rule) and no brand
-        // logos (trademark), so the type only shapes the caption.
+
+        // Per-type GENERIC system icon (globe, speech bubble, camera\u2026), never a
+        // brand logo \u2014 the trademark rule is about not reproducing someone's logo,
+        // not about every link looking alike. Gold at rest, and it keeps its own
+        // Foreground so it stays gold while the caption brightens on hover.
         content.Children.Add(new TextBlock
         {
-            Text = "\uE71B",   // Segoe MDL2 Link
+            Text = ModLink.GlyphFor(link.Type),
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
             FontSize = _fsCaption,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0),
-            Foreground = (Brush)FindResource("TextSecondary"),
+            Margin = new Thickness(0, 0, 8, 0),
+            Foreground = (Brush)FindResource("AccentBrush"),
         });
+
+        // NO Foreground here on purpose. The ContentPresenter propagates the
+        // button's Foreground to its content, which is the only route the hover
+        // trigger has to reach this caption; a local value would kill it \u2014 the
+        // exact bug this pill used to have.
         content.Children.Add(new TextBlock
         {
             Text = string.IsNullOrEmpty(link.Label) ? DefaultLinkLabel(link.Type) : link.Label,
-            FontSize = _fsCaption,
-            FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = (Brush)FindResource("TextPrimary"),
         });
 
+        // Tells the player the link leaves the launcher.
+        content.Children.Add(new TextBlock
+        {
+            Text = ModLink.ExternalGlyph,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = _fsCaption - 2,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+            Foreground = (Brush)FindResource("TextSecondary"),
+        });
+
+        // Colours come from the Style, never from here: a local Background or
+        // BorderBrush beats the template's hover triggers and the pill goes dead.
         var button = new Button
         {
             Content = content,
-            Background = (Brush)FindResource("BgBase"),
-            BorderBrush = (Brush)FindResource("BorderSubtle"),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(10, 5, 10, 5),
-            Margin = new Thickness(0, 0, 6, 6),
-            Cursor = Cursors.Hand,
+            Style = (Style)FindResource("ModLinkPill"),
+            Margin = new Thickness(0, 0, 8, 8),
             ToolTip = TooltipHelper.Wrap(link.Url),
         };
         button.Click += (_, _) => OpenWebsiteRequested?.Invoke(this, link.Url);
@@ -1206,19 +1220,9 @@ public partial class ModsBrowser : UserControl
         _primaryAction = click;
         DetailPrimaryButton.Click += OnPrimaryClick;
 
-        // Secondary — view mod page if URL present, otherwise hide.
-        if (!string.IsNullOrWhiteSpace(profile.OfficialWebsite))
-        {
-            DetailSecondaryButton.Visibility = Visibility.Visible;
-            DetailSecondaryButton.Content = DetailViewWebsiteLabel;
-            DetailSecondaryButton.Click -= OnSecondaryClick;
-            _secondaryUrl = profile.OfficialWebsite;
-            DetailSecondaryButton.Click += OnSecondaryClick;
-        }
-        else
-        {
-            DetailSecondaryButton.Visibility = Visibility.Collapsed;
-        }
+        // The "view mod page" button used to live here. It is gone: the official
+        // website is now the first pill in the community-links row, so every
+        // external destination sits in one place instead of two.
 
         // Overflow menu items: Set active + Uninstall (when installed).
         BuildDetailMoreMenu(profile, state);
@@ -1226,14 +1230,8 @@ public partial class ModsBrowser : UserControl
 
     private Action? _primaryAction;
     private Action? _removeAction;
-    private string _secondaryUrl = "";
     private void OnPrimaryClick(object sender, RoutedEventArgs e) => _primaryAction?.Invoke();
     private void OnRemoveClick(object sender, RoutedEventArgs e) => _removeAction?.Invoke();
-    private void OnSecondaryClick(object sender, RoutedEventArgs e)
-    {
-        if (!string.IsNullOrEmpty(_secondaryUrl))
-            OpenWebsiteRequested?.Invoke(this, _secondaryUrl);
-    }
 
     private void BuildDetailMoreMenu(ModProfile profile, ModRowState state)
     {

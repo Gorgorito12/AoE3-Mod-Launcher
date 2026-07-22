@@ -511,7 +511,9 @@ public static class ModRegistry
             InstallMarker = m.Install.Marker ?? "",
             GameExecutable = m.Install.Executable ?? "",
             GameArguments = m.Install.Arguments ?? "",
+            MultiplayerProbeFiles = m.Install.MultiplayerProbeFiles ?? new(),
             UserDataRedirect = m.Install.UserDataRedirect,
+            SetupPathRedirect = m.Install.SetupPathRedirect,
             UpdateMechanism = updateMechanism,
         };
 

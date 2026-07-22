@@ -56,15 +56,59 @@ public class ModInstallProbeTests : IDisposable
     private static void CreateDirAt(string root, string relative)
         => Directory.CreateDirectory(Path.Combine(root, relative));
 
+    /// <summary>
+    /// An IsolatedFolder install is a full AoE3 clone (bin\ flattened to root),
+    /// so it always has the engine DLLs at the root. Detection now requires one,
+    /// so a fixture that should read as a real install must lay it.
+    /// </summary>
+    private static void CreateEngineAt(string root)
+        => CreateFileAt(root, "RockallDLL.dll");
+
     [Fact]
-    public void IsolatedMod_WithProbeAndMarker_IsDetected_RegardlessOfFolderName()
+    public void IsolatedMod_WithProbeMarkerAndEngine_IsDetected_RegardlessOfFolderName()
     {
         // A WoL install in a folder named "MiWoL" — nothing like the DisplayName.
         var install = Path.Combine(NewTempDir(), "MiWoL");
         CreateFileAt(install, @"data\stringtabley.xml"); // probe
         CreateDirAt(install, @"art\zulushield");          // marker (a directory)
+        CreateEngineAt(install);                          // cloned base engine
 
         Assert.True(ModInstallProbe.LooksLikeModInstall(install, WolLikeProfile()));
+    }
+
+    /// <summary>
+    /// The Napoleonic Era bug: a folder with the mod's probe (and marker) but
+    /// NO base game underneath is only the mod's overlay — a leftover manual
+    /// download, not an install. Adopting it made the launcher offer a bogus
+    /// "update" for a mod it never installed.
+    /// </summary>
+    [Fact]
+    public void IsolatedMod_WithProbeButNoEngine_IsRejected()
+    {
+        var install = Path.Combine(NewTempDir(), "Napoleonic era");
+        CreateFileAt(install, @"data\stringtabley.xml"); // probe
+        CreateDirAt(install, @"art\zulushield");          // marker
+        // no engine DLL — only the overlay
+
+        Assert.False(ModInstallProbe.LooksLikeModInstall(install, WolLikeProfile()));
+        Assert.Equal(ProbeOutcome.EngineMissing,
+            ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
+
+    /// <summary>Any one of the engine DLLs is enough — a mod may not ship all four.</summary>
+    [Theory]
+    [InlineData("RockallDLL.dll")]
+    [InlineData("binkw32.dll")]
+    [InlineData("granny2.dll")]
+    [InlineData("deformerdlly.dll")]
+    public void IsolatedMod_AnySingleEngineFile_Satisfies(string engineDll)
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");
+        CreateDirAt(install, @"art\zulushield");
+        CreateFileAt(install, engineDll);
+
+        Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(install, WolLikeProfile()));
     }
 
     [Fact]
@@ -81,10 +125,11 @@ public class ModInstallProbeTests : IDisposable
     }
 
     [Fact]
-    public void OverlayMod_WithExclusiveProbe_NoMarker_IsDetected()
+    public void OverlayMod_WithExclusiveProbe_NoMarker_NoEngine_IsStillDetected()
     {
-        // Improvement-Mod-style: overlay, probe is its own exclusive .exe, no
-        // marker declared. Detection rides the probe alone, under any name.
+        // InPlaceOverlay installs INTO the base game, whose engine lives in bin\,
+        // not at the install-path root — so the engine check does NOT apply. A
+        // probe-only folder is a valid detection for this install type.
         var profile = new ModProfile
         {
             Id = "improvement-mod",
@@ -95,6 +140,7 @@ public class ModInstallProbeTests : IDisposable
         };
         var install = Path.Combine(NewTempDir(), "AnyName");
         CreateFileAt(install, "age3m.exe");
+        // no engine DLL — must NOT matter for InPlaceOverlay
 
         Assert.True(ModInstallProbe.LooksLikeModInstall(install, profile));
     }
@@ -118,10 +164,11 @@ public class ModInstallProbeTests : IDisposable
     {
         var profile = WolLikeProfile();
 
-        // Both present → Match.
+        // Probe + marker + engine → Match.
         var full = Path.Combine(NewTempDir(), "MiWoL");
         CreateFileAt(full, @"data\stringtabley.xml");
         CreateDirAt(full, @"art\zulushield");
+        CreateEngineAt(full);
         Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(full, profile));
 
         // Probe present, marker gone → MarkerMissing (looks like base AoE3 /
@@ -145,7 +192,8 @@ public class ModInstallProbeTests : IDisposable
     {
         // The manual picker keeps the "closest to a real install" reason across
         // candidates by comparing outcomes; this ordering is load-bearing for that.
-        Assert.True(ProbeOutcome.Match > ProbeOutcome.MarkerMissing);
+        Assert.True(ProbeOutcome.Match > ProbeOutcome.EngineMissing);
+        Assert.True(ProbeOutcome.EngineMissing > ProbeOutcome.MarkerMissing);
         Assert.True(ProbeOutcome.MarkerMissing > ProbeOutcome.ProbeMissing);
         Assert.True(ProbeOutcome.ProbeMissing > ProbeOutcome.NotADirectory);
     }

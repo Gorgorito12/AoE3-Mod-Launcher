@@ -542,6 +542,27 @@ Two cheap gates beyond a green build:
   `StaleOriginalsFallbackTests`, where the **translation-applied case is the important
   one** (it's what protects the backup).
 
+- **`IsolatedFolder` detection ALSO requires the base-game ENGINE at the folder root, not
+  just the probe — a folder with only the mod's overlay is NOT an install.**
+  `ModInstallProbe.Inspect` checks, for `ModInstallType.IsolatedFolder` only, that at least
+  one engine DLL (`RockallDLL.dll`/`binkw32.dll`/`granny2.dll`/`deformerdlly.dll`) sits at the
+  install root (new `ProbeOutcome.EngineMissing`, ranked between `MarkerMissing` and `Match`).
+  An `IsolatedFolder` real install is a full AoE3 clone (bin\ flattened to root), so the engine
+  is always there; a folder with the probe but no engine is a leftover **manual download of
+  the mod's overlay** — the Napoleonic Era bug: the launcher adopted the user's stray
+  `Napoleonic era\` folder (had `age3n.exe`, no engine, no manifest), read it as installed, and
+  — being `GitHubReleases` with no known version — offered a bogus **Update** for a mod it never
+  installed (the `ghUnknownInstalled` CTA). **Only `IsolatedFolder`:** an `InPlaceOverlay` mod
+  installs INTO the base game, whose engine lives in `bin\`, not the install-path root, so the
+  check is skipped for it. The engine list is the non-data `VerifyService.EngineCandidates`
+  (NOT the data version-key files — a mod may ship its own, e.g. NE's `proton.xml` vs
+  `protoy.xml`). Load-bearing: the install order (clone engine → flatten → overlay adds the
+  probe LAST) means "probe without engine" never exists mid-install, so this can't reject an
+  install in progress. Pinned by `ModInstallProbeTests` (engine-missing rejected, any single
+  DLL satisfies, InPlaceOverlay unaffected); `ModInstallScannerTests`' fixtures lay the engine
+  too. The stale `installPath` such an adopted folder left in the config self-heals — the next
+  `ResolveInstallPath` rejects it as an invalid cached path.
+
 - **Install detection is by CONTENT, never by folder name —
   `InstallProbeFile` + an optional `InstallMarker`, unified in
   `Services/ModInstallProbe.cs`.** The historical bug: WoL (an
@@ -1734,6 +1755,27 @@ Two cheap gates beyond a green build:
   newest-first). Don't revert either to a plain `OrderBy(e => e.Name)`. Pinned by
   `TranslationCompatTests`.
 
+- **The multiplayer fingerprint PROBE FILES are per-profile — a mod that ships its own
+  `data\` files instead of the base `y` ones must declare them, or its lobby version gate
+  is INERT.** `ModHashService.DefaultProbeFiles` is the three `y` files, but a mod like
+  **Napoleonic Era** (`age3n.exe`) ships `data\proton.xml` + `data\techtreen.xml` (the `n`
+  suffix) and does NOT overwrite the `y` files — those come from the AoE3 clone, so they're
+  byte-identical for every NE player regardless of version. Fingerprinting the defaults there
+  would make every NE install hash the same → two different versions could share a match and
+  desync, undetected. `ModProfile.MultiplayerProbeFiles` (catalog `install.multiplayerProbeFiles`,
+  a **tier-3 critical** field — it decides who can play with whom) declares the real files, and
+  **the resolution lives INSIDE `ModHashService.ProbeFilesFor` / the 2-arg `FingerprintAsync`
+  overload, NOT in the caller**, so every call site is correct at once (the one in `MainWindow`
+  today and any added later). Empty list = the defaults, so WoL / IM / the stock game are
+  byte-for-byte unchanged. Pinned by the per-profile cases in `ModHashServiceTests`. **Modelling
+  gotcha for `IsolatedFolder` mods (learned the hard way with NE):** the AoE3 engine loads its
+  `.bar` data from the **launch WORKING DIRECTORY**, not the registry `setuppath` — proven by
+  WoL launching fine with `setuppath` pointing at an unrelated mod folder. So the launcher's
+  existing "launch with `WorkingDirectory = mod folder`" is all these mods need; do NOT add a
+  registry-`setuppath` redirect. NE's own probe file `age3n.exe` is exclusive to the mod (not in
+  base AoE3), so its profile needs **no `marker`** (unlike WoL, whose probe `stringtabley.xml`
+  ships in vanilla).
+
 - **The multiplayer fingerprint is LOCALIZATION-INVARIANT — applying a translation
   must NOT lock a player out of English lobbies.** `ModHashService` gates the lobby
   join on the SHA-256 of three files (`data\protoy.xml`, `techtreey.xml`,
@@ -1889,11 +1931,36 @@ Two cheap gates beyond a green build:
   only door" reasoning as above. (2) **The pill's tooltip is the full URL**
   (`TooltipHelper.Wrap`) — a label can claim anything, so showing the destination is
   the real anti-phishing measure; a Steam-style "you are leaving" interstitial was
-  deliberately NOT built. (3) **No emoji and no brand logos** — one generic Segoe MDL2
-  glyph (`\uE71B`) for every type; `type` only picks the caption. (4) The section is
+  deliberately NOT built. (3) **No emoji and no brand logos** — the pills use GENERIC
+  Segoe MDL2 system icons chosen per `type` by `ModLink.GlyphFor` (globe / speech bubble /
+  camera …), plus a trailing `\uE8A7` marking that the link leaves the launcher. The rule
+  is about never reproducing someone's LOGO, not about every link looking alike; it used to
+  be one `\uE71B` for every type, which made the row read as static badges. `GlyphFor`'s
+  `_ =>` returns the generic link glyph, so a type added later still renders an icon —
+  pinned by `ModLinkTests`, which enumerates the enum rather than listing cases and asserts
+  the glyphs sit in the Private Use Area (outside it they would render as literal
+  characters). **The pill's colours come from the keyed `ModLinkPill` style in
+  `Buttons.xaml`, NEVER from the instance:** `BuildLinkPill` used to set
+  `Background`/`BorderBrush` locally, and a local value (precedence 3) beats
+  `ControlTemplate.Triggers` (4-6), so every hover trigger was dead and the pills had no
+  click affordance at all — the same precedence trap documented for `TitleBarBrandButton`.
+  For the same reason the caption `TextBlock` must NOT set `Foreground` (the
+  `ContentPresenter` propagates the button's, which is the only route hover has to reach
+  it); the leading glyph DOES set one, so it stays gold on hover. (4) The section is
   **collapsed when `Links` is empty**, so every built-in and every pre-`links`
-  manifest renders byte-for-byte as before. (5) A link equal to `OfficialWebsite` is
-  skipped — the action bar's "view mod page" button already covers it. **(6) `links` is
+  manifest renders byte-for-byte as before. **(5) `OfficialWebsite` is FOLDED INTO the row
+  as the first pill** (`ModLink.BuildDisplayList`, pure + tested), unless a `links` entry
+  already carries that url. This inverted an earlier rule that SKIPPED such a link because
+  the action bar had a "view mod page" button; that button was removed as redundant, and
+  since the metadata "Website" line is plain text, the row became the only clickable route
+  to the site — dropping the button without folding it in would have left every mod's
+  website unreachable, and a mod that declares no `links` with nothing clickable at all.
+  **The website must NOT go through `ModLink.Sanitize`:** that is HTTPS-only, while
+  `OfficialWebsite` keeps a deliberate legacy HTTP allowance (WoL's is
+  `http://aoe3wol.com/`), so sanitising it would silently delete the pill. The correct gate
+  is `SafeUrl.IsAllowed`, which takes http and https — the same check that runs on open.
+  The "Website" metadata row was also dropped: the pill's tooltip already shows the full
+  url. **(6) `links` is
   the ONE field a catalog entry may contribute to a BUILT-IN — the single documented
   exception to the shadow rule, via `ModRegistry.ApplyBuiltInCosmeticOverlay`.** `wol` /
   `aoe3-tad` are constructed directly in `ModRegistry._builtIn` and never go through
@@ -2242,6 +2309,73 @@ Two cheap gates beyond a green build:
   = WolPatcher/GitHubReleases only, so that keeps Install/Repair off). Either way it keeps
   `userDataRedirect:true` (KR writes to the shared `Age of Empires 3` My Games regardless
   of install location — the folder name is engine-product-derived, not path-derived).
+
+- **UHC decides the install model: a mod's `.exe` locates its `.bar`/data by the
+  registry `setuppath` UNLESS it's UHC-patched (then it uses the working directory).
+  This is the root rule behind why `IsolatedFolder` works for some mods and not
+  others — get it wrong and the game either fails to load or launches VANILLA.** UHC
+  ("Unofficial Hotfix / extension hack" applied onto the game exes — confirmed by
+  modder Mandos/Improvement Mod) is what lets a mod run from ANY folder. WoL,
+  Improvement Mod and ESOC ship UHC-patched exes (`age3y.exe`/`age3m.exe` read the
+  launch **working directory**) → the launcher's `IsolatedFolder` clone-and-launch
+  model works. A mod that ships the **stock** exe (no UHC) reads the registry
+  `setuppath` (the TAD key `HKLM\…\Age of Empires 3 Expansion Pack 2\1.0\setuppath`,
+  = the real `…\bin`), NOT the working dir → an isolated clone loads the base game's
+  content, not the mod. **Empirically confirmed** (Napoleonic Era's `age3n.exe`: the
+  isolated install said "Could not load DATAPN.BAR" until `setuppath` was pointed at
+  its folder; Struggle of Indonesia's `age3y.exe` is byte-identical to the stock exe →
+  no UHC). We CAN'T add UHC ourselves (needs a custom exe → forks multiplayer
+  compatibility with the original mod's players). So NON-UHC mods use one of two models
+  by whether they're ADDITIVE or REPLACEMENT:
+  **(1) Additive non-UHC mods → `InPlaceOverlay` into the real AoE3.** Napoleonic Era
+  ships its own exe (`age3n.exe`) + suffixed files (`DataPN.bar`, `data\proton.xml`,
+  `RMN\`, `AIN\`, `triggerN\`, `loading*n*.ddt`) that DON'T collide with the base `y`
+  files, so overlaying them into the real AoE3 (`DataPN.bar`+`age3n.exe` where
+  `setuppath` points, the loose files alongside) makes NE load with `setuppath`
+  UNCHANGED at `…\bin` → TAD and NE coexist, registry never touched. This is exactly
+  the layout NE's official Inno installer produces. (In this Steam layout `…\bin` holds
+  EVERYTHING — `data\`/`RM\`/`AI\`/`Sound\`/`loading*.ddt` are all inside `bin\`, so
+  ALL of NE's files map into `bin\`.) Uninstall stays safe: an `InPlaceOverlay`
+  manifest is `ClonedAoe3=false` → `UninstallService` removes only the mod's net-new
+  files, never the base.
+  **(2) Replacement non-UHC mods → `SetupPathRedirect` (junction the setuppath folder).**
+  Struggle of Indonesia ships the STOCK `age3y.exe` and REPLACES base TAD files
+  (`data\civs.xml`, `homecity*.xml`, `protoy/techtreey/stringtabley.xml` with the
+  Indonesian civs), so it can't be overlaid (would destroy vanilla) and it shares the
+  exe+registry-key with vanilla TAD. It stays an `IsolatedFolder` clone; the new
+  `Services/AoE3SetupPathRedirect.cs` (gated by `ModProfile.SetupPathRedirect` /
+  `install.setupPathRedirect`) — a near-copy of `AoE3UserDataRedirect` — makes the
+  folder `setuppath` points at (the real `bin\`) resolve to the mod's clone folder via
+  a **directory junction** around launch, WITHOUT touching the registry (no admin): it
+  reads `setuppath` from the registry, moves the real `bin\` aside once (to
+  `bin\ (AoE3 vanilla)`), `mklink /J` `bin\` → the mod folder, launches (stock
+  `age3y.exe` reads `setuppath=bin` = the junction = SoI content), and restores on the
+  next non-redirect launch / `App.OnStartup` self-heal. `GameLauncher.ApplyLaunchRedirects`
+  (renamed from `ApplyUserDataRedirect`, now takes `modInstallPath`) applies BOTH
+  redirects on every launch. **Load-bearing:** NEVER deletes a real folder (junction
+  removed with `recursive:false` = link only); bails if the aside already exists;
+  best-effort try/caught; **stricter than the My Games variant — it refuses to junction
+  when the setup folder doesn't already exist** (won't create a link where the base game
+  should be). While a replacement mod plays, the real `bin\` (base + NE) is aside, so a
+  crash leaves it junctioned until the next launcher start heals it — accepted trade-off
+  (the user chose this over per-launch-admin `setuppath` writes, which broke TAD when a
+  manual restore failed). Pinned by `AoE3SetupPathRedirectTests`. **`ModInstallProbe`'s
+  engine check still applies** (SoI is `IsolatedFolder` with the base engine DLLs); its
+  probe (`data\stringtabley.xml`, shared with vanilla) needs a marker
+  (`art\buildings\soi`, verified present). **Don't confuse the two models:** additive →
+  InPlaceOverlay (no registry, coexists), replacement → SetupPathRedirect (junction,
+  mutually exclusive with vanilla while playing).
+  **Modder-facing surfaces (keep in sync with this gotcha):** `docs/MODDING.md §4` is the
+  authoritative guide — §4.0 the UHC decision rule + the "copy the folder and run the exe"
+  UHC test, §4.1 IsolatedFolder (UHC only), §4.2 InPlaceOverlay (additive non-UHC, NE),
+  §4.3 `setupPathRedirect` (stock-exe replacement, SoI); §3.4 documents the
+  `setupPathRedirect`/`multiplayerProbeFiles`/`userDataRedirect` fields; §9 has the "my mod
+  won't open" runtime entry. The **"Publish my mod" wizard** (`PublishModDialog`, Step 3) no
+  longer shows the raw `IsolatedFolder`/`InPlaceOverlay` combo — it asks ONE plain-language
+  question ("how your mod installs and runs") with 3 options whose `Tag` encodes the type +
+  a `+setupPathRedirect` suffix; `InstallTypeFromTag`/`SetupRedirectFromTag` split it in
+  `ReadFormInput`, and `BuildModJson` emits `install.setupPathRedirect` only when true
+  (pinned by `BuildModJsonTests`).
 
 - **The notification bell (Steam-style) is a persistent, deduped history fed by
   detection hooks — NOT a second toast pipeline.** `Services/NotificationCenter.cs`

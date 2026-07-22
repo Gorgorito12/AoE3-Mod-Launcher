@@ -227,13 +227,19 @@ public static class GameLauncher
     }
 
     /// <summary>
-    /// Apply the per-mod My Games redirect just before launch: a redirect-mod
-    /// (writes to the shared <c>Age of Empires 3</c> folder) gets its exclusive
-    /// folder junctioned in; anything else restores the real vanilla folder. This
-    /// runs on EVERY launch so the junction is only active while a redirect-mod
-    /// plays and is undone the moment vanilla / another mod launches. Best-effort.
+    /// Apply the per-mod launch redirects just before launch. Both run on EVERY
+    /// launch so a junction is only active while the owning mod plays and is undone
+    /// the moment vanilla / another mod launches. Best-effort — never blocks a launch.
+    ///
+    /// (1) My Games redirect: a <see cref="ModProfile.UserDataRedirect"/> mod (writes
+    ///     to the shared <c>Age of Empires 3</c> save folder) gets its exclusive
+    ///     folder junctioned in; anything else restores the real vanilla folder.
+    /// (2) setuppath redirect: a <see cref="ModProfile.SetupPathRedirect"/> mod (ships
+    ///     the stock <c>age3y.exe</c>, so the engine loads content from the registry
+    ///     <c>setuppath</c>) gets that folder junctioned at its install folder;
+    ///     anything else restores it. See <see cref="AoE3SetupPathRedirect"/>.
     /// </summary>
-    private static void ApplyUserDataRedirect(ModProfile profile)
+    private static void ApplyLaunchRedirects(ModProfile profile, string? modInstallPath)
     {
         try
         {
@@ -244,7 +250,19 @@ public static class GameLauncher
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"ApplyUserDataRedirect failed: {ex.Message}");
+            DiagnosticLog.Write($"ApplyLaunchRedirects (user data) failed: {ex.Message}");
+        }
+
+        try
+        {
+            if (profile.SetupPathRedirect && !string.IsNullOrWhiteSpace(modInstallPath))
+                AoE3SetupPathRedirect.EnsureRedirected(modInstallPath);
+            else
+                AoE3SetupPathRedirect.EnsureDefault();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ApplyLaunchRedirects (setup path) failed: {ex.Message}");
         }
     }
 
@@ -274,9 +292,9 @@ public static class GameLauncher
 
         DiagnosticLog.Write($"Launching game: {exePath} (profile '{profile.Id}')");
 
-        // Give a redirect-mod its exclusive My Games folder (junction); restore the
-        // default for everything else. Best-effort — never blocks the launch.
-        ApplyUserDataRedirect(profile);
+        // Apply the per-mod launch redirects (My Games save folder + stock-exe
+        // setuppath) for this mod; restore defaults for everything else. Best-effort.
+        ApplyLaunchRedirects(profile, modInstallPath);
 
         var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
             ? profile.GameArguments
@@ -352,9 +370,9 @@ public static class GameLauncher
             config.Save();
         }
 
-        // Give a redirect-mod its exclusive My Games folder (junction); restore the
-        // default for everything else. Best-effort — never blocks the launch.
-        ApplyUserDataRedirect(profile);
+        // Apply the per-mod launch redirects (My Games save folder + stock-exe
+        // setuppath) for this mod; restore defaults for everything else. Best-effort.
+        ApplyLaunchRedirects(profile, modInstallPath);
 
         var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
             ? profile.GameArguments

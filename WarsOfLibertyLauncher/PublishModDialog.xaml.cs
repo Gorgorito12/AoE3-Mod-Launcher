@@ -102,6 +102,11 @@ public partial class PublishModDialog : Window
     public string HintBannerText { get => HintBanner.Text; set => HintBanner.Text = value; }
     public string LblInstallTypeText { get => LblInstallType.Text; set => LblInstallType.Text = value; }
     public string HintInstallTypeText { get => HintInstallType.Text; set => HintInstallType.Text = value; }
+    // Plain-language install options (Content localized by the opener). The Tag on
+    // each item (set in XAML) is what maps to install.type / setupPathRedirect.
+    public string InstallOptUhcText { set => InstallOptUhc.Content = value; }
+    public string InstallOptAdditiveText { set => InstallOptAdditive.Content = value; }
+    public string InstallOptReplaceText { set => InstallOptReplace.Content = value; }
     public string LblDefaultFolderText { get => LblDefaultFolder.Text; set => LblDefaultFolder.Text = value; }
     public string LblProbeFileText { get => LblProbeFile.Text; set => LblProbeFile.Text = value; }
     public string LblExecutableText { get => LblExecutable.Text; set => LblExecutable.Text = value; }
@@ -419,6 +424,14 @@ public partial class PublishModDialog : Window
         public string? DescriptionEs { get; init; }
         // install.*  (nested under "install")
         public string InstallType { get; init; } = "IsolatedFolder";
+        /// <summary>
+        /// When true, emits <c>install.setupPathRedirect: true</c> — for a total
+        /// conversion that ships the STOCK <c>age3y.exe</c> (no UHC) and replaces
+        /// base game data, so the launcher junctions the registry setuppath folder
+        /// at the mod's clone folder around launch. Only meaningful with
+        /// <c>InstallType = "IsolatedFolder"</c>. See MODDING.md §4.
+        /// </summary>
+        public bool SetupPathRedirect { get; init; }
         public string? DefaultFolder { get; init; }
         public string? ProbeFile { get; init; }
         public string? Marker { get; init; }
@@ -447,6 +460,19 @@ public partial class PublishModDialog : Window
         public string CatalogBranch { get; init; } = "main";
     }
 
+    /// <summary>
+    /// The Step-3 install-type combo carries a compound <c>Tag</c> that encodes
+    /// the install type AND, via a <c>+setupPathRedirect</c> suffix, whether the
+    /// mod needs the setuppath junction — so a modder answers ONE plain-language
+    /// question ("how does your mod run?") instead of two technical fields.
+    /// e.g. <c>"IsolatedFolder+setupPathRedirect"</c> → IsolatedFolder + redirect.
+    /// </summary>
+    private static string InstallTypeFromTag(string? tag)
+        => (string.IsNullOrWhiteSpace(tag) ? "IsolatedFolder" : tag).Split('+')[0];
+
+    private static bool SetupRedirectFromTag(string? tag)
+        => (tag ?? "").Contains("+setupPathRedirect", System.StringComparison.OrdinalIgnoreCase);
+
     public string GenerateJson() => BuildModJson(ReadFormInput());
 
     /// <summary>Reads the live WPF controls into a flat <see cref="ModJsonInput"/>.</summary>
@@ -463,7 +489,8 @@ public partial class PublishModDialog : Window
         LinkLines = SplitLines(FieldLinks.Text),
         DescriptionEn = FieldDescriptionEn.Text,
         DescriptionEs = FieldDescriptionEs.Text,
-        InstallType = SelectedTag(FieldInstallType) ?? "IsolatedFolder",
+        InstallType = InstallTypeFromTag(SelectedTag(FieldInstallType)),
+        SetupPathRedirect = SetupRedirectFromTag(SelectedTag(FieldInstallType)),
         DefaultFolder = FieldDefaultFolder.Text,
         ProbeFile = FieldProbeFile.Text,
         Marker = FieldMarker.Text,
@@ -535,6 +562,9 @@ public partial class PublishModDialog : Window
         AddIfPresent(install, "marker", input.Marker);
         AddIfPresent(install, "executable", input.Executable);
         AddIfPresent(install, "arguments", input.Arguments);
+        // Emitted only when true (JSON stays clean, like every other optional flag).
+        // Marks a stock-exe replacement TC that needs the setuppath junction (§4).
+        if (input.SetupPathRedirect) install["setupPathRedirect"] = true;
         AddArrayIfPresent(install, "payloadUrls", input.PayloadUrls);
         AddArrayIfPresent(install, "payloadSha256", input.PayloadSha256);
         doc["install"] = install;
@@ -732,7 +762,10 @@ public partial class PublishModDialog : Window
         LblAccent.Text = "Accent colour (optional)"; HintAccent.Text = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher.";
         LblIcon.Text = "Icon filename (optional)"; HintIcon.Text = "icon.png — square (1:1), 256–1024 px, PNG with alpha, ≤1 MB.";
         LblBanner.Text = "Banner filename (optional)"; HintBanner.Text = "banner.png/.jpg — 4:1, 1200–4800 px wide, ≤2 MB.";
-        LblInstallType.Text = "Install type"; HintInstallType.Text = "IsolatedFolder = own folder (recommended for most mods). InPlaceOverlay = on top of AoE3.";
+        LblInstallType.Text = "How your mod installs and runs"; HintInstallType.Text = "Pick how your mod behaves — this decides whether it opens correctly. Not sure? Copy your game folder elsewhere and run the .exe; if it opens, it has UHC (first option). See MODDING.md §4.";
+        InstallOptUhc.Content = "Total conversion with its own patched exe (UHC) — runs from any folder";
+        InstallOptAdditive.Content = "Adds new files to AoE3 (own suffixed exe/.bar, doesn't replace base files)";
+        InstallOptReplace.Content = "Replaces AoE3 using the stock age3y.exe (needs the setuppath junction)";
         LblDefaultFolder.Text = "Default install folder"; HintDefaultFolder.Text = "Folder name suggested when installing. Example: Napoleonic Era";
         LblProbeFile.Text = "Probe file"; HintProbeFile.Text = "A file that confirms the mod is installed. Example: data\\napoleonic.xml";
         LblExecutable.Text = "Executable"; HintExecutable.Text = "The .exe that launches the game. Example: age3y.exe";

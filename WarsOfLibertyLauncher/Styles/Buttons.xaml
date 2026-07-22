@@ -1272,4 +1272,64 @@
         </Setter>
     </Style>
 
+    <!--
+        Community-link pill, used by every mod's Workshop detail panel and by any
+        link type added later — the point of it being a keyed Style rather than
+        properties set per button.
+
+        It replaced a version that set Background and BorderBrush as LOCAL values
+        on each button, which silently killed every hover trigger: a local value
+        (precedence 3) beats ControlTemplate.Triggers (4-6), so the pills never
+        reacted to the mouse and read as static badges. Same trap documented for
+        TitleBarBrandButton. Set colours HERE, never on the instance.
+
+        The label TextBlock inside must NOT set its own Foreground: the
+        ContentPresenter propagates the button's Foreground to the content, which
+        is the only way the hover trigger reaches the caption. The leading glyph
+        DOES set one (gold), deliberately, so it stays gold on hover.
+    -->
+    <Style x:Key="ModLinkPill" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="Background" Value="{DynamicResource BgBase}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="PillBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="PillBorder" Property="Background"
+                                    Value="{DynamicResource TintGoldHover}"/>
+                            <Setter TargetName="PillBorder" Property="BorderBrush"
+                                    Value="{DynamicResource AccentBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="PillBorder" Property="Background"
+                                    Value="{DynamicResource TintGoldHoverSubtle}"/>
+                            <Setter TargetName="PillBorder" Property="BorderBrush"
+                                    Value="{DynamicResource AccentDeep}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

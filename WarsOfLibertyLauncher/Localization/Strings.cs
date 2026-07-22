@@ -1939,11 +1939,26 @@ public static class Strings
             [LangEn] = "banner.png/.jpg — 1200x300, ≤500 KB.",
             [LangEs] = "banner.png/.jpg — 1200x300, ≤500 KB.",
         },
-        ["PublishFieldInstallType"] = new() { [LangEn] = "Install type", [LangEs] = "Tipo de instalación" },
+        ["PublishFieldInstallType"] = new() { [LangEn] = "How your mod installs and runs", [LangEs] = "Cómo se instala y corre tu mod" },
         ["PublishFieldInstallTypeHint"] = new()
         {
-            [LangEn] = "IsolatedFolder = own folder (recommended for most mods). InPlaceOverlay = on top of AoE3.",
-            [LangEs] = "IsolatedFolder = carpeta propia (recomendado para la mayoría). InPlaceOverlay = encima de AoE3.",
+            [LangEn] = "Pick how your mod behaves — this decides whether it opens correctly. Not sure? Test UHC: copy your game folder somewhere else and run the .exe; if it opens, it has UHC (first option). See MODDING.md §4.",
+            [LangEs] = "Elegí cómo se comporta tu mod — esto decide si abre bien. ¿No sabés? Probá UHC: copiá la carpeta del juego a otro lado y corré el .exe; si abre, tiene UHC (primera opción). Mirá MODDING.md §4.",
+        },
+        ["PublishInstallOptUhc"] = new()
+        {
+            [LangEn] = "Total conversion with its own patched exe (UHC) — runs from any folder",
+            [LangEs] = "Conversión total con su propio exe parcheado (UHC) — corre desde cualquier carpeta",
+        },
+        ["PublishInstallOptAdditive"] = new()
+        {
+            [LangEn] = "Adds new files to AoE3 (own suffixed exe/.bar, doesn't replace base files)",
+            [LangEs] = "Agrega archivos nuevos al AoE3 (exe/.bar propio con sufijo, no pisa el base)",
+        },
+        ["PublishInstallOptReplace"] = new()
+        {
+            [LangEn] = "Replaces AoE3 using the stock age3y.exe (needs the setuppath junction)",
+            [LangEs] = "Reemplaza el AoE3 usando el age3y.exe stock (necesita el junction de setuppath)",
         },
         ["PublishFieldDefaultFolder"] = new() { [LangEn] = "Default install folder", [LangEs] = "Carpeta de instalación por defecto" },
         ["PublishFieldDefaultFolderHint"] = new()
@@ -4356,6 +4371,14 @@ public static class Strings
                        "If you uninstalled {0} or files are missing, reinstall it from the launcher (adding the folder can't recover deleted mod files).",
             [LangEs] = "La carpeta seleccionada parece un Age of Empires III base, no una instalación completa de {0} — le falta '{1}'.\n\n" +
                        "Si desinstalaste {0} o faltan archivos, reinstálalo desde el launcher (agregar la carpeta no puede recuperar archivos del mod borrados).",
+        },
+        // {0} = mod display name.
+        ["DlgInvalidFolderEngineBody"] = new()
+        {
+            [LangEn] = "That folder only has {0}'s own files, not the Age of Empires III game underneath — so it isn't a complete installation the launcher can run.\n\n" +
+                       "Install {0} from the launcher instead: it copies a full Age of Empires III and lays the mod on top.",
+            [LangEs] = "Esa carpeta solo tiene los archivos de {0}, no el juego Age of Empires III debajo — así que no es una instalación completa que el launcher pueda ejecutar.\n\n" +
+                       "Instala {0} desde el launcher: copia un Age of Empires III completo y aplica el mod encima.",
         },
         // {0} = mod display name.
         ["DlgFolderPickerTitle"] = new()

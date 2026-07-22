@@ -122,6 +122,170 @@ public class ModLinkTests
         Assert.Single(ModLink.Sanitize(raw!));
     }
 
+    // -- What the pill row shows -----------------------------------------------
+    //
+    // The "view mod page" button is gone, so this row is the only clickable route
+    // to a mod's official website. That inverts the old rule: instead of skipping
+    // a link that repeated the website, the website is folded in unless a link
+    // already covers it.
+
+    private static ModLink Link(ModLinkType type, string url) => new() { Type = type, Url = url };
+
+    [Fact]
+    public void OfficialWebsite_ComesFirst_AsAWebsitePill()
+    {
+        var result = ModLink.BuildDisplayList(
+            "https://impmod.blogspot.com/",
+            new[] { Link(ModLinkType.Discord, "https://discord.gg/x") });
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(ModLinkType.Website, result[0].Type);
+        Assert.Equal("https://impmod.blogspot.com/", result[0].Url);
+        Assert.Equal(ModLinkType.Discord, result[1].Type);
+    }
+
+    /// <summary>
+    /// Wars of Liberty's site is http://aoe3wol.com/ — officialWebsite carries a
+    /// deliberate legacy HTTP allowance that the HTTPS-only Sanitize does not.
+    /// Running it through that would silently delete the pill.
+    /// </summary>
+    [Fact]
+    public void HttpOfficialWebsite_Survives()
+    {
+        var result = ModLink.BuildDisplayList("http://aoe3wol.com/", new List<ModLink>());
+
+        Assert.Single(result);
+        Assert.Equal("http://aoe3wol.com/", result[0].Url);
+    }
+
+    /// <summary>Never twice: the old skip rule inverted, not deleted.</summary>
+    [Theory]
+    [InlineData("https://www.moddb.com/mods/x")]
+    [InlineData("HTTPS://WWW.MODDB.COM/mods/x")]
+    public void WebsiteAlreadyAmongLinks_IsNotDuplicated(string site)
+    {
+        var result = ModLink.BuildDisplayList(
+            site, new[] { Link(ModLinkType.ModDb, "https://www.moddb.com/mods/x") });
+
+        Assert.Single(result);
+        Assert.Equal(ModLinkType.ModDb, result[0].Type);
+    }
+
+    /// <summary>
+    /// The regression this change exists to avoid: a catalog mod that declares no
+    /// `links` still has its site reachable, now that the button is gone.
+    /// </summary>
+    [Fact]
+    public void ModWithoutLinks_StillGetsItsWebsite()
+    {
+        var result = ModLink.BuildDisplayList("https://example.com/", new List<ModLink>());
+
+        Assert.Single(result);
+        Assert.Equal(ModLinkType.Website, result[0].Type);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("   ")]
+    [InlineData("file:///C:/x.exe")]
+    [InlineData(@"C:\Windows\System32\cmd.exe")]
+    [InlineData("https://user:pass@evil.example/")]
+    public void UnusableWebsite_ProducesNoPill(string? site)
+        => Assert.Empty(ModLink.BuildDisplayList(site, new List<ModLink>()));
+
+    /// <summary>Nothing to show at all keeps the section collapsed.</summary>
+    [Fact]
+    public void NoWebsiteAndNoLinks_IsEmpty()
+    {
+        Assert.Empty(ModLink.BuildDisplayList("", new List<ModLink>()));
+        Assert.Empty(ModLink.BuildDisplayList(null, null));
+    }
+
+    /// <summary>The author's order is preserved after the website.</summary>
+    [Fact]
+    public void CatalogLinksKeepTheirOrder()
+    {
+        var result = ModLink.BuildDisplayList("https://site/", new[]
+        {
+            Link(ModLinkType.Discord, "https://discord.gg/x"),
+            Link(ModLinkType.ModDb, "https://moddb/x"),
+            Link(ModLinkType.Video, "https://youtube/x"),
+        });
+
+        Assert.Equal(
+            new[] { ModLinkType.Website, ModLinkType.Discord, ModLinkType.ModDb, ModLinkType.Video },
+            result.Select(l => l.Type).ToArray());
+    }
+
+    // -- Pill icons ------------------------------------------------------------
+    //
+    // Generic system icons, never brand logos. The fallback is the part worth
+    // pinning: a link type added later must still render an icon rather than an
+    // empty gap, and that is a promise about code nobody has written yet.
+
+    /// <summary>Every declared type has an icon — no gaps today.</summary>
+    [Theory]
+    [InlineData(ModLinkType.Website)]
+    [InlineData(ModLinkType.Discord)]
+    [InlineData(ModLinkType.ModDb)]
+    [InlineData(ModLinkType.Forum)]
+    [InlineData(ModLinkType.Wiki)]
+    [InlineData(ModLinkType.Video)]
+    [InlineData(ModLinkType.Other)]
+    public void EveryLinkType_HasAGlyph(ModLinkType type)
+        => Assert.False(string.IsNullOrEmpty(ModLink.GlyphFor(type)));
+
+    /// <summary>
+    /// Enumerating the enum rather than listing cases: a type added later is
+    /// covered automatically, which is the whole point of the fallback.
+    /// </summary>
+    [Fact]
+    public void NoLinkTypeIsEverIconless_IncludingOnesAddedLater()
+    {
+        foreach (ModLinkType type in Enum.GetValues<ModLinkType>())
+            Assert.False(string.IsNullOrEmpty(ModLink.GlyphFor(type)),
+                $"{type} has no glyph — add one to ModLink.GlyphFor.");
+
+        // A value outside the enum is what an unmapped future type looks like
+        // before someone updates the switch.
+        Assert.Equal(ModLink.GenericLinkGlyph, ModLink.GlyphFor((ModLinkType)999));
+    }
+
+    /// <summary>
+    /// Distinct icons are the point — the row should scan at a glance. If two
+    /// types share one, the caption is doing all the work.
+    /// </summary>
+    [Fact]
+    public void TheMainTypes_HaveDistinctGlyphs()
+    {
+        var glyphs = new[]
+        {
+            ModLinkType.Website, ModLinkType.Discord, ModLinkType.ModDb,
+            ModLinkType.Forum, ModLinkType.Wiki, ModLinkType.Video,
+        }.Select(ModLink.GlyphFor).ToList();
+
+        Assert.Equal(glyphs.Count, glyphs.Distinct().Count());
+    }
+
+    /// <summary>
+    /// Segoe MDL2 icons live in the Private Use Area. A glyph outside it would
+    /// render as a literal character instead of an icon.
+    /// </summary>
+    [Fact]
+    public void GlyphsArePrivateUseArea_SoTheyRenderAsIcons()
+    {
+        foreach (ModLinkType type in Enum.GetValues<ModLinkType>())
+        {
+            var g = ModLink.GlyphFor(type);
+            Assert.Single(g);
+            Assert.InRange(g[0], (char)0xE000, (char)0xF8FF);
+        }
+
+        Assert.Single(ModLink.ExternalGlyph);
+        Assert.InRange(ModLink.ExternalGlyph[0], (char)0xE000, (char)0xF8FF);
+    }
+
     // -- Built-in cosmetic overlay --------------------------------------------
     //
     // Built-ins never pass through ProjectToProfile, so the catalog entry that

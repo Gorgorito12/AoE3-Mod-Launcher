@@ -45,12 +45,17 @@ public class ModInstallScannerTests : IDisposable
         InstallMarker = @"art\zulushield",
     };
 
-    /// <summary>Lay down a real-looking WoL install (probe + marker) at a path.</summary>
+    /// <summary>
+    /// Lay down a real-looking WoL install (probe + marker + cloned base engine)
+    /// at a path. The engine DLL is what detection now requires for an
+    /// IsolatedFolder mod — an install without it is only the mod's overlay.
+    /// </summary>
     private static void MakeWolInstall(string installDir)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(installDir, @"data\stringtabley.xml"))!);
         File.WriteAllText(Path.Combine(installDir, @"data\stringtabley.xml"), "x");
         Directory.CreateDirectory(Path.Combine(installDir, @"art\zulushield"));
+        File.WriteAllText(Path.Combine(installDir, "RockallDLL.dll"), "x");
     }
 
     [Fact]

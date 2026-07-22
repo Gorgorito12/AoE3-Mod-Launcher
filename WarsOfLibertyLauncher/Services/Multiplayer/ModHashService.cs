@@ -79,14 +79,34 @@ public static class ModHashService
     };
 
     /// <summary>
-    /// Fingerprint a mod install using the default probe files. Convenience
-    /// overload for the multiplayer join check.
+    /// The probe files that identify a mod's version for the multiplayer join
+    /// check: the profile's own <see cref="ModProfile.MultiplayerProbeFiles"/>
+    /// when it declares them, else <see cref="DefaultProbeFiles"/>.
+    ///
+    /// This lives HERE, not in the caller, so every call site is correct at once
+    /// — the one in <c>MainWindow</c> today and any added later. A mod like
+    /// Napoleonic Era ships its own data files (<c>data\proton.xml</c>,
+    /// <c>data\techtreen.xml</c> — the <c>n</c> suffix) and NONE of the default
+    /// <c>y</c> files; without this the fingerprint would hash the base game's
+    /// <c>y</c> files, which the AoE3 clone makes identical for every player, so
+    /// the room's version check would be INERT and two versions could share a
+    /// match and desync.
+    /// </summary>
+    public static IReadOnlyList<string> ProbeFilesFor(ModProfile profile)
+    {
+        var declared = profile?.MultiplayerProbeFiles;
+        return declared is { Count: > 0 } ? declared : DefaultProbeFiles;
+    }
+
+    /// <summary>
+    /// Fingerprint a mod install using the probe files the profile resolves to
+    /// (its own, or the defaults). Convenience overload for the join check.
     /// </summary>
     public static Task<ModFingerprint> FingerprintAsync(
         ModProfile profile,
         string installRoot,
         CancellationToken ct = default)
-        => FingerprintAsync(profile, installRoot, DefaultProbeFiles, ct);
+        => FingerprintAsync(profile, installRoot, ProbeFilesFor(profile), ct);
 
     /// <summary>
     /// Fingerprint a mod install over an explicit set of relative paths.

@@ -222,6 +222,75 @@ public sealed class ModLink
         var cleaned = new string(raw.Where(c => !char.IsControl(c)).ToArray()).Trim();
         return cleaned.Length <= MaxLabelLength ? cleaned : cleaned[..MaxLabelLength].Trim();
     }
+
+    /// <summary>
+    /// The pills to render for a mod: its official website first, then its
+    /// catalog links.
+    ///
+    /// The website used to live in a separate "view mod page" button next to the
+    /// action bar, and the links row deliberately SKIPPED any link repeating it.
+    /// With that button gone the rule inverts \u2014 the website is folded into the row
+    /// unless a link already covers it \u2014 because the row is now the only clickable
+    /// route to it. The metadata "Website" line is plain text, so dropping the
+    /// button without this would have left every mod's site unreachable, and mods
+    /// that declare no <c>links</c> at all with nothing clickable whatsoever.
+    ///
+    /// <b><paramref name="officialWebsite"/> must NOT go through
+    /// <see cref="Sanitize"/>.</b> That is HTTPS-only, while this field carries a
+    /// deliberate legacy HTTP allowance \u2014 Wars of Liberty's is
+    /// <c>http://aoe3wol.com/</c>, which sanitising would silently delete. The
+    /// right gate is <c>SafeUrl.IsAllowed</c>: it takes http and https and refuses
+    /// everything else, and it is the same check that runs when the link is opened.
+    ///
+    /// Pure so the ordering and the dedup can be tested without a UI thread.
+    /// </summary>
+    public static List<ModLink> BuildDisplayList(string? officialWebsite, IEnumerable<ModLink>? links)
+    {
+        var result = new List<ModLink>();
+        var catalog = links?.ToList() ?? new List<ModLink>();
+
+        var site = (officialWebsite ?? "").Trim();
+        bool alreadyLinked = catalog.Any(l =>
+            string.Equals(l.Url, site, System.StringComparison.OrdinalIgnoreCase));
+
+        if (Services.SafeUrl.IsAllowed(site) && !alreadyLinked)
+            result.Add(new ModLink { Type = ModLinkType.Website, Url = site });
+
+        result.AddRange(catalog);
+        return result;
+    }
+
+    /// <summary>Segoe MDL2 glyph shown on a link's pill, so the row scans at a glance.</summary>
+    public const string GenericLinkGlyph = "\uE71B";   // Link
+
+    /// <summary>
+    /// Picks the icon for a link type.
+    ///
+    /// These are GENERIC system icons (a globe, a speech bubble, a camera), never
+    /// brand logos — the trademark rule the links feature was built under is about
+    /// not reproducing someone's logo, not about every link looking the same.
+    ///
+    /// Lives on the model rather than in the browser so it can be unit-tested: the
+    /// point of the fallback is that a link type added later still renders an icon
+    /// instead of nothing, and that guarantee is worth pinning rather than
+    /// trusting.
+    /// </summary>
+    public static string GlyphFor(ModLinkType type) => type switch
+    {
+        ModLinkType.Website => "\uE774",   // Globe
+        ModLinkType.Discord => "\uE8BD",   // Message
+        ModLinkType.ModDb   => "\uE7B8",   // Download
+        ModLinkType.Forum   => "\uE8F2",   // Comment
+        ModLinkType.Wiki    => "\uE736",   // ReadingList
+        ModLinkType.Video   => "\uE714",   // Video
+        _                   => GenericLinkGlyph,
+    };
+
+    /// <summary>
+    /// Trailing hint that the link leaves the launcher. Paired with the tooltip
+    /// showing the full url, which is the actual anti-phishing measure.
+    /// </summary>
+    public const string ExternalGlyph = "\uE8A7";   // OpenInNewWindow
 }
 
 /// <summary>
@@ -420,6 +489,20 @@ public class ModProfile
     public string InstallMarker { get; set; } = "";
 
     /// <summary>
+    /// Install-relative files that identify this mod's VERSION for the
+    /// multiplayer join check. Empty = use the launcher default
+    /// (<c>data\protoy.xml</c> / <c>techtreey.xml</c> / <c>stringtabley.xml</c>).
+    ///
+    /// Declare it only for a mod that ships its own data files instead of
+    /// overwriting the base <c>y</c> ones — e.g. Napoleonic Era's
+    /// <c>data\proton.xml</c> / <c>data\techtreen.xml</c>. Without it the
+    /// fingerprint would hash the base game's <c>y</c> files (identical for
+    /// every player via the AoE3 clone), leaving the room's version gate inert.
+    /// See <see cref="Services.Multiplayer.ModHashService.ProbeFilesFor"/>.
+    /// </summary>
+    public List<string> MultiplayerProbeFiles { get; set; } = new();
+
+    /// <summary>
     /// Filename of the .exe to launch when the user hits PLAY. Resolved
     /// relative to the install folder for in-place mods, or to the mod's
     /// own folder for isolated mods.
@@ -494,6 +577,19 @@ public class ModProfile
     /// isolate natively or share vanilla's folder on purpose.
     /// </summary>
     public bool UserDataRedirect { get; set; } = false;
+
+    /// <summary>
+    /// When true, this mod ships the STOCK <c>age3y.exe</c> (no UHC patch) and is
+    /// a total conversion cloned into its own folder, so the engine — which locates
+    /// its <c>.bar</c>/data by the registry <c>setuppath</c>, not the working
+    /// directory — would load VANILLA content instead of the mod. The launcher
+    /// works around this by junctioning the <c>setuppath</c> folder at this mod's
+    /// install folder around launch and restoring it afterwards (see
+    /// <see cref="Services.AoE3SetupPathRedirect"/>). Default false — only stock-exe
+    /// replacement mods (e.g. Struggle of Indonesia) need it; UHC mods (WoL,
+    /// Improvement Mod, ESOC) and additive-overlay mods (Napoleonic Era) do not.
+    /// </summary>
+    public bool SetupPathRedirect { get; set; } = false;
 
     /// <summary>
     /// True for the launcher's built-in "stock Age of Empires III" profile.

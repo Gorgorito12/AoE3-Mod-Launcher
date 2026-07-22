@@ -208,6 +208,16 @@ public class ModCatalogInstall
     public string Arguments { get; set; } = "";
 
     /// <summary>
+    /// Install-relative files that identify this mod's version for the
+    /// multiplayer join check. Declare only for a mod that ships its own data
+    /// files instead of the base <c>y</c> ones (e.g. Napoleonic Era's
+    /// <c>data\proton.xml</c>). Projected into
+    /// <see cref="ModProfile.MultiplayerProbeFiles"/>. Empty = launcher default.
+    /// </summary>
+    [JsonPropertyName("multiplayerProbeFiles")]
+    public List<string>? MultiplayerProbeFiles { get; set; }
+
+    /// <summary>
     /// When true, the mod writes to the SHARED vanilla <c>My Games\Age of Empires 3\</c>
     /// folder; the launcher junction-redirects the standard folder to
     /// <c>userDataFolder</c> around launch to give it an exclusive save folder.
@@ -216,6 +226,17 @@ public class ModCatalogInstall
     /// </summary>
     [JsonPropertyName("userDataRedirect")]
     public bool UserDataRedirect { get; set; } = false;
+
+    /// <summary>
+    /// When true, the mod ships the STOCK <c>age3y.exe</c> (no UHC patch) and is a
+    /// clone-into-its-own-folder total conversion, so the engine loads its content
+    /// via the registry <c>setuppath</c>. The launcher junctions the setup folder at
+    /// the mod's install folder around launch. Projected into
+    /// <see cref="ModProfile.SetupPathRedirect"/>. Default false — only stock-exe
+    /// replacement mods (e.g. Struggle of Indonesia) need it.
+    /// </summary>
+    [JsonPropertyName("setupPathRedirect")]
+    public bool SetupPathRedirect { get; set; } = false;
 
     /// <summary>
     /// Initial-install payload URLs, agnostic of the update mechanism. Used

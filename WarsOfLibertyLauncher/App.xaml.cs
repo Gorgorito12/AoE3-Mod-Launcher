@@ -114,6 +114,12 @@ public partial class App : System.Windows.Application
         // A redirect-mod re-applies its junction when it next launches. Best-effort.
         try { Services.AoE3UserDataRedirect.EnsureDefault(); } catch { /* never block startup */ }
 
+        // Self-heal the setuppath redirect: if a previous session was killed while a
+        // stock-exe replacement mod (e.g. Struggle of Indonesia) was up, the real
+        // bin\ folder may still be junctioned to the mod's folder — restore it so the
+        // base game / other mods load vanilla content. Best-effort.
+        try { Services.AoE3SetupPathRedirect.EnsureDefault(); } catch { /* never block startup */ }
+
         // Global crash net. Before this existed, an unhandled exception killed the
         // process with ZERO in-app trace: no global handler wrote anything, the
         // debug log is truncated each launch, and there was no persistent crash

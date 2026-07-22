@@ -75,7 +75,13 @@
       "Bash(curl -sL -o C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/addons/1932b.bin -H 'Referer: https://aoe3.heavengames.com/downloads/showfile.php?fileid=1932' -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 Chrome/120 Safari/537.36' -w 'http=%{http_code} type=%{content_type} size=%{size_download}\\\\n' 'https://aoe3.heavengames.com/downloads/getfile.php?id=1932&dd=1&s=499a6328c0d57fa3bf675991eb3ebfbb')",
       "Bash(grep -oE \"'[0-9a-f]{16,}'\")",
       "Bash(curl -sL -A 'Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36' -H 'Referer: https://aoe3.heavengames.com/downloads/getfile.php?id=1932&s=caf2c858986c325ae0bc4928b56d16c8' -o C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/addons/rot2.bin -w 'http=%{http_code} type=%{content_type} size=%{size_download}\\\\n' 'https://aoe3.heavengames.com/downloads/getfile.php?id=1932&dd=1&s=caf2c858986c325ae0bc4928b56d16c8')",
-      "Bash(awk '{print \"bytes:\", $5}')"
+      "Bash(awk '{print \"bytes:\", $5}')",
+      "Bash(python3 -c ' *)",
+      "Bash('/c/Program Files/7-Zip/7z.exe' l C:/Users/Jeison/Downloads/ne217b_setup.exe)",
+      "Bash(awk '{print \"  SI: \"$5}')",
+      "Bash(grep -rn \"setuppath\\\\|SetupPath\\\\|Microsoft Games\\\\\\\\\\\\\\\\Age\" --include=*.cs Services/)",
+      "Bash(curl -sL -A Aoe3ModLauncher/1.0 -o C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/ne_remote.zip https://github.com/papillo12/Napoleonic-Era/releases/download/1.0.0/napoleonic-era-2.1.7b.zip)",
+      "Bash(python3 - C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/ne_remote.zip)"
     ]
   }
 }
