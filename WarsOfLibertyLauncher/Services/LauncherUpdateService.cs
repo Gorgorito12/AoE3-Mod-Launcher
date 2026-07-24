@@ -33,7 +33,7 @@ public class UpdateVerificationException : Exception
 public class LauncherUpdateService
 {
     private const string GitHubApiUrl =
-        "https://api.github.com/repos/Gorgorito12/Updater/releases/latest";
+        "https://api.github.com/repos/Gorgorito12/AoE3-Mod-Launcher/releases/latest";
 
     private static readonly HttpClient Http = CreateHttpClient();
 

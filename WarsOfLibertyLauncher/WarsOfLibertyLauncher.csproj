@@ -31,9 +31,11 @@
          Liberty mod's branding for its tile in the mod browser) so the
          launcher can rebrand without affecting the WoL profile. -->
     <ApplicationIcon>AppIcon.ico</ApplicationIcon>
-    <!-- Manifest declares requireAdministrator so Windows always prompts
-         for UAC before launching. Avoids permission edge cases when the
-         install lives in Program Files or the registry needs HKLM access. -->
+    <!-- Manifest declares asInvoker: the launcher runs UN-ELEVATED (normal
+         user token). Privileged operations (install/update/uninstall into a
+         protected folder like Program Files, HKLM writes) elevate ON DEMAND
+         via ElevationService. See app.manifest for the full rationale (running
+         elevated would break HKCU Run-key auto-start). -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Pre-compile to native code at publish time (ReadyToRun). Without
          this the JIT runs on every cold start, adding 1-2s of startup

@@ -1,7 +1,7 @@
 # Code Signing Policy
 
 The release binary of the **AoE3 Mod Launcher** (`Aoe3ModLauncher.exe`,
-distributed through [GitHub Releases](https://github.com/Gorgorito12/Updater/releases))
+distributed through [GitHub Releases](https://github.com/Gorgorito12/AoE3-Mod-Launcher/releases))
 is Authenticode-signed.
 
 > Free code signing provided by [SignPath.io](https://about.signpath.io),
@@ -12,7 +12,7 @@ is Authenticode-signed.
 - **License:** Apache-2.0 (OSI-approved), with no proprietary or commercially
   dual-licensed components — see [`LICENSE`](LICENSE).
 - **Source of truth:** the public repository
-  <https://github.com/Gorgorito12/Updater>. The team that maintains the source
+  <https://github.com/Gorgorito12/AoE3-Mod-Launcher>. The team that maintains the source
   owns the repository and authorizes every signing request.
 - **Actively maintained**, released through GitHub Releases.
 - Contains no malware, and no features designed to identify or exploit security
@@ -25,7 +25,7 @@ maintainer-led project the roles are held as follows:
 
 - **Authors / committers** — trusted developers who write and commit code:
   [@Gorgorito12](https://github.com/Gorgorito12) and the contributors listed at
-  <https://github.com/Gorgorito12/Updater/graphs/contributors>.
+  <https://github.com/Gorgorito12/AoE3-Mod-Launcher/graphs/contributors>.
 - **Reviewers** — review every external contribution before merge:
   [@Gorgorito12](https://github.com/Gorgorito12). All third-party contributions
   arrive as pull requests under a [DCO](CONTRIBUTING.md) sign-off and are
@@ -63,5 +63,5 @@ Radmin VPN, and the mod distribution servers) are listed in `PRIVACY.md`.
 ## Reporting
 
 Security or code-signing concerns: please
-[open an issue](https://github.com/Gorgorito12/Updater/issues), or see
+[open an issue](https://github.com/Gorgorito12/AoE3-Mod-Launcher/issues), or see
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
