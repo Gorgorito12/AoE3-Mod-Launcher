@@ -181,5 +181,6 @@ we review it in the open.
 
 ---
 
-*See also: [CODE_SIGNING_POLICY.md](../CODE_SIGNING_POLICY.md) ·
+*See also: the full code-cited **[Transparency & Security Audit](AUDIT.md)** ·
+[CODE_SIGNING_POLICY.md](../CODE_SIGNING_POLICY.md) ·
 [PRIVACY.md](../PRIVACY.md) · [SECURITY.md](../SECURITY.md)*

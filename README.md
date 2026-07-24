@@ -105,7 +105,8 @@ to click and how to verify the SHA-256.
 
 > **Think it's a virus?** It isn't — it's an unsigned open-source build. See
 > **[Is it a virus? / ¿Es un virus?](docs/IS-IT-A-VIRUS.md)** for why antivirus
-> may flag it and how to verify the binary yourself.
+> may flag it and how to verify the binary yourself, or the full code-cited
+> **[transparency & security audit](docs/AUDIT.md)** for the deep version.
 
 ## Quick build (developers)
 
@@ -136,6 +137,9 @@ pipeline, see [docs/BUILDING.md](docs/BUILDING.md).
   SmartScreen guide.
 - **[docs/IS-IT-A-VIRUS.md](docs/IS-IT-A-VIRUS.md)** — why an unsigned build may
   trip antivirus, and how to verify it (VirusTotal / SHA-256 / build from source).
+- **[docs/AUDIT.md](docs/AUDIT.md)** — full transparency & security audit
+  (bilingual, code-cited): network endpoints, persistence, the no-malware
+  checklist, build/update integrity, and the **AI models** used to build it.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — build / test, DCO sign-off, PR
   conventions.
 - **[SECURITY.md](SECURITY.md)** · **[PRIVACY.md](PRIVACY.md)** ·
