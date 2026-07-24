@@ -25,9 +25,13 @@ public class InstallerService
         set => _downloader.Pause = value;
     }
 
-    /// <summary>Where temp files for installation live.</summary>
+    /// <summary>
+    /// Where temp files for installation live. Derived from
+    /// <see cref="AppPaths.InstallTempRoot"/> so it cannot drift from the folder the
+    /// antivirus-exclusion advice tells the user to exclude.
+    /// </summary>
     public static string TempDirectory =>
-        Path.Combine(Path.GetTempPath(), "WarsOfLibertyLauncher", "installer");
+        Path.Combine(AppPaths.InstallTempRoot, "installer");
 
     /// <summary>
     /// Best-effort cleanup of the temp folder. Called after a successful

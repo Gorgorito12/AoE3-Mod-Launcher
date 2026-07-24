@@ -458,7 +458,39 @@ public static class GameLauncher
             EnableRaisingEvents = true,
         };
         process.Exited += safeOnExited;
-        if (!process.Start()) return null;
-        return process;
+        try
+        {
+            if (!process.Start()) return null;
+            return process;
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 740)
+        {
+            // ERROR_ELEVATION_REQUIRED. The exe needs elevation — e.g. Windows applies a
+            // compat shim to AoE3's raw age3y.exe (kernel-driver DRM), so launching it
+            // requires admin regardless of the launcher. UseShellExecute=false CANNOT
+            // elevate, so the un-caught throw here used to fail the multiplayer launch
+            // outright (the dashboard path already degrades via ShellExecute=true). Retry
+            // through ShellExecute so the game LAUNCHES (with a UAC prompt Windows imposes,
+            // not us — the launcher never touches Windows compat settings). We lose the
+            // exit watcher on this degraded path: a medium-IL launcher can't open a handle
+            // to a higher-integrity child, so Process.Exited / the cancel-leave tree-kill
+            // won't fire for the elevated game. The game starting matters more; the caller
+            // gets a best-effort process (enough for the last-played stamp).
+            DiagnosticLog.Write(
+                "Watched child launch needs elevation; retrying via ShellExecute (no exit watcher).");
+            try { process.Dispose(); } catch { /* ignore */ }
+
+            var elevated = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    Arguments = arguments ?? "",
+                    WorkingDirectory = Path.GetDirectoryName(exePath),
+                    UseShellExecute = true,
+                },
+            };
+            return elevated.Start() ? elevated : null;
+        }
     }
 }

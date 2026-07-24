@@ -178,29 +178,6 @@ public static class UserDataService
     }
 
     /// <summary>
-    /// Count of files inside the <c>Savegame\</c> subfolder. This is where
-    /// the game keeps custom metropolises and saved games — the files most
-    /// likely to be in a newer format that a freshly-installed older
-    /// binary can't parse, causing the loading-screen hang.
-    /// Returns 0 if the folder doesn't exist or can't be read.
-    /// </summary>
-    public static int CountSavegameFiles(string folderName)
-    {
-        var folder = GetUserDataFolder(folderName);
-        if (string.IsNullOrEmpty(folder)) return 0;
-        var savegame = Path.Combine(folder, "Savegame");
-        if (!Directory.Exists(savegame)) return 0;
-        try
-        {
-            return Directory.EnumerateFiles(savegame, "*", SearchOption.AllDirectories).Count();
-        }
-        catch
-        {
-            return 0;
-        }
-    }
-
-    /// <summary>
     /// Renames the user-data folder to "&lt;folderName&gt;.bak.&lt;timestamp&gt;"
     /// so the game starts with a clean slate. Returns the new backup path on
     /// success, or null if there was nothing to back up / the rename failed.

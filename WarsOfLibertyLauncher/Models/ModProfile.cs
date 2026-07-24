@@ -613,6 +613,40 @@ public class ModProfile
     /// </summary>
     public bool IsStockGame { get; set; } = false;
 
+    /// <summary>
+    /// Absolute path of the local <c>mod.json</c> this profile was loaded from, or empty
+    /// when it came from the catalog (or is a built-in).
+    ///
+    /// <para>Set only by the "add local mod" path, where a modder points the launcher at a
+    /// manifest on disk to try it before publishing. It exists so the Workshop can mark
+    /// the entry as local — an unpublished manifest must not be mistaken for a catalog
+    /// one — and so removing it knows which path to drop from the config. Removing a local
+    /// mod deletes NOTHING on disk; it only stops reading that file.</para>
+    /// </summary>
+    public string LocalManifestPath { get; set; } = "";
+
+    /// <summary>
+    /// Install-relative path of a payload file that antivirus engines are KNOWN to
+    /// flag as a false positive (WoL: <c>AI3\wolai.upl</c>, detected as
+    /// <c>Trojan:Win32/DllInject!MTB</c>). Empty for every other mod.
+    ///
+    /// <para>Set this only for a detection that is real, reproducible and
+    /// PERMANENT. WoL's predates the launcher entirely and has already been reported
+    /// upstream; <c>!MTB</c> verdicts come from re-trained ML models, so a correction
+    /// can regress. That is what makes it worth warning about BEFORE the install
+    /// rather than treating it as a rare accident: Defender quarantines the file
+    /// mid-extraction, <see cref="Services.NativeInstallService.VerifyExtractIntact"/>
+    /// aborts, and the user loses a multi-GB download that a folder exclusion would
+    /// have prevented.</para>
+    ///
+    /// <para>It is a PATH, not a bool, on purpose — naming the offending file is what
+    /// makes the warning actionable and lets the user verify the quarantine entry
+    /// matches, instead of asking them to trust a vague "your antivirus may
+    /// interfere". The launcher never touches antivirus configuration; it only names
+    /// the folders to exclude (see <see cref="Services.AppPaths.InstallTempRoot"/>).</para>
+    /// </summary>
+    public string AntivirusFalsePositiveFile { get; set; } = "";
+
     // ------------------------------------------------------------------
     // Image-source resolvers.
     //

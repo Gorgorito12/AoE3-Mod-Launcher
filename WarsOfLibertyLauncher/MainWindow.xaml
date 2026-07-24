@@ -23,6 +23,14 @@
              reaches the gear ContextMenu popup and the standalone dialogs, and
              so long tooltips wrap instead of clipping. Don't re-add it here. -->
 
+        <!-- Notification rows paint the icon of the mod they are about, resolved
+             from the item's ModId through the shared icon cache. Both converters
+             return "no icon" for kinds with no mod (launcher update, connectivity)
+             and for items whose mod has left the catalog — the row then falls back
+             to the per-kind glyph. -->
+        <controls:ModIconConverter x:Key="ModIconConv"/>
+        <controls:ModIconPresentConverter x:Key="ModIconPresentConv"/>
+
         <!-- (Removed local SidebarPrimaryButton style — the redesign
              relies on the global one from Styles/Buttons.xaml which
              has the gold gradient + glow effect. Window.Resources used
@@ -705,12 +713,76 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <!-- Kind glyph -->
+                                                <!-- Mod icon + kind badge. The icon says WHICH mod,
+                                                     the badge says WHAT happened; the badge reuses the
+                                                     same per-kind glyph and colour the big fallback
+                                                     glyph uses, so the two can't drift. -->
+                                                <Grid Grid.Column="0"
+                                                      Width="34" Height="34"
+                                                      VerticalAlignment="Top"
+                                                      Margin="0,1,10,0"
+                                                      Visibility="{Binding ModId, Converter={StaticResource ModIconPresentConv}}">
+                                                    <Border CornerRadius="6"
+                                                            Background="{Binding ModId, Converter={StaticResource ModIconConv}}"
+                                                            BorderBrush="{DynamicResource BorderSubtle}"
+                                                            BorderThickness="1"/>
+                                                    <Border HorizontalAlignment="Right"
+                                                            VerticalAlignment="Bottom"
+                                                            Width="15" Height="15"
+                                                            Margin="0,0,-3,-3"
+                                                            CornerRadius="7.5"
+                                                            Background="{DynamicResource BgPanel}"
+                                                            BorderBrush="{DynamicResource BgBase}"
+                                                            BorderThickness="1.5">
+                                                        <TextBlock HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"
+                                                                   FontFamily="Segoe MDL2 Assets"
+                                                                   FontSize="8"
+                                                                   Foreground="{DynamicResource TextSecondary}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Text" Value="&#xEA8F;"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="UpdateAvailable">
+                                                                            <Setter Property="Text" Value="&#xE896;"/>
+                                                                            <Setter Property="Foreground" Value="#5AA9E6"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="UpdateFinished">
+                                                                            <Setter Property="Text" Value="&#xE930;"/>
+                                                                            <Setter Property="Foreground" Value="#62C462"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="NewTranslation">
+                                                                            <Setter Property="Text" Value="&#xF2B7;"/>
+                                                                            <Setter Property="Foreground" Value="#D8B66A"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="NewMod">
+                                                                            <Setter Property="Text" Value="&#xE710;"/>
+                                                                            <Setter Property="Foreground" Value="#B48AD8"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="Installed">
+                                                                            <Setter Property="Text" Value="&#xE73E;"/>
+                                                                            <Setter Property="Foreground" Value="#62C462"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="RoomCreated">
+                                                                            <Setter Property="Text" Value="&#xE902;"/>
+                                                                            <Setter Property="Foreground" Value="#5AA9E6"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Border>
+                                                </Grid>
+
+                                                <!-- Fallback: no mod to show (launcher update, connectivity)
+                                                     or the mod is gone from the catalog. Notifications persist
+                                                     across sessions, so this case is normal, not an error. -->
                                                 <TextBlock Grid.Column="0"
                                                            VerticalAlignment="Top"
                                                            Margin="0,1,10,0"
                                                            FontFamily="Segoe MDL2 Assets"
                                                            FontSize="16"
+                                                           Visibility="{Binding ModId, Converter={StaticResource ModIconPresentConv}, ConverterParameter=invert}"
                                                            Foreground="{DynamicResource TextSecondary}">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">

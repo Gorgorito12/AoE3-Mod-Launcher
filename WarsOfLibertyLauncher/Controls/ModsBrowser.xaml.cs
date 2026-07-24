@@ -86,12 +86,28 @@ public partial class ModsBrowser : UserControl
     public event EventHandler<string>? OpenWebsiteRequested;
     public event EventHandler? PublishRequested;
     public event EventHandler? RefreshCatalogRequested;
-    public event EventHandler? AddLocalModRequested;
 
     /// <summary>Workshop "Add to my mods" button click.</summary>
     public event EventHandler<ModProfile>? AddToCollectionRequested;
     /// <summary>Workshop "Remove from my mods" button click.</summary>
     public event EventHandler<ModProfile>? RemoveFromCollectionRequested;
+    /// <summary>
+    /// "See in Library" click — the forward action for a mod that is already in the
+    /// user's collection.
+    ///
+    /// <para>Adding a mod used to leave the panel with NO enabled action: the primary
+    /// button became a disabled "In my mods" pill and the overflow menu is empty, so the
+    /// only thing left to click was Remove — which undoes what the user just did. A user
+    /// reported exactly this, having pressed Add expecting it to install. Installing
+    /// still lives on the Library dashboard (PLAY + gear); this event is the missing
+    /// bridge to it.</para>
+    /// </summary>
+    public event EventHandler<ModProfile>? OpenInLibraryRequested;
+    /// <summary>
+    /// "Stop using this file" for a mod loaded from a local <c>mod.json</c>. Forgets the
+    /// path; never touches the file itself, which the modder is probably still editing.
+    /// </summary>
+    public event EventHandler<ModProfile>? RemoveLocalModRequested;
     // (RightClicked event removed — right-click on Workshop rows
     // no longer triggers a per-mod context popup. Per-mod admin
     // actions live in the dashboard gear button now.)
@@ -183,7 +199,6 @@ public partial class ModsBrowser : UserControl
 
         // Header buttons.
         RefreshCatalogButton.Click += (_, _) => RefreshCatalogRequested?.Invoke(this, EventArgs.Empty);
-        AddLocalModButton.Click += (_, _) => AddLocalModRequested?.Invoke(this, EventArgs.Empty);
         PublishModButton.Click += (_, _) => PublishRequested?.Invoke(this, EventArgs.Empty);
         MoreMenuButton.Click += (_, _) =>
         {
@@ -234,8 +249,6 @@ public partial class ModsBrowser : UserControl
         set { _refreshCatalogTooltip = TooltipHelper.Wrap(value); if (RefreshCatalogButton?.IsEnabled == true) RefreshCatalogButton.ToolTip = _refreshCatalogTooltip; }
     }
 
-    public string AddLocalModLabel { get => (string)(AddLocalModButton.Content ?? ""); set => AddLocalModButton.Content = value; }
-    public string AddLocalModTooltip { set => AddLocalModButton.ToolTip = TooltipHelper.Wrap(value); }
     public string PublishModLabel { get => (string)(PublishModButton.Content ?? ""); set => PublishModButton.Content = value; }
     public string PublishModTooltip { set => PublishModButton.ToolTip = TooltipHelper.Wrap(value); }
     public string SubTabMyModsLabel { get => (string)(SubTabMyMods.Content ?? ""); set => SubTabMyMods.Content = value; }
@@ -321,6 +334,23 @@ public partial class ModsBrowser : UserControl
     /// </summary>
     public string BtnInCollectionLabel { get; set; } = "In my mods";
     public string BtnBuiltinLabel { get; set; } = "Built-in";
+    /// <summary>
+    /// Forward action for a mod already in the collection. Deliberately the SAME text
+    /// whether or not the mod is installed: it describes where the button goes, never
+    /// what will happen there, so it can't repeat the original confusion of a Workshop
+    /// button that looks like it installs.
+    /// </summary>
+    public string BtnOpenInLibraryLabel { get; set; } = "See in Library";
+    /// <summary>Badge marking an entry that comes from a local file, not the catalog.</summary>
+    public string LocalModBadgeLabel { get; set; } = "Local";
+    public string RemoveLocalModLabel { get; set; } = "Stop using this file";
+
+    /// <summary>
+    /// Explains which axis the status badge reports. The badge is about DISK state
+    /// (installed or not) while the buttons beside it are about collection membership —
+    /// two independent things that read as one control without this.
+    /// </summary>
+    public string BadgeTooltipText { get; set; } = "";
 
     /// <summary>Status badge labels (localised text shown inside each badge).</summary>
     public string BadgeNotInstalled { get; set; } = "No instalado";
@@ -723,7 +753,7 @@ public partial class ModsBrowser : UserControl
             ModRowStatus.Error           => ((Brush)FindResource("StatusErrorBg"),           (Brush)FindResource("StatusErrorFg"),           BadgeError),
             _                            => ((Brush)FindResource("StatusNotInstalledBg"),    (Brush)FindResource("StatusNotInstalledFg"),    BadgeNotInstalled),
         };
-        return new Border
+        var badge = new Border
         {
             Background = bg,
             CornerRadius = new CornerRadius(4),
@@ -736,48 +766,39 @@ public partial class ModsBrowser : UserControl
                 Foreground = fg,
             },
         };
+
+        // Names the axis this badge reports. It talks about DISK state, while the button
+        // right beside it talks about collection membership — two independent things that
+        // read as one control, which is how "Add to my mods" got mistaken for "install".
+        if (!string.IsNullOrEmpty(BadgeTooltipText))
+            badge.ToolTip = TooltipHelper.Wrap(BadgeTooltipText);
+
+        return badge;
     }
 
     private Button BuildRowAction(ModProfile profile, ModRowState state)
     {
-        // Workshop redesign — the per-row CTA is now a toggle for the
-        // user's personal collection, not an install/update/play
-        // dispatcher. Three modes:
-        //   1. Built-in profile (WoL) → small disabled "Built-in" pill.
-        //      Can't be removed because the launcher needs something
-        //      to fall back on if the user empties their collection.
-        //   2. In user's collection → "Remove from my mods" (neutral
-        //      ghost button — destructive-looking but recoverable).
-        //   3. Not in user's collection → "Add to my mods" (primary
-        //      CatalogBlue button — the main Workshop action).
-        // All install / update / repair / uninstall happens on the
-        // Dashboard (PLAY state machine + gear menu).
-        if (state.IsBuiltIn)
-        {
-            return new Button
-            {
-                Content = BtnBuiltinLabel,
-                Foreground = (Brush)FindResource("TextSecondary"),
-                Background = (Brush)FindResource("BgPanelAlt"),
-                BorderBrush = (Brush)FindResource("BorderSubtle"),
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(14, 5, 14, 5),
-                FontSize = _fsCaption,
-                FontWeight = FontWeights.SemiBold,
-                Cursor = Cursors.Arrow,
-                IsEnabled = false,
-            };
-        }
-
-        bool added = state.IsInUserCollection;
+        // Two modes, both actionable:
+        //   1. Already in the collection (including built-ins) → "See in Library",
+        //      neutral surface, navigates to the dashboard with this mod active.
+        //   2. Not in the collection → "Add to my mods", primary CatalogBlue.
+        // All install / update / repair / uninstall still happens on the Dashboard
+        // (PLAY state machine + gear menu); this button only navigates there.
+        //
+        // REMOVE IS NOT HERE ANYMORE. It used to be the row button for every added
+        // mod, which made the destructive verb the most visible thing when scanning
+        // the catalogue — and left the useful action nowhere. It now lives only in
+        // the detail panel's secondary button, so MainWindow's remove handler is the
+        // single entry point (and keeps being the single place that confirms).
+        bool inCollection = state.IsInUserCollection || state.IsBuiltIn;
         var btn = new Button
         {
-            Content = added ? BtnRemoveFromCollectionLabel : BtnAddToCollectionLabel,
-            Foreground = added ? (Brush)FindResource("TextSecondary") : Brushes.White,
-            Background = added
+            Content = inCollection ? BtnOpenInLibraryLabel : BtnAddToCollectionLabel,
+            Foreground = inCollection ? (Brush)FindResource("TextPrimary") : Brushes.White,
+            Background = inCollection
                 ? (Brush)FindResource("BgPanelAlt")
                 : (Brush)FindResource("CatalogBlue"),
-            BorderBrush = added
+            BorderBrush = inCollection
                 ? (Brush)FindResource("BorderSubtle")
                 : (Brush)FindResource("CatalogBlue"),
             BorderThickness = new Thickness(1),
@@ -788,11 +809,16 @@ public partial class ModsBrowser : UserControl
         };
         btn.Click += (_, _) =>
         {
+            if (inCollection)
+            {
+                // Don't call ShowDetail first: we're leaving the Workshop, and
+                // selecting a row on the way out just repaints a panel nobody sees.
+                OpenInLibraryRequested?.Invoke(this, profile);
+                return;
+            }
+
             ShowDetail(profile);
-            if (added)
-                RemoveFromCollectionRequested?.Invoke(this, profile);
-            else
-                AddToCollectionRequested?.Invoke(this, profile);
+            AddToCollectionRequested?.Invoke(this, profile);
         };
         return btn;
     }
@@ -1155,44 +1181,54 @@ public partial class ModsBrowser : UserControl
 
     private void BuildDetailActions(ModProfile profile, ModRowState state)
     {
-        // Workshop redesign — the primary CTA is Add to my mods (primary blue)
-        // or, once the mod is in the collection, a disabled STATUS pill: the
-        // same treatment as a built-in. Removing is deliberately NOT here — it
-        // sits in the secondary DetailRemoveButton below, so the destructive
-        // option isn't the biggest, easiest-to-hit target in the panel.
-        // Install / Update / Repair / Uninstall live on the Dashboard via
-        // PLAY + gear menu.
+        // The primary CTA is "Add to my mods" (blue) for a mod that isn't in the
+        // collection yet, and "See in Library" once it is. Install / Update / Repair /
+        // Uninstall still live on the Library dashboard (PLAY + gear menu) — this button
+        // does not install, it navigates to where installing happens.
+        //
+        // It used to become a DISABLED "In my mods" pill instead, which left the panel
+        // with no enabled action at all (the overflow menu is empty too), so the only
+        // clickable thing was Remove. That dead end is what made a user report being
+        // unable to install: they pressed Add, nothing seemed to happen, and there was
+        // nowhere to go from there.
+        //
+        // Built-ins take the same forward action — WoL and stock AoE3 ARE in the Library,
+        // so sending the user there is correct and drops another disabled pill. What
+        // still marks them is having no Remove button (handled below).
         string label;
         Action? click;
-        bool enabled;
         bool primaryStyle;
 
-        if (state.IsBuiltIn)
+        if (state.IsInUserCollection || state.IsBuiltIn)
         {
-            label = BtnBuiltinLabel;
-            click = null;
-            enabled = false;
-            primaryStyle = false;
-        }
-        else if (state.IsInUserCollection)
-        {
-            label = BtnInCollectionLabel;
-            click = null;
-            enabled = false;
-            primaryStyle = false;
+            label = BtnOpenInLibraryLabel;
+            click = () => OpenInLibraryRequested?.Invoke(this, profile);
+            primaryStyle = false;   // neutral surface: doesn't compete with Add's blue
         }
         else
         {
             label = BtnAddToCollectionLabel;
             click = () => AddToCollectionRequested?.Invoke(this, profile);
-            enabled = true;
             primaryStyle = true;
         }
 
+
+        // A LOCAL manifest takes the secondary slot: while you are trying a mod.json off
+        // disk, "stop using this file" is the action you actually need, and collection
+        // membership is beside the point for something that isn't published yet.
+        if (!string.IsNullOrEmpty(profile.LocalManifestPath))
+        {
+            DetailRemoveButton.Content = RemoveLocalModLabel;
+            DetailRemoveButton.ToolTip = TooltipHelper.Wrap(profile.LocalManifestPath);
+            DetailRemoveButton.Visibility = Visibility.Visible;
+            DetailRemoveButton.Click -= OnRemoveClick;
+            _removeAction = () => RemoveLocalModRequested?.Invoke(this, profile);
+            DetailRemoveButton.Click += OnRemoveClick;
+        }
         // Remove — only for a non-built-in mod already in the collection.
         // Built-ins can't be removed at all (the launcher needs a fallback), and
         // a mod that isn't added has nothing to remove.
-        if (state.IsInUserCollection && !state.IsBuiltIn)
+        else if (state.IsInUserCollection && !state.IsBuiltIn)
         {
             DetailRemoveButton.Content = BtnRemoveFromCollectionLabel;
             DetailRemoveButton.Visibility = Visibility.Visible;
@@ -1207,13 +1243,17 @@ public partial class ModsBrowser : UserControl
         }
 
         DetailPrimaryButton.Content = label;
-        DetailPrimaryButton.IsEnabled = enabled;
+        // Always enabled now — every state has a real action. Both variants use a
+        // full-strength foreground and a hand cursor so the neutral one still reads as a
+        // button; TextSecondary here is what made the old pill look dead.
+        DetailPrimaryButton.IsEnabled = true;
+        DetailPrimaryButton.Cursor = Cursors.Hand;
         DetailPrimaryButton.Background = primaryStyle
             ? (Brush)FindResource("CatalogBlue")
             : (Brush)FindResource("BgPanelAlt");
-        DetailPrimaryButton.Foreground = enabled && primaryStyle
+        DetailPrimaryButton.Foreground = primaryStyle
             ? Brushes.White
-            : (Brush)FindResource("TextSecondary");
+            : (Brush)FindResource("TextPrimary");
         // Replace handler each rebuild — Click is rewired to whichever
         // action matches the current Add/Remove state.
         DetailPrimaryButton.Click -= OnPrimaryClick;

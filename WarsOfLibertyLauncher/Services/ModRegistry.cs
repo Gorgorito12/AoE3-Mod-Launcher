@@ -280,6 +280,64 @@ public static class ModRegistry
     }
 
     /// <summary>
+    /// Absolute paths of local <c>mod.json</c> files to merge in alongside the catalog,
+    /// so a manifest can be tried before it is published. Set once at startup from
+    /// <c>LauncherConfig.LocalCatalogModPaths</c> and again whenever the user adds or
+    /// removes one.
+    /// </summary>
+    public static void SetLocalModPaths(IEnumerable<string>? paths)
+    {
+        lock (_localLock)
+        {
+            _localModPaths = paths?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList()
+                             ?? new List<string>();
+        }
+    }
+
+    private static readonly object _localLock = new();
+    private static List<string> _localModPaths = new();
+
+    /// <summary>
+    /// Appends the user's local manifests to the catalog entries, with a LOCAL entry
+    /// replacing a catalog one of the same id.
+    ///
+    /// <para>Local wins on purpose: the normal way to try a change is to copy an existing
+    /// <c>mod.json</c> and edit it, and seeing the published version instead would make
+    /// the feature useless. Built-ins still win over both — that rule lives in the caller
+    /// and is a security property (a manifest must never redirect a first-party mod's
+    /// downloads), so a local manifest with id <c>wol</c> is ignored just like a catalog
+    /// one, and says so in the log.</para>
+    ///
+    /// <para>A manifest that no longer loads (deleted, or edited into invalid JSON mid-
+    /// session) is logged and skipped rather than throwing: it must not take down the
+    /// whole catalog, and the user is mid-iteration precisely when that happens.</para>
+    /// </summary>
+    private static List<ModCatalogEntry> MergeLocalEntries(List<ModCatalogEntry> entries)
+    {
+        List<string> paths;
+        lock (_localLock) { paths = new List<string>(_localModPaths); }
+        if (paths.Count == 0) return entries;
+
+        var result = new List<ModCatalogEntry>(entries);
+        foreach (var path in paths)
+        {
+            try
+            {
+                var local = ModCatalogService.LoadLocalEntry(path);
+                result.RemoveAll(e => string.Equals(
+                    e.Manifest?.Id, local.Manifest.Id, StringComparison.OrdinalIgnoreCase));
+                result.Add(local);
+                DiagnosticLog.Write(
+                    $"ModRegistry: merged local manifest '{local.Manifest.Id}' from {path}.");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"ModRegistry: skipping local manifest '{path}': {ex.Message}");
+            }
+        }
+        return result;
+    }
+    /// <summary>
     /// Builds the built-in + community merge from a raw entries list,
     /// publishes it into <see cref="_runtime"/>, and returns it. Shared
     /// between the cache-hit, stale-cache, and cold-fetch paths so the
@@ -291,6 +349,12 @@ public static class ModRegistry
     {
         var builtInIds = new HashSet<string>(
             _builtIn.Select(p => p.Id), StringComparer.OrdinalIgnoreCase);
+
+        // Local manifests join HERE, not at the call sites. ApplyMerged is reached from
+        // four of them (cache prime, fresh cache, stale cache, cold fetch); adding locals
+        // in the callers means remembering four times, and whichever one is missed makes
+        // a local mod vanish depending on how the refresh happened to enter.
+        entries = MergeLocalEntries(entries);
 
         var merged = new List<ModProfile>(_builtIn);
         foreach (var entry in entries)
@@ -485,6 +549,8 @@ public static class ModRegistry
         var profile = new ModProfile
         {
             Id = m.Id,
+            // Empty for a catalog entry; set only for a manifest loaded off disk.
+            LocalManifestPath = entry.LocalPath ?? "",
             DisplayName = string.IsNullOrEmpty(m.DisplayName) ? m.Id : m.DisplayName,
             Subtitle = m.Subtitle ?? "",
             AccentColor = string.IsNullOrEmpty(m.AccentColor) ? "#3a8cd9" : m.AccentColor,
@@ -676,6 +742,12 @@ public static class ModRegistry
             // files satisfy the probe too). Same marker the original Java
             // updater and RegistryService.IsValidInstall check.
             InstallMarker = @"art\zulushield",
+            // Known-permanent antivirus false positive: Defender flags this AI file
+            // as Trojan:Win32/DllInject!MTB and quarantines it mid-extraction, which
+            // aborts the install AFTER the multi-GB download. It predates the
+            // launcher and is already reported upstream, so the launcher warns before
+            // installing instead of pretending it is a rare accident.
+            AntivirusFalsePositiveFile = @"AI3\wolai.upl",
             GameExecutable = "age3y.exe",
             GameArguments = "",
             UpdateMechanism = ModUpdateMechanism.WolPatcher,

@@ -31,8 +31,15 @@ public sealed class NotificationCenter
     /// <summary>Fires on any state change (add / read / remove / clear) so the badge can refresh.</summary>
     public event EventHandler? Changed;
 
-    /// <summary>Fires only when a brand-new item is actually added — drives the one-shot bell pulse.</summary>
-    public event EventHandler? ItemAdded;
+    /// <summary>
+    /// Fires only when a brand-new item is actually added — drives the one-shot bell
+    /// pulse and the feedback sound.
+    ///
+    /// <para>It CARRIES the item: the sound is chosen from
+    /// <see cref="NotificationItem.Kind"/>, so a bare <c>EventArgs.Empty</c> would force
+    /// every kind to share one tone (which is what it used to do).</para>
+    /// </summary>
+    public event EventHandler<NotificationItem>? ItemAdded;
 
     /// <summary>Raised (title, body) when a new item is added, so the host can show a tray toast.</summary>
     public event Action<string, string>? ToastRequested;
@@ -82,13 +89,22 @@ public sealed class NotificationCenter
 
     /// <summary>
     /// "Update finished" for a mod. Deduped against an existing finished item
-    /// for the same (mod, version) still in the visible list (these are
-    /// user-initiated and rare, so list-scan dedup is enough).
+    /// for the same (mod, version) still in the visible list.
     /// </summary>
-    public bool RaiseUpdateFinished(string modId, string version, string title, string body)
+    /// <param name="bypassDedup">
+    /// Set ONLY by a raise that follows an operation the user just performed. The dedup
+    /// exists for the reconciliation backstop, which must stay idempotent because it runs
+    /// on every check; but it silently swallowed a real, user-initiated update when the
+    /// same version had been installed before — a maintainer downgraded via the version
+    /// picker and updated back, and got nothing. An action you asked for has to answer,
+    /// even if the resulting version already belled once. Same reasoning that keeps
+    /// <see cref="RaiseInstalled"/> undeduped.
+    /// </param>
+    public bool RaiseUpdateFinished(
+        string modId, string version, string title, string body, bool bypassDedup = false)
     {
         if (string.IsNullOrWhiteSpace(modId)) return false;
-        bool dup = Items.Any(i => i.Kind == NotificationKind.UpdateFinished
+        bool dup = !bypassDedup && Items.Any(i => i.Kind == NotificationKind.UpdateFinished
             && string.Equals(i.ModId, modId, StringComparison.OrdinalIgnoreCase)
             && string.Equals(i.TargetId, version, StringComparison.OrdinalIgnoreCase));
         if (dup) return false;
@@ -110,10 +126,18 @@ public sealed class NotificationCenter
     }
 
     /// <summary>
-    /// "Installed" / "Copy installed" for a mod — a fresh install (or a new copy)
-    /// finished, distinct from an update. Not deduped: an install is user-initiated,
-    /// raised exactly once per install (no reconciliation double-fires it), so each
-    /// install — including a second copy of the same version — gets its own confirmation.
+    /// A mod's files were laid down and the operation finished — a fresh install, a new
+    /// copy, a version picked from the list, or a repair. Distinct from an update, which
+    /// has its own kind so "Actualización completada" is never shown for a DOWNGRADE.
+    ///
+    /// <para>The caller supplies the wording; this kind only drives the icon badge, the
+    /// success sound and the click target, which are identical for all four cases — which
+    /// is why they share it instead of each getting an enum value, a badge trigger and a
+    /// navigation branch that would all behave the same.</para>
+    ///
+    /// <para>Not deduped, on purpose: these are user-initiated and raised exactly once per
+    /// operation (no reconciliation double-fires them), so each one — including a repair,
+    /// or a second copy of the same version — gets its own confirmation.</para>
     /// </summary>
     public bool RaiseInstalled(string modId, string version, string title, string body)
     {
@@ -306,7 +330,7 @@ public sealed class NotificationCenter
         while (Items.Count > MaxItems)
             Items.RemoveAt(Items.Count - 1);
         Persist();
-        ItemAdded?.Invoke(this, EventArgs.Empty);
+        ItemAdded?.Invoke(this, item);
         Changed?.Invoke(this, EventArgs.Empty);
         ToastRequested?.Invoke(item.Title, item.Body);
         return true;

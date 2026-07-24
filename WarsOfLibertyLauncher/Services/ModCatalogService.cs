@@ -293,6 +293,95 @@ public class ModCatalogService
             $"ModCatalog: cache saved ({entries.Count} entries, repo='{repo}').");
     }
 
+    /// <summary>
+    /// Thrown when a local <c>mod.json</c> can't be turned into a catalog entry. The
+    /// message is shown to the user verbatim, so it must name the actual problem.
+    /// </summary>
+    public sealed class LocalManifestException : Exception
+    {
+        public LocalManifestException(string message) : base(message) { }
+        public LocalManifestException(string message, Exception inner) : base(message, inner) { }
+    }
+
+    /// <summary>
+    /// Loads a single <c>mod.json</c> from disk as a catalog entry, so a manifest can be
+    /// tried in the Workshop before it is published.
+    ///
+    /// <para>Same deserializer as the remote path — the point is to exercise the REAL
+    /// projection, otherwise "it worked locally" would prove nothing about the PR. Assets
+    /// resolve to files sitting NEXT TO the manifest instead of raw-CDN URLs;
+    /// <see cref="Models.ModProfile.ResolveIconSource"/> → <c>TryLoadTileImage</c> already
+    /// paints on-disk paths, so nothing downstream needs to know the difference.</para>
+    ///
+    /// <para><b>The traversal guard applies here too.</b> A manifest is not more
+    /// trustworthy for being on disk — the user may well be trying someone else's file —
+    /// and without it a declared icon of <c>../../../secret.png</c> would be read and
+    /// rendered from outside the mod's folder.</para>
+    /// </summary>
+    /// <exception cref="LocalManifestException">
+    /// Unreadable file, invalid JSON, or a manifest with no <c>id</c>. Callers surface the
+    /// message: telling a modder WHY their manifest was rejected is the whole feature —
+    /// otherwise they only find out from the catalog CI after opening a PR.
+    /// </exception>
+    public static ModCatalogEntry LoadLocalEntry(string modJsonPath)
+    {
+        if (string.IsNullOrWhiteSpace(modJsonPath) || !File.Exists(modJsonPath))
+            throw new LocalManifestException($"File not found: {modJsonPath}");
+
+        var folder = Path.GetDirectoryName(Path.GetFullPath(modJsonPath));
+        if (string.IsNullOrEmpty(folder))
+            throw new LocalManifestException($"Could not resolve the folder of {modJsonPath}");
+
+        ModCatalogManifest? manifest;
+        try
+        {
+            manifest = JsonSerializer.Deserialize<ModCatalogManifest>(File.ReadAllText(modJsonPath));
+        }
+        catch (JsonException ex)
+        {
+            // Line/position included — that is what makes the message actionable.
+            throw new LocalManifestException($"Invalid JSON: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new LocalManifestException($"Could not read the file: {ex.Message}", ex);
+        }
+
+        if (manifest == null)
+            throw new LocalManifestException("The file is empty or is not a mod manifest.");
+        if (string.IsNullOrWhiteSpace(manifest.Id))
+            throw new LocalManifestException("The manifest has no \"id\" field.");
+
+        return new ModCatalogEntry
+        {
+            Manifest = manifest,
+            LocalPath = Path.GetFullPath(modJsonPath),
+            IconUrl = ResolveLocalAsset(folder, manifest.Icon),
+            BannerUrl = ResolveLocalAsset(folder, manifest.Banner),
+            HeroImageUrl = ResolveLocalAsset(folder, manifest.HeroImage),
+            HeroImageUrls = (manifest.HeroImages ?? new())
+                .Select(f => ResolveLocalAsset(folder, f))
+                .Where(u => u != null).Select(u => u!).ToList(),
+            ScreenshotUrls = (manifest.Screenshots ?? new())
+                .Select(f => ResolveLocalAsset(folder, f))
+                .Where(u => u != null).Select(u => u!).ToList(),
+        };
+    }
+
+    /// <summary>
+    /// Local sibling of <see cref="ResolveAssetUrl"/>: same rejection rules, absolute
+    /// on-disk path instead of a CDN URL. A declared asset that isn't actually there
+    /// returns null rather than a broken path, so the UI falls back to its monogram.
+    /// </summary>
+    internal static string? ResolveLocalAsset(string folder, string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return null;
+        if (fileName.Contains('/') || fileName.Contains('\\') || fileName.Contains(".."))
+            return null;
+        var full = Path.Combine(folder, fileName);
+        return File.Exists(full) ? full : null;
+    }
+
     // -- Internals ------------------------------------------------------------
 
     /// <summary>
@@ -352,6 +441,14 @@ public class ModCatalogService
 public class ModCatalogEntry
 {
     public ModCatalogManifest Manifest { get; set; } = new();
+
+    /// <summary>
+    /// Absolute path of the local <c>mod.json</c> this entry came from, or empty for a
+    /// catalog entry. Carried through <c>ProjectToProfile</c> into
+    /// <see cref="Models.ModProfile.LocalManifestPath"/> so the Workshop can mark it and
+    /// removing it knows which path to forget.
+    /// </summary>
+    public string LocalPath { get; set; } = "";
 
     /// <summary>Absolute URL of the icon, or null if the manifest didn't ship one.</summary>
     public string? IconUrl { get; set; }

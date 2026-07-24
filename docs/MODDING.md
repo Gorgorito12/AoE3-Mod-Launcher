@@ -50,6 +50,35 @@ Key points:
 
 ---
 
+## 1.5. Try your manifest before you publish it
+
+You do not have to open a PR to see how your mod will look. In the launcher:
+**Settings → General → tick "Developer mode"**, then **Settings → DEVELOPER →
+"Choose a mod.json…"** and pick your manifest from disk. (Developer mode also
+unlocks the translation packager and the delta-patch generator; it is off by
+default because most players never need any of them.)
+
+It appears in the catalog listing like any published mod — same parsing, same
+projection, same icons and screenshots — except nothing is uploaded. Edit the file,
+press **"Refresh catalog"**, and your changes show up immediately. Assets are read
+from the folder the `mod.json` sits in, so keep `icon.png` and friends beside it
+exactly as they will live in the catalog repo.
+
+If the manifest can't be read, the launcher tells you **why** — the JSON error with
+its line, or the missing required field. That is the point of trying it here: the
+catalog CI only answers after you have opened the PR.
+
+To stop using it, press **Remove** next to it in that same DEVELOPER section (or
+open the mod's detail panel in the Workshop and press **"Stop using this file"**).
+Either way it only forgets the path; your file is never modified or deleted.
+
+Two limits worth knowing:
+
+- A manifest whose `id` is `wol` or `aoe3-tad` is ignored — those are built into the
+  launcher and no manifest may redirect them (see §6). Use a different `id` to test.
+- This validates the **manifest**. Whether the mod actually *installs* still depends on
+  the URLs in `install`/`update` pointing at something real and downloadable.
+
 ## 2. Three ways to publish
 
 Pick whichever feels most comfortable; the end result is the same PR.

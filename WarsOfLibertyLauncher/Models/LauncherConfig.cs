@@ -601,6 +601,43 @@ public class LauncherConfig
     public List<ImportedAddon> ImportedAddons { get; set; } = new();
 
     /// <summary>
+    /// Unlocks the Settings → DEVELOPER tab, which holds the author tools: trying a local
+    /// <c>mod.json</c>, the translation packager and the delta-patch generator.
+    ///
+    /// <para>Off by default, and the tab is hidden entirely while it is — those tools each
+    /// already told the reader "normal users can ignore this section", which is a sign they
+    /// were costing every user a tab for nothing.</para>
+    ///
+    /// <para><b>It gates the TOOLS, never the content.</b> Local manifests stay merged into
+    /// the catalog with this off: a test mod can be INSTALLED, and dropping it from the
+    /// listing would orphan that install — no active mod to return to and no way to
+    /// uninstall it from the UI. Turning developer mode off hides where you manage them,
+    /// not what you already have.</para>
+    ///
+    /// <para>The toggle itself lives in GENERAL on purpose. Inside the tab it governs, it
+    /// could never be switched back on.</para>
+    /// </summary>
+    [JsonPropertyName("developerMode")]
+    public bool DeveloperMode { get; set; } = false;
+
+    /// <summary>
+    /// Absolute paths of local <c>mod.json</c> files the user added to try a manifest
+    /// before publishing it (Workshop → "Add local mod"). Merged into the catalog listing
+    /// by <see cref="Services.ModRegistry.SetLocalModPaths"/>.
+    ///
+    /// <para>Launcher-wide, and only PATHS are stored — the manifest is re-read on every
+    /// merge, which is what makes editing the file and hitting Refresh show the change.
+    /// Caching a copy here would defeat the entire point.</para>
+    ///
+    /// <para>A path that stops loading (deleted, or edited into invalid JSON) is skipped
+    /// with a log line, never dropped automatically: the user is mid-edit exactly when
+    /// that happens, and silently forgetting their entry would be worse than showing
+    /// nothing for a moment.</para>
+    /// </summary>
+    [JsonPropertyName("localCatalogModPaths")]
+    public List<string> LocalCatalogModPaths { get; set; } = new();
+
+    /// <summary>
     /// True when the given mod id belongs to the user's collection
     /// (either explicitly added via Workshop or a built-in profile
     /// like WoL). Drives the Dashboard's MODS popup filter and the
@@ -932,6 +969,26 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("selfInstallPromptShown")]
     public bool SelfInstallPromptShown { get; set; } = false;
+
+    /// <summary>
+    /// Set when the user ticked "don't show this again" on the pre-install
+    /// antivirus-exclusion notice (see
+    /// <see cref="ModProfile.AntivirusFalsePositiveFile"/>), i.e. they have added
+    /// the exclusions and don't want to be asked before every install.
+    ///
+    /// <para>Launcher-wide, NOT per-mod, because an antivirus exclusion is a
+    /// property of the MACHINE: the folders it covers
+    /// (<see cref="Services.AppPaths.InstallTempRoot"/> and the install folder) are
+    /// the same ones every mod installs through, so having acknowledged it once for
+    /// WoL means it is genuinely handled.</para>
+    ///
+    /// <para>Only the PREVENTIVE notice reads and writes this. The notice shown
+    /// AFTER an antivirus actually blocked a file deliberately ignores it — someone
+    /// hitting that failure needs the exclusion paths regardless of what they
+    /// dismissed earlier.</para>
+    /// </summary>
+    [JsonPropertyName("antivirusNoticeAcknowledged")]
+    public bool AntivirusNoticeAcknowledged { get; set; } = false;
 
     /// <summary>
     /// When true, an AUTO-START launch (Windows login, recognised by the

@@ -762,11 +762,6 @@ public static class Strings
             [LangEn] = "Get the newest list of community mods.",
             [LangEs] = "Trae la lista más nueva de mods de la comunidad.",
         },
-        ["TipWsAddLocal"] = new()
-        {
-            [LangEn] = "Add a mod you already have in a folder on your PC.",
-            [LangEs] = "Agrega un mod que ya tienes en una carpeta de tu PC.",
-        },
         ["TipWsPublish"] = new()
         {
             [LangEn] = "For mod authors: submit your mod to the community catalog.",
@@ -1477,10 +1472,14 @@ public static class Strings
             [LangEn] = "Workshop",
             [LangEs] = "Workshop",
         },
+        // Names the LIBRARY tab, and says the two steps out loud. It used to send the
+        // user to "the Dashboard" — a word that appears nowhere in the UI, since the tab
+        // is called LIBRARY / BIBLIOTECA. A user who could not find where to install
+        // reported exactly this gap.
         ["ModsBrowserHeaderSubtitle"] = new()
         {
-            [LangEn] = "Discover mods and add them to your launcher. Manage them from the Dashboard.",
-            [LangEs] = "Descubre mods y agrégalos a tu launcher. Gestiónalos desde el Dashboard.",
+            [LangEn] = "Discover mods and add them to your launcher. Install and play them from the Library.",
+            [LangEs] = "Descubre mods y agrégalos a tu launcher. Instálalos y juégalos desde la Biblioteca.",
         },
         // Workshop redesign: per-row action button is now Add / Remove
         // from the user's personal collection. Install / Update /
@@ -1490,6 +1489,23 @@ public static class Strings
         {
             [LangEn] = "Add to my mods",
             [LangEs] = "Agregar a mis mods",
+        },
+        // Forward action once a mod is in the collection, replacing a DISABLED "In my
+        // mods" pill that left the panel with nothing to click but Remove. Same text
+        // whether or not the mod is installed: it says where the button goes, never what
+        // happens there, so it can't be misread as an install button the way the old
+        // Workshop buttons were.
+        ["ModsBrowserBtnOpenInLibrary"] = new()
+        {
+            [LangEn] = "See in Library",
+            [LangEs] = "Ver en la Biblioteca",
+        },
+        // The badge reports DISK state; the button beside it reports collection
+        // membership. Naming the axis is what keeps them from reading as one control.
+        ["ModsBrowserBadgeTooltip"] = new()
+        {
+            [LangEn] = "Installation state on your PC. Adding a mod to your mods does not install it — open it in the Library to install.",
+            [LangEs] = "Estado de instalación en tu PC. Agregar un mod a tus mods no lo instala — ábrelo en la Biblioteca para instalarlo.",
         },
         ["ModsBrowserBtnRemove"] = new()
         {
@@ -1580,11 +1596,9 @@ public static class Strings
             [LangEn] = "↻ Refresh catalog",
             [LangEs] = "↻ Actualizar catálogo",
         },
-        ["ModsBrowserAddLocal"] = new()
-        {
-            [LangEn] = "+ Add local mod",
-            [LangEs] = "+ Agregar mod local",
-        },
+        // ("ModsBrowserAddLocal" / "TipWsAddLocal" removed with the Workshop header button.
+        //  Trying a mod.json now lives in Settings → DEVELOPER; the old copy also described
+        //  a different feature — registering an installed folder — that never existed.)
         ["ModsBrowserSubTabMyMods"] = new()
         {
             [LangEn] = "My mods",
@@ -1797,15 +1811,97 @@ public static class Strings
             [LangEn] = "Publish my mod",
             [LangEs] = "Publicar mi mod",
         },
-        ["ModsBrowserAddLocalSoonTitle"] = new()
+        // --- Add local mod: try a mod.json from disk before publishing it ---
+        // --- Developer mode: unlocks the tab holding the author tools ---
+        ["DlgSettingsDeveloperMode"] = new()
         {
-            [LangEn] = "Add local mod",
-            [LangEs] = "Agregar mod local",
+            [LangEn] = "Developer mode",
+            [LangEs] = "Modo desarrollador",
         },
-        ["ModsBrowserAddLocalSoonBody"] = new()
+        ["DlgSettingsDeveloperModeHint"] = new()
         {
-            [LangEn] = "Registering a manually-installed mod folder lands in a future update.",
-            [LangEs] = "Registrar una carpeta de mod instalada manualmente llegará en una próxima actualización.",
+            [LangEn] = "Shows the DEVELOPER tab, with the tools for testing a mod.json, packaging a translation and generating patches. Normal users don't need it.",
+            [LangEs] = "Muestra la pestaña DESARROLLADOR, con las herramientas para probar un mod.json, empaquetar una traducción y generar parches. Los usuarios normales no la necesitan.",
+        },
+        ["DlgSettingsDeveloperModeTip"] = new()
+        {
+            [LangEn] = "Turning it off only hides the tools — the mods you added from a local file stay in your catalog.",
+            [LangEs] = "Apagarlo solo esconde las herramientas — los mods que agregaste desde un archivo local siguen en tu catálogo.",
+        },
+        ["DlgLauncherSettingsSectionDeveloper"] = new()
+        {
+            [LangEn] = "DEVELOPER",
+            [LangEs] = "DESARROLLADOR",
+        },
+        // --- Local mod.json section inside the developer tab ---
+        ["DlgSettingsLocalModsHeader"] = new()
+        {
+            [LangEn] = "Test a mod.json",
+            [LangEs] = "Probar un mod.json",
+        },
+        ["DlgSettingsLocalModsDescription"] = new()
+        {
+            [LangEn] = "Loads a mod.json from your PC using the same format as the catalog, so you can see how your mod will look before publishing it. Edit the file and press \"Refresh catalog\" in the Workshop to see your changes. Nothing is uploaded.",
+            [LangEs] = "Carga un mod.json de tu PC con el mismo formato del catálogo, para ver cómo se verá tu mod antes de publicarlo. Edita el archivo y presiona \"Actualizar catálogo\" en el Workshop para ver los cambios. No se sube nada.",
+        },
+        ["DlgSettingsLocalModsAdd"] = new()
+        {
+            [LangEn] = "Choose a mod.json...",
+            [LangEs] = "Elegir un mod.json...",
+        },
+        ["DlgSettingsLocalModsRemove"] = new()
+        {
+            [LangEn] = "Remove",
+            [LangEs] = "Quitar",
+        },
+        ["DlgSettingsLocalModsEmpty"] = new()
+        {
+            [LangEn] = "No local manifests yet.",
+            [LangEs] = "Todavía no hay manifiestos locales.",
+        },
+        ["ModsBrowserAddLocalPickTitle"] = new()
+        {
+            [LangEn] = "Choose a mod.json",
+            [LangEs] = "Elige un mod.json",
+        },
+        ["ModsBrowserAddLocalFilter"] = new()
+        {
+            [LangEn] = "Mod manifest (mod.json)|*.json|All files|*.*",
+            [LangEs] = "Manifiesto de mod (mod.json)|*.json|Todos los archivos|*.*",
+        },
+        ["ModsBrowserAddLocalAddedTitle"] = new()
+        {
+            [LangEn] = "Local mod added",
+            [LangEs] = "Mod local agregado",
+        },
+        // {0} = mod display name. Says where it came from AND how to iterate, because the
+        // re-read-on-refresh loop is the whole reason to use this instead of a PR.
+        ["ModsBrowserAddLocalAddedBody"] = new()
+        {
+            [LangEn] = "{0} was added from your manifest and now appears in the catalog. Edit the file and press \"Refresh catalog\" to see your changes — nothing is uploaded.",
+            [LangEs] = "{0} se agregó desde tu manifiesto y ya aparece en el catálogo. Edita el archivo y presiona \"Actualizar catálogo\" para ver los cambios — no se sube nada.",
+        },
+        ["ModsBrowserAddLocalInvalidTitle"] = new()
+        {
+            [LangEn] = "That manifest can't be read",
+            [LangEs] = "No se puede leer ese manifiesto",
+        },
+        // {0} = the actual reason (JSON error with line, missing id, ...). Naming the
+        // cause is the point: the catalog CI only tells you after you open the PR.
+        ["ModsBrowserAddLocalInvalidBody"] = new()
+        {
+            [LangEn] = "The mod was not added:\n\n{0}",
+            [LangEs] = "El mod no se agregó:\n\n{0}",
+        },
+        ["ModsBrowserLocalBadge"] = new()
+        {
+            [LangEn] = "Local",
+            [LangEs] = "Local",
+        },
+        ["ModsBrowserRemoveLocal"] = new()
+        {
+            [LangEn] = "Stop using this file",
+            [LangEs] = "Dejar de usar este archivo",
         },
         ["PublishWizardTitle"] = new()
         {
@@ -3413,6 +3509,32 @@ public static class Strings
             [LangEn] = "{0} was updated to {1}.",
             [LangEs] = "{0} se actualizó a {1}.",
         },
+        // Version picker. Deliberately NOT worded as an update: picking a version can be
+        // a downgrade, and "updated to 19.07" after going back from 24.07 would be wrong.
+        // {0} = mod name, {1} = version.
+        ["NotifVersionInstalledTitle"] = new()
+        {
+            [LangEn] = "Version installed",
+            [LangEs] = "Versión instalada",
+        },
+        ["NotifVersionInstalledBody"] = new()
+        {
+            [LangEn] = "{0} is now on {1}.",
+            [LangEs] = "{0} quedó en la versión {1}.",
+        },
+        // Repair. Only raised when files were actually re-laid — a repair that found
+        // nothing damaged says so in the status line and leaves no bell entry.
+        // {0} = mod name.
+        ["NotifRepairFinishedTitle"] = new()
+        {
+            [LangEn] = "Repair complete",
+            [LangEs] = "Reparación completada",
+        },
+        ["NotifRepairFinishedBody"] = new()
+        {
+            [LangEn] = "{0}'s files were restored.",
+            [LangEs] = "Se restauraron los archivos de {0}.",
+        },
         ["MpNotifRoomCreatedTitle"] = new()
         {
             [LangEn] = "New room",
@@ -4769,10 +4891,82 @@ public static class Strings
             [LangEn] = "The Age of Empires III base game wasn't copied, so the mod can't run. Your AoE3 install may be missing, in an unexpected location, or excluded by another mod's path. The mod was NOT installed — check your AoE3 install and try again.",
             [LangEs] = "No se copió el juego base de Age of Empires III, así que el mod no puede ejecutarse. Tu instalación de AoE3 podría faltar, estar en una ubicación inesperada o quedar excluida por la ruta de otro mod. El mod NO se instaló — revisa tu instalación de AoE3 e inténtalo de nuevo.",
         },
+        // Short on purpose: this lands in the status bar and the progress error
+        // line. The paths, the how-to and the copy button live in
+        // AntivirusExclusionDialog, which this catch opens — a paragraph with two
+        // absolute paths is unreadable in a one-line status strip.
         ["InstallDefenderBlocked"] = new()
         {
-            [LangEn] = "Windows Defender (or your antivirus) blocked a mod file during install: {0}. This is a known false positive — the mod is safe. Add an exclusion for the install folder AND the temp folder (%TEMP%), or turn off real-time protection briefly, then install again.",
-            [LangEs] = "Windows Defender (o tu antivirus) bloqueó un archivo del mod durante la instalación: {0}. Es un falso positivo conocido — el mod es seguro. Agrega una exclusión para la carpeta de instalación Y la carpeta temporal (%TEMP%), o desactiva la protección en tiempo real un momento, y vuelve a instalar.",
+            [LangEn] = "Antivirus removed a mod file during install: {0}. The mod was not installed.",
+            [LangEs] = "El antivirus eliminó un archivo del mod durante la instalación: {0}. El mod no se instaló.",
+        },
+
+        // -------- Antivirus exclusion notice (AntivirusExclusionDialog) --------
+        // Two modes, one dialog: shown BEFORE installing a mod that declares a
+        // known false positive (ModProfile.AntivirusFalsePositiveFile), and AFTER an
+        // antivirus actually removed a payload file. The launcher never edits
+        // antivirus settings — it only names the folders and copies them.
+        ["DlgAntivirusTitleNotice"] = new()
+        {
+            [LangEn] = "Antivirus exclusion recommended",
+            [LangEs] = "Se recomienda una exclusión de antivirus",
+        },
+        ["DlgAntivirusTitleBlocked"] = new()
+        {
+            [LangEn] = "Your antivirus removed a mod file",
+            [LangEs] = "Tu antivirus eliminó un archivo del mod",
+        },
+        // {0} = mod display name, {1} = the file antivirus flags.
+        ["DlgAntivirusNoticeBody"] = new()
+        {
+            [LangEn] = "Windows Defender is known to flag one of {0}'s files, {1}, as a threat and delete it while the mod installs. It is a false positive: the file is part of the mod, the detection is older than this launcher, and it has already been reported.\n\nIf it happens, the install stops after the whole download has finished — so it is worth adding the exclusions below before you start.",
+            [LangEs] = "Windows Defender suele marcar como amenaza uno de los archivos de {0}, {1}, y lo elimina mientras el mod se instala. Es un falso positivo: el archivo es parte del mod, la detección es anterior a este launcher y ya fue reportada.\n\nSi ocurre, la instalación se detiene después de que terminó toda la descarga — así que conviene agregar las exclusiones de abajo antes de empezar.",
+        },
+        // {0} = the file that was removed.
+        ["DlgAntivirusBlockedBody"] = new()
+        {
+            [LangEn] = "Your antivirus removed {0} while the mod was installing, so the launcher stopped instead of leaving you with a broken copy of the mod.\n\nThis is a known false positive — the file is safe. Add the exclusions below, then install again.",
+            [LangEs] = "Tu antivirus eliminó {0} mientras el mod se instalaba, así que el launcher se detuvo en lugar de dejarte una copia dañada del mod.\n\nEs un falso positivo conocido — el archivo es seguro. Agrega las exclusiones de abajo y vuelve a instalar.",
+        },
+        ["DlgAntivirusPathsLabel"] = new()
+        {
+            [LangEn] = "Add these folders to your antivirus exclusions:",
+            [LangEs] = "Agrega estas carpetas a las exclusiones de tu antivirus:",
+        },
+        ["DlgAntivirusHowTo"] = new()
+        {
+            [LangEn] = "In Windows Security: Virus & threat protection → Manage settings → Add or remove exclusions → Add an exclusion → Folder.",
+            [LangEs] = "En Seguridad de Windows: Protección antivirus y contra amenazas → Administrar la configuración → Agregar o quitar exclusiones → Agregar una exclusión → Carpeta.",
+        },
+        ["DlgAntivirusCopyPaths"] = new()
+        {
+            [LangEn] = "Copy paths",
+            [LangEs] = "Copiar rutas",
+        },
+        ["DlgAntivirusCopied"] = new()
+        {
+            [LangEn] = "Copied",
+            [LangEs] = "Copiado",
+        },
+        ["DlgAntivirusDontShowAgain"] = new()
+        {
+            [LangEn] = "Don't show this again",
+            [LangEs] = "No volver a mostrar esto",
+        },
+        ["DlgAntivirusContinue"] = new()
+        {
+            [LangEn] = "Continue",
+            [LangEs] = "Continuar",
+        },
+        ["DlgAntivirusCancel"] = new()
+        {
+            [LangEn] = "Cancel",
+            [LangEs] = "Cancelar",
+        },
+        ["DlgAntivirusClose"] = new()
+        {
+            [LangEn] = "Close",
+            [LangEs] = "Cerrar",
         },
 
         // -------- Download corruption retry (NativeInstall) --------
@@ -5084,75 +5278,16 @@ public static class Strings
             [LangEs] = "CERRAR",
         },
 
-        // -------- User-data alert (Documents\<mod>\) --------
-        // Title is mod-agnostic (no placeholder needed).
-        ["DlgUserDataAlertTitle"] = new()
-        {
-            [LangEn] = "Previous user data detected",
-            [LangEs] = "Datos de versión anterior detectados",
-        },
-        // {0} = mod display name (e.g. "Wars of Liberty", "Improvement Mod").
-        ["DlgUserDataAlertHeader"] = new()
-        {
-            [LangEn] = "We found {0} user data on your computer",
-            [LangEs] = "Encontramos datos de {0} en tu PC",
-        },
-        // {0} = mod display name. The "base version" framing matches WoL's
-        // WolPatcher flow, but the warning applies to any install that lays
-        // down older binaries on top of newer saves — keep it generic.
-        ["DlgUserDataAlertDescription"] = new()
-        {
-            [LangEn] = "We're about to install {0}. If you previously played a " +
-                       "newer version, your saves and home cities may not be " +
-                       "compatible — the game can hang on the loading screen " +
-                       "until you patch back to the latest version.",
-            [LangEs] = "Vamos a instalar {0}. Si jugaste antes una versión más " +
-                       "nueva, tus partidas guardadas y metrópolis pueden no " +
-                       "ser compatibles — el juego puede quedarse en la pantalla " +
-                       "de carga hasta que actualices a la versión más reciente.",
-        },
-        ["DlgUserDataAlertFoundLabel"] = new()
-        {
-            [LangEn] = "FOUND AT",
-            [LangEs] = "UBICACIÓN",
-        },
-        ["DlgUserDataAlertSavegameCount"] = new()
-        {
-            [LangEn] = "⚠ Found {0} file(s) in Savegame\\ — these may include " +
-                       "home cities in a newer format the older binary can't read.",
-            [LangEs] = "⚠ Hay {0} archivo(s) en Savegame\\ — pueden incluir " +
-                       "metrópolis en formato nuevo que el binario viejo no puede leer.",
-        },
-        // {0} = mod display name (used as the renamed-folder prefix:
-        // "<modName>.bak.<timestamp>").
-        ["DlgUserDataAlertRecommendation"] = new()
-        {
-            [LangEn] = "Recommended: back up the folder before the install runs. " +
-                       "The launcher will rename it to \"{0}.bak.<timestamp>\" so " +
-                       "the freshly installed game starts with a clean slate. " +
-                       "Your old data stays on disk and you can restore it later " +
-                       "from the gear menu (⚙ → User data → Restore backup).",
-            [LangEs] = "Recomendado: respaldar la carpeta antes de instalar. El " +
-                       "launcher la renombrará a \"{0}.bak.<fecha>\" para que el " +
-                       "juego recién instalado arranque limpio. Tus datos " +
-                       "antiguos siguen en el disco y puedes restaurarlos después " +
-                       "desde el menú de tuerca (⚙ → Datos de usuario → Restaurar " +
-                       "respaldo).",
-        },
-        ["DlgUserDataAlertBtnBackup"] = new()
-        {
-            [LangEn] = "Back up and continue",
-            [LangEs] = "Respaldar y continuar",
-        },
+        // -------- User-data backup (Documents\<mod>\) --------
+        // These once belonged to a modal that interrupted every fresh install to offer
+        // a backup; it was removed and backups are now ON DEMAND only (gear menu →
+        // Create backup now, Properties → USER DATA). The keys the alert alone used are
+        // gone with it — what remains is what those on-demand surfaces still show. The
+        // `DlgUserDataAlert*` prefix is kept so git blame stays readable.
         ["DlgUserDataAlertBtnOpen"] = new()
         {
             [LangEn] = "Open folder",
             [LangEs] = "Abrir carpeta",
-        },
-        ["DlgUserDataAlertBtnIgnore"] = new()
-        {
-            [LangEn] = "Ignore",
-            [LangEs] = "Ignorar",
         },
         ["DlgUserDataAlertBackupFailedTitle"] = new()
         {

@@ -138,17 +138,10 @@
                                 VerticalAlignment="Center"
                                 Height="36"/>
 
-                        <Button x:Name="AddLocalModButton"
-                                Background="{DynamicResource CatalogBlue}"
-                                Foreground="White"
-                                BorderThickness="0"
-                                Padding="18,8"
-                                Margin="0,0,8,0"
-                                FontSize="{StaticResource FontSizeBody}"
-                                FontWeight="SemiBold"
-                                Cursor="Hand"
-                                VerticalAlignment="Center"
-                                Height="36"/>
+                        <!-- "Add local mod" used to sit here. Trying a mod.json now lives in
+                             Settings → DEVELOPER, behind the developer-mode switch, together
+                             with the packager tools — this header is for everyone, and an
+                             author-only action was taking space from it. -->
 
                         <!-- Publish wizard — promoted out of the ⋮ overflow into a
                              first-class accent-outlined header button so modders can

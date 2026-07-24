@@ -191,6 +191,8 @@
     <Resource Include="Assets\Sounds\chat.wav" />
     <Resource Include="Assets\Sounds\notify.wav" />
     <Resource Include="Assets\Sounds\connect.wav" />
+    <Resource Include="Assets\Sounds\success.wav" />
+    <Resource Include="Assets\Sounds\error.wav" />
 
     <!-- AoE3 taunts (1..33) for the lobby chat: typing "11" plays taunt 11 for
          everyone in the room, each in THEIR launcher's language — see

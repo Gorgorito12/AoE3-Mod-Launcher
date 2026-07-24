@@ -276,6 +276,16 @@
                         <CheckBox x:Name="ReceiveInvitesCheck"/>
                         <TextBlock x:Name="ReceiveInvitesHint" Style="{StaticResource HintText}"/>
 
+                        <!-- Developer mode. Lives HERE, not in the tab it governs —
+                             inside that tab it could never be switched back on once
+                             off. Toggling it shows/hides the DEVELOPER tab live so the
+                             switch visibly does something; the value still persists
+                             only on Save, like every other setting on this page. -->
+                        <CheckBox x:Name="DeveloperModeCheck"
+                                  Checked="DeveloperModeCheck_Changed"
+                                  Unchecked="DeveloperModeCheck_Changed"/>
+                        <TextBlock x:Name="DeveloperModeHint" Style="{StaticResource HintText}"/>
+
                         <Border Style="{StaticResource DialogDivider}"/>
 
                         <!-- Radmin assistant mode — decides whether the
@@ -460,6 +470,34 @@
                          tab body doesn't depend on which mod is active.
                          =================================================== -->
                     <StackPanel x:Name="TranslationsPanel" Visibility="Collapsed">
+                        <!-- Try a mod.json without publishing it. First because it is the
+                             newest tool and the reason this tab became DEVELOPER; the two
+                             packager blocks below are unchanged. -->
+                        <TextBlock x:Name="LocalModsHeader"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   FontSize="{StaticResource FontSizeBodyStrong}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8"/>
+                        <TextBlock x:Name="LocalModsDescription"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   FontSize="{StaticResource FontSizeBody}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,16"/>
+                        <Button x:Name="AddLocalModButton"
+                                Style="{StaticResource PrimaryButton}"
+                                MinWidth="240"
+                                HorizontalAlignment="Left"
+                                Click="AddLocalModButton_Click"/>
+                        <!-- Reads from config, NOT from the merged registry, so a manifest
+                             that no longer loads (deleted, or broken mid-edit) still shows
+                             up and can be removed. Removing it from the Workshop needs the
+                             mod to be visible there, which is exactly what fails then. -->
+                        <StackPanel x:Name="LocalModsList" Margin="0,14,0,0"/>
+                        <TextBlock x:Name="LocalModsEmptyHint"
+                                   Style="{StaticResource HintText}"
+                                   Margin="0,10,0,0"/>
+
+                        <Border Height="1" Background="{DynamicResource MpDivider}" Margin="0,22,0,18"/>
                         <TextBlock x:Name="TranslationsHeader"
                                    Foreground="{DynamicResource TextPrimary}"
                                    FontSize="{StaticResource FontSizeBodyStrong}"

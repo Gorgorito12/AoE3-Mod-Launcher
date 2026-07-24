@@ -56,6 +56,14 @@ public partial class LauncherSettingsDialog : Window
     public Action? AssetsCleared { get; set; }
 
     /// <summary>
+    /// Invoked after a local <c>mod.json</c> is added or removed, so the (still open,
+    /// non-modal) launcher re-merges the catalog and the Workshop shows the change without
+    /// a restart. Same shape as <see cref="AssetsCleared"/>: this dialog can't refresh the
+    /// catalog itself. Null = no live refresh.
+    /// </summary>
+    public Action? LocalModsChanged { get; set; }
+
+    /// <summary>
     /// Invoked when the user clicks "Clear translations cache". Community
     /// translations have no on-disk cache (only MainWindow's in-memory index),
     /// so the caller wires this to null that index and re-fetch live. Set by
@@ -143,7 +151,10 @@ public partial class LauncherSettingsDialog : Window
         TabInterfaceLabel.Text = Strings.Get("DlgLauncherSettingsSectionInterface");
         TabUpdatesLabel.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
         TabCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
-        TabTranslationsLabel.Text = Strings.Get("DlgLauncherSettingsSectionTranslations");
+        // x:Name kept (TabTranslations*) while the label moved on — same call the repo
+        // already made when this tab stopped being TRANSLATIONS and became PACKAGER.
+        // Renaming it means touching XAML + code-behind for nothing and loses git blame.
+        TabTranslationsLabel.Text = Strings.Get("DlgLauncherSettingsSectionDeveloper");
         TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
         TabPrivacyLabel.Text = Strings.Get("DlgLauncherSettingsSectionPrivacy");
 
@@ -177,6 +188,12 @@ public partial class LauncherSettingsDialog : Window
         ReceiveInvitesCheck.Content = Strings.Get("DlgSettingsReceiveInvites");
         ReceiveInvitesHint.Text = Strings.Get("DlgSettingsReceiveInvitesHint");
         SetTip(ReceiveInvitesCheck, "DlgSettingsReceiveInvitesTip");
+        DeveloperModeCheck.Content = Strings.Get("DlgSettingsDeveloperMode");
+        DeveloperModeHint.Text = Strings.Get("DlgSettingsDeveloperModeHint");
+        SetTip(DeveloperModeCheck, "DlgSettingsDeveloperModeTip");
+        LocalModsHeader.Text = Strings.Get("DlgSettingsLocalModsHeader");
+        LocalModsDescription.Text = Strings.Get("DlgSettingsLocalModsDescription");
+        AddLocalModButton.Content = Strings.Get("DlgSettingsLocalModsAdd");
 
         // Radmin assistant mode picker. Combo items tagged with the
         // raw enum strings ("Auto"/"OnRequest"/"Never") so saving is
@@ -313,6 +330,9 @@ public partial class LauncherSettingsDialog : Window
         NotifyNewRoomsCheck.IsChecked = _config.NotifyNewRooms;
         SoundsCheck.IsChecked = _config.EnableSounds;
         ReceiveInvitesCheck.IsChecked = _config.ReceiveInvites;
+        DeveloperModeCheck.IsChecked = _config.DeveloperMode;
+        ApplyDeveloperModeVisibility();
+        RefreshLocalModsList();
         AutoCheckCheck.IsChecked = _config.CheckUpdatesOnStartup;
         OpenPostUpdateCheck.IsChecked = _config.OpenPostUpdatePages;
         TelemetryCheck.IsChecked = _config.MultiplayerTelemetryEnabled;
@@ -389,6 +409,148 @@ public partial class LauncherSettingsDialog : Window
     // right-rail accent off that), and the panels' Visibility is set to
     // Visible only on the matching one. Same predictable contract, same
     // SidebarNavButton style, so the two dialogs read as siblings.
+
+    /// <summary>
+    /// Shows or hides the DEVELOPER tab to match the checkbox, live.
+    ///
+    /// <para>Includes a fallback to GENERAL when the tab being hidden is the one on screen:
+    /// otherwise the content pane goes blank with nothing marked in the sidebar, which
+    /// reads as the dialog breaking rather than a setting taking effect.</para>
+    /// </summary>
+    private void ApplyDeveloperModeVisibility()
+    {
+        bool dev = DeveloperModeCheck.IsChecked == true;
+        TabTranslationsBtn.Visibility = dev ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!dev && TranslationsPanel.Visibility == Visibility.Visible)
+            SetActiveTab(TabGeneralBtn);
+    }
+
+    private void DeveloperModeCheck_Changed(object sender, RoutedEventArgs e)
+        => ApplyDeveloperModeVisibility();
+
+    /// <summary>
+    /// Rebuilds the list of local manifests from <b>the config</b>, not from the merged
+    /// registry.
+    ///
+    /// <para>That is the point of having this list at all: a manifest that no longer loads
+    /// — deleted, or broken halfway through an edit — produces no mod in the Workshop, so
+    /// the Workshop's own "stop using this file" can't reach it. Reading the config shows
+    /// the entry regardless and keeps it removable.</para>
+    /// </summary>
+    private void RefreshLocalModsList()
+    {
+        LocalModsList.Children.Clear();
+
+        var paths = _config.LocalCatalogModPaths ?? new List<string>();
+        LocalModsEmptyHint.Text = paths.Count == 0
+            ? Strings.Get("DlgSettingsLocalModsEmpty")
+            : "";
+
+        foreach (var path in paths.ToList())
+        {
+            var row = new System.Windows.Controls.Grid { Margin = new Thickness(0, 0, 0, 8) };
+            row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            { Width = GridLength.Auto });
+
+            // Middle-ellipsis: the distinguishing part of these paths is the TAIL (the mod
+            // folder), which WPF's end-trimming would be the first thing to hide.
+            var label = new System.Windows.Controls.TextBlock
+            {
+                Text = Services.PathDisplay.CompactPathMiddle(path, 64),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondary"),
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                FontSize = (double)FindResource("FontSizeCaption"),
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = TooltipHelper.Wrap(path),
+            };
+            System.Windows.Controls.Grid.SetColumn(label, 0);
+            row.Children.Add(label);
+
+            var remove = new System.Windows.Controls.Button
+            {
+                Content = Strings.Get("DlgSettingsLocalModsRemove"),
+                Style = (Style)FindResource("PropertyActionButton"),
+                Margin = new Thickness(12, 0, 0, 0),
+                Tag = path,
+            };
+            remove.Click += RemoveLocalModButton_Click;
+            System.Windows.Controls.Grid.SetColumn(remove, 1);
+            row.Children.Add(remove);
+
+            LocalModsList.Children.Add(row);
+        }
+    }
+
+    private void AddLocalModButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = Strings.Get("ModsBrowserAddLocalPickTitle"),
+            Filter = Strings.Get("ModsBrowserAddLocalFilter"),
+            CheckFileExists = true,
+        };
+        if (dlg.ShowDialog(this) != true) return;
+
+        var path = System.IO.Path.GetFullPath(dlg.FileName);
+
+        Services.ModCatalogEntry entry;
+        try
+        {
+            entry = Services.ModCatalogService.LoadLocalEntry(path);
+        }
+        catch (Exception ex)
+        {
+            // Naming the cause is the feature: the catalog CI only tells a modder their
+            // manifest is wrong after they have opened the PR.
+            Services.DiagnosticLog.Write($"Add local mod: rejected '{path}': {ex.Message}");
+            MessageBox.Show(this,
+                Strings.Format("ModsBrowserAddLocalInvalidBody", ex.Message),
+                Strings.Get("ModsBrowserAddLocalInvalidTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Re-adding the same file is a no-op, not a duplicate row — a modder iterating
+        // will press this more than once on the same manifest.
+        if (!_config.LocalCatalogModPaths.Any(p =>
+                string.Equals(p, path, StringComparison.OrdinalIgnoreCase)))
+        {
+            _config.LocalCatalogModPaths.Add(path);
+        }
+
+        PersistLocalMods();
+        Services.DiagnosticLog.Write($"Add local mod: '{entry.Manifest.Id}' from {path}.");
+    }
+
+    private void RemoveLocalModButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string path }) return;
+
+        _config.LocalCatalogModPaths.RemoveAll(p =>
+            string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        PersistLocalMods();
+        Services.DiagnosticLog.Write($"Removed local manifest: {path}");
+    }
+
+    /// <summary>
+    /// Saves immediately and re-merges, unlike the rest of this dialog which waits for
+    /// "Save changes".
+    ///
+    /// <para>Adding a manifest is an ACTION with a visible result in the Workshop, not a
+    /// preference — making it wait for Save (or vanish on Cancel) would mean pressing
+    /// "choose file", seeing the row appear, and finding no mod. The file itself is never
+    /// touched either way.</para>
+    /// </summary>
+    private void PersistLocalMods()
+    {
+        _config.Save();
+        Services.ModRegistry.SetLocalModPaths(_config.LocalCatalogModPaths);
+        RefreshLocalModsList();
+        LocalModsChanged?.Invoke();
+    }
 
     private void SetActiveTab(System.Windows.Controls.Button activeBtn)
     {
@@ -932,6 +1094,7 @@ public partial class LauncherSettingsDialog : Window
         _config.EnableSounds = SoundsCheck.IsChecked == true;
         Services.SoundService.Enabled = _config.EnableSounds;
         _config.ReceiveInvites = ReceiveInvitesCheck.IsChecked == true;
+        _config.DeveloperMode = DeveloperModeCheck.IsChecked == true;
         _config.CheckUpdatesOnStartup = AutoCheckCheck.IsChecked == true;
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;

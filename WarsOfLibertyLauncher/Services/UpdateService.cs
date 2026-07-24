@@ -737,7 +737,12 @@ public class UpdateService
         if (string.IsNullOrEmpty(InstallPath))
             throw new InvalidOperationException(Strings.Get("ErrInstallPathMissing"));
 
-        var tempDir = Path.Combine(Path.GetTempPath(), "WarsOfLibertyLauncher");
+        // Derived from AppPaths.InstallTempRoot, not rebuilt inline: this is the folder
+        // the antivirus-exclusion advice names, and patches land here too — a .tar.xz
+        // extracted into it is exposed to the same Defender false positive an install is.
+        // A second copy of the path could drift and leave the advice pointing at a folder
+        // updates no longer use, which fails silently.
+        var tempDir = AppPaths.InstallTempRoot;
         Directory.CreateDirectory(tempDir);
 
         // Pre-compute totals so we can show overall progress across all patches.

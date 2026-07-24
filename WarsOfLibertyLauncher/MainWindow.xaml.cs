@@ -162,12 +162,13 @@ public partial class MainWindow : Window
         // below), so the old typed action events were removed.
         ModsBrowserView.OpenWebsiteRequested += ModsBrowserView_OpenWebsiteRequested;
         ModsBrowserView.RefreshCatalogRequested += ModsBrowserView_RefreshCatalogRequested;
-        ModsBrowserView.AddLocalModRequested += ModsBrowserView_AddLocalModRequested;
         ModsBrowserView.PublishRequested += ModsBrowserView_PublishRequested;
         // Workshop redesign: per-row "Add to my mods" / "Remove from
         // my mods" toggle. Replaces the old install/update/repair
         // dispatch on the Workshop — those flows now live on the
         // Dashboard (PLAY state machine + gear menu).
+        ModsBrowserView.OpenInLibraryRequested += ModsBrowserView_OpenInLibraryRequested;
+        ModsBrowserView.RemoveLocalModRequested += (_, p) => RemoveLocalMod(p);
         ModsBrowserView.AddToCollectionRequested += ModsBrowserView_AddToCollectionRequested;
         ModsBrowserView.RemoveFromCollectionRequested += ModsBrowserView_RemoveFromCollectionRequested;
         // Lazily fetch a mod's gallery screenshots when its detail panel opens.
@@ -310,6 +311,11 @@ public partial class MainWindow : Window
         Strings.LanguageChanged += ApplyLanguage;
         RestoreWindowState();
 
+        // Local manifests BEFORE the prime: PrimeFromCache merges immediately, so setting
+        // them afterwards would leave a locally-added mod missing from the very first
+        // resolution — including the saved-active-mod lookup right below.
+        ModRegistry.SetLocalModPaths(_config.LocalCatalogModPaths);
+
         // Publish the cached catalog BEFORE resolving the saved active mod. Without
         // this, ModRegistry.All is built-ins only at this point, so a saved COMMUNITY
         // mod id doesn't resolve and GetActiveProfile falls back to WoL — and nothing
@@ -344,13 +350,13 @@ public partial class MainWindow : Window
         // (which itself no-ops when the user is already looking at the window).
         _notifications = new NotificationCenter(_config);
         _notifications.Changed += (_, _) => Dispatcher.Invoke(RefreshNotificationBadge);
-        _notifications.ItemAdded += (_, _) => Dispatcher.Invoke(() =>
+        _notifications.ItemAdded += (_, item) => Dispatcher.Invoke(() =>
         {
             PulseNotificationBell();
-            // Audible "ding" for any bell notification. Fires once per real add
+            // Audible feedback for any bell notification. Fires once per real add
             // (the NotificationCenter dedups), and — unlike the tray toast — is
             // NOT gated on "user is looking", so the sound plays even in-window.
-            Services.SoundService.PlayNotification();
+            Services.SoundService.Play(SoundForNotification(item.Kind));
         });
         _notifications.ToastRequested += (title, body) => Dispatcher.Invoke(() => ShowToast(title, body));
         NotificationList.ItemsSource = _notifications.Items;
@@ -842,14 +848,29 @@ public partial class MainWindow : Window
             if (string.IsNullOrEmpty(lobbyId)) return;
             _knownLobbyIds.Add(lobbyId);   // keep the fallback poll from re-announcing it
 
+            // Every early return LOGS. This path used to be completely silent, so "the
+            // room notification didn't appear" was indistinguishable between a bug and
+            // any of these three deliberate filters — and the answer is usually one of
+            // them (hosting the room yourself is the common one).
             var me = _multiplayerSession.CurrentUser;
             if (me != null && !string.IsNullOrEmpty(hostUserId)
                 && string.Equals(hostUserId, me.Id, StringComparison.Ordinal))
-                return;   // my own room
-            if (!IsModInstalled(modId)) return;
+            {
+                DiagnosticLog.Write($"New room {lobbyId}: skipped — it's my own room.");
+                return;
+            }
+            if (!IsModInstalled(modId))
+            {
+                DiagnosticLog.Write($"New room {lobbyId}: skipped — mod '{modId}' not installed.");
+                return;
+            }
 
             // Persistent dedup shared with the poll — first-seen only.
-            if (!_notifications.TryMarkRoomNotified(lobbyId)) return;
+            if (!_notifications.TryMarkRoomNotified(lobbyId))
+            {
+                DiagnosticLog.Write($"New room {lobbyId}: skipped — already announced.");
+                return;
+            }
 
             var host = string.IsNullOrWhiteSpace(hostLogin) ? "—" : hostLogin;
             var name = string.IsNullOrWhiteSpace(title) ? "—" : title;
@@ -863,6 +884,11 @@ public partial class MainWindow : Window
                 {
                     new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), true, () =>
                     {
+                        // The click can come from the DESKTOP card, with the launcher
+                        // minimised or hidden in the tray — switching tabs on a window
+                        // nobody can see would look like the button did nothing.
+                        // No-op when it is already up front.
+                        BringToForeground();
                         SwitchTopTab(TopTab.Multiplayer);
                         _ = MultiplayerView?.JoinByLobbyIdAsync(lobbyId);
                     }),
@@ -1102,6 +1128,59 @@ public partial class MainWindow : Window
            || string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)
            || string.Equals(profile.Id, _operatingModId, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// A round disc showing a mod's icon, falling back to an accent-coloured monogram
+    /// when it has none.
+    ///
+    /// <para>Extracted so the Workshop cards and the CAMBIAR JUEGO switcher share one
+    /// implementation — the monogram fallback and the asset kick are easy to get subtly
+    /// different in a second copy, and then two surfaces disagree about the same mod.</para>
+    ///
+    /// <para>The <c>EnsureModAssetsAsync</c> kick is UNCONDITIONAL by design: with live
+    /// URL painting the brush is rarely null, so a "only when unloaded" gate would never
+    /// fire for a newly-installed mod. That method gates internally on
+    /// installed/active/operating and keeps one real pass per mod per session.</para>
+    /// </summary>
+    private System.Windows.Controls.Border BuildModIconDisc(
+        ModProfile profile, double size, System.Windows.Media.Brush fallbackBg)
+    {
+        var iconBrush = TryLoadTileImage(profile.ResolveIconSource());
+        _ = EnsureModAssetsAsync(profile);
+
+        UIElement iconChild;
+        System.Windows.Media.Brush iconBg;
+        if (iconBrush != null)
+        {
+            iconChild = new System.Windows.Controls.Border();
+            iconBg = iconBrush;
+        }
+        else
+        {
+            iconChild = new System.Windows.Controls.TextBlock
+            {
+                Text = string.IsNullOrEmpty(profile.DisplayName)
+                    ? "?"
+                    : profile.DisplayName[..1].ToUpperInvariant(),
+                FontSize = size * 0.47,
+                FontWeight = FontWeights.Bold,
+                Foreground = System.Windows.Media.Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            iconBg = fallbackBg;
+        }
+
+        return new System.Windows.Controls.Border
+        {
+            Width = size,
+            Height = size,
+            CornerRadius = new CornerRadius(size / 2),
+            Background = iconBg,
+            Child = iconChild,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+    }
+
     private FrameworkElement BuildModCard(ModProfile profile, string activeId)
     {
         bool isActive = string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase);
@@ -1122,40 +1201,8 @@ public partial class MainWindow : Window
         // itself gates on installed/active/operating (cheap early return for
         // everything else), reconciles orphaned cache files, and its
         // per-session guard keeps this to one real pass per mod.
-        var iconBrush = TryLoadTileImage(profile.ResolveIconSource());
-        _ = EnsureModAssetsAsync(profile);
-        UIElement iconChild;
-        System.Windows.Media.Brush iconBg;
-        if (iconBrush != null)
-        {
-            iconChild = new System.Windows.Controls.Border();
-            iconBg = iconBrush;
-        }
-        else
-        {
-            iconChild = new System.Windows.Controls.TextBlock
-            {
-                Text = string.IsNullOrEmpty(profile.DisplayName)
-                    ? "?"
-                    : profile.DisplayName[..1].ToUpperInvariant(),
-                FontSize = 14,
-                FontWeight = FontWeights.Bold,
-                Foreground = System.Windows.Media.Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            iconBg = accent;
-        }
-        var icon = new System.Windows.Controls.Border
-        {
-            Width = ModCardIconSize,
-            Height = ModCardIconSize,
-            CornerRadius = new CornerRadius(ModCardIconSize / 2),
-            Background = iconBg,
-            Child = iconChild,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 12, 0),
-        };
+        var icon = BuildModIconDisc(profile, ModCardIconSize, accent);
+        icon.Margin = new Thickness(0, 0, 12, 0);
 
         // Card body: title + secondary state line.
         var titleText = new System.Windows.Controls.TextBlock
@@ -1766,7 +1813,12 @@ public partial class MainWindow : Window
     private static readonly Dictionary<string, System.Windows.Media.ImageBrush?> s_tileImageCache =
         new(StringComparer.OrdinalIgnoreCase);
 
-    private static System.Windows.Media.ImageBrush? TryLoadTileImage(string? uri)
+    /// <remarks>
+    /// <c>internal</c> so <see cref="Controls.ModIconConverter"/> can paint notification
+    /// rows through the SAME cache. A second cache would be a second thing for
+    /// <see cref="InvalidateTileImageCache"/> to miss when a mod replaces its icon.
+    /// </remarks>
+    internal static System.Windows.Media.ImageBrush? TryLoadTileImage(string? uri)
     {
         if (string.IsNullOrWhiteSpace(uri)) return null;
         if (s_tileImageCache.TryGetValue(uri, out var cached)) return cached;
@@ -1898,6 +1950,11 @@ public partial class MainWindow : Window
         // re-download the images live so the user doesn't see monograms until a
         // restart. activeOnly:false covers the Workshop grid too.
         dialog.AssetsCleared = () => _ = RevalidateVisibleAssetsAsync(activeOnly: false);
+
+        // Adding or removing a local mod.json re-merges the catalog, so the Workshop
+        // shows the change while Settings is still open. force:true because the catalog
+        // cache is still valid — without it the merge wouldn't re-run until the TTL.
+        dialog.LocalModsChanged = () => _ = RefreshCatalogAsync(force: true);
 
         // "Clear translations cache" has no disk file to delete — invalidate the
         // in-memory index and re-fetch live so the list reflects the (possibly
@@ -2202,23 +2259,50 @@ public partial class MainWindow : Window
     /// balloons are disabled by group policy.
     /// </summary>
     /// <summary>
-    /// Show an in-app toast (the AppToast corner card) over any tab. When the
-    /// window is minimised or not focused — so the card wouldn't be seen — ALSO
-    /// fire the OS tray balloon (<see cref="ShowToast"/>) as a fallback. Called by
-    /// the multiplayer surface (new-room + invite notifications) via the
-    /// <c>showAppToast</c> callback wired in <see cref="MultiplayerView"/>.Attach.
+    /// Routes an <see cref="Controls.AppToast"/> card to the surface the user can
+    /// actually see: inside the window when they are looking at it, and on the DESKTOP
+    /// (<see cref="Controls.DesktopToastWindow"/>) when the window is minimised, in the
+    /// tray, or behind another app. Suppressed entirely while a game is running.
+    ///
+    /// <para>It used to always draw in-window and additionally fire a tray balloon. That
+    /// balloon is easily dropped by Windows and — the real problem — cannot carry the
+    /// card's action buttons, so a "new room" notification arrived without its Join.</para>
+    ///
+    /// <para>Called by the multiplayer surface (new-room + invite notifications) via the
+    /// <c>showAppToast</c> callback wired in <see cref="MultiplayerView"/>.Attach.</para>
     /// </summary>
     public void ShowAppToast(Controls.AppToast.ToastOptions opts)
     {
         if (opts == null) return;
         Dispatcher.Invoke(() =>
         {
-            Controls.AppToast.Show(ToastHost, opts);
-            // Off-window fallback: if they can't see the in-app card, mirror it to
-            // a Windows notification (respects ShowToastNotifications itself).
             bool userIsLooking = IsVisible && WindowState != WindowState.Minimized && IsActive;
-            if (!userIsLooking)
-                ShowToast(opts.Title, opts.Body ?? "");
+
+            if (userIsLooking)
+            {
+                Controls.AppToast.Show(ToastHost, opts);
+                DiagnosticLog.Write($"AppToast '{opts.Title}' → in-window.");
+                return;
+            }
+
+            // Never float a topmost window over a running game: it can minimise AoE3 out
+            // of full-screen, and a room invite is useless mid-match anyway. The bell
+            // entry and the sound still happen, so nothing is lost — only deferred.
+            if (_isGameRunning)
+            {
+                DiagnosticLog.Write($"AppToast '{opts.Title}' suppressed — game running.");
+                return;
+            }
+
+            // Minimised, sitting in the tray, or buried behind another app: put the SAME
+            // card on the desktop. It used to fall back to a tray balloon, which Windows
+            // drops easily and — the real problem — cannot carry the Join button, so the
+            // notification lost the only thing that made it actionable.
+            //
+            // ONE surface per event: the in-app card is deliberately NOT also added, or
+            // restoring the window shortly after would surface a stale duplicate.
+            Controls.DesktopToastWindow.Show(opts);
+            DiagnosticLog.Write($"AppToast '{opts.Title}' → desktop popup.");
         });
     }
 
@@ -2375,6 +2459,21 @@ public partial class MainWindow : Window
     /// new notification arrives. No looping — the badge carries the persistent
     /// unread state; this is just the moment-of-arrival cue.
     /// </summary>
+    /// <summary>
+    /// Maps a notification to one of the SEMANTIC feedback sounds.
+    ///
+    /// <para>Grouped by what the user needs to know, not one tone per kind: eight short
+    /// tones are indistinguishable in practice, and the installed-mods sweep can raise
+    /// several notifications back to back. "Something finished" is worth its own sound;
+    /// everything else is a heads-up and shares the existing notify tone.</para>
+    /// </summary>
+    private static Services.SoundService.SoundKind SoundForNotification(NotificationKind kind) => kind switch
+    {
+        NotificationKind.Installed or NotificationKind.UpdateFinished
+            => Services.SoundService.SoundKind.Success,
+        _ => Services.SoundService.SoundKind.Notification,
+    };
+
     private void PulseNotificationBell()
     {
         var shake = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames
@@ -2879,8 +2978,6 @@ public partial class MainWindow : Window
         // Header action buttons.
         ModsBrowserView.RefreshCatalogLabel = Strings.Get("ModsBrowserRefreshCatalog");
         ModsBrowserView.RefreshCatalogTooltip = Strings.Get("TipWsRefreshCatalog");
-        ModsBrowserView.AddLocalModLabel = Strings.Get("ModsBrowserAddLocal");
-        ModsBrowserView.AddLocalModTooltip = Strings.Get("TipWsAddLocal");
         ModsBrowserView.PublishModLabel = Strings.Get("ModsBrowserMenuPublish");
         ModsBrowserView.PublishModTooltip = Strings.Get("TipWsPublish");
         ModsBrowserView.SubTabMyModsLabel = Strings.Get("ModsBrowserSubTabMyMods");
@@ -2943,6 +3040,10 @@ public partial class MainWindow : Window
         ModsBrowserView.BtnRemoveFromCollectionLabel = Strings.Get("ModsBrowserBtnRemove");
         ModsBrowserView.BtnBuiltinLabel = Strings.Get("ModsBrowserBtnBuiltin");
         ModsBrowserView.BtnInCollectionLabel = Strings.Get("ModsBrowserInCollection");
+        ModsBrowserView.BtnOpenInLibraryLabel = Strings.Get("ModsBrowserBtnOpenInLibrary");
+        ModsBrowserView.LocalModBadgeLabel = Strings.Get("ModsBrowserLocalBadge");
+        ModsBrowserView.RemoveLocalModLabel = Strings.Get("ModsBrowserRemoveLocal");
+        ModsBrowserView.BadgeTooltipText = Strings.Get("ModsBrowserBadgeTooltip");
 
         // Header ⋯ menu is empty now — publish was promoted to its own
         // accent-outlined header button (PublishModButton), so the overflow
@@ -4285,17 +4386,20 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Placeholder for the catalog redesign's "Add local mod" entry point.
-    /// Wiring a real folder-picker → schema-validate → register flow is a
-    /// future commit; for now we surface a friendly toast so the button
-    /// doesn't feel dead.
+    /// Stops reading a local manifest. Removes the PATH from the config only — the file
+    /// stays exactly where it is, which is why this is safe to offer next to a mod the
+    /// user may still be working on.
     /// </summary>
-    private void ModsBrowserView_AddLocalModRequested(object? sender, EventArgs e)
+    private void RemoveLocalMod(ModProfile profile)
     {
-        MessageBox.Show(this,
-            Strings.Get("ModsBrowserAddLocalSoonBody"),
-            Strings.Get("ModsBrowserAddLocalSoonTitle"),
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        if (profile == null || string.IsNullOrEmpty(profile.LocalManifestPath)) return;
+
+        _config.LocalCatalogModPaths.RemoveAll(p =>
+            string.Equals(p, profile.LocalManifestPath, StringComparison.OrdinalIgnoreCase));
+        _config.Save();
+        ModRegistry.SetLocalModPaths(_config.LocalCatalogModPaths);
+        DiagnosticLog.Write($"Removed local mod '{profile.Id}' ({profile.LocalManifestPath}).");
+        _ = RefreshCatalogAsync(force: true);
     }
 
     /// <summary>
@@ -4312,6 +4416,30 @@ public partial class MainWindow : Window
         _config.AddUserMod(profile.Id);
         PersistConfigInBackground();
         RefreshModsBrowser();
+    }
+
+    /// <summary>
+    /// "See in Library" — takes the user from the Workshop to the dashboard with this
+    /// mod active, which is where installing and playing actually happen.
+    ///
+    /// <para>This is the bridge that was missing. Adding a mod left the Workshop with no
+    /// enabled action, so a user who pressed "Add to my mods" expecting an install had
+    /// nowhere to go and reported the mod as impossible to install. Nothing is installed
+    /// here — the dashboard's own CTA does that, already reading INSTALL for a mod that
+    /// isn't on disk.</para>
+    ///
+    /// <para>Same shape as <see cref="NavigateToNotification"/>: only switch profiles
+    /// when the target isn't already active, because <see cref="LoadModProfile"/> rebuilds
+    /// <c>_updateService</c> and re-runs detection.</para>
+    /// </summary>
+    private void ModsBrowserView_OpenInLibraryRequested(object? sender, ModProfile profile)
+    {
+        if (profile == null) return;
+
+        if (!string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+            LoadModProfile(profile);
+
+        SwitchTopTab(TopTab.Play);
     }
 
     /// <summary>
@@ -5825,11 +5953,13 @@ public partial class MainWindow : Window
     {
         var row = new System.Windows.Controls.Grid();
         row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
-        { Width = GridLength.Auto });                                   // state glyph
+        { Width = GridLength.Auto });                                   // mod icon
         row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
         { Width = new GridLength(1, GridUnitType.Star) });               // name + subtitle
         row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
         { Width = GridLength.Auto });                                   // played-ago
+        row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+        { Width = GridLength.Auto });                                   // active check
         row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
         { Width = GridLength.Auto });                                   // favourite star
 
@@ -5846,8 +5976,23 @@ public partial class MainWindow : Window
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
                 : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
         };
-        System.Windows.Controls.Grid.SetColumn(glyph, 0);
+        // The checkmark moved off the left edge — the mod's own icon leads the row now —
+        // to its own column beside the favourite star, where it REINFORCES the gold bold
+        // name instead of being the only active-mod signal. Inactive rows show nothing:
+        // the old placeholder glyph would read as a second, meaningless icon now that a
+        // real one sits at the start of the row. Set here with escapes rather than in the
+        // initialiser so the literal Segoe MDL2 code points stay readable in source.
+        glyph.Text = isActive ? "" : "";
+        glyph.Width = double.NaN;
+        glyph.Margin = new Thickness(6, 0, 6, 0);
+        System.Windows.Controls.Grid.SetColumn(glyph, 3);
         row.Children.Add(glyph);
+
+        // Same disc the Workshop cards use, so a mod looks identical wherever it appears.
+        var modIcon = BuildModIconDisc(p, 24, SafeBrush(p.AccentColor, "#3a3d44"));
+        modIcon.Margin = new Thickness(0, 0, 10, 0);
+        System.Windows.Controls.Grid.SetColumn(modIcon, 0);
+        row.Children.Add(modIcon);
 
         // Label + subtitle stacked vertically so each mod entry shows its display
         // name plus the short Subtitle from ModProfile ("Launcher", "Asian Dynasties
@@ -5917,7 +6062,7 @@ public partial class MainWindow : Window
                 ? System.Windows.Visibility.Visible
                 : System.Windows.Visibility.Collapsed,
         };
-        System.Windows.Controls.Grid.SetColumn(star, 3);
+        System.Windows.Controls.Grid.SetColumn(star, 4);
         row.Children.Add(star);
 
         return row;
@@ -6801,6 +6946,59 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Bell entry for a finished <see cref="RepairInstallAsync"/> run, worded for what the
+    /// user actually asked for.
+    ///
+    /// <para><b>An update gets <c>UpdateFinished</c>; a version pick and a repair get
+    /// <c>Installed</c>.</b> Not interchangeable: "Actualización completada" would be a
+    /// lie after a DOWNGRADE through the version picker. The kind only drives the icon
+    /// badge, the success sound and the click target — identical for all three — so the
+    /// wording is what distinguishes them, and no new enum value is needed.</para>
+    ///
+    /// <para><b>Dedup is bypassed</b> for the update case: the user performed this, so it
+    /// must answer even when that version already belled once (installing 19, then
+    /// updating back to 24, is exactly how the silence was reported). The reconciliation
+    /// backstop keeps its dedup — it runs on every check and has to stay idempotent.</para>
+    /// </summary>
+    /// <param name="intact">
+    /// True when a plain repair found nothing damaged and re-laid nothing. No bell then:
+    /// the status line already says there was nothing to repair, and a history entry for
+    /// an operation that changed no files is noise.
+    /// </param>
+    private void RaiseRepairFinishedBell(
+        bool asUpdate, string? targetReleaseTag, string laidDownVersion, bool intact)
+    {
+        var profile = _updateService.Profile;
+        var version = string.IsNullOrEmpty(laidDownVersion) ? "?" : laidDownVersion;
+
+        if (targetReleaseTag != null)
+        {
+            _notifications.RaiseInstalled(
+                profile.Id, version,
+                Strings.Get("NotifVersionInstalledTitle"),
+                Strings.Format("NotifVersionInstalledBody", profile.DisplayName, version));
+            return;
+        }
+
+        if (asUpdate)
+        {
+            _notifications.RaiseUpdateFinished(
+                profile.Id, version,
+                Strings.Get("NotifUpdateFinishedTitle"),
+                Strings.Format("NotifUpdateFinishedBody", profile.DisplayName, version),
+                bypassDedup: true);
+            return;
+        }
+
+        if (intact) return;
+
+        _notifications.RaiseInstalled(
+            profile.Id, version,
+            Strings.Get("NotifRepairFinishedTitle"),
+            Strings.Format("NotifRepairFinishedBody", profile.DisplayName));
+    }
+
     private async Task RepairInstallAsync(bool asUpdate = false, string? targetReleaseTag = null)
     {
         if (_isBusy) return;
@@ -7108,6 +7306,23 @@ public partial class MainWindow : Window
                 }
                 _config.Save();
                 updated = true;
+
+                // Leave a bell entry for what the user just did.
+                //
+                // This is the ONLY direct raise on the GitHubReleases path: install,
+                // update, version-pick and repair all funnel through here, while the
+                // raises in InstallAsync / ApplyAsync cover the full-install and
+                // WolPatcher paths. Without it this path relied entirely on
+                // ReconcileUpdateFinishedNotification, which only reacts to a version
+                // ADVANCE — so a downgrade through the version picker, a repair, or a
+                // re-install of the same version were all silent. A maintainer hit
+                // exactly that: downgraded, updated back, and got nothing.
+                //
+                // ORDER IS LOAD-BEARING: this runs BEFORE the post-operation CheckAsync
+                // (fired after the finally, via `else if (updated)`), so the backstop
+                // finds this item and dedups itself out. Raise it after the re-check and
+                // the two would both fire, because the raise below bypasses dedup.
+                RaiseRepairFinishedBell(asUpdate, targetReleaseTag, laidDownVersion, intact);
 
                 // Intact (nothing was re-laid) → "nothing to repair"; otherwise the
                 // usual update/repair-success line.
@@ -8219,6 +8434,10 @@ public partial class MainWindow : Window
     private void ShowProgressError(string errorMessage)
     {
         _progressState = ProgressState.Error;
+        // The single funnel every failed operation goes through, so the error tone is
+        // wired here rather than at each call site. Failures deliberately leave NO bell
+        // item, which is why this sound can't hang off a NotificationKind.
+        Services.SoundService.PlayError();
         ProgressPanelControl.ProgressTitleText.Text = Strings.Get("ProgressTitleError");
         ProgressPanelControl.ProgressSubtitleText.Text = "";
         ProgressPanelControl.ProgressStepText.Text = "";
@@ -9128,13 +9347,14 @@ public partial class MainWindow : Window
             }
         }
 
-        // Surface the user-data alert BEFORE the install dialog. We're about
-        // to lay down the 1.0.15d base — if the user has saves/metropolises
-        // from a newer install in Documents\My Games\Wars of Liberty, this
-        // is the right time to offer a backup. Doing it after the install
-        // makes the user wait through a 4 GB download just to learn about
-        // a problem they could have addressed up-front.
-        ShowUserDataAlertIfNeeded();
+        // Record pre-existing saves/metropolises in Documents\My Games\<mod>, without
+        // interrupting. This used to open a modal offering a backup; it was removed
+        // because it barged in on every fresh install right after the user had already
+        // decided to install. Backups stay available ON DEMAND (gear menu → Create
+        // backup now, and Properties → USER DATA). The log line stays: it is the only
+        // record that the user had prior data at install time, which is what a
+        // diagnostic bundle needs when someone reports losing their saves.
+        LogPreExistingUserData();
 
         // Show the styled install dialog (single popup, no MessageBoxes)
         var dialog = new InstallFolderDialog(
@@ -9147,6 +9367,30 @@ public partial class MainWindow : Window
 
         var installFolder = dialog.SelectedFolder;
         aoe3SourcePath = dialog.Aoe3SourcePath; // may have been inferred
+
+        // ---- Known antivirus false positive ----
+        // Some mods ship a file antivirus engines remove on sight (WoL:
+        // AI3\wolai.upl). Defender quarantines it DURING extraction, VerifyExtractIntact
+        // aborts, and the user has already paid for the whole download by then — so the
+        // only useful moment to ask for an exclusion is here, before anything is fetched.
+        // Warn-but-allow, like the disk-space confirm: the detection is a false positive
+        // and plenty of users never hit it (it depends on their AV and its current model).
+        if (!string.IsNullOrEmpty(profile.AntivirusFalsePositiveFile)
+            && !_config.AntivirusNoticeAcknowledged)
+        {
+            var proceed = AntivirusExclusionDialog.ShowNotice(
+                this, profile.DisplayName, profile.AntivirusFalsePositiveFile,
+                installFolder, out var ackAntivirusNotice);
+
+            // Persist the opt-out even when they cancelled — "don't ask me again" is a
+            // statement about the notice, not about this particular install.
+            if (ackAntivirusNotice)
+            {
+                _config.AntivirusNoticeAcknowledged = true;
+                _config.Save();
+            }
+            if (!proceed) return;
+        }
 
         // For an additional copy: guard against picking a folder that is ALREADY
         // a registered copy of this mod (would reinstall over it / desync slots).
@@ -9239,6 +9483,12 @@ public partial class MainWindow : Window
         ProgressPanelControl.EtaText.Text = "";
 
         var nativeInstaller = new NativeInstallService();
+
+        // Set by the antivirus catch below and consumed AFTER the finally: showing a
+        // modal from inside the catch would block the UI with the install still marked
+        // busy and the progress bar frozen mid-run, because the finally that clears
+        // both has not run yet.
+        string? antivirusBlockedFile = null;
 
         try
         {
@@ -9588,13 +9838,15 @@ public partial class MainWindow : Window
         catch (Services.PayloadFileBlockedException ex)
         {
             // Windows Defender (or another AV) quarantined a mod file mid-install —
-            // a known false positive (e.g. AI3\wolai.upl). A retry re-fails (the temp
-            // source is already gone), so tell the user exactly what to do instead of
-            // surfacing the raw "...contains a virus..." IOException.
+            // a known false positive (e.g. AI3\wolai.upl). A retry re-fails unless the
+            // user excludes the folders first, so the dialog names them and copies
+            // them; the status line keeps only the short version, because a paragraph
+            // with two absolute paths is unreadable there.
             DiagnosticLog.Write($"Install aborted — antivirus blocked payload file: {ex}");
             var msg = Strings.Format("InstallDefenderBlocked", ex.BlockedFile);
             SetStatus(msg);
             ShowProgressError(msg);
+            antivirusBlockedFile = ex.BlockedFile;
         }
         catch (Exception ex)
         {
@@ -9610,6 +9862,11 @@ public partial class MainWindow : Window
             ResetProgressUI();
             _currentInstallPhase = InstallPhase.None;
         }
+
+        // Now that the busy state is cleared and the progress strip is reset, it is
+        // safe to open the modal that names the folders to exclude.
+        if (antivirusBlockedFile != null)
+            AntivirusExclusionDialog.ShowBlocked(this, antivirusBlockedFile, installFolder);
 
         if (installSucceeded)
         {
@@ -9751,21 +10008,22 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// If the user has a populated WoL data folder under Documents from a
-    /// previous (possibly newer) install, show a styled dialog explaining
-    /// the risk and offering to back it up. We never delete user data —
-    /// the worst we do is rename the folder to ".bak.&lt;timestamp&gt;".
+    /// Records, in the diagnostic log only, whether the user already has data under
+    /// <c>Documents\My Games\&lt;profile.UserDataFolder&gt;</c> before a fresh install.
+    /// Skipped when the active mod declares no user-data folder.
     ///
-    /// Called once per fresh install. Doesn't run on plain updates.
+    /// <para><b>This used to open a modal</b> (<c>UserDataAlertDialog</c>) offering to
+    /// back that folder up. It was removed: it interrupted every fresh install at the
+    /// moment the user had already committed to installing, and a backup is something
+    /// they can ask for instead — the gear menu's "Create backup now" and Properties →
+    /// USER DATA both still do it, through the same
+    /// <see cref="CreateUserDataBackupCore"/>.</para>
+    ///
+    /// <para>The detection is KEPT rather than deleted with the dialog because the log
+    /// line is the only evidence that prior data existed at install time. Nothing here
+    /// reads or writes the folder — the launcher never deletes user data.</para>
     /// </summary>
-    /// <summary>
-    /// Show the user-data backup alert if there's pre-existing data under
-    /// <c>Documents\My Games\&lt;profile.UserDataFolder&gt;</c>. Skipped
-    /// when the active mod doesn't declare a user-data folder. Called only
-    /// before a fresh install — that's the only deterministic moment where
-    /// the version risk applies.
-    /// </summary>
-    private void ShowUserDataAlertIfNeeded()
+    private void LogPreExistingUserData()
     {
         var profile = _updateService.Profile;
         var userDataFolderName = profile.UserDataFolder;
@@ -9798,19 +10056,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        var savegameCount = UserDataService.CountSavegameFiles(userDataFolderName);
         DiagnosticLog.Write(
-            $"Pre-existing user data detected for '{profile.Id}'. " +
-            $"Savegame files: {savegameCount}. Showing alert.");
-
-        var dialog = new UserDataAlertDialog(
-            folder, profile.DisplayName, userDataFolderName) { Owner = this };
-        var backedUp = dialog.ShowDialog() == true;
-
-        if (backedUp && !string.IsNullOrEmpty(dialog.BackupPath))
-        {
-            SetStatus(Strings.Format("StatusUserDataBackedUp", dialog.BackupPath));
-        }
+            $"Pre-existing user data detected for '{profile.Id}' at '{folder}'. " +
+            "Not prompting — backups are available on demand from the gear menu " +
+            "and Properties → USER DATA.");
     }
 
     private async Task ApplyAsync(InstallCompletion installContext = InstallCompletion.None)
@@ -11718,6 +11967,10 @@ public partial class MainWindow : Window
                 SetStatus(Strings.Format(
                     "StatusUninstallSuccess",
                     _updateService.Profile.DisplayName, result.FilesDeleted));
+                // Sound only, no bell item: the user asked for this and is watching it
+                // happen, so a history entry would be noise — the same reasoning that
+                // keeps room notifications out of the bell.
+                Services.SoundService.PlaySuccess();
                 // Uninstall: nothing to play, nothing to open — just Close.
                 ShowProgressCompleted("ProgressTitleCompleted",
                     Strings.Format(

@@ -44,6 +44,27 @@ public static class AppPaths
     /// <summary>Full path for a named diagnostic snapshot (e.g. UpdateInfo-snapshot.xml).</summary>
     public static string SnapshotFile(string name) => Path.Combine(DataDir, name);
 
+    /// <summary>
+    /// Root of the launcher's install scratch space:
+    /// <c>%TEMP%\WarsOfLibertyLauncher\</c>, parent of <c>native-install\</c>
+    /// (<see cref="NativeInstallService.TempDirectory"/>) and <c>installer\</c>
+    /// (<see cref="InstallerService.TempDirectory"/>).
+    ///
+    /// <para>Deliberately NOT under <see cref="DataDir"/>: this holds multi-GB
+    /// throwaway payload parts and their extraction, which belong in %TEMP% where
+    /// the OS can reclaim them, not in the per-user data folder next to the config
+    /// and logs.</para>
+    ///
+    /// <para><b>Why it is centralised here.</b> Both services used to build this
+    /// path inline, and it is the folder the user must add to their antivirus
+    /// exclusions — a known-permanent Defender false positive on a WoL payload file
+    /// quarantines it mid-install. The exclusion advice names this exact path, so a
+    /// second copy of the string could tell the user to exclude a folder the code no
+    /// longer writes to, which fails silently and looks like the advice was wrong.</para>
+    /// </summary>
+    public static string InstallTempRoot =>
+        Path.Combine(Path.GetTempPath(), "WarsOfLibertyLauncher");
+
     /// <summary>The legacy next-to-exe config path (pre-relocation).</summary>
     private static string LegacyConfigFile =>
         Path.Combine(AppContext.BaseDirectory, ConfigFileName);

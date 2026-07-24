@@ -182,6 +182,21 @@ Two cheap gates beyond a green build:
   "document it as you change it" rule is unchanged, only the file moved. Rules that
   merely touch multiplayer but apply more broadly stayed in this file.
 
+- **Optional community ADDON gotchas live in `.claude/rules/addons.md`.** They load
+  automatically when you work on the addon surface (`Services/Addon*`,
+  `HeavenDownloader`, `NsisExtractor`, `Models/AddonManifest`, the ADDONS tab in
+  `ModPropertiesDialog`) instead of costing every session. **Update addon invariants
+  THERE, in the same change** — the "document it as you change it" rule is unchanged,
+  only the file differs. Rules that merely touch addons but apply more broadly stay in
+  this file. The short version, because it constrains code you may touch from
+  elsewhere: an addon may **never** write the three identity files
+  (`data\protoy.xml` / `techtreey.xml` / `stringtabley.xml` — version detection and the
+  MP fingerprint both read them), applying one **re-captures** the touched files'
+  fingerprints into the manifest so verify stays honest, and the two flows that re-lay
+  the overlay (`UpdateService.ApplyUpdatesAsync`, `MainWindow.RepairInstallAsync`)
+  **re-apply addons in their tails** — best-effort, so a cosmetic overlay can never
+  fail an update.
+
 - **Single-file publish deliberately omits `IncludeAllContentForSelfExtract`.**
   Turning it on would point `AppContext.BaseDirectory` at a `%TEMP%` extract dir.
   **(Update: user data — config, log, snapshot, telemetry — now lives in
@@ -273,6 +288,11 @@ Two cheap gates beyond a green build:
   startup self-heal (`MainWindow`) — and is the single home for the "strip nothing"
   policy if it ever needs to change. Pinned by
   `WarsOfLibertyLauncher.Tests/InstallParityTests` (`RemoveStaleBuildArtifacts_IsNoOp_KeepsEveryFile`).
+  **The one sanctioned divergence from the canonical file set is an enabled community
+  ADDON** — a deliberate, user-chosen overlay recorded in `<install>\addons\_owned.json`
+  and reversible from it (see `.claude/rules/addons.md`). That is a user choice, not a
+  strip: nothing here deletes, and the addon gate refuses any file this policy's
+  reasoning protects.
 
 - **Patch `deleteList`s are install-RELATIVE paths, NOT URLs — and the snapshot
   install bypasses them, so the payload must be pre-cleaned.** Each `<download>` in
@@ -386,7 +406,13 @@ Two cheap gates beyond a green build:
   `NativeInstallService.RepairFilesAsync` were REMOVED) and do a STRUCTURAL recheck
   only (`hashPass:false` — a per-file hash over a multi-GB freshly-written install
   re-reads everything and looks frozen). The **full re-overlay** is also the path for
-  an update, a version switch, or an old manifest with no `FileHashes`.
+  an update, a version switch, or an old manifest with no `FileHashes`. **Because the
+  re-overlay rewrites every overlay file, it also wipes any enabled community ADDON —
+  so `RepairInstallAsync`'s tail re-applies them** (`ReapplyAddonsAfterOverlayAsync`),
+  BEFORE the success branch reports "repaired" so the state the user is told about is
+  the final one. This was a real bug, not a hypothetical: a repair silently cost the
+  user their addons as a side effect of "fixing" the install. Best-effort — see
+  `.claude/rules/addons.md`.
   `InstallModOnlyAsync` downloads the full ZIP (the host has no per-file URLs),
   **rewrites the manifest**, and runs `ApplyUpdateDeletions` (GitHubReleases) / the
   delete-list strip. **Updates ride along automatically:** because a plain repair
@@ -459,6 +485,10 @@ Two cheap gates beyond a green build:
   `NativeInstallService.RecaptureHashes` → merges into `FileHashes`, `PruneMissingHashes`,
   recomputes `EngineFileHashes`, saves. It's wrapped non-fatal (try/catch +
   `DiagnosticLog`) — a patched install is the normal WoL state and must stay verifiable.
+  **That same block then re-applies the user's enabled ADDONS** (`ReapplyAddonsAsync`),
+  deliberately AFTER the hash refresh — re-applying re-captures those files again with
+  the addon's bytes, so the order is load-bearing; it's best-effort, so an addon can
+  never fail an update (see `.claude/rules/addons.md`).
   **The same post-patch block ALSO re-stamps the version-KEY baseline** (`KeyFileHashes`
   + `manifest.Version`), which used to be a real bug: `KeyFileHashes` was written ONLY at
   install/repair, never after a patch, so a patched-to-current install kept the PRE-patch
@@ -1138,11 +1168,18 @@ Two cheap gates beyond a green build:
   `ModState` for every mod the user never touched. The recency text uses
   `RoomAgeFormat.Coarse` (single unit: "5 min" / "2 h" / "3 d"), a sibling of `Compact` — `Compact`
   keeps a second unit ("1 d 3 h") because a live room's exact age matters, which is noise here.
-  The row is built by `MainWindow.BuildModSwitchRow` as a **`Grid`** (`Auto | * | Auto | Auto`),
-  not the horizontal `StackPanel` it used to be: the recency text has to sit hard right, and a
-  horizontal StackPanel measures children with INFINITE width, which made the name's
-  `CharacterEllipsis` inert (a long name grew the popup instead of trimming) — the same lesson as
-  the rooms table.
+  The row is built by `MainWindow.BuildModSwitchRow` as a **`Grid`**
+  (`Auto | * | Auto | Auto | Auto` — icon, name+subtitle, played-ago, active check,
+  favourite star), not the horizontal `StackPanel` it used to be: the recency text has to sit
+  hard right, and a horizontal StackPanel measures children with INFINITE width, which made the
+  name's `CharacterEllipsis` inert (a long name grew the popup instead of trimming) — the same
+  lesson as the rooms table. **Column 0 is the mod's ICON**, built by the shared
+  `MainWindow.BuildModIconDisc` (extracted from `BuildModCard` so the switcher and the Workshop
+  cards can't drift on the monogram fallback or the asset kick). It replaced a state glyph that
+  was only ever checkmark-or-blank; **the active check moved to its own column beside the star**,
+  where it reinforces the gold bold name rather than being the only signal, and inactive rows
+  show nothing there — a placeholder glyph would read as a second, meaningless icon now that a
+  real one leads the row.
 
 - **Long ops (install / update) run in the BACKGROUND — the user can switch to another
   installed mod and PLAY it while one installs. Still ONE op at a time.** The op is owned by
@@ -1240,12 +1277,40 @@ Two cheap gates beyond a green build:
   — by **HRESULT `0x800700E1` (ERROR_VIRUS_INFECTED) / `0x800700E2` (ERROR_VIRUS_DELETED)**, which
   is locale-independent (the message text is localized, so don't match on it) — and rethrows
   `Services.PayloadFileBlockedException(relPath)`. `MainWindow.InstallAsync` catches it BEFORE the
-  generic handler and shows the localized `InstallDefenderBlocked` (naming the blocked file, telling
-  the user to add an exclusion for the install + `%TEMP%` folders). **No auto-retry** — the temp
-  source is already quarantined, so a retry re-fails; the guidance is the fix. This is a band-aid:
-  the durable fixes are the SignPath signature (suppresses the AV heuristic) + reporting the file to
-  Microsoft as a false positive. Don't widen the catch to all `IOException` (a real disk/sharing
-  error must still surface its own message).
+  generic handler, shows the SHORT localized `InstallDefenderBlocked` in the status line and opens
+  **`AntivirusExclusionDialog`** with the exact folders to exclude. **No auto-retry** — the temp
+  source is already quarantined, so a retry re-fails; the guidance is the fix. Don't widen the catch
+  to all `IOException` (a real disk/sharing error must still surface its own message).
+  **The dialog is opened AFTER the `finally`, via a `string? antivirusBlockedFile` local set in the
+  catch** — showing a modal from inside the catch would block the UI with the install still flagged
+  busy and the progress strip frozen mid-run, because the `finally` that clears both hasn't run yet.
+  **This detection is KNOWN and PERMANENT, so the launcher also warns BEFORE installing.**
+  `ModProfile.AntivirusFalsePositiveFile` (set to `AI3\wolai.upl` on the WoL built-in only) makes
+  `MainWindow.InstallAsync` show the same dialog in its PREVENTIVE mode right after the install
+  folder is picked and **before anything is downloaded** — warn-but-allow, exactly like the
+  disk-space confirm next to it. That is the whole point: Defender quarantines the file mid-extract,
+  `VerifyExtractIntact` aborts, and by then the user has already paid for the multi-GB download.
+  `LauncherConfig.AntivirusNoticeAcknowledged` ("don't show again") is **launcher-wide, not per-mod**
+  — an exclusion is a property of the machine — and is read ONLY by the preventive mode; the
+  post-failure mode always shows, since anyone who hit it needs the paths regardless.
+  **The advice names `AppPaths.InstallTempRoot` + the install folder, NOT `%TEMP%` wholesale** (the
+  old string said to exclude all of `%TEMP%` and to "turn off real-time protection briefly" — both
+  bad advice, and neither told the user the actual path). **All THREE writers of that folder derive
+  from `InstallTempRoot`** — `NativeInstallService.TempDirectory`, `InstallerService.TempDirectory`
+  and `UpdateService.ApplyUpdatesAsync` (which stages patch `.tar.xz` there, so the UPDATE flow is
+  exposed to the same false positive an install is) — so the advice can't name a folder the code no
+  longer writes to. Don't rebuild that path inline anywhere; a fourth copy that drifts makes the
+  guidance wrong in silence. (Unrelated `Path.GetTempPath()` uses — `DeltaPatchService`,
+  `DiagnosticLog`, `TranslationService`, `SelfInstallService`, `RadminVpnService` — create their own
+  GUID-named scratch dirs and are deliberately NOT part of this.) **The launcher NEVER edits antivirus configuration** — no
+  elevation, no `Add-MpPreference`: an installer that excludes itself from Defender is precisely the
+  behaviour AV heuristics punish, which this project already fights over its own `.exe`. It only
+  names the folders and copies them to the clipboard.
+  **Correction to what this bullet used to claim:** the durable fix is NOT the SignPath signature —
+  signing the launcher's `.exe` does nothing about Defender quarantining a WoL *data* file — and
+  "report it to Microsoft" is already done: the detection predates the launcher entirely. `!MTB`
+  verdicts come from re-trained ML models, so a correction can regress. Treat it as permanent and
+  warn early; don't re-propose either as the fix.
   **That catch alone only covers the RACE (blocked mid-`File.Copy`) — the likelier, SILENT case is
   the AV quarantining the file AFTER a successful write, which threw nothing and produced an install
   missing it, permanently and invisibly.** `CopyPayloadToDestinationAsync` enumerates the DISK
@@ -1637,6 +1702,37 @@ Two cheap gates beyond a green build:
   `WarsOfLibertyLauncher.Tests/DetachedProcessLauncherTests` (interop launches
   without throwing; returns a valid pid or the `-1` fallback).
 
+- **The launcher NEVER touches Windows compatibility settings — AoE3 is kept "pure" — and
+  the MP launch degrades to `UseShellExecute=true` when the game exe needs elevation, so a
+  launch can never fail just because Windows shimmed the exe.** Background: Windows' Program
+  Compatibility Assistant recognises AoE3 (a 2007 game with a kernel-mode copy-protection
+  driver) and auto-applies `WINXPSP3 RUNASADMIN` to `bin\age3y.exe` under
+  `HKCU\…\AppCompatFlags\Layers` (event-log resolution `DetectorShim_KernelDriver`). The
+  stock-game profile (`aoe3-tad`) launches the RAW `bin\age3y.exe` directly, which is what
+  trips the detector (Steam avoids it via the game's bootstrapper); the launcher has ZERO code
+  that writes AppCompatFlags. A prior fix that STRIPPED the `RUNASADMIN` token before launch
+  was **reverted**, for two independently sufficient reasons the diagnostic log proved: (1) it
+  DIDN'T WORK — with `RUNASADMIN` cleared (leaving `WINXPSP3`), launching the exe STILL required
+  elevation, so the elevation is intrinsic (the `WINXPSP3` shim / Windows installer-detection on
+  the raw exe), not that token; and (2) editing another program's compat flags is exactly the
+  "leave AoE3 pure, don't touch Windows" line the maintainer drew. So: **don't re-add any
+  AppCompatFlags read/write.** The UAC prompt on the raw `age3y.exe` is Windows' requirement and
+  unavoidable from user space; the dialog reading "Age of Empires III: The War Chiefs" is
+  age3y.exe's embedded product-name string (a cosmetic AoE3 quirk — it is NOT launching
+  WarChiefs). **The genuine bug that WAS fixed:** the MP `LaunchAndWatch` fallback launched via
+  `UseShellExecute=false` (needed for `Process.Exited`), which CANNOT elevate — so for an
+  elevation-required exe `process.Start()` threw `Win32Exception` `ERROR_ELEVATION_REQUIRED`
+  (740), the MainWindow launch hook swallowed it, and **the game silently never opened from
+  multiplayer** (the dashboard `Launch` fallback already used `UseShellExecute=true`, so it at
+  least prompted UAC and launched — the MP path was strictly worse). Now the fallback wraps
+  `process.Start()` and, on a 740, RETRIES with `UseShellExecute=true` so the game launches
+  (with the UAC Windows imposes). **Load-bearing trade-off:** the retried path loses the exit
+  watcher — a medium-IL launcher can't open a handle to a higher-integrity child, so
+  `Process.Exited` / the cancel-leave `Kill(entireProcessTree)` won't fire for the elevated
+  game; the game starting matters more, and the caller gets a best-effort `Process` (enough for
+  the last-played stamp). It only engages when BOTH the reparent AND the watched launch fail on
+  elevation, so normal `asInvoker` mods (WoL/IM/SoI) keep the reparented watched launch untouched.
+
 - **Community translations are PROFILE-scoped, and the index is re-fetched on
   mod switch.** Two coupled rules: (1) `UpdateService.EffectiveTranslationsRepo()`
   returns the repo from the active `ModProfile.Translations` block, or `""` when
@@ -1990,6 +2086,29 @@ Two cheap gates beyond a green build:
   the schema would reject so a modder's first PR isn't red. Pinned by `ModLinkTests`
   + the `Links_*` cases in `BuildModJsonTests`.
 
+- **The Workshop NEVER installs — it hands off to the Library, and that handoff has to be
+  a real, enabled button. Adding a mod used to be a DEAD END, and it cost a real user the
+  install.** Two orthogonal axes sit side by side in every Workshop row: the status badge
+  is DISK state (`ModRowStatus.Installed`/`NotInstalled`) while the button is COLLECTION
+  membership (`ModRowState.IsInUserCollection`). Nothing distinguished them, so "Add to my
+  mods" on a not-installed mod read as the install button — and after pressing it the
+  primary became a **disabled** "In my mods" pill while `BuildDetailMoreMenu` is empty by
+  design, leaving Remove as the only clickable thing: the one action that undoes what the
+  user just did. A user reported Improvement Mod as impossible to install from exactly
+  this state. The fix, in `ModsBrowser`: a mod already in the collection (**including
+  built-ins** — WoL and stock AoE3 *are* in the Library) shows an enabled
+  **`OpenInLibraryRequested`** button in BOTH the row and the detail panel, wired in
+  `MainWindow` to the same shape `NavigateToNotification` uses — `LoadModProfile(profile)`
+  only when it isn't already active (it rebuilds `_updateService`), then
+  `SwitchTopTab(TopTab.Play)`. **Load-bearing rules:** (a) the label is the SAME whether or
+  not the mod is installed ("See in Library") — it names a destination, never an outcome,
+  so it can't repeat the original confusion; (b) it must stay **enabled with a full-strength
+  foreground** — `TextSecondary` is what made the old pill read as dead; (c) it does NOT
+  install: the dashboard CTA already reads INSTALL for a mod that isn't on disk, so adding
+  a second install trigger here would duplicate the state machine. The status badge carries
+  a tooltip naming its axis (`ModsBrowserBadgeTooltip`) because that ambiguity is the root
+  cause, not the button alone. Don't reintroduce a disabled pill in either slot.
+
 - **"Remove from my mods" is a VISIBILITY toggle — it never deletes a file — and it is
   confirmed WHEN INSTALLED, from a secondary button, precisely because none of that is
   visible.**
@@ -1999,10 +2118,12 @@ Two cheap gates beyond a green build:
   problem it caused is perceptual, not data loss: an INSTALLED mod vanishes from the
   dashboard MODS popup while its multi-GB folder sits on disk, which reads as an
   uninstall — and nobody guesses re-adding brings it back. Three parts: (1) **one gate,
-  both entry points** — the per-row toggle (`ModsBrowser.BuildRowAction`) and the detail
-  panel both raise `RemoveFromCollectionRequested`, so confirming inside
-  `MainWindow.ModsBrowserView_RemoveFromCollectionRequested` covers both; don't add a
-  second check at either call site. (2) **The prompt is gated on
+  ONE entry point** — only the detail panel's secondary `DetailRemoveButton` raises
+  `RemoveFromCollectionRequested`, and confirming inside
+  `MainWindow.ModsBrowserView_RemoveFromCollectionRequested` covers it; don't add a
+  second check at the call site, and don't put Remove back on the row (it used to be the
+  row button for every added mod, which made the destructive verb the most visible thing
+  in the catalogue — see the Workshop→Library bullet). (2) **The prompt is gated on
   `IsProfileInstalledLocally` — a mod that isn't installed is removed outright.** That
   asymmetry is deliberate, not an oversight: nothing is at stake there, and confirming
   harmless actions is exactly what trains users to click through the prompt that matters.
@@ -2258,8 +2379,15 @@ Two cheap gates beyond a green build:
   `ListBackups` scans `<folder>.bak.*` in BOTH parents, and `RestoreBackup`
   falls back to a recursive COPY (source left in place) when the chosen backup
   lives on another volume and `Directory.Move` throws. Every consumer
-  (pre-install alert, gear menu, Properties tab, MP replay finder) goes
-  through `UserDataService` — don't rebuild the path by hand. The Properties
+  (gear menu, Properties tab, MP replay finder) goes
+  through `UserDataService` — don't rebuild the path by hand. **Backups are ON DEMAND
+  only.** A `UserDataAlertDialog` used to open before every fresh install that found
+  pre-existing data, offering to back it up; it was removed because it interrupted the
+  user right after they had already committed to installing. `MainWindow.InstallAsync`
+  still calls `LogPreExistingUserData()` at that point — detection and logging with no
+  UI, kept because the log line is the only record that prior data existed at install
+  time, which is what a diagnostic bundle needs when someone reports losing saves.
+  Don't re-add an unprompted backup dialog to the install flow. The Properties
   USER DATA tab makes this visible on purpose: it shows the resolved path
   (Consolas), an amber warning when the OTHER root also holds files, the
   backup count + latest date on the Restore row (button disabled with a
@@ -2393,7 +2521,18 @@ Two cheap gates beyond a green build:
   `TitleBarButton` with a Segoe MDL2 bell (`\xEA8F`) + a red count badge; a `Popup`
   holds the panel (`MpSurface` card, `NotifRowButton`/`NotifLinkButton` styles).
   **Indicator: static red badge with the count; a one-shot ~1.3s `RotateTransform`
-  shake (`PulseNotificationBell`) fires only on `ItemAdded`, never looping.** Opening
+  shake (`PulseNotificationBell`) fires only on `ItemAdded`, never looping.**
+  **Each row shows the ICON of the mod it is about, with the per-kind glyph demoted to
+  a small badge on its corner** — the icon says which mod, the badge says what happened.
+  It resolves from the `ModId` the item already carries, via `Controls/ModIconConverter`
+  → `ModRegistry.Find` → `ModProfile.ResolveIconSource()` →
+  `MainWindow.TryLoadTileImage` (`internal` for exactly this reason — a second icon
+  cache would be a second thing `InvalidateTileImageCache` can miss). **The glyph
+  fallback is load-bearing, not a leftover:** kinds with no mod (`LauncherUpdate`,
+  `Connectivity`) resolve to null, and so do items whose mod has left the catalog —
+  which is normal, because notifications PERSIST across sessions. `ModIconPresentConverter`
+  (with `ConverterParameter=invert`) is what swaps the two; a `DataTrigger` can't do it
+  because "the icon failed to load" isn't a value the row's bindings can see. Opening
   the panel `MarkAllRead()`s (badge → 0, items stay). Click → `NavigateToNotification`
   (`LoadModProfile` + `SwitchTopTab(TopTab.Play)`; NewTranslation also opens
   `MenuGameLanguage`). **Detection hooks**: update-available in `ApplyCheckResult`
@@ -2436,7 +2575,10 @@ Two cheap gates beyond a green build:
   `LauncherConfig.CatalogBaselineSeeded`) or the whole existing catalog floods the bell
   on first launch — same pattern as the translation baseline; the stock game is excluded
   and the WoL built-in is caught by the baseline. (2) **"Update finished" is raised in
-  TWO places** — the direct raise in `ApplyAsync`'s success block AND a **startup
+  THREE places** — the direct raise in `ApplyAsync`'s success block (WolPatcher), the
+  direct raise in `RepairInstallAsync` via `RaiseRepairFinishedBell` (the WHOLE
+  GitHubReleases surface: update, version pick and repair all funnel through
+  `InstallModOnlyAsync`), AND a **startup
   reconciliation** (`MainWindow.ReconcileUpdateFinishedNotification`, called from
   `ApplyCheckResult`): it compares the freshly-detected installed version against the
   per-mod `ModState.NotifiedInstalledVersion` (silent baseline the first time, bell only
@@ -2448,7 +2590,27 @@ Two cheap gates beyond a green build:
   user's own session/config. Idempotent with the direct raise (that dedups on the visible
   list). Also, `--update-now` now runs `CheckAsync` even when `CheckUpdatesOnStartup` is
   off, so `_pendingDownloads` is populated and the elevated apply actually happens.
-  Pinned by `NotificationCenterTests`. (3) **The bell POPUP follows the window.** A WPF
+  Pinned by `NotificationCenterTests`.
+  **(2b) The GitHubReleases raise exists because the backstop alone is NOT enough, and its
+  two rules are load-bearing.** The reconciliation only reacts to a version **ADVANCE**, so
+  before this every operation that didn't raise the version was silent: a repair, a
+  re-install of the same version, and a **downgrade** through the version picker (which
+  additionally rewrites `NotifiedInstalledVersion` regardless). Reported for real —
+  a maintainer downgraded Improvement Mod to `19.07.2026`, updated back to `24.07.2026`
+  and got nothing, because the update path raised nothing directly and the backstop's
+  raise was **deduped** against the `(mod, version)` item from the earlier update.
+  So: (a) **the direct raise passes `bypassDedup: true`** — an action the user performed
+  must answer even if that version already belled, the same reasoning that keeps
+  `RaiseInstalled` undeduped; the BACKSTOP keeps its dedup because it runs on every check
+  and has to stay idempotent. (b) **The direct raise must run BEFORE the post-operation
+  `CheckAsync`** (it does: the raise is inside the success branch, the re-check fires after
+  the `finally` via `else if (updated)`), so the backstop finds the fresh item and dedups
+  itself out — reverse the order and both fire, since the direct one ignores dedup.
+  Wording is picked per operation: an update gets `UpdateFinished`, while a version pick
+  and a repair get **`Installed`** with their own strings — "Actualización completada"
+  after a downgrade would be a lie, and the kind only drives icon/sound/click-target, all
+  identical, so no new enum value is warranted. An `intact` repair (nothing damaged, no
+  files re-laid) deliberately raises **nothing**. (3) **The bell POPUP follows the window.** A WPF
   `Popup` renders in its own HWND and only computes placement on open, so it didn't move
   when the window was dragged. `MainWindow` attaches `LocationChanged`/`SizeChanged →
   RepositionNotifPopup` (nudges `HorizontalOffset` to force a placement recompute against
@@ -2532,9 +2694,30 @@ Two cheap gates beyond a green build:
   `ToastHost` StackPanel in `MainWindow.xaml`, spans all rows, `Background=null` so only
   the cards catch clicks). Reuses `MpAlertOverlay`'s card look (MpSurface + two-tone rim +
   shadow) but has no scrim, times out (~9 s), and carries optional action buttons
-  (Join/Ignore). `MainWindow.ShowAppToast(opts)` adds the card AND, when the window is
-  minimised/unfocused, ALSO fires the OS `ShowToast` (so it's seen off-window). Wired to
-  `MultiplayerTab` via the `showAppToast` callback in `MultiplayerView.Attach`.
+  (Join/Ignore). Wired to `MultiplayerTab` via the `showAppToast` callback in
+  `MultiplayerView.Attach`.
+  **`MainWindow.ShowAppToast` ROUTES the card to the surface the user can actually see —
+  ONE surface per event, never two.** Looking at the window → in-window (`ToastHost`);
+  **game running (`_isGameRunning`) → nothing** (a topmost window can knock AoE3 out of
+  full-screen, and a room invite is useless mid-match; the bell entry and sound still
+  happen); otherwise (minimised, in the tray, buried) → **`Controls/DesktopToastWindow`**,
+  a `Topmost`, `ShowInTaskbar=false` window pinned to the bottom-right of
+  `SystemParameters.WorkArea` that hosts the SAME card. It reuses `AppToast` untouched
+  because `AppToast.Show` takes any `Panel` and resolves brushes via `Application.Current`
+  — it never depended on the main window. **Load-bearing:** `ShowActivated=false` (or the
+  toast steals keystrokes from whatever the user is doing), `AllowsTransparency=true` (the
+  deliberate exception to the repo's no-transparency rule for dialogs — the card has
+  rounded corners and a shadow over an arbitrary desktop, and it is small and transient),
+  and it closes itself once its panel empties so an invisible topmost window can't linger.
+  **It replaced a tray-balloon fallback** (`ShowToast`) that Windows drops easily and —
+  the real defect — **cannot carry action buttons**, so a "new room" arrived with no way to
+  Join. `ShowToast` still serves the BELL (`NotificationCenter.ToastRequested`); don't
+  re-add it here. The Join action calls `BringToForeground()` FIRST, since the click can
+  come from the desktop card with the window hidden in the tray.
+  **Every early return in `OnNewRoomFromWs` LOGS** (own room / mod not installed / already
+  announced) — the path used to be entirely silent, which made "the notification didn't
+  appear" indistinguishable between a bug and the three deliberate filters; hosting the
+  room yourself is the usual answer.
   **Three real-time frames over the always-on `/global/ws`** (owned by `MultiplayerTab`,
   sent via `LobbyWebSocket.SendAsync`): (1) **invite** — right-click a player in the
   Players panel → "Invite to my room" (`AttachInviteContextMenu`, enabled only while
@@ -2575,17 +2758,35 @@ Two cheap gates beyond a green build:
 
 - **Feedback sounds are a tiny dependency-free layer — `Services/SoundService.cs`
   playing embedded WAVs via `SoundPlayer` — gated by one config toggle, and the
-  "don't sound on history / on my own message" rules are load-bearing.** Three
-  short synthesized WAVs (`Assets/Sounds/{chat,notify,connect}.wav`, shipped as
-  `<Resource>` next to the icons) map to three categories: **Chat** ("blip"),
-  **Notification** ("ding"), **Connect** ("pop", shared). `SoundService` is
+  "don't sound on history / on my own message" rules are load-bearing.** Five
+  short synthesized WAVs (`Assets/Sounds/{chat,notify,connect,success,error}.wav`,
+  shipped as `<Resource>` next to the icons) map to five categories: **Chat**
+  ("blip"), **Notification** ("ding"), **Connect** ("pop", shared), **Success**
+  (ascending G5→C6) and **Error** (descending A4→F4). **Categories are SEMANTIC,
+  not one-per-event** — eight notification kinds mapped to eight tones would be
+  indistinguishable, and the installed-mods sweep can raise several at once, so
+  `MainWindow.SoundForNotification` groups them: `Installed`/`UpdateFinished` →
+  Success, everything else → Notification (which IS the "available/heads-up" tone,
+  reused rather than duplicated under a second name). **Error is NOT a notification
+  kind** — failures leave no bell item, so it hangs off `ShowProgressError`, the
+  single funnel every failed operation already goes through. A finished **uninstall**
+  plays Success directly with **no bell entry** (the user asked for it and is watching;
+  a history row would be noise — same reasoning that keeps room notifications out).
+  **`NotificationCenter.ItemAdded` carries the `NotificationItem`** precisely so the
+  sound can be chosen from `Kind`; it used to fire `EventArgs.Empty`, which is what
+  forced one tone for everything. New sounds are synthesized to peak at 29490 (90 % of
+  scale) like the existing three, or they land louder/quieter than their siblings.
+  `SoundService` is
   static/UI-free: caches each WAV's bytes once (`Application.GetResourceStream`),
   and each `Play` spins a FRESH `SoundPlayer` over a new `MemoryStream` so sounds
   overlap and any thread can call it (no `MediaPlayer` — it needs a UI-thread
   Dispatcher + first-play latency; no NAudio). Every play is best-effort
   try/caught (audio must never kill the app), no-op when `!Enabled`, and
   **throttled per category** via `Environment.TickCount64` (Chat/Notify 300 ms,
-  Connect 900 ms — presence altas cluster). `Enabled` is wired to
+  Connect/Success/Error 900 ms — presence altas cluster, and completions deserve to
+  land cleanly). Resource path + throttle live in ONE table keyed by `SoundKind`, so
+  adding a sound is a single entry rather than a field plus two switch arms that can
+  disagree. `Enabled` is wired to
   `LauncherConfig.EnableSounds` (default true, independent of
   `ShowToastNotifications`/`NotifyNewRooms`) at MainWindow ctor startup + re-applied
   on `LauncherSettingsDialog` save (same pattern as `MultiplayerTelemetry.Enabled`);
@@ -3231,6 +3432,38 @@ mods to `ModRegistry._builtIn`** — they go to the catalog repo (the in-app
 deliberate exception; both are *also* mirrored in the catalog (`mods/wol/`,
 `mods/aoe3-tad/`) for the public listing, and the built-in shadows the catalog
 entry on id collision so a community PR can't redirect them.
+
+**A `mod.json` can also be loaded straight off DISK — Settings → DEVELOPER → "Choose a
+mod.json…" — so a manifest can be tried before it is published.** That tab is gated by
+**`LauncherConfig.DeveloperMode`** (default false), which also holds the translation
+packager and the delta-patch generator — all three already told the reader "normal users
+can ignore this section", so they were costing every user a tab. **The toggle lives in
+GENERAL, not in the tab it governs** (inside it, it could never be switched back on), and
+`SetActiveTab` falls back to GENERAL when the tab is hidden while displayed, or the content
+pane goes blank. **Developer mode gates the TOOLS, never the content: local manifests stay
+merged when it is off** — a test mod can be INSTALLED, and dropping it from the listing
+would orphan that install. The Workshop's header button was REMOVED (its copy promised a
+different, never-implemented feature: registering an already-installed folder); the row
+badge and the detail panel's "stop using this file" stay. `LauncherConfig.LocalCatalogModPaths`
+stores only PATHS (`ModCatalogService.LoadLocalEntry` re-reads the file on every merge,
+which is what makes "edit + Refresh catalog" show the change; caching a copy would defeat
+the feature). Three rules are load-bearing: (1) **they are injected INSIDE
+`ModRegistry.ApplyMerged`, never at its call sites** — it is reached from four (cache
+prime, fresh cache, stale cache, cold fetch), so per-caller injection means a local mod
+that appears or vanishes depending on how the refresh entered; (2) **a local entry
+replaces a CATALOG entry of the same id** (you copy an existing manifest to edit it, so
+seeing the published one instead would be useless) but **built-ins still win over both** —
+that is the security property above, so a local `wol` is ignored and logged; (3) assets
+resolve to files beside the `mod.json` through `ResolveLocalAsset`, which repeats
+`ResolveAssetUrl`'s traversal guard — **being on disk does not make a manifest trusted**,
+and without it a declared `../../secret.png` would be read and rendered. A manifest that
+stops loading mid-session is skipped with a log line, never auto-dropped: the user is
+editing it exactly when that happens. Rejections must NAME the cause
+(`LocalManifestException` carries the JSON line / missing field) — learning the manifest
+is wrong before opening the PR is the whole point, since the catalog CI only answers
+after. Removing forgets the path and touches no file. Pinned by `LocalManifestTests`
+(the rejection + traversal cases are the point); documented for modders in
+`docs/MODDING.md` §1.5.
 
 Switching the active mod at runtime swaps `MainWindow._updateService` for a new
 instance bound to the chosen profile (no process restart). `CheckAsync` results

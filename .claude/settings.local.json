@@ -81,7 +81,10 @@
       "Bash(awk '{print \"  SI: \"$5}')",
       "Bash(grep -rn \"setuppath\\\\|SetupPath\\\\|Microsoft Games\\\\\\\\\\\\\\\\Age\" --include=*.cs Services/)",
       "Bash(curl -sL -A Aoe3ModLauncher/1.0 -o C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/ne_remote.zip https://github.com/papillo12/Napoleonic-Era/releases/download/1.0.0/napoleonic-era-2.1.7b.zip)",
-      "Bash(python3 - C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/ne_remote.zip)"
+      "Bash(python3 - C:/Users/Jeison/AppData/Local/Temp/claude/C--Users-Jeison-Documents-AoE3-Mod-Launcher/b89cf73d-1c58-4e67-b5de-ee89d67299cb/scratchpad/ne_remote.zip)",
+      "Bash(cd *)",
+      "Bash(exit 1)",
+      "Bash(echo *)"
     ]
   }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Media;
 using System.Windows;
@@ -25,25 +26,52 @@ public static class SoundService
     /// <summary>Master on/off. False = every <see cref="Play"/> is a no-op.</summary>
     public static bool Enabled { get; set; } = true;
 
-    public enum SoundKind { Chat, Notification, Connect }
+    /// <summary>
+    /// Categories are SEMANTIC, not one-per-event. Eight notification kinds mapped to
+    /// eight tones would be indistinguishable in practice — worse, the installed-mods
+    /// sweep can raise several at once. Grouping by what the user needs to know
+    /// ("something finished" vs "something is available" vs "something failed") is what
+    /// makes them informative instead of noise.
+    ///
+    /// <see cref="Notification"/> IS the "available / heads-up" tone — it already maps to
+    /// notify.wav and is the most frequent case, so it is reused rather than duplicated
+    /// under a second name.
+    /// </summary>
+    public enum SoundKind { Chat, Notification, Connect, Success, Error }
 
     // Cached WAV bytes per resource path (loaded once from the pack resource).
     private static readonly ConcurrentDictionary<string, byte[]?> s_cache = new();
 
-    // Last-played tick (ms) per category, for the anti-spam throttle.
-    private static long s_lastChat, s_lastNotify, s_lastConnect;
+    /// <summary>
+    /// Resource + throttle window per category, in one table so adding a sound is one
+    /// entry instead of a new field plus two switch arms that can disagree.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<SoundKind, (string Resource, long ThrottleMs)> s_kinds =
+        new Dictionary<SoundKind, (string, long)>
+        {
+            [SoundKind.Chat]         = ("Assets/Sounds/chat.wav",    300),
+            [SoundKind.Notification] = ("Assets/Sounds/notify.wav",  300),
+            // Longer: presence altas arrive in clusters.
+            [SoundKind.Connect]      = ("Assets/Sounds/connect.wav", 900),
+            // Longer than a heads-up: completions are rare and deserve to land cleanly,
+            // and a fresh install can finish into an immediate update-finished.
+            [SoundKind.Success]      = ("Assets/Sounds/success.wav", 900),
+            [SoundKind.Error]        = ("Assets/Sounds/error.wav",   900),
+        };
 
-    // Minimum gap between two sounds of the same category. Connect is longer
-    // because presence altas can arrive in clusters.
-    private const long ChatThrottleMs = 300;
-    private const long NotifyThrottleMs = 300;
-    private const long ConnectThrottleMs = 900;
+    // Last-played tick (ms) per category, for the anti-spam throttle.
+    private static readonly Dictionary<SoundKind, long> s_lastPlayed = new();
 
     private static readonly object s_throttleLock = new();
 
     public static void PlayChat() => Play(SoundKind.Chat);
+    /// <summary>Heads-up: an update, translation or mod is available.</summary>
     public static void PlayNotification() => Play(SoundKind.Notification);
     public static void PlayConnect() => Play(SoundKind.Connect);
+    /// <summary>An install, update or uninstall finished successfully.</summary>
+    public static void PlaySuccess() => Play(SoundKind.Success);
+    /// <summary>An operation failed. Not a notification kind — failures leave no bell item.</summary>
+    public static void PlayError() => Play(SoundKind.Error);
 
     /// <summary>
     /// Play the sound for <paramref name="kind"/> if sounds are enabled and the
@@ -52,20 +80,12 @@ public static class SoundService
     public static void Play(SoundKind kind)
     {
         if (!Enabled) return;
-        if (!PassesThrottle(kind)) return;
-
-        var res = kind switch
-        {
-            SoundKind.Chat => "Assets/Sounds/chat.wav",
-            SoundKind.Notification => "Assets/Sounds/notify.wav",
-            SoundKind.Connect => "Assets/Sounds/connect.wav",
-            _ => null,
-        };
-        if (res == null) return;
+        if (!s_kinds.TryGetValue(kind, out var spec)) return;
+        if (!PassesThrottle(kind, spec.ThrottleMs)) return;
 
         try
         {
-            var bytes = LoadCached(res);
+            var bytes = LoadCached(spec.Resource);
             if (bytes == null || bytes.Length == 0) return;
             // Fresh player + stream per call so overlapping sounds don't fight
             // over one instance. SoundPlayer.Play() copies/streams on its own
@@ -79,25 +99,15 @@ public static class SoundService
         }
     }
 
-    private static bool PassesThrottle(SoundKind kind)
+    private static bool PassesThrottle(SoundKind kind, long throttleMs)
     {
         long now = Environment.TickCount64;
         lock (s_throttleLock)
         {
-            switch (kind)
-            {
-                case SoundKind.Chat:
-                    if (now - s_lastChat < ChatThrottleMs) return false;
-                    s_lastChat = now; return true;
-                case SoundKind.Notification:
-                    if (now - s_lastNotify < NotifyThrottleMs) return false;
-                    s_lastNotify = now; return true;
-                case SoundKind.Connect:
-                    if (now - s_lastConnect < ConnectThrottleMs) return false;
-                    s_lastConnect = now; return true;
-                default:
-                    return false;
-            }
+            if (s_lastPlayed.TryGetValue(kind, out var last) && now - last < throttleMs)
+                return false;
+            s_lastPlayed[kind] = now;
+            return true;
         }
     }
 

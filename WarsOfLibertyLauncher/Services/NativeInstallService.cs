@@ -100,9 +100,13 @@ public class NativeInstallService
         _cloneService = new FolderCloneService();
     }
 
-    /// <summary>Where temp files for installation live.</summary>
+    /// <summary>
+    /// Where temp files for installation live. Derived from
+    /// <see cref="AppPaths.InstallTempRoot"/> so it cannot drift from the folder the
+    /// antivirus-exclusion advice tells the user to exclude.
+    /// </summary>
     public static string TempDirectory =>
-        Path.Combine(Path.GetTempPath(), "WarsOfLibertyLauncher", "native-install");
+        Path.Combine(AppPaths.InstallTempRoot, "native-install");
 
     /// <summary>
     /// Wipes the native-install temp folder (downloaded ZIP parts, the
