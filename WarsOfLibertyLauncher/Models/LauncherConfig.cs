@@ -1029,7 +1029,7 @@ public class LauncherConfig
     /// state.
     /// </summary>
     public const string PrivacyPolicyUrl =
-        "https://github.com/Gorgorito12/Updater/blob/main/PRIVACY.md";
+        "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/PRIVACY.md";
 
     /// <summary>UI language: "en" or "es". While <see cref="LanguageExplicitlyChosen"/>
     /// is false the launcher FOLLOWS the Windows display language on every launch
