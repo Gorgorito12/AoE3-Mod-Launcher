@@ -10,6 +10,10 @@ malware. For the full explanation and how to verify the binary yourself
 
 ## How this project earns trust
 
+For a deep, code-cited walkthrough — every network endpoint, every system change,
+a no-malware checklist, build/update integrity, and the AI models used to build it —
+see the **[Transparency & Security Audit](docs/AUDIT.md)**.
+
 - **Open source.** The complete source is public at
   <https://github.com/Gorgorito12/AoE3-Mod-Launcher> under Apache-2.0. Anyone can
   read exactly what the launcher does.
