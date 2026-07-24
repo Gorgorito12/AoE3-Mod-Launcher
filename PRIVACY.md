@@ -6,7 +6,7 @@ The **AoE3 Mod Launcher** is a free, open-source desktop application. This
 document describes exactly what data it stores, what data leaves your computer,
 and how to turn each of those off. It is written to be honest about the code as
 it actually behaves — if you find a discrepancy between this policy and what the
-launcher does, please [open an issue](https://github.com/Gorgorito12/Updater/issues).
+launcher does, please [open an issue](https://github.com/Gorgorito12/AoE3-Mod-Launcher/issues).
 
 ## Summary (TL;DR)
 
@@ -136,5 +136,5 @@ reflected in this file in the repository, with the "Last updated" date above.
 ## Contact
 
 Questions or concerns: please
-[open an issue](https://github.com/Gorgorito12/Updater/issues) on the project
+[open an issue](https://github.com/Gorgorito12/AoE3-Mod-Launcher/issues) on the project
 repository.

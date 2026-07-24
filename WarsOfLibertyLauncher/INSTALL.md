@@ -1,8 +1,13 @@
 # Installing AoE3 Mod Launcher
 
+> **"Is this a virus?"** No — it's an unsigned open-source `.exe`, which is why
+> Windows may warn on first run. See
+> **[docs/IS-IT-A-VIRUS.md](../docs/IS-IT-A-VIRUS.md)** for the full explanation
+> and how to verify the binary yourself (VirusTotal, SHA-256, build from source).
+
 ## Quick start
 
-1. Download `Aoe3ModLauncher.exe` from the latest [GitHub release](https://github.com/Gorgorito12/Updater/releases/latest).
+1. Download `Aoe3ModLauncher.exe` from the latest [GitHub release](https://github.com/Gorgorito12/AoE3-Mod-Launcher/releases/latest).
 2. (Optional but recommended) Verify the SHA-256 hash matches the one published in the release notes:
    ```powershell
    Get-FileHash Aoe3ModLauncher.exe -Algorithm SHA256
@@ -62,3 +67,5 @@ The launcher is open-source and built from the public source tree. Official rele
 What the releases don't have **yet** is a certificate that Windows already trusts — commercial ones cost $200–700/year, which isn't feasible for a free, open-source modding tool (hence SignPath). Without one, Windows treats the publisher as "unknown" and shows the warnings above the first time you run a new release.
 
 If you want to verify the launcher is exactly what was built from this repository, every release ships with a SHA-256 hash. Compare the hash of your downloaded file (`Get-FileHash Aoe3ModLauncher.exe -Algorithm SHA256`) against the one in the release notes — if they match, the binary is authentic.
+
+You can also scan it on [VirusTotal](https://www.virustotal.com/) (~70 antivirus engines at once) or, for full certainty, **build it yourself** from source — see [docs/IS-IT-A-VIRUS.md](../docs/IS-IT-A-VIRUS.md) for both.
