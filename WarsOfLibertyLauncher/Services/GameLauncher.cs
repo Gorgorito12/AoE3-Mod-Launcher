@@ -276,7 +276,7 @@ public static class GameLauncher
         try
         {
             if (config.GetState(profile.Id).SyncGameSettings)
-                GameSettingsStore.ApplyTo(profile);
+                GameSettingsStore.ApplyTo(profile, config);
         }
         catch (Exception ex)
         {

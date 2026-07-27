@@ -113,6 +113,21 @@ public class ModState
     public string InstallPath { get; set; } = "";
 
     /// <summary>
+    /// The mod's folder under <c>Documents\My Games\</c>, once the launcher has
+    /// worked it out for a mod whose catalog manifest declares no
+    /// <c>userDataFolder</c> (discovered by name, learned from a game launch, or
+    /// picked by the user).
+    ///
+    /// Remembered rather than re-derived on every read so the answer is stable:
+    /// discovery depends on what is on disk at the time, and a folder that
+    /// momentarily fails to match must not silently move a mod's settings
+    /// somewhere else. A declared manifest value always wins over this — see
+    /// <c>UserDataService.ResolveFolderName</c>.
+    /// </summary>
+    [JsonPropertyName("userDataFolder")]
+    public string UserDataFolder { get; set; } = "";
+
+    /// <summary>
     /// ID of the community translation pack currently applied for this mod
     /// (e.g. "es", "fr"). Empty means the canonical English data is active.
     /// </summary>

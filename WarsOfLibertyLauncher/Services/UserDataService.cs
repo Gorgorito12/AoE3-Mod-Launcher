@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using WarsOfLibertyLauncher.Models;
 
 namespace WarsOfLibertyLauncher.Services;
 
@@ -114,6 +115,112 @@ public static class UserDataService
     }
 
     /// <summary>
+    /// A candidate "My Games" subfolder, as seen by the discovery rule below.
+    /// <paramref name="LooksLikeAoE3Data"/> is the caller's disk probe result
+    /// so the rule itself stays pure.
+    /// </summary>
+    internal readonly record struct UserDataCandidate(string Name, bool LooksLikeAoE3Data);
+
+    /// <summary>
+    /// The vanilla game's own folder. Never handed to a mod: its saves belong
+    /// to the player's base game, and letting a mod claim it would make the
+    /// settings-sharing feature write into vanilla's profile.
+    /// </summary>
+    internal const string VanillaFolderName = "Age of Empires 3";
+
+    /// <summary>
+    /// Works out which "My Games" folder belongs to a mod that never declared
+    /// one, so the user-data features (settings sharing, backup/restore, the
+    /// game artifacts in a diagnostics bundle) work for EVERY mod rather than
+    /// only the ones whose author remembered the manifest field.
+    ///
+    /// Matching is on the NORMALIZED name — case, punctuation and an "AoE3" /
+    /// "Age of Empires 3" prefix dropped — accepting an exact match or a folder
+    /// that STARTS WITH the mod's name. That is what resolves the two real
+    /// shapes: "AoE3 Improvement Mod" for <i>Improvement Mod</i>, and
+    /// "Napoleonic Era Beta 2" for <i>Napoleonic Era</i>.
+    ///
+    /// <para>Three guards, and they are the point of this method. Picking the
+    /// wrong folder means writing one mod's graphics/hotkeys into another mod's
+    /// profile — silent, and not something the user could diagnose:</para>
+    /// <list type="number">
+    ///   <item>the vanilla folder is never returned;</item>
+    ///   <item>a folder already spoken for by another profile is never returned
+    ///         (<paramref name="claimed"/>) — one folder, one mod;</item>
+    ///   <item>the folder must actually look like AoE3 user data.</item>
+    /// </list>
+    /// <para>Ambiguity resolves to null, deliberately: no answer leaves the UI
+    /// offering a manual picker, which the user can fix, while a wrong answer
+    /// corrupts another mod's settings.</para>
+    /// </summary>
+    internal static string? MatchUserDataFolder(
+        string modDisplayName,
+        IReadOnlyList<UserDataCandidate> candidates,
+        IReadOnlyCollection<string> claimed)
+    {
+        var want = NormalizeFolderKey(modDisplayName);
+        if (want.Length == 0) return null;
+
+        var claimedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in claimed)
+            if (!string.IsNullOrWhiteSpace(c)) claimedKeys.Add(c.Trim());
+
+        string? exact = null;
+        string? prefixed = null;
+        var prefixedCount = 0;
+
+        foreach (var candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate.Name)) continue;
+            // Guard 1 + 2: the base game's folder, and anything another profile owns.
+            if (string.Equals(candidate.Name, VanillaFolderName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (claimedKeys.Contains(candidate.Name)) continue;
+            // Guard 3: it has to be an AoE3-family user-data folder.
+            if (!candidate.LooksLikeAoE3Data) continue;
+
+            var key = NormalizeFolderKey(candidate.Name);
+            if (key.Length == 0) continue;
+
+            if (key == want)
+            {
+                // Two folders normalizing to the same name is not something we
+                // can resolve; refuse rather than guess.
+                if (exact != null) return null;
+                exact = candidate.Name;
+            }
+            else if (key.StartsWith(want, StringComparison.Ordinal))
+            {
+                prefixedCount++;
+                prefixed = candidate.Name;
+            }
+        }
+
+        if (exact != null) return exact;
+        return prefixedCount == 1 ? prefixed : null;
+    }
+
+    /// <summary>
+    /// Lowercase, alphanumerics only, with a leading "aoe3" / "ageofempires3" /
+    /// "ageofempiresiii" dropped — the game's own folders carry that prefix
+    /// inconsistently, so it can't be part of the comparison.
+    /// </summary>
+    internal static string NormalizeFolderKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "";
+
+        var sb = new System.Text.StringBuilder(value.Length);
+        foreach (var ch in value)
+            if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
+
+        var key = sb.ToString();
+        foreach (var prefix in new[] { "ageofempiresiii", "ageofempires3", "aoe3" })
+            if (key.Length > prefix.Length && key.StartsWith(prefix, StringComparison.Ordinal))
+                return key[prefix.Length..];
+        return key;
+    }
+
+    /// <summary>
     /// The NON-chosen candidate that exists and holds at least one file, or
     /// null. Surfaced as a warning in the USER DATA tab — data in two places
     /// means a Documents redirection happened mid-life and the user should
@@ -136,6 +243,155 @@ public static class UserDataService
         }
         catch { /* best-effort informational probe */ }
         return null;
+    }
+
+    /// <summary>
+    /// THE single source of truth for "which My Games folder is this mod's".
+    /// Every user-data surface goes through here — settings sharing, backup and
+    /// restore, and the game artifacts a diagnostics bundle collects — so they
+    /// can never disagree about where a mod's data lives.
+    ///
+    /// <para>Order: the catalog's declared <c>userDataFolder</c> (authoritative,
+    /// unchanged behaviour), then whatever was previously worked out and
+    /// remembered in <see cref="ModState.UserDataFolder"/>, then a fresh
+    /// discovery by name — which is persisted so the answer stays stable.</para>
+    ///
+    /// <para>Empty means "not resolved yet", NOT "this mod opts out". The one
+    /// real opt-out is the stock game profile, which is excluded because the
+    /// launcher does not manage the base game's data.</para>
+    /// </summary>
+    public static string ResolveFolderName(ModProfile profile, LauncherConfig config)
+    {
+        if (profile == null || config == null) return "";
+        if (!string.IsNullOrWhiteSpace(profile.UserDataFolder)) return profile.UserDataFolder;
+        if (profile.IsStockGame) return "";
+
+        // Read through the dictionary rather than GetState: merely resolving a
+        // folder must not create a blank entry for every mod the user never
+        // touched (the same rule the mod switcher follows for LastPlayedUtc).
+        if (config.Mods != null
+            && config.Mods.TryGetValue(profile.Id, out var state)
+            && !string.IsNullOrWhiteSpace(state?.UserDataFolder))
+            return state.UserDataFolder;
+
+        var found = DiscoverFolderName(profile.DisplayName, ClaimedFolderNames(config, profile.Id));
+        if (string.IsNullOrWhiteSpace(found)) return "";
+
+        RememberFolderName(profile.Id, found, config);
+        DiagnosticLog.Write(
+            $"User data: discovered folder '{found}' for '{profile.Id}' (manifest declares none).");
+        return found;
+    }
+
+    /// <summary>
+    /// Persists a resolved folder for a mod. Public so the learn-from-launch
+    /// path can record what the game itself just told us.
+    /// </summary>
+    public static void RememberFolderName(string modId, string folderName, LauncherConfig config)
+    {
+        if (config == null || string.IsNullOrWhiteSpace(modId) || string.IsNullOrWhiteSpace(folderName))
+            return;
+        try
+        {
+            config.GetState(modId).UserDataFolder = folderName;
+            config.Save();
+        }
+        catch (Exception ex)
+        {
+            // Losing the note only costs a re-discovery next time.
+            DiagnosticLog.Write($"User data: could not remember folder for '{modId}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Folder names already spoken for by some OTHER mod — declared in a
+    /// manifest or previously remembered — plus the vanilla game's own. Feeds
+    /// the "one folder, one mod" guard.
+    /// </summary>
+    public static IReadOnlyCollection<string> ClaimedFolderNames(LauncherConfig config, string exceptModId)
+    {
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { VanillaFolderName };
+        try
+        {
+            foreach (var p in ModRegistry.All)
+            {
+                if (string.Equals(p.Id, exceptModId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.IsNullOrWhiteSpace(p.UserDataFolder)) claimed.Add(p.UserDataFolder);
+            }
+            if (config?.Mods != null)
+                foreach (var kv in config.Mods)
+                {
+                    if (string.Equals(kv.Key, exceptModId, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!string.IsNullOrWhiteSpace(kv.Value?.UserDataFolder))
+                        claimed.Add(kv.Value.UserDataFolder);
+                }
+        }
+        catch { /* a partial claim set only risks refusing a match, never a wrong one */ }
+        return claimed;
+    }
+
+    /// <summary>
+    /// Every "My Games" subfolder across both Documents roots, each flagged with
+    /// whether it looks like AoE3 user data. The disk half of
+    /// <see cref="MatchUserDataFolder"/>.
+    /// </summary>
+    internal static IReadOnlyList<UserDataCandidate> EnumerateUserDataCandidates()
+    {
+        var seen = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        // GetCandidateUserDataFolders takes a folder NAME and returns the per-root
+        // paths for it; passing a placeholder gives us the "My Games" parents.
+        foreach (var probe in GetCandidateUserDataFolders("_"))
+        {
+            string? parent;
+            try { parent = Path.GetDirectoryName(probe); }
+            catch { continue; }
+            if (string.IsNullOrEmpty(parent)) continue;
+
+            try
+            {
+                if (!Directory.Exists(parent)) continue;
+                foreach (var dir in Directory.EnumerateDirectories(parent))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (string.IsNullOrEmpty(name)) continue;
+                    var looks = LooksLikeAoE3UserData(dir);
+                    // A folder present under both roots counts as AoE3 data if
+                    // EITHER copy does — the split-Documents case again.
+                    seen[name] = seen.TryGetValue(name, out var had) ? (had || looks) : looks;
+                }
+            }
+            catch { /* unreadable root — skip it */ }
+        }
+
+        return seen.Select(kv => new UserDataCandidate(kv.Key, kv.Value)).ToList();
+    }
+
+    /// <summary>
+    /// The shape every AoE3-family user-data folder shares. <c>Users3\</c> is
+    /// the meaningful one: it holds the profile file the settings-sharing
+    /// feature reads, so a folder without it is useless to us even if the name
+    /// matched perfectly.
+    /// </summary>
+    internal static bool LooksLikeAoE3UserData(string path)
+    {
+        try { return Directory.Exists(Path.Combine(path, "Users3")); }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Discovers the "My Games" folder name for a mod that declares none.
+    /// Returns null when nothing matches confidently — see
+    /// <see cref="MatchUserDataFolder"/> for why refusing beats guessing.
+    /// </summary>
+    public static string? DiscoverFolderName(
+        string modDisplayName, IReadOnlyCollection<string> claimed)
+    {
+        try
+        {
+            return MatchUserDataFolder(
+                modDisplayName, EnumerateUserDataCandidates(), claimed);
+        }
+        catch { return null; }
     }
 
     // Divergence is interesting once per mod per session — GetUserDataFolder

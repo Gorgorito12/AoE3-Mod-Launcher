@@ -6003,7 +6003,7 @@ public partial class MultiplayerTab : UserControl
         // Opt-in and best-effort; the match report below matters far more than this.
         if (_config?.GetState(profile.Id).SyncGameSettings == true)
         {
-            try { Services.GameSettingsStore.CaptureFrom(profile); }
+            try { Services.GameSettingsStore.CaptureFrom(profile, _config); }
             catch (Exception ex) { DiagnosticLog.Write($"Capturing shared settings failed: {ex.Message}"); }
         }
 
@@ -6029,7 +6029,8 @@ public partial class MultiplayerTab : UserControl
             // The mod's user-data folder lives under Documents/My Games/<userDataFolder>.
             // Resolved by the central helper so it honours the dual-root rule
             // (redirected OneDrive Documents vs the physical folder).
-            var modUserData = UserDataService.GetUserDataFolder(profile.UserDataFolder);
+            var modUserData = UserDataService.GetUserDataFolder(
+                UserDataService.ResolveFolderName(profile, _config));
 
             if (string.IsNullOrEmpty(modUserData)) return;
 

@@ -664,7 +664,7 @@ public partial class ModPropertiesDialog : Window
         OpenUserDataFolderBtn.IsEnabled = installed;
         CreateBackupBtn.IsEnabled = installed;
 
-        var folderName = _profile.UserDataFolder;
+        var folderName = Services.UserDataService.ResolveFolderName(_profile, _config);
 
         // Resolved data path, visible — with OneDrive Known Folder Move the
         // real Documents can be "...\OneDrive\Dokumente\...", and seeing the
@@ -715,13 +715,17 @@ public partial class ModPropertiesDialog : Window
     /// </summary>
     private void LoadGameSettings()
     {
-        // A mod with no user-data folder of its own (the base game included) has no settings to
-        // share or receive, exactly as the backup rows above are inert for it.
-        if (string.IsNullOrWhiteSpace(_profile.UserDataFolder))
+        // Resolve rather than read the manifest field: most mods never declare one, and gating on
+        // the raw value hid this whole feature from them — the reason it looked like it had been
+        // lost. Only the base game genuinely has nothing here (the launcher manages none of its
+        // files), and for it the section stays collapsed exactly as the backup rows are inert.
+        var folderName = Services.UserDataService.ResolveFolderName(_profile, _config);
+        if (string.IsNullOrWhiteSpace(folderName))
         {
             GameSettingsSection.Visibility = Visibility.Collapsed;
             return;
         }
+        GameSettingsSection.Visibility = Visibility.Visible;
 
         SyncSettingsCheck.IsChecked = _config.GetState(_profile.Id).SyncGameSettings;
 
@@ -1592,7 +1596,7 @@ public partial class ModPropertiesDialog : Window
         var source = ModRegistry.Find(sourceId);
         if (source == null) return;
 
-        var ok = Services.GameSettingsStore.ImportFrom(source, _profile);
+        var ok = Services.GameSettingsStore.ImportFrom(source, _profile, _config);
         ShowUserDataResult(ok
             ? Strings.Format("ModPropSettingsImported", source.DisplayName)
             : Strings.Get("ModPropSettingsImportFailed"));

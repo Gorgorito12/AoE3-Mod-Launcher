@@ -4648,9 +4648,12 @@ public partial class MainWindow : Window
             // check is private to this window; the rules themselves live in
             // GameSettingsStore.CanImportFrom so they are testable.
             listSettingsSources: () => ModRegistry.All
+                // The RESOLVED folder, not p.UserDataFolder: most mods never declare that field,
+                // and reading it raw kept every one of them out of this list.
                 .Where(p => Services.GameSettingsStore.CanImportFrom(
-                    p.Id, p.IsStockGame, p.UserDataFolder, IsProfileInstalledLocally(p), profile.Id))
-                .Where(Services.GameSettingsStore.HasReadableProfile)
+                    p.Id, p.IsStockGame, Services.UserDataService.ResolveFolderName(p, _config),
+                    IsProfileInstalledLocally(p), profile.Id))
+                .Where(p => Services.GameSettingsStore.HasReadableProfile(p, _config))
                 .OrderBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)
                 .ToList());
         // NO Owner on purpose: an owned window with ShowInTaskbar=True minimizes
@@ -8753,7 +8756,8 @@ public partial class MainWindow : Window
             // (My Games\<folder>), so an in-game OUT-OF-SYNC report is diagnosable —
             // a sim desync is written by AoE3, not the launcher log. Read-only; null
             // (e.g. the stock game, which has no managed user-data folder) is a no-op.
-            var gameUserDataDir = UserDataService.GetUserDataFolder(_updateService.Profile.UserDataFolder);
+            var gameUserDataDir = UserDataService.GetUserDataFolder(
+                UserDataService.ResolveFolderName(_updateService.Profile, _config));
             DiagnosticLog.ExportBundle(zipPath, gameUserDataDir: gameUserDataDir);
 
             // Reveal the freshly-created zip selected in Explorer (ready to drag
@@ -10282,7 +10286,7 @@ public partial class MainWindow : Window
     private void LogPreExistingUserData()
     {
         var profile = _updateService.Profile;
-        var userDataFolderName = profile.UserDataFolder;
+        var userDataFolderName = UserDataService.ResolveFolderName(profile, _config);
         if (string.IsNullOrEmpty(userDataFolderName))
         {
             DiagnosticLog.Write(
@@ -10913,6 +10917,9 @@ public partial class MainWindow : Window
             !_gameProcessQueryFailed &&
             _gameStartedUtc != default &&
             (DateTime.UtcNow - _gameStartedUtc) < TimeSpan.FromSeconds(GameInstantExitSeconds);
+        // Same reason: the user-data learning below compares folder write times against it, and
+        // the clear a few lines down would leave it reading `default`.
+        var launchedAtUtc = _gameStartedUtc;
 
         _gameMonitorTimer?.Stop();
         _gameMonitorTimer = null;
@@ -10948,9 +10955,14 @@ public partial class MainWindow : Window
         // is why the push stays the last step of GameLauncher.ApplyLaunchRedirects.
         var played = _settingsSyncProfile;
         _settingsSyncProfile = null;
+        // The game has just told us where it keeps its data — take the answer before anything
+        // else, so a mod whose folder name resembles nothing (and which name-matching therefore
+        // cannot find) still gets its user-data features. Runs BEFORE the capture below, which
+        // needs the folder to be resolved.
+        if (played != null) LearnUserDataFolderFromLaunch(played, launchedAtUtc);
         if (played != null && _config.GetState(played.Id).SyncGameSettings)
         {
-            try { Services.GameSettingsStore.CaptureFrom(played); }
+            try { Services.GameSettingsStore.CaptureFrom(played, _config); }
             catch (Exception ex) { DiagnosticLog.Write($"Capturing shared settings failed: {ex.Message}"); }
         }
 
@@ -10968,6 +10980,59 @@ public partial class MainWindow : Window
         var pending = _pendingCompatLayerExe;
         _pendingCompatLayerExe = null;
         if (pending != null) MaybeOfferCompatLayerFix(pending);
+    }
+
+    /// <summary>
+    /// Works out a mod's <c>My Games</c> folder from the session that just ended, for the case
+    /// name-matching cannot cover: a mod whose folder is named nothing like the mod.
+    ///
+    /// <para>The game has just written to its own folder, so the one touched during the session is
+    /// the answer — no guessing, no manifest field, and nothing asked of the player or the mod's
+    /// author. That is what makes the user-data features work for mods that do not exist yet.</para>
+    ///
+    /// <para>Applies the same guards as name discovery (never the vanilla folder, never one
+    /// another mod owns, must look like AoE3 data) and skips a <see cref="ModProfile.UserDataRedirect"/>
+    /// mod outright: for those the standard folder is junctioned at the mod's, so "what did the
+    /// game write to" answers with the junction rather than the real destination.</para>
+    /// </summary>
+    private void LearnUserDataFolderFromLaunch(ModProfile profile, DateTime launchedAtUtc)
+    {
+        try
+        {
+            if (profile.UserDataRedirect) return;
+            if (launchedAtUtc == default) return;
+            // Already known — declared, remembered, or matched by name.
+            if (!string.IsNullOrWhiteSpace(Services.UserDataService.ResolveFolderName(profile, _config)))
+                return;
+
+            var claimed = Services.UserDataService.ClaimedFolderNames(_config, profile.Id);
+            var since = launchedAtUtc;
+            string? best = null;
+
+            foreach (var candidate in Services.UserDataService.EnumerateUserDataCandidates())
+            {
+                if (!candidate.LooksLikeAoE3Data) continue;
+                if (claimed.Contains(candidate.Name)) continue;
+
+                var folder = Services.UserDataService.GetUserDataFolder(candidate.Name);
+                if (folder == null || !System.IO.Directory.Exists(folder)) continue;
+                if (System.IO.Directory.GetLastWriteTimeUtc(folder) < since) continue;
+
+                // Two folders written during one session can't be told apart, and picking either
+                // could put this mod's settings in another mod's profile. Refuse instead.
+                if (best != null) return;
+                best = candidate.Name;
+            }
+
+            if (best == null) return;
+            Services.UserDataService.RememberFolderName(profile.Id, best, _config);
+            DiagnosticLog.Write(
+                $"User data: learned folder '{best}' for '{profile.Id}' from the session that just ended.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Learning the user-data folder failed (ignored): {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -11445,7 +11510,7 @@ public partial class MainWindow : Window
         // user-data folder. Mods that don't (e.g. overlay mods sharing the
         // AoE3 vanilla folder) hide the whole submenu so the items don't
         // suggest a feature that wouldn't do anything.
-        var userDataFolderName = _updateService.Profile.UserDataFolder;
+        var userDataFolderName = UserDataService.ResolveFolderName(_updateService.Profile, _config);
         var userDataActive = !string.IsNullOrEmpty(userDataFolderName);
         ActionPanelControl.MenuUserData.Visibility = userDataActive
             ? Visibility.Visible
@@ -12268,7 +12333,7 @@ public partial class MainWindow : Window
     {
         if (_isBusy) return null;
 
-        var userDataFolderName = _updateService.Profile.UserDataFolder;
+        var userDataFolderName = UserDataService.ResolveFolderName(_updateService.Profile, _config);
         if (string.IsNullOrEmpty(userDataFolderName)) return null;
 
         var backups = UserDataService.ListBackups(userDataFolderName);
@@ -12307,7 +12372,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void MenuOpenUserDataFolder_Click(object sender, RoutedEventArgs e)
     {
-        var userDataFolderName = _updateService.Profile.UserDataFolder;
+        var userDataFolderName = UserDataService.ResolveFolderName(_updateService.Profile, _config);
         if (string.IsNullOrEmpty(userDataFolderName)) return;
 
         var folder = UserDataService.GetUserDataFolder(userDataFolderName);
@@ -12349,7 +12414,7 @@ public partial class MainWindow : Window
     {
         if (_isBusy) return null;
 
-        var userDataFolderName = _updateService.Profile.UserDataFolder;
+        var userDataFolderName = UserDataService.ResolveFolderName(_updateService.Profile, _config);
         if (string.IsNullOrEmpty(userDataFolderName)) return null;
 
         if (!UserDataService.HasExistingUserData(userDataFolderName))

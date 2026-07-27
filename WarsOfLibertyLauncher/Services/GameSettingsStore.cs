@@ -34,11 +34,11 @@ public static class GameSettingsStore
     /// Stores this mod's settings as the shared copy. Called when the game exits, so the last
     /// mod played is the one whose settings the others pick up.
     /// </summary>
-    public static bool CaptureFrom(ModProfile profile)
+    public static bool CaptureFrom(ModProfile profile, LauncherConfig config)
     {
         try
         {
-            var profilePath = ResolveProfilePath(profile);
+            var profilePath = ResolveProfilePath(profile, config);
             if (profilePath == null) return false;
 
             var shared = GameSettingsSync.ExtractSections(ReadProfile(profilePath));
@@ -64,13 +64,13 @@ public static class GameSettingsStore
     /// Grafts the shared copy into this mod's profile. Called just before launching, after the
     /// My Games junction is in place so the write lands in the folder the game will actually read.
     /// </summary>
-    public static bool ApplyTo(ModProfile profile)
+    public static bool ApplyTo(ModProfile profile, LauncherConfig config)
     {
         try
         {
             if (!HasSharedSettings()) return false;
 
-            var profilePath = ResolveProfilePath(profile);
+            var profilePath = ResolveProfilePath(profile, config);
             if (profilePath == null) return false;
 
             var current = ReadProfile(profilePath);
@@ -107,12 +107,12 @@ public static class GameSettingsStore
     /// between two named mods, not a statement about which settings are canonical. A mod outside
     /// the sharing group can both give and receive an import without joining it.</para>
     /// </summary>
-    public static bool ImportFrom(ModProfile source, ModProfile target)
+    public static bool ImportFrom(ModProfile source, ModProfile target, LauncherConfig config)
     {
         try
         {
-            var from = ResolveProfilePath(source);
-            var to = ResolveProfilePath(target);
+            var from = ResolveProfilePath(source, config);
+            var to = ResolveProfilePath(target, config);
             if (from == null || to == null) return false;
 
             var shared = GameSettingsSync.ExtractSections(ReadProfile(from));
@@ -154,7 +154,8 @@ public static class GameSettingsStore
     }
 
     /// <summary>Whether this mod actually has a profile on disk to read settings from.</summary>
-    public static bool HasReadableProfile(ModProfile profile) => ResolveProfilePath(profile) != null;
+    public static bool HasReadableProfile(ModProfile profile, LauncherConfig config)
+        => ResolveProfilePath(profile, config) != null;
 
     /// <summary>
     /// Keeps one untouched copy of the profile as it was before this feature ever wrote to it.
@@ -172,16 +173,19 @@ public static class GameSettingsStore
     /// <summary>
     /// The active profile file for a mod, or null when the mod doesn't participate.
     ///
-    /// <para>A mod with no <see cref="ModProfile.UserDataFolder"/> — the stock game included —
-    /// has no folder of its own, and is skipped exactly as the backup feature skips it. The
-    /// folder itself is resolved through <see cref="UserDataService"/> so a Documents folder
-    /// redirected to OneDrive lands in the same place everything else uses.</para>
+    /// <para>The folder NAME comes from <see cref="UserDataService.ResolveFolderName"/>, not from
+    /// <see cref="ModProfile.UserDataFolder"/> directly: most mods never declare that field, and
+    /// reading it raw is what made this whole feature invisible for them. The stock game still
+    /// resolves to nothing (the launcher manages none of its files) and is skipped exactly as the
+    /// backup feature skips it. The absolute path then goes through the same service, so a
+    /// Documents folder redirected to OneDrive lands where everything else looks.</para>
     /// </summary>
-    private static string? ResolveProfilePath(ModProfile profile)
+    private static string? ResolveProfilePath(ModProfile profile, LauncherConfig config)
     {
-        if (string.IsNullOrWhiteSpace(profile.UserDataFolder)) return null;
+        var folderName = UserDataService.ResolveFolderName(profile, config);
+        if (string.IsNullOrWhiteSpace(folderName)) return null;
 
-        var folder = UserDataService.GetUserDataFolder(profile.UserDataFolder);
+        var folder = UserDataService.GetUserDataFolder(folderName);
         if (folder == null) return null;
 
         var users3 = Path.Combine(folder, "Users3");
