@@ -225,9 +225,21 @@ public static class DeltaPatchService
     /// null. The target is a PARAMETER (not read from <paramref name="gh"/>) so the caller
     /// decides the policy and this service stays decoupled from the catalog pin.
     /// </summary>
+    /// <param name="confirmSpace">
+    /// Called with the patch zip's compressed size once it is known and BEFORE anything is
+    /// downloaded, so the caller can check free space and ask the user. Optional; null skips it.
+    ///
+    /// <para>To CANCEL, throw <see cref="OperationCanceledException"/> from inside — it is
+    /// rethrown untouched and the whole update unwinds. Deliberately not "return false to fall
+    /// back to the full path": the full download needs MORE room than the delta, so offering it
+    /// to someone who just declined for lack of space would be nonsense. Returning false is
+    /// treated as "no usable delta" (null), which is the right answer for any other reason the
+    /// caller might have.</para>
+    /// </param>
     public static async Task<PreparedPatch?> TryPrepareAsync(
         GitHubReleasesSettings gh, string? installedTag, string targetTag, string installPath,
-        InstallManifest? manifest, IReadOnlyList<string>? coveredFiles, CancellationToken ct)
+        InstallManifest? manifest, IReadOnlyList<string>? coveredFiles, CancellationToken ct,
+        Func<long, bool>? confirmSpace = null)
     {
         try
         {
@@ -267,6 +279,12 @@ public static class DeltaPatchService
             var payloadAsset = assets.FirstOrDefault(x =>
                 string.Equals(x.Name, descriptor.Payload, StringComparison.OrdinalIgnoreCase));
             if (payloadAsset == null || string.IsNullOrEmpty(payloadAsset.Url)) return null;
+
+            // Room to land it? The asset size has always been here and was simply unused, so this
+            // costs no extra request. It has to happen HERE rather than at the call site: the
+            // download below is inside this method, so a caller-side check could only run after
+            // the bytes had already been written.
+            if (confirmSpace != null && !confirmSpace(payloadAsset.Size)) return null;
 
             var tempZip = Path.Combine(Path.GetTempPath(), "aoe3ml-delta-" + Guid.NewGuid().ToString("N") + ".zip");
             using (var resp = await Http.GetAsync(payloadAsset.Url, HttpCompletionOption.ResponseHeadersRead, ct))

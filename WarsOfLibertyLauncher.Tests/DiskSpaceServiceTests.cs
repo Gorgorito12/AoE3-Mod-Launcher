@@ -128,6 +128,47 @@ public class DiskSpaceServiceTests
         Assert.StartsWith("C", shortfall!.Drive, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ---------------- the per-flow multipliers ----------------
+    //
+    // These are constants, so the point isn't arithmetic — it's that a factor of 0 would make
+    // `required` zero, which Check reads as "nothing to check" and silently disables the warning
+    // for that flow. Nothing else would fail: the build stays green and the app looks fine.
+
+    [Fact]
+    public void EveryFlowFactor_IsPositive_SoNoCheckIsSilentlyDisabled()
+    {
+        Assert.True(DiskSpaceService.DeltaTempFactor > 0);
+        Assert.True(DiskSpaceService.DeltaInstallFactor > 0);
+        Assert.True(DiskSpaceService.TranslationInstallFactor > 0);
+        Assert.True(DiskSpaceService.AddonFactor > 0);
+        Assert.True(DiskSpaceService.RadminInstallAllowanceBytes > 0);
+        Assert.True(DiskSpaceService.OverlayHeadroomBytes > 0);
+    }
+
+    [Fact]
+    public void DeltaChargesTempMoreThanTheInstall()
+    {
+        // Temp carries the patch zip AND the rollback backup of every overwritten file; the
+        // install only receives the extracted result. Flipping these would under-charge the
+        // volume that actually runs out first.
+        Assert.True(DiskSpaceService.DeltaTempFactor > DiskSpaceService.DeltaInstallFactor);
+    }
+
+    [Fact]
+    public void DeltaShape_WithATightTempVolume_NamesTemp()
+    {
+        // The delta's real call shape: install charged on one volume, %TEMP% on another.
+        const long compressed = 200 * DiskSpaceService.MiB;
+
+        var shortfall = DiskSpaceService.Check(
+            OnD, compressed * DiskSpaceService.DeltaInstallFactor,
+            OnC, compressed * DiskSpaceService.DeltaTempFactor,
+            Free(cFree: 100 * DiskSpaceService.MiB, dFree: 500 * DiskSpaceService.GiB));
+
+        Assert.NotNull(shortfall);
+        Assert.StartsWith("C", shortfall!.Drive, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void EstimateInstallRequirement_AddsFixedAllowanceToCloneBytes()
     {

@@ -1054,6 +1054,11 @@ public static class Strings
             [LangEn] = "You declined the permission prompt, so nothing was changed.",
             [LangEs] = "Rechazaste el permiso, así que no se cambió nada.",
         },
+        ["AddonCancelled"] = new()
+        {
+            [LangEn] = "Cancelled — nothing was changed.",
+            [LangEs] = "Cancelado: no se cambió nada.",
+        },
         ["AddonUnpacking"] = new()
         {
             [LangEn] = "Unpacking {0}...",

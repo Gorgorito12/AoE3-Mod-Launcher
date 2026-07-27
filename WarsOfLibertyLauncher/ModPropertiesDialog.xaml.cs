@@ -1778,7 +1778,8 @@ public partial class ModPropertiesDialog : Window
         {
             var zip = AddonStore.PathFor(entry.Id);
             if (!File.Exists(zip))
-                await HeavenDownloader.DownloadAsync(entry.HeavenFileId, zip);
+                await HeavenDownloader.DownloadAsync(
+                    entry.HeavenFileId, zip, confirmSpace: ConfirmAddonSpaceOk);
 
             // An NSIS addon has to be unpacked before anything about it is known —
             // its archive holds only the installer, so the risk verdict comes from
@@ -1842,6 +1843,13 @@ public partial class ModPropertiesDialog : Window
             DiagnosticLog.Write($"Addon '{entry.Id}' download failed: {ex.Message}");
             ShowAddonResult(Strings.Get("AddonDownloadFailed"), ok: false);
         }
+        catch (OperationCanceledException)
+        {
+            // The user declined the low-space warning. Their own choice, so it reports as a
+            // neutral cancellation — the generic handler below would paint it red as a failure.
+            DiagnosticLog.Write($"Addon '{entry.Id}' cancelled by the user.");
+            ShowAddonResult(Strings.Get("AddonCancelled"), ok: true);
+        }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Addon '{entry.Id}' failed: {ex.Message}");
@@ -1851,6 +1859,22 @@ public partial class ModPropertiesDialog : Window
         {
             LoadAddons();
         }
+    }
+
+    /// <summary>
+    /// Warn before an addon download when either volume is too tight. The archive is written
+    /// under <see cref="AppPaths.DataDir"/> (and unpacked beside itself for an NSIS addon), while
+    /// the install receives the extracted files plus a backup of everything they overwrite — so
+    /// both sides are charged twice the archive.
+    /// </summary>
+    private bool ConfirmAddonSpaceOk(long archiveBytes)
+    {
+        if (archiveBytes <= 0) return true;   // Heaven sent no Content-Length — don't guess
+
+        var required = archiveBytes * DiskSpaceService.AddonFactor;
+        var shortfall = DiskSpaceService.Check(
+            AddonStore.RootDir, required, _service.InstallPath, required);
+        return DiskSpacePrompt.ConfirmOrCancel(this, shortfall, "DiskSpaceConfirmDownloadBody");
     }
 
     private async Task DisableOfferedAddonAsync(AddonEntry entry)

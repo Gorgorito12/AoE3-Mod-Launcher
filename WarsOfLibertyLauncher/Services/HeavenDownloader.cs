@@ -64,8 +64,16 @@ public static class HeavenDownloader
     /// <summary>
     /// Resolves the token and downloads the archive to <paramref name="destPath"/>.
     /// </summary>
+    /// <param name="confirmSpace">
+    /// Called with the archive's size from the response headers, before any of it is read, so the
+    /// caller can check free space and ask the user. Heaven does not always send a
+    /// <c>Content-Length</c>; a missing one is passed as 0, which the caller reads as unmeasurable
+    /// and does not warn about. Throw <see cref="OperationCanceledException"/> from inside to
+    /// abort. Optional; null skips the check.
+    /// </param>
     public static async Task DownloadAsync(
-        string fileId, string destPath, CancellationToken ct = default)
+        string fileId, string destPath, CancellationToken ct = default,
+        Func<long, bool>? confirmSpace = null)
     {
         if (string.IsNullOrWhiteSpace(fileId))
             throw new HeavenDownloadException("No file id was given.");
@@ -88,6 +96,12 @@ public static class HeavenDownloader
 
         using var res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
         res.EnsureSuccessStatusCode();
+
+        // ResponseHeadersRead means the body hasn't been pulled yet, so this is the point where a
+        // space check still costs nothing — and it also runs before the whole archive is buffered
+        // into memory below.
+        if (confirmSpace != null && !confirmSpace(res.Content.Headers.ContentLength ?? 0L))
+            throw new OperationCanceledException();
 
         var bytes = await res.Content.ReadAsByteArrayAsync(ct);
 

@@ -49,6 +49,41 @@ public static class DiskSpaceService
     public const long OverlayHeadroomBytes = 1 * GiB;
 
     /// <summary>
+    /// Multipliers over a delta patch's COMPRESSED size, because that is the only figure
+    /// available: the patch descriptor records each changed file's hashes but no size, so unlike
+    /// every other check here this one is an estimate rather than a measurement.
+    ///
+    /// <para><c>%TEMP%</c> holds the patch zip AND the rollback backup of every file the patch
+    /// overwrites; the install receives the extracted files. These are game assets (<c>.bar</c>,
+    /// <c>.ddt</c>) that are already compressed, so the archive shrinks them very little and a
+    /// small multiple is the honest bound.</para>
+    ///
+    /// <para>Adding a <c>size</c> field to the descriptor would make this exact — worth doing if
+    /// the format is revised.</para>
+    /// </summary>
+    public const int DeltaTempFactor = 3;
+    public const int DeltaInstallFactor = 2;
+
+    /// <summary>
+    /// A translation pack is written twice: extracted into <c>translations\&lt;id&gt;\</c> and
+    /// then copied over <c>data\</c>. The download itself lands in <c>%TEMP%</c> at 1×.
+    /// </summary>
+    public const int TranslationInstallFactor = 2;
+
+    /// <summary>
+    /// An addon archive is written twice on each side: the stored copy plus (for an NSIS addon)
+    /// its unpacked payload under <c>AppPaths.DataDir</c>, and the extracted files plus their
+    /// backups in <c>addons\_originals\</c> inside the install.
+    /// </summary>
+    public const int AddonFactor = 2;
+
+    /// <summary>
+    /// Room for what msiexec expands into Program Files, on top of the Radmin MSI itself. Fixed
+    /// because the installed footprint isn't reported anywhere we can read before running it.
+    /// </summary>
+    public const long RadminInstallAllowanceBytes = 300 * MiB;
+
+    /// <summary>
     /// Free bytes on the volume that holds <paramref name="path"/>, or -1 when it
     /// can't be determined (invalid path, removed drive, access error). Never
     /// throws — callers treat -1 as "unknown, don't warn".

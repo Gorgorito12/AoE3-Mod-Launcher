@@ -6665,22 +6665,43 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Warn before a delta patch when a disk is too tight for it, and CANCEL the update when the
+    /// user declines — by throwing, which <see cref="DeltaPatchService.TryPrepareAsync"/> passes
+    /// through untouched.
+    ///
+    /// <para>This closed a real hole rather than adding a nicety: <c>RepairInstallAsync</c> only
+    /// calls <see cref="ConfirmRepairSpaceOk"/> inside its <c>if (!deltaApplied)</c> branch, so a
+    /// delta that SUCCEEDED downloaded, backed up and extracted without any space check ever
+    /// running. It is also the one path here whose requirement is an estimate — the descriptor
+    /// carries no uncompressed size, hence the documented factors on
+    /// <see cref="Services.DiskSpaceService"/>.</para>
+    /// </summary>
+    private bool ConfirmDeltaSpaceOk(string installPath, long compressedBytes)
+    {
+        if (compressedBytes <= 0) return true;   // no size published — don't guess, don't warn
+
+        // GetTempPath(), not AppPaths.InstallTempRoot: the delta writes its zip and its rollback
+        // backup straight to the temp ROOT. Same volume today, but naming the path it actually
+        // uses keeps this honest if that ever changes.
+        var shortfall = Services.DiskSpaceService.Check(
+            installPath, compressedBytes * Services.DiskSpaceService.DeltaInstallFactor,
+            System.IO.Path.GetTempPath(),
+            compressedBytes * Services.DiskSpaceService.DeltaTempFactor);
+        if (shortfall == null) return true;
+
+        if (ConfirmLowSpace(shortfall, "DiskSpaceConfirmDownloadBody")) return true;
+        throw new OperationCanceledException();
+    }
+
+    /// <summary>
     /// The shared "not enough room, carry on anyway?" prompt. Warn-but-allow, like every other
     /// disk-space check here — the estimate is conservative, so blocking would refuse installs
-    /// that would have worked.
+    /// that would have worked. Delegates to <see cref="DiskSpacePrompt"/>, which the translation,
+    /// addon and Radmin flows use too — they live in other windows, so the prompt can't stay
+    /// private here.
     /// </summary>
     private bool ConfirmLowSpace(Services.DiskSpaceShortfall shortfall, string bodyKey)
-    {
-        var body = Strings.Format(bodyKey,
-            Services.DiskSpaceService.FormatBytes(shortfall.RequiredBytes),
-            Services.DiskSpaceService.FormatBytes(shortfall.FreeBytes),
-            shortfall.Drive);
-        DiagnosticLog.Write(
-            $"Low disk space on {shortfall.Drive}: need {shortfall.RequiredBytes}, have {shortfall.FreeBytes}.");
-        return MessageBox.Show(this, body,
-            Strings.Get("DiskSpaceConfirmTitle"),
-            MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
-    }
+        => DiskSpacePrompt.ConfirmOrCancel(this, shortfall, bodyKey);
 
     private async Task SearchInstallAsync(ModProfile profile)
     {
@@ -6934,7 +6955,8 @@ public partial class MainWindow : Window
             // Version and LastKnownVersion stay coherent.
             var targetTag = EffectiveGitHubTag(profile);
             var prepared = await DeltaPatchService.TryPrepareAsync(
-                gh, installedTag, targetTag, installPath, manifest, covered, _operatingCts!.Token);
+                gh, installedTag, targetTag, installPath, manifest, covered, _operatingCts!.Token,
+                confirmSpace: size => ConfirmDeltaSpaceOk(installPath, size));
             if (prepared == null) return false;   // no usable delta → full
 
             DiagnosticLog.Write(

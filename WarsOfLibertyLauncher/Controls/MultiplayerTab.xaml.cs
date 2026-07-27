@@ -609,6 +609,21 @@ public partial class MultiplayerTab : UserControl
     /// we degrade gracefully to opening the download page in the
     /// browser so the user still has a path forward.
     /// </summary>
+    /// <summary>
+    /// Warn before the Radmin MSI when the disk is too tight. The requirement is the download
+    /// PLUS a fixed allowance for what msiexec expands into Program Files — normally the same
+    /// volume as <c>%TEMP%</c>, and <see cref="DiskSpaceService.Check"/> adds the two
+    /// requirements rather than comparing them apart when that is the case.
+    /// </summary>
+    private bool ConfirmRadminSpaceOk(long msiBytes)
+    {
+        var required = Math.Max(0, msiBytes) + DiskSpaceService.RadminInstallAllowanceBytes;
+        var shortfall = DiskSpaceService.Check(
+            System.IO.Path.GetTempPath(), required, tempPath: null, tempRequired: 0);
+        return DiskSpacePrompt.ConfirmOrCancel(
+            Window.GetWindow(this), shortfall, "DiskSpaceConfirmDownloadBody");
+    }
+
     private async Task RunRadminAutoInstallAsync()
     {
         if (RadminBanner == null) return;
@@ -622,7 +637,8 @@ public partial class MultiplayerTab : UserControl
         bool ok;
         try
         {
-            ok = await RadminVpnService.InstallSilentAsync(progress, CancellationToken.None);
+            ok = await RadminVpnService.InstallSilentAsync(
+                progress, CancellationToken.None, confirmSpace: ConfirmRadminSpaceOk);
         }
         catch (Exception ex)
         {

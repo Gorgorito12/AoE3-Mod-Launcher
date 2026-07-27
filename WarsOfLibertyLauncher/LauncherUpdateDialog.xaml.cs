@@ -124,16 +124,8 @@ public partial class LauncherUpdateDialog : Window
         var shortfall = DiskSpaceService.Check(
             LauncherUpdateService.GetPendingUpdatePath(), _update.DownloadSize * 2,
             tempPath: null, tempRequired: 0);
-        if (shortfall != null)
-        {
-            var body = Strings.Format("DiskSpaceConfirmDownloadBody",
-                DiskSpaceService.FormatBytes(shortfall.RequiredBytes),
-                DiskSpaceService.FormatBytes(shortfall.FreeBytes),
-                shortfall.Drive);
-            if (MessageBox.Show(this, body, Strings.Get("DiskSpaceConfirmTitle"),
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-                return;
-        }
+        if (!DiskSpacePrompt.ConfirmOrCancel(this, shortfall, "DiskSpaceConfirmDownloadBody"))
+            return;
 
         _phase = Phase.Downloading;
         ActionButton.IsEnabled = false;

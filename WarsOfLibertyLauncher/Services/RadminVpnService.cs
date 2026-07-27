@@ -497,9 +497,17 @@ public static class RadminVpnService
     /// on any failure — caller should fall back to opening the browser
     /// download page so the user can install manually.
     /// </returns>
+    /// <param name="confirmSpace">
+    /// Called with the MSI's size once the response headers arrive and BEFORE any of it is
+    /// written, so the caller can check free space and ask the user. Returning false aborts and
+    /// this method returns false — which lands on the documented "fall back to the browser
+    /// download page" path, exactly where someone who cancelled for lack of space should end up.
+    /// Optional; null skips the check.
+    /// </param>
     public static async Task<bool> InstallSilentAsync(
         IProgress<int>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<long, bool>? confirmSpace = null)
     {
         var tmpPath = Path.Combine(Path.GetTempPath(), "RadminVPN_setup.msi");
         try
@@ -514,6 +522,15 @@ public static class RadminVpnService
                     ct);
                 resp.EnsureSuccessStatusCode();
                 var total = resp.Content.Headers.ContentLength ?? 0L;
+
+                // The size was already being read here to drive the progress bar; comparing it
+                // against free space costs nothing extra. No Content-Length (0) means unknown,
+                // and unknown never warns.
+                if (confirmSpace != null && !confirmSpace(total))
+                {
+                    DiagnosticLog.Write("RadminVpnService.InstallSilentAsync: cancelled — not enough disk space.");
+                    return false;
+                }
 
                 await using var fs = File.Create(tmpPath);
                 await using var stream = await resp.Content.ReadAsStreamAsync(ct);

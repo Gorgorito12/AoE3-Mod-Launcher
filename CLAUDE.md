@@ -3723,9 +3723,10 @@ engine** and the UI binds to it.
    ConfirmInstallBody,ConfirmRepairBody,ConfirmDownloadBody}`. Load-bearing: the estimate
    is deliberately conservative (exact clone + fixed slack), unknown free space never
    warns, and it NEVER blocks — it's a protective heads-up for low-space users.
-   **The other three download paths are covered too, and the shared decision lives in
-   `DiskSpaceService.Check(destPath, destRequired, tempPath, tempRequired)` — the reason
-   it exists as ONE function is the same-volume case.** When both paths resolve to the
+   **EVERY download the launcher makes is now covered — seven sites — and the shared decision
+   lives in `DiskSpaceService.Check(destPath, destRequired, tempPath, tempRequired)`, with the
+   shared PROMPT in `Controls/DiskSpacePrompt.ConfirmOrCancel`. The reason `Check` exists as ONE
+   function is the same-volume case.** When both paths resolve to the
    same volume root the two requirements are **ADDED**, not compared separately: two
    independent checks each pass on a drive with 4 GB free and 3 GB needed on each side,
    and the operation still fills the disk — which is exactly what the two hand-rolled
@@ -3748,10 +3749,43 @@ engine** and the UI binds to it.
    (`LauncherUpdateDialog`, before the download) against a THIRD volume nothing else
    looks at — the one holding the running `.exe`, via the new public
    `LauncherUpdateService.GetPendingUpdatePath()`; size exact (GitHub reports it) and
-   **doubled**, since the new binary sits beside the old one until the swap. Deliberately
-   NOT covered (small enough that a failure is an error message, not a half-filled disk):
-   `DeltaPatchService`, translations, addons, and the Radmin installer — that last is the
-   biggest of the four and would be next.
+   **doubled**, since the new binary sits beside the old one until the swap. (4) **The
+   GitHubReleases DELTA patch** — see the paragraph below, it was a BUG not a gap. (5) **The
+   Radmin MSI** (`RadminVpnService.InstallSilentAsync`) — it already read `ContentLength` to
+   drive its progress bar and never compared it to anything; returning false from its
+   `confirmSpace` lands on the documented "fall back to the browser download page", which is
+   where someone who cancelled for lack of space should end up. (6) **Translations**
+   (`TranslationApplyDialog`) — `%TEMP%` once, install TWICE (extracted into
+   `translations\<id>\` AND copied over `data\`). (7) **Addons** (`HeavenDownloader`, checked at
+   the `ResponseHeadersRead` point before the body is pulled) — `AppPaths.DataDir` for the
+   archive + NSIS unpack, install for the extracted files + their `_originals` backups.
+   **Two rules the four new sites share:** a size of 0 (no `Content-Length`, or the
+   translation registry's folder path which hard-codes `Size = 0`) means unmeasurable and
+   **never warns** — the same `IsShort` rule, needing no special case because `Check` already
+   returns null for `required <= 0`; and declining is the USER's choice, so it must not be
+   reported as a failure (the addon path needed its own `catch (OperationCanceledException)` →
+   neutral `AddonCancelled`, or the generic handler painted it red).
+   **The delta patch was a genuine HOLE, not a missing nicety, and the shape is worth
+   remembering.** `RepairInstallAsync` calls `ConfirmRepairSpaceOk` only inside its
+   `if (!deltaApplied)` branch, so a delta that SUCCEEDED downloaded, backed up and extracted
+   with the space check never having run — the guard existed and the code simply walked past
+   it. The fix can't live at the call site: the download is INSIDE
+   `DeltaPatchService.TryPrepareAsync`, so a caller-side check could only run after the bytes
+   were already written. Hence the `confirmSpace` callback, invoked once `payloadAsset` resolves
+   (its `.Size` was always there and simply unused, so this costs no extra request) and BEFORE
+   the download. **Declining THROWS `OperationCanceledException` rather than returning false**:
+   returning false means "no usable delta" and would fall through to the FULL path, which needs
+   MORE room — offering that to someone who just declined for lack of space is nonsense.
+   It is also **the one requirement here that is an estimate**: the descriptor records per-file
+   hashes but no size, so only the compressed figure is known, hence the documented
+   `DeltaTempFactor` (3) / `DeltaInstallFactor` (2) — temp is charged more because it holds the
+   zip AND the rollback backup while the install only receives the extracted result. A `size`
+   field in the descriptor would make it exact. `DiskSpaceServiceTests` pins that every factor
+   is **> 0**, because a 0 makes `required` zero, which `Check` reads as "nothing to check" and
+   silently disables that flow's warning with a green build and no visible symptom.
+   Still deliberately NOT covered: `upd_backup_<id>` (`UpdateService`) is written INSIDE the
+   install folder and its size isn't measured — `ConfirmUpdateSpaceOk` approximates it with the
+   compressed download size, a refinement of an existing check rather than a gap.
    **Uninstall is a blanket recursive delete** of the install folder, gated only
    by a probe/manifest check that it looks like a mod install — it ignores the
    manifest's file list and has **no per-file base-game protection**. AoE3 base

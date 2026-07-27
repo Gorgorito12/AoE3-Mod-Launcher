@@ -242,6 +242,17 @@ public partial class TranslationApplyDialog : Window
         ProgressPercentText.Text = "";
         ProgressBytesText.Text = "";
 
+        // Room for it? The pack lands in %TEMP% once and in the install TWICE — extracted into
+        // translations\<id>\ and then copied over data\. A pack discovered through the repo's
+        // folder listing reports Size = 0 (the registry hard-codes it there), which Check reads
+        // as unmeasurable and stays quiet about, exactly like every other unknown here.
+        var spaceShortfall = DiskSpaceService.Check(
+            _translationService.TranslationsRoot,
+            Math.Max(0, _entry.Size) * DiskSpaceService.TranslationInstallFactor,
+            Path.GetTempPath(), Math.Max(0, _entry.Size));
+        if (!DiskSpacePrompt.ConfirmOrCancel(this, spaceShortfall, "DiskSpaceConfirmDownloadBody"))
+            throw new OperationCanceledException();
+
         // Download to a temp file
         var tempZip = Path.Combine(Path.GetTempPath(),
             $"wol-translation-{_entry.Id}-{Guid.NewGuid():N}.zip");
