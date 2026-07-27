@@ -162,18 +162,18 @@ if ($Version) {
 # nothing in this script's output hinted at it. The commit ends up embedded in
 # InformationalVersion, so this is just surfacing it before the upload instead
 # of after.
+#
+# Captured here but REPORTED in the summary at the end. A warning printed before
+# `dotnet publish` scrolls away behind a hundred lines of build output, and the
+# moment that matters is when you are copying the SHA-256 out of the summary —
+# so that is where it has to be visible.
+$srcBranch = $null; $srcCommit = $null; $srcDirty = $false
 try {
-    $branch = (& git rev-parse --abbrev-ref HEAD 2>$null)
-    $commit = (& git rev-parse --short HEAD 2>$null)
-    $dirty = (& git status --porcelain 2>$null)
-    if ($branch) {
-        Write-Host "Source: branch '$branch' at $commit" -ForegroundColor DarkGray
-        if ($branch -ne 'main') {
-            Write-Warning "Building from '$branch', not 'main' — make sure that is deliberate."
-        }
-        if ($dirty) {
-            Write-Warning 'Working tree has uncommitted changes; the build will include them.'
-        }
+    $srcBranch = (& git rev-parse --abbrev-ref HEAD 2>$null)
+    $srcCommit = (& git rev-parse --short HEAD 2>$null)
+    $srcDirty = [bool](& git status --porcelain 2>$null)
+    if ($srcBranch) {
+        Write-Host "Source: branch '$srcBranch' at $srcCommit" -ForegroundColor DarkGray
     }
 } catch {
     # Not a git checkout, or no git on PATH — the build itself doesn't need it.
@@ -273,7 +273,23 @@ Write-Host "  Signature: $($sig.Status)"
 if ($sig.SignerCertificate) {
     Write-Host "  Signer:    $($sig.SignerCertificate.Subject)"
 }
+if ($srcBranch) {
+    Write-Host "  Source:    branch '$srcBranch' at $srcCommit"
+}
 Write-Host ''
+
+# The two ways a build can still be publishable-looking but wrong. Both are shown
+# HERE, beside the SHA-256 you are about to copy, because that is the last moment
+# before the file gets uploaded.
+if ($srcBranch -and $srcBranch -ne 'main') {
+    Write-Warning "Built from '$srcBranch', not 'main'. v1.0.11 shipped this way and was missing half the release."
+}
+if ($srcDirty) {
+    Write-Warning 'Working tree had uncommitted changes, so this build includes work that is not in any commit.'
+}
+if (-not $VersionFull) {
+    Write-Warning "No -Version passed, so this is stamped '$fileVersion' from the .csproj. A release needs -Version, or the self-updater misreads which version this is."
+}
 
 # An UNSIGNED build must not reach a release. The launcher's self-update refuses
 # any update whose Authenticode signer doesn't match the running binary's, so

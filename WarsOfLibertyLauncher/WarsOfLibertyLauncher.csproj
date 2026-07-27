@@ -22,7 +22,7 @@
     -->
     <AssemblyName>Aoe3ModLauncher</AssemblyName>
     <RootNamespace>WarsOfLibertyLauncher</RootNamespace>
-    <Version>1.0.10</Version>
+    <Version>1.0.12</Version>
     <Authors>Gorgorito</Authors>
     <Company>Gorgorito</Company>
     <!-- Icon embedded in the .exe — shows in Explorer, taskbar, Alt+Tab,
