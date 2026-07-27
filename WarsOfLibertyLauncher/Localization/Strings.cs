@@ -2044,7 +2044,7 @@ public static class Strings
         ["PublishFieldInstallTypeHint"] = new()
         {
             [LangEn] = "Pick how your mod behaves — this decides whether it opens correctly. Not sure? Test UHC: copy your game folder somewhere else and run the .exe; if it opens, it has UHC (first option). See MODDING.md §4.",
-            [LangEs] = "Elegí cómo se comporta tu mod — esto decide si abre bien. ¿No sabés? Probá UHC: copiá la carpeta del juego a otro lado y corré el .exe; si abre, tiene UHC (primera opción). Mirá MODDING.md §4.",
+            [LangEs] = "Elige cómo se comporta tu mod — esto decide si abre bien. ¿No sabes? Prueba UHC: copia la carpeta del juego a otro lado y ejecuta el .exe; si abre, tiene UHC (primera opción). Mira MODDING.md §4.",
         },
         ["PublishInstallOptUhc"] = new()
         {
@@ -2058,8 +2058,8 @@ public static class Strings
         },
         ["PublishInstallOptReplace"] = new()
         {
-            [LangEn] = "Replaces AoE3 using the stock age3y.exe (needs the setuppath junction)",
-            [LangEs] = "Reemplaza el AoE3 usando el age3y.exe stock (necesita el junction de setuppath)",
+            [LangEn] = "Replaces AoE3 using the stock age3y.exe (gets its own registry entry)",
+            [LangEs] = "Reemplaza el AoE3 usando el age3y.exe stock (recibe su propia clave de registro)",
         },
         ["PublishFieldDefaultFolder"] = new() { [LangEn] = "Default install folder", [LangEs] = "Carpeta de instalación por defecto" },
         ["PublishFieldDefaultFolderHint"] = new()

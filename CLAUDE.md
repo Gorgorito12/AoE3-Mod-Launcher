@@ -2608,6 +2608,44 @@ Two cheap gates beyond a green build:
   rather than a partial document: this runs moments before the game starts, and the worst outcome
   would be a profile the game can no longer read.
 
+- **WHICH `My Games` folder belongs to a mod is resolved by
+  `UserDataService.ResolveFolderName(profile, config)` — the single source of truth.
+  Never read `ModProfile.UserDataFolder` raw; that is what made three features
+  invisible for most mods.** `userDataFolder` is a catalog field the mod's AUTHOR has
+  to declare, and most don't: of the five shipped mods only WoL, Napoleonic Era and
+  Struggle of Indonesia do. Improvement Mod never did, yet
+  `Documents\My Games\AoE3 Improvement Mod` exists on every player's disk — so
+  `ModPropertiesDialog.LoadGameSettings` collapsed its whole "Game settings" block,
+  it could never appear as an import SOURCE for another mod
+  (`GameSettingsStore.CanImportFrom` requires a folder), user-data backup/restore was
+  inert, and `DiagnosticLog`'s bundle collected none of the game artifacts that make
+  an OOS report diagnosable. The bug reads as "the feature was lost".
+  **Order: declared → remembered (`ModState.UserDataFolder`) → discovered by name →
+  learned from a launch.** Discovery (`MatchUserDataFolder`, pure + pinned by
+  `UserDataDiscoveryTests`) normalizes both names (lowercase, alphanumerics only, a
+  leading `aoe3`/`ageofempires3` dropped) and accepts an exact match or a folder that
+  STARTS WITH the mod's name — which is what resolves `AoE3 Improvement Mod` →
+  *Improvement Mod* and `Napoleonic Era Beta 2` → *Napoleonic Era*.
+  **Three guards, and they are the point.** Choosing wrong writes one mod's
+  graphics/hotkeys into ANOTHER mod's profile — silent, and not something a player
+  could diagnose: (1) never the vanilla `Age of Empires 3` folder; (2) never a folder
+  another profile already claims (`ClaimedFolderNames`) — one folder, one mod;
+  (3) it must actually look like AoE3 data (`Users3\`, which is also the file the
+  settings feature reads). **Ambiguity returns null on purpose** — no answer leaves
+  the UI offering the section with nothing selected, which the user can fix, while a
+  wrong answer corrupts another mod's settings. The rejection tests are the ones that
+  matter, same philosophy as `SafeUrlTests`.
+  **`MainWindow.LearnUserDataFolderFromLaunch` is what covers mods that don't exist
+  yet**: on game exit, a mod still without a folder adopts the one written during the
+  session — the game just told us, so no name heuristic is needed. It takes
+  `launchedAtUtc` as a PARAMETER because `OnGameExited` clears `_gameStartedUtc` a few
+  lines above the call (the same "decide before clearing the launch bookkeeping" rule
+  the instant-exit detection follows); reading the field would make it always no-op.
+  It skips `UserDataRedirect` mods, where the standard folder is junctioned at the
+  mod's and the answer would be the junction rather than the destination.
+  **Declaring `userDataFolder` in the catalog is still the exact, guess-free path and
+  stays authoritative — the launcher just no longer DEPENDS on it.**
+
 - **User-data paths are DUAL-ROOT: the system Documents folder can be
   redirected (OneDrive Known Folder Move / moved to another drive) and the
   game's saves may live in EITHER root — don't collapse the resolution back
