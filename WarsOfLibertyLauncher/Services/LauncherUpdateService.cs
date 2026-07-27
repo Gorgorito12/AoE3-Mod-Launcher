@@ -400,6 +400,18 @@ public class LauncherUpdateService
         });
     }
 
+    /// <summary>
+    /// Where the downloaded update will land — beside the running executable. Public so the
+    /// dialog can check the free space of THAT volume before starting: it is a third disk
+    /// nothing else in the launcher looks at (neither the game's nor <c>%TEMP%</c>'s). Null when
+    /// the executable path is unknown, which the caller reads as "can't measure, don't warn".
+    /// </summary>
+    public static string? GetPendingUpdatePath()
+    {
+        var currentExe = Environment.ProcessPath;
+        return string.IsNullOrEmpty(currentExe) ? null : GetPendingUpdatePath(currentExe);
+    }
+
     private static string GetPendingUpdatePath(string currentExe)
     {
         var dir = Path.GetDirectoryName(currentExe)!;

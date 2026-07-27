@@ -722,9 +722,23 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   that its column has no cap. **ROOM and HOST cells are
   `Grid{Auto,*}` (disc in col0, text in col1), NOT horizontal StackPanels** — a
   horizontal StackPanel measures children with infinite width so wrap/ellipsis
-  never fire; the text must live in a bounded `*` column. **Keep the header strip
-  and the `BuildRoomCard` column defs in lockstep (7 each), and don't revert
-  either to fixed px.** Left inset is now **30px** (ScrollViewer pad 16 + row
+  never fire; the text must live in a bounded `*` column.
+  **The seven columns now live ONCE, in `Services/RoomsTableLayout.All`, which both the header
+  strip and `BuildRoomCard` read — the old "keep the two lists in lockstep" comment is gone
+  because the two lists are gone. Don't re-add literal `ColumnDefinition`s to either side, and
+  don't revert to fixed px.** `RoomsTableLayout.Resolve(width)` also DROPS columns as the card
+  narrows — ping → host → mod, never Room/Players/Action — and `Hidden(resolved)` tells
+  `BuildRoomCard` which values to fold into the room's sub-line instead, so nothing is lost at
+  any width. `ApplyRoomColumns` (hooked to `RoomsHeaderStrip.SizeChanged`) re-renders **only
+  when the resolved SET changes**, not per resize tick, or dragging the window edge rebuilds
+  every row per pixel. Pinned by `RoomsTableLayoutTests`.
+  **Every cell must stay BOUNDED, and this is not cosmetic.** The header labels (label + sort
+  arrow), the mod chip, the ping bars and the status badge were all horizontal StackPanels, so
+  their `TextTrimming` never fired and they drew straight over the next column — visible at a
+  1355 px window, not just a small one, and much worse in Spanish (`JUGADORES` vs `PLAYERS`,
+  `ANFITRIÓN` vs `HOST`). They are now `Grid [*][Auto]` (text in the star column) or wrapped by
+  `WrapCell`, and the header grid + each row grid set `ClipToBounds` as a backstop. If you add a
+  cell, don't put text straight into a horizontal StackPanel. Left inset is now **30px** (ScrollViewer pad 16 + row
   padding 14; the flat row has no side border) — the header strip (wrapped in a
   subtle `#141C2C` band Border with a bottom `MpDivider` divider) has a `30,7,30,7`
   margin that matches it. **Header columns 0–5 are clickable SORT buttons**

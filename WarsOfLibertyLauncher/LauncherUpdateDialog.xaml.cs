@@ -116,7 +116,25 @@ public partial class LauncherUpdateDialog : Window
             return;
         }
 
-        // Idle → start the download
+        // Idle → start the download. Check the room for it first: this lands beside the running
+        // executable, which is a THIRD volume nothing else in the launcher looks at — neither the
+        // install drive nor %TEMP%. The size is exact (GitHub reports it with the release), and
+        // it is doubled because the new exe sits next to the old one until the swap. Warn-but-
+        // allow, like every other disk-space check.
+        var shortfall = DiskSpaceService.Check(
+            LauncherUpdateService.GetPendingUpdatePath(), _update.DownloadSize * 2,
+            tempPath: null, tempRequired: 0);
+        if (shortfall != null)
+        {
+            var body = Strings.Format("DiskSpaceConfirmDownloadBody",
+                DiskSpaceService.FormatBytes(shortfall.RequiredBytes),
+                DiskSpaceService.FormatBytes(shortfall.FreeBytes),
+                shortfall.Drive);
+            if (MessageBox.Show(this, body, Strings.Get("DiskSpaceConfirmTitle"),
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+        }
+
         _phase = Phase.Downloading;
         ActionButton.IsEnabled = false;
         ProgressLabelText.Text = Strings.Get("DlgLauncherUpdateDownloading");

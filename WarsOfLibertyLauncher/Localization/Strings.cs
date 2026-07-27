@@ -3234,6 +3234,125 @@ public static class Strings
             [LangEn] = "Not now",
             [LangEs] = "Ahora no",
         },
+        // CompatibilityLayerDialog — shown when a launch needed elevation because Windows
+        // pinned a compatibility layer on the game .exe. The copy has to make two things
+        // clear, because both were reported as "the launcher broke my game": WINDOWS did
+        // this, not us; and it is reversible.
+        ["DlgCompatLayerTitle"] = new()
+        {
+            [LangEn] = "Windows is forcing administrator on your game",
+            [LangEs] = "Windows está forzando el modo administrador en tu juego",
+        },
+        ["DlgCompatLayerBody"] = new()
+        {
+            [LangEn] = "Windows set a compatibility mode on your game by itself, and that is what makes it "
+                     + "ask for administrator permission every time you open it. It also stops the launcher "
+                     + "from keeping the game running when the launcher is force-closed.\n\n"
+                     + "The launcher can remove it. This only affects this one file, only for your user "
+                     + "account, and you can turn it back on anytime from the file's Properties → "
+                     + "Compatibility if the game starts misbehaving.",
+            [LangEs] = "Windows le puso un modo de compatibilidad a tu juego por su cuenta, y eso es lo que "
+                     + "hace que pida permisos de administrador cada vez que lo abres. Además impide que el "
+                     + "launcher mantenga el juego abierto si cierras el launcher a la fuerza.\n\n"
+                     + "El launcher lo puede quitar. Solo afecta a este archivo, solo para tu usuario, y lo "
+                     + "puedes volver a activar cuando quieras desde Propiedades → Compatibilidad del archivo "
+                     + "si el juego te empieza a fallar.",
+        },
+        // Variant for a layer the USER set on purpose (no "~" marker, or machine-wide):
+        // it is their choice, so we explain and point at Properties instead of offering
+        // to undo it.
+        ["DlgCompatLayerBodyManual"] = new()
+        {
+            [LangEn] = "Your game has a compatibility mode set, and that is what makes it ask for "
+                     + "administrator permission every time you open it. It also stops the launcher from "
+                     + "keeping the game running when the launcher is force-closed.\n\n"
+                     + "This one wasn't set by Windows, so the launcher won't touch it. You can review it "
+                     + "in the file's Properties → Compatibility.",
+            [LangEs] = "Tu juego tiene puesto un modo de compatibilidad, y eso es lo que hace que pida "
+                     + "permisos de administrador cada vez que lo abres. Además impide que el launcher "
+                     + "mantenga el juego abierto si cierras el launcher a la fuerza.\n\n"
+                     + "Este no lo puso Windows, así que el launcher no lo va a tocar. Lo puedes revisar en "
+                     + "Propiedades → Compatibilidad del archivo.",
+        },
+        ["DlgCompatLayerFileLabel"] = new()
+        {
+            [LangEn] = "Affected file",
+            [LangEs] = "Archivo afectado",
+        },
+        ["DlgCompatLayerRemove"] = new()
+        {
+            [LangEn] = "Remove it",
+            [LangEs] = "Quitarlo",
+        },
+        ["DlgCompatLayerProperties"] = new()
+        {
+            [LangEn] = "Open file properties",
+            [LangEs] = "Abrir propiedades del archivo",
+        },
+        ["DlgCompatLayerLater"] = new()
+        {
+            [LangEn] = "Not now",
+            [LangEs] = "Ahora no",
+        },
+        ["DlgCompatLayerDontAsk"] = new()
+        {
+            [LangEn] = "Don't show this again",
+            [LangEs] = "No volver a mostrar esto",
+        },
+        ["StatusCompatLayerRemoved"] = new()
+        {
+            [LangEn] = "Compatibility mode removed. The next launch shouldn't ask for administrator.",
+            [LangEs] = "Modo de compatibilidad quitado. El próximo lanzamiento no debería pedir administrador.",
+        },
+        ["StatusCompatLayerRemoveFailed"] = new()
+        {
+            [LangEn] = "Couldn't remove the compatibility mode. You can do it from the file's Properties → Compatibility.",
+            [LangEs] = "No se pudo quitar el modo de compatibilidad. Lo puedes hacer desde Propiedades → Compatibilidad del archivo.",
+        },
+        // Declining the UAC prompt is a decision, not a failure — it gets a neutral status
+        // line instead of the red framework error dialog it used to produce.
+        ["StatusGameLaunchCancelled"] = new()
+        {
+            [LangEn] = "Launch cancelled — you declined the Windows permission prompt.",
+            [LangEs] = "Lanzamiento cancelado: rechazaste el permiso de Windows.",
+        },
+        // A game that dies seconds after launching failed to start; it used to be
+        // indistinguishable from a normal session, so a broken install just looked like
+        // "I press play and nothing happens".
+        ["StatusGameClosedImmediately"] = new()
+        {
+            [LangEn] = "The game closed by itself",
+            [LangEs] = "El juego se cerró solo",
+        },
+        // Refusing a destination that is the user's actual AoE3 folder. Every install
+        // stamps clonedAoe3:true, which is what Uninstall reads to decide between removing
+        // the mod's files and deleting the whole folder — so this would arm an uninstall
+        // that wipes their game.
+        ["DlgInstallInsideAoe3Title"] = new()
+        {
+            [LangEn] = "Choose a different folder",
+            [LangEs] = "Elige otra carpeta",
+        },
+        ["DlgInstallInsideAoe3Body"] = new()
+        {
+            [LangEn] = "That folder is your Age of Empires III installation:\n\n{0}\n\n"
+                     + "A mod can't be installed on top of the game itself — uninstalling it later "
+                     + "would delete your game with it. Pick a separate folder, for example one "
+                     + "next to it named after the mod.",
+            [LangEs] = "Esa carpeta es tu instalación de Age of Empires III:\n\n{0}\n\n"
+                     + "Un mod no se puede instalar encima del juego mismo: al desinstalarlo después "
+                     + "se llevaría tu juego por delante. Elige una carpeta aparte, por ejemplo una "
+                     + "al lado con el nombre del mod.",
+        },
+        ["ToastGameClosedImmediatelyBody"] = new()
+        {
+            [LangEn] = "It opened and shut down after a few seconds, so it didn't start properly. "
+                     + "That usually means files are missing: try \"Verify files\" or \"Repair\" "
+                     + "from the gear menu.",
+            [LangEs] = "Se abrió y se cerró a los pocos segundos, así que no llegó a arrancar bien. "
+                     + "Suele ser por archivos que faltan: prueba \"Verificar archivos\" o \"Reparar\" "
+                     + "desde el menú del engranaje.",
+        },
         // Careful: "closing the window keeps it running" belongs to the SEPARATE
         // close-to-tray checkbox (LauncherConfig.CloseToTray), not to this toggle.
         // This one is auto-start only; don't merge the two descriptions again.
@@ -3374,6 +3493,54 @@ public static class Strings
                      + "multijugador. Las invitaciones repetidas del mismo jugador se silencian ~60s, y cada "
                      + "aviso tiene un botón Silenciar para frenar a ese jugador durante la sesión. Desactívalo "
                      + "para rechazar todas las invitaciones.",
+        },
+        ["ModPropSettingsTitle"] = new()
+        {
+            [LangEn] = "Game settings",
+            [LangEs] = "Ajustes del juego",
+        },
+        ["ModPropSettingsDesc"] = new()
+        {
+            [LangEn] = "Copy the graphics, sound volumes and hotkeys from another mod into this one. "
+                     + "Your saved games, home cities and profile are not touched.",
+            [LangEs] = "Copia los gráficos, los volúmenes y los atajos de otro mod a este. Tus partidas "
+                     + "guardadas, tus metrópolis y tu perfil no se tocan.",
+        },
+        ["ModPropSettingsNoSources"] = new()
+        {
+            [LangEn] = "There is no other mod installed to copy settings from yet.",
+            [LangEs] = "Todavía no hay otro mod instalado del que copiar los ajustes.",
+        },
+        ["ModPropSettingsImportBtn"] = new()
+        {
+            [LangEn] = "Import",
+            [LangEs] = "Importar",
+        },
+        ["ModPropSettingsImported"] = new()
+        {
+            [LangEn] = "✔ Graphics, sound and hotkeys copied from {0}.",
+            [LangEs] = "✔ Gráficos, sonido y atajos copiados de {0}.",
+        },
+        ["ModPropSettingsImportFailed"] = new()
+        {
+            [LangEn] = "Nothing was copied — the settings couldn't be read. This mod is unchanged.",
+            [LangEs] = "No se copió nada — no se pudieron leer los ajustes. Este mod queda igual.",
+        },
+        ["ModPropSettingsShare"] = new()
+        {
+            [LangEn] = "Share this mod's settings with the others",
+            [LangEs] = "Compartir los ajustes de este mod con los demás",
+        },
+        ["ModPropSettingsShareHint"] = new()
+        {
+            [LangEn] = "Every mod with this ticked keeps the same graphics, sound and hotkeys: change "
+                     + "them while playing any of them and the rest pick them up. A mod without it is "
+                     + "left alone. The first time this writes, the mod's original settings are saved "
+                     + "beside their file.",
+            [LangEs] = "Todos los mods con esto marcado mantienen los mismos gráficos, sonido y atajos: "
+                     + "los cambias jugando a cualquiera de ellos y el resto los adopta. Un mod sin "
+                     + "marcar no se toca. La primera vez que se escribe, los ajustes originales del mod "
+                     + "se guardan junto a su archivo.",
         },
         ["DlgLauncherSettingsSectionPrivacy"] = new()
         {
@@ -4646,6 +4813,16 @@ public static class Strings
             [LangEn] = "Low space: about {0} needed, only {1} free on {2}.",
             [LangEs] = "Poco espacio: se necesitan ~{0}, solo hay {1} en {2}.",
         },
+        // {0} = required, {1} = free, {2} = drive. Generic body for any download that can
+        // fill a disk; DiskSpaceConfirmInstallBody takes no arguments and so cannot name
+        // the drive, which matters when the short one is not the one the user was looking at.
+        ["DiskSpaceConfirmDownloadBody"] = new()
+        {
+            [LangEn] = "This download needs about {0} of free space, but only {1} is free on {2}. "
+                     + "It can fail part-way if the drive fills up. Continue anyway?",
+            [LangEs] = "Esta descarga necesita unos {0} libres, pero solo hay {1} en {2}. Puede fallar "
+                     + "a la mitad si el disco se llena. ¿Continuar igual?",
+        },
         ["DiskSpaceConfirmTitle"] = new()
         {
             [LangEn] = "Low disk space",
@@ -4890,6 +5067,26 @@ public static class Strings
         {
             [LangEn] = "The Age of Empires III base game wasn't copied, so the mod can't run. Your AoE3 install may be missing, in an unexpected location, or excluded by another mod's path. The mod was NOT installed — check your AoE3 install and try again.",
             [LangEs] = "No se copió el juego base de Age of Empires III, así que el mod no puede ejecutarse. Tu instalación de AoE3 podría faltar, estar en una ubicación inesperada o quedar excluida por la ruta de otro mod. El mod NO se instaló — revisa tu instalación de AoE3 e inténtalo de nuevo.",
+        },
+        ["StatusGameStillRunning"] = new()
+        {
+            [LangEn] = "The game couldn't be closed, so nothing was changed — it may be running with administrator rights. Close it yourself and try again.",
+            [LangEs] = "No se pudo cerrar el juego, así que no se cambió nada — puede estar ejecutándose como administrador. Ciérralo tú e inténtalo de nuevo.",
+        },
+        ["StatusInstallSetupPathBadName"] = new()
+        {
+            [LangEn] = "This mod's name can't be used for the registry entry it needs: it has to be plain ASCII, without \"\\\", and at most {0} characters. Nothing was installed — the mod's author has to shorten it in the catalogue.",
+            [LangEs] = "El nombre de este mod no sirve para la entrada del registro que necesita: tiene que ser ASCII simple, sin «\\», y de {0} caracteres como máximo. No se instaló nada — quien publica el mod tiene que acortarlo en el catálogo.",
+        },
+        ["StatusPrivateKeyNeedsAdmin"] = new()
+        {
+            [LangEn] = "This mod needs a registry entry of its own so it loads its files instead of the base game's, and creating it needs administrator rights. Close the launcher and run it as administrator, then try again.",
+            [LangEs] = "Este mod necesita una entrada propia en el registro para cargar sus archivos y no los del juego base, y crearla requiere permisos de administrador. Cierra el launcher, ábrelo como administrador e inténtalo de nuevo.",
+        },
+        ["StatusInstallSetupPathFailed"] = new()
+        {
+            [LangEn] = "This mod needs its own copy of {0} adjusted so it loads its files instead of the base game's, but that executable isn't one the launcher recognises. The mod was NOT installed — it would have run showing plain Age of Empires III content.",
+            [LangEs] = "Este mod necesita que se ajuste su propia copia de {0} para que cargue sus archivos y no los del juego base, pero ese ejecutable no es uno que el launcher reconozca. El mod NO se instaló — habría arrancado mostrando el contenido normal de Age of Empires III.",
         },
         // Short on purpose: this lands in the status bar and the progress error
         // line. The paths, the how-to and the copy button live in

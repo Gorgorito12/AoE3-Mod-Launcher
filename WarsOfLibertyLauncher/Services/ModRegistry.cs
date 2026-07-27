@@ -546,6 +546,16 @@ public static class ModRegistry
         var installType = ParseInstallType(m.Install.Type);
         var updateMechanism = ParseUpdateMechanism(m.Update.Mechanism);
 
+        // privateSetupPath rewrites the executable inside the install folder. For anything but a
+        // launcher-made clone that folder is the player's own Age of Empires III, so the flag is
+        // dropped rather than trusted — a catalogue typo must not be able to reach the patcher.
+        // NativeInstallService refuses the same combination; this is the outer of the two.
+        var privateSetupPath = m.Install.PrivateSetupPath && installType == ModInstallType.IsolatedFolder;
+        if (m.Install.PrivateSetupPath && !privateSetupPath)
+            DiagnosticLog.Write(
+                $"ModRegistry: '{m.Id}' declares privateSetupPath with install.type={m.Install.Type} — " +
+                "ignoring it (only IsolatedFolder may be patched).");
+
         var profile = new ModProfile
         {
             Id = m.Id,
@@ -580,6 +590,7 @@ public static class ModRegistry
             MultiplayerProbeFiles = m.Install.MultiplayerProbeFiles ?? new(),
             UserDataRedirect = m.Install.UserDataRedirect,
             SetupPathRedirect = m.Install.SetupPathRedirect,
+            PrivateSetupPath = privateSetupPath,
             UpdateMechanism = updateMechanism,
         };
 

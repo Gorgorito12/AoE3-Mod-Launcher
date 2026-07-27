@@ -562,14 +562,17 @@
                                     Background="#0C1626"
                                     BorderBrush="{DynamicResource MpDivider}"
                                     BorderThickness="0,0,0,1">
-                            <Grid x:Name="RoomsHeaderStrip" Margin="30,7,30,7">
-                                <!-- Proportional, NO MaxWidth: on a wide window
-                                     every column grows together so the "air"
-                                     distributes evenly (symmetric) instead of
-                                     ROOM absorbing all slack. Low MinWidths so
-                                     the 7 columns still fit a small window with
-                                     the ACTION button visible. Keep IDENTICAL to
-                                     BuildRoomCard (lockstep). -->
+                            <!-- ClipToBounds: a Grid cell does NOT clip, so without this a
+                                 header that outgrows its share draws straight over the next
+                                 column instead of being cut. Belt and braces behind the
+                                 bounded layouts below. -->
+                            <Grid x:Name="RoomsHeaderStrip" Margin="30,7,30,7" ClipToBounds="True">
+                                <!-- The columns are built at runtime from
+                                     Services/RoomsTableLayout.All, which BuildRoomCard reads
+                                     too — one list, so the header and the rows cannot drift
+                                     apart and misalign the table. These seven are only the
+                                     design-time placeholder so the strip looks right in the
+                                     designer; ApplyRoomColumns replaces them. -->
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="2.3*" MinWidth="120"/>
                                     <ColumnDefinition Width="1.05*" MinWidth="58"/>
@@ -579,41 +582,52 @@
                                     <ColumnDefinition Width="0.9*" MinWidth="60"/>
                                     <ColumnDefinition Width="0.95*" MinWidth="100"/>
                                 </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0" Style="{StaticResource MpColHeaderButton}" Tag="Room" Click="RoomHeader_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="ColHeaderRoom" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                <!-- Label in the * column, sort arrow in Auto. These used to be
+                                     a horizontal StackPanel, which measures its children with
+                                     INFINITE width — so the CharacterEllipsis below never fired
+                                     and a long label (Spanish JUGADORES, ANFITRIÓN) overflowed
+                                     onto the next column instead of being trimmed. -->
+                                <Button x:Name="ColButtonRoom" Grid.Column="0" Style="{StaticResource MpColHeaderButton}" Tag="Room" Click="RoomHeader_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </Button>
-                                <Button Grid.Column="1" Style="{StaticResource MpColHeaderButton}" Tag="Mod" Click="RoomHeader_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="ColHeaderMod" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="SortArrowMod" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                <Button x:Name="ColButtonMod" Grid.Column="1" Style="{StaticResource MpColHeaderButton}" Tag="Mod" Click="RoomHeader_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderMod" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowMod" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </Button>
-                                <Button Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Host" Click="RoomHeader_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="ColHeaderHost" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="SortArrowHost" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                <Button x:Name="ColButtonHost" Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Host" Click="RoomHeader_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderHost" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowHost" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </Button>
-                                <Button Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                <Button x:Name="ColButtonPlayers" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </Button>
-                                <Button Grid.Column="4" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="ColHeaderPing" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                <Button x:Name="ColButtonPing" Grid.Column="4" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPing" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </Button>
-                                <Button Grid.Column="5" Style="{StaticResource MpColHeaderButton}" Tag="Status" Click="RoomHeader_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="ColHeaderStatus" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="SortArrowStatus" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                <Button x:Name="ColButtonStatus" Grid.Column="5" Style="{StaticResource MpColHeaderButton}" Tag="Status" Click="RoomHeader_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderStatus" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowStatus" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid>
                                 </Button>
                                 <TextBlock Grid.Column="6" x:Name="ColHeaderAction"
                                            Foreground="{DynamicResource MpTableHeader}"

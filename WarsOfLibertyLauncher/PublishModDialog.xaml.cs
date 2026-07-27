@@ -103,7 +103,7 @@ public partial class PublishModDialog : Window
     public string LblInstallTypeText { get => LblInstallType.Text; set => LblInstallType.Text = value; }
     public string HintInstallTypeText { get => HintInstallType.Text; set => HintInstallType.Text = value; }
     // Plain-language install options (Content localized by the opener). The Tag on
-    // each item (set in XAML) is what maps to install.type / setupPathRedirect.
+    // each item (set in XAML) is what maps to install.type / privateSetupPath.
     public string InstallOptUhcText { set => InstallOptUhc.Content = value; }
     public string InstallOptAdditiveText { set => InstallOptAdditive.Content = value; }
     public string InstallOptReplaceText { set => InstallOptReplace.Content = value; }
@@ -425,13 +425,13 @@ public partial class PublishModDialog : Window
         // install.*  (nested under "install")
         public string InstallType { get; init; } = "IsolatedFolder";
         /// <summary>
-        /// When true, emits <c>install.setupPathRedirect: true</c> — for a total
+        /// When true, emits <c>install.privateSetupPath: true</c> — for a total
         /// conversion that ships the STOCK <c>age3y.exe</c> (no UHC) and replaces
-        /// base game data, so the launcher junctions the registry setuppath folder
-        /// at the mod's clone folder around launch. Only meaningful with
+        /// base game data, so the launcher points the player's own copy of the exe
+        /// at a registry key of the mod's own at install time. Only meaningful with
         /// <c>InstallType = "IsolatedFolder"</c>. See MODDING.md §4.
         /// </summary>
-        public bool SetupPathRedirect { get; init; }
+        public bool PrivateSetupPath { get; init; }
         public string? DefaultFolder { get; init; }
         public string? ProbeFile { get; init; }
         public string? Marker { get; init; }
@@ -462,16 +462,16 @@ public partial class PublishModDialog : Window
 
     /// <summary>
     /// The Step-3 install-type combo carries a compound <c>Tag</c> that encodes
-    /// the install type AND, via a <c>+setupPathRedirect</c> suffix, whether the
-    /// mod needs the setuppath junction — so a modder answers ONE plain-language
+    /// the install type AND, via a <c>+privateSetupPath</c> suffix, whether the
+    /// mod needs its own registry key — so a modder answers ONE plain-language
     /// question ("how does your mod run?") instead of two technical fields.
-    /// e.g. <c>"IsolatedFolder+setupPathRedirect"</c> → IsolatedFolder + redirect.
+    /// e.g. <c>"IsolatedFolder+privateSetupPath"</c> → IsolatedFolder + private key.
     /// </summary>
     private static string InstallTypeFromTag(string? tag)
         => (string.IsNullOrWhiteSpace(tag) ? "IsolatedFolder" : tag).Split('+')[0];
 
-    private static bool SetupRedirectFromTag(string? tag)
-        => (tag ?? "").Contains("+setupPathRedirect", System.StringComparison.OrdinalIgnoreCase);
+    private static bool PrivateSetupPathFromTag(string? tag)
+        => (tag ?? "").Contains("+privateSetupPath", System.StringComparison.OrdinalIgnoreCase);
 
     public string GenerateJson() => BuildModJson(ReadFormInput());
 
@@ -490,7 +490,7 @@ public partial class PublishModDialog : Window
         DescriptionEn = FieldDescriptionEn.Text,
         DescriptionEs = FieldDescriptionEs.Text,
         InstallType = InstallTypeFromTag(SelectedTag(FieldInstallType)),
-        SetupPathRedirect = SetupRedirectFromTag(SelectedTag(FieldInstallType)),
+        PrivateSetupPath = PrivateSetupPathFromTag(SelectedTag(FieldInstallType)),
         DefaultFolder = FieldDefaultFolder.Text,
         ProbeFile = FieldProbeFile.Text,
         Marker = FieldMarker.Text,
@@ -563,8 +563,8 @@ public partial class PublishModDialog : Window
         AddIfPresent(install, "executable", input.Executable);
         AddIfPresent(install, "arguments", input.Arguments);
         // Emitted only when true (JSON stays clean, like every other optional flag).
-        // Marks a stock-exe replacement TC that needs the setuppath junction (§4).
-        if (input.SetupPathRedirect) install["setupPathRedirect"] = true;
+        // Marks a stock-exe replacement TC that needs its own registry key (§4).
+        if (input.PrivateSetupPath) install["privateSetupPath"] = true;
         AddArrayIfPresent(install, "payloadUrls", input.PayloadUrls);
         AddArrayIfPresent(install, "payloadSha256", input.PayloadSha256);
         doc["install"] = install;

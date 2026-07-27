@@ -183,6 +183,22 @@ public class ModState
     public string LastKnownLatestVersion { get; set; } = "";
 
     /// <summary>
+    /// When true, this mod shares its graphics / sound / hotkey settings with every other mod
+    /// that has this on: playing any of them updates the shared copy, and launching any of them
+    /// applies it (<see cref="Services.GameSettingsStore"/>).
+    ///
+    /// <para><b>Per MOD, not per install, and off by default.</b> Being in the group means
+    /// launching the mod rewrites part of its profile, which would silently undo a deliberate
+    /// per-mod choice — someone who lowered the graphics for a heavy mod would find them raised
+    /// again after playing another. That is precisely why the decision lives on the mod's own
+    /// settings page instead of a launcher-wide switch: the blast radius is visible from where
+    /// you turn it on. A mod without this is never read from or written to by the sync; only the
+    /// explicit "import settings from…" button touches it, and only when pressed.</para>
+    /// </summary>
+    [JsonPropertyName("syncGameSettings")]
+    public bool SyncGameSettings { get; set; } = false;
+
+    /// <summary>
     /// ETag of the last 200 response from <c>/releases/latest</c> for this mod
     /// (follow-latest GitHubReleases mods only). Sent as <c>If-None-Match</c> so
     /// an unchanged latest release is a free 304 (conditional requests don't
@@ -989,6 +1005,18 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("antivirusNoticeAcknowledged")]
     public bool AntivirusNoticeAcknowledged { get; set; } = false;
+
+    /// <summary>
+    /// The user ticked "don't show this again" on the compatibility-layer notice — the
+    /// one that appears when Windows pinned a compat mode on the game .exe, forcing a UAC
+    /// prompt on every launch (see <see cref="Services.AppCompatLayerService"/>).
+    ///
+    /// <para>Launcher-wide rather than per-mod, like the antivirus notice: the layer is a
+    /// property of the MACHINE's Windows configuration, and a player who chose to live
+    /// with the prompt for one game does not want to be asked again for the next.</para>
+    /// </summary>
+    [JsonPropertyName("compatLayerNoticeAcknowledged")]
+    public bool CompatLayerNoticeAcknowledged { get; set; } = false;
 
     /// <summary>
     /// When true, an AUTO-START launch (Windows login, recognised by the

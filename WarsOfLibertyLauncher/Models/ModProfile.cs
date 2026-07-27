@@ -588,8 +588,24 @@ public class ModProfile
     /// <see cref="Services.AoE3SetupPathRedirect"/>). Default false — only stock-exe
     /// replacement mods (e.g. Struggle of Indonesia) need it; UHC mods (WoL,
     /// Improvement Mod, ESOC) and additive-overlay mods (Napoleonic Era) do not.
+    ///
+    /// <para><b>Legacy.</b> Prefer <see cref="PrivateSetupPath"/>, which solves the same
+    /// problem without renaming the player's <c>bin\</c> while the mod runs. This is kept
+    /// so an install made by an older build still gets its folder restored.</para>
     /// </summary>
     public bool SetupPathRedirect { get; set; } = false;
+
+    /// <summary>
+    /// When true, the launcher rewrites the registry-key string inside this mod's own copy
+    /// of the stock executable at install time, so the engine resolves its content through
+    /// a key belonging to the mod instead of the base game's — and creates that key pointing
+    /// at the install folder (see <see cref="Services.SetupPathPatcher"/>).
+    ///
+    /// <para>Same purpose as <see cref="SetupPathRedirect"/> and mutually exclusive with it,
+    /// but nothing global is moved: vanilla keeps its own key and its own folder, so both
+    /// stay playable and an abrupt exit leaves nothing to restore. Default false.</para>
+    /// </summary>
+    public bool PrivateSetupPath { get; set; } = false;
 
     /// <summary>
     /// True for the launcher's built-in "stock Age of Empires III" profile.

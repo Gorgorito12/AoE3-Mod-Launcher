@@ -29,49 +29,53 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
 
-        <!-- AoE3 folder (always visible) -->
-        <TextBlock x:Name="LblAoE3Folder"
-                   FontSize="{StaticResource FontSizeCaption}"
-                   Foreground="#888"
-                   Margin="0,0,0,4"/>
+        <!-- AoE3 source — the folder to CLONE. Collapsed as a block for an in-place
+             overlay, which clones nothing: the base game is already at the destination,
+             so asking for a source there would block an install that needs none. -->
+        <StackPanel x:Name="Aoe3Row">
+            <TextBlock x:Name="LblAoE3Folder"
+                       FontSize="{StaticResource FontSizeCaption}"
+                       Foreground="#888"
+                       Margin="0,0,0,4"/>
 
-        <Grid Margin="0,0,0,4">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBox x:Name="Aoe3PathTextBox"
-                     Grid.Column="0"
-                     FontSize="{StaticResource FontSizeBody}"
-                     Background="{DynamicResource BgPanelAlt}"
-                     Foreground="White"
-                     BorderBrush="{DynamicResource BorderSubtle}"
-                     BorderThickness="1"
-                     Padding="8,6"
-                     CaretBrush="White"
-                     IsReadOnly="True"/>
-            <Button x:Name="BrowseAoE3InDialogButton"
-                    Grid.Column="1"
+            <Grid Margin="0,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="Aoe3PathTextBox"
+                         Grid.Column="0"
+                         FontSize="{StaticResource FontSizeBody}"
+                         Background="{DynamicResource BgPanelAlt}"
+                         Foreground="White"
+                         BorderBrush="{DynamicResource BorderSubtle}"
+                         BorderThickness="1"
+                         Padding="8,6"
+                         CaretBrush="White"
+                         IsReadOnly="True"/>
+                <Button x:Name="BrowseAoE3InDialogButton"
+                        Grid.Column="1"
+                        Style="{StaticResource DialogButton}"
+                        Margin="8,0,0,0"
+                        Click="BrowseAoE3InDialogButton_Click"/>
+            </Grid>
+
+            <!-- AoE3 status (color-coded inline message) -->
+            <TextBlock x:Name="Aoe3StatusText"
+                       FontSize="{StaticResource FontSizeCaption}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,6"/>
+
+            <!-- Manual "search my Asian Dynasties" — exhaustive content scan, shown
+                 only when no source is set. The automatic pre-fill already runs a
+                 conservative scan; this is the user-initiated exhaustive one. -->
+            <Button x:Name="SearchAoe3Button"
                     Style="{StaticResource DialogButton}"
-                    Margin="8,0,0,0"
-                    Click="BrowseAoE3InDialogButton_Click"/>
-        </Grid>
-
-        <!-- AoE3 status (color-coded inline message) -->
-        <TextBlock x:Name="Aoe3StatusText"
-                   FontSize="{StaticResource FontSizeCaption}"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,6"/>
-
-        <!-- Manual "search my Asian Dynasties" — exhaustive content scan, shown
-             only when no source is set. The automatic pre-fill already runs a
-             conservative scan; this is the user-initiated exhaustive one. -->
-        <Button x:Name="SearchAoe3Button"
-                Style="{StaticResource DialogButton}"
-                HorizontalAlignment="Left"
-                Margin="0,0,0,14"
-                Visibility="Collapsed"
-                Click="SearchAoe3Button_Click"/>
+                    HorizontalAlignment="Left"
+                    Margin="0,0,0,14"
+                    Visibility="Collapsed"
+                    Click="SearchAoe3Button_Click"/>
+        </StackPanel>
 
         <!-- First-run reminder: open the original game at least once
              before installing (non-blocking, shown only when AoE3's

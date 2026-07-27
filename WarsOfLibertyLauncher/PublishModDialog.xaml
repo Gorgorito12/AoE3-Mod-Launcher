@@ -160,10 +160,10 @@
                               BorderBrush="{DynamicResource BorderSubtle}"
                               Padding="8,6" FontSize="{StaticResource FontSizeBody}">
                         <!-- Content set from Strings in ApplyLanguage; Tag encodes
-                             install type (+setupPathRedirect suffix = stock-exe TC). -->
+                             install type (+privateSetupPath suffix = stock-exe TC). -->
                         <ComboBoxItem x:Name="InstallOptUhc"      Tag="IsolatedFolder"/>
                         <ComboBoxItem x:Name="InstallOptAdditive" Tag="InPlaceOverlay"/>
-                        <ComboBoxItem x:Name="InstallOptReplace"  Tag="IsolatedFolder+setupPathRedirect"/>
+                        <ComboBoxItem x:Name="InstallOptReplace"  Tag="IsolatedFolder+privateSetupPath"/>
                     </ComboBox>
                     <TextBlock x:Name="HintInstallType" Style="{StaticResource FieldHint}"/>
 

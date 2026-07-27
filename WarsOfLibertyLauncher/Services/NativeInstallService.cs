@@ -261,6 +261,10 @@ public class NativeInstallService
         var (overlayFiles, overlayNetNew) =
             ClassifyOverlay(overlayCapture, InstallManifest.TryLoad(destinationFolder));
 
+        // ---- Phase 4b: Private setup path (stock-exe total conversions) ----
+        // Runs before the manifest so the registry key it creates is recorded there.
+        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, overlayCapture.Hashes);
+
         // ---- Phase 5: Finalize (shortcuts, registry, manifest) ----
         phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
@@ -271,7 +275,7 @@ public class NativeInstallService
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath, clonedAoe3: true,
             shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel,
-            overlayCapture.Hashes);
+            overlayCapture.Hashes, privateSetupKey);
 
         // Translation snapshot is WoL-specific (it relies on the WoL-style
         // <c>data\stringtabley.xml</c> and <c>unithelpstringsy.xml</c> layout
@@ -514,6 +518,11 @@ public class NativeInstallService
 
         var (overlayFiles, overlayNetNew) = ClassifyOverlay(overlayCapture, previousManifest);
 
+        // Re-assert the private setup path. A re-overlay can put a shipped executable back,
+        // and even when it can't (the exe came from the AoE3 clone) this keeps the key in the
+        // rewritten manifest so uninstall still knows to remove it.
+        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, overlayCapture.Hashes);
+
         // ---- Phase 4: Finalize ----
         phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
@@ -522,7 +531,7 @@ public class NativeInstallService
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
             shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel,
-            overlayCapture.Hashes);
+            overlayCapture.Hashes, privateSetupKey);
 
         // Translation snapshot only applies to mods that opt into the WoL-
         // style translation overlay system (CoveredFiles non-empty).
@@ -674,12 +683,19 @@ public class NativeInstallService
 
         var (overlayFiles, overlayNetNew) = ClassifyOverlay(capture, previousManifest);
 
+        // Re-assert the private setup path, like the two full paths do. Two reasons it can't be
+        // skipped here: a patch is free to ship the executable, which would put an UNPATCHED one
+        // back; and the manifest below is a full re-stamp, so without this the key would be
+        // dropped from it and uninstall would leave an orphan pointing at a deleted folder.
+        // Idempotent, so in the ordinary case (key present, exe already patched) it does nothing.
+        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, capture.Hashes);
+
         // Re-stamp the manifest to the new version, preserving install identity (shortcuts, source).
         // Runs AFTER the canonical-restore above, so KeyFileHashes/EngineFileHashes see canonical bytes.
         WriteManifest(profile, version, destinationFolder,
             previousManifest.Aoe3SourcePath, previousManifest.ClonedAoe3,
             previousManifest.Shortcuts ?? new(), previousManifest.StartMenuFolder,
-            overlayFiles, overlayNetNew, installLabel: null, capture.Hashes);
+            overlayFiles, overlayNetNew, installLabel: null, capture.Hashes, privateSetupKey);
 
         // Now that every covered file on disk is canonical, refresh the snapshot (updates the
         // CHANGED covered files to their new canonical bytes; unchanged ones are a no-op).
@@ -1823,6 +1839,57 @@ public class NativeInstallService
     }
 
     /// <summary>
+    /// For a mod that opted into <see cref="ModProfile.PrivateSetupPath"/>: rewrite the
+    /// registry-key string in this install's own copy of the executable and create that key
+    /// pointing here, so the engine loads the mod's content instead of the base game's.
+    /// Returns the key created, or <c>""</c> when the mod did not opt in.
+    /// </summary>
+    private static string ApplyPrivateSetupPath(
+        ModProfile profile, string installFolder, Dictionary<string, FileFingerprint>? fileHashes)
+    {
+        if (!profile.PrivateSetupPath) return "";
+
+        // Only ever patch an executable inside a folder the launcher CLONED. For an in-place
+        // overlay the install folder IS the player's own Age of Empires III directory, so this
+        // would rewrite their base-game executable, break its signature and repoint VANILLA at
+        // the mod's registry key. The docs call the two mutually exclusive; this is the code
+        // making it true, because the combination can only arrive from a catalogue typo and the
+        // damage is not something the player can undo.
+        if (profile.InstallType != ModInstallType.IsolatedFolder)
+        {
+            DiagnosticLog.Write(
+                $"SetupPathPatcher: '{profile.Id}' declares privateSetupPath with " +
+                $"InstallType={profile.InstallType} — refusing (only IsolatedFolder may be patched).");
+            return "";
+        }
+
+        var exeName = string.IsNullOrWhiteSpace(profile.GameExecutable) ? "age3y.exe" : profile.GameExecutable;
+        var exePath = Path.Combine(installFolder, exeName);
+        var key = SetupPathPatcher.PrivateKeyFor(profile.DisplayName);
+
+        SetupPathPatcher.PatchExecutable(exePath, key);
+        SetupPathPatcher.EnsurePrivateKey(key, installFolder);
+        SetupPathPatcher.CarryOverFirstRunMarker(profile.DisplayName);
+
+        // The executable's bytes just changed. When the payload is what shipped it, the
+        // capture we are about to write holds the PRE-patch fingerprint — Verify would then
+        // call the install damaged and Repair would lay the unpatched exe back down. That is
+        // exactly the state a hand-patched Napoleonic Era was left in.
+        if (fileHashes is { Count: > 0 })
+        {
+            var relative = exeName.Replace('\\', '/');
+            var tracked = fileHashes.Keys.FirstOrDefault(
+                k => k.Equals(relative, StringComparison.OrdinalIgnoreCase));
+            if (tracked != null)
+            {
+                fileHashes[tracked] = VerifyService.ComputeFingerprintOf(exePath);
+                DiagnosticLog.Write($"SetupPathPatcher: re-captured the fingerprint for '{tracked}'.");
+            }
+        }
+        return key;
+    }
+
+    /// <summary>
     /// Writes the install manifest at the root of the install folder. The
     /// manifest records every file and directory the installer placed on
     /// disk so the uninstaller can later delete them safely without touching
@@ -1842,7 +1909,8 @@ public class NativeInstallService
         List<string>? overlayFiles = null,
         List<string>? overlayNetNew = null,
         string? installLabel = null,
-        Dictionary<string, FileFingerprint>? fileHashes = null)
+        Dictionary<string, FileFingerprint>? fileHashes = null,
+        string? privateSetupPathKey = null)
     {
         try
         {
@@ -1874,6 +1942,7 @@ public class NativeInstallService
                 KeyFileHashes = ComputeKeyFileHashes(installFolder),
                 FileHashes = prunedHashes ?? new(),
                 EngineFileHashes = ComputeEngineHashes(installFolder, (prunedHashes ?? new()).Keys),
+                PrivateSetupPathKey = privateSetupPathKey ?? "",
             };
             manifest.Save();
             DiagnosticLog.Write(

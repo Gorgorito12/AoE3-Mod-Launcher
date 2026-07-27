@@ -271,7 +271,8 @@ max per language.
 | `marker` | *Optional.* Relative path (file **or** directory) that is unique to your mod and absent from vanilla AoE3. When set, the launcher detects your mod **by content in a folder with any name** (the install folder no longer has to be named after the mod) and uses it to tell a real install apart from the base game. Needed only when `probeFile` is shared with AoE3 — WoL uses `art\\zulushield`, because its probe `data\\stringtabley.xml` also ships in vanilla. |
 | `executable` | Filename of the .exe that launches the game (`age3y.exe` for WoL, `age3m.exe` for Improvement Mod). The launcher looks for it inside the install folder. |
 | `arguments` | Extra args the launcher appends when running. Usually empty. |
-| `setupPathRedirect` | *Optional, default false.* Set `true` for a **stock-exe replacement** total conversion (§4.3): the launcher junctions the registry `setuppath` folder at your clone folder around launch so the stock engine loads your data. Only meaningful with `type: IsolatedFolder`. Don't set it for a UHC mod or an additive `InPlaceOverlay` mod. |
+| `privateSetupPath` | *Optional, default false.* Set `true` for a **stock-exe replacement** total conversion (§4.3): at install the launcher points the player's own copy of your exe at a registry key of its own, so it loads your data instead of the base game's and both stay playable. Only meaningful with `type: IsolatedFolder`. Costs one admin prompt at install and caps `displayName` at 33 characters. Don't set it for a UHC mod or an additive `InPlaceOverlay` mod. |
+| `setupPathRedirect` | *Optional, default false.* **Legacy** — the junction-based predecessor of `privateSetupPath` (§4.3). Still supported, but it renames the player's `bin` while your mod runs. Don't use it for a new mod. |
 | `multiplayerProbeFiles` | *Optional.* Array (≤6) of install-relative files that identify your mod's **version** for the multiplayer join check. Declare **only** if your mod ships its own data files instead of overwriting the base `y` files (`data\\protoy.xml` / `techtreey.xml` / `stringtabley.xml`) — e.g. Napoleonic Era's `data\\proton.xml` + `data\\techtreen.xml`. Omit for a normal mod: the launcher default is correct. This is a **critical** field — wrong values let two different versions share a match and desync. |
 | `userDataRedirect` | *Optional, default false.* Set `true` if your mod writes saves to the **shared** `My Games\\Age of Empires 3` folder (instead of its own); the launcher junctions that folder at your `userDataFolder` around launch. A stock-exe replacement TC (§4.3) usually needs this too. |
 | `payloadUrls` | Array of HTTPS URLs for the initial install zip (multi-part `.zip.001`, `.002`, … listed in order). **Reserved — the current launcher does NOT read this.** It's schema-valid and the publish wizard collects it, but the install pipeline sources the initial payload from the **`update` block** instead (a GitHubReleases release asset / `externalAssetUrlTemplate`, or `update.wol.payloadZipUrls`). Declare your payload there. |
@@ -333,7 +334,15 @@ Then pick your model:
 | --- | --- |
 | has a **UHC-patched** exe (runs from any folder) | `IsolatedFolder` (§4.1) |
 | ships the **stock** exe and **ADDS** files (own suffixed exe/`.bar`, doesn't overwrite base) | `InPlaceOverlay` (§4.2) |
-| ships the **stock** exe and **REPLACES** base game files | `IsolatedFolder` + `setupPathRedirect: true` (§4.3) |
+| ships the **stock** exe and **REPLACES** base game files | `IsolatedFolder` + `privateSetupPath: true` (§4.3) |
+
+> **Why the additive case is the better deal when you qualify:** an `InPlaceOverlay` install
+> copies your files into the folder the engine already reads, so there is no clone, no
+> duplicated copy of the game, no junction, and the player can still run vanilla AoE3 while
+> your mod is installed. Uninstalling removes only the files you added — but note it does
+> **not** restore any base file you overwrote, so keep your payload strictly additive.
+> `privateSetupPath` (§4.3) is the answer for replacement mods; it also leaves vanilla
+> playable, at the cost of one administrator prompt at install.
 
 If a stock-exe mod is installed as a plain `IsolatedFolder` clone, it will fail to
 open or launch vanilla — because the engine keeps loading the base game's data from
@@ -364,7 +373,7 @@ Use it when:
 - Your exe is **UHC-patched** — it runs from any folder (WoL, Improvement Mod,
   ESOC). This is the load-bearing requirement: a **non-UHC** exe in an isolated
   clone loads vanilla data, not your mod (see §4.0). If yours is non-UHC, use §4.2
-  (additive) or add `setupPathRedirect` (§4.3, replacement).
+  (additive) or add `privateSetupPath` (§4.3, replacement).
 - You want users to not feel the install is touching their AoE3.
 
 Real example: `aoe3-mods-catalog-template/mods/wol/mod.json`.
@@ -384,19 +393,25 @@ Internal steps:
 Use it when:
 
 - Your mod is **additive and non-UHC** — it ships its **own suffixed** exe and
-  files (e.g. Napoleonic Era: `age3n.exe`, `DataPN.bar`, `data\proton.xml`) that
-  **don't overwrite** the base game's. Because your files land in the real AoE3
-  (where `setuppath` already points), the stock engine finds them with **no
-  registry tricks**, and your mod coexists with vanilla. This is exactly what the
-  mod's own installer does.
+  files (`age3n.exe`, `DataPN.bar`, `data\proton.xml`…) that **don't overwrite**
+  the base game's. Because your files land in the real AoE3 (where `setuppath`
+  already points), the stock engine finds them with **no registry tricks**, and
+  your mod coexists with vanilla. This is what an additive mod's own installer does.
 - Or your mod is a **lightweight patch/overhaul** touching few files.
+
+> **No shipped mod uses this today.** Napoleonic Era is additive and was the
+> obvious candidate, but it ships on §4.3 instead: writing into the player's real
+> AoE3 is the part worth avoiding, and once your mod lives in its own folder a
+> stock exe needs its own registry key regardless of whether it overwrites
+> anything. Pick §4.2 only if installing *into* the base game is genuinely what
+> you want.
 
 **Uninstall is safe:** an in-place install's manifest records only your net-new
 files, so uninstalling removes just those and leaves the base game intact. Declare
 `payloadSha256` and ship your files in the folder layout they belong in (e.g. the
 `.bar`/exe where the base `.bar` live), so they overlay onto the right place.
 
-### 4.3. `setupPathRedirect` — stock-exe total conversions
+### 4.3. `privateSetupPath` — stock-exe total conversions
 
 For a total conversion that ships the **stock `age3y.exe`** and **replaces** base
 game data (so it can't just add files like §4.2 — it would destroy vanilla). It
@@ -405,20 +420,56 @@ stays an `IsolatedFolder` clone, and you add one flag:
 ```jsonc
 "install": {
   "type": "IsolatedFolder",
-  "setupPathRedirect": true,
+  "privateSetupPath": true,
   "userDataRedirect": true,          // usually also needed (see §3.6 / userDataFolder)
   ...
 }
 ```
 
-Around launch the launcher **junctions the folder `setuppath` points at (the real
-`…\bin`) to your mod's clone folder**, so the stock exe transparently loads your
-content — **without touching the registry** (no admin) — and restores it when
-anything else launches. Real example: Struggle of Indonesia
-(`mods/struggle-of-indonesia/mod.json`). Because the stock exe is shared with
-vanilla and your data replaces the base, your mod and vanilla are mutually
-exclusive *while playing* (the redirect is only active during your mod's session);
-this is inherent to a stock-exe replacement and can't be avoided without UHC.
+**What it does.** The stock engine finds its `.bar`/data through a registry key
+named inside the executable — the base game's — which is why an isolated clone
+otherwise loads vanilla. At install time the launcher rewrites that name inside
+**the player's own copy** of your exe so it points at a key belonging to your mod,
+and creates that key with `setuppath` set to the install folder. Your mod and
+vanilla then each read their own, so **both stay playable, including at the same
+time**, and nothing has to be undone when the game closes. Real example: Struggle
+of Indonesia (`mods/struggle-of-indonesia/mod.json`).
+
+**What it costs you as a modder:**
+
+- **One administrator prompt, at install only.** The key lives in `HKLM`; the engine
+  ignores `HKCU` (measured — it falls back to demanding the product key). The
+  launcher folds this into the permission prompt it may already be showing, so the
+  player is asked once, before the download — and never again: the key is written
+  once, so later repairs and updates need no elevation at all.
+- **Your `displayName` must be at most 33 characters.** The replacement key has to
+  fit in the 72-character slot the original occupies. A longer name fails the
+  install rather than truncating.
+- **Only the stock TAD executable is supported.** If the launcher doesn't find the
+  base key in your exe, it **aborts the install** instead of leaving a mod that
+  silently shows vanilla content. If your exe is UHC-patched you don't need this
+  flag at all — use §4.1.
+- The patch invalidates the executable's Authenticode signature. It is applied to
+  the player's local copy only; no modified binary is distributed.
+
+> **Don't ship a pre-patched exe in your payload.** It looks like it would save the
+> launcher a step, and it doesn't work: the patched exe is useless without its
+> registry key, and that key cannot be packaged — its `setuppath` is *that player's*
+> install folder, and the licence values in it (`pid`, `digitalproductid`,
+> `doublehash`) are *that player's* licence. A shipped exe with no key lands the
+> player straight in the product-key dialog. It would also mean redistributing
+> Microsoft's executable. Let the launcher patch the player's own copy; the key it
+> creates is cloned from that machine's base game, so your mod's licence state always
+> matches their vanilla — if their AoE3 opens without asking for a key, so does your
+> mod.
+
+> **Legacy: `setupPathRedirect`.** The earlier answer to the same problem: around
+> launch the launcher junctioned the folder `setuppath` points at (the real `…\bin`)
+> to your clone folder, and restored it afterwards. It needed no admin, but it
+> renamed the player's `bin` while the mod ran — making your mod and vanilla
+> mutually exclusive during a session, and leaving the folder renamed until the
+> launcher next started if the game crashed. It still works, and installs made with
+> it keep being restored correctly, but **don't choose it for a new mod.**
 
 ---
 
@@ -875,29 +926,30 @@ will see your mod automatically when their cache expires
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/schema/mod.schema.json",
-  "id": "napoleonic-era",
-  "displayName": "Napoleonic Era",
-  "author": "Napoleonic Era Team",
+  "id": "example-mod",
+  "displayName": "Example Mod",
+  "author": "Example Team",
   "accentColor": "#1f4e79",
   "icon": "icon.png",
   "banner": "banner.png",
   "description": {
-    "en": "Napoleonic-era total conversion for AoE3.",
-    "es": "Conversión total ambientada en la era napoleónica para AoE3."
+    "en": "Example total conversion for AoE3.",
+    "es": "Conversión total de ejemplo para AoE3."
   },
-  "sourceRepo": "napo-team/napoleonic-era",
+  "sourceRepo": "example-team/example-mod",
   "approvedReleaseTag": "v2.3.0",
-  "userDataFolder": "Napoleonic Era",
+  "userDataFolder": "Example Mod",
   "install": {
-    "type": "InPlaceOverlay",
+    "type": "IsolatedFolder",
     "probeFile": "age3n.exe",
     "executable": "age3n.exe",
+    "privateSetupPath": true,
     "multiplayerProbeFiles": ["data\\proton.xml", "data\\techtreen.xml"]
   },
   "update": {
     "mechanism": "GitHubReleases",
     "github": {
-      "externalAssetUrlTemplate": "https://cdn.napoleonic-era.com/builds/napoleonic-{tag}.zip",
+      "externalAssetUrlTemplate": "https://cdn.example-mod.com/builds/example-{tag}.zip",
       "externalAssetSha256": "5d41402abc4b2a76b9719d911017c592aa8f1b9c2b4e8a3f1e0c9b8a7f6e5d4c"
     }
   }
@@ -924,7 +976,7 @@ this is almost always the wrong `install.type` for a **non-UHC** mod, not a CI/P
 problem. The engine is loading the base game's data from the real `…\bin` instead of
 your clone. Read **§4.0** and switch to the model that matches your mod: additive →
 `InPlaceOverlay` (§4.2), stock-exe replacement → `IsolatedFolder` +
-`setupPathRedirect: true` (§4.3).
+`privateSetupPath: true` (§4.3).
 
 ---
 
@@ -942,7 +994,7 @@ your clone. Read **§4.0** and switch to the model that matches your mod: additi
 - **Don't UHC-patch the game exe yourself to make an isolated clone work.**
   It needs a custom exe, which forks multiplayer compatibility (your players
   can't play with the original mod's players). If your mod ships the stock
-  exe, use `InPlaceOverlay` (§4.2) or `setupPathRedirect` (§4.3) instead — the
+  exe, use `InPlaceOverlay` (§4.2) or `privateSetupPath` (§4.3) instead — the
   launcher handles the "runs from any folder" problem for you.
 - **Don't declare `update.github.externalAssetSha256` without actually
   computing the hash.** That's the one hash the launcher enforces — a

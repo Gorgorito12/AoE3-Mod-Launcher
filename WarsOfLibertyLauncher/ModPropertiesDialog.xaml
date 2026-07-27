@@ -607,6 +607,39 @@
                                     Click="RestoreBackupBtn_Click"/>
                         </Grid>
 
+                        <Border Style="{StaticResource DialogDivider}"/>
+
+                        <!-- Game settings (graphics, sound, hotkeys). On THIS tab because
+                             they live inside the mod's My Games folder, which every row
+                             above is about — and because putting the decision on the mod's
+                             own page is what makes the blast radius visible. Collapsed for a
+                             mod with no user-data folder of its own. -->
+                        <StackPanel x:Name="GameSettingsSection">
+                            <TextBlock x:Name="LblGameSettingsTitle"
+                                       Style="{StaticResource DialogActionTitle}"/>
+                            <TextBlock x:Name="LblGameSettingsDesc"
+                                       Style="{StaticResource DialogActionDesc}"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <ComboBox x:Name="SettingsSourceCombo"
+                                          MinWidth="240"
+                                          VerticalAlignment="Center"/>
+                                <Button x:Name="ImportSettingsBtn"
+                                        Style="{StaticResource PropertyActionButton}"
+                                        Margin="10,0,0,0"
+                                        MinWidth="150"
+                                        VerticalAlignment="Center"
+                                        Click="ImportSettingsBtn_Click"/>
+                            </StackPanel>
+                            <CheckBox x:Name="SyncSettingsCheck"
+                                      Margin="0,14,0,0"
+                                      Click="SyncSettingsCheck_Click"/>
+                            <TextBlock x:Name="SyncSettingsHint"
+                                       Style="{StaticResource DialogActionDesc}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
+
                         <!-- Inline result of the last Backup/Restore action —
                              the MainWindow status bar sits BEHIND this
                              non-modal dialog, so feedback must live here

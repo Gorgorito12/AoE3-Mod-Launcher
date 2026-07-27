@@ -105,6 +105,89 @@ public class AoE3SetupPathRedirectTests : IDisposable
     }
 
     [Fact]
+    public void EnsureDefault_LeavesAForeignJunctionAlone()
+    {
+        // The one that matters. Users junction game folders themselves — moving an
+        // install to another drive is the usual reason — and the old code deleted ANY
+        // reparse point it found at the setup path. With no aside to restore it also
+        // left the path GONE: no AoE3 where the registry says AoE3 lives. The aside
+        // folder is the ownership proof, so a link without one must survive untouched.
+        var root = NewRoot();
+        var bin = Path.Combine(root, "bin");
+        var elsewhere = Path.Combine(root, "moved-to-another-drive");
+        Directory.CreateDirectory(elsewhere);
+        File.WriteAllText(Path.Combine(elsewhere, "age3y.exe"), "the real game");
+
+        // The user's own junction: bin → elsewhere, and NO "(AoE3 vanilla)" aside.
+        MakeJunction(bin, elsewhere);
+        Assert.True(AoE3SetupPathRedirect.IsJunction(bin));
+        Assert.False(Directory.Exists(bin + Aside));
+
+        AoE3SetupPathRedirect.EnsureDefaultAt(bin);
+
+        Assert.True(AoE3SetupPathRedirect.IsJunction(bin));                       // still linked
+        Assert.Equal("the real game", File.ReadAllText(Path.Combine(bin, "age3y.exe")));
+    }
+
+    [Fact]
+    public void EnsureDefault_RestoresEvenWhenTheJunctionTargetIsGone()
+    {
+        // The recovery path that actually got exercised: the mod folder was deleted while
+        // the junction was live, leaving `bin` pointing at nothing. That breaks the BASE
+        // GAME too — the registry setuppath resolves to a dangling link — so the startup
+        // self-heal has to handle it. It can: on a dangling junction Directory.Exists
+        // still returns true and the attributes still carry ReparsePoint, so IsJunction
+        // sees it. Don't "optimise" IsJunction into anything that enumerates the folder.
+        var root = NewRoot();
+        var bin = Path.Combine(root, "bin");
+        var mod = Path.Combine(root, "mod");
+        Directory.CreateDirectory(bin);
+        Directory.CreateDirectory(mod);
+        File.WriteAllText(Path.Combine(bin, "age3y.exe"), "the real game");
+
+        Assert.True(AoE3SetupPathRedirect.EnsureRedirectedAt(bin, mod));
+        Directory.Delete(mod, recursive: true);          // the target vanishes
+        Assert.True(AoE3SetupPathRedirect.IsJunction(bin));
+
+        AoE3SetupPathRedirect.EnsureDefaultAt(bin);
+
+        Assert.False(AoE3SetupPathRedirect.IsJunction(bin));
+        Assert.Equal("the real game", File.ReadAllText(Path.Combine(bin, "age3y.exe")));
+        Assert.False(Directory.Exists(bin + Aside));
+    }
+
+    [Fact]
+    public void EnsureDefault_NeverLeavesTheSetupPathMissing()
+    {
+        // Same failure seen from the other side: whatever happens, something must be
+        // reachable at the setup path when we're done.
+        var root = NewRoot();
+        var bin = Path.Combine(root, "bin");
+        var mod = Path.Combine(root, "mod");
+        Directory.CreateDirectory(mod);
+        MakeJunction(bin, mod);                       // junction, no aside
+
+        AoE3SetupPathRedirect.EnsureDefaultAt(bin);
+
+        Assert.True(Directory.Exists(bin));
+    }
+
+    /// <summary>A junction created outside the service, to stand in for the user's own.</summary>
+    private static void MakeJunction(string link, string target)
+    {
+        using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/c mklink /J \"{link}\" \"{target}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        });
+        p!.WaitForExit(10_000);
+    }
+
+    [Fact]
     public void Redirect_WhenAsideAlreadyExists_BailsWithoutClobbering()
     {
         // A prior restore didn't finish (aside present) — leave the real bin intact

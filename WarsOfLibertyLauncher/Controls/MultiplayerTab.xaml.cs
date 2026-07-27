@@ -118,6 +118,14 @@ public partial class MultiplayerTab : UserControl
     /// rebuild). Rebuilt with the rooms list, same as <see cref="_roomPingCells"/>.</summary>
     private readonly System.Collections.Generic.List<(TextBlock Text, DateTime CreatedUtc)> _roomAgeCells = new();
 
+    /// <summary>
+    /// The rooms-table columns currently on screen, from <see cref="Services.RoomsTableLayout"/>.
+    /// Both the header strip and every row read this, so they cannot drift apart and misalign.
+    /// Starts as the full set and is narrowed by <see cref="ApplyRoomColumns"/> as the card shrinks.
+    /// </summary>
+    private System.Collections.Generic.IReadOnlyList<Services.RoomColumnSpec> _roomColumns =
+        Services.RoomsTableLayout.All;
+
     // Radmin banner state. The timer polls the install/connection
     // status every 3 s while the tab is visible so the user gets
     // immediate feedback when they finish installing or starting
@@ -359,6 +367,10 @@ public partial class MultiplayerTab : UserControl
         // Keep the rooms header aligned with the rows as the vertical scrollbar
         // comes and goes (see SyncHeaderScrollbarGutter).
         RoomsListScroll.ScrollChanged += (_, _) => SyncHeaderScrollbarGutter();
+        // Re-decide which columns fit whenever the table's width changes. Hooked to the header
+        // strip rather than the window because that IS the width the columns divide up, already
+        // in the logical units UiScale lays this tab out in.
+        RoomsHeaderStrip.SizeChanged += (_, _) => ApplyRoomColumns();
         // Initial Radmin banner render (state poll + paint). The timer
         // starts ticking only once IsVisible flips to true via the
         // OnVisibleChangedTabGate hook installed by Attach().
@@ -1133,12 +1145,11 @@ public partial class MultiplayerTab : UserControl
             // exit a room with an active game (forced disconnect,
             // host left), tear down the local AoE3 process and
             // unlock the popup chrome.
-            try
-            {
-                var p = _aoe3Process;
-                if (p != null && !p.HasExited) p.Kill(entireProcessTree: true);
-            }
-            catch { /* best-effort cleanup */ }
+            // Off the UI thread — this runs on a UI callback and the kill confirms with a
+            // WaitForExit, so it must not block the dispatcher.
+            var leavingGame = _aoe3Process;
+            if (leavingGame != null)
+                _ = Task.Run(() => Services.GameProcessCloser.Stop(leavingGame, killEntireTree: true));
             ExitInGamePhase();
             // Lobby window position used to need re-centering here for
             // the in-tab popup. The real Window we use now remembers
@@ -1312,16 +1323,10 @@ public partial class MultiplayerTab : UserControl
                         // InGame phase. We don't send a follow-up
                         // frame back — the server already cleared
                         // the lobby state in its UPDATE.
-                        try
-                        {
-                            var p = _aoe3Process;
-                            if (p != null && !p.HasExited)
-                                p.Kill(entireProcessTree: true);
-                        }
-                        catch (Exception ex)
-                        {
-                            DiagnosticLog.Write($"MultiplayerTab.game_cancelled: kill — {ex.Message}");
-                        }
+                        var cancelledGame = _aoe3Process;
+                        if (cancelledGame != null)
+                            _ = Task.Run(() => Services.GameProcessCloser.Stop(
+                                cancelledGame, killEntireTree: true));
                         ExitInGamePhase();
                         RefreshFromSession();
                         break;
@@ -3540,6 +3545,68 @@ public partial class MultiplayerTab : UserControl
             RoomsHeaderStrip.Margin = new Thickness(m.Left, m.Top, right, m.Bottom);
     }
 
+    /// <summary>
+    /// Re-resolve which columns fit and, when the answer changed, apply them to the header and
+    /// re-render the rows.
+    ///
+    /// <para><b>Only when the SET changed</b> — not on every resize tick. Dragging the window
+    /// edge raises this per pixel, and rebuilding every row each time would make the drag crawl
+    /// and flicker; the visible outcome only changes when a column appears or disappears.</para>
+    ///
+    /// <para>The width comes from the rooms card itself rather than the window, because
+    /// <see cref="UiScale"/> lays this tab out at a scaled logical size — the card's own
+    /// ActualWidth is already in the units the columns are measured in, so there is no scale
+    /// factor to reason about here.</para>
+    /// </summary>
+    private void ApplyRoomColumns()
+    {
+        if (RoomsHeaderStrip == null) return;
+
+        var available = RoomsHeaderStrip.ActualWidth;
+        if (available <= 0) return;   // not laid out yet; the next SizeChanged will do it
+
+        var resolved = Services.RoomsTableLayout.Resolve(available);
+        if (Services.RoomsTableLayout.SameColumns(resolved, _roomColumns)) return;
+
+        _roomColumns = resolved;
+
+        RoomsHeaderStrip.ColumnDefinitions.Clear();
+        foreach (var spec in resolved)
+            RoomsHeaderStrip.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(spec.Weight, GridUnitType.Star),
+                MinWidth = spec.MinWidth,
+            });
+
+        for (var i = 0; i < resolved.Count; i++)
+        {
+            var header = HeaderElementFor(resolved[i].Column);
+            if (header == null) continue;
+            Grid.SetColumn(header, i);
+            header.Visibility = Visibility.Visible;
+        }
+        foreach (var dropped in Services.RoomsTableLayout.Hidden(resolved))
+        {
+            var header = HeaderElementFor(dropped);
+            if (header != null) header.Visibility = Visibility.Collapsed;
+        }
+
+        RerenderRoomsFromCache();
+    }
+
+    /// <summary>The header element for a column, so it can be moved or hidden with its cells.</summary>
+    private FrameworkElement? HeaderElementFor(Services.RoomColumn column) => column switch
+    {
+        Services.RoomColumn.Room => ColButtonRoom,
+        Services.RoomColumn.Mod => ColButtonMod,
+        Services.RoomColumn.Host => ColButtonHost,
+        Services.RoomColumn.Players => ColButtonPlayers,
+        Services.RoomColumn.Ping => ColButtonPing,
+        Services.RoomColumn.Status => ColButtonStatus,
+        Services.RoomColumn.Action => ColHeaderAction,
+        _ => null,
+    };
+
     // ---------- Global chat ----------
 
     /// <summary>
@@ -4602,18 +4669,21 @@ public partial class MultiplayerTab : UserControl
         // MaxWidth caps the others; MinWidth (esp. ACTION) keeps the button fully
         // visible when space is tight. Keep these in lockstep with the header
         // definitions (RoomsHeaderStrip in MultiplayerTab.xaml).
-        // Proportional, NO MaxWidth (except none): columns grow together on a
-        // wide window so the air distributes evenly (symmetric) instead of ROOM
-        // eating all slack. Low MinWidths so the 7 fit a small window with the
-        // ACTION button visible. IDENTICAL to the header (lockstep).
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.3, GridUnitType.Star), MinWidth = 120 });  // ROOM
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.05, GridUnitType.Star), MinWidth = 58 }); // MOD
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.35, GridUnitType.Star), MinWidth = 66 }); // HOST
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.62, GridUnitType.Star), MinWidth = 46 }); // PLAYERS
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.62, GridUnitType.Star), MinWidth = 48 }); // PING
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.9, GridUnitType.Star), MinWidth = 60 });  // STATUS
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.95, GridUnitType.Star), MinWidth = 100 }); // ACTION
+        // Proportional, NO MaxWidth: columns grow together on a wide window so the air
+        // distributes evenly instead of ROOM eating all the slack.
+        //
+        // The set comes from Services/RoomsTableLayout, which the header strip reads too —
+        // one list rather than two lists of literals kept in step by a comment. It also
+        // shrinks: on a narrow window the least useful columns are dropped and their values
+        // move into the room's sub-line below, so nothing is lost at any width.
+        // ClipToBounds because a Grid cell does not clip on its own.
+        var grid = new Grid { ClipToBounds = true };
+        foreach (var spec in _roomColumns)
+            grid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(spec.Weight, GridUnitType.Star),
+                MinWidth = spec.MinWidth,
+            });
 
         // === Col 0: ROOM — mod icon disc (★ fallback) + title (wraps to 2
         // lines, never hard-cut) over an optional sub-line (🔒 private / "not
@@ -4622,6 +4692,24 @@ public partial class MultiplayerTab : UserControl
         var modProfile = ModRegistry.Find(lobby.ModId);
         var modName = modProfile?.DisplayName;
         if (string.IsNullOrWhiteSpace(modName)) modName = lobby.ModId;
+
+        // Host name resolved HERE, above the ROOM cell, because when the HOST column is
+        // dropped at a narrow width the room's sub-line has to show it — and re-deriving it
+        // down in the host cell would be a second copy of this fallback chain to keep in step.
+        // Same order as everywhere else: display name → Discord username → me → em-dash.
+        var hostName = lobby.Host.DisplayName;
+        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
+            hostName = lobby.Host.DiscordUsername;
+        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
+        {
+            var hostIsMe = me != null
+                && _isHostInCurrentRoom
+                && string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
+            if (hostIsMe)
+                hostName = string.IsNullOrEmpty(me!.DiscordUsername) ? me.DisplayName : me.DiscordUsername;
+        }
+        var hostNameKnown = !string.IsNullOrWhiteSpace(hostName) && hostName != "-";
+        if (!hostNameKnown) hostName = "—";
 
         var salaCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
         salaCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -4704,6 +4792,38 @@ public partial class MultiplayerTab : UserControl
                 Margin = new Thickness(0, 2, 0, 0),
             });
         }
+        // Whatever the current width couldn't fit as a column moves here, so narrowing the
+        // window hides the COLUMN but never the information: "Gorgorito12 · Wars of Liberty".
+        // Built from the same resolved set the columns came from, so the two can't disagree
+        // about what is on screen.
+        var relocated = new System.Collections.Generic.List<string>();
+        foreach (var dropped in Services.RoomsTableLayout.Hidden(_roomColumns))
+        {
+            switch (dropped)
+            {
+                case Services.RoomColumn.Host when hostNameKnown:
+                    relocated.Add(hostName!);
+                    break;
+                case Services.RoomColumn.Mod when !string.IsNullOrWhiteSpace(modName):
+                    relocated.Add(modName!);
+                    break;
+                // Ping is deliberately absent: it is YOUR latency, identical on every row, so
+                // repeating it per room would add noise rather than information.
+            }
+        }
+        if (relocated.Count > 0)
+        {
+            salaText.Children.Add(new TextBlock
+            {
+                Text = string.Join(" · ", relocated),
+                Foreground = textSecondary,
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 2, 0, 0),
+            });
+        }
+
         // "open for X" — a live count-up sub-line, ticked in place by
         // RefreshRoomAgeCells (rooms ping timer). Registered so it stays live
         // without re-rendering the row. Only when we can parse the open time.
@@ -4724,36 +4844,23 @@ public partial class MultiplayerTab : UserControl
         }
         Grid.SetColumn(salaText, 1);
         salaCell.Children.Add(salaText);
-        Grid.SetColumn(salaCell, 0);
-        grid.Children.Add(salaCell);
+        PlaceRoomCell(grid, Services.RoomColumn.Room, salaCell);
 
-        // === Col 1: MOD — the mod's name as a blue chip (its own column now,
-        // moved out of the ROOM cell). ===
-        var modCell = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        modCell.Children.Add(BuildRoomChip(
+        // === MOD — the mod's name as a blue chip, in its own column. The chip lives in a
+        // bounded Grid, not a horizontal StackPanel: a StackPanel measures with infinite
+        // width, so the chip rendered at its natural size and ran under the HOST cell. ===
+        var modCell = new Grid { VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
+        var modChip = BuildRoomChip(
             modName!,
             (Brush)Application.Current.FindResource("MpModBadgeBg"),
-            (Brush)Application.Current.FindResource("FgHoverBlue")));
-        Grid.SetColumn(modCell, 1);
-        grid.Children.Add(modCell);
+            (Brush)Application.Current.FindResource("FgHoverBlue"));
+        modChip.HorizontalAlignment = HorizontalAlignment.Left;
+        modCell.Children.Add(modChip);
+        PlaceRoomCell(grid, Services.RoomColumn.Mod, modCell);
 
-        // === Col 2: HOST — colored initial circle + name (Grid{Auto,*} so the
-        // name ellipsizes instead of overflowing). Same host-name resolution as
-        // the table (display → Discord username → me → em-dash). ===
-        var hostName = lobby.Host.DisplayName;
-        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
-            hostName = lobby.Host.DiscordUsername;
-        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
-        {
-            var hostIsMe = me != null
-                && _isHostInCurrentRoom
-                && string.Equals(lobby.Id, _session?.CurrentLobbyId, StringComparison.Ordinal);
-            if (hostIsMe)
-                hostName = string.IsNullOrEmpty(me!.DiscordUsername) ? me.DisplayName : me.DiscordUsername;
-        }
-        if (string.IsNullOrWhiteSpace(hostName) || hostName == "-")
-            hostName = "—";
-
+        // === HOST — colored initial circle + name (Grid{Auto,*} so the name ellipsizes
+        // instead of overflowing). hostName was resolved above the ROOM cell because the
+        // sub-line needs it when this column is dropped. ===
         var hostCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -4771,8 +4878,7 @@ public partial class MultiplayerTab : UserControl
         };
         Grid.SetColumn(hostNameText, 1);
         hostCell.Children.Add(hostNameText);
-        Grid.SetColumn(hostCell, 2);
-        grid.Children.Add(hostCell);
+        PlaceRoomCell(grid, Services.RoomColumn.Host, hostCell);
 
         // === Col 3: PLAYERS — icon + X/Y, clickable to PEEK the roster without joining. ===
         var playersCell = new TextBlock
@@ -4785,13 +4891,13 @@ public partial class MultiplayerTab : UserControl
             Tag = lobby,
             ToolTip = Strings.Get("MpRoomPeekTooltip"),
             TextDecorations = null,
+            TextTrimming = TextTrimming.CharacterEllipsis,
         };
         // Underline on hover so it reads as clickable (link affordance).
         playersCell.MouseEnter += (_, _) => playersCell.TextDecorations = TextDecorations.Underline;
         playersCell.MouseLeave += (_, _) => playersCell.TextDecorations = null;
         playersCell.MouseLeftButtonUp += PlayersPeek_Click;
-        Grid.SetColumn(playersCell, 3);
-        grid.Children.Add(playersCell);
+        PlaceRoomCell(grid, Services.RoomColumn.Players, playersCell);
 
         // === Col 4: PING — registered so RefreshRoomPingCells() updates it in
         // place (no rebuild). It's YOUR internet latency (same for every row;
@@ -4799,8 +4905,9 @@ public partial class MultiplayerTab : UserControl
         var pingCell = BuildPingCell(_connectionPingMs >= 0 ? _connectionPingMs : (double?)null);
         pingCell.ToolTip = Strings.Get("MpRoomPingTooltip");
         _roomPingCells.Add(pingCell);
-        Grid.SetColumn(pingCell, 4);
-        grid.Children.Add(pingCell);
+        // Wrapped in a clipping Grid: the inner StackPanel stays exactly as it is (the ping
+        // timer mutates its children in place), but it can no longer draw past its column.
+        PlaceRoomCell(grid, Services.RoomColumn.Ping, WrapCell(pingCell));
 
         // === Col 5: STATUS — colored dot + label. Waiting (blue) / In Game
         // (green) / Full (amber). ===
@@ -4814,8 +4921,7 @@ public partial class MultiplayerTab : UserControl
             : (isFull ? Strings.Get("MpRoomFull")
             : (lobby.IsPrivate ? Strings.Get("MpRoomStatusLocked") : Strings.Get("MpRoomStatusWaiting")));
         var statusCell = BuildStatusCell(statusLabel, statusKind);
-        Grid.SetColumn(statusCell, 5);
-        grid.Children.Add(statusCell);
+        PlaceRoomCell(grid, Services.RoomColumn.Status, WrapCell(statusCell));
 
         // === Col 6: ACTION — gold-outline button. SAME priority logic: in this
         // room → Re-enter; our own room → "Your room" (disabled); in game →
@@ -4874,11 +4980,42 @@ public partial class MultiplayerTab : UserControl
             actionBtn.IsEnabled = modInstalled;
             actionBtn.Click += JoinRoomButton_Click;
         }
-        Grid.SetColumn(actionBtn, 6);
-        grid.Children.Add(actionBtn);
+        PlaceRoomCell(grid, Services.RoomColumn.Action, actionBtn);
 
         card.Child = grid;
         return card;
+    }
+
+    /// <summary>
+    /// Puts a cell in its column, or drops it when this width doesn't show that column.
+    ///
+    /// <para>Column indices used to be written into each cell by hand (0..6), which only
+    /// worked while all seven were always present. Looking the index up from the resolved set
+    /// is what lets columns disappear without every cell after them landing in the wrong
+    /// place.</para>
+    /// </summary>
+    /// <summary>
+    /// Puts a horizontal StackPanel cell inside a clipping Grid so it can't overflow its column.
+    /// A StackPanel measures its children with INFINITE width, so nothing inside one ever trims —
+    /// that is what let the ping bars and the status badge draw over their neighbours.
+    /// </summary>
+    private static FrameworkElement WrapCell(FrameworkElement inner)
+    {
+        var host = new Grid { ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
+        inner.HorizontalAlignment = HorizontalAlignment.Left;
+        host.Children.Add(inner);
+        return host;
+    }
+
+    private void PlaceRoomCell(Grid grid, Services.RoomColumn column, UIElement cell)
+    {
+        var index = -1;
+        for (var i = 0; i < _roomColumns.Count; i++)
+            if (_roomColumns[i].Column == column) { index = i; break; }
+
+        if (index < 0) return;   // dropped at this width — its value moved to the sub-line
+        Grid.SetColumn(cell, index);
+        grid.Children.Add(cell);
     }
 
     /// <summary>Small rounded badge for a room row (the MOD name). Bordered so
@@ -5845,6 +5982,15 @@ public partial class MultiplayerTab : UserControl
     {
         AppendChatSystem(Strings.Get("MpChatGameClosed"));
 
+        // A multiplayer game is still a game played, so its settings become the shared copy too —
+        // otherwise someone who only plays multiplayer would never see settings carry over.
+        // Opt-in and best-effort; the match report below matters far more than this.
+        if (_config?.GetState(profile.Id).SyncGameSettings == true)
+        {
+            try { Services.GameSettingsStore.CaptureFrom(profile); }
+            catch (Exception ex) { DiagnosticLog.Write($"Capturing shared settings failed: {ex.Message}"); }
+        }
+
         // Report the match FIRST — before the replay block's early return on a
         // missing user-data folder, which would otherwise skip reporting.
         var roomClosedByReport = await TryReportMatchAsync(profile);
@@ -6790,14 +6936,8 @@ public partial class MultiplayerTab : UserControl
             var p = _aoe3Process;
             if (p != null)
             {
-                try
-                {
-                    if (!p.HasExited) p.Kill(entireProcessTree: true);
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write($"MultiplayerTab.EndMatch: kill AoE3 failed — {ex.Message}");
-                }
+                // Off the UI thread — the kill confirms with a WaitForExit.
+                await Task.Run(() => Services.GameProcessCloser.Stop(p, killEntireTree: true));
             }
         }
         finally

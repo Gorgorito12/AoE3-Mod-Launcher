@@ -149,7 +149,10 @@ gotcha), `DiagnosticLogTests` (`ExportBundle` includes `*.log`/`*snapshot*`,
 ON-by-default auto-start seed; `OptedOut_NeverReArms` is the one that matters, it
 guards against silently re-enabling auto-start after the user turned it off), and
 `SafeUrlTests` + `ModLinkTests` (the mod-supplied-url gate and the community-links
-sanitisation — the REJECTION cases are the point, see the `SafeUrl` gotcha).
+sanitisation — the REJECTION cases are the point, see the `SafeUrl` gotcha), and
+`AppCompatLayerTests` (`AppCompatLayerService.Parse` — the `~` marker separating a layer
+Windows applied itself from one the user set deliberately, which is the only thing gating
+whether the launcher offers to remove it).
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -592,6 +595,85 @@ Two cheap gates beyond a green build:
   DLL satisfies, InPlaceOverlay unaffected); `ModInstallScannerTests`' fixtures lay the engine
   too. The stale `installPath` such an adopted folder left in the config self-heals — the next
   `ResolveInstallPath` rejects it as an invalid cached path.
+  **That last sentence was FICTION until `UpdateService` was made to actually call this — it
+  had its own, weaker copy of the rule, and the invariant above held nowhere on the
+  resolution path.** `UpdateService.LooksLikeRealModInstall` used to be a local two-liner:
+  require `InstallMarker` when the profile declares one, `return true` otherwise — **without
+  touching the disk**. Napoleonic Era declares no marker, so every adoption path in that class
+  (ctor cache, `forceInstallPath` step 0, cached path, registry, disk scan, broad scan)
+  collapsed to "the probe file exists". The engine-less overlay folder above satisfied that,
+  so the launcher reported it installed, showed PLAY, and `age3n.exe` died two seconds after
+  every launch with nothing in the UI and a bare `Game exited.` in the log — the user's "I
+  press play and it doesn't start". `CheckAsync`'s `valid` (which becomes
+  `CheckResult.IsValidInstall` → `_modIsInstalled` → the PLAY-vs-INSTALL CTA) was looser
+  still: probe file only. Both now go through `ModInstallProbe`. **Keep exactly one source of
+  truth for "is this an install"** — a second opinion is how these drifted apart, and an empty
+  `InstallMarker` must never again be read as "valid": no marker means *the probe is already
+  exclusive*, not *skip the remaining checks*.
+
+  **The engine requirement now covers `InPlaceOverlay` too — the old exemption was a hole,
+  not a design.** It was written on the reasoning that an overlay's engine "lives in `bin\`,
+  not the install root", which held only while overlays installed to the AoE3 ROOT. They now
+  install to the folder the engine reads from (see the next bullet), so the exemption stopped
+  protecting anything and started hiding the exact failure it sat next to: switching Napoleonic
+  Era to `InPlaceOverlay` made its engine-less leftover folder pass again, by the other route.
+  The two types differ only in WHERE the engine may be: `IsolatedFolder` requires it at the
+  root exactly (a clone flattens `bin\` into the root), `InPlaceOverlay` accepts it at the path
+  **or one level down in `bin\`** (`HasEngineNearby`) — a Steam overlay lands in `…\bin` where
+  the engine is, other layouts keep `data\` at the root with the executables under `bin\`.
+  Accepting both is what makes the check layout-independent instead of a guess.
+
+- **`InPlaceOverlay` installs through `InstallModOnlyAsync` — the CLONE branch must never see
+  it, because a clone stamps `clonedAoe3: true` and that flag is what tells Uninstall it may
+  delete the whole folder.** `MainWindow.InstallAsync` computes `overlayInPlace`
+  (`InstallType == InPlaceOverlay && !addNewSlot`) and routes on it; `addNewSlot` still clones,
+  since two overlays can't share one game folder. The chain that makes this safe:
+  `InstallModOnlyAsync` writes `WriteManifest(…, aoe3SourcePath: null, clonedAoe3: false, …)` →
+  `UninstallService` takes the `overlayOnly` branch → only `OverlayNetNew` is removed and the
+  player's AoE3 survives. **Caveat:** files the mod OVERWROTE aren't restored (Napoleonic Era
+  overwrites exactly 1 of its 552); uninstall removes what was added, it doesn't revert what
+  was replaced.
+  **Why this is written so emphatically:** the type used to be ignored by the whole pipeline —
+  the clone-vs-not decision hung on `aoe3SourcePath == null`, and `InstallFolderDialog`
+  guaranteed it was never null, so `InstallModOnlyAsync` was dead code from `InstallAsync` and
+  EVERY install stamped `clonedAoe3: true`. With the overlay destination pointed at the real
+  game folder (which is where an overlay belongs), that combination would have cloned
+  `directx\`/`msxml\` INTO the user's `bin\`, left a manifest there that makes
+  `FolderCloneService` exclude `bin\` from every future clone (producing engine-less installs),
+  and armed a **recursive delete of their AoE3** on uninstall. Two guards keep that from coming
+  back: `InstallFolderDialog` still demands an AoE3 source for every CLONING install (the
+  `requiresAoe3Source` flag only drops it for overlays), and `FindAoe3FolderConflict` refuses a
+  destination that IS a detected `GameFolder`/`ModRoot` — skipped for overlays, since that is
+  precisely where they go. The `…\Age Of Empires 3\<Mod Name>` convention stays allowed.
+  **The overlay destination is the folder holding `data\`**, resolved with the same
+  `GameLauncher.FindAoe3InstallRoot` the stock-game profile uses (parent of `bin\`, else the
+  exe's folder — whichever has `data\`): `…\Age Of Empires 3\bin` on Steam, the root on a flat
+  layout. `ModRoot` is one level above everything AoE3 loads.
+  **Model choice for a non-UHC mod — the axis is WHERE THE EXE LOOKS, not whether the mod
+  overwrites anything.** A non-UHC exe resolves its content through the registry `setuppath`,
+  so any mod living in its own folder → `IsolatedFolder` + `privateSetupPath: true`, which
+  gives it a key of its own and leaves vanilla's alone, both playable side by side. That is
+  what BOTH shipped non-UHC mods use — Napoleonic Era and Struggle of Indonesia — even though
+  only SoI overwrites base files. `InPlaceOverlay` (no key, install into the real AoE3) is
+  still valid for a purely additive mod but **nothing ships on it**; see the fuller treatment
+  in the UHC gotcha below before choosing it. The older `setupPathRedirect: true` solved the
+  same problem with a junction and is mutually exclusive with vanilla while it runs — legacy,
+  don't pick it for a new mod.
+  **Applying UHC ourselves is not an option** — measured: WoL's UHC `age3y.exe` is 11,591,680
+  bytes against the stock 11,598,648, a different *build* rather than a byte patch, so there is
+  no "apply UHC" operation an installer could perform. It's done by the mod authors at build
+  time.
+
+- **A game that exits within `GameInstantExitSeconds` (8 s) of launching is reported as a
+  FAILED start, not a short session.** `StartGameMonitor` only ever asked "is the pid still
+  alive", so a game that couldn't start at all was indistinguishable from someone opening and
+  quitting: the sole trace was `Game exited.` This is what let a broken install be launched
+  over and over in silence. `MainWindow` stamps `_gameStartedUtc` beside `_gameProcessId` and
+  `OnGameExited` warns (toast + status line, pointing at Verify/Repair) when the game died on
+  its own inside that window. **`_stopRequestedByUser` is load-bearing**: `StopButton_Click`
+  and `EnsureGameNotRunning`'s kill both set it, or pressing Stop — or agreeing to close the
+  game before an install — would report the user's own action as a crash. The decision is made
+  at the TOP of `OnGameExited`, before the bookkeeping it reads is cleared.
 
 - **Install detection is by CONTENT, never by folder name —
   `InstallProbeFile` + an optional `InstallMarker`, unified in
@@ -1520,6 +1602,40 @@ Two cheap gates beyond a green build:
   needs a known installed version and is false for the detected-install case that
   also raises this CTA. When adding any new affordance, mirror it into the dashboard
   — don't just unhide something in the legacy panel.
+  **The same invisibility makes the primary CTA the ONLY reachable Stop, so
+  `SetPrimaryAction` COERCES `Play`/`Update` to `Stop` while `_isGameRunning`.** The real
+  `StopButton` is `Visibility="Collapsed"` (`Controls/ActionPanel.xaml`) inside the
+  Collapsed `LegacyPlayContent`, and the sole route to `StopButton_Click` is
+  `PlayButton_Click`'s `case PrimaryAction.Stop`. `ApplyCheckResult` sets `Play`/`Update`
+  WITHOUT consulting `_isGameRunning`, and a `WolPatcher` check goes to the network — so its
+  result routinely lands a second AFTER the launch, overwriting the Stop the monitor had
+  just set. The old `Play` branch only consulted `_isGameRunning` for the LABEL, painting a
+  disabled "PLAYING…" while leaving `_primaryAction = Play`, which made the Stop case
+  unreachable and stranded the user with a running game and no way to close it (reported for
+  Wars of Liberty; the stock game hid it because its `Manual` check resolves locally and
+  finishes before you press Play). The coercion sits at the top of `SetPrimaryAction` — the
+  one place no caller can bypass — mirroring the rule `UpdateGameUI` already encodes.
+  `Update` is coerced too (its handler opens with `EnsureGameNotRunning()`, which asks to
+  close the game anyway); `Install`/`Hidden` are left alone, since they can't legitimately
+  co-occur with a running game and forcing them would mask a real state bug. `BtnPlaying`
+  is now unreachable by construction. **Any new primary action must respect this** — an
+  action that can be raised by a check completing mid-game will strand the user again.
+
+- **The launched game is tracked by PID, not by executable name.** `GameProcessName()`
+  derives from `ModProfile.GameExecutable`, and **WoL and the stock game both declare
+  `age3y.exe`** (`ModRegistry`), so `GetProcessesByName("age3y")` cannot tell them apart.
+  Consequences when it was the only signal: the 2 s exit monitor kept reading "still
+  playing" while an unrelated AoE3 sat open, so the CTA stayed on Stop after the mod had
+  closed; and Stop killed **every** `age3y.exe` on the machine, including copies the
+  launcher never started. `GameLauncher.Launch` therefore returns
+  `GameLaunchResult.ProcessId` — the pid from `StartReparented`, or `Process.Start(...)?.Id`
+  on the fallback, `-1` when the OS hands back nothing usable (the elevated ShellExecute
+  path). `MainWindow` stores it in `_gameProcessId` (cleared in `OnGameExited`) and both
+  `StartGameMonitor`'s tick and `StopButton_Click` go through `TryGetLaunchedGameProcess()`.
+  **The by-name sweep stays as the fallback for `ProcessId <= 0`** — don't delete it, it's
+  what keeps the elevated launch working. `EnsureGameNotRunning` deliberately KEEPS the
+  by-name sweep: its question is "is anything holding this folder open?", not "what did I
+  launch?".
 
 - **The follow-latest cache (`LastKnownLatestVersion` + `LatestReleaseETag`) is
   TIED to `ModState.LatestReleaseRepo` and discarded when the catalog moves a mod
@@ -1702,24 +1818,59 @@ Two cheap gates beyond a green build:
   `WarsOfLibertyLauncher.Tests/DetachedProcessLauncherTests` (interop launches
   without throwing; returns a valid pid or the `-1` fallback).
 
-- **The launcher NEVER touches Windows compatibility settings — AoE3 is kept "pure" — and
-  the MP launch degrades to `UseShellExecute=true` when the game exe needs elevation, so a
-  launch can never fail just because Windows shimmed the exe.** Background: Windows' Program
-  Compatibility Assistant recognises AoE3 (a 2007 game with a kernel-mode copy-protection
-  driver) and auto-applies `WINXPSP3 RUNASADMIN` to `bin\age3y.exe` under
-  `HKCU\…\AppCompatFlags\Layers` (event-log resolution `DetectorShim_KernelDriver`). The
-  stock-game profile (`aoe3-tad`) launches the RAW `bin\age3y.exe` directly, which is what
-  trips the detector (Steam avoids it via the game's bootstrapper); the launcher has ZERO code
-  that writes AppCompatFlags. A prior fix that STRIPPED the `RUNASADMIN` token before launch
-  was **reverted**, for two independently sufficient reasons the diagnostic log proved: (1) it
-  DIDN'T WORK — with `RUNASADMIN` cleared (leaving `WINXPSP3`), launching the exe STILL required
-  elevation, so the elevation is intrinsic (the `WINXPSP3` shim / Windows installer-detection on
-  the raw exe), not that token; and (2) editing another program's compat flags is exactly the
-  "leave AoE3 pure, don't touch Windows" line the maintainer drew. So: **don't re-add any
-  AppCompatFlags read/write.** The UAC prompt on the raw `age3y.exe` is Windows' requirement and
-  unavoidable from user space; the dialog reading "Age of Empires III: The War Chiefs" is
-  age3y.exe's embedded product-name string (a cosmetic AoE3 quirk — it is NOT launching
-  WarChiefs). **The genuine bug that WAS fixed:** the MP `LaunchAndWatch` fallback launched via
+- **A compat layer Windows pins on `age3y.exe` is what forces the UAC prompt on the stock
+  game — the launcher DETECTS it (read-only) and offers to remove it on an explicit click,
+  and never writes AppCompatFlags on its own.** This bullet supersedes an earlier one that
+  said the launcher must never touch compat settings at all; **two of its factual claims were
+  measured and found FALSE** (see below), so re-read this before "restoring" the old rule.
+  **The chain, verified end to end on a reporting machine:** the manifest went
+  `requireAdministrator` → `asInvoker` (`aa13bdd`, for the Run-key auto-start — see that
+  bullet), so the launcher stopped running elevated and the game stopped INHERITING elevation;
+  the stock profile launches the RAW `bin\age3y.exe`; Windows' Program Compatibility Assistant
+  then pinned **`~ WINXPSP3`** on that exe under `HKCU\…\AppCompatFlags\Layers` on its own; that
+  layer makes `CreateProcessW` fail with **740 `ERROR_ELEVATION_REQUIRED`**, so
+  `DetachedProcessLauncher.StartReparented` returns `-1` and `GameLauncher` falls back to
+  `UseShellExecute=true` — the only path that can elevate — which is what raises the UAC prompt.
+  **The `~` prefix is PCA's signature**: it marks a layer Windows applied itself
+  (`age3.exe`/`age3x.exe` on the same machine carry `WINXPSP3 RUNASADMIN` **without** it —
+  those are the user's own, set years earlier). The launcher still has **ZERO code that WRITES
+  AppCompatFlags unprompted**.
+  **Two corrections to what this file used to assert.** (1) *"Clearing the layer doesn't help —
+  the elevation is intrinsic"*: **false.** Removing the layer removes the UAC prompt, and the
+  log flips from `Detached launch unavailable; falling back to Process.Start` to
+  `Game launched detached (pid …)` — so the layer was ALSO silently defeating the explorer.exe
+  re-parenting that keeps the game alive when the launcher is force-closed. That second cost is
+  the reason this is worth fixing rather than tolerating. (2) *"the UAC dialog says 'Age of
+  Empires III: The War Chiefs' because that's age3y.exe's embedded product-name"*: **false** —
+  that string does not exist inside the binary (its `FileDescription` is "Age of Empires III
+  Expansion 2"; "The WarChiefs" belongs to `age3x.exe`). The name comes from Windows' own shim
+  database, which also fires a harmless built-in fix ("Age of Empires 3 Expansion 2",
+  `{984d57c7-…}`) on EVERY launch including ones that need no elevation. Still cosmetic — it
+  does launch Asian Dynasties.
+  **What the launcher does now.** `Services/AppCompatLayerService.cs` reads the layer
+  (`Probe`, pure parser `Parse` pinned by `AppCompatLayerTests`) and can delete it (`Remove`).
+  `GameLauncher.Launch` returns a `GameLaunchResult` whose `NeededElevation` reflects the 740,
+  and `MainWindow.MaybeOfferCompatLayerFix` opens `CompatibilityLayerDialog` explaining that
+  **Windows** did this, with "Remove it" / "Open file properties" and a don't-ask-again flag
+  (`LauncherConfig.CompatLayerNoticeAcknowledged`). **The old rule's spirit is what constrains
+  it, and these guards are load-bearing:** nothing happens without an explicit click; only
+  **HKCU** is written (never HKLM — needs admin and isn't this user's to undo); only the one exe
+  that was launched; the removed value is logged verbatim so it can be restored by hand; and a
+  layer WITHOUT the `~` marker (the user set it deliberately) or in HKLM hides the Remove button
+  entirely. **The offer is deferred to `OnGameExited`**, never shown at launch — a modal over a
+  game that is opening steals focus and can knock AoE3 out of fullscreen (same reasoning as the
+  toast rule). On the CANCEL path it shows immediately, since nothing is running.
+  **Trigger, unproven and now unmitigated:** what makes PCA pin the layer is not established —
+  the event log only reaches back to the day it happened, so there is no "before" to compare
+  against. Repeatedly `TerminateProcess`-ing a legacy game is a known PCA trigger, and a
+  graceful-close attempt was built for exactly that; it was then **measured and removed**
+  (AoE3 never honours WM_CLOSE, so it waited 5 s and killed the process anyway — see the
+  `GameProcessCloser` bullet). So the launcher still terminates the game abruptly when the user
+  presses Stop, and there is no mitigation in place — the detect-and-offer flow above is the
+  whole answer, which is fine precisely because it is deterministic rather than a theory.
+  **Don't re-add a SILENT compat write, and don't widen this past the one exe / HKCU /
+  explicit-click shape.**
+  **The genuine MP bug that WAS fixed:** the MP `LaunchAndWatch` fallback launched via
   `UseShellExecute=false` (needed for `Process.Exited`), which CANNOT elevate — so for an
   elevation-required exe `process.Start()` threw `Win32Exception` `ERROR_ELEVATION_REQUIRED`
   (740), the MainWindow launch hook swallowed it, and **the game silently never opened from
@@ -1732,6 +1883,43 @@ Two cheap gates beyond a green build:
   game; the game starting matters more, and the caller gets a best-effort `Process` (enough for
   the last-played stamp). It only engages when BOTH the reparent AND the watched launch fail on
   elevation, so normal `asInvoker` mods (WoL/IM/SoI) keep the reparented watched launch untouched.
+
+- **Declining the UAC prompt is a DECISION, not a failure — and `StartReparented` must log
+  WHY it failed.** Two small gaps that together made the compat-layer bug above cost an hour
+  instead of a glance. (1) `GameLauncher.Launch`'s fallback `Process.Start` sat outside any
+  `try`, so clicking "No" on the UAC prompt threw `Win32Exception` 1223 (`ERROR_CANCELLED`)
+  straight into `ExecutePlay`'s generic `catch`, which showed the framework's raw message in a
+  red error dialog — telling the user something broke immediately after they chose that it
+  shouldn't happen. It now raises `GameLaunchCancelledException` (same shape as
+  `NsisExtractionException.DeclinedByUser`), caught BEFORE the generic handler: status line and
+  log only, plus the compat-layer offer. The MP `LaunchAndWatch` elevated retry does the same.
+  (2) `DetachedProcessLauncher` declares `SetLastError=true` on every P/Invoke and **never read
+  `Marshal.GetLastWin32Error()`**, so "no explorer in this session", "OpenProcess denied" and
+  "this exe demands elevation" all collapsed into one anonymous `-1` and a single
+  `Detached launch unavailable` line. The `out int lastError` overload now names the failing
+  step and its code, and calls out 740 explicitly. **Don't drop either** — the 740 is what tells
+  `GameLauncher` that elevation (not some interop hiccup) cost the re-parenting, and it is the
+  signal the compat-layer offer keys off. Note the first `InitializeProcThreadAttributeList`
+  call is EXPECTED to fail (that's how it reports the buffer size); its error is deliberately
+  not inspected.
+
+- **Stopping the game KILLS it outright — `Services/GameProcessCloser.Stop`. Asking politely
+  first was tried, measured, and removed; don't reintroduce it.** The class exists only to give
+  the five kill sites one shared "kill, confirm with a short `WaitForExit`, log the pid"
+  instead of the same try/catch copied five times: `MainWindow.StopButton_Click` +
+  `EnsureGameNotRunning` (synchronous, as they always were — after a `Kill` the wait returns in
+  milliseconds), and the three multiplayer ones (`MultiplayerTab` leave-room / `game_cancelled`
+  / `EndMatchAsync`), which pass `killEntireTree: true` and run on `Task.Run` so a WS/UI
+  callback can't block on the wait.
+  **What was tried:** `CloseMainWindow()` → wait 5 s → `Kill()` only if refused, to avoid
+  `TerminateProcess` (half-written saves, and the suspected PCA trigger behind the compat
+  layer). **The log killed it:** across six stops, `"closed gracefully"` appeared **zero**
+  times — four `"ignored the close request after 5000 ms"`, two `"has no main window to ask"`.
+  AoE3 answers WM_CLOSE with its own in-game confirmation dialog, invisible while the launcher
+  has focus, so the wait always expired. That made it strictly worse than doing nothing: five
+  seconds of frozen UI (the Stop button calls this synchronously) **and** the same abrupt kill
+  at the end, so the PCA mitigation never applied once. Every mod runs the same 2007 engine, so
+  no profile will behave differently.
 
 - **Community translations are PROFILE-scoped, and the index is re-fetched on
   mod switch.** Two coupled rules: (1) `UpdateService.EffectiveTranslationsRepo()`
@@ -2362,6 +2550,43 @@ Two cheap gates beyond a green build:
   Settings now fires an `AssetsCleared` callback → `RevalidateVisibleAssetsAsync`
   so cleared images re-download live instead of staying monograms until restart.
 
+- **Sharing graphics/sound/hotkeys between mods GRAFTS XML SECTIONS — and the profile's real
+  shape is NOT what an inspection suggests.** `Services/GameSettingsSync.cs` (pure, tested) +
+  `GameSettingsStore.cs` (the disk side) carry a player's settings between mods. Two surfaces,
+  both in **ModProperties → USER DATA**, because these settings live in the mod's own My Games
+  folder and putting the decision on the mod's page is what makes the blast radius visible:
+  an **"import from…"** picker (one-shot, explicit, `ImportFrom` goes straight between two
+  profiles and never touches the shared copy) and a per-mod **`ModState.SyncGameSettings`**
+  checkbox (**default false**) putting the mod in a shared GROUP — any member played updates the
+  copy, any member launched applies it; a non-member is never read or written by the sync.
+  **This replaced a launcher-wide `ShareGameSettingsAcrossMods` flag** — wrong on two counts:
+  nobody finds a global checkbox (the very problem the request described), and it rewrote any
+  mod's profile at launch with no clue on screen where that came from. The candidate rules live
+  in the pure `GameSettingsStore.CanImportFrom` (installed, not stock, has a user-data folder,
+  never the mod itself) so they are tested rather than buried in the dialog; `LoadGameSettings`
+  is called ONCE from the ctor and deliberately NOT from `LoadUserData`, since `RefreshData()`
+  re-runs that and would reset a half-made combo selection — the same reason `LoadVersions` sits
+  outside it. Everything lives in ONE file per mod,
+  `My Games\<mod>\Users3\<profile>.xml` (UTF-16; the active profile is named inside
+  `Users3\LastProfile3.dat`). **Only `GameOptions` and `KeyMapGroups` travel** — the six
+  `*GameSettings` blocks are last-used lobby setups and a civ from one mod means nothing in
+  another, and the whole file would drag `UserInformation` too.
+  **The trap, which cost a full wrong implementation: only `KeyMapGroups` is an element of its
+  own name.** The rest are identical `<GameSettings Name="…">` siblings keyed by an ATTRIBUTE, so
+  `FindSection` matches the `Name` attribute FIRST and only falls back to the element name.
+  Matching by element name alone finds `KeyMapGroups` and nothing else — it shares nothing and
+  reports success. It was written that way because **PowerShell's XML adapter returns the `Name`
+  ATTRIBUTE from `$node.Name`**, so inspecting a real profile there prints a tree of neatly named
+  sections that does not exist; the unit tests then encoded the same misreading and passed.
+  `GameSettingsSyncTests`' fixture is copied from a real profile for exactly this reason — if you
+  change it, diff it against one on disk first. Push happens LAST inside
+  `GameLauncher.ApplyLaunchRedirects`, after the `My Games` junction, or a `userDataRedirect`
+  mod's settings land in the wrong physical folder; capture happens in `MainWindow.OnGameExited`
+  (using the profile captured AT LAUNCH — the user may switch mods mid-game) and
+  `MultiplayerTab.OnGameExitedAsync`. Every path is best-effort, and `Graft` returns **null**
+  rather than a partial document: this runs moments before the game starts, and the worst outcome
+  would be a profile the game can no longer read.
+
 - **User-data paths are DUAL-ROOT: the system Documents folder can be
   redirected (OneDrive Known Folder Move / moved to another drive) and the
   game's saves may live in EITHER root — don't collapse the resolution back
@@ -2412,13 +2637,31 @@ Two cheap gates beyond a green build:
   `Age of Empires 3` a directory JUNCTION to the mod's exclusive folder — and calls
   `EnsureDefault()` for every NON-redirect launch (vanilla / WoL / IM) to restore the
   real folder. `App.OnStartup` also calls `EnsureDefault()` (self-heal if a prior
-  session was killed mid-play). **So the junction is only active while a redirect-mod
-  plays; anything else undoes it — no game-exit hook needed** (the dashboard `Launch`
-  is fire-and-forget). **Safety is load-bearing:** it NEVER deletes a real folder —
+  session was killed mid-play). **`MainWindow.OnGameExited` calls BOTH `EnsureDefault()`s
+  too, and that hook is load-bearing — this bullet used to claim "no game-exit hook
+  needed" and that claim was the bug.** Restoring only on the next launcher start / next
+  other launch is not a bound at all: the launcher auto-starts minimised and lives in the
+  tray, so it can stay open for days. Observed on a real machine — `My Games\Age of Empires 3`
+  sat junctioned at Struggle of Indonesia for four hours with the launcher running, and any
+  AoE3 opened outside the launcher in that window would have written its saves into the mod's
+  folder. The dashboard `Launch` being fire-and-forget is irrelevant: the 2 s
+  `StartGameMonitor` already detects the exit. **Safety is load-bearing:** it NEVER deletes a real folder —
   only moves it aside + creates/removes a junction, and the junction is removed with
   `Directory.Delete(std, recursive:false)` (drops ONLY the link, never the target);
   if an aside already exists it bails rather than clobber; every op is best-effort
   try/caught so it can never block a launch. Junctions use `mklink /J` (no elevation).
+  **`EnsureDefault` restores ONLY a junction it owns, and the aside folder is the proof
+  — this fixed a real latent bug in BOTH redirect services.** It used to delete ANY
+  reparse point sitting at the target path and only afterwards restore, if an aside
+  happened to exist. Two failures in one: redirecting saves (or a game folder) to
+  another drive with a junction is something users do on their own, and such a link was
+  deleted out from under them; and with no aside to put back, the path was left simply
+  GONE. Only these services ever create `"<name> (AoE3 vanilla)"`, so requiring it both
+  proves the link is ours and guarantees there is something to restore — one condition
+  closing both holes. The link target is captured before the delete so a failed
+  `Directory.Move` rolls the junction back rather than leaving the path missing. Pinned
+  by the `EnsureDefault_LeavesAForeignJunctionAlone` cases in both test suites — those
+  are the ones that matter.
   **CAVEAT:** this touches the user's My Games — it's clean on a NON-OneDrive Documents
   (junctions inside OneDrive-synced Documents are risky); the maintainer's machine is
   physical `C:\Users\…\Documents`. Pinned by `AoE3UserDataRedirectTests` (real→junction
@@ -2455,18 +2698,99 @@ Two cheap gates beyond a green build:
   no UHC). We CAN'T add UHC ourselves (needs a custom exe → forks multiplayer
   compatibility with the original mod's players). So NON-UHC mods use one of two models
   by whether they're ADDITIVE or REPLACEMENT:
-  **(1) Additive non-UHC mods → `InPlaceOverlay` into the real AoE3.** Napoleonic Era
-  ships its own exe (`age3n.exe`) + suffixed files (`DataPN.bar`, `data\proton.xml`,
-  `RMN\`, `AIN\`, `triggerN\`, `loading*n*.ddt`) that DON'T collide with the base `y`
-  files, so overlaying them into the real AoE3 (`DataPN.bar`+`age3n.exe` where
-  `setuppath` points, the loose files alongside) makes NE load with `setuppath`
-  UNCHANGED at `…\bin` → TAD and NE coexist, registry never touched. This is exactly
-  the layout NE's official Inno installer produces. (In this Steam layout `…\bin` holds
-  EVERYTHING — `data\`/`RM\`/`AI\`/`Sound\`/`loading*.ddt` are all inside `bin\`, so
-  ALL of NE's files map into `bin\`.) Uninstall stays safe: an `InPlaceOverlay`
-  manifest is `ClonedAoe3=false` → `UninstallService` removes only the mod's net-new
-  files, never the base.
-  **(2) Replacement non-UHC mods → `SetupPathRedirect` (junction the setuppath folder).**
+  **(1) Additive non-UHC mods CAN go `InPlaceOverlay` into the real AoE3 — but this is
+  NOT what Napoleonic Era ships, and the distinction is worth reading before you trust
+  the model.** An additive mod brings its own exe + suffixed files that don't collide
+  with the base `y` ones (NE: `age3n.exe`, `DataPN.bar`, `data\proton.xml`, `RMN\`,
+  `AIN\`, `triggerN\`, `loading*n*.ddt`), so overlaying them where `setuppath` points
+  makes the mod load with the registry **UNCHANGED** → TAD and the mod coexist, nothing
+  global touched. That is the layout NE's official Inno installer produces, and it is why
+  this was the original plan for NE. (In the Steam layout `…\bin` holds EVERYTHING —
+  `data\`/`RM\`/`AI\`/`Sound\`/`loading*.ddt` are all inside `bin\`, so all of NE's files
+  map into `bin\`.) Uninstall stays safe here: an `InPlaceOverlay` manifest is
+  `ClonedAoe3=false`, so `UninstallService` removes only the mod's net-new files.
+  **NE was nonetheless moved to `IsolatedFolder` + `privateSetupPath` (2) once the
+  patcher existed**, and the catalog is the authority (`mods/napoleonic-era/mod.json`:
+  `type: IsolatedFolder`, `privateSetupPath: true`). The reason is that additive-vs-
+  replacement is the WRONG axis for this decision: what actually decides it is whether
+  the exe resolves content through the **registry key** or through its **working
+  directory**. A non-UHC exe reads the key, so the moment the mod lives in its own
+  folder — for ANY reason, collisions or not — it needs a key of its own. Writing into
+  the player's real AoE3 was the thing worth avoiding. So: **`InPlaceOverlay` is a valid
+  model, but no shipped mod uses it today** — don't "fix" NE back to it on the strength
+  of the paragraph above.
+  **(2) Replacement non-UHC mods → `PrivateSetupPath` (patch the key name inside the mod's
+  own exe). This SUPERSEDES the `SetupPathRedirect` junction described below, which is kept
+  only so an install made by an older build still gets its `bin\` restored.**
+  `Services/SetupPathPatcher.cs` (gated by `ModProfile.PrivateSetupPath` /
+  `install.privateSetupPath`) rewrites the registry-key string inside the install's OWN copy
+  of the executable to name a key belonging to the mod, and creates that key with
+  `setuppath` = the install folder. Nothing global moves: vanilla keeps its key and its
+  folder, both stay playable at once, and an abrupt exit leaves nothing to restore — which is
+  the whole reason it replaced the junction (the maintainer rejected having `bin\` renamed
+  while playing).
+  **The flag is REFUSED outside `IsolatedFolder`, in BOTH `ModRegistry.ProjectToProfile`
+  (dropped at projection, logged) and `NativeInstallService.ApplyPrivateSetupPath` (refused at
+  use).** For an `InPlaceOverlay` the install folder IS the player's own AoE3, so the patcher
+  would rewrite their BASE-GAME executable, break its signature and repoint vanilla at the mod's
+  key — reachable from nothing worse than a catalogue typo, and not undoable by the player. The
+  docs asserting the two are exclusive is not a guard; these two are.
+  **The `displayName` is validated BEFORE the download** (`MainWindow.InstallAsync`, beside the
+  elevation gate; `SetupPathPatcher.MaxModNameLength` = 33 → `StatusInstallSetupPathBadName`):
+  the patch runs at the END of the install, so an unusable name would otherwise clone AoE3,
+  download several GB and only then abort — reporting "the mod was NOT installed" with ten
+  gigabytes sitting on disk. And `PatchExecutable` writes `<exe>.patching` then
+  `File.Move(overwrite:true)` rather than rewriting in place: for a mod whose exe comes from the
+  clone (SoI) a torn write is unrecoverable, because Repair only re-lays the overlay.
+  **Measured on the real binaries, don't re-derive:** the key
+  `Software\Microsoft\Microsoft Games\Age of Empires 3 Expansion Pack 2\1.0` occurs at
+  **exactly 3 sites** — one ANSI (`8272016`) and two UTF-16 (`8009984`, `8626656`) — and is
+  **72 chars**, the hard ceiling on the replacement (so `displayName` is capped at 33). Three
+  OTHER keys (vanilla, WarChiefs) are deliberately left alone; the vanilla one is only 54
+  chars, so patching those too would tighten the ceiling. **Four invariants:** (a) the private
+  key must clone **every value** of the base key, not just `setuppath` — writing only the path
+  makes the game demand the 25-character product key, because the licence check reads `pid` /
+  `digitalproductid` / `doublehash` from the SAME key, and two of those are `REG_BINARY` so
+  each value keeps its original kind; (b) the engine reads **HKLM only** — HKCU was tried and
+  ignored, so writing the key needs elevation. **The key is written ONCE**: `EnsurePrivateKey`
+  early-returns on `IsPrivateKeyCurrent` (read-only: key exists, `setuppath` matches, carries
+  every value name the base key has), so the player is asked for admin at install and never
+  again on a Repair/Update. That predicate is also what the elevation guard keys off —
+  `MainWindow.NeedsAdminForPrivateKey`, consumed by `EnsureInstallWritableOrElevate(installPath,
+  profile)`, which BOTH `InstallAsync` and both `RepairInstallAsync` sites call. **Keep that
+  rule in the one helper**: it lived only in `InstallAsync` at first, and because a Steam
+  library folder is writable the repair path sailed past the folder check and threw at the
+  HKLM write — *after* the multi-GB download, as a raw non-localized .NET message. A permission
+  failure now raises `SetupPathKeyAccessException` → `StatusPrivateKeyNeedsAdmin`, kept separate
+  from `SetupPathPatchException` because the two ask the user for different things (run as
+  admin vs. this exe is unsupported); (c) the 32-bit registry view is mandatory (the game is
+  32-bit → its `HKLM\Software` is `WOW6432Node`, this launcher is x64); (d) `PatchExecutable`
+  is **idempotent** — a Repair
+  re-lays only the overlay, and for a mod whose exe comes from the AoE3 clone that file is
+  never rewritten, so the step re-runs over an already-patched exe and treating that as a
+  failure would abort every repair of exactly the mods this exists for. Applied in **all THREE**
+  paths that write a manifest — `InstallAsync`, `InstallModOnlyAsync` and
+  `ApplyGitHubDeltaAsync` — before `WriteManifest`, which records the key in
+  `InstallManifest.PrivateSetupPathKey` so `UninstallService.RemoveRegistryEntries` takes it
+  away; `RemovePrivateKey` refuses anything outside the AoE3 product root or naming a base
+  game. It also **carries over the base game's EULA marker** (`FIRSTRUN` /
+  `SystemInitialization` in HKCU) — a mod under its own product key otherwise re-prompts for
+  a licence the player already accepted for this same game; it only ever propagates an
+  acceptance that ALREADY exists, never fabricates one. Patching the exe **invalidates its
+  Authenticode signature** and is an AV-sensitive edit, so it is done to the player's local
+  copy and no modified binary is ever redistributed. **Don't "simplify" this by shipping a
+  pre-patched exe in the mod's payload** — it was asked and it does not work: the patched exe
+  is useless without its key, and the key CANNOT be packaged, because `setuppath` is that
+  player's install folder and `pid`/`digitalproductid`/`doublehash` are that player's licence.
+  A shipped exe with no key reproduces exactly the product-key dialog this feature exists to
+  avoid, and would additionally mean redistributing Microsoft's executable (SoI's payload does
+  not contain `age3y.exe` today — it comes from the player's own AoE3 clone). The flip side is
+  the property that makes this correct: the mod's key is cloned from that machine's base-game
+  key, so **the mod's licence state always equals vanilla's**. If the base key isn't found (unknown
+  build), the install **aborts** (`SetupPathPatchException` → `StatusInstallSetupPathFailed`)
+  rather than shipping a mod that silently loads vanilla. Pinned by `SetupPathPatcherTests`
+  — the ABSENT case is the one that matters, since it is what makes a clean abort possible.
+  **(2b, legacy) `SetupPathRedirect` (junction the setuppath folder).**
   Struggle of Indonesia ships the STOCK `age3y.exe` and REPLACES base TAD files
   (`data\civs.xml`, `homecity*.xml`, `protoy/techtreey/stringtabley.xml` with the
   Indonesian civs), so it can't be overlaid (would destroy vanilla) and it shares the
@@ -2484,21 +2808,32 @@ Two cheap gates beyond a green build:
   removed with `recursive:false` = link only); bails if the aside already exists;
   best-effort try/caught; **stricter than the My Games variant — it refuses to junction
   when the setup folder doesn't already exist** (won't create a link where the base game
-  should be). While a replacement mod plays, the real `bin\` (base + NE) is aside, so a
+  should be); and `EnsureDefault` only removes a junction that has its `(AoE3 vanilla)`
+  aside beside it — see the ownership-proof note in the My Games bullet above, which
+  applies identically here (a user's own junction on `bin\` must survive untouched). While a replacement mod plays, the real `bin\` (base + NE) is aside, so a
   crash leaves it junctioned until the next launcher start heals it — accepted trade-off
   (the user chose this over per-launch-admin `setuppath` writes, which broke TAD when a
   manual restore failed). Pinned by `AoE3SetupPathRedirectTests`. **`ModInstallProbe`'s
   engine check still applies** (SoI is `IsolatedFolder` with the base engine DLLs); its
   probe (`data\stringtabley.xml`, shared with vanilla) needs a marker
-  (`art\buildings\soi`, verified present). **Don't confuse the two models:** additive →
-  InPlaceOverlay (no registry, coexists), replacement → SetupPathRedirect (junction,
-  mutually exclusive with vanilla while playing).
+  (`art\buildings\soi`, verified present). **Don't confuse the models:** additive →
+  InPlaceOverlay (no registry, coexists), replacement → PrivateSetupPath (own registry key,
+  coexists, one admin prompt at install) — with SetupPathRedirect as the legacy junction
+  variant of the latter, mutually exclusive with vanilla while playing. **SoI's `mod.json` now
+  declares `privateSetupPath`**, so `ApplyLaunchRedirects` sees the old flag off and calls
+  `EnsureDefault()`, which is exactly what restores `bin\` for anyone coming from the old
+  model. Note `AoE3SetupPathRedirect` therefore has no live consumer in the catalog and is
+  kept solely for that migration — don't delete it while installs made by older builds exist.
   **Modder-facing surfaces (keep in sync with this gotcha):** `docs/MODDING.md §4` is the
   authoritative guide — §4.0 the UHC decision rule + the "copy the folder and run the exe"
   UHC test, §4.1 IsolatedFolder (UHC only), §4.2 InPlaceOverlay (additive non-UHC, NE),
-  §4.3 `setupPathRedirect` (stock-exe replacement, SoI); §3.4 documents the
-  `setupPathRedirect`/`multiplayerProbeFiles`/`userDataRedirect` fields; §9 has the "my mod
-  won't open" runtime entry. The **"Publish my mod" wizard** (`PublishModDialog`, Step 3) no
+  §4.3 `privateSetupPath` (stock-exe replacement, SoI — with `setupPathRedirect` noted as the
+  legacy variant); §3.4 documents the
+  `privateSetupPath`/`setupPathRedirect`/`multiplayerProbeFiles`/`userDataRedirect` fields;
+  §9 has the "my mod won't open" runtime entry. (Known drift, pre-existing: the template
+  schema at `aoe3-mods-catalog-template/schema/mod.schema.json` is missing
+  `userDataRedirect`, `multiplayerProbeFiles` and both setup-path fields — the live catalog's
+  schema is the current one.) The **"Publish my mod" wizard** (`PublishModDialog`, Step 3) no
   longer shows the raw `IsolatedFolder`/`InPlaceOverlay` combo — it asks ONE plain-language
   question ("how your mod installs and runs") with 3 options whose `Tag` encodes the type +
   a `+setupPathRedirect` suffix; `InstallTypeFromTag`/`SetupRedirectFromTag` split it in
@@ -3385,9 +3720,38 @@ engine** and the UI binds to it.
    `InstallModOnlyAsync` re-download** (NOT at the top) so a "plain repair intact"
    (no download) never false-warns; declining throws `OperationCanceledException`
    (caught as a clean cancel). Strings `DiskSpace{Calculating,WarningLine,ConfirmTitle,
-   ConfirmInstallBody,ConfirmRepairBody}`. Load-bearing: the estimate is deliberately
-   conservative (exact clone + fixed slack), unknown free space never warns, and it
-   NEVER blocks — it's a protective heads-up for low-space users.
+   ConfirmInstallBody,ConfirmRepairBody,ConfirmDownloadBody}`. Load-bearing: the estimate
+   is deliberately conservative (exact clone + fixed slack), unknown free space never
+   warns, and it NEVER blocks — it's a protective heads-up for low-space users.
+   **The other three download paths are covered too, and the shared decision lives in
+   `DiskSpaceService.Check(destPath, destRequired, tempPath, tempRequired)` — the reason
+   it exists as ONE function is the same-volume case.** When both paths resolve to the
+   same volume root the two requirements are **ADDED**, not compared separately: two
+   independent checks each pass on a drive with 4 GB free and 3 GB needed on each side,
+   and the operation still fills the disk — which is exactly what the two hand-rolled
+   callers that predate it could not get right. It returns a `DiskSpaceShortfall(Drive,
+   Required, Free)` so the message can **NAME the volume** ("3 GB short on C:" is
+   actionable when the user was looking at D:), or null when there's room **or when a
+   volume is unmeasurable** (the `IsShort` rule — never cry wolf). Unknown on one side
+   must still fall through to the other; pinned. Wired at three sites, all
+   warn-but-allow through the shared `MainWindow.ConfirmLowSpace`: (1) **the WoL patch
+   chain** (`ConfirmUpdateSpaceOk`, at the TOP of `ApplyAsync`) — the heaviest download
+   the launcher does and it had NO check at all; it spans two volumes (the `.tar.xz`
+   stage in `AppPaths.InstallTempRoot` while each patch's rollback backup is written
+   INSIDE the install folder) and the requirement is **exact, not estimated** —
+   `DownloadInfo.Size` is already in the manifest, temp doubled for the extraction. It
+   sits in `MainWindow`, not `UpdateService`, because a service must not open dialogs.
+   (2) **Repair**, which used to check the install folder — where a repair barely writes
+   — and now checks `InstallTempRoot` too (`OverlayHeadroomBytes` 1 GiB on the install
+   side, the full allowance on temp); with the game on D: and `%TEMP%` on a small C:
+   there was previously no warning at all. (3) **The launcher self-update**
+   (`LauncherUpdateDialog`, before the download) against a THIRD volume nothing else
+   looks at — the one holding the running `.exe`, via the new public
+   `LauncherUpdateService.GetPendingUpdatePath()`; size exact (GitHub reports it) and
+   **doubled**, since the new binary sits beside the old one until the swap. Deliberately
+   NOT covered (small enough that a failure is an error message, not a half-filled disk):
+   `DeltaPatchService`, translations, addons, and the Radmin installer — that last is the
+   biggest of the four and would be next.
    **Uninstall is a blanket recursive delete** of the install folder, gated only
    by a probe/manifest check that it looks like a mod install — it ignores the
    manifest's file list and has **no per-file base-game protection**. AoE3 base
@@ -3396,7 +3760,17 @@ engine** and the UI binds to it.
    "hard-coded base-game protection" claim is false.) The lone hard-coded
    exception is the stock-game profile: `UninstallService.Plan` refuses any
    `IsStockGame` profile outright (its "install folder" is the user's real AoE3
-   install — see the `IsStockGame` gotcha). **Uninstall ELEVATES ON DEMAND:** since
+   install — see the `IsStockGame` gotcha).
+   **The blanket delete is gated by the pure `UninstallService.ShouldRemoveOverlayOnly`, where a
+   real AoE3 root VETOES the manifest — it does not merely stand in for it** (pinned by
+   `UninstallSafetyTests`). It used to read `manifest != null ? !ClonedAoe3 : IsUserAoe3Root(path)`,
+   so `IsUserAoe3Root` was consulted ONLY when there was no manifest — leaving the worst case
+   open, because older builds stamped `clonedAoe3: true` on EVERY install (see the
+   `InPlaceOverlay` gotcha), including overlays laid straight into the player's game folder.
+   Anyone still carrying such a manifest lost their Age of Empires III to one Uninstall click.
+   The no-manifest branch is deliberately unchanged: a launcher-made clone whose manifest went
+   missing still gets a normal folder removal, which is the correct uninstall for it.
+   **Uninstall ELEVATES ON DEMAND:** since
    the launcher runs `asInvoker`, deleting an install under a protected folder
    (Program Files) needs admin, so `MainWindow.UninstallMenuItem_Click` probes
    `ElevationService.CanWriteTo(InstallPath)` before it starts and, if it can't

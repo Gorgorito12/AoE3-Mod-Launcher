@@ -4643,7 +4643,16 @@ public partial class MainWindow : Window
                 }
             },
             addExistingFolder: () => AddExistingCopy(),
-            searchInstall: () => _ = SearchInstallAsync(_updateService.Profile));
+            searchInstall: () => _ = SearchInstallAsync(_updateService.Profile),
+            // Which mods this one can copy game settings from. Built here because the install
+            // check is private to this window; the rules themselves live in
+            // GameSettingsStore.CanImportFrom so they are testable.
+            listSettingsSources: () => ModRegistry.All
+                .Where(p => Services.GameSettingsStore.CanImportFrom(
+                    p.Id, p.IsStockGame, p.UserDataFolder, IsProfileInstalledLocally(p), profile.Id))
+                .Where(Services.GameSettingsStore.HasReadableProfile)
+                .OrderBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList());
         // NO Owner on purpose: an owned window with ShowInTaskbar=True minimizes
         // its owner when closed (the "closing properties minimizes the launcher"
         // bug). Independent top-level window like LobbyWindow; Activate() on open.
@@ -6616,14 +6625,58 @@ public partial class MainWindow : Window
     /// </summary>
     private bool ConfirmRepairSpaceOk(string installPath)
     {
-        long free = Services.DiskSpaceService.SafeFreeSpace(installPath);
-        if (!Services.DiskSpaceService.IsShort(free, Services.DiskSpaceService.RepairAllowanceBytes))
-            return true;
+        // BOTH volumes. This used to look only at the install folder — where a repair barely
+        // writes: InstallModOnlyAsync downloads and extracts the multi-GB payload into
+        // AppPaths.InstallTempRoot. Someone with the game on D: and %TEMP% on a small C: got no
+        // warning at all, which is precisely the case the warning exists for.
+        var shortfall = Services.DiskSpaceService.Check(
+            installPath, Services.DiskSpaceService.OverlayHeadroomBytes,
+            Services.AppPaths.InstallTempRoot, Services.DiskSpaceService.RepairAllowanceBytes);
+        if (shortfall == null) return true;
 
-        var body = Strings.Format("DiskSpaceConfirmRepairBody",
-            Services.DiskSpaceService.FormatBytes(Services.DiskSpaceService.RepairAllowanceBytes),
-            Services.DiskSpaceService.FormatBytes(free),
-            Path.GetPathRoot(installPath) ?? installPath);
+        return ConfirmLowSpace(shortfall, "DiskSpaceConfirmRepairBody");
+    }
+
+    /// <summary>
+    /// Warn before applying the WoL patch chain when a disk is too tight for it.
+    ///
+    /// <para>This flow had no check at all, and it is the heaviest download the launcher does —
+    /// several GB across two volumes: the <c>.tar.xz</c> archives stage in
+    /// <see cref="Services.AppPaths.InstallTempRoot"/> while each patch's rollback backup is
+    /// written INSIDE the install folder.</para>
+    ///
+    /// <para>The requirement is EXACT rather than estimated: the manifest already carries every
+    /// download's size, so unlike the install estimate there is nothing to guess. The temp side
+    /// is doubled because each archive is extracted beside itself.</para>
+    /// </summary>
+    private bool ConfirmUpdateSpaceOk(string? installPath, IReadOnlyList<DownloadInfo>? downloads)
+    {
+        if (downloads == null || downloads.Count == 0) return true;
+
+        long total = 0;
+        foreach (var d in downloads) total += Math.Max(0, d.Size);
+        if (total <= 0) return true;   // a manifest without sizes — nothing to check against
+
+        var shortfall = Services.DiskSpaceService.Check(
+            installPath, total, Services.AppPaths.InstallTempRoot, total * 2);
+        if (shortfall == null) return true;
+
+        return ConfirmLowSpace(shortfall, "DiskSpaceConfirmDownloadBody");
+    }
+
+    /// <summary>
+    /// The shared "not enough room, carry on anyway?" prompt. Warn-but-allow, like every other
+    /// disk-space check here — the estimate is conservative, so blocking would refuse installs
+    /// that would have worked.
+    /// </summary>
+    private bool ConfirmLowSpace(Services.DiskSpaceShortfall shortfall, string bodyKey)
+    {
+        var body = Strings.Format(bodyKey,
+            Services.DiskSpaceService.FormatBytes(shortfall.RequiredBytes),
+            Services.DiskSpaceService.FormatBytes(shortfall.FreeBytes),
+            shortfall.Drive);
+        DiagnosticLog.Write(
+            $"Low disk space on {shortfall.Drive}: need {shortfall.RequiredBytes}, have {shortfall.FreeBytes}.");
         return MessageBox.Show(this, body,
             Strings.Get("DiskSpaceConfirmTitle"),
             MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
@@ -7183,7 +7236,7 @@ public partial class MainWindow : Window
                     // install folder isn't writable (asInvoker + protected non-Steam
                     // folder). Placed here (not for the intact branch above) so an
                     // intact repair never prompts. Returns → the finally resets busy.
-                    if (!EnsureInstallWritableOrElevate(installPath)) return;
+                    if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile)) return;
                     // This re-downloads the payload, so warn on low disk space first.
                     if (!ConfirmRepairSpaceOk(installPath))
                         throw new OperationCanceledException();
@@ -7211,7 +7264,7 @@ public partial class MainWindow : Window
                 // with no per-file hashes. Elevate on demand if the folder isn't
                 // writable (asInvoker + protected non-Steam folder). Returns → the
                 // finally resets busy.
-                if (!EnsureInstallWritableOrElevate(installPath)) return;
+                if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile)) return;
 
                 // Incremental delta patch first (only for a normal update to the approved tag, when
                 // the mod opted in): downloads/apply just the changed files. Any doubt returns false
@@ -7349,6 +7402,21 @@ public partial class MainWindow : Window
             SetStatus(Strings.Get("StatusCancelledUpdate"));
             ShowProgressCancelled();
         }
+        catch (Services.SetupPathKeyAccessException ex)
+        {
+            // Named before the generic handler: the raw .NET text ("Requested registry access
+            // is not allowed") gives no hint that the answer is to run as administrator.
+            DiagnosticLog.Write($"Repair failed — the private registry key needs admin: {ex}");
+            SetStatus(Strings.Get("StatusPrivateKeyNeedsAdmin"));
+            ShowProgressError(Strings.Get("StatusPrivateKeyNeedsAdmin"));
+        }
+        catch (Services.SetupPathPatchException ex)
+        {
+            DiagnosticLog.Write($"Repair failed — cannot patch the setup path: {ex}");
+            var patchMsg = Strings.Format("StatusInstallSetupPathFailed", Path.GetFileName(ex.ExePath));
+            SetStatus(patchMsg);
+            ShowProgressError(patchMsg);
+        }
         catch (Exception ex)
         {
             SetStatus($"Error: {ex.Message}");
@@ -7446,13 +7514,21 @@ public partial class MainWindow : Window
     /// or user-chosen folder is already writable, so the prompt never fires. Same
     /// plumbing + strings as the install/uninstall guards; no auto-resume (the user
     /// re-triggers the action in the elevated instance).
+    ///
+    /// <para>Pass <paramref name="profile"/> whenever one is available: a mod using
+    /// <see cref="ModProfile.PrivateSetupPath"/> also needs an HKLM key, which needs admin
+    /// even when the folder itself is writable — and a Steam library usually is, so the
+    /// folder check alone would let it through and the write would blow up later, after the
+    /// download. Checking here keeps that single rule in one place.</para>
     /// </summary>
-    private bool EnsureInstallWritableOrElevate(string installPath)
+    private bool EnsureInstallWritableOrElevate(string installPath, ModProfile? profile = null)
     {
-        if (ElevationService.CanWriteTo(installPath)) return true;
+        var needsAdminForPrivateKey = NeedsAdminForPrivateKey(profile, installPath);
+        if (ElevationService.CanWriteTo(installPath) && !needsAdminForPrivateKey) return true;
 
-        DiagnosticLog.Write(
-            $"Cannot write to install folder '{installPath}'. Prompting user to relaunch elevated.");
+        DiagnosticLog.Write(needsAdminForPrivateKey
+            ? $"'{profile!.DisplayName}' needs an HKLM registry key. Prompting user to relaunch elevated."
+            : $"Cannot write to install folder '{installPath}'. Prompting user to relaunch elevated.");
 
         var elevateResult = MessageBox.Show(
             this,
@@ -7479,6 +7555,37 @@ public partial class MainWindow : Window
             SetStatus(Strings.Get("StatusElevationDenied"));
         }
         return false;
+    }
+
+    /// <summary>
+    /// Whether this mod still needs an elevated write to create its private AoE3 registry key.
+    ///
+    /// <para>False once the key exists and points at this folder, which is the whole reason
+    /// this is a separate check rather than a plain "is it a privateSetupPath mod": the key is
+    /// written ONCE, so the player is asked for admin when installing and never again on a
+    /// Repair or an Update. A mod name the patcher would reject also returns false — the
+    /// install fails later with a message that actually explains the problem, and demanding
+    /// admin first would only add a pointless prompt to a doomed run.</para>
+    /// </summary>
+    private static bool NeedsAdminForPrivateKey(ModProfile? profile, string installPath)
+    {
+        if (profile is not { PrivateSetupPath: true }) return false;
+        if (ElevationService.IsRunningAsAdmin()) return false;
+
+        try
+        {
+            var key = SetupPathPatcher.PrivateKeyFor(profile.DisplayName);
+            return !SetupPathPatcher.IsPrivateKeyCurrent(key, installPath);
+        }
+        catch (ArgumentException ex)
+        {
+            // The install path refuses this name before downloading anything, so reaching here
+            // means a Repair/Update of a mod whose catalogue name became unusable. Don't demand
+            // admin for a run that is going to fail anyway — but say so, because silence here is
+            // what let a bad name sail through the gate and die at the end of the install.
+            DiagnosticLog.Write($"NeedsAdminForPrivateKey: '{profile.DisplayName}' is unusable: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>
@@ -8745,22 +8852,29 @@ public partial class MainWindow : Window
 
         if (result == MessageBoxResult.Yes)
         {
+            // The user consented to closing it, so the monitor's exit must not be reported
+            // as the game having crashed on its own.
+            _stopRequestedByUser = true;
+
+            // Honour a kill that DIDN'T work. A game launched elevated (the compat-layer case
+            // this whole area exists for) can't be killed by an un-elevated launcher, and
+            // returning "go ahead" anyway sends the installer on to overwrite files the running
+            // game still holds open. Better to say plainly that it is still running.
+            bool allClosed = true;
             foreach (var p in processes)
             {
-                try
-                {
-                    p.Kill();
-                    p.WaitForExit(5000);
-                    DiagnosticLog.Write($"Closed game process (PID {p.Id}).");
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write($"Failed to close game: {ex.Message}");
-                }
+                if (!Services.GameProcessCloser.Stop(p)) allClosed = false;
+                p.Dispose();
             }
-            return true;
+            if (!allClosed)
+            {
+                DiagnosticLog.Write("EnsureGameNotRunning: the game could not be closed — refusing to continue.");
+                SetStatus(Strings.Get("StatusGameStillRunning"));
+            }
+            return allClosed;
         }
 
+        foreach (var p in processes) p.Dispose();
         return result != MessageBoxResult.Cancel;
     }
 
@@ -9162,6 +9276,47 @@ public partial class MainWindow : Window
         return candidate;
     }
 
+    /// <summary>
+    /// The detected AoE3 folder that <paramref name="destination"/> would install ON TOP
+    /// of, or null when the destination is safe.
+    ///
+    /// <para>Refuses the game's own folders, NOT a subfolder beside them: putting a mod in
+    /// <c>…\Age Of Empires 3\Wars of Liberty</c> is the normal convention and must keep
+    /// working. The one nested case that IS refused is anything under a Steam-style
+    /// <c>bin\</c> (where <c>GameFolder != ModRoot</c>) — that's inside the game itself. On
+    /// a flat layout the two are the same folder, so only an exact match is refused or the
+    /// convention above would be rejected too.</para>
+    /// </summary>
+    private static string? FindAoe3FolderConflict(string destination)
+    {
+        if (string.IsNullOrWhiteSpace(destination)) return null;
+
+        static string Norm(string p)
+        {
+            try { return Path.GetFullPath(p).TrimEnd('\\', '/'); }
+            catch { return p.TrimEnd('\\', '/'); }
+        }
+        static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        static bool Inside(string child, string parent) =>
+            child.StartsWith(parent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+        var dest = Norm(destination);
+
+        foreach (var install in AoE3Detector.FindAll())
+        {
+            var root = string.IsNullOrEmpty(install.ModRoot) ? null : Norm(install.ModRoot);
+            var game = string.IsNullOrEmpty(install.GameFolder) ? null : Norm(install.GameFolder);
+
+            if (root != null && Same(dest, root)) return root;
+            if (game != null && Same(dest, game)) return game;
+
+            // Inside the executables folder of a split (Steam) layout.
+            if (game != null && root != null && !Same(game, root) && Inside(dest, game)) return game;
+        }
+
+        return null;
+    }
+
     /// <param name="addNewSlot">
     /// When true, install an ADDITIONAL copy of an already-installed mod into a
     /// new folder instead of overwriting the existing one: suggests a
@@ -9241,6 +9396,14 @@ public partial class MainWindow : Window
             }
         }
 
+        // An IN-PLACE overlay adds its files to the AoE3 the user already has, so there is
+        // nothing to clone: the base game is already at the destination. Routing it through
+        // the mod-only install is what makes the manifest say `clonedAoe3: false`, which is
+        // in turn what makes Uninstall remove only the mod's own files instead of the whole
+        // folder. An ADDITIONAL copy (addNewSlot) is always an isolated clone even for these
+        // mods — two overlays can't share one game folder.
+        bool overlayInPlace = profile.InstallType == ModInstallType.InPlaceOverlay && !addNewSlot;
+
         string? aoe3SourcePath = null;
         string? aoe3SourceLabel = null;
 
@@ -9255,8 +9418,11 @@ public partial class MainWindow : Window
         }
 
         // Default destination depends on InstallType:
-        //   * InPlaceOverlay → the AoE3 folder itself (mod files extracted on
-        //                      top of vanilla AoE3).
+        //   * InPlaceOverlay → the AoE3 folder the ENGINE reads: the one holding data\.
+        //     FindAoe3InstallRoot derives it the same way the stock-game profile does
+        //     (parent of bin\, else the exe's folder — whichever has data\), so on Steam
+        //     it lands in …\Age Of Empires 3\bin and on a flat layout at the root. Getting
+        //     this level wrong installs the mod one directory above everything AoE3 loads.
         //   * IsolatedFolder → in priority order:
         //       1. the path the user installed THIS mod to last time (per-mod
         //          state — remembers their pick across reinstalls), as long
@@ -9291,7 +9457,8 @@ public partial class MainWindow : Window
         }
         else if (profile.InstallType == ModInstallType.InPlaceOverlay)
         {
-            suggestedFolder = aoe3SourcePath
+            suggestedFolder = GameLauncher.FindAoe3InstallRoot(_config)
+                ?? aoe3SourcePath
                 ?? (string.IsNullOrEmpty(profile.DefaultInstallFolder)
                     ? profile.DisplayName
                     : profile.DefaultInstallFolder);
@@ -9359,7 +9526,9 @@ public partial class MainWindow : Window
         // Show the styled install dialog (single popup, no MessageBoxes)
         var dialog = new InstallFolderDialog(
             suggestedFolder, aoe3SourcePath, aoe3SourceLabel,
-            profile.DisplayName)
+            profile.DisplayName,
+            // An in-place overlay clones nothing, so it must not wait for a clone source.
+            requiresAoe3Source: !overlayInPlace)
         {
             Owner = this
         };
@@ -9367,6 +9536,30 @@ public partial class MainWindow : Window
 
         var installFolder = dialog.SelectedFolder;
         aoe3SourcePath = dialog.Aoe3SourcePath; // may have been inferred
+
+        // ---- A CLONING install must never land on top of the real AoE3 ----
+        // A clone stamps clonedAoe3:true into the manifest, and UninstallService reads
+        // exactly that flag to choose between "remove only the mod's net-new files" and a
+        // RECURSIVE DELETE of the whole folder — so a cloning install whose destination is
+        // the user's game folder quietly arms an uninstall that wipes their AoE3. The
+        // clone would also copy the game's own siblings into it, and the manifest left
+        // behind makes FolderCloneService exclude that folder from every future clone
+        // (producing engine-less installs).
+        //
+        // Exempt for an in-place overlay: that model installs there BY DESIGN, and it goes
+        // through InstallModOnlyAsync, whose manifest says clonedAoe3:false — so uninstall
+        // removes only what the mod added and none of the above applies.
+        var aoe3Conflict = overlayInPlace ? null : FindAoe3FolderConflict(installFolder);
+        if (aoe3Conflict != null)
+        {
+            DiagnosticLog.Write(
+                $"Install refused: destination '{installFolder}' is inside the detected AoE3 at '{aoe3Conflict}'.");
+            MessageBox.Show(this,
+                Strings.Format("DlgInstallInsideAoe3Body", aoe3Conflict),
+                Strings.Get("DlgInstallInsideAoe3Title"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         // ---- Known antivirus false positive ----
         // Some mods ship a file antivirus engines remove on sight (WoL:
@@ -9424,11 +9617,35 @@ public partial class MainWindow : Window
             ? installFolder
             : Path.GetDirectoryName(installFolder) ?? installFolder;
 
-        if (!ElevationService.CanWriteTo(probeFolder))
+        // A mod whose name can't produce a registry key would otherwise clone AoE3, download the
+        // payload and lay the overlay before dying at the patch step — reporting "the mod was NOT
+        // installed" with ten gigabytes on disk. The name is known up front, so refuse up front.
+        if (profile.PrivateSetupPath)
+        {
+            try { SetupPathPatcher.PrivateKeyFor(profile.DisplayName); }
+            catch (ArgumentException ex)
+            {
+                DiagnosticLog.Write($"Install refused before download — unusable mod name: {ex.Message}");
+                var badName = Strings.Format("StatusInstallSetupPathBadName", SetupPathPatcher.MaxModNameLength);
+                SetStatus(badName);
+                ShowProgressError(badName);
+                return;
+            }
+        }
+
+        // A stock-exe total conversion also needs its own AoE3 registry key under HKLM
+        // (see SetupPathPatcher), which needs admin even when the install folder itself is
+        // writable — a Steam library usually is. Fold it into the SAME gate so the user is
+        // asked once, up front, instead of the install dying after a multi-GB download with
+        // everything already on disk. The engine reads HKLM only; HKCU was tried and ignored.
+        var needsAdminForPrivateKey = NeedsAdminForPrivateKey(profile, installFolder);
+
+        if (!ElevationService.CanWriteTo(probeFolder) || needsAdminForPrivateKey)
         {
             DiagnosticLog.Write(
-                $"Cannot write to install folder '{probeFolder}'. " +
-                "Prompting user to relaunch elevated.");
+                needsAdminForPrivateKey
+                    ? $"'{profile.DisplayName}' needs an HKLM registry key. Prompting user to relaunch elevated."
+                    : $"Cannot write to install folder '{probeFolder}'. Prompting user to relaunch elevated.");
 
             var elevateResult = MessageBox.Show(
                 this,
@@ -9644,7 +9861,7 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    if (aoe3SourcePath != null)
+                    if (aoe3SourcePath != null && !overlayInPlace)
                     {
                         // Canonical sibling-mod exclusion list. When the
                         // user installs Improvement Mod and already has
@@ -9834,6 +10051,23 @@ public partial class MainWindow : Window
             DiagnosticLog.Write($"Install aborted — AoE3 base not cloned: {ex}");
             SetStatus(Strings.Get("StatusInstallBaseMissing"));
             ShowProgressError(Strings.Get("StatusInstallBaseMissing"));
+        }
+        catch (Services.SetupPathKeyAccessException ex)
+        {
+            DiagnosticLog.Write($"Install aborted — the private registry key needs admin: {ex}");
+            SetStatus(Strings.Get("StatusPrivateKeyNeedsAdmin"));
+            ShowProgressError(Strings.Get("StatusPrivateKeyNeedsAdmin"));
+        }
+        catch (Services.SetupPathPatchException ex)
+        {
+            // The mod declares privateSetupPath but its executable isn't one we can point at
+            // a key of its own. Fatal on purpose: letting it through leaves a mod that reads
+            // the BASE GAME's key and quietly loads vanilla from the player's bin\, which
+            // presents as "I installed the mod and nothing changed".
+            DiagnosticLog.Write($"Install aborted — cannot patch the setup path: {ex}");
+            var patchMsg = Strings.Format("StatusInstallSetupPathFailed", Path.GetFileName(ex.ExePath));
+            SetStatus(patchMsg);
+            ShowProgressError(patchMsg);
         }
         catch (Services.PayloadFileBlockedException ex)
         {
@@ -10065,6 +10299,7 @@ public partial class MainWindow : Window
     private async Task ApplyAsync(InstallCompletion installContext = InstallCompletion.None)
     {
         if (_isBusy) return;
+        if (!ConfirmUpdateSpaceOk(_updateService.InstallPath, _pendingDownloads)) return;
         SetBusy(true);
         _operationIsBackgroundable = true;   // svc/pending captured below → switch-to-another-mod OK
         _operatingCts = new CancellationTokenSource();
@@ -10356,7 +10591,25 @@ public partial class MainWindow : Window
 
         try
         {
-            GameLauncher.Launch(_config, _updateService.InstallPath, _updateService.Profile);
+            // Remember WHICH mod is being played before anything can change it — the player may
+            // switch mods in the launcher while the game runs, and OnGameExited has to store the
+            // settings against the mod that was actually played.
+            _settingsSyncProfile = _updateService.Profile;
+
+            var launch = GameLauncher.Launch(_config, _updateService.InstallPath, _updateService.Profile);
+
+            // Remember WHICH process we started. Tracking by executable name can't tell
+            // Wars of Liberty from the stock game (both run age3y.exe), so the monitor and
+            // Stop would act on whichever copy happened to be open.
+            _gameProcessId = launch.ProcessId;
+            _gameStartedUtc = DateTime.UtcNow;
+            _stopRequestedByUser = false;
+
+            // Windows demanded elevation for this exe, so we lost the re-parented launch
+            // and the user paid a UAC prompt. Don't interrupt them now — a modal over a
+            // game that is opening steals focus and can knock AoE3 out of fullscreen —
+            // park it and offer the fix once the game exits.
+            if (launch.NeededElevation) _pendingCompatLayerExe = launch.ExePath;
 
             // Only after Launch returned without throwing — a failed launch (missing
             // exe) must not count as "played". Before the CloseLauncherOnGameStart
@@ -10390,6 +10643,22 @@ public partial class MainWindow : Window
             if (result == MessageBoxResult.OK)
                 BrowseAoE3Button_Click(sender, e);
         }
+        catch (Services.GameLaunchCancelledException cancelled)
+        {
+            // The user said No to the UAC prompt. That is a DECISION, and it used to be
+            // reported as a red error dialog carrying the framework's raw message —
+            // telling them something broke right after they chose that it shouldn't
+            // happen. Nothing is running now, so this is the right moment to offer the
+            // fix that removes the prompt for good.
+            RefreshIdlePanel();
+            SetStatus(Strings.Get("StatusGameLaunchCancelled"));
+            if (!MaybeOfferCompatLayerFix(cancelled.ExePath))
+                ShowAppToast(new Controls.AppToast.ToastOptions(
+                    "⚠",
+                    Strings.Get("StatusGameLaunchCancelled"),
+                    null,
+                    Array.Empty<Controls.AppToast.ToastAction>()));
+        }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message,
@@ -10398,8 +10667,142 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// The exe whose launch had to elevate, parked until the game exits so the offer
+    /// below never interrupts a game that is opening. Null when there's nothing pending.
+    /// </summary>
+    private string? _pendingCompatLayerExe;
+
+    /// <summary>
+    /// Offers to undo the compatibility layer Windows pinned on the game executable.
+    ///
+    /// <para>That layer is what makes <c>CreateProcess</c> fail with
+    /// <c>ERROR_ELEVATION_REQUIRED</c>, and it costs the player two things at once: a UAC
+    /// prompt on every launch, and — invisibly — the explorer.exe re-parenting that keeps
+    /// the game running when the launcher is force-closed. The launcher never wrote it
+    /// (nothing here touches AppCompatFlags); Windows' Program Compatibility Assistant
+    /// applies it on its own, which is why the value carries its <c>~</c> marker.</para>
+    ///
+    /// <para>Returns true when a dialog was shown. Entirely best-effort — this runs after
+    /// a launch that already succeeded, and must never be able to disturb it.</para>
+    /// </summary>
+    private bool MaybeOfferCompatLayerFix(string exePath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(exePath)) return false;
+            if (_config.CompatLayerNoticeAcknowledged) return false;
+
+            var layer = Services.AppCompatLayerService.Probe(exePath);
+            if (layer == null)
+            {
+                // Elevation came from somewhere else (the exe's own manifest, a
+                // machine-wide policy). Nothing we can offer to undo.
+                DiagnosticLog.Write($"Elevation required for '{exePath}' but no compat layer is set.");
+                return false;
+            }
+
+            var info = layer.Value;
+            DiagnosticLog.Write(
+                $"Compat layer on '{exePath}': '{info.RawValue}' (setByWindows={info.AppliedByWindows}, " +
+                $"hkcu={info.InCurrentUserHive}, runAsAdmin={info.HasRunAsAdmin}).");
+
+            var dialog = new CompatibilityLayerDialog(exePath, info) { Owner = this };
+            bool remove = dialog.ShowDialog() == true;
+
+            if (dialog.DontAskAgain)
+            {
+                _config.CompatLayerNoticeAcknowledged = true;
+                _config.Save();
+            }
+
+            if (remove)
+            {
+                bool removed = Services.AppCompatLayerService.Remove(exePath);
+                string key = removed ? "StatusCompatLayerRemoved" : "StatusCompatLayerRemoveFailed";
+                SetStatus(Strings.Get(key));
+                ShowAppToast(new Controls.AppToast.ToastOptions(
+                    removed ? "✔" : "⚠",
+                    Strings.Get(key),
+                    null,
+                    Array.Empty<Controls.AppToast.ToastAction>()));
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Compat layer notice failed (ignored): {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The process this launcher started, or -1 when unknown (elevated launch). Preferred
+    /// over matching on the executable name, which is ambiguous — see
+    /// <see cref="Services.GameLaunchResult.ProcessId"/>.
+    /// </summary>
+    private int _gameProcessId = -1;
+
+    /// <summary>
+    /// The game we started, or null when it's gone / we never got a pid. The caller then
+    /// falls back to the by-name sweep.
+    /// </summary>
+    private Process? TryGetLaunchedGameProcess()
+    {
+        if (_gameProcessId <= 0) return null;
+        try
+        {
+            var p = Process.GetProcessById(_gameProcessId);
+            return p.HasExited ? null : p;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            // The process is genuinely gone. Let the caller degrade to the name sweep.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // Anything else (an access denial, a transient Win32 failure) is NOT evidence that
+            // the game exited. We still have to answer null — there is no handle to hand back —
+            // but this answer feeds the "the game closed by itself" warning, and a hiccup here
+            // would accuse a healthy game of crashing and send the player to Verify/Repair. The
+            // flag is what stops that; OnGameExited consumes it.
+            _gameProcessQueryFailed = true;
+            DiagnosticLog.Write($"Could not query the launched game (pid {_gameProcessId}): {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Set when <see cref="TryGetLaunchedGameProcess"/> failed for a reason that does NOT mean
+    /// the process ended, so the crash warning can tell "it died" apart from "we couldn't look".
+    /// </summary>
+    private bool _gameProcessQueryFailed;
+
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
+        // The user asked for this, so the exit that follows must not be reported as the
+        // game closing on its own.
+        _stopRequestedByUser = true;
+
+        // Stop the process we launched. Only when we don't have one do we fall back to
+        // the by-name sweep, which cannot distinguish this mod's age3y.exe from the stock
+        // game's and would close a copy the launcher never started.
+        var launched = TryGetLaunchedGameProcess();
+        if (launched != null)
+        {
+            using (launched) Services.GameProcessCloser.Stop(launched);
+            OnGameExited();
+            return;
+        }
+
+        if (_gameProcessId > 0)
+        {
+            // We had a pid and it's gone — the game already closed.
+            OnGameExited();
+            return;
+        }
+
         var processes = Process.GetProcessesByName(GameProcessName());
         if (processes.Length == 0)
         {
@@ -10409,18 +10812,7 @@ public partial class MainWindow : Window
         }
 
         foreach (var p in processes)
-        {
-            try
-            {
-                p.Kill();
-                p.WaitForExit(5000);
-                DiagnosticLog.Write($"Stopped game process (PID {p.Id}).");
-            }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write($"Failed to stop game: {ex.Message}");
-            }
-        }
+            Services.GameProcessCloser.Stop(p);
         OnGameExited();
     }
 
@@ -10447,9 +10839,23 @@ public partial class MainWindow : Window
             // returned Process handles too, or they leak over a long session.
             try
             {
-                var processes = Process.GetProcessesByName(GameProcessName());
-                bool running = processes.Length > 0;
-                foreach (var p in processes) p.Dispose();
+                bool running;
+                if (_gameProcessId > 0)
+                {
+                    // Watch the process we started. By name, an unrelated AoE3 left open
+                    // would keep this reading "still playing" long after our game closed,
+                    // stranding the CTA on Stop.
+                    var launched = TryGetLaunchedGameProcess();
+                    running = launched != null;
+                    launched?.Dispose();
+                }
+                else
+                {
+                    var processes = Process.GetProcessesByName(GameProcessName());
+                    running = processes.Length > 0;
+                    foreach (var p in processes) p.Dispose();
+                }
+
                 if (!running)
                 {
                     OnGameExited();
@@ -10464,14 +10870,112 @@ public partial class MainWindow : Window
         DiagnosticLog.Write("Game monitor started.");
     }
 
+    /// <summary>
+    /// Under this many seconds, "the game exited" means it failed to start rather than
+    /// that someone played and quit. Generous on purpose: AoE3 shows its intro and menu
+    /// well inside this window, so a genuine session never trips it.
+    /// </summary>
+    private const int GameInstantExitSeconds = 8;
+
+    /// <summary>When the current game was launched, to tell a crash from a short session.</summary>
+    private DateTime _gameStartedUtc;
+
+    /// <summary>The exit about to happen was requested by the user, so it isn't a crash.</summary>
+    private bool _stopRequestedByUser;
+
     private void OnGameExited()
     {
+        // Decide BEFORE clearing the launch bookkeeping below.
+        bool diedOnItsOwn =
+            !_stopRequestedByUser &&
+            !_gameProcessQueryFailed &&
+            _gameStartedUtc != default &&
+            (DateTime.UtcNow - _gameStartedUtc) < TimeSpan.FromSeconds(GameInstantExitSeconds);
+
         _gameMonitorTimer?.Stop();
         _gameMonitorTimer = null;
         _isGameRunning = false;
+        _gameProcessId = -1;
+        _gameStartedUtc = default;
+        _stopRequestedByUser = false;
+        _gameProcessQueryFailed = false;
         UpdateGameUI();
         DiagnosticLog.Write("Game exited.");
+
+        // Put the player's own folders back the moment the game closes. These used to be undone
+        // only by App.OnStartup or by the NEXT launch of something else — and the launcher is
+        // built to auto-start minimised and live in the tray, so "it heals on restart" could mean
+        // days. In the meantime `My Games\Age of Empires 3` stays junctioned at the mod, and any
+        // Age of Empires III opened outside the launcher writes its saves into the mod's folder.
+        // Observed on a real machine, live for hours. Best-effort: a failure here must never
+        // interfere with the exit bookkeeping above.
+        try { Services.AoE3UserDataRedirect.EnsureDefault(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Restoring the user-data folder after exit failed: {ex.Message}"); }
+        try { Services.AoE3SetupPathRedirect.EnsureDefault(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Restoring the setup path after exit failed: {ex.Message}"); }
+
+        // Take the settings the player just used as the shared copy, so the next mod they open
+        // starts where they left off. The profile is the one captured AT LAUNCH, not the one on
+        // screen now: switching mods while the game runs is allowed, and reading the current one
+        // would store these settings against a mod that was never played.
+        //
+        // Deliberately AFTER the redirect restore above, and that is safe: GameSettingsStore
+        // resolves the profile through the mod's own UserDataFolder, never through the
+        // `My Games\Age of Empires 3` junction, so it reads the same file whether the junction
+        // is up or not. The reverse order — the WRITE side — does depend on the junction, which
+        // is why the push stays the last step of GameLauncher.ApplyLaunchRedirects.
+        var played = _settingsSyncProfile;
+        _settingsSyncProfile = null;
+        if (played != null && _config.GetState(played.Id).SyncGameSettings)
+        {
+            try { Services.GameSettingsStore.CaptureFrom(played); }
+            catch (Exception ex) { DiagnosticLog.Write($"Capturing shared settings failed: {ex.Message}"); }
+        }
+
+        // A game that dies seconds after launching didn't get played — it failed. Until
+        // now that was indistinguishable from a normal session in the UI and left only a
+        // bare "Game exited." in the log, which is how an engine-less Napoleonic Era
+        // install could be launched over and over with the launcher reporting nothing at
+        // all ("I press play and nothing happens").
+        if (diedOnItsOwn) WarnGameClosedImmediately();
+
+        // The launch we just finished had to elevate. Now — with nothing running and the
+        // user back at the launcher — is the moment to offer to undo the compat layer
+        // behind it. Deliberately not at launch time: a modal over a game that is opening
+        // steals focus and can knock AoE3 out of fullscreen.
+        var pending = _pendingCompatLayerExe;
+        _pendingCompatLayerExe = null;
+        if (pending != null) MaybeOfferCompatLayerFix(pending);
     }
+
+    /// <summary>
+    /// Tells the user the game shut itself down right after starting, and points at the
+    /// tool that usually explains it. Best-effort — this runs from the monitor tick.
+    /// </summary>
+    private void WarnGameClosedImmediately()
+    {
+        try
+        {
+            DiagnosticLog.Write(
+                $"Game closed within {GameInstantExitSeconds}s of launching — reporting a failed start.");
+            SetStatus(Strings.Get("StatusGameClosedImmediately"));
+            ShowAppToast(new Controls.AppToast.ToastOptions(
+                "⚠",
+                Strings.Get("StatusGameClosedImmediately"),
+                Strings.Get("ToastGameClosedImmediatelyBody"),
+                Array.Empty<Controls.AppToast.ToastAction>()));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Immediate-exit notice failed (ignored): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The mod whose game is running, remembered from the launch so its settings can be captured
+    /// when it exits. See <see cref="OnGameExited"/> for why the displayed mod won't do.
+    /// </summary>
+    private ModProfile? _settingsSyncProfile;
 
     /// <summary>
     /// Possible meanings the primary sidebar button can take depending on
@@ -10492,6 +10996,24 @@ public partial class MainWindow : Window
     /// </summary>
     private void SetPrimaryAction(PrimaryAction action, bool enabled = true)
     {
+        // While the game runs the primary CTA IS Stop — the rule UpdateGameUI already
+        // encodes, enforced here because this is the one place nobody can bypass.
+        //
+        // It has to be enforced, not assumed: ApplyCheckResult sets Play/Update without
+        // consulting _isGameRunning, and a WolPatcher check goes to the network, so its
+        // result routinely lands a second AFTER the launch. The Play branch below then
+        // wrote a DISABLED "PLAYING…" and — the real damage — left _primaryAction on Play,
+        // making `case PrimaryAction.Stop` in the dispatcher unreachable. Since the actual
+        // StopButton is Collapsed inside the Collapsed LegacyPlayContent, that stranded the
+        // user with a running game and no way to close it (reported for Wars of Liberty).
+        //
+        // Update is coerced too: its handler opens with EnsureGameNotRunning(), which asks
+        // to close the game anyway, so offering Stop directly is the same thing minus a
+        // step. Install and Hidden are left alone — they can't legitimately co-occur with a
+        // running game, and forcing them would mask a real state bug instead of fixing one.
+        if (_isGameRunning && (action == PrimaryAction.Play || action == PrimaryAction.Update))
+            action = PrimaryAction.Stop;
+
         _primaryAction = action;
         var profile = _updateService.Profile;
         var accent = SafeBrush(profile.AccentColor, "#c8102e");
@@ -10505,6 +11027,10 @@ public partial class MainWindow : Window
                 ActionPanelControl.PlayButton.IsEnabled = enabled;
                 break;
             case PrimaryAction.Play:
+                // The _isGameRunning arms are dead now that the coercion above turns Play
+                // into Stop while the game runs — kept as belt-and-braces so a future
+                // caller that somehow reaches here can't paint an enabled PLAY over a
+                // running game. "BtnPlaying" is unreachable for the same reason.
                 ActionPanelControl.PlayButtonText.Text = _isGameRunning
                     ? Strings.Get("BtnPlaying")
                     : Strings.Get("BtnPlay");

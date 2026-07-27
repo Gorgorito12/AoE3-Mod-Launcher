@@ -90,21 +90,23 @@ public class BuildModJsonTests
     }
 
     [Fact]
-    public void SetupPathRedirect_UnderInstall_OnlyWhenTrue()
+    public void PrivateSetupPath_UnderInstall_OnlyWhenTrue()
     {
         // Off by default → omitted (JSON stays clean, like userDataRedirect).
         var off = Build(new() { Id = "m", DisplayName = "M" });
-        Assert.False(Has(off.GetProperty("install"), "setupPathRedirect"));
+        Assert.False(Has(off.GetProperty("install"), "privateSetupPath"));
 
-        // On → install.setupPathRedirect: true (stock-exe replacement TC, §4).
+        // On → install.privateSetupPath: true (stock-exe replacement TC, §4).
         var on = Build(new()
         {
             Id = "m", DisplayName = "M",
             InstallType = "IsolatedFolder",
-            SetupPathRedirect = true,
+            PrivateSetupPath = true,
         });
-        Assert.True(on.GetProperty("install").GetProperty("setupPathRedirect").GetBoolean());
-        Assert.False(Has(on, "setupPathRedirect"));  // not at top level
+        Assert.True(on.GetProperty("install").GetProperty("privateSetupPath").GetBoolean());
+        Assert.False(Has(on, "privateSetupPath"));  // not at top level
+        // The legacy junction flag is never emitted by the wizard any more.
+        Assert.False(Has(on.GetProperty("install"), "setupPathRedirect"));
     }
 
     [Fact]

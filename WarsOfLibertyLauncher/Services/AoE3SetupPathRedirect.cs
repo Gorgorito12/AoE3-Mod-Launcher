@@ -102,23 +102,54 @@ public static class AoE3SetupPathRedirect
         return true;
     }
 
-    /// <summary>Core of <see cref="EnsureDefault"/> against an explicit setup path.</summary>
+    /// <summary>
+    /// Core of <see cref="EnsureDefault"/> against an explicit setup path.
+    ///
+    /// <para><b>The aside folder is the ownership proof, and requiring it is
+    /// load-bearing.</b> This used to delete ANY reparse point sitting at the setup
+    /// path and then restore only if an aside happened to exist — two bugs in one.
+    /// Junctioning a game folder is a thing users do on their own (moving an install to
+    /// another drive is the common case), so a link we never created was deleted out
+    /// from under them; and with no aside to put back, the setup path was left simply
+    /// GONE — no AoE3 where the registry says AoE3 lives. Only this service creates
+    /// <c>"&lt;name&gt; (AoE3 vanilla)"</c>, so its presence is what marks the junction as
+    /// ours, and it is also exactly what we would restore — which is why the one
+    /// condition closes both holes at once.</para>
+    /// </summary>
     internal static void EnsureDefaultAt(string setupPath)
     {
         var std = setupPath.TrimEnd('\\', '/');
         var aside = std + AsideSuffix;
 
-        if (IsJunction(std))
+        if (!IsJunction(std)) return;   // nothing redirected — the common case
+
+        if (!Directory.Exists(aside))
         {
-            Directory.Delete(std, recursive: false);   // drop the link only
-            DiagnosticLog.Write($"AoE3SetupPathRedirect: removed '{std}' junction.");
+            DiagnosticLog.Write(
+                $"AoE3SetupPathRedirect: '{std}' is a junction but there is no '{aside}' to restore — " +
+                "leaving it alone (not ours).");
+            return;
         }
-        // Restore the real setup folder if it's parked aside and nothing occupies std.
-        if (Directory.Exists(aside) && !Directory.Exists(std))
+
+        // Remember where the link pointed BEFORE dropping it, so a failed restore can be
+        // rolled back instead of leaving the setup path missing.
+        var linkTarget = TryGetLinkTarget(std);
+
+        Directory.Delete(std, recursive: false);   // drops the link only, never its target
+        try
         {
             Directory.Move(aside, std);
-            DiagnosticLog.Write($"AoE3SetupPathRedirect: restored real '{std}'.");
         }
+        catch
+        {
+            if (linkTarget != null)
+            {
+                try { CreateJunction(std, linkTarget); }
+                catch (Exception ex) { DiagnosticLog.Write($"AoE3SetupPathRedirect: rollback failed: {ex.Message}"); }
+            }
+            throw;
+        }
+        DiagnosticLog.Write($"AoE3SetupPathRedirect: restored real '{std}'.");
     }
 
     // ---- helpers ----------------------------------------------------------------
@@ -157,6 +188,13 @@ public static class AoE3SetupPathRedirect
             return (attrs & FileAttributes.ReparsePoint) != 0;
         }
         catch { return false; }
+    }
+
+    /// <summary>Where a link points, or null when it isn't one / can't be read.</summary>
+    private static string? TryGetLinkTarget(string path)
+    {
+        try { return Directory.ResolveLinkTarget(path, returnFinalTarget: false)?.FullName; }
+        catch { return null; }
     }
 
     private static bool JunctionPointsAt(string junction, string target)

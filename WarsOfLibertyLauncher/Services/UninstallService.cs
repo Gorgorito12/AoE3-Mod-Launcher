@@ -103,10 +103,20 @@ public class UninstallService
         // path one of the user's detected AoE3 roots?". For an in-place install
         // we switch to OVERLAY-ONLY removal (delete only the mod's net-new files
         // via the manifest, never the folder).
+        //
+        // <b>A real AoE3 root VETOES the manifest, it doesn't merely stand in for it.</b> The
+        // manifest used to be consulted first and IsUserAoe3Root only when there was no
+        // manifest — which left the worst case unguarded, because older launcher builds stamped
+        // clonedAoe3:true on EVERY install, including in-place overlays whose destination was
+        // the player's own Age of Empires III folder. Anyone still carrying such a manifest
+        // would lose their base game to a single Uninstall click. The no-manifest branch is
+        // deliberately unchanged: a launcher-made clone that lost its manifest still gets a
+        // normal folder removal, which is the correct uninstall for it.
         var manifest = InstallManifest.TryLoad(installPath);
-        bool overlayOnly = manifest != null
-            ? !manifest.ClonedAoe3
-            : IsUserAoe3Root(installPath);
+        bool overlayOnly = ShouldRemoveOverlayOnly(
+            hasManifest: manifest != null,
+            clonedAoe3: manifest?.ClonedAoe3 ?? false,
+            isRealAoe3Root: IsUserAoe3Root(installPath));
 
         if (overlayOnly)
         {
@@ -128,6 +138,21 @@ public class UninstallService
 
         return new UninstallPlan(UninstallMode.Valid, installPath, fileCount, dirCount);
     }
+
+    /// <summary>
+    /// Whether an uninstall must remove only the mod's net-new files instead of deleting the
+    /// folder. Pure, so the one decision that can cost a player their Age of Empires III is
+    /// pinned by tests rather than argued about.
+    ///
+    /// <para><b>A real AoE3 root vetoes the manifest.</b> The manifest used to decide alone
+    /// whenever it existed, with the detector consulted only in its absence — and that left the
+    /// worst case open, because older launcher builds stamped <c>clonedAoe3: true</c> on every
+    /// install, including in-place overlays laid straight into the player's game folder. The
+    /// no-manifest branch is deliberately unchanged: a launcher-made clone that lost its manifest
+    /// still gets a normal folder removal, which is the correct uninstall for it.</para>
+    /// </summary>
+    internal static bool ShouldRemoveOverlayOnly(bool hasManifest, bool clonedAoe3, bool isRealAoe3Root)
+        => hasManifest ? (!clonedAoe3 || isRealAoe3Root) : isRealAoe3Root;
 
     /// <summary>True when <paramref name="path"/> is one of the user's detected
     /// AoE3 install roots (its game folder or mod root) — i.e. NOT a
@@ -175,6 +200,22 @@ public class UninstallService
                 Errors: new(),
                 Message: $"Path does not look like a valid {profile.DisplayName} install.");
         }
+
+        // Undo any launch-time junction BEFORE deleting anything. A setupPathRedirect mod
+        // leaves the registry `setuppath` folder (…\bin) junctioned at its install folder;
+        // deleting that folder out from under the link leaves a DANGLING junction where
+        // the base game should be, so AoE3 — and every other mod that reads it — breaks
+        // too, not just the one being removed. The redirects are otherwise only touched at
+        // launch and at startup, so nothing else would undo it before the delete.
+        //
+        // Unconditional and best-effort, exactly like GameLauncher does on every launch
+        // that isn't a redirect mod's: it is idempotent, and a redirect mod re-applies its
+        // junction the next time it starts. A redirect we can't undo must never abort an
+        // uninstall.
+        try { AoE3SetupPathRedirect.EnsureDefault(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Uninstall: setuppath restore failed: {ex.Message}"); }
+        try { AoE3UserDataRedirect.EnsureDefault(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Uninstall: user-data restore failed: {ex.Message}"); }
 
         if (plan.Mode == UninstallMode.NothingToDo)
         {
@@ -465,6 +506,15 @@ public class UninstallService
         var productGuid = !string.IsNullOrEmpty(manifest?.ProductGuid)
             ? manifest!.ProductGuid
             : profile.EffectiveProductGuid;
+
+        // A stock-exe total conversion also created an AoE3 product key of its own so it
+        // could load content from here (see SetupPathPatcher). Take it away with the mod;
+        // leaving it behind would keep a setuppath pointing at a folder we are deleting.
+        if (!string.IsNullOrWhiteSpace(manifest?.PrivateSetupPathKey))
+        {
+            try { SetupPathPatcher.RemovePrivateKey(manifest!.PrivateSetupPathKey); }
+            catch (Exception ex) { DiagnosticLog.Write($"Removing the private setup key failed: {ex.Message}"); }
+        }
 
         bool removedAny = false;
         var keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + productGuid;

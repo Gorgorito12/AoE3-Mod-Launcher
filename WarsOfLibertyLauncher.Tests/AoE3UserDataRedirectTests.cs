@@ -35,6 +35,67 @@ public class AoE3UserDataRedirectTests : IDisposable
     private const string Target = "Age of Empires 3 (King's Return)";
 
     [Fact]
+    public void EnsureDefault_RestoresEvenWhenTheJunctionTargetIsGone()
+    {
+        // Same recovery case as the setuppath variant: the mod's save folder is deleted
+        // while the junction is live. Without this the player's real save folder would
+        // stay parked aside behind a dangling link.
+        var root = NewRoot();
+        var std = Path.Combine(root, Std);
+        Directory.CreateDirectory(std);
+        File.WriteAllText(Path.Combine(std, "vanilla-save.txt"), "vanilla");
+
+        Assert.True(AoE3UserDataRedirect.EnsureRedirectedIn(root, Target));
+        Directory.Delete(Path.Combine(root, Target), recursive: true);   // target vanishes
+        Assert.True(AoE3UserDataRedirect.IsJunction(std));
+
+        AoE3UserDataRedirect.EnsureDefaultIn(root);
+
+        Assert.False(AoE3UserDataRedirect.IsJunction(std));
+        Assert.Equal("vanilla", File.ReadAllText(Path.Combine(std, "vanilla-save.txt")));
+        Assert.False(Directory.Exists(Path.Combine(root, Aside)));
+    }
+
+    [Fact]
+    public void EnsureDefault_LeavesAForeignJunctionAlone()
+    {
+        // Redirecting saves to another drive with a junction is something users do on
+        // their own. The old restore deleted ANY reparse point it found here and, with
+        // no aside to put back, left the save folder missing outright. The aside is the
+        // ownership proof — a link without one is not ours to remove.
+        var root = NewRoot();
+        var std = Path.Combine(root, Std);
+        var elsewhere = Path.Combine(root, "saves-on-D");
+        Directory.CreateDirectory(elsewhere);
+        File.WriteAllText(Path.Combine(elsewhere, "my-save.txt"), "years of savegames");
+
+        MakeJunction(std, elsewhere);
+        Assert.True(AoE3UserDataRedirect.IsJunction(std));
+        Assert.False(Directory.Exists(Path.Combine(root, Aside)));
+
+        AoE3UserDataRedirect.EnsureDefaultIn(root);
+
+        Assert.True(AoE3UserDataRedirect.IsJunction(std));                       // still linked
+        Assert.True(Directory.Exists(std));                                      // and reachable
+        Assert.Equal("years of savegames", File.ReadAllText(Path.Combine(std, "my-save.txt")));
+    }
+
+    /// <summary>A junction created outside the service, to stand in for the user's own.</summary>
+    private static void MakeJunction(string link, string target)
+    {
+        using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/c mklink /J \"{link}\" \"{target}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        });
+        p!.WaitForExit(10_000);
+    }
+
+    [Fact]
     public void Redirect_ThenRestore_PreservesRealVanillaData()
     {
         var root = NewRoot();

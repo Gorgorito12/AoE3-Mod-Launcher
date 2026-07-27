@@ -204,6 +204,19 @@ public class InstallManifest
     [JsonPropertyName("addonFiles")]
     public Dictionary<string, List<string>> AddonFiles { get; set; } = new();
 
+    /// <summary>
+    /// The private AoE3 registry key this install created, relative to the hive — e.g.
+    /// <c>Software\Microsoft\Microsoft Games\Struggle of Indonesia\1.0</c>. Written only for
+    /// mods using <see cref="ModProfile.PrivateSetupPath"/>.
+    ///
+    /// Recording it is what lets uninstall take it away again: the key is derived from the
+    /// mod's display name at install time, so re-deriving it later would break the moment a
+    /// mod is renamed in the catalogue. Empty for every other install, which reads correctly
+    /// as "this one created no registry key of its own".
+    /// </summary>
+    [JsonPropertyName("privateSetupPathKey")]
+    public string PrivateSetupPathKey { get; set; } = "";
+
     public static string GetManifestPath(string installPath) =>
         Path.Combine(installPath, FileName);
 

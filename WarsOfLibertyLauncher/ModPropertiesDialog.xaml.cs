@@ -78,6 +78,13 @@ public partial class ModPropertiesDialog : Window
     /// status) with no network call. Null = nothing to refresh.</summary>
     private readonly Action? _onUpdatePolicyChanged;
 
+    /// <summary>
+    /// The mods this one may import game settings from. Comes in as a callback because the
+    /// install check that decides it (<c>MainWindow.IsProfileInstalledLocally</c>) is private to
+    /// the main window. Null hides the source picker.
+    /// </summary>
+    private readonly Func<IReadOnlyList<ModProfile>>? _listSettingsSources;
+
     // Fase 1 — version picker (GitHubReleases mods only). Null for other
     // mechanisms, which hides the whole "Version" section.
     private readonly Func<Task<IReadOnlyList<GitHubReleaseDownloader.ReleaseInfo>>>? _listVersions;
@@ -115,7 +122,8 @@ public partial class ModPropertiesDialog : Window
         Func<string, Task>? switchInstall = null,
         Action<string>? removeInstall = null,
         Func<bool>? addExistingFolder = null,
-        Action? searchInstall = null)
+        Action? searchInstall = null,
+        Func<IReadOnlyList<ModProfile>>? listSettingsSources = null)
     {
         _profile = profile;
         _service = service;
@@ -144,12 +152,17 @@ public partial class ModPropertiesDialog : Window
         _removeInstall = removeInstall;
         _addExistingFolder = addExistingFolder;
         _searchInstall = searchInstall;
+        _listSettingsSources = listSettingsSources;
 
         InitializeComponent();
         ApplyStrings();
         LoadGeneral();
         LoadLocalFiles();
         LoadUserData();
+        // Deliberately NOT inside LoadUserData: RefreshData() calls that, and repopulating the
+        // source combo there would wipe a selection the user was in the middle of making — the
+        // same reason LoadVersions() is left out of RefreshData().
+        LoadGameSettings();
         LoadLanguage();
         LoadVersions();
         LoadAddons();
@@ -193,6 +206,10 @@ public partial class ModPropertiesDialog : Window
         CheckUpdatesBtn.Content = Strings.Get("ModPropCheckUpdates");
         SetTip(CheckUpdatesBtn, "TooltipMenuCheckForUpdates");
         StayOnVersionHint.Text = Strings.Get("ModPropStayOnVersionHint");
+        LblGameSettingsTitle.Text = Strings.Get("ModPropSettingsTitle");
+        ImportSettingsBtn.Content = Strings.Get("ModPropSettingsImportBtn");
+        SyncSettingsCheck.Content = Strings.Get("ModPropSettingsShare");
+        SyncSettingsHint.Text = Strings.Get("ModPropSettingsShareHint");
         VersionSectionLabel.Text = Strings.Get("ModPropVersionSection");
         VersionSectionHint.Text = Strings.Get("ModPropVersionHint");
         InstallVersionBtn.Content = Strings.Get("ModPropVersionInstallBtn");
@@ -686,6 +703,46 @@ public partial class ModPropertiesDialog : Window
             LblRestoreBackupDesc.Text = Strings.Get("ModPropRestoreNone");
             RestoreBackupBtn.IsEnabled = false;
         }
+    }
+
+    /// <summary>
+    /// Fills the game-settings section: the sharing checkbox from this mod's state, and the
+    /// source picker from the mods that can supply settings.
+    ///
+    /// <para>Called ONCE from the constructor. It must not be folded into
+    /// <see cref="LoadUserData"/>, which <see cref="RefreshData"/> re-runs after a backup or a
+    /// folder change — that would reset the combo under the user's hand.</para>
+    /// </summary>
+    private void LoadGameSettings()
+    {
+        // A mod with no user-data folder of its own (the base game included) has no settings to
+        // share or receive, exactly as the backup rows above are inert for it.
+        if (string.IsNullOrWhiteSpace(_profile.UserDataFolder))
+        {
+            GameSettingsSection.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        SyncSettingsCheck.IsChecked = _config.GetState(_profile.Id).SyncGameSettings;
+
+        var sources = _listSettingsSources?.Invoke() ?? new List<ModProfile>();
+        SettingsSourceCombo.Items.Clear();
+        foreach (var p in sources)
+            SettingsSourceCombo.Items.Add(new System.Windows.Controls.ComboBoxItem
+            {
+                Content = p.DisplayName,
+                Tag = p.Id,
+            });
+
+        var any = SettingsSourceCombo.Items.Count > 0;
+        if (any) SettingsSourceCombo.SelectedIndex = 0;
+        SettingsSourceCombo.IsEnabled = any;
+        ImportSettingsBtn.IsEnabled = any;
+        // Say why the picker is empty instead of leaving a dead control: with only one mod
+        // installed there is simply nowhere to import from yet.
+        LblGameSettingsDesc.Text = any
+            ? Strings.Get("ModPropSettingsDesc")
+            : Strings.Get("ModPropSettingsNoSources");
     }
 
     /// <summary>Paints the inline result line under the USER DATA rows
@@ -1520,6 +1577,37 @@ public partial class ModPropertiesDialog : Window
     {
         // Just opens Explorer — no covering window, so keep the dialog open.
         _openUserDataFolder?.Invoke();
+    }
+
+    /// <summary>
+    /// Copy the chosen mod's graphics / sound / hotkeys into this one, once, now.
+    /// Deliberately separate from the sharing checkbox: this is a deliberate act with a visible
+    /// result, and it works whether or not either mod is in the sharing group.
+    /// </summary>
+    private void ImportSettingsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SettingsSourceCombo.SelectedItem is not System.Windows.Controls.ComboBoxItem item) return;
+        if (item.Tag is not string sourceId || string.IsNullOrWhiteSpace(sourceId)) return;
+
+        var source = ModRegistry.Find(sourceId);
+        if (source == null) return;
+
+        var ok = Services.GameSettingsStore.ImportFrom(source, _profile);
+        ShowUserDataResult(ok
+            ? Strings.Format("ModPropSettingsImported", source.DisplayName)
+            : Strings.Get("ModPropSettingsImportFailed"));
+        if (!ok) UserDataResultHint.Foreground = new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D));
+    }
+
+    /// <summary>
+    /// Join or leave the group of mods that share one set of settings. Same three-step idiom as
+    /// the stay-on-version pin: mutate the live <see cref="ModState"/>, save, done — there is
+    /// nothing for the main window to repaint here.
+    /// </summary>
+    private void SyncSettingsCheck_Click(object sender, RoutedEventArgs e)
+    {
+        _config.GetState(_profile.Id).SyncGameSettings = SyncSettingsCheck.IsChecked == true;
+        _config.Save();
     }
 
     private void CreateBackupBtn_Click(object sender, RoutedEventArgs e)

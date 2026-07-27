@@ -80,6 +80,17 @@ public static class ModInstallProbe
     }
 
     /// <summary>
+    /// The engine at <paramref name="path"/> or one level down in <c>bin\</c> — the two
+    /// shapes an <see cref="ModInstallType.InPlaceOverlay"/> install path can take. On a
+    /// Steam layout the overlay lands in <c>…\Age Of Empires 3\bin</c> (which holds the
+    /// engine, <c>data\</c> and everything else), while other layouts keep <c>data\</c> at
+    /// the root with the executables in <c>bin\</c>. Accepting either is what lets the
+    /// engine requirement apply to overlays without guessing the layout.
+    /// </summary>
+    private static bool HasEngineNearby(string path) =>
+        HasEngine(path) || HasEngine(Path.Combine(path, "bin"));
+
+    /// <summary>
     /// True if <paramref name="marker"/> — a path (file or directory) relative
     /// to <paramref name="installPath"/> — exists on disk. An empty marker
     /// returns false; callers treat "no marker declared" as a separate case.
@@ -116,14 +127,25 @@ public static class ModInstallProbe
             && !MarkerExists(path, profile.InstallMarker))
             return ProbeOutcome.MarkerMissing;
 
-        // Engine: an IsolatedFolder install is a full AoE3 clone + overlay, so
-        // the engine sits at the root. A folder with the probe but no engine is
-        // only the mod's overlay (a leftover manual download), NOT an install —
-        // adopting it makes the launcher offer a bogus "update" for a mod it
-        // never installed. Only IsolatedFolder: an InPlaceOverlay mod's files go
-        // into the base game, whose engine lives in bin\, not the install root.
-        if (profile.InstallType == ModInstallType.IsolatedFolder && !HasEngine(path))
-            return ProbeOutcome.EngineMissing;
+        // Engine: EVERY install type sits with the base game, so a folder holding the
+        // probe file and nothing else is only the mod's overlay (a leftover manual
+        // download), NOT an install — adopting it makes the launcher offer a bogus
+        // "update", show PLAY, and launch an executable that dies on the spot for want of
+        // an engine to load.
+        //
+        // The two types differ only in WHERE the engine is allowed to be. An
+        // IsolatedFolder install is a full AoE3 clone with bin\ flattened into the root,
+        // so it must be at the root exactly. An InPlaceOverlay install path is the base
+        // game's own folder, whose shape depends on the layout — hence HasEngineNearby.
+        // The overlay case used to be exempt entirely, on the reasoning that the engine
+        // "lives in bin\, not the install root"; that was true only while overlays were
+        // installed to the AoE3 ROOT. They now go to the folder the engine reads from, so
+        // the exemption stopped protecting anything and started hiding the exact failure
+        // it was written next to: an engine-less Napoleonic Era folder read as installed.
+        bool engineOk = profile.InstallType == ModInstallType.IsolatedFolder
+            ? HasEngine(path)
+            : HasEngineNearby(path);
+        if (!engineOk) return ProbeOutcome.EngineMissing;
 
         return ProbeOutcome.Match;
     }

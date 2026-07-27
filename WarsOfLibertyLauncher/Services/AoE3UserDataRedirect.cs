@@ -92,23 +92,58 @@ public static class AoE3UserDataRedirect
         return true;
     }
 
-    /// <summary>Core of <see cref="EnsureDefault"/> against an explicit My Games root.</summary>
+    /// <summary>
+    /// Core of <see cref="EnsureDefault"/> against an explicit My Games root.
+    ///
+    /// <para><b>The aside folder is the ownership proof — see the matching note in
+    /// <see cref="AoE3SetupPathRedirect.EnsureDefaultAt"/>.</b> Deleting any reparse
+    /// point found here would destroy a junction the user made themselves (redirecting
+    /// saves to another drive is common), and with no aside to put back it left the save
+    /// folder missing entirely. Only this service creates
+    /// <c>"Age of Empires 3 (AoE3 vanilla)"</c>, so requiring it both proves the link is
+    /// ours and guarantees we have something to restore.</para>
+    /// </summary>
     internal static void EnsureDefaultIn(string myGamesRoot)
     {
         var std = Path.Combine(myGamesRoot, StdName);
         var aside = Path.Combine(myGamesRoot, AsideName);
 
-        if (IsJunction(std))
+        if (!IsJunction(std)) return;   // nothing redirected — the common case
+
+        if (!Directory.Exists(aside))
         {
-            Directory.Delete(std, recursive: false);   // drop the link only
-            DiagnosticLog.Write($"AoE3UserDataRedirect: removed '{StdName}' junction.");
+            DiagnosticLog.Write(
+                $"AoE3UserDataRedirect: '{StdName}' is a junction but there is no '{AsideName}' to " +
+                "restore — leaving it alone (not ours).");
+            return;
         }
-        // Restore the real vanilla folder if it's parked aside and nothing occupies std.
-        if (Directory.Exists(aside) && !Directory.Exists(std))
+
+        // Remember the link target before dropping it so a failed restore can roll back
+        // instead of leaving the save folder missing.
+        var linkTarget = TryGetLinkTarget(std);
+
+        Directory.Delete(std, recursive: false);   // drops the link only, never its target
+        try
         {
             Directory.Move(aside, std);
-            DiagnosticLog.Write($"AoE3UserDataRedirect: restored real '{StdName}'.");
         }
+        catch
+        {
+            if (linkTarget != null)
+            {
+                try { CreateJunction(std, linkTarget); }
+                catch (Exception ex) { DiagnosticLog.Write($"AoE3UserDataRedirect: rollback failed: {ex.Message}"); }
+            }
+            throw;
+        }
+        DiagnosticLog.Write($"AoE3UserDataRedirect: restored real '{StdName}'.");
+    }
+
+    /// <summary>Where a link points, or null when it isn't one / can't be read.</summary>
+    private static string? TryGetLinkTarget(string path)
+    {
+        try { return Directory.ResolveLinkTarget(path, returnFinalTarget: false)?.FullName; }
+        catch { return null; }
     }
 
     // ---- helpers ----------------------------------------------------------------

@@ -31,6 +31,7 @@ public partial class InstallFolderDialog : Window
 
     private string? _aoe3SourceLabel;
     private readonly string _modDisplayName;
+    private readonly bool _requiresAoe3Source = true;
 
     // Disk-space estimate state. _cloneBytes = -1 means "not measured yet"; it's
     // filled off-thread by measuring the AoE3 source we'd clone. _spaceWarning is
@@ -47,13 +48,24 @@ public partial class InstallFolderDialog : Window
     /// "&lt;mod&gt; will be installed in its own '&lt;mod&gt;' folder" copy so
     /// every mod sees its own name instead of WoL.
     /// </param>
-    public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel, string modDisplayName)
+    /// <param name="requiresAoe3Source">
+    /// False for an IN-PLACE overlay: it adds its files to the AoE3 the player already has,
+    /// so there is nothing to clone and the destination IS the game folder. Demanding a
+    /// clone source there would block an install that needs none, so the whole AoE3 row is
+    /// hidden and the OK button stops waiting for it. Every other install type clones and
+    /// keeps the requirement — without a source the result is an unplayable mod-only folder.
+    /// </param>
+    public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel,
+        string modDisplayName, bool requiresAoe3Source = true)
     {
         InitializeComponent();
         _diskSpaceDefaultBrush = DiskSpaceText.Foreground;
         Aoe3SourcePath = aoe3Path;
         _aoe3SourceLabel = aoe3SourceLabel;
+        _requiresAoe3Source = requiresAoe3Source;
         _modDisplayName = string.IsNullOrEmpty(modDisplayName) ? "the mod" : modDisplayName;
+
+        if (!requiresAoe3Source) Aoe3Row.Visibility = Visibility.Collapsed;
 
         ApplyLanguage();
         FolderTextBox.Text = defaultFolder;
@@ -221,9 +233,10 @@ public partial class InstallFolderDialog : Window
             }
         }
 
-        // AoE3 source is mandatory — checked after the folder so a bad
-        // folder warning takes priority (the user fixes one thing at a time).
-        if (warning == null && string.IsNullOrEmpty(Aoe3SourcePath))
+        // AoE3 source is mandatory for a CLONING install — checked after the folder so a
+        // bad folder warning takes priority (the user fixes one thing at a time). An
+        // in-place overlay clones nothing, so it never waits for a source.
+        if (warning == null && _requiresAoe3Source && string.IsNullOrEmpty(Aoe3SourcePath))
         {
             warning = Strings.Get("DlgInstallAoe3Required");
         }
@@ -502,11 +515,11 @@ public partial class InstallFolderDialog : Window
     {
         var chosen = FolderTextBox.Text.Trim().TrimEnd('\\', '/');
 
-        // AoE3 source is mandatory — the live inference + Browse button
-        // normally fill it before the button enables, but guard here so
-        // the install can never start mod-only (an unplayable folder with
-        // no base-game files).
-        if (string.IsNullOrEmpty(Aoe3SourcePath))
+        // AoE3 source is mandatory for a CLONING install — the live inference + Browse
+        // button normally fill it before the button enables, but guard here so such an
+        // install can never start mod-only (an unplayable folder with no base-game files).
+        // An in-place overlay is exempt: it adds to the game that is already there.
+        if (_requiresAoe3Source && string.IsNullOrEmpty(Aoe3SourcePath))
         {
             ValidateInputs();
             return;

@@ -239,7 +239,7 @@ public static class GameLauncher
     ///     <c>setuppath</c>) gets that folder junctioned at its install folder;
     ///     anything else restores it. See <see cref="AoE3SetupPathRedirect"/>.
     /// </summary>
-    private static void ApplyLaunchRedirects(ModProfile profile, string? modInstallPath)
+    private static void ApplyLaunchRedirects(LauncherConfig config, ModProfile profile, string? modInstallPath)
     {
         try
         {
@@ -264,6 +264,24 @@ public static class GameLauncher
         {
             DiagnosticLog.Write($"ApplyLaunchRedirects (setup path) failed: {ex.Message}");
         }
+
+        // Carry the player's graphics / sound / hotkeys over from the last mod they played —
+        // but ONLY for a mod they put in the sharing group on its own settings page. A mod
+        // outside it is never written to by this path.
+        //
+        // Deliberately LAST: for a mod with UserDataRedirect the junction above is what decides
+        // which physical folder `My Games\Age of Empires 3` resolves to, so writing before it
+        // would land the settings in the wrong mod's folder. Best-effort — a launch must never
+        // fail over this.
+        try
+        {
+            if (config.GetState(profile.Id).SyncGameSettings)
+                GameSettingsStore.ApplyTo(profile);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ApplyLaunchRedirects (shared settings) failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -271,7 +289,7 @@ public static class GameLauncher
     /// throws so the UI can surface a friendly "please point us to your AoE3
     /// install" dialog.
     /// </summary>
-    public static void Launch(LauncherConfig config, string? modInstallPath, ModProfile profile)
+    public static GameLaunchResult Launch(LauncherConfig config, string? modInstallPath, ModProfile profile)
     {
         var exePath = Find(config, modInstallPath, profile);
 
@@ -294,7 +312,7 @@ public static class GameLauncher
 
         // Apply the per-mod launch redirects (My Games save folder + stock-exe
         // setuppath) for this mod; restore defaults for everything else. Best-effort.
-        ApplyLaunchRedirects(profile, modInstallPath);
+        ApplyLaunchRedirects(config, profile, modInstallPath);
 
         var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
             ? profile.GameArguments
@@ -304,14 +322,23 @@ public static class GameLauncher
         // "End task" on the launcher doesn't cascade-kill the game. Falls back to a
         // plain launch if re-parenting isn't available — the game must always start.
         int pid = DetachedProcessLauncher.StartReparented(
-            exePath, arguments, Path.GetDirectoryName(exePath));
+            exePath, arguments, Path.GetDirectoryName(exePath), out int reparentError);
         if (pid > 0)
         {
             DiagnosticLog.Write($"Game launched detached (pid {pid}).");
-            return;
+            return new GameLaunchResult(exePath, NeededElevation: false, ProcessId: pid);
         }
 
-        DiagnosticLog.Write("Detached launch unavailable; falling back to Process.Start.");
+        // 740 is not "re-parenting is unavailable", it's "this exe demands admin". Windows
+        // applies that to AoE3 through a compatibility layer on the exe, and the effect is
+        // twofold: the user gets a UAC prompt on every launch, AND we silently lose the
+        // re-parenting that keeps the game alive when the launcher is force-closed. Report
+        // it so the caller can offer to undo the layer.
+        bool neededElevation = reparentError == DetachedProcessLauncher.ErrorElevationRequired;
+        DiagnosticLog.Write(neededElevation
+            ? "Detached launch needs elevation; falling back to Process.Start (Windows will prompt)."
+            : "Detached launch unavailable; falling back to Process.Start.");
+
         var startInfo = new ProcessStartInfo
         {
             FileName = exePath,
@@ -319,7 +346,26 @@ public static class GameLauncher
             WorkingDirectory = Path.GetDirectoryName(exePath),
             UseShellExecute = true
         };
-        Process.Start(startInfo);
+        int fallbackPid;
+        try
+        {
+            // Keep the pid when the OS gives us one: it's what lets the exit monitor and
+            // Stop target THIS game rather than every process sharing its name. An
+            // elevated launch may hand back nothing usable, hence the -1.
+            using var started = Process.Start(startInfo);
+            fallbackPid = started?.Id ?? -1;
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            // ERROR_CANCELLED — they said No to the UAC prompt. A decision, not a failure.
+            DiagnosticLog.Write("Game launch cancelled by the user at the UAC prompt.");
+            throw new GameLaunchCancelledException(exePath);
+        }
+
+        DiagnosticLog.Write(fallbackPid > 0
+            ? $"Game launched via Process.Start (pid {fallbackPid})."
+            : "Game launched via Process.Start (no pid available — will track by name).");
+        return new GameLaunchResult(exePath, neededElevation, fallbackPid);
     }
 
     /// <summary>
@@ -372,7 +418,7 @@ public static class GameLauncher
 
         // Apply the per-mod launch redirects (My Games save folder + stock-exe
         // setuppath) for this mod; restore defaults for everything else. Best-effort.
-        ApplyLaunchRedirects(profile, modInstallPath);
+        ApplyLaunchRedirects(config, profile, modInstallPath);
 
         var arguments = !string.IsNullOrWhiteSpace(profile.GameArguments)
             ? profile.GameArguments
@@ -490,7 +536,16 @@ public static class GameLauncher
                     UseShellExecute = true,
                 },
             };
-            return elevated.Start() ? elevated : null;
+            try
+            {
+                return elevated.Start() ? elevated : null;
+            }
+            catch (System.ComponentModel.Win32Exception cancelled) when (cancelled.NativeErrorCode == 1223)
+            {
+                // Same rule as the dashboard path: declining the prompt is a decision.
+                DiagnosticLog.Write("Multiplayer game launch cancelled by the user at the UAC prompt.");
+                throw new GameLaunchCancelledException(exePath);
+            }
         }
     }
 }

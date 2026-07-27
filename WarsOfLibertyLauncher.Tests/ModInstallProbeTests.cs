@@ -124,25 +124,53 @@ public class ModInstallProbeTests : IDisposable
         Assert.False(ModInstallProbe.LooksLikeModInstall(install, WolLikeProfile()));
     }
 
-    [Fact]
-    public void OverlayMod_WithExclusiveProbe_NoMarker_NoEngine_IsStillDetected()
+    private static ModProfile OverlayProfile() => new()
     {
-        // InPlaceOverlay installs INTO the base game, whose engine lives in bin\,
-        // not at the install-path root — so the engine check does NOT apply. A
-        // probe-only folder is a valid detection for this install type.
-        var profile = new ModProfile
-        {
-            Id = "improvement-mod",
-            DisplayName = "Improvement Mod",
-            InstallType = ModInstallType.InPlaceOverlay,
-            InstallProbeFile = "age3m.exe",
-            InstallMarker = "",
-        };
-        var install = Path.Combine(NewTempDir(), "AnyName");
-        CreateFileAt(install, "age3m.exe");
-        // no engine DLL — must NOT matter for InPlaceOverlay
+        Id = "napoleonic-era",
+        DisplayName = "Napoleonic Era",
+        InstallType = ModInstallType.InPlaceOverlay,
+        InstallProbeFile = "age3n.exe",
+        InstallMarker = "",
+    };
 
-        Assert.True(ModInstallProbe.LooksLikeModInstall(install, profile));
+    [Fact]
+    public void OverlayMod_WithProbeButNoEngineAnywhere_IsRejected()
+    {
+        // The reported bug. An InPlaceOverlay install path IS the base game's folder, so
+        // a folder holding only the mod's own executable is a leftover download, not an
+        // install. This case used to be ACCEPTED (overlays were exempt from the engine
+        // check), which is how a Napoleonic Era folder with age3n.exe and no engine read
+        // as installed: the launcher showed PLAY and the game died two seconds later,
+        // every time, with nothing explaining it.
+        var install = Path.Combine(NewTempDir(), "Napoleonic Era");
+        CreateFileAt(install, "age3n.exe");
+
+        Assert.False(ModInstallProbe.LooksLikeModInstall(install, OverlayProfile()));
+    }
+
+    [Fact]
+    public void OverlayMod_WithEngineBesideIt_IsDetected()
+    {
+        // Steam layout: the overlay lands in …\Age Of Empires 3\bin, which holds the
+        // engine, data\ and everything else the game reads.
+        var install = Path.Combine(NewTempDir(), "bin");
+        CreateFileAt(install, "age3n.exe");
+        CreateFileAt(install, "RockallDLL.dll");
+
+        Assert.True(ModInstallProbe.LooksLikeModInstall(install, OverlayProfile()));
+    }
+
+    [Fact]
+    public void OverlayMod_WithEngineInBinSubfolder_IsDetected()
+    {
+        // Other layouts keep data\ at the game root with the executables under bin\, and
+        // an overlay installed to that root is equally valid — so the engine is accepted
+        // one level down too. Without this the check would depend on guessing the layout.
+        var install = Path.Combine(NewTempDir(), "Age of Empires III");
+        CreateFileAt(install, "age3n.exe");
+        CreateFileAt(install, @"bin\binkw32.dll");
+
+        Assert.True(ModInstallProbe.LooksLikeModInstall(install, OverlayProfile()));
     }
 
     [Fact]

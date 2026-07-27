@@ -307,7 +307,14 @@ public class UpdateService
         // is honoured even if the normal cached-path resolution can't see it.
         status?.Report(Strings.Format("StatusDetectingInstall", _profile.DisplayName));
         InstallPath = ResolveInstallPath(forceInstallPath);
-        bool valid = !string.IsNullOrEmpty(InstallPath) && IsProfileInstalled(InstallPath);
+        // Both gates, deliberately: this `valid` becomes CheckResult.IsValidInstall, which
+        // drives _modIsInstalled and therefore the PLAY-vs-INSTALL CTA. On the probe file
+        // alone it was LOOSER than the resolution above, so a path arriving from a route
+        // that skips the content gate (registry, broad scan) could still read as a real
+        // install and offer PLAY for a folder the game can't run.
+        bool valid = !string.IsNullOrEmpty(InstallPath)
+                     && IsProfileInstalled(InstallPath)
+                     && LooksLikeRealModInstall(InstallPath);
         DiagnosticLog.Write($"Install path detected: '{InstallPath}' (valid: {valid})");
 
         // Broad fallback (OFF the UI thread): when the cheap resolution above
@@ -1349,22 +1356,27 @@ public class UpdateService
     }
 
     /// <summary>
-    /// Extra content gate layered on top of <see cref="IsProfileInstalled"/>'s
-    /// probe-file check: when the profile declares an
-    /// <see cref="ModProfile.InstallMarker"/> (a file/dir unique to the mod,
-    /// absent from the base game it clones/overlays) require it. This is what
-    /// tells a real mod install apart from a stale path pointing at vanilla
-    /// AoE3 — which also satisfies the probe file (it carries the same
-    /// <c>data\</c> files). Detection is by CONTENT, not folder name, so the
-    /// mod is recognised under any folder name. Profiles with no marker pass:
-    /// their probe file is already exclusive to the mod (e.g. an overlay mod's
-    /// own .exe).
+    /// The content gate layered on top of <see cref="IsProfileInstalled"/>'s probe-file
+    /// check. Detection is by CONTENT, never by folder name, so a mod is recognised under
+    /// any folder name — see <see cref="ModInstallProbe"/> for the full rule (probe file,
+    /// optional marker, and the base-game engine for an isolated-folder install).
+    ///
+    /// <para><b>This MUST delegate to <see cref="ModInstallProbe"/> rather than re-check
+    /// anything itself.</b> It used to be a local two-liner: require the marker when the
+    /// profile declares one, otherwise return true. That "otherwise" was the hole — for a
+    /// profile with no marker it returned true WITHOUT LOOKING AT THE DISK, so every
+    /// adoption path in this class (ctor cache, forced pick, cached path, registry, disk
+    /// scan, broad scan) collapsed to "the probe file exists". A leftover folder holding
+    /// only Napoleonic Era's overlay — its <c>age3n.exe</c> present, no engine DLLs, no
+    /// base <c>data\</c> — satisfied that, so the launcher reported it installed, offered
+    /// PLAY, and the game died two seconds after every launch with nothing explaining
+    /// why. <see cref="ModInstallProbe.Inspect"/> already rejected exactly that case
+    /// (<see cref="ProbeOutcome.EngineMissing"/>); this class simply never asked it. Keep
+    /// the one source of truth: a second opinion about what counts as an install is how
+    /// the two drifted apart in the first place.</para>
     /// </summary>
     private bool LooksLikeRealModInstall(string path)
-    {
-        if (string.IsNullOrEmpty(_profile.InstallMarker)) return true;
-        return ModInstallProbe.MarkerExists(path, _profile.InstallMarker);
-    }
+        => ModInstallProbe.LooksLikeModInstall(path, _profile);
 
     /// <summary>
     /// Identifies the user's current mod version by computing MD5 of three key files

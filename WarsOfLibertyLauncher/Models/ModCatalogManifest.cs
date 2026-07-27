@@ -239,6 +239,16 @@ public class ModCatalogInstall
     public bool SetupPathRedirect { get; set; } = false;
 
     /// <summary>
+    /// When true, the launcher patches the mod's own copy of the stock executable at install
+    /// time so it reads a private registry key pointing at the install folder, instead of the
+    /// base game's. Projected into <see cref="ModProfile.PrivateSetupPath"/>. This is the
+    /// preferred answer for a stock-exe total conversion; <c>setupPathRedirect</c> is the
+    /// older junction-based one. Default false.
+    /// </summary>
+    [JsonPropertyName("privateSetupPath")]
+    public bool PrivateSetupPath { get; set; } = false;
+
+    /// <summary>
     /// Initial-install payload URLs, agnostic of the update mechanism. Used
     /// for first-time installs where the mod ships its files as one or
     /// more archives. Multi-part archives (.zip.001 / .zip.002 / ...)
