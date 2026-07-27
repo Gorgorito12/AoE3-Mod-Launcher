@@ -156,6 +156,29 @@ if ($Version) {
     $VersionNumeric = ($Version -replace '[A-Za-z]+$', '')   # strip trailing letter
 }
 
+# Say out loud WHICH code is being built. v1.0.11 was published from a stale
+# feature branch that was still checked out — it shipped without the stock-exe
+# support, so the two mods that need it would have launched plain AoE3, and
+# nothing in this script's output hinted at it. The commit ends up embedded in
+# InformationalVersion, so this is just surfacing it before the upload instead
+# of after.
+try {
+    $branch = (& git rev-parse --abbrev-ref HEAD 2>$null)
+    $commit = (& git rev-parse --short HEAD 2>$null)
+    $dirty = (& git status --porcelain 2>$null)
+    if ($branch) {
+        Write-Host "Source: branch '$branch' at $commit" -ForegroundColor DarkGray
+        if ($branch -ne 'main') {
+            Write-Warning "Building from '$branch', not 'main' — make sure that is deliberate."
+        }
+        if ($dirty) {
+            Write-Warning 'Working tree has uncommitted changes; the build will include them.'
+        }
+    }
+} catch {
+    # Not a git checkout, or no git on PATH — the build itself doesn't need it.
+}
+
 $publishLabel = if ($VersionFull) { "$Configuration | $Runtime | v$VersionFull" } else { "$Configuration | $Runtime" }
 Write-Host "Publishing ($publishLabel, single-file, self-contained)..." -ForegroundColor Cyan
 
@@ -212,12 +235,37 @@ if ($sig.SignerCertificate) {
 }
 Write-Host ''
 
-# Sanity check: signature should be Valid. If it's NotSigned, the post-build
-# target in the .csproj didn't run - most likely the cert thumbprint in
-# <SignCertThumbprint> doesn't match anything in Cert:\CurrentUser\My.
+# An UNSIGNED build must not reach a release. The launcher's self-update refuses
+# any update whose Authenticode signer doesn't match the running binary's, so
+# publishing an unsigned .exe leaves every existing user downloading ~170 MB and
+# then being told "verification failed" — with no way forward. That is exactly
+# how v1.0.11 shipped: this script warned, then printed "Ready to upload" and the
+# SHA line anyway, and exited 0.
+#
+# The distinction matters. A self-signed CN=Gorgorito cert that isn't in Root
+# reports 'UnknownError' (untrusted chain) on EVERY correct build — see the code
+# signing note in CLAUDE.md — so treating anything != 'Valid' as suspicious cried
+# wolf on every run and trained the warning away. Only a genuinely missing
+# signature is fatal.
+$signerSubject = $sig.SignerCertificate.Subject
+if ($sig.Status -eq 'NotSigned' -or [string]::IsNullOrWhiteSpace($signerSubject)) {
+    Write-Host ''
+    Write-Error @"
+The published .exe is NOT signed, so it must not be uploaded.
+
+The launcher's self-update rejects an unsigned update, so publishing this would
+break updating for every existing user.
+
+Check that <SignCertThumbprint> in the .csproj matches a certificate in
+Cert:\CurrentUser\My, then build again.
+"@
+    exit 1
+}
+
+# 'UnknownError' here means "signed, but the chain isn't trusted on this machine",
+# which is the normal and expected state for the self-signed cert.
 if ($sig.Status -ne 'Valid') {
-    Write-Warning "Signature status is '$($sig.Status)' - expected 'Valid'."
-    Write-Warning 'Check that <SignCertThumbprint> in the .csproj matches a cert in Cert:\CurrentUser\My, and that the cert chain is trusted.'
+    Write-Host "  (Signature status '$($sig.Status)' is expected for the self-signed cert — it is signed.)" -ForegroundColor DarkGray
 }
 
 Write-Host 'Ready to upload to GitHub Releases. Include the SHA-256 above in the release notes so users can verify the download.' -ForegroundColor Cyan

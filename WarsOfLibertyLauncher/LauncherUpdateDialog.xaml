@@ -79,6 +79,16 @@
                    Margin="0,0,0,16"/>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <!-- Only shown once an update has FAILED. The failure text already told
+                 people to download it by hand from GitHub, but gave them nothing to
+                 click — so this opens the release page for the exact version that was
+                 offered. -->
+            <Button x:Name="OpenReleasePageButton"
+                    Style="{StaticResource DialogButton}"
+                    MinWidth="150"
+                    Margin="0,0,8,0"
+                    Visibility="Collapsed"
+                    Click="OpenReleasePageButton_Click"/>
             <Button x:Name="CancelButton"
                     Style="{StaticResource DialogButton}"
                     MinWidth="100"

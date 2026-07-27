@@ -53,6 +53,33 @@ public partial class LauncherUpdateDialog : Window
 
         ActionButton.Content = Strings.Get("DlgLauncherUpdateBtnDownload");
         CancelButton.Content = Strings.Get("BtnCancel");
+        OpenReleasePageButton.Content = Strings.Get("DlgLauncherUpdateOpenPage");
+    }
+
+    /// <summary>
+    /// Offers the manual download once an update has failed. The dialog's failure text
+    /// has always said to fetch it from GitHub by hand, but there was nothing to click —
+    /// so someone whose update is refused (an unsigned release binary, a broken download)
+    /// is left with a dead end after waiting through ~170 MB.
+    ///
+    /// <para>Links to the SPECIFIC tag rather than /latest, so the page matches the
+    /// version that was just offered, and so its notes carry the matching SHA-256 for
+    /// anyone who wants to check the file themselves.</para>
+    /// </summary>
+    private void ShowManualDownloadOption()
+    {
+        OpenReleasePageButton.Visibility = Visibility.Visible;
+    }
+
+    private void OpenReleasePageButton_Click(object sender, RoutedEventArgs e)
+    {
+        var tag = (_update.RemoteTag ?? "").Trim();
+        var url = string.IsNullOrEmpty(tag)
+            ? LauncherUpdateService.ReleasesPageUrl
+            : $"{LauncherUpdateService.ReleasesPageUrl}/tag/{Uri.EscapeDataString(tag)}";
+        // Through SafeUrl like every other link the launcher opens, even though this
+        // one is built from our own constant.
+        Services.SafeUrl.TryOpen(url);
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
@@ -179,6 +206,7 @@ public partial class LauncherUpdateDialog : Window
             StatusText.Text = Strings.Get("DlgLauncherUpdateVerifyFailedBody");
             SpeedText.Text = "";
             EtaText.Text = "";
+            ShowManualDownloadOption();
             DiagnosticLog.Write($"Launcher self-update verification failed: {ex.Message}");
         }
         catch (Exception ex)
@@ -187,6 +215,9 @@ public partial class LauncherUpdateDialog : Window
             ActionButton.IsEnabled = true;
             ActionButton.Content = Strings.Get("BtnClose");
             StatusText.Text = $"Error: {ex.Message}";
+            // A download that died halfway leaves the same dead end as a failed
+            // verification, so it gets the same way out.
+            ShowManualDownloadOption();
             DiagnosticLog.Write($"Launcher self-update failed: {ex}");
         }
     }

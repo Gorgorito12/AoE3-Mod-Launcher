@@ -35,6 +35,14 @@ public class LauncherUpdateService
     private const string GitHubApiUrl =
         "https://api.github.com/repos/Gorgorito12/AoE3-Mod-Launcher/releases/latest";
 
+    /// <summary>
+    /// Human-facing releases page, for when the in-app update can't finish and the
+    /// user has to fetch the .exe themselves. Append <c>/tag/&lt;tag&gt;</c> for a
+    /// specific version.
+    /// </summary>
+    public const string ReleasesPageUrl =
+        "https://github.com/Gorgorito12/AoE3-Mod-Launcher/releases";
+
     private static readonly HttpClient Http = CreateHttpClient();
 
     public record UpdateCheckResult(

@@ -5459,6 +5459,11 @@ public static class Strings
                        "launcher actual quedó intacto. Inténtalo de nuevo más tarde o descarga la " +
                        "actualización manualmente desde GitHub.",
         },
+        ["DlgLauncherUpdateOpenPage"] = new()
+        {
+            [LangEn] = "Download manually",
+            [LangEs] = "Descargar manualmente",
+        },
         ["DlgLauncherUpdateBtnDownload"] = new()
         {
             [LangEn] = "DOWNLOAD",
