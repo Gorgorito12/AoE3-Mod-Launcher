@@ -165,6 +165,55 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   manual window only if it wasn't green on open"): that is unpredictable — it would
   close sometimes and not others depending on Radmin's state at open time.
 
+- **The `.age3Yrec` format, measured — don't re-derive it, and don't trust the
+  community references.** `ReplayParserService` reads the recorded game AoE3 writes to
+  `My Games\<mod>\Savegame\` when a match ends. Container:
+
+  ```
+  0  "l33t"                  magic (the same four bytes AoE2 recorded games use)
+  4  uint32 LE               decompressed size
+  8  zlib stream (78 9C)
+  ```
+
+  The declared size matched the real one **exactly** on both files tested, so verifying
+  it is a free corruption check — do it before parsing offsets that a truncated file
+  would invalidate. Inside is a settings dictionary:
+
+  ```
+  [uint32 nChars][key UTF-16LE][uint32 type][value]
+  type 1 = float (4B) · 2 = int (4B) · 5 = bool (1B) · 9 = string ([uint32 nChars][UTF-16LE])
+  ```
+
+  **All four types are load-bearing and a partial table fails SILENTLY, not loudly.**
+  With only int+string the walk dies on `gamerestored` — the 3rd key, a bool — which
+  still returns the map and player count (they come earlier) and **zero players**. That
+  is what the first run of these tests did. A real 2v2 has 370 keys: 159 int, 150
+  string, 35 bool, 26 float, then `0xFFFFFFFF` terminates.
+
+  **`civ` is a raw index, not a name, and the index is per-mod** — civ 8 in Struggle of
+  Indonesia is not civ 8 in Wars of Liberty. The parser returns the number; resolving it
+  needs that mod's own civ list. Don't map it to base-game names.
+
+  **The winner is NOT in the file.** Verified on a real 2v2: no outcome key among the
+  370 (`rank`/`winratio` are the players' ESO ladder stats from *before* the match), and
+  the command stream's ~27,000 readable strings are all asset names — no resign or
+  defeat marker. Deriving a winner means decoding command opcodes.
+
+  **The community references are worse than they look:** the official forum thread on
+  the format is someone *requesting* documentation, and the AoE3:DE parser on GitHub
+  declares **no license** (all rights reserved) *and* reads a different format —
+  273-byte fixed header + raw DEFLATE, not `l33t` + zlib. Everything above came from
+  reading real files.
+
+  **The identity gap is the blocker for scoring, not the parsing.** The replay names
+  players by their *AoE3 profile name* (`'69metal69'`); the backend needs the Discord
+  `users.id`. Nothing links them. Only the host's own name is knowable — from
+  `Users3\LastProfile3.dat`, which `GameSettingsStore.ReadActiveProfileName` already
+  reads. That determines a 1v1 completely (host won ⇒ the other lost) but not a team
+  game, so anything beyond 1v1 has to stay a draw until the room state carries in-game
+  names. **Ambiguous must report a draw — never an invented winner**, since this feeds
+  a rating.
+
 - **The History subtab is fed by a HOST-ONLY, unranked match report at game
   exit — don't re-add per-player reporting or an ELO/win-loss display.** The
   Multiplayer → History tab (`RefreshHistoryAsync`/`BuildHistoryRow`) was fully
