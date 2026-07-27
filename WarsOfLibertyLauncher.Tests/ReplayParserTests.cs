@@ -41,9 +41,20 @@ public class ReplayParserTests
         var header = ReplayParserService.TryParse(Fixture());
 
         Assert.NotNull(header);
-        Assert.Equal("ESOC Maps", header!.MapName);
-        Assert.Equal(4, header.PlayerCount);
+        Assert.Equal(4, header!.PlayerCount);
         Assert.Contains("age3y.exe", header.GameVersion);
+    }
+
+    [Fact]
+    public void MapNameIsTheMapPlayed_NotThePool()
+    {
+        // gamemapname holds the map POOL on a competitive game; gamefilename holds the
+        // map. They agree on a plain skirmish (both "amazonia"), so taking the wrong one
+        // looks correct right up until it reaches the games that matter.
+        var header = ReplayParserService.TryParse(Fixture())!;
+
+        Assert.Equal("ESOC_Baja California", header.MapName);
+        Assert.Equal("ESOC Maps", header.MapPool);
     }
 
     [Fact]

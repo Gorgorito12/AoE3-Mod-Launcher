@@ -82,11 +82,22 @@ public static class ReplayParserService
         public bool IsHuman => SlotType == SlotTypeHuman;
     }
 
-    /// <summary>What the pre-game header knows about a match.</summary>
+    /// <summary>
+    /// What the pre-game header knows about a match.
+    ///
+    /// <para><paramref name="MapName"/> is the map that was actually played, which is
+    /// <c>gamefilename</c> and NOT <c>gamemapname</c>. On a competitive game the latter
+    /// holds the map POOL — a real 2v2 reports <c>gamemapname="ESOC Maps"</c> against
+    /// <c>gamefilename="ESOC_Baja California"</c>. They agree on a plain skirmish
+    /// (both "amazonia"), which is exactly why picking the wrong one looks right until
+    /// it reaches the games people care about. <paramref name="MapPool"/> keeps the
+    /// other value rather than throwing it away.</para>
+    /// </summary>
     public sealed record ReplayHeader(
         string GameVersion,
         string GameName,
         string MapName,
+        string MapPool,
         int PlayerCount,
         IReadOnlyList<ReplayPlayer> Players);
 
@@ -177,10 +188,16 @@ public static class ReplayParserService
                 SlotType: type));
         }
 
+        var pool = GetString(dict, "gamemapname");
+        var file = GetString(dict, "gamefilename");
+
         return new ReplayHeader(
             GameVersion: ReadVersionString(data),
-            GameName: dict.TryGetValue("gamename", out var gn) ? gn as string ?? "" : "",
-            MapName: dict.TryGetValue("gamemapname", out var mn) ? mn as string ?? "" : "",
+            GameName: GetString(dict, "gamename"),
+            // The specific map wins; the pool is the fallback for anything that only
+            // records one of the two.
+            MapName: file.Length > 0 ? file : pool,
+            MapPool: pool,
             PlayerCount: unchecked((int)GetUInt(dict, "gamenumplayers")),
             Players: players);
     }
@@ -194,6 +211,9 @@ public static class ReplayParserService
 
     private static uint GetUInt(IReadOnlyDictionary<string, object> dict, string key)
         => dict.TryGetValue(key, out var v) && v is uint u ? u : 0;
+
+    private static string GetString(IReadOnlyDictionary<string, object> dict, string key)
+        => dict.TryGetValue(key, out var v) && v is string s ? s : "";
 
     /// <summary>
     /// The executable version ("age3y.exe 6.0108.0321.0137") sits near the start as a
