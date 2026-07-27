@@ -1577,6 +1577,27 @@ Two cheap gates beyond a green build:
   NON-ACTIVE follow-latest mods lags behind until the feed also queries
   `/releases/latest`; the active mod's check and the sweep's per-mod fallback
   resolve the real latest.
+  **A catalog `approvedReleaseTag` can go STALE SILENTLY, and the failure is total —
+  `followLatest` is the fix, not a nicety.** A modder re-tagging their own releases is
+  normal housekeeping, not a mistake: Napoleonic Era and Struggle of Indonesia were both
+  catalogued at `1.0.0` and their authors later re-tagged to the mods' real version
+  numbers (`2.1.7b`, `1.2`). `ResolveAssetAsync` fetches `/releases/tags/<approved>` with
+  `GetFromJsonAsync`, so the now-missing tag 404s → throws → **every install of that mod
+  fails for every player**, with nothing in the catalog looking wrong. It is invisible from
+  this side: the manifest still validates, CI still passes, and the maintainer's own machine
+  keeps working if the mod is already installed. Nothing in the launcher or the catalog CI
+  checks that the approved tag still exists — a periodic catalog-side check would be the
+  real guard, and doesn't exist yet. Meanwhile the mitigation is to have every
+  GitHubReleases mod whose author publishes on their own schedule opt into `followLatest`,
+  which reduces the pinned tag to an offline seed. What you give up is per-version review:
+  a release that renames the executable or reshapes the payload makes `probeFile` / `marker`
+  / `executable` stale and breaks installs unreviewed — bounded by the `CountCloneableFiles`
+  preflight, the 0-file abort and the three-`data\`-file verify, all of which fail loudly.
+  **A payload can be checked WITHOUT downloading it** (both mods above were, at ~450 MB and
+  ~105 MB): range-GET the zip tail, find the EOCD, range-GET the central directory and read
+  the names — the same trick `RemoteZipIndex` uses for version fingerprinting. Do that
+  before trusting a manifest's `probeFile` / `marker` / `multiplayerProbeFiles` against a
+  release nobody has installed yet.
 
 - **`ActionPanelControl` (and everything else in `LegacyPlayContent`) is INVISIBLE
   — setting a control's `Visibility` there paints NOTHING on screen. Only what
