@@ -215,6 +215,46 @@ if (-not (Test-Path $exePath)) {
 }
 
 $sig = Get-AuthenticodeSignature -FilePath $exePath
+
+# 4b. Sign here if the .csproj's post-publish target didn't manage it.
+#
+# That target shells out to `powershell` from inside MSBuild, and in some
+# environments Set-AuthenticodeSignature fails there with "the module could not
+# be loaded" while working perfectly in an ordinary shell — which is how an
+# unsigned v1.0.11 got built and published. Rather than diagnose MSBuild's host,
+# do the signing from this script, which runs in a normal session. The target
+# stays for plain `dotnet build`; this is the belt to its braces, and a no-op
+# whenever it already worked.
+if ($sig.Status -eq 'NotSigned') {
+    Write-Host 'Publish output is unsigned; signing here instead...' -ForegroundColor Yellow
+    try {
+        Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
+
+        $thumb = ([xml](Get-Content $projectFile)).Project.PropertyGroup.SignCertThumbprint |
+                 Where-Object { $_ } | Select-Object -First 1
+        $tsUrl = ([xml](Get-Content $projectFile)).Project.PropertyGroup.SignTimestampServer |
+                 Where-Object { $_ } | Select-Object -First 1
+        if (-not $thumb) { throw 'No <SignCertThumbprint> in the .csproj.' }
+
+        $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('My', 'CurrentUser')
+        $store.Open('ReadOnly')
+        $cert = $store.Certificates | Where-Object { $_.Thumbprint -eq $thumb } | Select-Object -First 1
+        $store.Close()
+        if (-not $cert) { throw "Certificate $thumb not found in Cert:\CurrentUser\My." }
+
+        Set-AuthenticodeSignature -FilePath $exePath -Certificate $cert `
+            -TimestampServer $tsUrl -HashAlgorithm SHA256 | Out-Null
+        $sig = Get-AuthenticodeSignature -FilePath $exePath
+        Write-Host "  Signed: $($sig.SignerCertificate.Subject)" -ForegroundColor Green
+    }
+    catch {
+        Write-Warning "Signing from the script also failed: $($_.Exception.Message)"
+    }
+}
+
+# Read the size and hash AFTER any signing above — signing rewrites the file, so
+# a hash taken before it would not match what gets uploaded. Publishing that hash
+# is its own outage: the self-updater compares it and rejects the download.
 $sizeMB = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
 $hash = (Get-FileHash -Algorithm SHA256 -Path $exePath).Hash
 
