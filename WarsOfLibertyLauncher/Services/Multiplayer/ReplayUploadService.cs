@@ -60,6 +60,77 @@ public static class ReplayUploadService
     }
 
     /// <summary>
+    /// How many recordings to open before giving up. A folder can hold hundreds, and
+    /// each candidate costs an inflate, so the walk is bounded — the right file is
+    /// among the newest few or it is not there.
+    /// </summary>
+    internal const int MaxCandidatesExamined = 5;
+
+    /// <summary>
+    /// Finds the recording that belongs to the match that just ended, newest first,
+    /// returning the first one <paramref name="belongsToMatch"/> accepts.
+    ///
+    /// <para><b>Why this is not just "the newest".</b> Replays other people send you live
+    /// in the same <c>Savegame\</c> folder — that is where the game looks for them — and
+    /// their timestamp is when they were copied, not when they were played. Two such
+    /// files sat on the maintainer's disk eleven minutes newer than his own games, so a
+    /// match played in between would have picked a stranger's recording and reported its
+    /// result. Walking past the ones that fail the check turns that from a wrong answer
+    /// into the right one.</para>
+    ///
+    /// <para>Null when nothing qualifies, which the caller must treat as "no result":
+    /// having no replay is a normal outcome (a game killed before the engine flushed
+    /// one) and is always safer than using a file that isn't ours.</para>
+    /// </summary>
+    public static FileInfo? FindMatchReplay(
+        string userDataDir, DateTime afterUtc, Func<FileInfo, bool> belongsToMatch)
+    {
+        if (belongsToMatch == null) throw new ArgumentNullException(nameof(belongsToMatch));
+
+        try
+        {
+            if (string.IsNullOrEmpty(userDataDir) || !Directory.Exists(userDataDir))
+                return null;
+
+            var saveDir = Path.Combine(userDataDir, "Savegame");
+            var searchRoot = Directory.Exists(saveDir) ? saveDir : userDataDir;
+
+            var candidates = new DirectoryInfo(searchRoot)
+                .EnumerateFiles("*.age3yrec", SearchOption.AllDirectories)
+                .Where(f => f.LastWriteTimeUtc >= afterUtc)
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .Take(MaxCandidatesExamined)
+                .ToList();
+
+            foreach (var candidate in candidates)
+            {
+                bool ours;
+                // One unreadable candidate — still being written, locked, corrupt — must
+                // not end the walk; the file we want may be the next one.
+                try { ours = belongsToMatch(candidate); }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Replay: '{candidate.Name}' could not be checked: {ex.Message}");
+                    continue;
+                }
+
+                if (ours) return candidate;
+                DiagnosticLog.Write($"Replay: '{candidate.Name}' is not this match — skipping.");
+            }
+
+            if (candidates.Count > 0)
+                DiagnosticLog.Write(
+                    $"Replay: none of the {candidates.Count} recent recording(s) belong to this match.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ReplayUploadService.FindMatchReplay: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Upload a replay file to the Worker for the given match id.
     /// Enforces the size cap up front so a 500 MB recording from a
     /// 4-hour FFA isn't streamed across the network just to be

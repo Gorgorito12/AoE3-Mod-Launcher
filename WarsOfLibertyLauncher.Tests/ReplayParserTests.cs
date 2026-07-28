@@ -196,33 +196,70 @@ public class ReplayParserTests
     private static byte[] Fx(string name)
         => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
 
-    private static ReplayParserService.ReplayOutcome OutcomeOf(byte[] raw)
+    private static ReplayParserService.ReplayOutcome OutcomeOf(
+        byte[] raw,
+        Func<ReplayParserService.ReplayHeader, ReplayParserService.ReplayHeader>? adjust = null)
     {
         var data = ReplayParserService.TryReadContainer(raw)!;
-        return ReplayParserService.ReadOutcome(data, ReplayParserService.ParseHeader(data));
+        var header = ReplayParserService.ParseHeader(data)!;
+        return ReplayParserService.ReadOutcome(data, adjust?.Invoke(header) ?? header);
+    }
+
+    [Fact]
+    public void ASkirmishAgainstTheAiNeverProducesAResult()
+    {
+        // Both fixtures are skirmishes, so neither may yield a verdict however clean the
+        // trailer is. Reporting already cannot reach one — it needs a lobby, and an AI is
+        // never a room member — but the replay is picked as "newest file after the match
+        // started", so a stray skirmish recording can arrive here, and a result derived
+        // from one would look exactly as trustworthy as a real one.
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous, OutcomeOf(Loss()).Confidence);
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous, OutcomeOf(Win()).Confidence);
+    }
+
+    [Fact]
+    public void TheLoserIsStillReadCorrectlyInARefusedSkirmish()
+    {
+        // Refusing to rule on it is not the same as failing to read it: the slot stays
+        // available for a diagnostic bundle, it just carries no authority.
+        Assert.Equal(1, OutcomeOf(Loss()).LoserSlot);   // the human resigned
+        Assert.Equal(2, OutcomeOf(Win()).LoserSlot);    // the AI was beaten
     }
 
     [Fact]
     public void ReadsTheLoserOfAGameThatWasResigned()
     {
-        var o = OutcomeOf(Loss());
+        // Same real trailer, with the opponent labelled human — which is what a 1v1
+        // between people looks like. Only the label is simulated; the bytes under test
+        // are the ones the game wrote. Real human 1v1s are checked outside the suite so
+        // no third party's handle ends up in the repo.
+        var o = OutcomeOf(Loss(), AllHuman);
 
         Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Confident, o.Confidence);
-        Assert.Equal(1, o.LoserSlot);   // the human resigned
-        Assert.Equal(2, o.WinnerSlot);  // so the AI won
+        Assert.Equal(1, o.LoserSlot);
+        Assert.Equal(2, o.WinnerSlot);
     }
 
     [Fact]
     public void ReadsTheLoserOfAGameThatWasWon()
     {
-        // The case that kills every rival reading: the human WON here and holds slot 1,
+        // The case that kills every rival reading: the recorder WON here and holds slot 1,
         // so a field meaning "winner" or "whoever recorded this" would say 1. It says 2.
-        var o = OutcomeOf(Win());
+        var o = OutcomeOf(Win(), AllHuman);
 
         Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Confident, o.Confidence);
         Assert.Equal(2, o.LoserSlot);
         Assert.Equal(1, o.WinnerSlot);
     }
+
+    /// <summary>Relabels every slot as human, leaving the replay bytes untouched.</summary>
+    private static ReplayParserService.ReplayHeader AllHuman(ReplayParserService.ReplayHeader h)
+        => h with
+        {
+            Players = h.Players
+                .Select(p => p with { SlotType = ReplayParserService.SlotTypeHuman })
+                .ToList(),
+        };
 
     [Fact]
     public void ReportsWhichSlotRecordedTheFile()
@@ -239,10 +276,13 @@ public class ReplayParserTests
         // Two of seven real recordings end without the trailer, having finished
         // abnormally. They must come back Ambiguous so the caller reports a draw
         // deliberately rather than reading a missing answer as one.
+        //
+        // Relabelled human so the missing trailer is the ONLY reason it fails.
         var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
         var truncated = data.Take(data.Length - 64).ToArray();
 
-        var o = ReplayParserService.ReadOutcome(truncated, ReplayParserService.ParseHeader(data));
+        var o = ReplayParserService.ReadOutcome(truncated, header);
 
         Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous, o.Confidence);
     }
@@ -251,9 +291,10 @@ public class ReplayParserTests
     public void ALoserSlotThatIsNotInTheGameIsAmbiguous()
     {
         var data = (byte[])ReplayParserService.TryReadContainer(Loss())!.Clone();
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
         BitConverter.GetBytes((uint)9).CopyTo(data, data.Length - 12);
 
-        var o = ReplayParserService.ReadOutcome(data, ReplayParserService.ParseHeader(data));
+        var o = ReplayParserService.ReadOutcome(data, header);
 
         Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous, o.Confidence);
     }
@@ -263,12 +304,17 @@ public class ReplayParserTests
     {
         // "X lost" names a winner only in a 1v1. With more players the others may have
         // lost too and nothing here says in what order, so the trailer is not enough.
+        //
+        // Everyone is relabelled human first, so this fails on the player COUNT alone —
+        // otherwise the AI rule would also reject it and the test would pass without
+        // exercising what it claims to.
         var data = ReplayParserService.TryReadContainer(Loss())!;
-        var header = ReplayParserService.ParseHeader(data)!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
         var crowded = header with
         {
             Players = header.Players
-                .Append(new ReplayParserService.ReplayPlayer(3, "Third", 1, 0, 0))
+                .Append(new ReplayParserService.ReplayPlayer(
+                    3, "Third", 1, 0, ReplayParserService.SlotTypeHuman))
                 .ToList(),
         };
 

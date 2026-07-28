@@ -209,6 +209,52 @@ public static class ReplayParserService
         return data == null ? null : ParseHeader(data);
     }
 
+    /// <summary>
+    /// Whether this recording is plausibly the match the launcher just watched, rather
+    /// than some other file that happens to be newer.
+    ///
+    /// <para><b>Picking "the newest file" alone is not safe, and the failure is ordinary
+    /// rather than exotic.</b> Downloaded replays live in <c>Savegame\</c>, because that
+    /// is where the game looks for them, and their timestamp is when they were copied.
+    /// On the maintainer's own disk, two replays belonging to other players sat eleven
+    /// minutes newer than his own games — so a match started in between would have
+    /// selected a stranger's file and reported a result for two people who never
+    /// played it.</para>
+    ///
+    /// <para>Three checks, all from data the launcher already holds:</para>
+    /// <list type="bullet">
+    ///   <item>the host is among the players — the strong one, since another player's
+    ///         replay simply does not contain him;</item>
+    ///   <item>the number of humans matches the room's participants;</item>
+    ///   <item>the slot that recorded the file is the host's, which the trailer gives
+    ///         away for free.</item>
+    /// </list>
+    ///
+    /// <para>The host's name comes from his AoE3 profile, so it is compared
+    /// case-insensitively and trimmed; anything blank fails, because an unknown host
+    /// cannot confirm anything.</para>
+    /// </summary>
+    public static bool LooksLikeThisMatch(
+        ReplayHeader? header, string hostProfileName, int expectedHumans, int recorderSlot = -1)
+    {
+        if (header == null) return false;
+        if (string.IsNullOrWhiteSpace(hostProfileName)) return false;
+
+        var humans = header.Players.Where(p => p.IsHuman).ToList();
+        if (expectedHumans > 0 && humans.Count != expectedHumans) return false;
+
+        var host = humans.FirstOrDefault(p =>
+            string.Equals(p.Name.Trim(), hostProfileName.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (host == null) return false;
+
+        // Only checked when the trailer supplied one; a recording without it is already
+        // going to be judged Ambiguous, and rejecting it here too would just lose the
+        // map and civilizations for no gain.
+        if (recorderSlot >= 0 && recorderSlot != host.Slot) return false;
+
+        return true;
+    }
+
     /// <summary>How much the outcome below can be trusted. Two values, not a bool,
     /// so a caller cannot read "I don't know" as "it was a draw".</summary>
     public enum ReplayOutcomeConfidence
@@ -250,10 +296,21 @@ public static class ReplayParserService
     /// reported as one.</para>
     ///
     /// <para>Confident requires everything to line up: the exact signature, an A that
-    /// names a slot the header actually has, and exactly two players — a 1v1, where "X
-    /// lost" settles the winner without inference. Anything else is Ambiguous, which the
-    /// caller must report as a draw: this feeds a rating, and an invented winner takes
-    /// points from someone silently.</para>
+    /// names a slot the header actually has, exactly two players, and <b>no AI among
+    /// them</b>. Anything else is Ambiguous, which the caller must report as a draw:
+    /// this feeds a rating, and an invented winner takes points from someone silently.</para>
+    ///
+    /// <para><b>The AI check is defence in depth, not the main gate.</b> Reporting
+    /// already cannot include a skirmish — <c>TryReportMatchAsync</c> needs a lobby and
+    /// two participants drawn from the room's members, and an AI is never a room member.
+    /// But the replay is chosen as "newest file written after the match started", so a
+    /// stray skirmish recording could reach this method, and a verdict derived from one
+    /// would look exactly as trustworthy as a real one. Cheap to refuse, expensive to
+    /// notice later.</para>
+    ///
+    /// <para>Note what this does NOT prevent: two real people agreeing on a result. That
+    /// replay is genuine — two humans, a real loser — and belongs to rate-limiting and
+    /// repeat-pairing checks on the backend, not here.</para>
     /// </summary>
     public static ReplayOutcome ReadOutcome(byte[] data, ReplayHeader? header)
     {
@@ -276,7 +333,15 @@ public static class ReplayParserService
         // Beyond a 1v1, "X lost" doesn't name a winner: the others may have lost too,
         // and nothing here says in what order. Those stay draws until the room state
         // can identify every player.
+        //
+        // The loser slot is still handed back on both this path and the AI one below —
+        // it was read correctly and is worth having in a diagnostic bundle. What the
+        // caller loses is permission to treat it as a result.
         if (header.Players.Count != 2)
+            return unknown with { LoserSlot = loser, RecorderSlot = recorder };
+
+        // A skirmish is not a match, whoever the trailer says lost it.
+        if (header.Players.Any(p => !p.IsHuman))
             return unknown with { LoserSlot = loser, RecorderSlot = recorder };
 
         var winner = header.Players.First(p => p.Slot != loser).Slot;
