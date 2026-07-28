@@ -337,6 +337,51 @@ public class ReplayParserTests
             ReplayParserService.ReadOutcome(new byte[64], null).Confidence);
     }
 
+    // ---------------- outcome → the host's score ----------------
+    //
+    // The one line where a mistake silently moves rating points between two real people,
+    // so it is pure and pinned here rather than living in the WPF caller.
+
+    [Fact]
+    public void TheHostWhoWonScoresOne()
+    {
+        // The game he actually won: he recorded it from slot 1 and the trailer blames 2.
+        var o = OutcomeOf(Win(), AllHuman);
+
+        Assert.Equal(1.0, ReplayParserService.HostResultFrom(o, hostSlot: 1));
+    }
+
+    [Fact]
+    public void TheHostWhoLostScoresZero()
+    {
+        var o = OutcomeOf(Loss(), AllHuman);   // he resigned from slot 1
+
+        Assert.Equal(0.0, ReplayParserService.HostResultFrom(o, hostSlot: 1));
+        Assert.Equal(1.0, ReplayParserService.HostResultFrom(o, hostSlot: 2));
+    }
+
+    [Fact]
+    public void AnAmbiguousOutcomeScoresNothing()
+    {
+        // The rule the whole feature rests on: no answer is null, which the caller turns
+        // into the 0.5 draw reporting used before any of this existed. Never a winner.
+        var skirmish = OutcomeOf(Win());   // real trailer, refused for being against AI
+
+        Assert.Null(ReplayParserService.HostResultFrom(skirmish, hostSlot: 1));
+        Assert.Null(ReplayParserService.HostResultFrom(null, hostSlot: 1));
+    }
+
+    [Fact]
+    public void AHostWhoIsNeitherPlayerScoresNothing()
+    {
+        // Either the wrong recording was picked or the slots do not mean what we think.
+        // Both are reasons to say nothing rather than to pick one of the two at random.
+        var o = OutcomeOf(Win(), AllHuman);
+
+        Assert.Null(ReplayParserService.HostResultFrom(o, hostSlot: 5));
+        Assert.Null(ReplayParserService.HostResultFrom(o, hostSlot: -1));
+    }
+
     /// <summary>Wraps a payload the way the game does, so tests can build odd containers.</summary>
     private static byte[] Pack(byte[] payload)
     {

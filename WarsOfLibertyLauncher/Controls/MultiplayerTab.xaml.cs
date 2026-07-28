@@ -5987,12 +5987,18 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// Called when the AoE3 process spawned by <see cref="LaunchActiveModGame"/>
-    /// exits. Best-effort post-game flow: (1) if we're the host, report the
+    /// exits. Best-effort post-game flow: (1) read the recording the game just
+    /// wrote, which is where the result lives; (2) if we're the host, report the
     /// finished match to the backend so it shows up in every participant's
-    /// History tab; (2) find the freshest <c>.age3yrec</c> in the mod's
-    /// user-data folder and surface it in the chat. The report is an unranked
-    /// "match log" (players + duration + mod + date) — win/loss + ELO need a
-    /// replay parser AoE3 doesn't give us, so that stays out of scope.
+    /// History tab; (3) surface the recording in the chat.
+    ///
+    /// <para><b>The recording is read BEFORE reporting, and that order is
+    /// load-bearing</b> — <see cref="TryReportMatchAsync"/> clears
+    /// <see cref="_matchParticipantSnapshot"/> in its <c>finally</c>, and the
+    /// analysis needs the room's head count to tell our recording from someone
+    /// else's. It used to be the other way round, to keep a missing user-data
+    /// folder from skipping the report; that is handled now by the analysis
+    /// returning null instead of returning early.</para>
     /// </summary>
     private async Task OnGameExitedAsync(ModProfile profile, DateTime gameStartedAtUtc)
     {
@@ -6007,9 +6013,11 @@ public partial class MultiplayerTab : UserControl
             catch (Exception ex) { DiagnosticLog.Write($"Capturing shared settings failed: {ex.Message}"); }
         }
 
-        // Report the match FIRST — before the replay block's early return on a
-        // missing user-data folder, which would otherwise skip reporting.
-        var roomClosedByReport = await TryReportMatchAsync(profile);
+        // Where the result comes from. Never throws, returns null when there is
+        // nothing usable — the report then carries the draws it always did.
+        var replayInfo = await AnalyseMatchReplayAsync(profile, gameStartedAtUtc);
+
+        var roomClosedByReport = await TryReportMatchAsync(profile, replayInfo);
 
         // If the match wasn't reported+closed (solo / short / failed report), the
         // HOST tells the server the game ended so the room reverts in_game → open
@@ -6024,25 +6032,111 @@ public partial class MultiplayerTab : UserControl
             catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.OnGameExitedAsync: SendGameEnded — {ex.Message}"); }
         }
 
+        // Already found above, so no second walk over the folder.
+        if (replayInfo != null)
+            AppendChatSystem(Strings.Format(
+                "MpChatReplaySaved", replayInfo.File.Name, replayInfo.File.Length / 1024));
+    }
+
+    /// <summary>What the recording contributes to the report, or null when it says nothing.</summary>
+    private sealed record MatchReplayInfo(
+        System.IO.FileInfo File,
+        string? MapName,
+        double? HostResult);
+
+    /// <summary>
+    /// Finds the recording the game just wrote and reads the result out of it.
+    ///
+    /// <para><b>Runs off the UI thread.</b> Each candidate costs an inflate of a file that
+    /// can be several megabytes, and this fires the moment the game closes — the player is
+    /// looking at the launcher again by then, and must not be looking at a frozen one.</para>
+    ///
+    /// <para>The two facts that identify OUR recording — the name the host plays under and
+    /// how many people were in the room — are read here, on the UI thread, before any of
+    /// that starts. The head count in particular is about to be cleared by the report.</para>
+    ///
+    /// <para>Every failure returns null, which the caller reports as a draw. A recording
+    /// that can't be found or read is not a reason to interrupt anyone.</para>
+    /// </summary>
+    private async Task<MatchReplayInfo?> AnalyseMatchReplayAsync(ModProfile profile, DateTime startedUtc)
+    {
         try
         {
-            // The mod's user-data folder lives under Documents/My Games/<userDataFolder>.
-            // Resolved by the central helper so it honours the dual-root rule
-            // (redirected OneDrive Documents vs the physical folder).
+            // Documents/My Games/<userDataFolder>, via the central helper so it honours the
+            // dual-root rule (redirected OneDrive Documents vs the physical folder).
             var modUserData = UserDataService.GetUserDataFolder(
                 UserDataService.ResolveFolderName(profile, _config));
+            if (string.IsNullOrEmpty(modUserData)) return null;
 
-            if (string.IsNullOrEmpty(modUserData)) return;
+            var hostName = UserDataService.GetInGameName(profile, _config);
+            var expectedHumans = _matchParticipantSnapshot.Count;
 
-            var replay = ReplayUploadService.FindLatestReplay(modUserData, gameStartedAtUtc);
-            if (replay != null)
-                AppendChatSystem(Strings.Format("MpChatReplaySaved", replay.Name, replay.Length / 1024));
+            // Without a name there is no way to tell our recording from one the player was
+            // sent, so nothing may be READ from it. The chat line doesn't need identity
+            // though, and announcing the newest file is what happened before any of this
+            // existed — so that much is kept rather than quietly lost.
+            if (string.IsNullOrWhiteSpace(hostName))
+            {
+                DiagnosticLog.Write(
+                    "MultiplayerTab.AnalyseMatchReplayAsync: no in-game name for " +
+                    $"'{profile.DisplayName}' — announcing the recording but reporting no result");
+
+                var newest = await Task.Run(
+                    () => ReplayUploadService.FindLatestReplay(modUserData, startedUtc));
+                return newest == null ? null : new MatchReplayInfo(newest, null, null);
+            }
+
+            return await Task.Run(() =>
+            {
+                ReplayParserService.ReplayHeader? header = null;
+                ReplayParserService.ReplayOutcome? outcome = null;
+
+                var file = ReplayUploadService.FindMatchReplay(modUserData, startedUtc, candidate =>
+                {
+                    // One inflate per candidate, used for both the identity check and the
+                    // result — the outcome trailer is also what names the slot that recorded.
+                    var data = ReplayParserService.TryReadContainer(
+                        System.IO.File.ReadAllBytes(candidate.FullName));
+                    if (data == null) return false;
+
+                    var h = ReplayParserService.ParseHeader(data);
+                    if (h == null) return false;
+
+                    var o = ReplayParserService.ReadOutcome(data, h);
+                    if (!ReplayParserService.LooksLikeThisMatch(h, hostName!, expectedHumans, o.RecorderSlot))
+                        return false;
+
+                    header = h;
+                    outcome = o;
+                    return true;
+                });
+
+                if (file == null || header == null)
+                {
+                    DiagnosticLog.Write(
+                        "MultiplayerTab.AnalyseMatchReplayAsync: no recording of this match was found " +
+                        $"(host='{hostName}' humans={expectedHumans}) — reporting without a result");
+                    return null;
+                }
+
+                // The trailer names the slot that recorded, which is this machine — so the
+                // host's slot comes from the file rather than from matching names twice.
+                var hostSlot = outcome!.RecorderSlot;
+                var result = ReplayParserService.HostResultFrom(outcome, hostSlot);
+
+                DiagnosticLog.Write(
+                    $"MultiplayerTab.AnalyseMatchReplayAsync: '{file.Name}' map='{header.MapName}' " +
+                    $"hostSlot={hostSlot} outcome={outcome.Confidence} " +
+                    $"result={(result.HasValue ? result.Value.ToString("0.0") : "none")}");
+
+                return new MatchReplayInfo(file, header.MapName, result);
+            });
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"MultiplayerTab.OnGameExitedAsync: {ex.Message}");
+            DiagnosticLog.Write($"MultiplayerTab.AnalyseMatchReplayAsync: {ex.Message}");
+            return null;
         }
-        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -6054,11 +6148,15 @@ public partial class MultiplayerTab : UserControl
     /// "close the room when the match ends" choice. Never throws; a failure
     /// (offline, room already GC'd, non-host) is swallowed with a log line so
     /// the post-match flow is unaffected.
+    ///
+    /// <para><paramref name="replay"/> carries what the recording said, when there was one:
+    /// the map, and the host's score in a 1v1. Everything it can't answer stays the 0.5
+    /// draw this used to send unconditionally.</para>
     /// </summary>
     /// <returns>True only when a successful report CLOSED the room; false on any
     /// skip (not host / &lt;2 players / &lt;3 min) or failure — the caller then sends
     /// game_ended so the room reverts to open instead of staying stuck in_game.</returns>
-    private async Task<bool> TryReportMatchAsync(ModProfile profile)
+    private async Task<bool> TryReportMatchAsync(ModProfile profile, MatchReplayInfo? replay)
     {
         // Every skip below is LOGGED with its reason — before this, a match that
         // didn't record looked identical whether it was skipped (not host, too
@@ -6117,35 +6215,51 @@ public partial class MultiplayerTab : UserControl
         try
         {
             var hash = await _computeModFingerprint(profile);
+            var hostId = _session.CurrentUser.Id;
+            var hostResult = ResolveHostResult(replay, participantIds, hostId);
+
             var req = new ReportMatchRequest
             {
                 LobbyId = lobbyId,
                 ModId = _currentLobbyModId,
                 ModCombinedHash = hash,
-                MapName = null,
+                MapName = replay?.MapName,
                 StartedAt = _matchStartedAtUtc.ToString("o"),
                 EndedAt = endedAt.ToString("o"),
                 DurationSeconds = durationSeconds,
-                // Unranked "match log": every participant is a draw (result=0.5)
-                // — AoE3 doesn't expose win/loss, so no real outcome to record.
+                // 0.5 across the board is the fallback, not the design: it is what every
+                // match got before the recording could be read, and it is still what a
+                // team game, an unreadable recording or a refused one gets.
+                //
+                // Civ stays null on purpose. The recording gives an INDEX, and turning it
+                // into a name needs the mod's civ list — which Improvement Mod doesn't ship
+                // loose, and whose ordering is unconfirmed. Sending a bare number would put
+                // a value nobody can interpret into everyone's history.
                 Participants = participantIds.Select(id => new MatchParticipantReport
                 {
                     UserId = id,
                     Team = 0,
                     Civ = null,
                     Score = 0,
-                    Result = 0.5,
+                    Result = hostResult == null ? 0.5
+                           : id == hostId ? hostResult.Value
+                           : 1.0 - hostResult.Value,
                 }).ToList(),
             };
 
             await _session.Api.ReportMatchAsync(req);
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryReportMatchAsync: reported match lobby={lobbyId} " +
-                $"players={participantIds.Count} duration={durationSeconds}s");
+                $"players={participantIds.Count} duration={durationSeconds}s " +
+                $"map='{replay?.MapName}' " +
+                $"hostResult={(hostResult.HasValue ? hostResult.Value.ToString("0.0") : "draw (no result)")}");
             // Visible confirmation. The backend closes the room right after, so
             // the lobby window is about to disappear — but the History tab
             // populating is the real confirmation; this chat line is a bonus.
             AppendChatSystem(Strings.Format("MpChatMatchRecorded", participantIds.Count));
+            if (hostResult.HasValue)
+                AppendChatSystem(Strings.Get(
+                    hostResult.Value > 0.5 ? "MpChatMatchResultWin" : "MpChatMatchResultLoss"));
             return true;   // report succeeded → backend closed the room
         }
         catch (LobbyApiException apiEx)
@@ -6170,6 +6284,40 @@ public partial class MultiplayerTab : UserControl
         {
             _matchParticipantSnapshot.Clear();
         }
+    }
+
+    /// <summary>
+    /// Whether the recording's verdict may be applied to THIS room, and as what.
+    ///
+    /// <para>The recording answers for two players; the room has to agree. Two people in the
+    /// room and the host among them is the only shape where "the host scored X" also fixes
+    /// what the other player scored — with three or more, the remaining scores would be a
+    /// guess. Anything short of that returns null and everyone is logged as a draw, which
+    /// is what every match got before the recording could be read at all.</para>
+    /// </summary>
+    private static double? ResolveHostResult(
+        MatchReplayInfo? replay, System.Collections.Generic.List<string> participantIds, string hostId)
+    {
+        if (replay?.HostResult == null) return null;
+
+        if (participantIds.Count != 2)
+        {
+            DiagnosticLog.Write(
+                $"MultiplayerTab.ResolveHostResult: recording gave a result but the room had " +
+                $"{participantIds.Count} players — logged as a draw");
+            return null;
+        }
+
+        if (!participantIds.Contains(hostId))
+        {
+            // The reporter is not among the people being reported: the snapshot and the
+            // session disagree, so nothing here can be trusted to name the other player.
+            DiagnosticLog.Write(
+                "MultiplayerTab.ResolveHostResult: host is not in the participant list — logged as a draw");
+            return null;
+        }
+
+        return replay.HostResult;
     }
 
     // ==================================================================

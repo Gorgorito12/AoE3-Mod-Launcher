@@ -348,6 +348,32 @@ public static class ReplayParserService
         return new ReplayOutcome(ReplayOutcomeConfidence.Confident, loser, winner, recorder);
     }
 
+    /// <summary>
+    /// Turns an outcome into the host's score — <c>1.0</c> won, <c>0.0</c> lost — or
+    /// <b>null</b> when the recording does not say.
+    ///
+    /// <para>Null is the answer for everything that is not a clean, confident 1v1 the host
+    /// played in: an ambiguous outcome, a host whose slot is neither of the two named. The
+    /// caller turns null into the 0.5 draw that reporting used before any of this existed,
+    /// so the failure mode is "no worse than before" rather than a wrong winner.</para>
+    ///
+    /// <para>Kept here, pure, rather than in the caller: <c>MultiplayerTab</c> is WPF and
+    /// cannot be tested, and this is the one line where a mistake silently moves rating
+    /// points between two real people.</para>
+    /// </summary>
+    public static double? HostResultFrom(ReplayOutcome? outcome, int hostSlot)
+    {
+        if (outcome == null || outcome.Confidence != ReplayOutcomeConfidence.Confident) return null;
+        if (hostSlot < 0) return null;
+
+        if (hostSlot == outcome.WinnerSlot) return 1.0;
+        if (hostSlot == outcome.LoserSlot) return 0.0;
+
+        // The host is not one of the two the trailer named. Either the wrong recording was
+        // picked or the slots do not mean what we think; both are reasons to say nothing.
+        return null;
+    }
+
     private static uint GetUInt(IReadOnlyDictionary<string, object> dict, string key)
         => dict.TryGetValue(key, out var v) && v is uint u ? u : 0;
 

@@ -255,15 +255,56 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   candidates newest-first (capped at 5, each costs an inflate) and takes the first that
   passes `LooksLikeThisMatch`: host present, human count matching the room, recorder slot
   = the host's. Nothing qualifying returns null, and no replay is always safer than the
-  wrong one. `FindLatestReplay` survives only for the chat line that names the saved file,
-  where "the newest" is exactly right.
+  wrong one. `FindLatestReplay` survives for the chat line that names the saved file, where
+  "the newest" is exactly right and no identity is needed.
+
+  **Verified end to end on the maintainer's own disk, and both gates fire independently:**
+  two strangers' replays in his `Savegame\` are refused for not containing him (the strong
+  check), while `Code vs Nathan 2` — which reads `Confident` in isolation — is refused by
+  ownership before its verdict can ever be reported. His own two recordings are accepted
+  and then refused a result for being skirmishes. Redundant on purpose: each gate alone
+  would have let one of those through.
+
+- **The result is read BEFORE the match is reported, and that order is load-bearing.**
+  `OnGameExitedAsync` runs `AnalyseMatchReplayAsync` first, then hands its
+  `MatchReplayInfo?` to `TryReportMatchAsync`. Two reasons, both real: the report clears
+  `_matchParticipantSnapshot` in its `finally`, and the analysis needs that head count to
+  tell our recording from a downloaded one. The old order (report first) existed to stop
+  a missing user-data folder from skipping the report via an early `return`; that `return`
+  is gone — the analysis returns null instead, and null reports the same all-draws it
+  always did.
+
+  **The host's slot comes from the trailer, not from a second name match.**
+  `LooksLikeThisMatch` only accepts a recording when `recorderSlot == host.Slot`, so after
+  acceptance `RecorderSlot` IS the host's slot; with no trailer it is −1 and
+  `HostResultFrom` returns null, which is consistent because a missing trailer is
+  Ambiguous anyway.
+
+  **`ResolveHostResult` is where the recording's verdict meets the room**, and it refuses
+  unless the room had exactly 2 participants and the host is among them — with three or
+  more, "the host scored X" leaves everyone else's score a guess. **The decision itself is
+  the pure `ReplayParserService.HostResultFrom`** (`MultiplayerTab` is WPF and untestable,
+  and this is the one line where a mistake silently moves rating points between two real
+  people). Every refusal logs its reason.
+
+  **Runs on a background thread** (`Task.Run`): each candidate costs an inflate of a
+  multi-megabyte file and this fires the instant the game closes, with the player looking
+  at the launcher again.
+
+  **Civ is deliberately still null.** The recording gives an INDEX; turning it into a name
+  needs the mod's civ list, which Improvement Mod doesn't ship loose (it is inside the
+  `.bar`) and whose ordering against `data\civs.xml` is plausible but **unconfirmed**
+  (7 = `Indians`, 17 = `Italians` land on real civs, which is not proof). Sending the bare
+  number would put a value nobody can interpret into everyone's history. `MapName` IS sent
+  now, from `gamefilename` — the real map, not `gamemapname`, which is the POOL.
 
 - **The History subtab is fed by a HOST-ONLY, unranked match report at game
   exit — don't re-add per-player reporting or an ELO/win-loss display.** The
   Multiplayer → History tab (`RefreshHistoryAsync`/`BuildHistoryRow`) was fully
   built but empty forever because nothing called `ReportMatchAsync`. Now
-  `MultiplayerTab.TryReportMatchAsync` (invoked from `OnGameExitedAsync`, BEFORE
-  its replay-block early-return) posts the finished match. **Load-bearing rules:**
+  `MultiplayerTab.TryReportMatchAsync` (invoked from `OnGameExitedAsync`, AFTER
+  `AnalyseMatchReplayAsync` — see the result-wiring bullet below) posts the
+  finished match. **Load-bearing rules:**
   (1) **host-only** (`if (!_isHostInCurrentRoom) return;`) — `OnGameExitedAsync`
   fires on EVERY player's client and the backend inserts a `match_participants`
   row for each participant (so every player's own `GET /matches/history/:userId`
@@ -276,11 +317,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `POST /matches`, which the backend host-validates AND **closes the room**
   (`status='closed'` + `finalizeRoom` Discord webhook) — the maintainer's "close
   the room when the match ends" choice; the backend WS close (`4007
-  match_reported`) tears down the lobby window for everyone. (4) **Unranked**: every
-  participant is `result=0.5` (AoE3 exposes no win/loss; no replay parser), so
-  `BuildHistoryRow` shows `mod · N players · duration · date` and does NOT show
-  Win/Loss/Draw or ELO (the backend still runs Glicko on the all-draws, but nothing
-  surfaces it). (5) **Anti-noise gates**: skip when the snapshot has < 2 players or
+  match_reported`) tears down the lobby window for everyone. (4) **`result=0.5` is
+  now the FALLBACK, not the design** — a clean human 1v1 reports the real winner
+  (result-wiring bullet below); a team game, an unreadable recording or one refused
+  by any gate still reports all-draws. `BuildHistoryRow` shows `mod · N players ·
+  duration · date` and still does NOT read `Result` or `MapName`, so none of it is
+  visible yet — that, and the backend accepting the value, are the two remaining
+  steps. (5) **Anti-noise gates**: skip when the snapshot has < 2 players or
   the match ran < 3 min (an opened-and-closed AoE3). The whole call is best-effort
   non-fatal (offline / 404 room-GC'd / 403 host-mismatch swallowed with a log).
   Backend: `GET /matches/history/:userId` gained a `player_count` subquery →

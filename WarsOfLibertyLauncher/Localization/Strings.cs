@@ -2305,6 +2305,18 @@ public static class Strings
             [LangEn] = "Couldn't record the match (HTTP {0} · {1}).",
             [LangEs] = "No se pudo registrar la partida (HTTP {0} · {1}).",
         },
+        // Only the host sees these — they are the visible confirmation that the result
+        // was read from the recording instead of being logged as a draw.
+        ["MpChatMatchResultWin"] = new()
+        {
+            [LangEn] = "Recorded as a win.",
+            [LangEs] = "Registrada como victoria.",
+        },
+        ["MpChatMatchResultLoss"] = new()
+        {
+            [LangEn] = "Recorded as a loss.",
+            [LangEs] = "Registrada como derrota.",
+        },
 
         // --- Radmin VPN banner (reactive, three states) ---
         ["MpRadminNotInstalledTitle"] = new()
