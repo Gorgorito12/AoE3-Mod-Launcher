@@ -3015,21 +3015,43 @@ public partial class MultiplayerTab : UserControl
             }
         }
 
-        left.Children.Add(new TextBlock
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
+        titleRow.Children.Add(new TextBlock
         {
             Text = modName,
             Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
             FontWeight = FontWeights.SemiBold,
             FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+            VerticalAlignment = VerticalAlignment.Center,
         });
 
-        // Meta line: "N players · duration · date". This is an unranked match
-        // log — no win/loss (AoE3 doesn't expose it) and no ELO, so we show the
-        // facts we DO have. Player count is 0 on an old backend that doesn't
-        // emit the field → that segment is dropped.
+        // Win / Loss, and NOTHING for 0.5 — which is the important half of this rule.
+        // A 0.5 means the result could not be read (no recording, a team game, a
+        // skirmish, an old match reported before any of this existed), and labelling
+        // that "Draw" would show every one of them as a drawn game that never happened.
+        // Saying nothing is the honest rendering, and it also leaves every existing
+        // history row looking exactly as it does today.
+        if (row.Result >= 0.999)
+            titleRow.Children.Add(BuildBadge(
+                Strings.Get("MpHistoryWin"),
+                new SolidColorBrush(Color.FromArgb(0x33, 0x3F, 0xB9, 0x50)),
+                new SolidColorBrush(Color.FromRgb(0x5B, 0xD1, 0x6E))));
+        else if (row.Result <= 0.001)
+            titleRow.Children.Add(BuildBadge(
+                Strings.Get("MpHistoryLoss"),
+                new SolidColorBrush(Color.FromArgb(0x33, 0xE5, 0x47, 0x4D)),
+                new SolidColorBrush(Color.FromRgb(0xE5, 0x74, 0x78))));
+
+        left.Children.Add(titleRow);
+
+        // Meta line: "N players · map · duration · date". Every segment is dropped
+        // when its field is empty, so an old match — reported before the map or the
+        // player count were sent — still renders exactly as it always did.
         var parts = new System.Collections.Generic.List<string>();
         if (row.PlayerCount > 0)
             parts.Add(Strings.Format("MpHistoryPlayers", row.PlayerCount));
+        if (!string.IsNullOrWhiteSpace(row.MapName))
+            parts.Add(row.MapName.Replace('_', ' '));   // "ESOC_Arizona" is a file name
         var dur = TimeSpan.FromSeconds(Math.Max(0, row.DurationSeconds));
         parts.Add(dur.TotalHours >= 1 ? dur.ToString(@"h\:mm\:ss") : dur.ToString(@"mm\:ss"));
         if (DateTimeOffset.TryParse(

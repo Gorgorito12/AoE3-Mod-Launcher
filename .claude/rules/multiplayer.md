@@ -298,6 +298,12 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   number would put a value nobody can interpret into everyone's history. `MapName` IS sent
   now, from `gamefilename` — the real map, not `gamemapname`, which is the POOL.
 
+  **The History row shows Win/Loss and NOTHING for 0.5 — the omission is the rule.** A 0.5
+  means the result could not be read (no recording, a team game, a skirmish, or any match
+  reported before this existed), so a "Draw" label would show all of them as drawn games
+  that never happened. Every meta segment is likewise dropped when empty, so an old row
+  renders exactly as it always did.
+
 - **The History subtab is fed by a HOST-ONLY, unranked match report at game
   exit — don't re-add per-player reporting or an ELO/win-loss display.** The
   Multiplayer → History tab (`RefreshHistoryAsync`/`BuildHistoryRow`) was fully
@@ -320,10 +326,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   match_reported`) tears down the lobby window for everyone. (4) **`result=0.5` is
   now the FALLBACK, not the design** — a clean human 1v1 reports the real winner
   (result-wiring bullet below); a team game, an unreadable recording or one refused
-  by any gate still reports all-draws. `BuildHistoryRow` shows `mod · N players ·
-  duration · date` and still does NOT read `Result` or `MapName`, so none of it is
-  visible yet — that, and the backend accepting the value, are the two remaining
-  steps. (5) **Anti-noise gates**: skip when the snapshot has < 2 players or
+  by any gate still reports all-draws. `BuildHistoryRow` shows `mod [Win|Loss] ·
+  N players · map · duration · date`. **The backend never needed a change for any of
+  this** — an earlier note here claimed it forced 0.5; it does not. `POST /matches`
+  has always taken `p.result` per participant, validated the sum against N/2, fed it
+  to Glicko via `applyMatch`, and returned `result`/`map_name`/`rating_*` from
+  `GET /matches/history/:userId`. The all-draws came from the LAUNCHER. No redeploy.
+  (5) **Anti-noise gates**: skip when the snapshot has < 2 players or
   the match ran < 3 min (an opened-and-closed AoE3). The whole call is best-effort
   non-fatal (offline / 404 room-GC'd / 403 host-mismatch swallowed with a log).
   Backend: `GET /matches/history/:userId` gained a `player_count` subquery →

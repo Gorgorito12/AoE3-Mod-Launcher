@@ -2295,6 +2295,10 @@ public static class Strings
         },
         ["MpHistoryPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
         ["MpHistoryReplay"] = new() { [LangEn] = "Replay", [LangEs] = "Repetición" },
+        // Shown only for a match whose result was actually read. There is deliberately no
+        // "Draw" label: 0.5 means "not known", and calling that a draw would invent one.
+        ["MpHistoryWin"] = new() { [LangEn] = "Win", [LangEs] = "Victoria" },
+        ["MpHistoryLoss"] = new() { [LangEn] = "Loss", [LangEs] = "Derrota" },
         ["MpChatMatchRecorded"] = new()
         {
             [LangEn] = "Match recorded in your history ({0} players).",
