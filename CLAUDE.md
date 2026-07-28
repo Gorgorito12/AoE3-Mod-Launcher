@@ -3885,8 +3885,12 @@ engine** and the UI binds to it.
    gated by a mod fingerprint (`ModHashService`) → players join a shared **Radmin
    VPN** network manually for the actual LAN; the host's game launch appends
    `OverrideAddress="<radmin-ip>"` plus skip-intro flags. Match history is wired as
-   a host-only unranked "match log" (players + duration + mod + date; see the
-   History-subtab gotcha); ELO and replay upload remain scaffolded/not surfaced.
+   a host-only match report (players + duration + mod + date + map, and — for a
+   clean human 1v1 whose recording can be read — the real winner; see the
+   History-subtab and result-wiring gotchas in `.claude/rules/multiplayer.md`).
+   Everything the recording can't answer stays a 0.5 draw, which the History row
+   renders as no badge at all rather than as "Draw". Replay UPLOAD remains
+   scaffolded/not surfaced.
 
 ### Multi-mod profile system
 
