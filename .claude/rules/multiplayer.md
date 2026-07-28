@@ -194,10 +194,34 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Indonesia is not civ 8 in Wars of Liberty. The parser returns the number; resolving it
   needs that mod's own civ list. Don't map it to base-game names.
 
-  **The winner is NOT in the file.** Verified on a real 2v2: no outcome key among the
-  370 (`rank`/`winratio` are the players' ESO ladder stats from *before* the match), and
-  the command stream's ~27,000 readable strings are all asset names — no resign or
-  defeat marker. Deriving a winner means decoding command opcodes.
+  **The outcome IS in the file — at the very end, not in the header.** An earlier pass
+  concluded it wasn't, having looked for text markers and header keys; that was wrong.
+  A normally-finished recording ends with:
+
+  ```
+  [00 × 12] [FF × 8] [A: uint32] [B: uint32] [C: uint32]
+  A = slot that LOST · B = slot that RECORDED the file · C = number of humans
+  ```
+
+  **A is the loser, and the rival readings die on one case:** a game the recorder WON
+  reports A = the opponent's slot, so A is neither the winner nor the recorder. Confirmed
+  on five games whose result was known independently — three skirmishes (two resigned,
+  one won) and two real 1v1s between humans. The 1v1s were **predicted before the result
+  was known** and then confirmed by the player who lost them, which is what separates
+  this from fitting the data afterwards. B was likewise predicted and held: two files
+  from the same player point at him in both, across different slots.
+
+  **Two of seven recordings have no trailer at all** — games that ended abnormally
+  (a disconnect, a killed process). That is why `ReadOutcome` checks for the signature
+  instead of assuming it, and why it returns a two-value confidence rather than a bool:
+  a missing answer must not be readable as "it was a draw".
+
+  **Confident requires all three:** the exact signature, an A naming a slot the header
+  has, and exactly two players. Past a 1v1 "X lost" doesn't name a winner — the others
+  may have lost too and nothing records the order — so team games stay draws until the
+  room state can identify every player. **Ambiguous must be reported as a draw**: this
+  feeds a rating, and an invented winner takes points from someone with nothing on
+  screen to explain it.
 
   **The community references are worse than they look:** the official forum thread on
   the format is someone *requesting* documentation, and the AoE3:DE parser on GitHub

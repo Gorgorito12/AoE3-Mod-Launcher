@@ -178,6 +178,119 @@ public class ReplayParserTests
         }
     }
 
+    // ---------------- the outcome ----------------
+    //
+    // These two fixtures are the maintainer's own skirmishes, and their results are known
+    // independently of anything the parser says: one was resigned, the other won. Each is
+    // the real stream's first 64 KB (the settings dictionary) joined to its last 4 KB (the
+    // outcome trailer) and repacked — a composite, stated plainly, and sound only because
+    // the parser reads exactly those two regions and nothing between them.
+    //
+    // The reading was confirmed on five games in two contexts: three skirmishes and two
+    // real 1v1s between humans, the latter predicted BEFORE the outcome was known and then
+    // confirmed by the player who lost them.
+
+    private static byte[] Loss() => Fx("wol-loss-arizona.age3Yrec");   // resigned  → slot 1 lost
+    private static byte[] Win() => Fx("wol-win-amazonia.age3Yrec");    // won       → slot 2 lost
+
+    private static byte[] Fx(string name)
+        => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
+
+    private static ReplayParserService.ReplayOutcome OutcomeOf(byte[] raw)
+    {
+        var data = ReplayParserService.TryReadContainer(raw)!;
+        return ReplayParserService.ReadOutcome(data, ReplayParserService.ParseHeader(data));
+    }
+
+    [Fact]
+    public void ReadsTheLoserOfAGameThatWasResigned()
+    {
+        var o = OutcomeOf(Loss());
+
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Confident, o.Confidence);
+        Assert.Equal(1, o.LoserSlot);   // the human resigned
+        Assert.Equal(2, o.WinnerSlot);  // so the AI won
+    }
+
+    [Fact]
+    public void ReadsTheLoserOfAGameThatWasWon()
+    {
+        // The case that kills every rival reading: the human WON here and holds slot 1,
+        // so a field meaning "winner" or "whoever recorded this" would say 1. It says 2.
+        var o = OutcomeOf(Win());
+
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Confident, o.Confidence);
+        Assert.Equal(2, o.LoserSlot);
+        Assert.Equal(1, o.WinnerSlot);
+    }
+
+    [Fact]
+    public void ReportsWhichSlotRecordedTheFile()
+    {
+        // Both were recorded by the human in slot 1 — including the one he won, where the
+        // loser field says 2. That difference is what makes these two fields distinct.
+        Assert.Equal(1, OutcomeOf(Loss()).RecorderSlot);
+        Assert.Equal(1, OutcomeOf(Win()).RecorderSlot);
+    }
+
+    [Fact]
+    public void AGameWithNoTrailerIsAmbiguous_NotADraw()
+    {
+        // Two of seven real recordings end without the trailer, having finished
+        // abnormally. They must come back Ambiguous so the caller reports a draw
+        // deliberately rather than reading a missing answer as one.
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var truncated = data.Take(data.Length - 64).ToArray();
+
+        var o = ReplayParserService.ReadOutcome(truncated, ReplayParserService.ParseHeader(data));
+
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous, o.Confidence);
+    }
+
+    [Fact]
+    public void ALoserSlotThatIsNotInTheGameIsAmbiguous()
+    {
+        var data = (byte[])ReplayParserService.TryReadContainer(Loss())!.Clone();
+        BitConverter.GetBytes((uint)9).CopyTo(data, data.Length - 12);
+
+        var o = ReplayParserService.ReadOutcome(data, ReplayParserService.ParseHeader(data));
+
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous, o.Confidence);
+    }
+
+    [Fact]
+    public void MoreThanTwoPlayersIsAmbiguousEvenWithTheSignature()
+    {
+        // "X lost" names a winner only in a 1v1. With more players the others may have
+        // lost too and nothing here says in what order, so the trailer is not enough.
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = ReplayParserService.ParseHeader(data)!;
+        var crowded = header with
+        {
+            Players = header.Players
+                .Append(new ReplayParserService.ReplayPlayer(3, "Third", 1, 0, 0))
+                .ToList(),
+        };
+
+        var o = ReplayParserService.ReadOutcome(data, crowded);
+
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous, o.Confidence);
+        Assert.Equal(1, o.LoserSlot);   // still reported, just not decisive on its own
+    }
+
+    [Fact]
+    public void ReadOutcomeRejectsNullsAndStubs()
+    {
+        var header = ReplayParserService.ParseHeader(ReplayParserService.TryReadContainer(Loss())!);
+
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous,
+            ReplayParserService.ReadOutcome(null!, header).Confidence);
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous,
+            ReplayParserService.ReadOutcome(new byte[8], header).Confidence);
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous,
+            ReplayParserService.ReadOutcome(new byte[64], null).Confidence);
+    }
+
     /// <summary>Wraps a payload the way the game does, so tests can build odd containers.</summary>
     private static byte[] Pack(byte[] payload)
     {

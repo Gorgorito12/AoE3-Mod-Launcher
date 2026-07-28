@@ -209,6 +209,80 @@ public static class ReplayParserService
         return data == null ? null : ParseHeader(data);
     }
 
+    /// <summary>How much the outcome below can be trusted. Two values, not a bool,
+    /// so a caller cannot read "I don't know" as "it was a draw".</summary>
+    public enum ReplayOutcomeConfidence
+    {
+        /// <summary>Report a draw. Never guess a winner from this.</summary>
+        Ambiguous,
+        Confident,
+    }
+
+    /// <summary>
+    /// Who lost, who won, and which slot recorded the file. Slots are -1 when unknown.
+    /// </summary>
+    public sealed record ReplayOutcome(
+        ReplayOutcomeConfidence Confidence,
+        int LoserSlot,
+        int WinnerSlot,
+        int RecorderSlot);
+
+    /// <summary>The 12 zero bytes + 8 × 0xFF that precede the trailing triple.</summary>
+    private const int OutcomeTrailerBytes = 32;
+
+    /// <summary>
+    /// Reads the match outcome from the end of the stream.
+    ///
+    /// <para>The last 32 bytes of a normally-finished recording are
+    /// <c>[00 × 12][FF × 8][A][B][C]</c>, three uint32 where <b>A is the slot that
+    /// LOST</b>, B is the slot that recorded the file, and C is the number of humans.</para>
+    ///
+    /// <para><b>Measured, then predicted, then confirmed.</b> A is the loser across five
+    /// games whose result was known independently: three skirmishes (two resigned, one
+    /// won) and two real 1v1s between humans. The rival readings die on the same case —
+    /// a game the recorder WON reports A = the opponent's slot, so A is neither the
+    /// winner nor the recorder. B was then predicted to be the recorder and held: in two
+    /// files from the same player it points at him in both, across different slots.</para>
+    ///
+    /// <para><b>Two of seven recordings have no trailer at all</b> — games that ended
+    /// abnormally. That is why this checks for the signature instead of assuming it, and
+    /// why the enum exists: no trailer means no answer, not a draw that happens to be
+    /// reported as one.</para>
+    ///
+    /// <para>Confident requires everything to line up: the exact signature, an A that
+    /// names a slot the header actually has, and exactly two players — a 1v1, where "X
+    /// lost" settles the winner without inference. Anything else is Ambiguous, which the
+    /// caller must report as a draw: this feeds a rating, and an invented winner takes
+    /// points from someone silently.</para>
+    /// </summary>
+    public static ReplayOutcome ReadOutcome(byte[] data, ReplayHeader? header)
+    {
+        var unknown = new ReplayOutcome(ReplayOutcomeConfidence.Ambiguous, -1, -1, -1);
+        if (data == null || header == null || data.Length < OutcomeTrailerBytes) return unknown;
+
+        var start = data.Length - OutcomeTrailerBytes;
+        for (var i = 0; i < 12; i++)
+            if (data[start + i] != 0x00) return unknown;
+        for (var i = 12; i < 20; i++)
+            if (data[start + i] != 0xFF) return unknown;
+
+        var loser = unchecked((int)BitConverter.ToUInt32(data, start + 20));
+        var recorder = unchecked((int)BitConverter.ToUInt32(data, start + 24));
+
+        // The loser has to be someone who was actually in the game.
+        if (header.Players.All(p => p.Slot != loser))
+            return unknown with { RecorderSlot = recorder };
+
+        // Beyond a 1v1, "X lost" doesn't name a winner: the others may have lost too,
+        // and nothing here says in what order. Those stay draws until the room state
+        // can identify every player.
+        if (header.Players.Count != 2)
+            return unknown with { LoserSlot = loser, RecorderSlot = recorder };
+
+        var winner = header.Players.First(p => p.Slot != loser).Slot;
+        return new ReplayOutcome(ReplayOutcomeConfidence.Confident, loser, winner, recorder);
+    }
+
     private static uint GetUInt(IReadOnlyDictionary<string, object> dict, string key)
         => dict.TryGetValue(key, out var v) && v is uint u ? u : 0;
 
