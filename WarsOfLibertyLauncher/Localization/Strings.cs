@@ -2299,6 +2299,27 @@ public static class Strings
         // "Draw" label: 0.5 means "not known", and calling that a draw would invent one.
         ["MpHistoryWin"] = new() { [LangEn] = "Win", [LangEs] = "Victoria" },
         ["MpHistoryLoss"] = new() { [LangEn] = "Loss", [LangEs] = "Derrota" },
+
+        // --- Profile: the standing, all of it server-side ---
+        ["MpProfileRating"] = new() { [LangEn] = "Rating {0}", [LangEs] = "Puntuación {0}" },
+        ["MpProfileGames"] = new()
+        {
+            [LangEn] = "{0} matches played",
+            [LangEs] = "{0} partidas jugadas",
+        },
+        // The denominator is shown on purpose: most matches have no readable result, so the
+        // rate covers far fewer games than the player has played, and hiding that would make
+        // the number look wrong.
+        ["MpProfileWinrate"] = new()
+        {
+            [LangEn] = "{0}% wins · {1}W-{2}L of {3} decided",
+            [LangEs] = "{0}% de victorias · {1}V-{2}D de {3} decididas",
+        },
+        ["MpProfileProvisional"] = new()
+        {
+            [LangEn] = "provisional — no matches yet",
+            [LangEs] = "provisional — todavía sin partidas",
+        },
         ["MpChatMatchRecorded"] = new()
         {
             [LangEn] = "Match recorded in your history ({0} players).",

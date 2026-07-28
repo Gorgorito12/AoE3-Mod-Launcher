@@ -2775,6 +2775,9 @@ public partial class MultiplayerTab : UserControl
     /// Recreated by each <see cref="RenderRoomPanel"/>; null when no age is shown.</summary>
     private System.Windows.Documents.Run? _lobbyAgeRun;
 
+    /// <summary>The standing, fetched once per session — see <see cref="LoadStandingAsync"/>.</summary>
+    private EloSnapshot? _cachedStanding;
+
     private void RenderProfileTab()
     {
         var user = _session?.CurrentUser;
@@ -2788,11 +2791,72 @@ public partial class MultiplayerTab : UserControl
         }
         ProfileNameText.Text = user.DisplayName;
         ProfileLoginText.Text = $"@{user.DiscordUsername}";
-        // ELO is fetched lazily; cached value would live in extended
-        // cachedUser later. For now leave the line empty so we don't
-        // lie about an unknown rating.
-        ProfileEloText.Text = "";
-        ProfileGamesText.Text = "";
+
+        if (_cachedStanding != null) ShowStanding(_cachedStanding);
+        else
+        {
+            // Blank rather than a placeholder: an unknown rating must not be shown as
+            // anything, least of all as the 1500 the server hands out by default.
+            ProfileEloText.Text = "";
+            ProfileGamesText.Text = "";
+            _ = LoadStandingAsync();
+        }
+    }
+
+    /// <summary>
+    /// Fetches the player's standing. Everything shown here lives on the SERVER — the
+    /// launcher keeps only this per-session copy so re-opening the tab costs nothing.
+    ///
+    /// <para>Once per session, and never on a timer: the endpoint allows 20/min and 500/day
+    /// <b>per IP</b>, and that IP is shared behind NAT or an active Radmin network, so a poll
+    /// would spend everyone's budget on that network.</para>
+    ///
+    /// <para>A failure leaves the lines blank. There is nothing useful to say when the
+    /// standing can't be read, and a default would be a lie.</para>
+    /// </summary>
+    private async Task LoadStandingAsync()
+    {
+        var session = _session;
+        var userId = session?.CurrentUser?.Id;
+        if (session == null || string.IsNullOrEmpty(userId)) return;
+        if (ConnectivityState.IsOffline) return;
+
+        try
+        {
+            var standing = await session.Api.GetEloAsync(userId);
+            _cachedStanding = standing;
+
+            // The user may have moved to another subtab while this was in flight.
+            if (ProfileView.IsVisible) ShowStanding(standing);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.LoadStandingAsync: {ex.Message}");
+        }
+    }
+
+    private void ShowStanding(EloSnapshot standing)
+    {
+        ProfileEloText.Text = Strings.Format("MpProfileRating", (int)Math.Round(standing.Rating));
+
+        if (standing.GamesPlayed <= 0)
+        {
+            ProfileGamesText.Text = Strings.Get("MpProfileProvisional");
+            return;
+        }
+
+        var line = Strings.Format("MpProfileGames", standing.GamesPlayed);
+
+        // Only when something has actually been decided. A 0 % for a player whose matches
+        // simply had no readable result would be wrong, and an old backend that sends no
+        // tally lands here too — same silence, no special case needed.
+        var percent = PlayerStanding.WinPercent(standing.Wins, standing.Losses);
+        if (percent.HasValue)
+            line += " · " + Strings.Format(
+                "MpProfileWinrate", percent.Value, standing.Wins, standing.Losses,
+                PlayerStanding.DecidedGames(standing.Wins, standing.Losses));
+
+        ProfileGamesText.Text = line;
     }
 
     private void UpdateSubtabHighlights()
@@ -3144,8 +3208,13 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
-    private void SignOutLink_Click(object sender, RoutedEventArgs e) =>
+    private void SignOutLink_Click(object sender, RoutedEventArgs e)
+    {
+        // Or the next person to sign in on this machine would be shown the previous
+        // player's rating until the launcher restarts.
+        _cachedStanding = null;
         _session?.SignOut();
+    }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
@@ -6270,6 +6339,12 @@ public partial class MultiplayerTab : UserControl
             };
 
             await _session.Api.ReportMatchAsync(req);
+
+            // The match just moved the rating, so the cached standing is stale. Dropping it
+            // rather than re-fetching keeps this off the per-IP budget: the next visit to the
+            // Profile tab pays for it, and only if there is one.
+            _cachedStanding = null;
+
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryReportMatchAsync: reported match lobby={lobbyId} " +
                 $"players={participantIds.Count} duration={durationSeconds}s " +

@@ -388,6 +388,36 @@ public class ReportMatchResponse
     public List<RatingChange> RatingChanges { get; set; } = new();
 }
 
+/// <summary>
+/// A player's standing, from <c>GET /matches/elo/:userId</c>. Everything here lives on the
+/// server — the launcher stores none of it.
+///
+/// <para><b><see cref="Wins"/> and <see cref="Losses"/> count DECIDED games only</b>, so they
+/// do not add up to <see cref="GamesPlayed"/>: a match whose outcome could not be read is
+/// recorded as 0.5 and is neither. That gap is the normal case, not an anomaly — see
+/// <c>MultiplayerTab.FormatWinrate</c> for why the rate must divide by the two rather than by
+/// the total. Both are 0 against a backend that predates them, which reads the same as "no
+/// decided games yet" and hides the line either way.</para>
+/// </summary>
+public class EloSnapshot
+{
+    [JsonPropertyName("rating")]
+    public double Rating { get; set; }
+
+    /// <summary>Glicko deviation — high means the rating is still provisional.</summary>
+    [JsonPropertyName("rd")]
+    public double Rd { get; set; }
+
+    [JsonPropertyName("games_played")]
+    public int GamesPlayed { get; set; }
+
+    [JsonPropertyName("wins")]
+    public int Wins { get; set; }
+
+    [JsonPropertyName("losses")]
+    public int Losses { get; set; }
+}
+
 public class RatingChange
 {
     [JsonPropertyName("user_id")]

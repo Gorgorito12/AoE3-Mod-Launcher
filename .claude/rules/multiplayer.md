@@ -298,6 +298,25 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   number would put a value nobody can interpret into everyone's history. `MapName` IS sent
   now, from `gamefilename` — the real map, not `gamemapname`, which is the POOL.
 
+- **The Profile tab shows a SERVER-side standing, and the win rate divides by DECIDED games —
+  never by games played.** Everything on that tab lives in the backend's `elo_ratings` table
+  (Glicko, `src/elo/glicko2.ts`); the launcher stores only a per-session copy. `GET
+  /matches/elo/:userId` (client: `LobbyApiClient.GetEloAsync`, DTO `EloSnapshot`) gained
+  `wins`/`losses` — a `SUM(CASE …)` over `match_participants` counting only `result >= 0.999`
+  and `<= 0.001`. **`wins + losses` deliberately does NOT equal `games_played`:** a 0.5 means
+  the outcome could not be read, and that is the MAJORITY of stored rows, so dividing by
+  `games_played` would report **3 %** for someone who won 3 of their 4 decided games. The rule
+  lives in the pure `Services/Multiplayer/PlayerStanding.WinPercent` (pinned by
+  `PlayerStandingTests`), which returns **null** when nothing has been decided — the profile
+  then shows no rate at all rather than a 0 %, the same refusal as the History badge. An older
+  backend sends neither field, which deserializes to 0/0 and lands on that same silence with no
+  special case. **Fetched once per session, never on a timer** (`_cachedStanding`, dropped on
+  sign-out and after a report moves the rating): the endpoint allows 20/min · 500/day **per
+  IP**, and that IP is shared behind NAT or an active Radmin network. A failed or offline fetch
+  leaves the lines BLANK — the 1500 the server hands new players must never be shown as if it
+  were earned. Verified against the live backend: today's deployment answers without the tally
+  and the rate is correctly hidden.
+
   **The History row shows Win/Loss and NOTHING for 0.5 — the omission is the rule.** A 0.5
   means the result could not be read (no recording, a team game, a skirmish, or any match
   reported before this existed), so a "Draw" label would show all of them as drawn games
