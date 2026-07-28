@@ -331,6 +331,107 @@ public static class UserDataService
     }
 
     /// <summary>
+    /// The name this player appears under INSIDE the game — the one a recorded game
+    /// stores, and the only link between a replay and the person who played it.
+    ///
+    /// <para><b>It is not in <c>LastProfile3.dat</c>.</b> That file holds the active
+    /// profile's FILE name, which on every install checked is the default
+    /// <c>NewProfile3</c> — the same string for everyone, useless for telling players
+    /// apart. The real name lives inside <c>Users3\&lt;profile&gt;.xml</c> as
+    /// <c>&lt;OnlineName&gt;</c>. Assuming otherwise costs nothing until it silently
+    /// matches every player against the same placeholder.</para>
+    ///
+    /// <para>Per MOD, not per machine: each mod keeps its own profile, and the same
+    /// person can be "Gorgorito" in one and "gorgorito" in another — hence every
+    /// comparison against this is case-insensitive.</para>
+    ///
+    /// <para>Null when it cannot be read, which callers must treat as "cannot identify
+    /// this player" rather than falling back to a guess.</para>
+    /// </summary>
+    public static string? GetInGameName(ModProfile profile, LauncherConfig config)
+    {
+        try
+        {
+            var folder = GetUserDataFolder(ResolveFolderName(profile, config));
+            if (string.IsNullOrEmpty(folder)) return null;
+
+            var users3 = Path.Combine(folder, "Users3");
+            if (!Directory.Exists(users3)) return null;
+
+            var active = ReadActiveProfileFileName(users3);
+            string? xml = null;
+            if (!string.IsNullOrEmpty(active))
+            {
+                var candidate = Path.Combine(users3, active + ".xml");
+                if (File.Exists(candidate)) xml = candidate;
+            }
+            // The pointer file can be missing or stale; the newest profile is the best
+            // remaining guess at which one the game last wrote.
+            xml ??= Directory.EnumerateFiles(users3, "*.xml")
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+            if (xml == null) return null;
+
+            return ExtractInGameName(File.ReadAllText(xml, System.Text.Encoding.Unicode));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"User data: could not read the in-game name: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Pulls the player's name out of a profile XML. <c>OnlineName</c> is the one a
+    /// replay records; <c>optionskirmishnickname</c> is the fallback, identical on every
+    /// profile inspected but present in its own right, so it costs nothing to accept.
+    /// </summary>
+    internal static string? ExtractInGameName(string profileXml)
+    {
+        if (string.IsNullOrEmpty(profileXml)) return null;
+
+        var online = Between(profileXml, "<OnlineName>", "</OnlineName>");
+        if (!string.IsNullOrWhiteSpace(online)) return online.Trim();
+
+        var nick = Between(profileXml, "optionskirmishnickname\">", "<");
+        return string.IsNullOrWhiteSpace(nick) ? null : nick.Trim();
+
+        static string? Between(string haystack, string open, string close)
+        {
+            var a = haystack.IndexOf(open, StringComparison.OrdinalIgnoreCase);
+            if (a < 0) return null;
+            a += open.Length;
+            var b = haystack.IndexOf(close, a, StringComparison.Ordinal);
+            return b < 0 ? null : haystack[a..b];
+        }
+    }
+
+    /// <summary>
+    /// The active profile's FILE name from <c>LastProfile3.dat</c> — a short UTF-16 blob
+    /// with a couple of leading bytes, so the readable text is taken rather than the
+    /// whole decode. Null when it can't be read.
+    ///
+    /// <para>This is a file name (<c>NewProfile3</c>), NOT the player's name — see
+    /// <see cref="GetInGameName"/>.</para>
+    /// </summary>
+    public static string? ReadActiveProfileFileName(string users3Dir)
+    {
+        try
+        {
+            var dat = Path.Combine(users3Dir, "LastProfile3.dat");
+            if (!File.Exists(dat)) return null;
+
+            var decoded = System.Text.Encoding.Unicode.GetString(File.ReadAllBytes(dat));
+            var name = new string(decoded.Where(c => !char.IsControl(c)).ToArray()).Trim();
+            return string.IsNullOrWhiteSpace(name) ? null : name;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Every "My Games" subfolder across both Documents roots, each flagged with
     /// whether it looks like AoE3 user data. The disk half of
     /// <see cref="MatchUserDataFolder"/>.

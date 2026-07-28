@@ -198,7 +198,7 @@ public static class GameSettingsStore
         // More than one profile: the game records which is active in LastProfile3.dat. Falling
         // back to the newest file rather than guessing keeps us from writing settings into a
         // profile the player isn't using.
-        var active = ReadActiveProfileName(users3);
+        var active = UserDataService.ReadActiveProfileFileName(users3);
         if (active != null)
         {
             var match = profiles.FirstOrDefault(p =>
@@ -206,28 +206,6 @@ public static class GameSettingsStore
             if (match != null) return match;
         }
         return profiles.OrderByDescending(File.GetLastWriteTimeUtc).First();
-    }
-
-    /// <summary>
-    /// The active profile's name from <c>LastProfile3.dat</c> — a short UTF-16 blob with a couple
-    /// of leading bytes before the name, so the readable tail is taken rather than the whole
-    /// decode. Null when it can't be read; the caller then falls back on file times.
-    /// </summary>
-    private static string? ReadActiveProfileName(string users3)
-    {
-        try
-        {
-            var dat = Path.Combine(users3, "LastProfile3.dat");
-            if (!File.Exists(dat)) return null;
-
-            var decoded = Encoding.Unicode.GetString(File.ReadAllBytes(dat));
-            var name = new string(decoded.Where(c => !char.IsControl(c)).ToArray()).Trim();
-            return string.IsNullOrWhiteSpace(name) ? null : name;
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     /// <summary>Reads a profile honouring its byte-order mark (these files are UTF-16).</summary>

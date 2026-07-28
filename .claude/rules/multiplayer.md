@@ -231,12 +231,32 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   **The identity gap is the blocker for scoring, not the parsing.** The replay names
   players by their *AoE3 profile name* (`'69metal69'`); the backend needs the Discord
-  `users.id`. Nothing links them. Only the host's own name is knowable — from
-  `Users3\LastProfile3.dat`, which `GameSettingsStore.ReadActiveProfileName` already
-  reads. That determines a 1v1 completely (host won ⇒ the other lost) but not a team
-  game, so anything beyond 1v1 has to stay a draw until the room state carries in-game
-  names. **Ambiguous must report a draw — never an invented winner**, since this feeds
-  a rating.
+  `users.id`. Nothing links them. Only the host's own name is knowable, and it comes from
+  `UserDataService.GetInGameName` — which determines a 1v1 completely (host won ⇒ the
+  other lost) but not a team game, so anything beyond 1v1 stays a draw until the room
+  state carries in-game names. **Ambiguous must report a draw — never an invented
+  winner**, since this feeds a rating.
+
+  **The in-game name is NOT in `LastProfile3.dat`.** That file holds the active profile's
+  FILE name, which is the stock `NewProfile3` on all five installs checked — the same
+  string for everyone. Used as an identity it would match every player against the same
+  placeholder: no crash, just results quietly attributed to whoever was checked first.
+  The real name is `<OnlineName>` inside `Users3\<profile>.xml` (fallback
+  `optionskirmishnickname`). The chain is `LastProfile3.dat` → the profile FILE → the
+  name inside it, and `GameSettingsStore` shares the first step rather than keeping its
+  own copy. **It is per MOD, not per machine** — the same person is `Gorgorito` in one
+  and `gorgorito` in another — so every comparison against it is case-insensitive.
+
+  **Never trust "the newest replay" alone.** Replays other people send you live in the
+  same `Savegame\` folder — that is where the game looks for them — timestamped when they
+  were copied. On a real disk two of someone else's games sat eleven minutes newer than
+  the player's own, so a match played in between selected a stranger's file, whose result
+  would have been reported for two people who never played it. `FindMatchReplay` walks
+  candidates newest-first (capped at 5, each costs an inflate) and takes the first that
+  passes `LooksLikeThisMatch`: host present, human count matching the room, recorder slot
+  = the host's. Nothing qualifying returns null, and no replay is always safer than the
+  wrong one. `FindLatestReplay` survives only for the chat line that names the saved file,
+  where "the newest" is exactly right.
 
 - **The History subtab is fed by a HOST-ONLY, unranked match report at game
   exit — don't re-add per-player reporting or an ELO/win-loss display.** The
