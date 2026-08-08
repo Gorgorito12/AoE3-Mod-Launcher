@@ -134,6 +134,57 @@ public static class GameLauncher
         return null;
     }
 
+    /// <summary>
+    /// Whether the cached <see cref="LauncherConfig.GameExecutable"/> may be used as
+    /// candidate #1 for this lookup. Pure (no disk access) so it can be unit-tested.
+    ///
+    /// <para>The filename must match the profile's exe — a cached <c>age3y.exe</c> is
+    /// no good for Improvement Mod's <c>age3m.exe</c>. That check alone was NOT enough:
+    /// the cache is a single launcher-wide field, so it can hold a path from an install
+    /// the user has since moved away from, and every WoL/AoE3 folder ships the same
+    /// filename. Observed in a real diagnostic bundle: the launcher was checking,
+    /// patching and verifying <c>…\Wars of Liberty ORIGINAL\bin</c> while PLAY launched
+    /// <c>…\Age Of Empires 3\Wars of Liberty\age3y.exe</c> — a different copy that no
+    /// update, repair or verify had ever touched. This is the same hijack the
+    /// clear-on-mod-switch rule guards, reached without any mod switch.</para>
+    ///
+    /// <para>So a MOD launch (<paramref name="modInstallPath"/> set) additionally
+    /// requires the cached exe to sit INSIDE that install folder. Nothing is lost when
+    /// it doesn't: the walk-up in step 2 covers the install folder and four ancestors,
+    /// so a legitimate exe is still found — just one step later — and the launch's
+    /// write-back then re-points the cache at it, healing the stale value.
+    /// A BASE-game lookup (<c>modInstallPath == null</c>: the stock <c>aoe3-tad</c>
+    /// profile and the "AoE3 found" badge) keeps trusting the cache as before; that is
+    /// what lets a manually-pointed, non-standard AoE3 resolve at all.</para>
+    /// </summary>
+    internal static bool CachedExeIsUsable(string? cachedExe, string exeName, string? modInstallPath)
+    {
+        if (string.IsNullOrWhiteSpace(cachedExe)) return false;
+        if (!string.Equals(Path.GetFileName(cachedExe), exeName, StringComparison.OrdinalIgnoreCase))
+            return false;
+        // Base-game resolution: no install folder to be consistent with.
+        if (string.IsNullOrWhiteSpace(modInstallPath)) return true;
+        return IsUnder(cachedExe, modInstallPath);
+    }
+
+    /// <summary>Whether <paramref name="path"/> sits inside <paramref name="folder"/>.
+    /// Compares normalized full paths so <c>..\</c>, mixed separators and a trailing
+    /// slash can't defeat it; a malformed path answers false rather than throwing.</summary>
+    private static bool IsUnder(string path, string folder)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"GameLauncher.IsUnder('{path}', '{folder}') failed: {ex.Message}");
+            return false;
+        }
+    }
+
     /// <summary>Lazy enumeration of likely paths, in priority order.</summary>
     private static IEnumerable<string> EnumerateCandidates(
         LauncherConfig config,
@@ -150,14 +201,25 @@ public static class GameLauncher
         //    the active mod's cached path would satisfy the filename match and
         //    open the WRONG game (host a WoL room while AoE3 is active → it
         //    launched AoE3). MP resolves purely from the room mod's folder.
-        if (trustConfigCache
-            && !string.IsNullOrWhiteSpace(config.GameExecutable)
-            && string.Equals(
-                Path.GetFileName(config.GameExecutable),
-                exeName,
-                StringComparison.OrdinalIgnoreCase))
+        //
+        //    A MOD launch additionally requires the cached exe to live INSIDE the
+        //    mod's own install folder — see CachedExeIsUsable.
+        if (trustConfigCache && CachedExeIsUsable(config.GameExecutable, exeName, modInstallPath))
         {
             yield return config.GameExecutable;
+        }
+        else if (trustConfigCache
+                 && !string.IsNullOrWhiteSpace(modInstallPath)
+                 && !string.IsNullOrWhiteSpace(config.GameExecutable)
+                 && string.Equals(Path.GetFileName(config.GameExecutable), exeName,
+                                  StringComparison.OrdinalIgnoreCase))
+        {
+            // Filename matched but the path points outside the active install: the
+            // exact hijack this gate exists for. Log it — a silent skip here is how
+            // "the launcher patches one folder and plays another" stayed invisible.
+            DiagnosticLog.Write(
+                $"GameLauncher: ignoring cached exe outside the active install " +
+                $"('{config.GameExecutable}' is not under '{modInstallPath}').");
         }
 
         // 1b. Durable manually-confirmed AoE3 BASE folder (config.Aoe3ManualPath).

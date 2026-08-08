@@ -1811,6 +1811,22 @@ Two cheap gates beyond a green build:
   (the reverse bug). The dashboard `GameLauncher.Launch` keeps `trustConfigCache`
   at its default `true` (it launches the active mod, so the cache is correct and
   worth persisting). Don't drop the `false` on the MP path.
+  **A THIRD variant needs no mod switch and no multiplayer at all: the cache can simply
+  point at ANOTHER COPY of the same mod, and then the launcher manages one folder and
+  plays a different one — silently, forever.** Straight from a diagnostic bundle:
+  `modInstallPath = …\Wars of Liberty ORIGINAL\bin` (checked, patched to 1.2.0e and
+  verified) while `gameExecutable = …\Age Of Empires 3\Wars of Liberty\age3y.exe` — a
+  copy no update, repair or verify had ever touched, and the one PLAY actually launched.
+  The clear-on-switch rule can't help (there was no switch) and the filename gate can't
+  either (every WoL/AoE3 folder ships `age3y.exe`). So `GameLauncher.CachedExeIsUsable`
+  (pure, pinned by `GameLauncherFindTests`) requires, for a MOD launch, that the cached
+  exe live INSIDE the active `modInstallPath`; a **base-game** lookup
+  (`modInstallPath == null` — the stock `aoe3-tad` profile and the "AoE3 found" badge)
+  still trusts it, which is what lets a manually-pointed non-standard AoE3 resolve at
+  all. Rejecting costs nothing (step 2's walk-up covers the install folder and four
+  ancestors, so a legitimate exe is found one step later) and self-heals (the launch's
+  write-back re-points the cache). The rejection is **logged** — the silence is what let
+  a user play an unpatched copy while the launcher reported it up to date.
 
 - **The game is launched RE-PARENTED under `explorer.exe`, not as a child of the
   launcher — don't "simplify" it back to a plain `Process.Start`.** Windows Task

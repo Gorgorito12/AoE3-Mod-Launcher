@@ -79,4 +79,70 @@ public class GameLauncherFindTests : IDisposable
 
         Assert.Equal(Path.Combine(baseFolder, "age3y.exe"), resolved);
     }
+
+    // ---- config.GameExecutable cache scoping -------------------------------
+    //
+    // The cache is a single launcher-wide field shared by every profile, and every
+    // WoL/AoE3 folder ships the same filename — so a filename match alone let a path
+    // from an install the user had moved away from win over the mod's own exe. Seen
+    // in a real bundle: the launcher patched and verified '…\Wars of Liberty
+    // ORIGINAL\bin' while PLAY launched '…\Age Of Empires 3\Wars of Liberty\age3y.exe'.
+
+    [Fact]
+    public void ModLaunch_WithCachedExeOutsideInstall_LaunchesModsOwnExe()
+    {
+        var modFolder = NewDirWithExe("age3y.exe");    // the install the launcher manages
+        var otherCopy = NewDirWithExe("age3y.exe");    // a stale copy left in the cache
+
+        var config = new LauncherConfig { GameExecutable = Path.Combine(otherCopy, "age3y.exe") };
+        var wol = new ModProfile { Id = "wol", GameExecutable = "age3y.exe" };
+
+        var resolved = GameLauncher.Find(config, modInstallPath: modFolder, profile: wol);
+
+        Assert.Equal(Path.Combine(modFolder, "age3y.exe"), resolved);
+    }
+
+    [Fact]
+    public void ModLaunch_WithCachedExeInsideInstall_StillPrefersTheCache()
+    {
+        // The cache keeps its priority for the case it exists for: the exe of the
+        // very install we're launching (here in a bin\ subfolder, Steam layout).
+        var modFolder = Directory.CreateTempSubdirectory("wol-find-test-").FullName;
+        _tempDirs.Add(modFolder);
+        var bin = Directory.CreateDirectory(Path.Combine(modFolder, "bin")).FullName;
+        File.WriteAllText(Path.Combine(bin, "age3y.exe"), "");
+
+        var config = new LauncherConfig { GameExecutable = Path.Combine(bin, "age3y.exe") };
+        var wol = new ModProfile { Id = "wol", GameExecutable = "age3y.exe" };
+
+        var resolved = GameLauncher.Find(config, modInstallPath: modFolder, profile: wol);
+
+        Assert.Equal(Path.Combine(bin, "age3y.exe"), resolved);
+    }
+
+    [Theory]
+    // Base-game resolution (no install folder) keeps trusting the cache — that is
+    // what lets a manually-pointed, non-standard AoE3 resolve at all.
+    [InlineData(@"C:\Games\AoE3\age3y.exe", "age3y.exe", null, true)]
+    // Wrong filename never matches, install folder or not.
+    [InlineData(@"C:\Games\AoE3\age3y.exe", "age3m.exe", null, false)]
+    [InlineData(@"C:\Mod\age3y.exe", "age3m.exe", @"C:\Mod", false)]
+    // Inside the install (directly, and in a subfolder) → usable.
+    [InlineData(@"C:\Mod\age3y.exe", "age3y.exe", @"C:\Mod", true)]
+    [InlineData(@"C:\Mod\bin\age3y.exe", "age3y.exe", @"C:\Mod", true)]
+    [InlineData(@"C:\Mod\age3y.exe", "age3y.exe", @"C:\Mod\", true)]
+    // Outside the install → rejected, including the sibling-with-a-shared-prefix
+    // case a naive StartsWith would wrongly accept.
+    [InlineData(@"C:\Other\age3y.exe", "age3y.exe", @"C:\Mod", false)]
+    [InlineData(@"C:\Mod2\age3y.exe", "age3y.exe", @"C:\Mod", false)]
+    // The install folder itself is not an exe inside it.
+    [InlineData(@"C:\Mod", "age3y.exe", @"C:\Mod", false)]
+    // Nothing cached.
+    [InlineData("", "age3y.exe", @"C:\Mod", false)]
+    [InlineData(null, "age3y.exe", null, false)]
+    public void CachedExeIsUsable_ScopesTheCacheToTheActiveInstall(
+        string? cachedExe, string exeName, string? modInstallPath, bool expected)
+    {
+        Assert.Equal(expected, GameLauncher.CachedExeIsUsable(cachedExe, exeName, modInstallPath));
+    }
 }
