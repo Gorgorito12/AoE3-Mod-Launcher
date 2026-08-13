@@ -1207,6 +1207,40 @@
         <Setter Property="FontWeight" Value="Medium"/>
     </Style>
 
+    <!-- Text link (design handoff 1a). The reference renders the "join" affordance
+         on the chat's room-opened card as plain coloured text at the end of the row,
+         not as a bordered button: inside a chat flow a real button reads as heavier
+         than the message it belongs to. Still a Button, so the click, the keyboard
+         focus and the disabled state are the framework's. -->
+    <Style x:Key="MpLinkButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter x:Name="content"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="content" Property="TextBlock.TextDecorations" Value="Underline"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Row-level Join button: the small one inside each room row in
          the rooms table. Looks like Secondary but with hover that
          shifts to MpBlue so it reads as "the primary action of this

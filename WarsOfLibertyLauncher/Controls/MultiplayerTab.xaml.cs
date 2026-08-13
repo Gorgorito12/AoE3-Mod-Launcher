@@ -4362,8 +4362,14 @@ public partial class MultiplayerTab : UserControl
             hostUserId = host.TryGetProperty("userId", out var hu) ? (hu.GetString() ?? "") : "";
             hostLogin = host.TryGetProperty("login", out var hl) ? (hl.GetString() ?? "") : "";
         }
+        // maxPlayers is on the frame; the count is not, and does not need to be —
+        // the announcement is emitted by POST /lobbies, which inserts the row with
+        // current_players = 1. "1/8" is therefore the capacity AT THAT INSTANT, the
+        // same snapshot semantics the host name and the mod already have on a log
+        // line. A room whose max is missing (an older backend) shows the mod alone.
+        var maxPlayers = lobby.TryGetProperty("maxPlayers", out var mp) && mp.TryGetInt32(out var mpv) ? mpv : 0;
         _onNewRoomFromWs?.Invoke(id, title, modId, hostUserId, hostLogin);
-        AppendGlobalChatRoomEvent(id, title, modId, hostLogin, hostUserId);
+        AppendGlobalChatRoomEvent(id, modId, hostLogin, hostUserId, maxPlayers);
     }
 
     /// <summary>
@@ -4380,7 +4386,7 @@ public partial class MultiplayerTab : UserControl
     /// offering none.</para>
     /// </summary>
     private void AppendGlobalChatRoomEvent(
-        string lobbyId, string title, string modId, string hostLogin, string hostUserId)
+        string lobbyId, string modId, string hostLogin, string hostUserId, int maxPlayers)
     {
         if (GlobalChatPanel == null || !_globalChatRendered) return;
 
@@ -4390,40 +4396,66 @@ public partial class MultiplayerTab : UserControl
             Background = (Brush)Application.Current.FindResource("MpEventBg"),
             BorderBrush = (Brush)Application.Current.FindResource("MpEventRim"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(10, 7, 10, 7),
-            Margin = new Thickness(0, 6, 0, 0),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(10, 9, 10, 9),
+            Margin = new Thickness(0, 8, 0, 8),
         };
 
-        var stack = new StackPanel();
-        var head = new StackPanel { Orientation = Orientation.Horizontal };
-        head.Children.Add(new TextBlock
+        // One row: glyph tile, text, link. The text column is the only star-sized
+        // one, which is what makes its ellipsis fire — a horizontal StackPanel would
+        // measure with infinite width and let a long mod name run under the link.
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // The glyph sits on a rounded tile, not loose in the text. MpEventRim is the
+        // reference's own tile fill (the accent at 20% alpha) and is reused rather
+        // than duplicated under a second name.
+        var glyphTile = new Border
         {
-            Text = "⚑",
-            Foreground = (Brush)Application.Current.FindResource("MpActionText"),
-            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-            Margin = new Thickness(0, 0, 7, 0),
+            Width = 24,
+            Height = 24,
+            CornerRadius = new CornerRadius(6),
+            Background = (Brush)Application.Current.FindResource("MpEventRim"),
             VerticalAlignment = VerticalAlignment.Center,
-        });
-        head.Children.Add(new TextBlock
+            Margin = new Thickness(0, 0, 9, 0),
+            Child = new TextBlock
+            {
+                Text = "⚑",
+                Foreground = (Brush)Application.Current.FindResource("MpActionText"),
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        Grid.SetColumn(glyphTile, 0);
+        row.Children.Add(glyphTile);
+
+        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        stack.Children.Add(new TextBlock
         {
             Text = Strings.Format("MpChatRoomOpened", string.IsNullOrWhiteSpace(hostLogin) ? "—" : hostLogin),
-            Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
-            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
+            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
         });
-        stack.Children.Add(head);
 
-        var detail = string.IsNullOrWhiteSpace(title) ? modName : $"{title} · {modName}";
+        // Mod and capacity — NOT the room title. The reference drops it here because
+        // the host's name is already the line above and the title would push the one
+        // fact that decides whether to click (is there room?) off the end.
+        var detail = maxPlayers > 0 ? $"{modName} · 1/{maxPlayers}" : modName;
         stack.Children.Add(new TextBlock
         {
             Text = detail,
-            Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
             FontSize = (double)Application.Current.FindResource("MpLabelSize"),
             TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 3, 0, 0),
+            Margin = new Thickness(0, 2, 0, 0),
         });
+        Grid.SetColumn(stack, 1);
+        row.Children.Add(stack);
 
         // Not my room, and I have the mod: the two things that decide whether joining
         // can actually work. Same gates the toast applies, minus the dedup — a chat
@@ -4436,16 +4468,16 @@ public partial class MultiplayerTab : UserControl
             var join = new Button
             {
                 Content = Strings.Get("MpRoomJoin"),
-                Style = (Style)Application.Current.FindResource("MpOutlineBlueButton"),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Padding = new Thickness(10, 3, 10, 3),
-                Margin = new Thickness(0, 7, 0, 0),
+                Style = (Style)Application.Current.FindResource("MpLinkButton"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(9, 0, 0, 0),
             };
             join.Click += async (_, _) => await JoinByLobbyIdAsync(lobbyId);
-            stack.Children.Add(join);
+            Grid.SetColumn(join, 2);
+            row.Children.Add(join);
         }
 
-        card.Child = stack;
+        card.Child = row;
         GlobalChatPanel.Children.Add(card);
 
         // A room card breaks the "same author = continuation" run, or the next message
