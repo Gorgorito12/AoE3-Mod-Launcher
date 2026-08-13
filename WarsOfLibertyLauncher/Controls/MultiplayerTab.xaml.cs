@@ -1106,7 +1106,6 @@ public partial class MultiplayerTab : UserControl
         ColHeaderHost.Text = Strings.Get("MpColHost");
         ColHeaderPlayers.Text = Strings.Get("MpColPlayers");
         ColHeaderPing.Text = Strings.Get("MpColPing");
-        ColHeaderAction.Text = Strings.Get("MpColAction");
         UpdateSortArrows();
         EmptyTitleText.Text = Strings.Get("MpRoomsEmptyTitle");
         EmptyBodyText.Text = Strings.Get("MpRoomsEmptyBody");
@@ -3691,6 +3690,9 @@ public partial class MultiplayerTab : UserControl
         if (_roomsSort == col) _roomsSortAsc = !_roomsSortAsc;
         else { _roomsSort = col; _roomsSortAsc = true; }
         UpdateSortArrows();
+        // Refresh the header line too, or its "sorted by X" suffix lags behind the
+        // arrows until the 3 s ping timer next fires.
+        UpdateRoomsUpdatedLabel();
         RerenderRoomsFromCache();
     }
 
@@ -3970,6 +3972,14 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Set the "Showing N rooms" footer count.</summary>
     private void UpdateRoomsShowingCount(int n)
     {
+        // The header pill and the footer count are the same fact, so they are set
+        // together — two writers would eventually disagree after a search or a filter.
+        if (RoomsCountPill != null)
+        {
+            RoomsCountPillText.Text = n.ToString();
+            RoomsCountPill.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         if (RoomsShowingCount == null) return;
         RoomsShowingCount.Text = Strings.Format("MpRoomsShowingCount", n);
     }
@@ -5710,11 +5720,29 @@ public partial class MultiplayerTab : UserControl
             return;
         }
         var secs = (int)(DateTime.Now - _lastRoomsRenderedAt).TotalSeconds;
-        RoomsUpdatedText.Text = secs < 5
+        var stamp = secs < 5
             ? Strings.Get("MpRoomsUpdatedNow")
             : secs < 60
                 ? Strings.Format("MpRoomsUpdatedSecs", secs)
                 : Strings.Format("MpRoomsUpdatedMins", secs / 60);
+
+        // The reference ends this line with "· sorted by ping". It is NOT hardcoded
+        // here, for two reasons: the user can sort by any column, and — until the
+        // backend exposes each host's Radmin IP — the ping shown is YOUR latency,
+        // identical on every row, so sorting by it does nothing. Claiming an order the
+        // table isn't in, by a value that can't order it, is worse than saying nothing.
+        // Naming the ACTUAL sort keeps the reference's intent and stays true.
+        var sortKey = _roomsSort switch
+        {
+            RoomSort.Room => "MpColRoom",
+            RoomSort.Host => "MpColHost",
+            RoomSort.Players => "MpColPlayers",
+            RoomSort.Ping => "MpColPing",
+            _ => null,
+        };
+        RoomsUpdatedText.Text = sortKey == null
+            ? stamp
+            : stamp + " · " + Strings.Format("MpRoomsSortedBy", Strings.Get(sortKey).ToLowerInvariant());
     }
 
     /// <summary>

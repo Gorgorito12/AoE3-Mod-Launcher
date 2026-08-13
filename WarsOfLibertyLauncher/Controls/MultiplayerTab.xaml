@@ -512,15 +512,28 @@
                             <Grid Grid.Row="0" Margin="20,16,20,12">
                                 <StackPanel Orientation="Horizontal"
                                             VerticalAlignment="Center">
-                                    <TextBlock Text="👥"
-                                               FontSize="{StaticResource FontSizeSubtitle}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,9,0"/>
+                                    <!-- No emoji before the title in the reference, and
+                                         13px rather than 16: it labels the list, it does
+                                         not head the page. -->
                                     <TextBlock x:Name="RoomsSectionTitle"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="{StaticResource FontSizeSubtitle}"
+                                               Foreground="{DynamicResource MpTextPrimary}"
+                                               FontSize="{StaticResource FontSizeCaption}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
+                                    <!-- Count pill. Collapsed at zero: "Active rooms 0"
+                                         beside an empty list says the same thing twice. -->
+                                    <Border x:Name="RoomsCountPill"
+                                            Visibility="Collapsed"
+                                            Margin="9,0,0,0"
+                                            Padding="7,3"
+                                            CornerRadius="10"
+                                            Background="#12FFFFFF"
+                                            VerticalAlignment="Center">
+                                        <TextBlock x:Name="RoomsCountPillText"
+                                                   Foreground="{DynamicResource MpTextSecondary}"
+                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   FontWeight="SemiBold"/>
+                                    </Border>
                                 </StackPanel>
                                 <TextBlock x:Name="RoomsUpdatedText"
                                            HorizontalAlignment="Right"

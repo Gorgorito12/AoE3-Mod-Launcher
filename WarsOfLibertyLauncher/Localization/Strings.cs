@@ -2719,6 +2719,9 @@ public static class Strings
         ["MpRoomModNotInstalled"] = new() { [LangEn] = "Mod not installed", [LangEs] = "Mod no instalado" },
         ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms available right now", [LangEs] = "No hay salas disponibles ahora" },
         ["MpRoomsEmptyBody"] = new() { [LangEn] = "Be the first to create one and start a game!", [LangEs] = "¡Sé el primero en crear una y empezar a jugar!" },
+        // Appended to the "updated N ago" line when a column sort is active. {0} is the
+        // lowercased column name.
+        ["MpRoomsSortedBy"] = new() { [LangEn] = "sorted by {0}", [LangEs] = "orden por {0}" },
         ["MpRoomsUpdatedNow"] = new() { [LangEn] = "Updated just now", [LangEs] = "Actualizado ahora" },
         ["MpRoomsUpdatedSecs"] = new() { [LangEn] = "Updated {0}s ago", [LangEs] = "Actualizado hace {0} s" },
         ["MpRoomsUpdatedMins"] = new() { [LangEn] = "Updated {0}m ago", [LangEs] = "Actualizado hace {0} min" },
