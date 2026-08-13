@@ -972,14 +972,25 @@ Two cheap gates beyond a green build:
   the bar and are easy to break:** the height must only ever be set through
   `TitleBarHeightMain` (`App.ApplyWindowChrome` derives `WindowChrome.CaptionHeight`
   from the same token — decouple them and the bottom strip of the bar silently stops
-  dragging the window); every interactive control in the bar needs
-  `IsHitTestVisibleInChrome` or its clicks become drags (content inside
-  `TitleBar.Content` inherits it from the template's `ContentPresenter`, so only
-  things overlaid from MainWindow's own grid set it themselves); and the notification
+  dragging the window); **every interactive control in the bar needs
+  `IsHitTestVisibleInChrome` set EXPLICITLY — do NOT rely on it being inherited into
+  `TitleBar.Content`**; and the notification
   bell + offline chip are still **overlaid** on Row 0 at hand-computed right margins
   (148 and 200, derived from `ButtonWidth=46`), which is why the bar's content grid
   carries a matching right margin — folding those two into the bar is what will
-  finally retire all three numbers. **The active-tab marker changed with the move:**
+  finally retire all three numbers.
+  **The hit-test rule bit us and the symptom was bizarre, so it's worth the detail:**
+  `WindowChrome.IsHitTestVisibleInChrome` IS declared `Inherits`, but that inheritance
+  does **not** reach an element placed in a `ContentControl`'s `Content` — the content's
+  inheritance parent is the ContentControl itself, not the template's `ContentPresenter`
+  that carries the flag. So the nav tabs, which relied on it, were **dead**: a click on
+  one landed in the caption region and dragged the window instead. What made it look
+  like a state bug rather than a hit-test bug is that they came ALIVE right after
+  opening the brand popup — a `StaysOpen=false` popup takes mouse capture, and while
+  captured every click is routed as a normal client hit, bypassing the caption
+  hit-test entirely. So "click the brand, then a tab works, then it's dead again"
+  is the signature of this exact bug. The fix is one attribute on the content grid,
+  which every OTHER control in the bar had already been setting on itself. **The active-tab marker changed with the move:**
   it was a 2px gold bottom border that worked because that edge *was* the chrome/
   content seam; inside the bar there is no seam to sit on, so it's a filled pill
   (`MpTabActiveBg` + `MpTabActiveRim`). The pill deliberately does **not** bold the

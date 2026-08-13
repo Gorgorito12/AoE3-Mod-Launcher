@@ -375,7 +375,8 @@
                      the window instead of switching tabs. Pinning the height makes
                      every control in here full-bar-height, so the whole strip either
                      hits a control or drags, with no dead band in between. -->
-                <Grid Height="{StaticResource TitleBarHeightMain}" Margin="0,0,58,0">
+                <Grid Height="{StaticResource TitleBarHeightMain}" Margin="0,0,58,0"
+                      shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
@@ -564,10 +565,16 @@
                      templated ContentControl precisely so named content can
                      live in the consumer's namescope.
 
-                     Interactive controls in the title bar would otherwise be
-                     swallowed by the window-drag region — these inherit
-                     IsHitTestVisibleInChrome from the template's
-                     ContentPresenter, so they don't each need to set it.
+                     IsHitTestVisibleInChrome is set on the CONTENT GRID above, not
+                     here. Although that property is declared Inherits, it does NOT
+                     reach content placed in a ContentControl's Content: the content's
+                     inheritance parent is the ContentControl, not the template's
+                     ContentPresenter that carries the flag. Every other interactive
+                     control in this bar sets it explicitly for that reason. Relying on
+                     the inheritance made the tabs dead: the first click on one landed
+                     in the caption region, and they only came alive after opening the
+                     brand popup, whose StaysOpen=false mouse capture routes clicks as
+                     client hits and bypasses the caption hit-test entirely.
 
                      The left-to-right child order is re-applied at startup
                      from LauncherConfig.TopTabOrder by ApplyTopTabOrder();
