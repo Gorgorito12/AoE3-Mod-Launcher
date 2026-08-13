@@ -483,29 +483,21 @@
                     </Grid.ColumnDefinitions>
 
                     <!-- ===================== LEFT: active rooms ===================== -->
-                    <!-- Wrapper: glow underlay (Effect, no children) BEHIND the
-                         real content card (no Effect → text stays ClearType-crisp). -->
+                    <!-- The rooms column is BARE in the reference: no card, no border, no
+                         glow — it sits straight on the tab background, and the cards are
+                         the ROWS. The card chrome and its blue DropShadowEffect underlay
+                         came from an earlier mockup ("premium navy refresh"); the current
+                         reference drops both, and wrapping a list of cards in another card
+                         is what made this column read as a panel instead of a list. -->
                     <Grid Grid.Column="0">
-                    <!-- Row 0 is the rooms card (glow underlay + content, stacked);
-                         row 1 is the activity strip below it. Without these the strip
-                         would land in the same cell as the card and paint over it. -->
+                    <!-- Row 0 is the rooms list; row 1 is the activity strip below it.
+                         Without these the strip would land in the same cell and paint
+                         over the list. -->
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0"
-                            Background="{DynamicResource MpSurface}"
-                            CornerRadius="{StaticResource RadiusLg}"
-                            Margin="1">
-                        <Border.Effect>
-                            <DropShadowEffect Color="#3A6BD0" BlurRadius="18" ShadowDepth="0" Opacity="0.28"/>
-                        </Border.Effect>
-                    </Border>
-                    <Border Grid.Row="0"
-                            Background="{DynamicResource MpSurface}"
-                            BorderBrush="{DynamicResource MpCardBorder}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusLg}">
+                    <Border Grid.Row="0">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>   <!-- section title -->
@@ -772,19 +764,16 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
+                    <!-- FLAT panel: the reference's fill and a thin inner rim, and no
+                         glow. The DropShadowEffect underlay it replaces was a two-Border
+                         trick — the shadow had to sit on a sibling because an Effect on
+                         the content card kills ClearType on every glyph inside it. With
+                         the glow gone the trick goes too, and one Border does the job. -->
                     <Border Grid.Row="0"
-                            Background="{DynamicResource MpSurface}"
-                            CornerRadius="{StaticResource RadiusLg}"
-                            Margin="1">
-                        <Border.Effect>
-                            <DropShadowEffect Color="#3A6BD0" BlurRadius="18" ShadowDepth="0" Opacity="0.28"/>
-                        </Border.Effect>
-                    </Border>
-                    <Border Grid.Row="0"
-                            Background="{DynamicResource MpSurface}"
-                            BorderBrush="{DynamicResource MpCardBorder}"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimSoft}"
                             BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusLg}">
+                            CornerRadius="{StaticResource RadiusRow}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>   <!-- title -->
@@ -797,14 +786,23 @@
                                  their names and their localized captions — they are the tab
                                  labels now, so every existing writer (presence count, player
                                  count) still lands in the right place. -->
-                            <StackPanel Grid.Row="0"
-                                        Orientation="Horizontal"
-                                        Margin="8,6,8,4"
-                                        VerticalAlignment="Center">
+                            <!-- The two tabs SPLIT the panel width evenly and centre their
+                                 captions, per the reference — a Grid of two star columns
+                                 rather than a StackPanel, which would size each to its own
+                                 caption and leave them huddled on the left. Even halves
+                                 also keep the boundary still while the presence and player
+                                 counts change. -->
+                            <Grid Grid.Row="0" Margin="8,8,8,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
                                 <Button x:Name="PanelTabChat"
+                                        Grid.Column="0"
+                                        Margin="0,0,2,0"
                                         Click="PanelTab_Click"
                                         Style="{StaticResource SubTab}">
-                                    <StackPanel Orientation="Horizontal">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                         <TextBlock x:Name="GlobalChatHeaderText" VerticalAlignment="Center"/>
                                         <Ellipse Width="6" Height="6"
                                                  Fill="{DynamicResource MpOk}"
@@ -814,11 +812,15 @@
                                     </StackPanel>
                                 </Button>
                                 <Button x:Name="PanelTabPlayers"
+                                        Grid.Column="1"
+                                        Margin="2,0,0,0"
                                         Click="PanelTab_Click"
                                         Style="{StaticResource SubTab}">
-                                    <TextBlock x:Name="PlayersPanelTitle" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="PlayersPanelTitle"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
                                 </Button>
-                            </StackPanel>
+                            </Grid>
 
                             <!-- Thin divider under the merged header. -->
                             <Border Grid.Row="1"
