@@ -250,7 +250,11 @@ public partial class MultiplayerTab : UserControl
     // game_countdown / game_started / game_cancelled frames flip
     // this; the popup's UI responds to changes.
 
-    private enum MatchPhase { Lobby, Starting, InGame }
+    /// <summary>
+    /// Lobby → Starting → InGame → <b>Result</b>. The last one is terminal for that room:
+    /// a reported match closes it server-side, so there is nothing to go back to.
+    /// </summary>
+    private enum MatchPhase { Lobby, Starting, InGame, Result }
     private MatchPhase _matchPhase = MatchPhase.Lobby;
 
     /// <summary>
@@ -1301,9 +1305,30 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
+    /// <summary>
+    /// The socket close the backend sends when a reported match closes its room
+    /// (<c>rooms.close(lobby_id, 4007, 'match_reported')</c>).
+    /// </summary>
+    private const string RoomClosedByReport = "server_close:4007";
+
     private void OnRoomDisconnected(object? sender, string reason) =>
         Dispatcher.InvokeAsync(() =>
         {
+            // A room closed BECAUSE the match was reported is not a dropped connection,
+            // and treating it as one is what produced the zombie lobby window: the socket
+            // retried forever while the room no longer existed. This is the only signal a
+            // NON-host gets — no frame carries the result — so both sides of the match
+            // reach the result phase through the same line.
+            //
+            // Gated on having been in a match: 4007 is also the kick code, and a kick has
+            // already closed the window through its own frame by the time this arrives.
+            if (reason == RoomClosedByReport
+                && (_matchPhase == MatchPhase.InGame || _matchContext != null))
+            {
+                EnterResultPhase();
+                return;
+            }
+
             // Connection-state events used to spam the room chat
             // log, which the redesign brief explicitly calls out as
             // wrong — they're now routed to the global chat bar at
@@ -6963,7 +6988,13 @@ public partial class MultiplayerTab : UserControl
             // nothing usable — the report then carries the draws it always did.
             var replayInfo = await AnalyseMatchReplayAsync(profile, ctx, gameStartedAtUtc);
 
-            var roomClosedByReport = await TryReportMatchAsync(profile, ctx, replayInfo);
+            var report = await TryReportMatchAsync(profile, ctx, replayInfo);
+            var roomClosedByReport = report.ClosedRoom;
+
+            // The host learns the room closed from their own POST, not from the socket —
+            // both arrive, and whichever is first wins. Entering here as well makes the
+            // host's card deterministic instead of dependent on that race.
+            if (roomClosedByReport && _matchPhase != MatchPhase.Result) EnterResultPhase();
 
             // If the match wasn't reported+closed (solo / short / failed report), the
             // HOST tells the server the game ended so the room reverts in_game → open
@@ -7242,7 +7273,17 @@ public partial class MultiplayerTab : UserControl
     /// <returns>True only when a successful report CLOSED the room; false on any
     /// skip (not host / &lt;2 players / &lt;3 min) or failure — the caller then sends
     /// game_ended so the room reverts to open instead of staying stuck in_game.</returns>
-    private async Task<bool> TryReportMatchAsync(
+    /// <summary>
+    /// What reporting did. <see cref="ClosedRoom"/> keeps the exact meaning the old
+    /// boolean had — the caller decides whether to send <c>game_ended</c> from it, so its
+    /// semantics must not drift. <see cref="Response"/> is the addition: the POST answers
+    /// with every participant's rating change, and until now that was thrown away, which
+    /// is why the end-of-match card would otherwise need a second HTTP request to learn
+    /// something the server had already told us.
+    /// </summary>
+    private sealed record ReportOutcome(bool ClosedRoom, ReportMatchResponse? Response);
+
+    private async Task<ReportOutcome> TryReportMatchAsync(
         ModProfile profile, Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay)
     {
         // Every skip below is LOGGED with its reason — before this, a match that
@@ -7262,7 +7303,7 @@ public partial class MultiplayerTab : UserControl
         if (ctx == null)
         {
             DiagnosticLog.Write("MultiplayerTab.TryReportMatchAsync: skipped — no match context");
-            return false;
+            return new ReportOutcome(false, null);
         }
 
         var endedAt = DateTime.UtcNow;
@@ -7270,7 +7311,7 @@ public partial class MultiplayerTab : UserControl
         if (!ok)
         {
             DiagnosticLog.Write($"MultiplayerTab.TryReportMatchAsync: skipped — {reason}");
-            return false;
+            return new ReportOutcome(false, null);
         }
 
         // Live on purpose, and the exception that proves the rule: these are what the POST needs
@@ -7280,7 +7321,7 @@ public partial class MultiplayerTab : UserControl
         if (_session?.Api == null || _computeModFingerprint == null)
         {
             DiagnosticLog.Write("MultiplayerTab.TryReportMatchAsync: skipped — no session / fingerprint hook");
-            return false;
+            return new ReportOutcome(false, null);
         }
 
         // Non-null past this point: CanReport refuses a context missing either of them, which is
@@ -7331,7 +7372,7 @@ public partial class MultiplayerTab : UserControl
                 }).ToList(),
             };
 
-            await _session.Api.ReportMatchAsync(req);
+            var response = await _session.Api.ReportMatchAsync(req);
 
             // The match just moved the rating, so the cached standing is stale. Dropping it
             // rather than re-fetching keeps this off the per-IP budget: the next visit to the
@@ -7351,7 +7392,7 @@ public partial class MultiplayerTab : UserControl
                 recorded += " " + Strings.Get(
                     hostResult.Value > 0.5 ? "MpChatMatchResultWin" : "MpChatMatchResultLoss");
             AnnounceMatchOutcome(recorded, Strings.Get("MpMatchReportedTitle"), "🏆");
-            return true;   // report succeeded → backend closed the room
+            return new ReportOutcome(true, response);   // succeeded → backend closed the room
         }
         catch (LobbyApiException apiEx)
         {
@@ -7364,7 +7405,7 @@ public partial class MultiplayerTab : UserControl
             AnnounceMatchOutcome(
                 Strings.Format("MpChatMatchNotRecorded", apiEx.Status, apiEx.Code),
                 Strings.Get("MpMatchNotReportedTitle"), "⚠");
-            return false;   // report failed → room stayed open (caller sends game_ended)
+            return new ReportOutcome(false, null);   // failed → room open (caller sends game_ended)
         }
         catch (Exception ex)
         {
@@ -7373,7 +7414,7 @@ public partial class MultiplayerTab : UserControl
             AnnounceMatchOutcome(
                 Strings.Format("MpChatMatchNotRecorded", 0, "offline"),
                 Strings.Get("MpMatchNotReportedTitle"), "⚠");
-            return false;
+            return new ReportOutcome(false, null);
         }
         // The context is deliberately NOT cleared here. A finally in this method sits below the
         // early returns above, so a joiner — who leaves at the very first of them — kept the
@@ -7649,6 +7690,8 @@ public partial class MultiplayerTab : UserControl
             ? Visibility.Visible : Visibility.Collapsed;
         _lobbyWindow!.InGameOverlay.Visibility = _matchPhase == MatchPhase.InGame
             ? Visibility.Visible : Visibility.Collapsed;
+        _lobbyWindow!.MatchResultOverlay.Visibility = _matchPhase == MatchPhase.Result
+            ? Visibility.Visible : Visibility.Collapsed;
 
         // NO glow call here — load-bearing. The countdown is now a live
         // line INSIDE the chat, whose CountdownOverlay Border uses a shared,
@@ -7923,6 +7966,81 @@ public partial class MultiplayerTab : UserControl
         // cancelled countdown or a returned-from-match room).
         _autoStartInFlight = false;
         ApplyMatchPhaseUi();
+    }
+
+    /// <summary>
+    /// The match is over and this room will not host another: show the result.
+    ///
+    /// <para><b>Why a phase and not just a panel.</b> A reported match closes the room on
+    /// the backend, which shuts the socket with 4007 — and nothing in the launcher ever
+    /// reacted to that. <see cref="LobbyWebSocket"/> treated it as a dropped connection
+    /// and retried forever, backing off to 30 s, so the window survived with a dead chat,
+    /// live buttons and a room that no longer existed. That zombie was the de-facto
+    /// end-of-match state; this makes it deliberate.</para>
+    ///
+    /// <para>Three things have to happen together, and each of them is load-bearing:</para>
+    /// <list type="number">
+    /// <item><b>Clear <c>_roomMatchLive</c>.</b> On the reported path nothing else does —
+    /// the <c>game_ended</c> branch that normally clears it is skipped precisely because
+    /// the report already closed the room. Left set, <c>WarnOnLeave</c> tells the player
+    /// they "will not be able to come back" while they are looking at their own
+    /// result.</item>
+    /// <item><b>Stop the retries, keep the socket object.</b> Disposing it or nulling
+    /// <c>RoomSocket</c> raises the session state change that closes the lobby window —
+    /// which is the window the card lives in.</item>
+    /// <item><b>Suppress the leave confirmation.</b> The room is gone; there is nothing
+    /// left to warn about, and asking would imply there is.</item>
+    /// </list>
+    /// </summary>
+    private void EnterResultPhase()
+    {
+        _matchPhase = MatchPhase.Result;
+        _aoe3Process = null;
+        _inGameTickTimer?.Stop();
+        _inGameTickTimer = null;
+        _autoStartInFlight = false;
+        _roomMatchLive = false;
+
+        try { _session?.RoomSocket?.StopReconnect(); }
+        catch (Exception ex) { DiagnosticLog.Write($"EnterResultPhase: StopReconnect — {ex.Message}"); }
+
+        _lobbyWindow?.SuppressLeaveConfirm();
+        ShowResultPending();
+        ApplyMatchPhaseUi();
+    }
+
+    /// <summary>
+    /// Dismiss the result and go back to the rooms list.
+    ///
+    /// <para>Closing the window is the whole exit: its <c>Closed</c> handler already
+    /// leaves the lobby, which flips the session to Idle and re-renders the browser. The
+    /// REST leave will 404 on the closed room, which that path already swallows.</para>
+    /// </summary>
+    private void ExitResultPhase()
+    {
+        _matchPhase = MatchPhase.Lobby;
+        CloseLobbyWindow();
+    }
+
+    /// <summary>
+    /// The card's waiting state. It goes up the instant the game exits, before the result
+    /// is known: the numbers do not exist until the report comes back, and the recording
+    /// search alone can take the best part of ten seconds. An empty window for ten seconds
+    /// reads as a failure; a line that says what is happening does not.
+    /// </summary>
+    private void ShowResultPending()
+    {
+        if (_lobbyWindow?.MatchResultHost == null) return;
+        _lobbyWindow.MatchResultHost.Children.Clear();
+        _lobbyWindow.MatchResultHost.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("MpResultPending"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
     }
 
     /// <summary>

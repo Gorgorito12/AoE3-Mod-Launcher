@@ -3211,6 +3211,14 @@ public static class Strings
             [LangEn] = "You left the game. Other players continue.",
             [LangEs] = "Saliste de la partida. Los demás jugadores siguen.",
         },
+        // End-of-match card. The pending line goes up the instant the game closes: the
+        // numbers do not exist until the report comes back, and the recording search can
+        // take the best part of ten seconds.
+        ["MpResultPending"] = new()
+        {
+            [LangEn] = "Working out the result…",
+            [LangEs] = "Calculando el resultado…",
+        },
         ["MpCreateDialogTitle"] = new() { [LangEn] = "Create a room", [LangEs] = "Crear una sala" },
         ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "Room title", [LangEs] = "Título de la sala" },
         ["MpCreateDialogMaxPlayers"] = new() { [LangEn] = "Max players", [LangEs] = "Jugadores máx." },

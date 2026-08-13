@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -77,6 +77,26 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     {
         if (_runLoop != null) return;
         _runLoop = Task.Run(() => RunLoopAsync(_cts.Token));
+    }
+
+    /// <summary>
+    /// Stop reconnecting, but keep the object.
+    ///
+    /// <para>For the one case where the room is gone for a REASON — the backend closes it
+    /// after a reported match and shuts the socket with 4007. The reconnect loop cannot
+    /// tell that from a dropped connection, so it kept retrying, forever, backing off to
+    /// 30 s: the lobby window survived with a dead chat, live buttons and a socket
+    /// pointing at a room that no longer existed.</para>
+    ///
+    /// <para>Deliberately NOT <see cref="DisposeAsync"/> and deliberately not paired with
+    /// nulling the caller's reference: dropping the socket object raises the session state
+    /// change that tears the lobby window down, and the window is exactly what has to stay
+    /// up to show the result. This kills the retries and nothing else.</para>
+    /// </summary>
+    public void StopReconnect()
+    {
+        try { _cts.Cancel(); } catch { /* already disposed */ }
+        try { _ws?.Abort(); } catch { /* socket already dying */ }
     }
 
     public ValueTask DisposeAsync()

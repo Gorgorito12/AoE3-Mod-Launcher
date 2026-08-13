@@ -1,4 +1,4 @@
-<Window x:Class="WarsOfLibertyLauncher.LobbyWindow"
+﻿<Window x:Class="WarsOfLibertyLauncher.LobbyWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -668,6 +668,28 @@
                          button. RefreshInGamePanel() (1 Hz) repaints it; all
                          the InGame* x:Names are preserved so the code-behind
                          needs no change. -->
+                    <!-- Result card host (design handoff 1f). Sibling of InGameOverlay and
+                         in the SAME column, so it inherits the same property: covering
+                         column 0 hides the roster, the checklist and the actions with no
+                         code, while the chat in column 2 stays alive for the "gg".
+
+                         It exists as its own phase because a reported match CLOSES the
+                         room server-side, and until now nothing in the launcher reacted
+                         to that: the socket simply reconnected forever and the window
+                         lingered with a dead chat and live buttons. The card is what that
+                         window is FOR once the match is over. Filled by the code-behind
+                         (see EnterResultPhase); starts as the pending line, because the
+                         numbers do not exist until the report comes back. -->
+                    <Border x:Name="MatchResultOverlay"
+                            Grid.Column="0"
+                            Background="{DynamicResource BgBase}"
+                            BorderBrush="{DynamicResource MpRimMedium}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusPanel}"
+                            Visibility="Collapsed">
+                        <Grid x:Name="MatchResultHost" Margin="16"/>
+                    </Border>
+
                     <Border x:Name="InGameOverlay"
                             Grid.Column="0"
                             Background="{DynamicResource BgBase}"

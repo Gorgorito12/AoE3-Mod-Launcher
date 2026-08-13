@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,6 +43,23 @@ public class DialogXamlTests
             // the constructor returned.
             Assert.NotNull(dlg.CreateButton);
             dlg.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void LobbyWindow_LoadsItsXaml()
+    {
+        // The window with the most to lose: it is only ever parsed once someone signs in
+        // AND enters a room, so nothing in the automated verification touches it. Both
+        // remaining handoff screens (the lobby itself and the in-match panel) rewrite it.
+        var error = RunOnStaThread(() =>
+        {
+            var window = new LobbyWindow(new MultiplayerSession(new LauncherConfig()));
+            Assert.NotNull(window.StartButton);
+            Assert.NotNull(window.MatchResultOverlay);
+            window.Close();
         });
 
         Assert.Null(error);
