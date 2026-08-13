@@ -4208,6 +4208,96 @@ public partial class MultiplayerTab : UserControl
             hostLogin = host.TryGetProperty("login", out var hl) ? (hl.GetString() ?? "") : "";
         }
         _onNewRoomFromWs?.Invoke(id, title, modId, hostUserId, hostLogin);
+        AppendGlobalChatRoomEvent(id, title, modId, hostLogin, hostUserId);
+    }
+
+    /// <summary>
+    /// A "someone opened a room" card, inserted into the global chat flow (design
+    /// handoff 1a).
+    ///
+    /// <para>It exists because the toast is transient and the dot is only a hint: a
+    /// room announced while you were reading the chat left nothing behind. Here it
+    /// stays in the log with a way in.</para>
+    ///
+    /// <para>Unlike the toast, this is NOT filtered — a room whose mod you don't have,
+    /// or your own, still reads as activity, which is the point of a room feed. Only
+    /// the JOIN link is gated, since offering a way in that cannot work is worse than
+    /// offering none.</para>
+    /// </summary>
+    private void AppendGlobalChatRoomEvent(
+        string lobbyId, string title, string modId, string hostLogin, string hostUserId)
+    {
+        if (GlobalChatPanel == null || !_globalChatRendered) return;
+
+        var modName = ResolveModDisplayName(modId);
+        var card = new Border
+        {
+            Background = (Brush)Application.Current.FindResource("MpEventBg"),
+            BorderBrush = (Brush)Application.Current.FindResource("MpEventRim"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 7, 10, 7),
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+
+        var stack = new StackPanel();
+        var head = new StackPanel { Orientation = Orientation.Horizontal };
+        head.Children.Add(new TextBlock
+        {
+            Text = "⚑",
+            Foreground = (Brush)Application.Current.FindResource("MpActionText"),
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            Margin = new Thickness(0, 0, 7, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        head.Children.Add(new TextBlock
+        {
+            Text = Strings.Format("MpChatRoomOpened", string.IsNullOrWhiteSpace(hostLogin) ? "—" : hostLogin),
+            Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        stack.Children.Add(head);
+
+        var detail = string.IsNullOrWhiteSpace(title) ? modName : $"{title} · {modName}";
+        stack.Children.Add(new TextBlock
+        {
+            Text = detail,
+            Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 3, 0, 0),
+        });
+
+        // Not my room, and I have the mod: the two things that decide whether joining
+        // can actually work. Same gates the toast applies, minus the dedup — a chat
+        // line is a log entry, so it is written once by construction.
+        var me = _session?.CurrentUser;
+        bool mine = me != null && !string.IsNullOrEmpty(hostUserId)
+            && string.Equals(hostUserId, me.Id, StringComparison.Ordinal);
+        if (!mine && IsModInstalledLocally(modId))
+        {
+            var join = new Button
+            {
+                Content = Strings.Get("MpRoomJoin"),
+                Style = (Style)Application.Current.FindResource("MpOutlineBlueButton"),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(10, 3, 10, 3),
+                Margin = new Thickness(0, 7, 0, 0),
+            };
+            join.Click += async (_, _) => await JoinByLobbyIdAsync(lobbyId);
+            stack.Children.Add(join);
+        }
+
+        card.Child = stack;
+        GlobalChatPanel.Children.Add(card);
+
+        // A room card breaks the "same author = continuation" run, or the next message
+        // would tuck itself under a header that is no longer above it.
+        _lastGlobalChatAuthor = null;
+        TrimGlobalChat();
+        ScrollGlobalChatToEnd();
     }
 
     /// <summary>Resolve a mod id to its display name for toasts (falls back to the id).</summary>
@@ -4444,11 +4534,20 @@ public partial class MultiplayerTab : UserControl
         _lastGlobalChatAuthor = login;
         if (msgDate != null) _lastGlobalChatDate = msgDate;
 
-        // Cap the rendered chat to the last N rows. The presence socket is now
-        // always-on (see SyncGlobalChat), so while the launcher sits in the tray
-        // for hours these rows would otherwise accumulate unbounded in a hidden
-        // panel — a slow memory leak. Trimming the oldest keeps it bounded while
-        // still showing recent chat when the user re-opens the tab.
+        TrimGlobalChat();
+    }
+
+    /// <summary>
+    /// Cap the rendered chat to the last N rows. The presence socket is always-on (see
+    /// SyncGlobalChat), so while the launcher sits in the tray for hours these rows
+    /// would otherwise accumulate unbounded in a hidden panel — a slow memory leak.
+    ///
+    /// <para>Its own method because EVERY writer to the panel has to call it, not just
+    /// message rows: day dividers and room-opened cards go into the same panel, and one
+    /// that skipped the trim would leak exactly as the messages once did.</para>
+    /// </summary>
+    private void TrimGlobalChat()
+    {
         const int MaxGlobalChatRows = 200;
         while (GlobalChatPanel.Children.Count > MaxGlobalChatRows)
             GlobalChatPanel.Children.RemoveAt(0);

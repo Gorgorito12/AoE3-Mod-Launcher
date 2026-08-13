@@ -460,6 +460,10 @@
     <SolidColorBrush x:Key="MpChevron" Color="#8EA4C0"/>
     <!-- Unfilled capacity segment in a room row. -->
     <SolidColorBrush x:Key="MpCapacityEmpty" Color="#21FFFFFF"/>
+    <!-- "Someone opened a room" card inside the chat flow. Fainter than the action
+         tints above, so it reads as an event in the log rather than as a button. -->
+    <SolidColorBrush x:Key="MpEventBg" Color="#172F7FE0"/>
+    <SolidColorBrush x:Key="MpEventRim" Color="#332F7FE0"/>
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>

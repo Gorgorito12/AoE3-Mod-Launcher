@@ -2396,6 +2396,12 @@ public static class Strings
         // Centred day divider in the global chat. "Today" instead of a date, because a
         // date on the line you are reading right now is noise.
         ["MpChatToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
+        // Room-opened card in the chat flow. {0} is the host's login.
+        ["MpChatRoomOpened"] = new()
+        {
+            [LangEn] = "{0} opened a room",
+            [LangEs] = "{0} abrió una sala",
+        },
         ["MpRoomsSearchPlaceholder"] = new()
         {
             [LangEn] = "Search room, mod or player",
