@@ -3255,6 +3255,72 @@ public static class Strings
             [LangEn] = "Mod fingerprint",
             [LangEs] = "Huella del mod",
         },
+        // Fingerprint state, shown UNDER the mod name in the create-room dialog. It was
+        // hidden behind an "Advanced details" toggle; a mismatched fingerprint is the
+        // usual reason another player cannot join, so it belongs on screen.
+        ["MpCreateDialogFingerprintOk"] = new()
+        {
+            [LangEn] = "Fingerprint verified · {0}",
+            [LangEs] = "Huella verificada · {0}",
+        },
+        ["MpCreateDialogFingerprintLoading"] = new()
+        {
+            [LangEn] = "Computing fingerprint…",
+            [LangEs] = "Calculando huella…",
+        },
+        ["MpCreateDialogFingerprintFailed"] = new()
+        {
+            [LangEn] = "Couldn't read the fingerprint — verify the install",
+            [LangEs] = "No se pudo leer la huella — verifica la instalación",
+        },
+        // Title suggestions. They are appended to the room title, so they read as
+        // things a host announces about the match, not as titles by themselves.
+        ["MpCreateDialogSuggest1"] = new() { [LangEn] = "Quick 1v1", [LangEs] = "1v1 rápido" },
+        ["MpCreateDialogSuggest2"] = new() { [LangEn] = "No rush 10 min", [LangEs] = "Sin rush 10 min" },
+        ["MpCreateDialogSuggest3"] = new() { [LangEn] = "LatAm only", [LangEs] = "Solo LatAm" },
+        ["MpCreateDialogPrivateBody"] = new()
+        {
+            [LangEn] = "Not announced. Share the code or the password.",
+            [LangEs] = "No se anuncia. Comparte el código o la contraseña.",
+        },
+        ["MpCreateDialogShowPassword"] = new() { [LangEn] = "Show", [LangEs] = "Mostrar" },
+        ["MpCreateDialogHidePassword"] = new() { [LangEn] = "Hide", [LangEs] = "Ocultar" },
+        // The recording warning belongs here, BEFORE the match: by the time the game is
+        // over there is nothing left to fix. {0} is the in-game checkbox's own name,
+        // which stays in English because that is what AoE3 shows.
+        ["MpCreateDialogRecordWarn"] = new()
+        {
+            [LangEn] = "For the match to count towards ELO, tick {0} on the AoE3 setup screen. "
+                     + "Without a recording nobody knows who won.",
+            [LangEs] = "Para que la partida cuente en el ELO, marca {0} en la pantalla de configuración de AoE3. "
+                     + "Sin grabación nadie sabe quién ganó.",
+        },
+        ["MpCreateDialogRecordWarnName"] = new() { [LangEn] = "Record Game", [LangEs] = "Record Game" },
+        ["MpCreateDialogAnnounceNote"] = new()
+        {
+            [LangEn] = "It will be announced in the global chat and on Discord.",
+            [LangEs] = "Se anunciará en el chat global y en Discord.",
+        },
+        ["MpCreateDialogAnnounceNotePrivate"] = new()
+        {
+            [LangEn] = "A private room is not announced anywhere.",
+            [LangEs] = "Una sala privada no se anuncia en ningún sitio.",
+        },
+        ["MpCreateDialogTitleTooShort"] = new()
+        {
+            [LangEn] = "The title needs at least 3 characters.",
+            [LangEs] = "El título necesita al menos 3 caracteres.",
+        },
+        ["MpCreateDialogNoFingerprint"] = new()
+        {
+            [LangEn] = "Pick a mod — the fingerprint is still being computed.",
+            [LangEs] = "Elige un mod — la huella todavía se está calculando.",
+        },
+        ["MpCreateDialogDefaultTitle"] = new()
+        {
+            [LangEn] = "{0} room",
+            [LangEs] = "Sala de {0}",
+        },
         ["MpCreateDialogCreate"] = new() { [LangEn] = "Create", [LangEs] = "Crear" },
         ["MpCreateDialogCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
         ["MpCreateDialogRadminWarning"] = new()

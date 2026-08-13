@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ================================================================
@@ -470,6 +470,13 @@
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>
     <SolidColorBrush x:Key="MpPrivateRim" Color="#3DA06EF0"/>
+    <!-- The private-room BOX in the create dialog: the same hue as the chip at a
+         lower alpha (.08 vs .16), because a whole box at chip strength shouts. Its
+         two text tones and the password field's rim come from the prototype. -->
+    <SolidColorBrush x:Key="MpPrivateSoftBg" Color="#14A06EF0"/>
+    <SolidColorBrush x:Key="MpPrivateFieldRim" Color="#4DA06EF0"/>
+    <SolidColorBrush x:Key="MpPrivateTitle" Color="#E2D5F7"/>
+    <SolidColorBrush x:Key="MpPrivateSub" Color="#B39FD0"/>
     <SolidColorBrush x:Key="MpCautionBg" Color="#14E6B455"/>
     <SolidColorBrush x:Key="MpCautionRim" Color="#38E6B455"/>
 

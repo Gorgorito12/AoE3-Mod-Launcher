@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -31,6 +31,15 @@ public partial class CreateLobbyDialog : Window
     private readonly MultiplayerSession _session;
     private readonly Func<ModProfile, Task<string>> _computeHash;
     private readonly IReadOnlyList<ModProfile> _profiles;
+    /// <summary>
+    /// The server's per-room player cap. Nothing passes it today, so it is the default
+    /// 8 — which is also the backend's own <c>LOBBY_MAX_PLAYERS</c> default, so the
+    /// segmented row is right unless that deployment value is changed. The real figure
+    /// IS on the wire (<c>ServerConfig.LobbyMaxPlayers</c>, from the sign-in response)
+    /// but nothing in the launcher reads that object yet; wiring it is a separate change
+    /// from this redesign, and guessing a lower number here would hide rooms sizes the
+    /// server would have accepted.
+    /// </summary>
     private readonly int _lobbyMaxPlayers;
     private readonly Func<ModProfile, ModCopyInfo> _resolveCopyInfo;
     private readonly Func<string, Task> _switchActiveCopy;
@@ -40,6 +49,16 @@ public partial class CreateLobbyDialog : Window
 
     private ModProfile? _selectedProfile;
     private string _selectedHash = "";
+
+    /// <summary>Room-size bounds the segmented row renders (the server caps within it).</summary>
+    private const int MinRoomPlayers = 2;
+    private const int MaxRoomPlayers = 8;
+
+    private readonly Dictionary<int, Button> _maxPlayerButtons = new();
+    private int _maxPlayers = MaxRoomPlayers;
+
+    /// <summary>True while the password is shown in clear, so the two controls stay in sync.</summary>
+    private bool _passwordRevealed;
 
     /// <summary>Set when the dialog returns DialogResult=true.</summary>
     public CreateLobbyResponse? CreatedLobby { get; private set; }
@@ -91,25 +110,19 @@ public partial class CreateLobbyDialog : Window
         TitleBarControl.Title = Strings.Get("MpCreateDialogTitle");
         ModLabel.Text = Strings.Get("MpCreateDialogModLabel");
         CopyLabel.Text = Strings.Get("MpCreateDialogCopyLabel");
-        // HashLabel is rendered next to the "Advanced details" toggle
-        // and uses the localised "(mod fingerprint)" suffix from the
-        // strings table. Wrap in parens to make it read as a hint.
-        HashLabel.Text = "(" + Strings.Get("MpCreateDialogHashLabel") + ")";
         TitleLabel.Text = Strings.Get("MpCreateDialogTitleLabel");
         MaxPlayersLabel.Text = Strings.Get("MpCreateDialogMaxPlayers");
-        // The dialog no longer has a "Password" label per se — the
-        // PasswordBox is grouped under the Private room checkbox.
-        // Keep the resource lookup for future re-localisation but
-        // don't try to assign to a removed control.
-        var _passwordLabel = Strings.Get("MpCreateDialogPassword");
-        // Localise the "Private room" toggle and surface the consequence right
-        // there: a private room is deliberately NOT announced (Discord + in-app
-        // popup), so the host chooses knowingly. See MpCreateDialogPrivateHint.
-        PrivateRoomCheck.Content = Strings.Get("MpCreateDialogPrivate");
-        PrivateHint.Text = Strings.Get("MpCreateDialogPrivateHint");
+        PrivateTitleText.Text = Strings.Get("MpCreateDialogPrivate");
+        PrivateHint.Text = Strings.Get("MpCreateDialogPrivateBody");
         PrivateRoomCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogPrivateHint"));
+        PasswordRevealButton.Content = Strings.Get("MpCreateDialogShowPassword");
+        Suggest1.Content = Strings.Get("MpCreateDialogSuggest1");
+        Suggest2.Content = Strings.Get("MpCreateDialogSuggest2");
+        Suggest3.Content = Strings.Get("MpCreateDialogSuggest3");
         CancelButton.Content = Strings.Get("MpCreateDialogCancel");
         CreateButton.Content = Strings.Get("MpCreateDialogCreate");
+        BuildRecordWarning();
+        RefreshAnnounceNote();
 
         // Populate the mod dropdown. We show DisplayName, store the
         // ModProfile in Tag so SelectionChanged can read it back.
@@ -130,31 +143,24 @@ public partial class CreateLobbyDialog : Window
         if (ModCombo.SelectedItem == null && ModCombo.Items.Count > 0)
             ((ComboBoxItem)ModCombo.Items[0]!).IsSelected = true;
 
-        RoomTitleBox.Focus();
-
-        // Cap the max-players combo at the server's lobby cap.
-        for (int i = 0; i < MaxPlayersCombo.Items.Count; i++)
+        // One installed mod means there is nothing to pick: the card stays, the
+        // affordance goes. A chevron that opens a list of one is a promise of choice.
+        if (profiles.Count < 2)
         {
-            if (MaxPlayersCombo.Items[i] is ComboBoxItem item)
-            {
-                if (int.TryParse(item.Content?.ToString(), out var val) && val > _lobbyMaxPlayers)
-                    item.IsEnabled = false;
-            }
+            ModChevron.Visibility = Visibility.Collapsed;
+            ModCombo.IsHitTestVisible = false;
         }
 
-        // INFORMATIONAL (not blocking, not discouraging) heads-up when Radmin
-        // isn't recognised as active. Creating the room and joining it are NEVER
-        // gated on Radmin (join is gated only by the mod fingerprint; Create is
-        // never disabled), and the game already auto-injects the 26.x IP via
-        // OverrideAddress — so the old "other players won't be able to join"
-        // copy was FALSE and scared testers off. The real requirement is only
-        // for actual in-game play (peers need Radmin's tunnel up on the AoE3
-        // network). Two tones by whether we can read an injectable 26.x IP:
-        //   * IP present (adapter Up even with the app closed / "Desconectado")
-        //     → info note WITH the IP (it's injected automatically).
-        //   * IP absent (not installed / adapter down) → info note to
-        //     install/enable Radmin.
-        // Best-effort: a probe failure just leaves the note hidden.
+        BuildMaxPlayersRow();
+        RoomTitleBox.Focus();
+
+        // INFORMATIONAL (not blocking, not discouraging) heads-up when Radmin isn't
+        // recognised as active. Creating the room and joining it are NEVER gated on
+        // Radmin (join is gated only by the mod fingerprint; Create is never disabled),
+        // and the game already auto-injects the 26.x IP via OverrideAddress — so the old
+        // "other players won't be able to join" copy was FALSE and scared testers off.
+        // The real requirement is only for actual in-game play. Two tones by whether we
+        // can read an injectable 26.x IP. Best-effort: a probe failure hides the note.
         try
         {
             var status = RadminVpnService.GetStatus();
@@ -174,6 +180,69 @@ public partial class CreateLobbyDialog : Window
     }
 
     /// <summary>
+    /// The recording warning, built as two Runs so the in-game checkbox's own name can
+    /// be emphasised inside a localized sentence. That name stays English on purpose —
+    /// it is what AoE3 actually shows on its setup screen.
+    /// </summary>
+    private void BuildRecordWarning()
+    {
+        var name = Strings.Get("MpCreateDialogRecordWarnName");
+        var sentence = Strings.Format("MpCreateDialogRecordWarn", " ");
+        var parts = sentence.Split(' ');
+        RecordWarnText.Inlines.Clear();
+        RecordWarnText.Inlines.Add(new System.Windows.Documents.Run(parts[0]));
+        RecordWarnText.Inlines.Add(new System.Windows.Documents.Run(name)
+        {
+            Foreground = (System.Windows.Media.Brush)FindResource("MpCautionTextAlt"),
+            FontWeight = FontWeights.SemiBold,
+        });
+        if (parts.Length > 1)
+            RecordWarnText.Inlines.Add(new System.Windows.Documents.Run(parts[1]));
+    }
+
+    /// <summary>
+    /// The footer note says what pressing Create will do. It flips with the private
+    /// checkbox, because "it will be announced" is exactly what a private room does not
+    /// do, and that promise is the reason someone ticks the box.
+    /// </summary>
+    private void RefreshAnnounceNote()
+        => AnnounceNote.Text = Strings.Get(PrivateRoomCheck?.IsChecked == true
+            ? "MpCreateDialogAnnounceNotePrivate"
+            : "MpCreateDialogAnnounceNote");
+
+    /// <summary>
+    /// The 2..8 segmented row. Options above the server's cap are rendered but
+    /// disabled: they say what the ceiling IS, which a shorter row would not.
+    /// </summary>
+    private void BuildMaxPlayersRow()
+    {
+        MaxPlayersRow.Children.Clear();
+        _maxPlayerButtons.Clear();
+        for (var n = MinRoomPlayers; n <= MaxRoomPlayers; n++)
+        {
+            var btn = new Button
+            {
+                Content = n.ToString(),
+                Style = (Style)FindResource("MpSegment"),
+                Tag = null,
+                IsEnabled = n <= _lobbyMaxPlayers,
+            };
+            var value = n;
+            btn.Click += (_, _) => SelectMaxPlayers(value);
+            _maxPlayerButtons[n] = btn;
+            MaxPlayersRow.Children.Add(btn);
+        }
+        SelectMaxPlayers(Math.Min(_lobbyMaxPlayers, MaxRoomPlayers));
+    }
+
+    private void SelectMaxPlayers(int value)
+    {
+        _maxPlayers = value;
+        foreach (var kv in _maxPlayerButtons)
+            kv.Value.Tag = kv.Key == value ? "active" : null;
+    }
+
+    /// <summary>
     /// User picked a different mod from the dropdown. Recompute the
     /// fingerprint and update the title placeholder. Disable Create
     /// while the hash is in flight so a fast-clicker can't submit
@@ -185,27 +254,104 @@ public partial class CreateLobbyDialog : Window
             return;
 
         _selectedProfile = profile;
+        ModNameText.Text = profile.DisplayName;
         UpdateModIcon(profile);
         RefreshCopyRow(profile);
         ModNameDefaultTitle(profile);
-        HashText.Text = "Loading…";
+        SetFingerprintState(FingerprintState.Loading, null);
         CreateButton.IsEnabled = false;
 
         try
         {
             _selectedHash = await _computeHash(profile);
-            HashText.Text = _selectedHash;
+            SetFingerprintState(FingerprintState.Ok, _selectedHash);
             CreateButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
             _selectedHash = "";
-            HashText.Text = "";
-            ShowError(ex.Message);
-            // Create stays disabled — the user can't submit without a
-            // valid hash. Switching mods triggers a fresh attempt.
+            SetFingerprintState(FingerprintState.Failed, null);
+            DiagnosticLog.Write($"CreateLobbyDialog: fingerprint failed: {ex.Message}");
+            // Create stays disabled — the user can't submit without a valid hash.
+            // Switching mods triggers a fresh attempt. The message is NOT pushed to
+            // ErrorText: the card already says what is wrong, next to what it is
+            // wrong about, and the footer line is for the server's answer to Create.
         }
     }
+
+    private enum FingerprintState { Ok, Loading, Failed }
+
+    /// <summary>
+    /// Paint the fingerprint line under the mod name. Only the first six characters of
+    /// the hash are shown — enough for two players to compare over voice, which is the
+    /// only thing anyone does with this value, and short enough to fit beside the name.
+    /// </summary>
+    private void SetFingerprintState(FingerprintState state, string? hash)
+    {
+        var (brushKey, dotKey, text) = state switch
+        {
+            FingerprintState.Ok => ("MpOkText", "MpOk",
+                Strings.Format("MpCreateDialogFingerprintOk", ShortHash(hash))),
+            FingerprintState.Loading => ("MpCautionText", "MpCaution",
+                Strings.Get("MpCreateDialogFingerprintLoading")),
+            _ => ("MpDestructiveText", "MpDestructiveText",
+                Strings.Get("MpCreateDialogFingerprintFailed")),
+        };
+        FingerprintText.Text = text;
+        FingerprintText.Foreground = (System.Windows.Media.Brush)FindResource(brushKey);
+        FingerprintDot.Fill = (System.Windows.Media.Brush)FindResource(dotKey);
+        FingerprintText.ToolTip = string.IsNullOrEmpty(hash)
+            ? null
+            : TooltipHelper.Wrap(Strings.Get("MpCreateDialogHashLabel") + ": " + hash);
+    }
+
+    private static string ShortHash(string? hash)
+        => string.IsNullOrEmpty(hash) ? "" : (hash!.Length <= 6 ? hash : hash[..6] + "…");
+
+    /// <summary>Append a suggestion to the room title instead of replacing it.</summary>
+    private void Suggest_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button b || b.Content is not string suggestion) return;
+        var current = RoomTitleBox.Text?.Trim() ?? "";
+        if (current.Contains(suggestion, StringComparison.OrdinalIgnoreCase)) return;
+        var joined = string.IsNullOrEmpty(current) ? suggestion : current + " · " + suggestion;
+        if (joined.Length > RoomTitleBox.MaxLength) joined = joined[..RoomTitleBox.MaxLength];
+        RoomTitleBox.Text = joined;
+        RoomTitleBox.CaretIndex = RoomTitleBox.Text.Length;
+        RoomTitleBox.Focus();
+    }
+
+    /// <summary>
+    /// Reveal or hide the password. A PasswordBox cannot show its own value, so the
+    /// reveal swaps in a plain TextBox; whichever is visible is copied back into the
+    /// PasswordBox, which stays the single source of truth for the request.
+    /// </summary>
+    private void PasswordReveal_Click(object sender, RoutedEventArgs e)
+    {
+        _passwordRevealed = !_passwordRevealed;
+        if (_passwordRevealed)
+        {
+            PasswordPlainBox.Text = PasswordBox.Password;
+            PasswordPlainBox.Visibility = Visibility.Visible;
+            PasswordBox.Visibility = Visibility.Collapsed;
+            PasswordPlainBox.Focus();
+            PasswordPlainBox.CaretIndex = PasswordPlainBox.Text.Length;
+        }
+        else
+        {
+            PasswordBox.Password = PasswordPlainBox.Text;
+            PasswordBox.Visibility = Visibility.Visible;
+            PasswordPlainBox.Visibility = Visibility.Collapsed;
+            PasswordBox.Focus();
+        }
+        PasswordRevealButton.Content = Strings.Get(_passwordRevealed
+            ? "MpCreateDialogHidePassword"
+            : "MpCreateDialogShowPassword");
+    }
+
+    /// <summary>The password as typed, from whichever of the two controls is showing.</summary>
+    private string CurrentPassword()
+        => _passwordRevealed ? PasswordPlainBox.Text : PasswordBox.Password;
 
     /// <summary>
     /// Repaint the copy row for the picked mod. Hidden for single-install mods
@@ -259,19 +405,19 @@ public partial class CreateLobbyDialog : Window
 
         CreateButton.IsEnabled = false;
         CopyCombo.IsEnabled = false;
-        HashText.Text = "Loading…";
+        SetFingerprintState(FingerprintState.Loading, null);
         try
         {
             await _switchActiveCopy(installId);
             _selectedHash = await _computeHash(_selectedProfile);
-            HashText.Text = _selectedHash;
+            SetFingerprintState(FingerprintState.Ok, _selectedHash);
             CreateButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
             _selectedHash = "";
-            HashText.Text = "";
-            ShowError(ex.Message);
+            SetFingerprintState(FingerprintState.Failed, null);
+            DiagnosticLog.Write($"CreateLobbyDialog: copy switch failed: {ex.Message}");
         }
         // Re-render so the active marker + enabled state follow the switch
         // (also restores CopyCombo.IsEnabled per CanSwitch).
@@ -285,9 +431,10 @@ public partial class CreateLobbyDialog : Window
         // We detect "custom" by checking whether the current text was
         // produced by us for any of the other profiles.
         var current = RoomTitleBox.Text?.Trim() ?? "";
-        var looksAuto = _profiles.Any(p => current == $"{p.DisplayName} room");
+        var looksAuto = _profiles.Any(p =>
+            current == Strings.Format("MpCreateDialogDefaultTitle", p.DisplayName));
         if (string.IsNullOrEmpty(current) || looksAuto)
-            RoomTitleBox.Text = $"{profile.DisplayName} room";
+            RoomTitleBox.Text = Strings.Format("MpCreateDialogDefaultTitle", profile.DisplayName);
     }
 
     /// <summary>
@@ -354,21 +501,18 @@ public partial class CreateLobbyDialog : Window
     {
         if (_selectedProfile == null || string.IsNullOrEmpty(_selectedHash))
         {
-            ShowError("Pick a mod first — the fingerprint is still loading.");
+            ShowError(Strings.Get("MpCreateDialogNoFingerprint"));
             return;
         }
 
         var title = RoomTitleBox.Text.Trim();
         if (title.Length < 3)
         {
-            ShowError("Title must be at least 3 characters.");
+            ShowError(Strings.Get("MpCreateDialogTitleTooShort"));
             return;
         }
 
-        int maxPlayers = _lobbyMaxPlayers;
-        if (MaxPlayersCombo.SelectedItem is ComboBoxItem sel
-            && int.TryParse(sel.Content?.ToString(), out var val))
-            maxPlayers = Math.Min(_lobbyMaxPlayers, val);
+        var maxPlayers = Math.Min(_lobbyMaxPlayers, _maxPlayers);
 
         CreateButton.IsEnabled = false;
         CancelButton.IsEnabled = false;
@@ -381,9 +525,8 @@ public partial class CreateLobbyDialog : Window
             // from typing a password that the server quietly drops
             // because IsPrivate was never set.
             var isPrivate = PrivateRoomCheck?.IsChecked == true;
-            var password = isPrivate && !string.IsNullOrEmpty(PasswordBox.Password)
-                ? PasswordBox.Password
-                : null;
+            var typed = CurrentPassword();
+            var password = isPrivate && !string.IsNullOrEmpty(typed) ? typed : null;
             CreatedLobbyProfile = _selectedProfile;
             CreatedLobbyTitle = title;
             CreatedLobbyMaxPlayers = maxPlayers;
@@ -429,7 +572,7 @@ public partial class CreateLobbyDialog : Window
     {
         if (TitleCounter == null) return;
         var len = RoomTitleBox.Text?.Length ?? 0;
-        TitleCounter.Text = $"{len} / {RoomTitleBox.MaxLength}";
+        TitleCounter.Text = $"{len}/{RoomTitleBox.MaxLength}";
     }
 
     /// <summary>
@@ -440,24 +583,19 @@ public partial class CreateLobbyDialog : Window
     /// </summary>
     private void PrivateRoomCheck_Changed(object sender, RoutedEventArgs e)
     {
-        if (PasswordBox == null || PrivateRoomCheck == null) return;
-        PasswordBox.IsEnabled = PrivateRoomCheck.IsChecked == true;
-        if (PrivateRoomCheck.IsChecked != true)
+        if (PasswordRow == null || PrivateRoomCheck == null) return;
+        var isPrivate = PrivateRoomCheck.IsChecked == true;
+        PasswordRow.Visibility = isPrivate ? Visibility.Visible : Visibility.Collapsed;
+        if (!isPrivate)
+        {
+            // Clear BOTH, or a password typed, revealed and then un-privated would still
+            // be sitting in the plain box the next time the row appears.
             PasswordBox.Password = "";
+            PasswordPlainBox.Text = "";
+        }
+        RefreshAnnounceNote();
     }
 
-    /// <summary>
-    /// Expand/collapse the "Advanced details" section that holds
-    /// the mod fingerprint. Kept demoted because the redesign brief
-    /// explicitly says the hash shouldn't dominate the dialog.
-    /// </summary>
-    private void AdvancedToggle_Click(object sender, RoutedEventArgs e)
-    {
-        if (HashText == null || AdvancedCaret == null) return;
-        var nowVisible = HashText.Visibility != Visibility.Visible;
-        HashText.Visibility = nowVisible ? Visibility.Visible : Visibility.Collapsed;
-        AdvancedCaret.Text = nowVisible ? "▾" : "▸";
-    }
 }
 
 /// <summary>

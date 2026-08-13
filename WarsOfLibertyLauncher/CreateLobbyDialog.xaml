@@ -4,31 +4,117 @@
         xmlns:local="clr-namespace:WarsOfLibertyLauncher"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Create a room"
-        Width="520"
+        Width="596"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="{DynamicResource BgBase}"
+        Background="{DynamicResource MpPanel}"
         ShowInTaskbar="False">
     <Window.Resources>
         <!-- Resolves a ModProfile (the mod ComboBoxItem's Tag) to its icon
              brush for the dropdown items. -->
         <local:ModProfileIconBrushConverter x:Key="ModProfileIconConv"/>
 
-        <!-- Dark form controls shared by every field in this dialog.
-             Keeping them local (instead of pushing into Styles/Inputs)
-             so the create-room dialog can carry its own subtle
-             personality (slightly chunkier paddings, blue focus ring)
-             without affecting the rest of the launcher. -->
-        <Style x:Key="MpFormTextBox" TargetType="TextBox">
-            <Setter Property="Background" Value="{DynamicResource MpSurfaceAlt}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="CaretBrush" Value="White"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
+        <!-- Uppercase section caption. 600/11 with letter-spacing in the reference;
+             WPF's TextBlock has no letter-spacing at all, so the tracking is the one
+             thing here that cannot be reproduced (documented deviation, same as 1a). -->
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
+            <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- A ComboBox with NO chrome of its own: it is stretched over the mod card so
+             that clicking the card opens the list, and the card underneath draws
+             everything the user sees. The popup still anchors to the control, which is
+             why this is a transparent ComboBox rather than a Button plus a hand-built
+             popup. -->
+        <Style x:Key="InvisiblePicker" TargetType="ComboBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid Background="Transparent">
+                            <ToggleButton x:Name="ToggleButton"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   AllowsTransparency="True"
+                                   PopupAnimation="Slide">
+                                <Border Background="{DynamicResource MpField}"
+                                        BorderBrush="{DynamicResource MpRimStrong}"
+                                        BorderThickness="1"
+                                        CornerRadius="{StaticResource RadiusRow}"
+                                        MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="260">
+                                    <ScrollViewer>
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ModCombo dropdown items: mod ICON disc + name. The item Content is the mod
+             NAME string; the icon is bound from the item's Tag (the ModProfile). -->
+        <Style x:Key="ModComboItem" TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="22" Height="22"
+                                        CornerRadius="6"
+                                        Margin="0,0,9,0"
+                                        VerticalAlignment="Center"
+                                        Background="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource ModProfileIconConv}}"/>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The room-title field: 40 tall, radius 8, and a 2 px blue ring on focus
+             (the reference draws it focused, because it is where the dialog starts). -->
+        <Style x:Key="MpTitleField" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource MpField}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource MpActionText}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="11,8"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -36,7 +122,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
+                                CornerRadius="{StaticResource RadiusRow}">
                             <ScrollViewer x:Name="PART_ContentHost"
                                           Margin="{TemplateBinding Padding}"
                                           VerticalAlignment="Center"
@@ -46,10 +132,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsFocused" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#777"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpActionRim}"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -57,34 +141,72 @@
             </Setter>
         </Style>
 
-        <Style x:Key="MpFormPasswordBox" TargetType="PasswordBox">
-            <Setter Property="Background" Value="{DynamicResource MpSurfaceAlt}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="CaretBrush" Value="White"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="11,8"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <!-- Title suggestion pill. Half-height radius, never the CSS 999 idiom, which
+             WPF renders as a distorted ellipse. -->
+        <Style x:Key="MpSuggestPill" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource MpQuickReplyBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="0,0,7,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="PasswordBox">
-                        <Border x:Name="border"
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="pill"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="11"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="pill" Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- One segment of the max-players row. The active one is a solid blue fill;
+             the rest are a rim only. Set through Tag, so the row can be rebuilt from
+             code without touching brushes. -->
+        <Style x:Key="MpSegment" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextBody}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimMedium}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="Padding" Value="0,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="{StaticResource MpMetaSize}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="seg"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
-                            <ScrollViewer x:Name="PART_ContentHost"
-                                          Margin="{TemplateBinding Padding}"
-                                          VerticalAlignment="Center"
-                                          Focusable="False"/>
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsFocused" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="seg" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="seg" Property="Background" Value="{DynamicResource MpAction}"/>
+                                <Setter TargetName="seg" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#777"/>
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource MpSurface}"/>
+                                <Setter Property="Opacity" Value="0.35"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -92,19 +214,165 @@
             </Setter>
         </Style>
 
-        <!-- Dropdown that doesn't look like the default Windows
-             combobox (which is the brief's specific complaint). We
-             keep it stylistically aligned with the textboxes — same
-             height, same border, blue focus ring. The popup is
-             dark too. -->
-        <Style x:Key="MpFormCombo" TargetType="ComboBox">
-            <Setter Property="Background" Value="{DynamicResource MpSurfaceAlt}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
+        <!-- The private-room checkbox. Its content is a two-line block, so the box is
+             top-aligned rather than centred on a single line of text. -->
+        <Style x:Key="MpPrivateCheck" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="checkBorder"
+                                    Grid.Column="0"
+                                    Width="18" Height="18"
+                                    CornerRadius="4"
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource MpPrivateFieldRim}"
+                                    BorderThickness="1"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,10,0">
+                                <Path x:Name="checkMark"
+                                      Data="M 3 8 L 6.5 11.5 L 13 4"
+                                      Stroke="#FFFFFF"
+                                      StrokeThickness="2"
+                                      Visibility="Collapsed"/>
+                            </Border>
+                            <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="checkBorder" Property="Background" Value="{DynamicResource MpPrivate}"/>
+                                <Setter TargetName="checkBorder" Property="BorderBrush" Value="{DynamicResource MpPrivate}"/>
+                                <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="checkBorder" Property="BorderBrush" Value="{DynamicResource MpPrivate}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The password pair. Both are chromeless: the row's Border is the field. -->
+        <Style x:Key="MpPrivateField" TargetType="PasswordBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpPrivateText}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource MpPrivateText}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="{StaticResource MpBodySize}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      VerticalAlignment="Center"
+                                      Focusable="False"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MpPrivateFieldText" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpPrivateText}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource MpPrivateText}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="{StaticResource MpBodySize}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      VerticalAlignment="Center"
+                                      Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MpRevealLink" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpPrivateSub}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,0,0,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter x:Name="content" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="content" Property="TextBlock.TextDecorations" Value="Underline"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Footer buttons: 36 tall, radius 7. Ghost cancel, solid create. -->
+        <Style x:Key="MpFooterGhost" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextSecondary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="11,7"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
-            <Setter Property="Height" Value="38"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="{StaticResource MpBodySize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{StaticResource RadiusControl}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MpFooterPrimary" TargetType="Button" BasedOn="{StaticResource MpFooterGhost}">
+            <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+            <Setter Property="Padding" Value="22,0"/>
+        </Style>
+
+        <!-- The copy picker keeps an ordinary combo look: it is a rare row and does not
+             carry the mod card's identity treatment. -->
+        <Style x:Key="MpFormCombo" TargetType="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource MpField}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="Height" Value="{StaticResource MpFieldHeight}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
@@ -113,14 +381,11 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="4"/>
+                                    CornerRadius="{StaticResource RadiusControl}"/>
                             <ToggleButton x:Name="ToggleButton"
-                                          Grid.Column="2"
                                           Focusable="False"
                                           IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                                          ClickMode="Press"
-                                          Background="Transparent"
-                                          BorderBrush="Transparent">
+                                          ClickMode="Press">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
                                         <Border Background="Transparent"/>
@@ -131,24 +396,24 @@
                                               IsHitTestVisible="False"
                                               Content="{TemplateBinding SelectionBoxItem}"
                                               ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                               Margin="{TemplateBinding Padding}"
                                               VerticalAlignment="Center"
                                               HorizontalAlignment="Left"/>
-                            <Path x:Name="Caret"
-                                  Data="M 0 0 L 4 4 L 8 0 Z"
-                                  Fill="{DynamicResource TextSecondary}"
-                                  HorizontalAlignment="Right"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,14,0"/>
+                            <TextBlock x:Name="Caret"
+                                       Text="▾"
+                                       Foreground="{DynamicResource MpChevron}"
+                                       FontSize="{StaticResource MpMicroSize}"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,12,0"/>
                             <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
                                    Placement="Bottom"
                                    AllowsTransparency="True"
                                    PopupAnimation="Slide">
-                                <Border Background="{DynamicResource MpSurfaceAlt}"
-                                        BorderBrush="{DynamicResource MpDivider}"
+                                <Border Background="{DynamicResource MpField}"
+                                        BorderBrush="{DynamicResource MpRimStrong}"
                                         BorderThickness="1"
-                                        CornerRadius="4"
+                                        CornerRadius="{StaticResource RadiusControl}"
                                         MinWidth="{TemplateBinding ActualWidth}"
                                         MaxHeight="240">
                                     <ScrollViewer>
@@ -158,12 +423,8 @@
                             </Popup>
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
-                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#777"/>
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource MpSurface}"/>
+                                <Setter Property="Opacity" Value="0.5"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -173,7 +434,7 @@
                 <Setter.Value>
                     <Style TargetType="ComboBoxItem">
                         <Setter Property="Background" Value="Transparent"/>
-                        <Setter Property="Foreground" Value="White"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
                         <Setter Property="Padding" Value="12,7"/>
                         <Setter Property="Template">
                             <Setter.Value>
@@ -185,11 +446,10 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpBlueSubtle}"/>
+                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpBlue}"/>
-                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -199,110 +459,20 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <!-- ModCombo dropdown items: mod ICON disc + name. Applied LOCALLY on
-             the ModCombo element (ItemContainerStyle="{StaticResource ModComboItem}"),
-             which overrides the plain-text item style MpFormCombo sets — so the
-             shared combo (MaxPlayersCombo) keeps its number-only items. The
-             item Content stays the mod NAME string, so the combo's selection
-             box shows just the name (the disc beside the combo paints the
-             selected icon); the dropdown icon is bound from the item's Tag
-             (the ModProfile) via ModProfileIconConv. -->
-        <Style x:Key="ModComboItem" TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,7"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ComboBoxItem">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                Padding="{TemplateBinding Padding}">
-                            <StackPanel Orientation="Horizontal">
-                                <Border Width="20" Height="20"
-                                        CornerRadius="10"
-                                        Margin="0,0,9,0"
-                                        VerticalAlignment="Center"
-                                        Background="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource ModProfileIconConv}}"/>
-                                <ContentPresenter VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource MpBlueSubtle}"/>
-                            </Trigger>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource MpBlue}"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="LabelText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,0,0,6"/>
-        </Style>
-
-        <!-- Custom CheckBox: square + a blue tint on check. -->
-        <Style x:Key="MpCheckBox" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
-                        <StackPanel Orientation="Horizontal">
-                            <Border x:Name="checkBorder"
-                                    Width="16" Height="16"
-                                    Background="{DynamicResource MpSurfaceAlt}"
-                                    BorderBrush="{DynamicResource MpDivider}"
-                                    BorderThickness="1"
-                                    CornerRadius="3"
-                                    VerticalAlignment="Center">
-                                <Path x:Name="checkMark"
-                                      Data="M 2 7 L 6 11 L 14 3"
-                                      Stroke="White"
-                                      StrokeThickness="2"
-                                      Visibility="Collapsed"/>
-                            </Border>
-                            <ContentPresenter Margin="8,0,0,0"
-                                              VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="checkBorder" Property="Background" Value="{DynamicResource MpBlue}"/>
-                                <Setter TargetName="checkBorder" Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
-                                <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="checkBorder" Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </Window.Resources>
 
-    <!-- Outer chrome: opaque window surface. The 44 px global TitleBar +
-         WindowChrome drag + rounded corners are applied centrally in
-         App.OnAnyWindowLoaded; here we keep a thin 1 px frame. -->
-    <Border Background="{DynamicResource BgBase}"
-            BorderBrush="{DynamicResource MpDivider}"
+    <!-- Outer chrome: opaque window surface. The global TitleBar + WindowChrome drag +
+         rounded corners are applied centrally in App.OnAnyWindowLoaded; here we keep a
+         thin 1 px frame. -->
+    <Border Background="{DynamicResource MpPanel}"
+            BorderBrush="{DynamicResource MpRimSoft}"
             BorderThickness="1"
             CornerRadius="0">
         <Grid Margin="0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>     <!-- Title bar -->
                 <RowDefinition Height="Auto"/>     <!-- Body -->
-                <RowDefinition Height="Auto"/>     <!-- Advanced details -->
-                <RowDefinition Height="Auto"/>     <!-- Buttons -->
+                <RowDefinition Height="Auto"/>     <!-- Footer -->
             </Grid.RowDefinitions>
 
             <controls:TitleBar Grid.Row="0"
@@ -311,217 +481,271 @@
                                ShowMaximize="False"
                                ShowClose="True"/>
 
-            <!-- Body. -->
-            <StackPanel Grid.Row="1" Margin="22,0,22,4">
-                <!-- Mod (display-only card; the picker drops out of
-                     the form when only one mod is installed, but we
-                     keep ModCombo present + invisible so the
-                     existing code-behind selection logic still
-                     runs and computes the fingerprint). -->
-                <TextBlock x:Name="ModLabel" Style="{StaticResource LabelText}"/>
-                <Border Background="{DynamicResource MpSurfaceAlt}"
-                        BorderBrush="{DynamicResource MpDivider}"
-                        BorderThickness="1"
-                        CornerRadius="4"
-                        Padding="10,8"
-                        Margin="0,0,0,14">
+            <!-- Body. 18 px padding, the reference's dialog spacing. -->
+            <StackPanel Grid.Row="1" Margin="18,4,18,18">
+
+                <!-- MOD. The card carries the mod's identity AND its fingerprint state.
+                     The fingerprint used to live behind an "Advanced details" toggle; it
+                     is the usual reason another player cannot join, so hiding it meant
+                     the one fact worth checking was the one nobody saw.
+
+                     ModCombo is stretched transparently over the whole card, so the card
+                     IS the picker: clicking anywhere opens the list and the popup anchors
+                     to the card. Collapsed for a single installed mod, where there is
+                     nothing to pick. -->
+                <TextBlock x:Name="ModLabel" Style="{StaticResource SectionLabel}"/>
+                <Border Margin="0,8,0,0"
+                        Padding="12,10"
+                        CornerRadius="{StaticResource RadiusRow}"
+                        Background="{DynamicResource MpField}"
+                        BorderBrush="{DynamicResource MpRimStrong}"
+                        BorderThickness="1">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Border Grid.Column="0"
                                 x:Name="ModIconHost"
-                                Width="24" Height="24"
+                                Width="26" Height="26"
+                                CornerRadius="6"
                                 Background="{DynamicResource MpBlueSubtle}"
-                                CornerRadius="12"
-                                Margin="0,0,10,0">
+                                VerticalAlignment="Center"
+                                Margin="0,0,11,0">
                             <TextBlock x:Name="ModIconEmoji"
                                        Text="🎮"
-                                       FontSize="13"
+                                       FontSize="{StaticResource MpBodySize}"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"/>
                         </Border>
-                        <ComboBox Grid.Column="1"
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Name="ModNameText"
+                                       Foreground="{DynamicResource MpTextPrimary}"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <Ellipse x:Name="FingerprintDot"
+                                         Width="5" Height="5"
+                                         Fill="{DynamicResource MpOk}"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,6,0"/>
+                                <TextBlock x:Name="FingerprintText"
+                                           Foreground="{DynamicResource MpOkText}"
+                                           FontSize="{StaticResource MpPillSize}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBlock Grid.Column="2"
+                                   x:Name="ModChevron"
+                                   Text="▾"
+                                   Foreground="{DynamicResource MpChevron}"
+                                   FontSize="{StaticResource MpMicroSize}"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0"/>
+                        <ComboBox Grid.Column="0" Grid.ColumnSpan="3"
                                   x:Name="ModCombo"
-                                  Style="{StaticResource MpFormCombo}"
+                                  Style="{StaticResource InvisiblePicker}"
                                   ItemContainerStyle="{StaticResource ModComboItem}"
-                                  Height="26"
-                                  BorderThickness="0"
-                                  Background="Transparent"
-                                  Padding="0,4"
                                   SelectionChanged="ModCombo_SelectionChanged"/>
                     </Grid>
                 </Border>
 
-                <!-- Which installed COPY the room uses. Collapsed unless the
-                     mod has 2+ copies. The combo is enabled only for the active
-                     dashboard mod (picking a copy rotates the active copy, which
-                     is what multiplayer launches / fingerprints); display-only
-                     otherwise. -->
-                <StackPanel x:Name="CopyRow" Visibility="Collapsed" Margin="0,0,0,14">
-                    <TextBlock x:Name="CopyLabel" Style="{StaticResource LabelText}"/>
+                <!-- Which installed COPY the room uses. Collapsed unless the mod has 2+
+                     copies. Interactive only for the active dashboard mod (picking a copy
+                     rotates the active copy, which is what multiplayer launches and
+                     fingerprints); display-only otherwise. -->
+                <StackPanel x:Name="CopyRow" Visibility="Collapsed" Margin="0,16,0,0">
+                    <TextBlock x:Name="CopyLabel" Style="{StaticResource SectionLabel}"/>
                     <ComboBox x:Name="CopyCombo"
                               Style="{StaticResource MpFormCombo}"
+                              Margin="0,8,0,0"
                               SelectionChanged="CopyCombo_SelectionChanged"/>
                     <TextBlock x:Name="CopyHint"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontSize="{StaticResource FontSizeCaption}"
+                               Foreground="{DynamicResource MpTextFaint}"
+                               FontSize="{StaticResource MpLabelSize}"
                                TextWrapping="Wrap"
                                Margin="0,4,0,0"
                                Visibility="Collapsed"/>
                 </StackPanel>
 
-                <!-- Room title with live char counter. -->
-                <Grid>
+                <!-- TÍTULO, with the counter on the label's own line, right-aligned. -->
+                <Grid Margin="0,16,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                x:Name="TitleLabel"
-                               Style="{StaticResource LabelText}"/>
+                               Style="{StaticResource SectionLabel}"
+                               VerticalAlignment="Bottom"/>
                     <TextBlock Grid.Column="1"
                                x:Name="TitleCounter"
-                               Style="{StaticResource LabelText}"
-                               Foreground="{DynamicResource TextSecondary}"
-                               Text="0 / 64"/>
+                               Foreground="{DynamicResource MpTextDim}"
+                               FontFamily="{StaticResource MonoFont}"
+                               FontSize="{StaticResource MpLabelSize}"
+                               VerticalAlignment="Bottom"/>
                 </Grid>
                 <TextBox x:Name="RoomTitleBox"
-                         Style="{StaticResource MpFormTextBox}"
+                         Style="{StaticResource MpTitleField}"
                          MaxLength="64"
                          TextChanged="RoomTitleBox_TextChanged"
-                         Margin="0,0,0,14"/>
+                         Margin="0,8,0,0"/>
+                <!-- Suggestions APPEND to the title rather than replacing it: they are
+                     things a host announces about the match, not titles of their own. -->
+                <StackPanel x:Name="SuggestRow" Orientation="Horizontal" Margin="0,9,0,0">
+                    <Button x:Name="Suggest1" Style="{StaticResource MpSuggestPill}" Click="Suggest_Click"/>
+                    <Button x:Name="Suggest2" Style="{StaticResource MpSuggestPill}" Click="Suggest_Click"/>
+                    <Button x:Name="Suggest3" Style="{StaticResource MpSuggestPill}" Click="Suggest_Click"/>
+                </StackPanel>
 
-                <!-- Max players + Private room + Password row.
-                     We replace the old "MaxPlayers + Password"
-                     side-by-side layout with a 3-column grid so the
-                     private toggle has space without re-flowing
-                     on small windows. -->
-                <Grid Margin="0,0,0,2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="20"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock x:Name="MaxPlayersLabel" Style="{StaticResource LabelText}"/>
-                        <ComboBox x:Name="MaxPlayersCombo"
-                                  Style="{StaticResource MpFormCombo}">
-                            <ComboBoxItem Content="2"/>
-                            <ComboBoxItem Content="3"/>
-                            <ComboBoxItem Content="4"/>
-                            <ComboBoxItem Content="5"/>
-                            <ComboBoxItem Content="6"/>
-                            <ComboBoxItem Content="7"/>
-                            <ComboBoxItem Content="8" IsSelected="True"/>
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <CheckBox x:Name="PrivateRoomCheck"
-                                  Style="{StaticResource MpCheckBox}"
-                                  Margin="0,0,0,8"
-                                  Checked="PrivateRoomCheck_Changed"
-                                  Unchecked="PrivateRoomCheck_Changed"/>
-                        <PasswordBox x:Name="PasswordBox"
-                                     Style="{StaticResource MpFormPasswordBox}"
-                                     MaxLength="50"
-                                     IsEnabled="False"/>
-                        <!-- Always-visible heads-up: a private room is NOT
-                             announced (Discord + in-app popup). Text set from
-                             MpCreateDialogPrivateHint in the ctor. -->
-                        <TextBlock x:Name="PrivateHint"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeCaption}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,6,0,0"/>
-                    </StackPanel>
-                </Grid>
+                <!-- JUGADORES MÁXIMOS: a segmented row, not a dropdown. Eight options that
+                     all fit on one line cost one click here and two in a combo, and the
+                     whole range is readable without opening anything. Built in code so
+                     the server's cap can disable the ones above it. -->
+                <TextBlock x:Name="MaxPlayersLabel" Style="{StaticResource SectionLabel}" Margin="0,18,0,0"/>
+                <UniformGrid x:Name="MaxPlayersRow" Rows="1" Margin="0,8,0,0"/>
 
-                <TextBlock x:Name="ErrorText"
-                           Foreground="{DynamicResource MpStatusOffline}"
-                           FontSize="{StaticResource FontSizeCaption}"
-                           TextWrapping="Wrap"
-                           Margin="0,12,0,0"
-                           Visibility="Collapsed"/>
+                <!-- Sala privada. The explanation lives INSIDE the box, and the password
+                     field only exists once the box is ticked — it used to sit there
+                     permanently disabled beside a paragraph, which reads as broken. -->
+                <Border x:Name="PrivateBox"
+                        Margin="0,18,0,0"
+                        Padding="12,11"
+                        CornerRadius="{StaticResource RadiusRow}"
+                        Background="{DynamicResource MpPrivateSoftBg}"
+                        BorderBrush="{DynamicResource MpPrivateRim}"
+                        BorderThickness="1">
+                    <CheckBox x:Name="PrivateRoomCheck"
+                              Style="{StaticResource MpPrivateCheck}"
+                              Checked="PrivateRoomCheck_Changed"
+                              Unchecked="PrivateRoomCheck_Changed">
+                        <StackPanel>
+                            <TextBlock x:Name="PrivateTitleText"
+                                       Foreground="{DynamicResource MpPrivateTitle}"
+                                       FontSize="{StaticResource MpBodySize}"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock x:Name="PrivateHint"
+                                       Foreground="{DynamicResource MpPrivateSub}"
+                                       FontSize="{StaticResource MpLabelSize}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </CheckBox>
+                </Border>
+                <Border x:Name="PasswordRow"
+                        Visibility="Collapsed"
+                        Height="38"
+                        Margin="0,9,0,0"
+                        Padding="12,0"
+                        CornerRadius="{StaticResource RadiusRow}"
+                        Background="{DynamicResource MpField}"
+                        BorderBrush="{DynamicResource MpPrivateFieldRim}"
+                        BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <!-- Two controls, one value: a PasswordBox cannot reveal its own
+                             text, so "Mostrar" swaps in a plain TextBox. The PasswordBox
+                             stays the source of truth — see SyncPasswordControls. -->
+                        <PasswordBox Grid.Column="0"
+                                     x:Name="PasswordBox"
+                                     Style="{StaticResource MpPrivateField}"
+                                     MaxLength="50"/>
+                        <TextBox Grid.Column="0"
+                                 x:Name="PasswordPlainBox"
+                                 Style="{StaticResource MpPrivateFieldText}"
+                                 MaxLength="50"
+                                 Visibility="Collapsed"/>
+                        <Button Grid.Column="1"
+                                x:Name="PasswordRevealButton"
+                                Style="{StaticResource MpRevealLink}"
+                                Click="PasswordReveal_Click"/>
+                    </Grid>
+                </Border>
 
-                <!-- Non-blocking heads-up: Radmin VPN not recognised active.
-                     The room can still be created, but peers can't join until
-                     Radmin is on. Shown only when GetStatus().IsServiceRunning
-                     is false; never disables the Create button. -->
+                <!-- Recording warning. Here, BEFORE the match: once it is over there is
+                     nothing left to fix, and this is the most common reason a match that
+                     was actually played ends up counting for nobody. -->
+                <Border Margin="0,16,0,0"
+                        Padding="12,11"
+                        CornerRadius="{StaticResource RadiusRow}"
+                        Background="{DynamicResource MpCautionBg}"
+                        BorderBrush="{DynamicResource MpCautionRim}"
+                        BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="⚠"
+                                   Foreground="{DynamicResource MpCaution}"
+                                   FontSize="{StaticResource MpMetaSize}"
+                                   VerticalAlignment="Top"
+                                   Margin="0,0,10,0"/>
+                        <TextBlock Grid.Column="1"
+                                   x:Name="RecordWarnText"
+                                   Foreground="{DynamicResource MpCautionText}"
+                                   FontSize="{StaticResource MpLabelSize}"
+                                   LineHeight="17"
+                                   LineStackingStrategy="BlockLineHeight"
+                                   TextWrapping="Wrap"/>
+                    </Grid>
+                </Border>
+
+                <!-- Non-blocking heads-up: Radmin VPN not recognised active. The room can
+                     still be created and joined; only actual play needs the tunnel. -->
                 <TextBlock x:Name="RadminWarning"
-                           Foreground="{DynamicResource MpStatusFull}"
-                           FontSize="{StaticResource FontSizeCaption}"
+                           Foreground="{DynamicResource MpCautionText}"
+                           FontSize="{StaticResource MpLabelSize}"
                            TextWrapping="Wrap"
                            Margin="0,12,0,0"
                            Visibility="Collapsed"/>
             </StackPanel>
 
-            <!-- Advanced details: the fingerprint demoted from
-                 first-class field to a collapsible block. Toggling
-                 the chevron expands the value (still selectable so
-                 power users can copy it). -->
+            <!-- Footer: what happens when you press Create, then the two actions. The
+                 server's error lands HERE, under the button that caused it — it used to
+                 render in the middle of the form, far from the Create the user pressed. -->
             <Border Grid.Row="2"
-                    BorderBrush="{DynamicResource MpDivider}"
+                    Background="{DynamicResource MpAppBg}"
+                    BorderBrush="{DynamicResource MpRimFaint}"
                     BorderThickness="0,1,0,0"
-                    Margin="22,16,22,0"
-                    Padding="0,12,0,4">
+                    Padding="18,13">
                 <StackPanel>
-                    <Button x:Name="AdvancedToggle"
-                            Click="AdvancedToggle_Click"
-                            Background="Transparent"
-                            BorderBrush="Transparent"
-                            HorizontalContentAlignment="Left"
-                            Cursor="Hand"
-                            Padding="0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="AdvancedCaret"
-                                       Text="▸"
-                                       Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="11"
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,6,0"/>
-                            <TextBlock Text="Advanced details"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       FontWeight="SemiBold"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="HashLabel"
-                                       Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="{StaticResource FontSizeCaption}"
-                                       VerticalAlignment="Center"
-                                       Margin="6,0,0,0"/>
-                        </StackPanel>
-                    </Button>
-                    <TextBlock x:Name="HashText"
-                               Foreground="{DynamicResource TextSecondary}"
-                               FontFamily="Consolas, Courier New, monospace"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               TextTrimming="CharacterEllipsis"
-                               Margin="14,6,0,4"
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   x:Name="AnnounceNote"
+                                   Foreground="{DynamicResource MpTextFaint}"
+                                   FontSize="{StaticResource MpLabelSize}"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0"/>
+                        <Button Grid.Column="1"
+                                x:Name="CancelButton"
+                                Click="CancelButton_Click"
+                                Style="{StaticResource MpFooterGhost}"
+                                Margin="0,0,10,0"/>
+                        <Button Grid.Column="2"
+                                x:Name="CreateButton"
+                                Click="CreateButton_Click"
+                                Style="{StaticResource MpFooterPrimary}"/>
+                    </Grid>
+                    <TextBlock x:Name="ErrorText"
+                               Foreground="{DynamicResource MpDestructiveText}"
+                               FontSize="{StaticResource MpLabelSize}"
+                               TextWrapping="Wrap"
+                               Margin="0,10,0,0"
                                Visibility="Collapsed"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Action row. -->
-            <Border Grid.Row="3"
-                    BorderBrush="{DynamicResource MpDivider}"
-                    BorderThickness="0,1,0,0"
-                    Padding="22,14"
-                    Margin="0,12,0,0">
-                <StackPanel Orientation="Horizontal"
-                            HorizontalAlignment="Right">
-                    <Button x:Name="CancelButton"
-                            Click="CancelButton_Click"
-                            Style="{StaticResource MpSecondaryButton}"
-                            Padding="22,10"
-                            MinWidth="110"
-                            Margin="0,0,8,0"/>
-                    <Button x:Name="CreateButton"
-                            Click="CreateButton_Click"
-                            Style="{StaticResource MpPrimaryButton}"
-                            Padding="24,10"
-                            MinWidth="140"/>
                 </StackPanel>
             </Border>
         </Grid>
