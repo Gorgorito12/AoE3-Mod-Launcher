@@ -3692,6 +3692,48 @@ public partial class MultiplayerTab : UserControl
         Set(SortArrowPing, RoomSort.Ping);
     }
 
+    /// <summary>
+    /// The reference's capacity indicator: a fixed row of four bars, filled in
+    /// proportion to how full the room is.
+    ///
+    /// <para>Four regardless of the room's size, so every row's indicator is the same
+    /// width and the column stays a column — one bar per SLOT would make a 2-player
+    /// room and an 8-player room draw different-width cells. It is a proportion, not a
+    /// headcount, which is also why it is paired with the exact "1/8" above it.</para>
+    ///
+    /// <para>Rounds UP for any non-zero occupancy, so a room with one player in eight
+    /// still lights a bar: showing none would read as empty, which is the one thing the
+    /// indicator must never say about a room somebody is waiting in.</para>
+    /// </summary>
+    private static StackPanel BuildCapacityBars(int current, int max)
+    {
+        const int Segments = 4;
+        var filledBrush = (Brush)Application.Current.FindResource("MpAction");
+        var emptyBrush = (Brush)Application.Current.FindResource("MpCapacityEmpty");
+
+        int filled = 0;
+        if (max > 0 && current > 0)
+            filled = Math.Min(Segments, (int)Math.Ceiling(current / (double)max * Segments));
+
+        var bars = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        for (var i = 0; i < Segments; i++)
+        {
+            bars.Children.Add(new Border
+            {
+                Width = 9,
+                Height = 5,
+                CornerRadius = new CornerRadius(2),
+                Margin = new Thickness(0, 0, i == Segments - 1 ? 0 : 3, 0),
+                Background = i < filled ? filledBrush : emptyBrush,
+            });
+        }
+        return bars;
+    }
+
     /// <summary>Mod display name for sorting (falls back to the raw id).</summary>
     private static string ModSortName(LobbySummary l)
     {
@@ -5106,7 +5148,7 @@ public partial class MultiplayerTab : UserControl
         var hostCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var hostDisc = BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, 24);
+        var hostDisc = BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, 20);
         hostDisc.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(hostDisc, 0);
         hostCell.Children.Add(hostDisc);
@@ -5122,22 +5164,31 @@ public partial class MultiplayerTab : UserControl
         hostCell.Children.Add(hostNameText);
         PlaceRoomCell(grid, Services.RoomColumn.Host, hostCell);
 
-        // === Col 3: PLAYERS — icon + X/Y, clickable to PEEK the roster without joining. ===
-        var playersCell = new TextBlock
+        // === PLAYERS — "1/8" plus the reference's capacity segments: four bars that
+        // fill in proportion to how full the room is, so occupancy reads at a glance
+        // without parsing two numbers. Still clickable to PEEK the roster without
+        // joining. The count and the bars live in a vertical stack, and the whole cell
+        // carries the click so the small bars are not the only target. ===
+        var playersCell = new StackPanel
         {
-            Text = $"👤 {lobby.CurrentPlayers} / {lobby.MaxPlayers}",
-            Foreground = textPrimary,
-            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             VerticalAlignment = VerticalAlignment.Center,
+            Background = Brushes.Transparent,   // or the gaps between children swallow the click
             Cursor = System.Windows.Input.Cursors.Hand,
             Tag = lobby,
             ToolTip = Strings.Get("MpRoomPeekTooltip"),
-            TextDecorations = null,
+        };
+        var playersCount = new TextBlock
+        {
+            Text = $"{lobby.CurrentPlayers}/{lobby.MaxPlayers}",
+            Foreground = textPrimary,
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        // Underline on hover so it reads as clickable (link affordance).
-        playersCell.MouseEnter += (_, _) => playersCell.TextDecorations = TextDecorations.Underline;
-        playersCell.MouseLeave += (_, _) => playersCell.TextDecorations = null;
+        playersCell.Children.Add(playersCount);
+        playersCell.Children.Add(BuildCapacityBars(lobby.CurrentPlayers, lobby.MaxPlayers));
+        playersCell.MouseEnter += (_, _) => playersCount.TextDecorations = TextDecorations.Underline;
+        playersCell.MouseLeave += (_, _) => playersCount.TextDecorations = null;
         playersCell.MouseLeftButtonUp += PlayersPeek_Click;
         PlaceRoomCell(grid, Services.RoomColumn.Players, playersCell);
 
@@ -5168,6 +5219,16 @@ public partial class MultiplayerTab : UserControl
                 && string.Equals(lobby.Host.Id, me.Id, StringComparison.Ordinal))
             || (!string.IsNullOrEmpty(lobby.Host.DiscordUsername)
                 && string.Equals(lobby.Host.DiscordUsername, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
+
+        // The reference lifts YOUR OWN room out of the list with a brighter fill and a
+        // stronger rim. Set locally rather than in the MpRoomCard style, because "this
+        // one is mine" is per-row DATA, not a control state a trigger could express.
+        // Placed here because it reuses the two flags the action button already derives.
+        if (iAmInThisRoom || iAmHost)
+        {
+            card.Background = (Brush)Application.Current.FindResource("MpRowHighlight");
+            card.BorderBrush = (Brush)Application.Current.FindResource("MpRimMedium");
+        }
 
         var actionBtn = new Button
         {
@@ -5389,10 +5450,13 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
+        // The reference's thresholds (60 / 150), tighter than the 80 / 200 this used.
+        // Only the rooms list follows them: the in-game and lobby readouts keep their own,
+        // because those measure a live match where a looser amber is the honest signal.
         var rtt = rttMs.Value;
-        var brush = rtt < 80
+        var brush = rtt < 60
             ? (Brush)Application.Current.FindResource("MpPingGood")
-            : rtt < 200
+            : rtt < 150
                 ? (Brush)Application.Current.FindResource("MpPingMedium")
                 : (Brush)Application.Current.FindResource("MpPingBad");
 

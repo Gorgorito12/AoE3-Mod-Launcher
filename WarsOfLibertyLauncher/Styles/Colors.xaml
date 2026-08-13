@@ -458,6 +458,8 @@
     <SolidColorBrush x:Key="MpAccountName" Color="#E4ECF6"/>
     <SolidColorBrush x:Key="MpAccountElo" Color="#8FB6EA"/>
     <SolidColorBrush x:Key="MpChevron" Color="#8EA4C0"/>
+    <!-- Unfilled capacity segment in a room row. -->
+    <SolidColorBrush x:Key="MpCapacityEmpty" Color="#21FFFFFF"/>
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>

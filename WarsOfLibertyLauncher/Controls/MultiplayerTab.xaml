@@ -74,12 +74,21 @@
              in-place ping, mod-installed gating) is preserved. Left inset =
              Padding.Left 14 + ScrollViewer pad 16 = 30, matched by the header
              strip's 30px left margin so columns line up under the labels. -->
+        <!-- Room ROW (design handoff 1a). Separated rounded rows with a rim, not the
+             flush table rows with a hairline divider this used to be. The reference
+             gives every row the SAME uniform height because it is one line with
+             ellipsis: nothing in it may wrap, or the rows stop scanning as a column of
+             equal blocks. Own-room rows are lifted by BuildRoomCard, which sets the
+             brighter fill and rim locally — a Style trigger can't express "this is
+             mine", since that is per-row data rather than a control state. -->
         <Style x:Key="MpRoomCard" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource MpRoomRowBg}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MpDivider}"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1"/>
-            <Setter Property="CornerRadius" Value="0"/>
-            <Setter Property="Padding" Value="14,9,14,9"/>
+            <Setter Property="Background" Value="{DynamicResource MpPanel}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimFaint}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusRow}"/>
+            <Setter Property="Height" Value="{StaticResource MpRoomRowHeight}"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="Padding" Value="12,0"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource MpRoomRowHover}"/>
