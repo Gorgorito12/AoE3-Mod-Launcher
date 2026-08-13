@@ -729,141 +729,195 @@
 
                     <Border x:Name="InGameOverlay"
                             Grid.Column="0"
-                            Background="{DynamicResource BgBase}"
-                            BorderBrush="{DynamicResource MpDivider}"
+                            Background="{DynamicResource MpAppBg}"
+                            BorderBrush="{DynamicResource MpRimSoft}"
                             BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusMd}"
+                            CornerRadius="{StaticResource RadiusPanel}"
                             Visibility="Collapsed">
-                        <Grid Margin="16,16">
+                        <Grid Margin="16">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>   <!-- live header -->
-                                <RowDefinition Height="Auto"/>   <!-- stats 2×2 -->
-                                <RowDefinition Height="*"/>      <!-- peers list -->
-                                <RowDefinition Height="Auto"/>   <!-- action -->
+                                <RowDefinition Height="Auto"/>   <!-- live header + clock -->
+                                <RowDefinition Height="Auto"/>   <!-- three cells -->
+                                <RowDefinition Height="Auto"/>   <!-- alone-in-the-room box -->
+                                <RowDefinition Height="*"/>      <!-- peers -->
+                                <RowDefinition Height="Auto"/>   <!-- abort -->
                             </Grid.RowDefinitions>
 
-                            <!-- Pulsing dot + headline (stacked so it fits
-                                 the narrow column). -->
-                            <StackPanel Grid.Row="0" Margin="0,0,0,14">
-                                <StackPanel Orientation="Horizontal"
-                                            VerticalAlignment="Center">
-                                    <Ellipse x:Name="InGameLiveDot"
-                                             Width="12" Height="12"
-                                             Fill="{DynamicResource MpStatusOnline}"
-                                             VerticalAlignment="Center"
-                                             Margin="0,0,10,0"/>
-                                    <TextBlock x:Name="InGameTitleText"
-                                               Text="GAME IN PROGRESS"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="{StaticResource FontSizeSubtitle}"
-                                               FontWeight="Bold"
-                                               VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock x:Name="InGameModeText"
-                                           Text="— Connected via P2P LAN"
-                                           Foreground="{DynamicResource MpStatusOnline}"
-                                           FontSize="{StaticResource FontSizeBody}"
+                            <!-- The clock joins the header instead of taking a cell of its
+                                 own: it is the one number that changes every second, and a
+                                 cell for it cost a quarter of the row for something the eye
+                                 tracks anyway. -->
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Ellipse Grid.Column="0"
+                                         x:Name="InGameLiveDot"
+                                         Width="8" Height="8"
+                                         Fill="{DynamicResource MpOk}"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,10,0"/>
+                                <TextBlock Grid.Column="1"
+                                           x:Name="InGameTitleText"
+                                           Foreground="{DynamicResource MpTextPrimary}"
+                                           FontSize="{StaticResource FontSizeCaption}"
                                            FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis"
-                                           Margin="0,4,0,0"/>
-                            </StackPanel>
-
-                            <!-- Match timer / traffic / connection / room,
-                                 laid out 2×2 to fit the 340 px column. -->
-                            <Grid Grid.Row="1" Margin="0,0,0,14">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,12">
-                                    <TextBlock x:Name="InGameMatchTimeHeader"
-                                               Text="MATCH TIME"
-                                               Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="{StaticResource FontSizeCaption}"
-                                               FontWeight="SemiBold"
-                                               Margin="0,0,0,4"/>
-                                    <TextBlock x:Name="InGameMatchTimer"
-                                               Text="00:00"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="{StaticResource FontSizeSubtitle}"
-                                               FontFamily="Consolas, Courier New, monospace"
-                                               FontWeight="SemiBold"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,12">
-                                    <TextBlock x:Name="InGameTrafficHeader"
-                                               Text="TRAFFIC"
-                                               Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="{StaticResource FontSizeCaption}"
-                                               FontWeight="SemiBold"
-                                               Margin="0,0,0,4"/>
-                                    <TextBlock x:Name="InGameTrafficText"
-                                               Text="0 KB"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="{StaticResource FontSizeSubtitle}"
-                                               FontFamily="Consolas, Courier New, monospace"
-                                               FontWeight="SemiBold"/>
-                                </StackPanel>
-                                <!-- Connection latency = YOUR internet RTT (not a
-                                     per-rival ping). The per-player ping lives in the
-                                     peer rows below (real ICMP RTT to each Radmin IP). -->
-                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,0">
-                                    <TextBlock x:Name="InGameConnectionHeader"
-                                               Text="CONNECTION"
-                                               Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="{StaticResource FontSizeCaption}"
-                                               FontWeight="SemiBold"
-                                               Margin="0,0,0,4"/>
-                                    <TextBlock x:Name="InGameConnectionText"
-                                               Text="—"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="{StaticResource FontSizeSubtitle}"
-                                               FontFamily="Consolas, Courier New, monospace"
-                                               FontWeight="SemiBold"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,0">
-                                    <TextBlock x:Name="InGameRoomHeader"
-                                               Text="ROOM"
-                                               Foreground="{DynamicResource MpTableHeader}"
-                                               FontSize="{StaticResource FontSizeCaption}"
-                                               FontWeight="SemiBold"
-                                               Margin="0,0,0,4"/>
-                                    <TextBlock x:Name="InGameRoomText"
-                                               Text=""
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="{StaticResource FontSizeBody}"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2"
+                                           x:Name="InGameMatchTimer"
+                                           Foreground="{DynamicResource MpTextPrimary}"
+                                           FontFamily="{StaticResource MonoFont}"
+                                           FontSize="{StaticResource MpStatValueSize}"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"/>
                             </Grid>
 
-                            <!-- Per-peer connection rows. -->
+                            <!-- Three cells: what is measurable during a match. The ROOM cell
+                                 went with the header (the window title says which room), the
+                                 MATCH TIME cell went to the header clock, and RECORDING took
+                                 the place both left. -->
+                            <Grid Grid.Row="1" Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="11"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="11"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Background="{DynamicResource MpPanel}"
+                                        CornerRadius="{StaticResource RadiusRow}"
+                                        Padding="12,11">
+                                    <StackPanel>
+                                        <TextBlock x:Name="InGameTrafficHeader"
+                                                   Foreground="{DynamicResource MpTextLabel}"
+                                                   FontSize="{StaticResource MpSectionLabelSize}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="InGameTrafficText"
+                                                   Foreground="{DynamicResource MpTextPrimary}"
+                                                   FontFamily="{StaticResource MonoFont}"
+                                                   FontSize="{StaticResource FontSizeCaption}"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="2"
+                                        Background="{DynamicResource MpPanel}"
+                                        CornerRadius="{StaticResource RadiusRow}"
+                                        Padding="12,11">
+                                    <StackPanel>
+                                        <TextBlock x:Name="InGameConnectionHeader"
+                                                   Foreground="{DynamicResource MpTextLabel}"
+                                                   FontSize="{StaticResource MpSectionLabelSize}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="InGameConnectionText"
+                                                   Foreground="{DynamicResource MpOkTextAlt}"
+                                                   FontFamily="{StaticResource MonoFont}"
+                                                   FontSize="{StaticResource FontSizeCaption}"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- RECORDING says what the LAUNCHER asked for, not what the
+                                     game will do: AoE3 decides that with a per-match checkbox
+                                     the launcher cannot read (measured — see
+                                     RecordingIndicator). A green "active" here would be a lie
+                                     in the one place where being wrong costs the player their
+                                     rating. -->
+                                <Border Grid.Column="4"
+                                        Background="{DynamicResource MpPanel}"
+                                        CornerRadius="{StaticResource RadiusRow}"
+                                        Padding="12,11">
+                                    <StackPanel>
+                                        <TextBlock x:Name="InGameRecordingHeader"
+                                                   Foreground="{DynamicResource MpTextLabel}"
+                                                   FontSize="{StaticResource MpSectionLabelSize}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="InGameRecordingText"
+                                                   Foreground="{DynamicResource MpOk}"
+                                                   FontSize="{StaticResource FontSizeCaption}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- Alone in the room. It used to be one italic line inside the
+                                 peer list with nothing to press, which describes the problem
+                                 and leaves the player holding it. Both buttons act on it. -->
                             <Border Grid.Row="2"
-                                    Background="{DynamicResource MpSurface}"
-                                    BorderBrush="{DynamicResource MpDivider}"
-                                    BorderThickness="1"
-                                    CornerRadius="{StaticResource RadiusMd}"
-                                    Padding="12,8">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <StackPanel x:Name="InGamePeersPanel"/>
-                                </ScrollViewer>
+                                    x:Name="InGameSoloBox"
+                                    Visibility="Collapsed"
+                                    Margin="0,12,0,0"
+                                    Padding="12"
+                                    CornerRadius="{StaticResource RadiusRow}"
+                                    Background="{DynamicResource MpCautionBg}"
+                                    BorderBrush="{DynamicResource MpCautionRim}"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="&#x26A0;"
+                                               Foreground="{DynamicResource MpCaution}"
+                                               FontSize="{StaticResource MpMetaSize}"
+                                               VerticalAlignment="Top"
+                                               Margin="0,0,10,0"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock x:Name="InGameSoloTitle"
+                                                   Foreground="{DynamicResource MpCautionTextAlt}"
+                                                   FontSize="{StaticResource MpMetaSize}"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="InGameSoloBody"
+                                                   Foreground="{DynamicResource MpCautionText}"
+                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   LineHeight="17"
+                                                   LineStackingStrategy="BlockLineHeight"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,9,0,0">
+                                            <Button x:Name="InGameSoloCopyButton"
+                                                    Click="InGameSoloCopyButton_Click"
+                                                    Style="{StaticResource MpGhostCautionButton}"
+                                                    Padding="11,0"
+                                                    Margin="0,0,8,0"/>
+                                            <Button x:Name="InGameSoloAnnounceButton"
+                                                    Click="InGameSoloAnnounceButton_Click"
+                                                    Style="{StaticResource MpGhostCautionButton}"
+                                                    Padding="11,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
                             </Border>
 
-                            <!-- Cancel / Leave action. Caption + colour
-                                 change is driven from code-behind depending
-                                 on whether the current user is the host. -->
-                            <Button Grid.Row="3"
+                            <!-- Per-peer link state and RTT. Not in the reference's card, kept
+                                 because the handoff's own prose asks for "ping por jugador":
+                                 it is the only place a player can see WHICH peer is the
+                                 problem. -->
+                            <ScrollViewer Grid.Row="3"
+                                          VerticalScrollBarVisibility="Auto"
+                                          Margin="0,12,0,0">
+                                <StackPanel x:Name="InGamePeersPanel"/>
+                            </ScrollViewer>
+
+                            <Button Grid.Row="4"
                                     x:Name="InGameCancelButton"
                                     Click="InGameCancelButton_Click"
-                                    Style="{StaticResource MpDangerButton}"
-                                    Padding="14,11"
-                                    Margin="0,14,0,0"
-                                    HorizontalContentAlignment="Center"
-                                    FontSize="{StaticResource FontSizeBody}"
-                                    Content="⚠  Cancel game"/>
+                                    Style="{StaticResource MpGhostDangerButton}"
+                                    Height="38"
+                                    Margin="0,12,0,0"
+                                    FontSize="{StaticResource MpBodySize}"
+                                    FontWeight="SemiBold"/>
                         </Grid>
                     </Border>
                 </Grid>

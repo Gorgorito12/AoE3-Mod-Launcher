@@ -2656,11 +2656,14 @@ public partial class MultiplayerTab : UserControl
         // caption to set here.
         _lobbyWindow.CountdownLabel.Text = Strings.Get("MpCountdownLabel");
         _lobbyWindow.InGameTitleText.Text = Strings.Get("MpInGameTitle");
-        _lobbyWindow.InGameMatchTimeHeader.Text = Strings.Get("MpInGameMatchTimeHeader");
+
         _lobbyWindow.InGameTrafficHeader.Text = Strings.Get("MpInGameTrafficHeader");
         _lobbyWindow.InGameConnectionHeader.Text = Strings.Get("MpInGameConnectionHeader");
-        _lobbyWindow.InGameRoomHeader.Text = Strings.Get("MpInGameRoomHeader");
-        _lobbyWindow.InGameModeText.Text = Strings.Get("MpInGameModeConnected");
+        _lobbyWindow.InGameRecordingHeader.Text = Strings.Get("MpInGameRecordingHeader");
+        _lobbyWindow.InGameSoloTitle.Text = Strings.Get("MpInGameSoloTitle");
+        _lobbyWindow.InGameSoloBody.Text = Strings.Get("MpInGameSoloBody");
+        _lobbyWindow.InGameSoloCopyButton.Content = Strings.Get("MpInGameSoloCopy");
+        _lobbyWindow.InGameSoloAnnounceButton.Content = Strings.Get("MpInGameSoloAnnounce");
 
         // Record Game band. Only the fixed parts here — the BODY says something
         // different to the host than to everyone else, so RenderRoomPanel owns it
@@ -7538,6 +7541,59 @@ public partial class MultiplayerTab : UserControl
         if (parts.Length > 1) text.Inlines.Add(new System.Windows.Documents.Run(parts[1]));
     }
 
+    /// <summary>Last time the room was announced in the global chat, for the cooldown.</summary>
+    private long _lastSoloAnnounceTicks;
+
+    /// <summary>How long the announce button stays spent after a click.</summary>
+    private const long SoloAnnounceCooldownMs = 10_000;
+
+    /// <summary>
+    /// Copy the room code so it can be pasted to somebody. Mirrors the header's own copy
+    /// button, including the tick that confirms it worked.
+    /// </summary>
+    private void CopyRoomCodeFromSolo()
+    {
+        var code = _session?.CurrentLobbyId;
+        if (string.IsNullOrEmpty(code) || _lobbyWindow == null) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(code);
+            _lobbyWindow.InGameSoloCopyButton.Content = Strings.Get("MpRoomCopied");
+        }
+        catch (Exception ex) { DiagnosticLog.Write($"Copying the room code failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Say in the global chat that this room is open and short of players.
+    ///
+    /// <para><b>The cooldown is not politeness, it is protection.</b> Global chat enforces
+    /// a 1.5 s slow mode and mutes a sender for 30 s after five violations, so an impatient
+    /// double-click would silence the very player who is trying to find an opponent. The
+    /// button is spent for ten seconds after a click, and disabled outright when there is
+    /// no chat socket to send on.</para>
+    /// </summary>
+    private void AnnounceRoomInGlobalChat()
+    {
+        if (_lobbyWindow == null) return;
+        var now = Environment.TickCount64;
+        if (now - _lastSoloAnnounceTicks < SoloAnnounceCooldownMs) return;
+        if (_globalChatSocket == null)
+        {
+            _lobbyWindow.InGameSoloAnnounceButton.IsEnabled = false;
+            return;
+        }
+
+        _lastSoloAnnounceTicks = now;
+        _lobbyWindow.InGameSoloAnnounceButton.IsEnabled = false;
+        var mod = ResolveModDisplayName(_currentLobbyModId ?? "");
+        var code = _session?.CurrentLobbyId ?? "";
+        _ = _globalChatSocket.SendChatAsync(Strings.Format("MpAnnounceRoomInGlobal", mod, code));
+
+        // Re-armed on the tick that passes the cooldown, so the button explains itself by
+        // being unavailable rather than by silently ignoring the click.
+        _lobbyWindow.InGameSoloAnnounceButton.Content = Strings.Get("MpInGameSoloAnnounced");
+    }
+
     /// <summary>
     /// Where AoE3 keeps the per-match recording checkbox. A notice rather than a setting:
     /// there is nothing the launcher can toggle here, which is the whole reason the
@@ -7615,6 +7671,8 @@ public partial class MultiplayerTab : UserControl
             OnClearChat = () => ClearChatButton_Click(this, new RoutedEventArgs()),
             OnInvitePlayers = ShowInviteHint,
             OnRecordHelp = ShowRecordHelp,
+            OnCopyRoomCode = CopyRoomCodeFromSolo,
+            OnAnnounceRoom = AnnounceRoomInGlobalChat,
             OnSendChat = () => ChatSendButton_Click(this, new RoutedEventArgs()),
             OnEmoji = () => ChatEmojiButton_Click(this, new RoutedEventArgs()),
             // The existing TextChanged / KeyDown handlers take WPF
@@ -7987,9 +8045,6 @@ public partial class MultiplayerTab : UserControl
         _lastReportedRadminIp = null;
         MaybeReportRadminIp();
 
-        if (_lobbyWindow != null)
-            _lobbyWindow!.InGameRoomText.Text = _session?.CurrentLobbyTitle ?? _session?.CurrentLobbyId ?? "";
-
         CancelLocalCountdownIfRunning();
         ApplyMatchPhaseUi();
 
@@ -8216,12 +8271,28 @@ public partial class MultiplayerTab : UserControl
             ? Strings.Get("MpInGameAbort")
             : Strings.Get("MpInGameLeave");
 
-        // Mode badge.
-        _lobbyWindow!.InGameModeText.Text = Strings.Get(bridgeReady
-            ? "MpInGameModeInLobby"
-            : "MpInGameModeWaitingLobby");
-        _lobbyWindow!.InGameModeText.Foreground = (Brush)Application.Current.FindResource(
-            bridgeReady ? "MpStatusOnline" : "MpStatusReconnect");
+        // What the mode badge used to say, moved onto the CONNECTION cell as a tooltip.
+        // The reference has no room for a fourth line, but "waiting for the lobby" is a
+        // real state and dropping it outright would lose the only hint that the room, not
+        // the network, is what is not ready.
+        _lobbyWindow!.InGameConnectionText.ToolTip = TooltipHelper.Wrap(Strings.Get(
+            bridgeReady ? "MpInGameModeInLobby" : "MpInGameModeWaitingLobby"));
+
+        // RECORDING. Three states, and none of them claims the game IS recording — see
+        // RecordingIndicator for why that claim cannot be made from here.
+        var recording = Services.Multiplayer.RecordingIndicator.Classify(
+            _config?.EnableGameRecording == true,
+            _currentLobbyModId != null ? _config?.GetState(_currentLobbyModId).GameRecordingApplied : null);
+        var (recKey, recBrush) = recording switch
+        {
+            Services.Multiplayer.RecordingState.Requested => ("MpInGameRecordingOn", "MpOk"),
+            Services.Multiplayer.RecordingState.Off => ("MpInGameRecordingOff", "MpCaution"),
+            _ => ("MpInGameRecordingUnknown", "MpCaution"),
+        };
+        _lobbyWindow!.InGameRecordingText.Text = Strings.Get(recKey);
+        _lobbyWindow!.InGameRecordingText.Foreground = (Brush)Application.Current.FindResource(recBrush);
+        _lobbyWindow!.InGameRecordingText.ToolTip =
+            TooltipHelper.Wrap(Strings.Get("MpInGameRecordingTooltip"));
 
         // Peer list. We just enumerate room members minus ourselves
         // — every member that's in the lobby IS reachable on the
@@ -8258,17 +8329,18 @@ public partial class MultiplayerTab : UserControl
                 isSelf: false));
         }
 
-        if (peerCount == 0)
+        // Alone in the room: an amber box with two things to press, above the peer list.
+        // It used to be an italic line INSIDE that list with no actions at all, which
+        // states the problem and hands it back to the player.
+        _lobbyWindow!.InGameSoloBox.Visibility = peerCount == 0
+            ? Visibility.Visible : Visibility.Collapsed;
+        if (_lastSoloAnnounceTicks > 0
+            && Environment.TickCount64 - _lastSoloAnnounceTicks >= SoloAnnounceCooldownMs
+            && !_lobbyWindow!.InGameSoloAnnounceButton.IsEnabled
+            && _globalChatSocket != null)
         {
-            _lobbyWindow!.InGamePeersPanel.Children.Add(new TextBlock
-            {
-                Text = Strings.Get("MpInGameWaitingPeers"),
-                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                FontStyle = FontStyles.Italic,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 12, 0, 0),
-            });
+            _lobbyWindow!.InGameSoloAnnounceButton.IsEnabled = true;
+            _lobbyWindow!.InGameSoloAnnounceButton.Content = Strings.Get("MpInGameSoloAnnounce");
         }
 
         // "Pulsing" dot — toggle opacity for a breathing effect.

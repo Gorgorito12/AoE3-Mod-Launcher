@@ -3270,6 +3270,43 @@ public static class Strings
         ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
         ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
         ["MpRoomLeaveShort"] = new() { [LangEn] = "Leave the room", [LangEs] = "Salir de la sala" },
+        // In-match panel (design handoff 1f). The recording cell states what the LAUNCHER
+        // asked for; what the GAME will do is decided by a per-match checkbox nothing here
+        // can read, so none of these three words claims it is recording.
+        ["MpInGameRecordingHeader"] = new() { [LangEn] = "RECORDING", [LangEs] = "GRABACI\u00D3N" },
+        ["MpInGameRecordingOn"] = new() { [LangEn] = "requested", [LangEs] = "solicitada" },
+        ["MpInGameRecordingOff"] = new() { [LangEn] = "turned off", [LangEs] = "desactivada" },
+        ["MpInGameRecordingUnknown"] = new() { [LangEn] = "not checked", [LangEs] = "sin comprobar" },
+        ["MpInGameRecordingTooltip"] = new()
+        {
+            [LangEn] = "This is the launcher's own setting. Whether the match is actually recorded "
+                     + "depends on the \u201CRecord Game\u201D box on AoE3's setup screen, which "
+                     + "comes up unticked every match and cannot be read from here.",
+            [LangEs] = "Es el ajuste del propio launcher. Que la partida se grabe de verdad depende "
+                     + "de la casilla \u201CRecord Game\u201D de la pantalla de configuraci\u00F3n de "
+                     + "AoE3, que aparece desmarcada en cada partida y no se puede leer desde aqu\u00ED.",
+        },
+        ["MpInGameSoloTitle"] = new()
+        {
+            [LangEn] = "You are the only player in the room",
+            [LangEs] = "Eres el \u00FAnico jugador en la sala",
+        },
+        ["MpInGameSoloBody"] = new()
+        {
+            [LangEn] = "The P2P network is ready, but another launcher has to join this room "
+                     + "before any game traffic can flow.",
+            [LangEs] = "La red P2P est\u00E1 lista, pero hace falta que otro launcher entre en esta "
+                     + "sala para que circule tr\u00E1fico de juego.",
+        },
+        ["MpInGameSoloCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar c\u00F3digo" },
+        ["MpRoomCopied"] = new() { [LangEn] = "Copied \u2713", [LangEs] = "Copiado \u2713" },
+        ["MpInGameSoloAnnounce"] = new() { [LangEn] = "Say it in chat", [LangEs] = "Avisar en el chat" },
+        ["MpInGameSoloAnnounced"] = new() { [LangEn] = "Sent \u2713", [LangEs] = "Enviado \u2713" },
+        ["MpAnnounceRoomInGlobal"] = new()
+        {
+            [LangEn] = "Room open in {0} \u2014 code {1}. Looking for someone to play.",
+            [LangEs] = "Sala abierta en {0} \u2014 c\u00F3digo {1}. Busco con qui\u00E9n jugar.",
+        },
         ["MpResultPending"] = new()
         {
             [LangEn] = "Working out the result…",

@@ -104,6 +104,12 @@ public partial class LobbyWindow : Window
     /// <summary>Explain where AoE3 hides the per-match Record Game checkbox.</summary>
     public Action? OnRecordHelp { get; set; }
 
+    /// <summary>Copy the room code (the alone-in-the-room box).</summary>
+    public Action? OnCopyRoomCode { get; set; }
+
+    /// <summary>Announce this room in the global chat (the alone-in-the-room box).</summary>
+    public Action? OnAnnounceRoom { get; set; }
+
     /// <summary>"Send" button on the chat input bar.</summary>
     public Action? OnSendChat { get; set; }
 
@@ -217,6 +223,8 @@ public partial class LobbyWindow : Window
     private void ClearChatButton_Click(object sender, RoutedEventArgs e) => OnClearChat?.Invoke();
     private void InvitePlayersButton_Click(object sender, RoutedEventArgs e) => OnInvitePlayers?.Invoke();
     private void PreflightRecordHelp_Click(object sender, RoutedEventArgs e) => OnRecordHelp?.Invoke();
+    private void InGameSoloCopyButton_Click(object sender, RoutedEventArgs e) => OnCopyRoomCode?.Invoke();
+    private void InGameSoloAnnounceButton_Click(object sender, RoutedEventArgs e) => OnAnnounceRoom?.Invoke();
     private void ChatSendButton_Click(object sender, RoutedEventArgs e) => OnSendChat?.Invoke();
     private void ChatEmojiButton_Click(object sender, RoutedEventArgs e) => OnEmoji?.Invoke();
     private void ChatInputBox_TextChanged(object sender, TextChangedEventArgs e) => OnChatTextChanged?.Invoke();
@@ -239,7 +247,7 @@ public partial class LobbyWindow : Window
         var revert = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.4) };
         revert.Tick += (_, _) =>
         {
-            CopyRoomIdButton.Content = "📋";
+            CopyRoomIdButton.Content = "\u29C9";
             revert.Stop();
         };
         revert.Start();
