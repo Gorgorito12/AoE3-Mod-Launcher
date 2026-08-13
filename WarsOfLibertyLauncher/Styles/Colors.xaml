@@ -398,6 +398,8 @@
     <SolidColorBrush x:Key="MpRimSoft" Color="#1C82AFFF"/>
     <SolidColorBrush x:Key="MpRimMedium" Color="#2482AFFF"/>
     <SolidColorBrush x:Key="MpRimStrong" Color="#2E82AFFF"/>
+    <!-- .16 — the reference's search field, between Medium and Strong. -->
+    <SolidColorBrush x:Key="MpRimField" Color="#2982AFFF"/>
 
     <!-- Text ramp, brightest → faintest. MpTextLabel is the uppercase
          section caption (9.5–10.5px, letter-spaced), deliberately the

@@ -1053,6 +1053,7 @@ public partial class MultiplayerTab : UserControl
         // pulling icon fonts.
         RefreshButton.Content = "↻  " + Strings.Get("MpRoomsRefresh");
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
+        RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
 
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
@@ -3745,13 +3746,49 @@ public partial class MultiplayerTab : UserControl
         RoomsListPanel.Children.Clear();
         _roomPingCells.Clear();
         _roomAgeCells.Clear();
-        var ordered = ApplyRoomSort(_lastBrowserList);
+        // Filter BEFORE sorting: the sort is stable, so filtering first keeps the
+        // surviving rooms in exactly the order they would have had anyway, and the
+        // "Showing N" footer then counts what is actually on screen.
+        var ordered = ApplyRoomSort(RoomSearchFilter.Apply(_lastBrowserList, _roomsQuery));
+
+        // A search that matches nothing must SAY so. Without this the panel simply
+        // renders empty, which is indistinguishable from "there are no rooms" — and
+        // the rooms are still there, just filtered out.
+        if (ordered.Count == 0)
+        {
+            RoomsListPanel.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("MpRoomsNoMatches"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                FontSize = 13,
+                Margin = new Thickness(30, 18, 30, 18),
+            });
+            UpdateRoomsShowingCount(0);
+            return;
+        }
+
         int idx = 0;
         foreach (var lobby in ordered)
             RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
         UpdateRoomsShowingCount(ordered.Count);
         Dispatcher.BeginInvoke(new Action(SyncHeaderScrollbarGutter),
             System.Windows.Threading.DispatcherPriority.Render);
+    }
+
+    /// <summary>The rooms-browser search text. Empty means no filtering.</summary>
+    private string _roomsQuery = string.Empty;
+
+    /// <summary>
+    /// Re-renders from the cache as the user types. Purely local — the list already in
+    /// hand is filtered, so typing costs no request and doesn't disturb the 5 s poll
+    /// (whose quiet diff compares the SERVER payload, not what is displayed).
+    /// </summary>
+    private void RoomSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _roomsQuery = RoomSearchBox.Text ?? string.Empty;
+        RoomSearchPlaceholder.Visibility =
+            string.IsNullOrEmpty(_roomsQuery) ? Visibility.Visible : Visibility.Collapsed;
+        RerenderRoomsFromCache();
     }
 
     /// <summary>Set the "Showing N rooms" footer count.</summary>

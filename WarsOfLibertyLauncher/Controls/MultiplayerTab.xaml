@@ -172,6 +172,49 @@
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
+                    <!-- Search. Filters the list ALREADY in hand, so typing costs no
+                         request. WPF's TextBox has no placeholder, hence the TextBlock
+                         behind it, hidden on the first character. -->
+                    <Border Height="32"
+                            Width="230"
+                            Margin="0,0,16,0"
+                            Padding="11,0"
+                            CornerRadius="{StaticResource RadiusControl}"
+                            Background="{DynamicResource MpField}"
+                            BorderBrush="{DynamicResource MpRimField}"
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="&#xE721;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12"
+                                       Foreground="#7E93AF"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,7,0"/>
+                            <Grid Grid.Column="1">
+                                <TextBlock x:Name="RoomSearchPlaceholder"
+                                           IsHitTestVisible="False"
+                                           Foreground="#6D829D"
+                                           FontFamily="{DynamicResource BodyFont}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"/>
+                                <TextBox x:Name="RoomSearchBox"
+                                         TextChanged="RoomSearchBox_TextChanged"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Padding="0"
+                                         Foreground="{DynamicResource MpTextPrimary}"
+                                         CaretBrush="{DynamicResource MpTextPrimary}"
+                                         FontFamily="{DynamicResource BodyFont}"
+                                         FontSize="12"
+                                         VerticalContentAlignment="Center"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
                     <Button x:Name="RefreshButton"
                             Click="RefreshButton_Click"
                             Style="{StaticResource MpSecondaryButton}"

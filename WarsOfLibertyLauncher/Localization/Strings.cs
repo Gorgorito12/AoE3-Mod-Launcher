@@ -2393,6 +2393,18 @@ public static class Strings
         // used to carry it was removed with the bar-2 redesign.
         ["MpAccountMenuProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
         ["MpAccountMenuSignOut"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
+        ["MpRoomsSearchPlaceholder"] = new()
+        {
+            [LangEn] = "Search room, mod or player",
+            [LangEs] = "Buscar sala, mod o jugador",
+        },
+        // Shown INSTEAD of the list when a search matches nothing. Without it an empty
+        // panel reads as "there are no rooms" when they are only filtered out.
+        ["MpRoomsNoMatches"] = new()
+        {
+            [LangEn] = "No rooms match your search.",
+            [LangEs] = "Ninguna sala coincide con tu búsqueda.",
+        },
         ["MpRadminLaunchFailed"] = new()
         {
             [LangEn] = "Could not launch Radmin VPN.",
