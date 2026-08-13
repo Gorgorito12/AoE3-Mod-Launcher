@@ -4325,6 +4325,14 @@ public partial class MultiplayerTab : UserControl
             : (DateTime?)null;
         bool dayChanged = msgDate != null && _lastGlobalChatDate != null && msgDate != _lastGlobalChatDate;
 
+        // The reference marks a change of day with a centred separator rather than by
+        // dating every message. Emitted for the FIRST dated message too, so a backlog
+        // replayed on join is anchored instead of starting mid-air. This is why the
+        // per-message stamp below is a bare time: the date is the separator's job now,
+        // and repeating it on each line was what made an old backlog read as today.
+        if (msgDate != null && (_lastGlobalChatDate == null || dayChanged))
+            GlobalChatPanel.Children.Add(BuildChatDateSeparator(msgDate.Value));
+
         bool sameAuthor = !dayChanged
             && !string.IsNullOrEmpty(login)
             && string.Equals(login, _lastGlobalChatAuthor, StringComparison.Ordinal);
@@ -4417,7 +4425,8 @@ public partial class MultiplayerTab : UserControl
             {
                 header.Children.Add(new TextBlock
                 {
-                    Text = FormatChatTime(atMs),
+                    // Time only — the day is carried by the separator above.
+                    Text = DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime.ToString("HH:mm"),
                     // Full date + time on hover, for precision.
                     ToolTip = FormatChatTimeFull(atMs),
                     Foreground = textSecondary,
@@ -4573,17 +4582,54 @@ public partial class MultiplayerTab : UserControl
         return disc;
     }
 
-    // Header stamp for a chat message: shows the DATE (not just the time) once
-    // a message isn't from today, so old messages don't read as recent. The
-    // formatting core is the pure, WPF-free ChatTimeFormat (unit-tested).
-    private static string FormatChatTime(long atMs)
+    /// <summary>
+    /// The reference's day divider: a hairline with the date centred on it. Replaces
+    /// dating every message — repeating the date on each line is what made an old
+    /// backlog read as today, and it is why the per-message stamp is now a bare time.
+    /// </summary>
+    private static UIElement BuildChatDateSeparator(DateTime day)
     {
-        var local = DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime;
-        return ChatTimeFormat.Format(
-            local, DateTime.Today, Strings.Get("MpChatYesterday"), ChatDateCulture());
+        var rule = (Brush)Application.Current.FindResource("MpDivider");
+        var grid = new Grid { Margin = new Thickness(0, 12, 0, 6) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        Border Rule() => new()
+        {
+            Height = 1,
+            Background = rule,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var left = Rule();
+        Grid.SetColumn(left, 0);
+        grid.Children.Add(left);
+
+        // The wording rule lives in ChatTimeFormat beside the message stamp's, so the
+        // two can't disagree about when a day stops being "yesterday".
+        var text = new TextBlock
+        {
+            Text = ChatTimeFormat.DateLabel(
+                day, DateTime.Today,
+                Strings.Get("MpChatToday"), Strings.Get("MpChatYesterday"),
+                ChatDateCulture()).ToUpperInvariant(),
+            Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+            FontSize = (double)Application.Current.FindResource("MpPillSize"),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        var right = Rule();
+        Grid.SetColumn(right, 2);
+        grid.Children.Add(right);
+        return grid;
     }
 
-    // Full date + time for the hover tooltip on a message's timestamp.
+    /// <summary>Full date + time for the hover tooltip on a message's timestamp.</summary>
     private static string FormatChatTimeFull(long atMs)
     {
         var local = DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime;

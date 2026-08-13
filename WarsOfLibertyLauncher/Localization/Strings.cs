@@ -2393,6 +2393,9 @@ public static class Strings
         // used to carry it was removed with the bar-2 redesign.
         ["MpAccountMenuProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
         ["MpAccountMenuSignOut"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
+        // Centred day divider in the global chat. "Today" instead of a date, because a
+        // date on the line you are reading right now is noise.
+        ["MpChatToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
         ["MpRoomsSearchPlaceholder"] = new()
         {
             [LangEn] = "Search room, mod or player",
