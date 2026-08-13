@@ -441,6 +441,12 @@
     <SolidColorBrush x:Key="MpNavTabIdle" Color="#A8BCD2"/>
     <SolidColorBrush x:Key="MpChipOkBg" Color="#2435C46F"/>
     <SolidColorBrush x:Key="MpChipOkRim" Color="#4D35C46F"/>
+    <!-- Secondary text inside the OK chip (the VPN address). Deliberately a muted
+         green-GREY rather than the saturated MpOkTextAlt: it sits beside the status
+         word and must not compete with it. Taken from the prototype, which uses a
+         value the handoff's token table doesn't list. -->
+    <SolidColorBrush x:Key="MpChipOkDetail" Color="#A9CBB9"/>
+    <SolidColorBrush x:Key="MpChipOkSeparator" Color="#4D78DCAA"/>
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>

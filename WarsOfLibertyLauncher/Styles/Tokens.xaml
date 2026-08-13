@@ -58,7 +58,13 @@
     <CornerRadius x:Key="RadiusControl">7</CornerRadius>
     <CornerRadius x:Key="RadiusRow">8</CornerRadius>
     <CornerRadius x:Key="RadiusPanel">9</CornerRadius>
-    <CornerRadius x:Key="RadiusPill">999</CornerRadius>
+    <!-- Pill = HALF the control's height, NOT a huge number. The handoff writes
+         `border-radius: 999px`, which is a CSS idiom: browsers clamp it to 50%. WPF
+         does NOT clamp — it builds the geometry from the value as given, the corner
+         arcs overlap, and the Border renders as a distorted ellipse that swallows its
+         own content. This value therefore only fits a 26px-high control (the
+         connection chip); a pill of another height needs its own half-height radius. -->
+    <CornerRadius x:Key="RadiusPill">13</CornerRadius>
 
     <!-- Two-tone "punched-out" popup rim — NOT part of the scale. Outer
          MUST stay inner+1 (the 1px near-black band over the 2px bright
@@ -162,16 +168,9 @@
          MULTIPLAYER). Its OWN knob, independent of the title and the dialog-rail
          nav.
 
-         13 (was 14): the tabs moved into the 46px title bar and now share it with the
-         brand, the connection chip and the account menu, so they had to give up width.
-
-         ⚠ The design handoff asks for 11.5px here. This deliberately does NOT follow it.
-         The typography scale has a measured floor of 13 — 10-11px secondary text was
-         reported as unreadable at 125/150% display scaling, which is what the whole
-         scale was introduced to fix. These are the launcher's PRIMARY navigation, so
-         they are the worst possible place to reintroduce that. Raise to 11.5 only if
-         you have looked at it on a 125% display and disagree. -->
-    <sys:Double x:Key="NavTabTextSize">13</sys:Double>
+         Now MpLabelSize (11.5), the handoff's value — see that token for why this sits
+         below the type scale's documented floor of 13 and whose call that was. -->
+    <sys:Double x:Key="NavTabTextSize">11.5</sys:Double>
 
     <!-- ============================================================
          MULTIPLAYER REDESIGN GEOMETRY (design handoff 1a/1d/1e/1f —
@@ -192,6 +191,13 @@
     <sys:Double x:Key="MpRoomRowHeight">58</sys:Double>
     <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
          text input; Control = a normal button; PrimaryButton = the one CTA. -->
+    <!-- The redesign's small-label size (nav tabs, chips). 11.5 is the handoff's
+         value and it sits BELOW the type scale's documented floor of 13, which exists
+         because 10-11px secondary text was reported unreadable at 125/150% scaling.
+         Used here on the maintainer's explicit call for fidelity to the reference,
+         after the deviation was raised and declined twice. Kept as its own token so
+         reversing it is one number, and so it can't leak into body text. -->
+    <sys:Double x:Key="MpLabelSize">11.5</sys:Double>
     <sys:Double x:Key="MpFieldHeight">34</sys:Double>
     <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
     <sys:Double x:Key="MpControlHeight">30</sys:Double>
