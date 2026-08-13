@@ -165,7 +165,11 @@ goes away underneath it: `MatchContextTests` (the facts of a match, captured at 
 `AClosedRoomCannotChangeTheAnswer` is the regression test for a real match that was never
 reported because the host closed the room mid-game) and `RoomMatchStateTests`
 (**`TheHostIsNeverOfferedIt`** — who may reopen their game without disturbing anyone, and what
-leaving the room mid-match has to warn about).
+leaving the room mid-match has to warn about). Two more cover the network edge of the WoL
+pipeline, which had none at all: `DownloadRetryTests` (which download failures are retried —
+the REJECTION cases are the point: a user's Cancel and a permission error must not be) and
+`UpdateInfoServiceTests` (`ParseXml` + `IsUsable` — the well-formed-but-empty manifest is
+the case that matters).
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -271,6 +275,37 @@ Two cheap gates beyond a green build:
   (bounded 4 levels), so a normal FLAT payload (WoL/Improvement Mod ship several top-level
   dirs) is an immediate no-op. Don't remove it — it's what makes wrapped community zips
   installable without repackaging.
+
+- **Every download RETRIES transient network failures and RESUMES from the `.part` file —
+  the retry lives in `DownloadService.DownloadFileAsync`, deliberately NOT at the call
+  sites.** The failure it closes: WoL's payload is ~4 GB across three parts fetched in a
+  loop by `DownloadAndConcatenatePartsAsync`, with **no mirror** (`WolPatcherSettings` has
+  `UpdateInfoUrlAlt` but no payload alt, and the part loop calls `DownloadFileAsync`
+  directly, not `DownloadWithFallbackAsync`). One dropped connection threw `IOException`
+  straight out of the install — and because `MainWindow.InstallAsync`'s own 3-attempt loop
+  catches only `InvalidDataException` (a corrupt ZIP), it hit the generic `catch (Exception)`
+  and died with a raw `Error: …` after gigabytes had been downloaded. The resume machinery
+  (`.part` + HTTP Range, incl. the 416 branch) already existed and worked; nothing ever
+  re-entered it. **Why per-PART matters:** the retry sits inside `DownloadFileAsync`, so a
+  blip on part 3 never re-fetches parts 1-2, and within a part it picks up at the byte it
+  stopped on. Three details are load-bearing: (1) **`IsTransientDownloadFailure(ex,
+  userCancelled)` takes the token state, not just the exception** — an `HttpClient` TIMEOUT
+  and a user pressing Cancel are BOTH `TaskCanceledException`, so the type cannot tell them
+  apart (the same trap `ConnectivityState.IsNetworkError` documents); retrying a Cancel
+  would make the button take four attempts and a backoff to be obeyed. (2) It walks the
+  inner-exception chain **twice, and the order is the point**: a `UnauthorizedAccessException`
+  ANYWHERE wins over a transport error wrapped around it, so a read-only destination fails
+  once instead of four times. (3) The budget is **two counters** — `MaxAttemptsWithoutProgress`
+  (4) resets whenever an attempt advanced the `.part` file, so a multi-GB download over a
+  flaky link may hiccup more than a handful of times, while `MaxTotalAttempts` (12) bounds a
+  server that accepts the connection and drops it after a few bytes. Those two consts plus
+  `RetryDelay` (2/4/8 s) are the dials. `DownloadWithFallbackAsync` now also **LOGS the
+  primary's failure** before falling over — it was a bare `catch when`, so a mirror failing
+  for every user was invisible in the diagnostic bundle (the download just appeared to work,
+  from the alt). Note the outer `InvalidDataException` retry still wipes the whole temp via
+  `CleanupTempPayload`, which stays correct: there we don't know WHICH part is corrupt.
+  Pinned by `DownloadRetryTests` (the REJECTION cases are the point); `DownloadService` had
+  no test before this.
 
 - **`NativeInstallService.RemoveStaleBuildArtifacts` is now a deliberate NO-OP — the
   launcher installs the WoL payload byte-faithfully and strips NOTHING.** It used to
@@ -526,9 +561,10 @@ Two cheap gates beyond a green build:
 - **A VALID install whose version can't be recognized NEVER gets offered a destructive
   from-scratch reinstall — `ApplyCheckResult` shows PLAY, not Install.** The failure it
   guards: WoL's UpdateInfo (`aoe3wol.com` over HTTP) intermittently returns a
-  short/truncated body; `UpdateInfoService.FetchAsync` uses the primary unless it THROWS
-  (a truncated body fails `LoadXml`), then falls to the ALT **without any version-count /
-  newer-wins validation**. The old ALT was a SourceForge mirror **frozen at 1.0.9h**, so
+  short/truncated body; `UpdateInfoService.FetchAsync` used the primary unless it THREW
+  (a truncated body fails `LoadXml`), then fell to the ALT **without any version-count
+  validation** — see the version-count bullet below, which closed that half. The old ALT
+  was a SourceForge mirror **frozen at 1.0.9h**, so
   the fallback served an ancient UpdateInfo → a real 1.2.0e install matched no `<version>`
   → NO MATCH → (manifest baseline drifted, see above, so no rescue) → the install path was
   VALID but `CurrentVersion==null` with bogus pending downloads → the UI offered a **full
@@ -555,6 +591,31 @@ Two cheap gates beyond a green build:
   philosophy as the offline fallback: a mod on disk stays playable regardless of a
   flaky/stale UpdateInfo; Repair/reinstall stays available via the gear menu but is never
   pushed, and every surface agrees.
+
+- **An `UpdateInfo.xml` that PARSES but lists no versions counts as a FAILED fetch, not a
+  successful one — `UpdateInfoService.IsUsable` — and the last validated manifest is kept
+  on disk as a last resort.** This is the other half of the bullet above. `FetchAsync`
+  only ever treated an EXCEPTION as failure, so a truncated body whose cut happens to land
+  on an element boundary is still well-formed XML: it parsed, `ConnectivityState.ReportSuccess()`
+  was reported, and `CheckCoreAsync` got `Versions = []` → `latest = null` → a perfectly
+  good 1.2.0e install reads as matching no known version. Indistinguishable downstream
+  from the failure that had users re-downloading 4 GB into `Wars of Liberty (2)`, and
+  invisible in a diagnostic bundle because nothing errored. Now `FetchFromUrlAsync` throws
+  `InvalidDataException` when `IsUsable` is false (versions count == 0), so **the ALT URL
+  gets its turn** instead of the empty primary being accepted; if the ALT is empty too,
+  `CheckAsync`'s existing catch degrades to `BuildOfflineResult`, which keeps PLAY and
+  never proposes a reinstall. **The cache is deliberately NOT `DiagnosticLog.SaveSnapshot`'s
+  `UpdateInfo-snapshot.xml`** — that one is a single shared file written even for the
+  garbage bodies (which is exactly what makes it useful in a bundle), so reading it back
+  would reintroduce the truncation this guards against. The validated copy is per-mod
+  (`AppPaths.DataDir\updateinfo-cache-<modId>.xml`, keyed by the `cacheKey` argument
+  `UpdateService` passes as `_profile.Id`), written only after a manifest passes
+  `IsUsable`, and re-validated on read so a half-written cache can't do what a truncated
+  download would have. **Risk direction, and why the cache is safe:** a stale manifest can
+  only list FEWER patches than the live one, never invent one — `ComputePendingDownloads`
+  filters by `MinReqDownload` and id. `IsUsable` and `ParseXml` are pure and pinned by
+  `UpdateInfoServiceTests` (the empty-but-well-formed case is the point); before this the
+  whole file had no test at all, making it the least-guarded link in the WoL version chain.
 
 - **A STALE `translations\_originals\` snapshot used to brick an install — detection
   falls back to the LIVE stringtabley when the snapshot matches nothing, and re-syncs
@@ -623,6 +684,21 @@ Two cheap gates beyond a green build:
   truth for "is this an install"** — a second opinion is how these drifted apart, and an empty
   `InstallMarker` must never again be read as "valid": no marker means *the probe is already
   exclusive*, not *skip the remaining checks*.
+  **That rule is now STRUCTURAL, not just written down: `UpdateService.IsRealInstall` is a
+  METHOD, where it used to be a two-call conjunction you had to remember to type.** The gate
+  was `IsProfileInstalled(p) && LooksLikeRealModInstall(p)`, spelled out at six sites — and
+  the second half had ALREADY gone missing at one of them (the `valid` recomputed after
+  `BroadFallbackScan`). That site happened to be harmless, because the scan validates its own
+  hits, but a conjunction that is correct only by luck at one of six sites is the same drift
+  this bullet is about, one step from repeating. The first half was also redundant wherever a
+  probe file IS declared, since `ModInstallProbe.Inspect` checks it too. `IsRealInstall` is
+  `ModInstallProbe.LooksLikeModInstall` **plus one legacy allowance**: a profile declaring NO
+  probe file must still pass `RegistryService.IsValidInstall` (the WoL `art\zulushield` marker),
+  which is how pre-probe-file installs stay recognised — `Inspect` SKIPS the probe step for
+  such a profile rather than failing it, so dropping that half would have silently widened
+  the gate instead of narrowing it. `LooksLikeRealModInstall` is gone; don't reintroduce a
+  second predicate beside `IsRealInstall`. Pinned by the no-probe-file cases in
+  `ModInstallProbeTests`.
 
   **The engine requirement now covers `InPlaceOverlay` too — the old exemption was a hole,
   not a design.** It was written on the reasoning that an overlay's engine "lives in `bin\`,
@@ -704,10 +780,11 @@ Two cheap gates beyond a green build:
   single rule lives in `ModInstallProbe.LooksLikeModInstall(path, profile)`:
   folder exists → probe present (if declared) → marker present (if declared) →
   true; the **folder name is never consulted**. `UpdateService` uses it two
-  ways: `LooksLikeRealModInstall` (renamed from `CachedPathLeafLooksValid` — the
-  marker gate layered on `IsProfileInstalled`'s probe check, applied to the
-  cached/saved path AND each disk-scan candidate so a renamed install survives
-  the re-check), and `IsolatedCandidates`' SECOND pass, which enumerates one
+  ways: **`IsRealInstall` — the single gate every adoption route in that class
+  goes through** (ctor cache fast-path, the forced/user-picked step 0, the saved
+  path, the registry, the near-AoE3 disk scan, the broad scan, and the `valid`
+  that becomes `CheckResult.IsValidInstall`), so a renamed install survives the
+  re-check; and `IsolatedCandidates`' SECOND pass, which enumerates one
   level under the AoE3 root / its `bin\` / the parent-that-holds-AoE3-as-sibling
   and yields any child that passes the content check — so WoL is auto-detected
   in a folder with ANY name (the first pass still tries the name-based happy
@@ -789,7 +866,7 @@ Two cheap gates beyond a green build:
   check — `MainWindow.CheckAsync(forceInstallPath)` (optional; skips the session cache
   fast-path when set) → `UpdateService.CheckAsync(..., forceInstallPath)` →
   `ResolveInstallPath(forced)`, whose new **step 0** adopts `forced` directly when it passes
-  `IsProfileInstalled` + `LooksLikeRealModInstall` (re-validated defensively; invalid falls
+  `IsRealInstall` (re-validated defensively; invalid falls
   through to normal resolution). So a valid manual pick is adopted **without depending on the
   cached-path read that was observed failing.** Both "Change mod folder" (`BrowseButton_Click`)
   and "Add existing folder" (`AddExistingCopy`, when there is NO active install — otherwise it
@@ -3909,7 +3986,7 @@ engine** and the UI binds to it.
    `stringtabley.xml`) to identify the installed version (falling back to the
    install manifest's baseline when the byte-faithful payload matches no UpdateInfo
    version — see the manifest-recognition gotcha), then download `.tar.xz`
-   patches (resume + mirror fallback), CRC32-verify, back up, and extract — then
+   patches (resume + retry + mirror fallback), CRC32-verify, back up, and extract — then
    re-fingerprint the touched files into the manifest so the patched install stays
    verifiable.
 3. **Multiplayer** — Discord sign-in (JWT cached in config) → REST/WebSocket to a

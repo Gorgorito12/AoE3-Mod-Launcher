@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,13 +13,13 @@ namespace WarsOfLibertyLauncher.Services;
 public record DownloadProgress(long BytesReceived, long TotalBytes, double Percentage);
 
 /// <summary>
-/// HTTP download with progress, resume (HTTP Range), pause/resume, and
-/// primary/alt URL fallback.
+/// HTTP download with progress, resume (HTTP Range), pause/resume, automatic
+/// retry of transient network failures, and primary/alt URL fallback.
 ///
-/// Pause vs cancel:
-///   - Cancel deletes the .part file and starts fresh next time.
-///   - Pause keeps the .part file. The next call to DownloadFileAsync with
-///     the same destination resumes from where it left off (HTTP Range).
+/// Pause vs cancel: both keep the .part file, so the next call to
+/// DownloadFileAsync with the same destination resumes from where it left off
+/// (HTTP Range). Only an explicit temp sweep (NativeInstallService.TryCleanupTemp /
+/// CleanupTempPayload) discards partial downloads.
 /// </summary>
 public class DownloadService
 {
@@ -66,20 +67,170 @@ public class DownloadService
         {
             await DownloadFileAsync(primaryUrl, destinationPath, progress, ct);
         }
-        catch when (!string.IsNullOrEmpty(alternateUrl) && !ct.IsCancellationRequested)
+        catch (Exception ex) when (!string.IsNullOrEmpty(alternateUrl) && !ct.IsCancellationRequested)
         {
+            // Log before falling over. This used to be a bare `catch when`, so a
+            // primary mirror that failed for EVERY user was invisible in the
+            // diagnostic bundle — the download simply appeared to work, from the
+            // alternate, with nothing saying the first host was dead.
+            DiagnosticLog.Write(
+                $"Download from primary '{primaryUrl}' failed ({ex.GetType().Name}: {ex.Message}); " +
+                $"falling back to '{alternateUrl}'.");
             await DownloadFileAsync(alternateUrl, destinationPath, progress, ct);
         }
     }
 
     /// <summary>
-    /// Downloads a file with progress and resume support.
+    /// How many times in a row an attempt may fail with a transient network error
+    /// before the download gives up. Retrying is cheap because the <c>.part</c> file
+    /// survives and the next attempt resumes from it via HTTP Range — nothing already
+    /// downloaded is fetched twice.
+    /// </summary>
+    private const int MaxAttemptsWithoutProgress = 4;
+
+    /// <summary>
+    /// Absolute cap on attempts, so a server that accepts the connection and then
+    /// drops it after a handful of bytes can't spin here forever. Only reached when
+    /// attempts keep making SOME progress; a genuinely dead host stops after
+    /// <see cref="MaxAttemptsWithoutProgress"/>.
+    /// </summary>
+    private const int MaxTotalAttempts = 12;
+
+    /// <summary>
+    /// Whether a failed download attempt is worth retrying.
+    ///
+    /// <para><paramref name="userCancelled"/> is the caller's token state, and it is
+    /// what separates the two things that both surface as
+    /// <see cref="OperationCanceledException"/>: a user pressing Cancel (never retry)
+    /// and an <see cref="HttpClient"/> TIMEOUT (exactly what we want to retry). The
+    /// exception type alone cannot tell them apart — <see cref="TaskCanceledException"/>
+    /// is used for both — which is the same trap
+    /// <see cref="ConnectivityState.IsNetworkError"/> documents.</para>
+    ///
+    /// Pure and static so the policy is unit-testable without a socket.
+    /// </summary>
+    internal static bool IsTransientDownloadFailure(Exception? ex, bool userCancelled)
+    {
+        if (ex == null) return false;
+
+        // The user's own cancellation outranks everything, including a wrapped
+        // network error that happened on the way down.
+        if (userCancelled) return false;
+
+        // Two passes, not one, and the order is the point: a permission problem
+        // ANYWHERE in the chain wins over a transport error wrapped around it.
+        // Walking once and returning on the first match would retry a read-only
+        // destination four times just because the framework reported it as an
+        // IOException with the real cause inside.
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            // Disk / permission problems are not going to fix themselves, and
+            // retrying would just rewrite the same failure three more times.
+            if (e is UnauthorizedAccessException) return false;
+        }
+
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            switch (e)
+            {
+                case HttpRequestException:
+                case SocketException:
+                case TimeoutException:
+                // Covers TaskCanceledException (an HttpClient timeout) — the
+                // userCancelled check above has already ruled out a real cancel.
+                case OperationCanceledException:
+                case IOException:
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Downloads a file with progress and resume support, retrying transient network
+    /// failures.
+    ///
+    /// <para>WHY the retry lives here rather than at the call sites: the WoL payload is
+    /// ~4 GB split across three parts and <c>NativeInstallService</c> downloads them in
+    /// a loop. Retrying per PART means a blip while fetching part 3 never re-downloads
+    /// parts 1 and 2 — and within a part, the <c>.part</c> file plus HTTP Range means
+    /// the retry picks up at the byte it stopped on. Before this, a single dropped
+    /// connection threw an <see cref="IOException"/> straight out of the install (which
+    /// is not the <see cref="InvalidDataException"/> the installer's own retry loop
+    /// catches), so a multi-gigabyte download died on a momentary hiccup.</para>
     /// </summary>
     public async Task DownloadFileAsync(
         string url,
         string destinationPath,
         IProgress<DownloadProgress>? progress = null,
         CancellationToken ct = default)
+    {
+        var tempPath = destinationPath + ".part";
+        int attemptsWithoutProgress = 0;
+
+        for (int attempt = 1; ; attempt++)
+        {
+            long bytesBefore = SafePartLength(tempPath);
+            try
+            {
+                await DownloadOnceAsync(url, destinationPath, progress, ct);
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (!IsTransientDownloadFailure(ex, ct.IsCancellationRequested))
+                    throw;
+
+                // Progress since the last attempt resets the budget: a long download
+                // over a flaky link should be allowed to hiccup more than a handful of
+                // times, as long as it keeps advancing.
+                long bytesAfter = SafePartLength(tempPath);
+                attemptsWithoutProgress = bytesAfter > bytesBefore ? 0 : attemptsWithoutProgress + 1;
+
+                if (attemptsWithoutProgress >= MaxAttemptsWithoutProgress
+                    || attempt >= MaxTotalAttempts)
+                {
+                    DiagnosticLog.Write(
+                        $"Download of '{url}' gave up after {attempt} attempt(s) " +
+                        $"({bytesAfter} bytes on disk): {ex.GetType().Name}: {ex.Message}");
+                    throw;
+                }
+
+                var delay = RetryDelay(attemptsWithoutProgress);
+                DiagnosticLog.Write(
+                    $"Download of '{url}' failed on attempt {attempt} " +
+                    $"({ex.GetType().Name}: {ex.Message}); {bytesAfter} bytes already on disk, " +
+                    $"resuming in {delay.TotalSeconds:0}s.");
+                await Task.Delay(delay, ct);
+            }
+        }
+    }
+
+    /// <summary>Backoff for the Nth consecutive fruitless attempt: 2s, 4s, 8s…</summary>
+    private static TimeSpan RetryDelay(int consecutiveFailures) =>
+        TimeSpan.FromSeconds(Math.Min(8, 1 << Math.Max(1, consecutiveFailures)));
+
+    /// <summary>
+    /// Length of the partial file, or 0 when it isn't there / can't be read. Used only
+    /// to decide whether an attempt advanced, so a failure to measure must not throw
+    /// over the top of the download error we're already handling.
+    /// </summary>
+    private static long SafePartLength(string tempPath)
+    {
+        try { return File.Exists(tempPath) ? new FileInfo(tempPath).Length : 0; }
+        catch { return 0; }
+    }
+
+    /// <summary>
+    /// One download attempt. Resumes from an existing <c>.part</c> file when the server
+    /// supports Range. Kept separate from <see cref="DownloadFileAsync"/> so each retry
+    /// re-reads the partial file's length and issues a fresh request.
+    /// </summary>
+    private async Task DownloadOnceAsync(
+        string url,
+        string destinationPath,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken ct)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
 
