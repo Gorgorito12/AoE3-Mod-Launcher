@@ -7057,7 +7057,8 @@ public partial class MultiplayerTab : UserControl
             // The host learns the room closed from their own POST, not from the socket —
             // both arrive, and whichever is first wins. Entering here as well makes the
             // host's card deterministic instead of dependent on that race.
-            if (roomClosedByReport && _matchPhase != MatchPhase.Result) EnterResultPhase();
+            if (roomClosedByReport && _matchPhase != MatchPhase.Result)
+                EnterResultPhase(ctx, report.Response, replayInfo);
 
             // If the match wasn't reported+closed (solo / short / failed report), the
             // HOST tells the server the game ended so the room reverts in_game → open
@@ -8162,7 +8163,10 @@ public partial class MultiplayerTab : UserControl
     /// left to warn about, and asking would imply there is.</item>
     /// </list>
     /// </summary>
-    private void EnterResultPhase()
+    private void EnterResultPhase(
+        Services.Multiplayer.MatchContext? ctx = null,
+        ReportMatchResponse? report = null,
+        MatchReplayInfo? replay = null)
     {
         _matchPhase = MatchPhase.Result;
         _aoe3Process = null;
@@ -8177,6 +8181,169 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow?.SuppressLeaveConfirm();
         ShowResultPending();
         ApplyMatchPhaseUi();
+
+        // The HOST already has everything: the POST answered with every participant's
+        // rating change, so their card costs no extra request. Everyone else has to go
+        // looking for it — see ResolveGuestResultAsync.
+        var context = ctx ?? _matchContext;
+        if (report != null && context != null) ShowMatchResult(BuildOutcome(context, report, replay));
+        else if (context != null) _ = ResolveGuestResultAsync(context);
+    }
+
+    /// <summary>
+    /// Turn the report's answer into the card's model. Host-side, so our own participant
+    /// row is the one to read.
+    /// </summary>
+    private MatchOutcomeView BuildOutcome(
+        Services.Multiplayer.MatchContext ctx, ReportMatchResponse report, MatchReplayInfo? replay)
+    {
+        var myId = ctx.ReporterUserId ?? "";
+        RatingChange? mine = null;
+        RatingChange? rival = null;
+        foreach (var change in report.RatingChanges ?? new List<RatingChange>())
+        {
+            if (string.Equals(change.UserId, myId, StringComparison.Ordinal)) mine = change;
+            else rival ??= change;
+        }
+
+        // Our own score, from the same resolver the report itself used — so the card and
+        // the row in History can never disagree about who won.
+        var hostResult = replay?.HostResult;
+        var decision = Services.Multiplayer.MatchResultResolver.ResolveHostResult(
+            hostResult, ctx.Participants, myId);
+        var myResult = decision.Result ?? Services.Multiplayer.MatchResultResolver.Unknown;
+
+        // Only a 1v1 has "the opponent"; past two players naming one would be a fiction.
+        string? rivalLogin = null;
+        if (ctx.Participants.Count == 2 && rival != null
+            && _roomMembers.TryGetValue(rival.UserId, out var rivalEntry))
+            rivalLogin = rivalEntry.Login;
+
+        return new MatchOutcomeView(
+            MatchOutcomeView.Classify(myResult),
+            ctx.ModId,
+            replay?.MapName,
+            ctx.DurationSeconds(DateTime.UtcNow),
+            ctx.Participants.Count,
+            mine?.RatingBefore,
+            mine?.RatingAfter,
+            rivalLogin,
+            rival?.RatingAfter,
+            _cachedStanding?.Wins ?? 0,
+            _cachedStanding?.Losses ?? 0,
+            _cachedStanding?.Rd);
+    }
+
+    /// <summary>
+    /// Find the match in our own history, for everyone who did not report it.
+    ///
+    /// <para>A guest gets no frame carrying the result — the room is simply closed — so the
+    /// only route is <c>GET /matches/history</c>, and the row may not be written yet when
+    /// the socket closes. Three attempts at 0 / 6 / 15 s, then a terminal line pointing at
+    /// the History tab. Never a timer beyond that: the endpoint allows 20/min and 500/day
+    /// per IP, shared behind NAT or an active Radmin network.</para>
+    ///
+    /// <para>Skipped outright for a match that was never reportable anyway (solo, or under
+    /// three minutes) — there is no row to find, so asking for one three times would spend
+    /// somebody else's budget to learn nothing.</para>
+    /// </summary>
+    private async Task ResolveGuestResultAsync(Services.Multiplayer.MatchContext ctx)
+    {
+        var api = _session?.Api;
+        var myId = _session?.CurrentUser?.Id;
+        if (api == null || string.IsNullOrEmpty(myId)) return;
+        if (ctx.Participants.Count < 2
+            || ctx.DurationSeconds(DateTime.UtcNow) < MinReportableSeconds)
+        {
+            ShowResultUnavailable();
+            return;
+        }
+
+        foreach (var delayMs in new[] { 0, 6_000, 15_000 })
+        {
+            if (delayMs > 0) await Task.Delay(delayMs);
+            // The player may have closed the card, or started another match, while we
+            // waited — either way this answer is no longer about anything on screen.
+            if (_matchPhase != MatchPhase.Result) return;
+
+            try
+            {
+                var history = await api.GetHistoryAsync(myId);
+                var row = Services.Multiplayer.MatchHistoryMatcher.PickForMatch(
+                    history?.Matches, ctx.ModId, ctx.StartedAtUtc);
+                if (row == null) continue;
+
+                ShowMatchResult(new MatchOutcomeView(
+                    MatchOutcomeView.Classify(row.Result),
+                    row.ModId,
+                    row.MapName,
+                    row.DurationSeconds,
+                    row.PlayerCount,
+                    row.RatingBefore,
+                    row.RatingAfter,
+                    // The opponent's name is local: the roster we played with. Their rating
+                    // would be a second request per match, which this budget cannot pay.
+                    RivalLoginFrom(ctx, myId),
+                    null,
+                    _cachedStanding?.Wins ?? 0,
+                    _cachedStanding?.Losses ?? 0,
+                    _cachedStanding?.Rd));
+                return;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"ResolveGuestResultAsync: {ex.Message}");
+            }
+        }
+
+        ShowResultUnavailable();
+    }
+
+    /// <summary>The other player's login in a 1v1, or null past two players.</summary>
+    private string? RivalLoginFrom(Services.Multiplayer.MatchContext ctx, string myId)
+    {
+        if (ctx.Participants.Count != 2) return null;
+        foreach (var id in ctx.Participants)
+        {
+            if (string.Equals(id, myId, StringComparison.Ordinal)) continue;
+            return _roomMembers.TryGetValue(id, out var entry) ? entry.Login : null;
+        }
+        return null;
+    }
+
+    /// <summary>Paint the finished card into whichever host is available.</summary>
+    private void ShowMatchResult(MatchOutcomeView model)
+    {
+        var host = _lobbyWindow?.MatchResultHost;
+        if (host == null) return;
+        host.Children.Clear();
+        host.Children.Add(MatchResultCard.Build(model, new MatchResultCard.Actions(
+            // Rematch is not offered yet: it has to leave the closed room BEFORE creating
+            // the next one, or it collides with the backend's "one active lobby" guard,
+            // and getting that sequence wrong strands the player in neither room.
+            OnRematch: null,
+            OnDismiss: ExitResultPhase)));
+    }
+
+    /// <summary>
+    /// The terminal "we could not find it" state. Says where the result WILL appear rather
+    /// than leaving the card spinning, because the row does land eventually — the launcher
+    /// just cannot keep asking for it.
+    /// </summary>
+    private void ShowResultUnavailable()
+    {
+        var host = _lobbyWindow?.MatchResultHost;
+        if (host == null) return;
+        host.Children.Clear();
+        host.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("MpResultPendingTimeout"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
     }
 
     /// <summary>

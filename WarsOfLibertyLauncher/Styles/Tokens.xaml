@@ -216,6 +216,11 @@
     <!-- The room name in the lobby header: serif, the one display-type moment in
          this window. -->
     <sys:Double x:Key="MpRoomNameSize">16</sys:Double>
+    <!-- The end-of-match card's two display sizes: the verdict, and the new rating in
+         monospace beside it. Both are one-of-a-kind moments, which is why they sit above
+         the rest of the multiplayer scale rather than inside it. -->
+    <sys:Double x:Key="MpResultTitleSize">17</sys:Double>
+    <sys:Double x:Key="MpRatingSize">22</sys:Double>
     <sys:Double x:Key="MpFieldHeight">34</sys:Double>
     <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
     <sys:Double x:Key="MpControlHeight">30</sys:Double>

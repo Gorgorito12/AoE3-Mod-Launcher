@@ -3307,6 +3307,40 @@ public static class Strings
             [LangEn] = "Room open in {0} \u2014 code {1}. Looking for someone to play.",
             [LangEs] = "Sala abierta en {0} \u2014 c\u00F3digo {1}. Busco con qui\u00E9n jugar.",
         },
+        // End-of-match card (design handoff 1f).
+        ["MpResultWin"] = new() { [LangEn] = "Victory", [LangEs] = "Victoria" },
+        ["MpResultLoss"] = new() { [LangEn] = "Defeat", [LangEs] = "Derrota" },
+        // NOT "draw": 0.5 is what the backend stores when the outcome could not be read.
+        ["MpResultNone"] = new() { [LangEn] = "No result", [LangEs] = "Sin resultado" },
+        ["MpResultNoneBody"] = new()
+        {
+            [LangEn] = "The match was not recorded, so nobody can tell who won \u2014 it counted "
+                     + "towards no one's rating. Tick \u201CRecord Game\u201D on the AoE3 setup "
+                     + "screen before the next one.",
+            [LangEs] = "La partida no se grab\u00F3, as\u00ED que no hay forma de saber qui\u00E9n gan\u00F3 "
+                     + "\u2014 no cont\u00F3 para el ELO de nadie. Marca \u201CRecord Game\u201D en la "
+                     + "pantalla de configuraci\u00F3n de AoE3 antes de la siguiente.",
+        },
+        ["MpResultRatingBefore"] = new() { [LangEn] = "was {0}", [LangEs] = "antes {0}" },
+        ["MpResultMinutes"] = new() { [LangEn] = "{0} min", [LangEs] = "{0} min" },
+        ["MpResultPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
+        ["MpResultDecidedHeader"] = new() { [LangEn] = "DECIDED", [LangEs] = "DECIDIDAS" },
+        ["MpResultReplayHeader"] = new() { [LangEn] = "REPLAY", [LangEs] = "REPETICI\u00D3N" },
+        ["MpResultReplayNone"] = new() { [LangEn] = "not uploaded", [LangEs] = "no subida" },
+        ["MpResultRivalHeader"] = new() { [LangEn] = "OPPONENT", [LangEs] = "RIVAL" },
+        ["MpResultUnknownValue"] = new() { [LangEn] = "\u2014", [LangEs] = "\u2014" },
+        ["MpResultProvisional"] = new()
+        {
+            [LangEn] = "Your rating is still provisional \u2014 it settles after a few more decided matches.",
+            [LangEs] = "Tu rating sigue siendo provisional \u2014 se estabiliza tras unas cuantas partidas decididas m\u00E1s.",
+        },
+        ["MpResultRematch"] = new() { [LangEn] = "Rematch", [LangEs] = "Revancha" },
+        ["MpResultBackToRooms"] = new() { [LangEn] = "Back to rooms", [LangEs] = "Volver a salas" },
+        ["MpResultPendingTimeout"] = new()
+        {
+            [LangEn] = "The result has not come through yet \u2014 it will show up under History.",
+            [LangEs] = "El resultado todav\u00EDa no ha llegado \u2014 aparecer\u00E1 en Historial.",
+        },
         ["MpResultPending"] = new()
         {
             [LangEn] = "Working out the result…",

@@ -6,6 +6,7 @@ using System.Windows;
 using WarsOfLibertyLauncher;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
 
@@ -60,6 +61,53 @@ public class DialogXamlTests
             Assert.NotNull(window.StartButton);
             Assert.NotNull(window.MatchResultOverlay);
             window.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(0.0)]
+    [InlineData(0.5)]
+    public void MatchResultCard_BuildsForEveryVerdict(double result)
+    {
+        // The card is built in code, so nothing about it is checked at compile time: a
+        // resource key that does not resolve throws at BUILD time, and it is only built
+        // once a real match has finished. All three verdicts take different branches —
+        // the no-result one in particular reaches the footer's explanation, which no other
+        // path does.
+        var error = RunOnStaThread(() =>
+        {
+            var model = new MatchOutcomeView(
+                MatchOutcomeView.Classify(result),
+                "wol", "Texas", 1440, 2,
+                RatingBefore: 1524, RatingAfter: 1542,
+                RivalLogin: "someone", RivalRating: 1592,
+                Wins: 4, Losses: 1, Rd: 60);
+            var card = MatchResultCard.Build(
+                model, new MatchResultCard.Actions(OnRematch: null, OnDismiss: () => { }));
+            Assert.NotNull(card);
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void MatchResultCard_BuildsWithNothingKnown()
+    {
+        // The degraded shape an older backend produces: no ratings, no map, no player
+        // count, nothing decided. Every one of those is a branch that returns null or an
+        // em dash instead of a value, and together they are the case most likely to throw.
+        var error = RunOnStaThread(() =>
+        {
+            var model = new MatchOutcomeView(
+                MatchVerdict.NoResult, null, null, 0, 0,
+                RatingBefore: null, RatingAfter: null,
+                RivalLogin: null, RivalRating: null,
+                Wins: 0, Losses: 0, Rd: null);
+            Assert.NotNull(MatchResultCard.Build(
+                model, new MatchResultCard.Actions(null, null)));
         });
 
         Assert.Null(error);
