@@ -282,6 +282,7 @@
                             <RowDefinition Height="Auto"/>   <!-- PLAYERS header -->
                             <RowDefinition Height="*"/>      <!-- members list -->
                             <RowDefinition Height="Auto"/>   <!-- info card -->
+                            <RowDefinition Height="Auto"/>   <!-- record-game reminder -->
                             <RowDefinition Height="Auto"/>   <!-- actions -->
                         </Grid.RowDefinitions>
 
@@ -382,16 +383,92 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- ===== "Tick Record Game" band =====
+                             Age of Empires III does not record a game unless its
+                             own per-match checkbox is ticked, and a match with no
+                             recording has no result — so it never counts towards
+                             anyone's rating. Neither the profile setting the
+                             launcher writes nor a +RecordGame launch argument
+                             turns it on; both were measured and both failed. So
+                             the only thing left is telling the player, and telling
+                             them somewhere they cannot miss.
+
+                             It sits HERE, immediately above the Start button the
+                             host is about to press, rather than in the chat: the
+                             chat auto-scrolls and keeps 500 lines, so the line
+                             posted at launch is gone by the next message. It is
+                             also deliberately NOT inside RoomInfoCard, which
+                             collapses as a whole when the room has no mod name,
+                             password or copy — a notice parked in there would
+                             vanish silently for those rooms.
+
+                             Nothing animates this Border: its brushes come from
+                             DynamicResource and are therefore frozen, and
+                             animating one throws (that is what froze the countdown
+                             line once — see ApplyMatchPhaseUi).
+
+                             Filled by RenderRoomPanel, which also picks the host
+                             vs guest wording; InGameOverlay covers this column
+                             during a match, so it hides itself for free. -->
+                        <Border Grid.Row="3"
+                                x:Name="RecordReminderBand"
+                                Background="{DynamicResource MpWarnSubtle}"
+                                BorderBrush="{DynamicResource WarningBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusMd}"
+                                Padding="12,10"
+                                Margin="0,0,0,14"
+                                Visibility="Collapsed">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="⚠"
+                                               Foreground="{DynamicResource WarningBrush}"
+                                               FontSize="{StaticResource FontSizeBody}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock x:Name="RecordReminderTitle"
+                                               Text="So the match counts"
+                                               Foreground="{DynamicResource WarningBrush}"
+                                               FontSize="{StaticResource FontSizeCaption}"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="RecordReminderBody"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           TextWrapping="Wrap"/>
+                                <Button x:Name="RecordReminderDismiss"
+                                        Click="RecordReminderDismiss_Click"
+                                        Style="{StaticResource MpQuietButton}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
+
                         <!-- Stacked actions. Ready = positive
                              (green-outline), Start = primary blue
                              + bigger weight, Leave = dark red. -->
-                        <StackPanel Grid.Row="3">
+                        <StackPanel Grid.Row="4">
                             <Button x:Name="ReadyButton"
                                     Click="ReadyButton_Click"
                                     Style="{StaticResource MpReadyButton}"
                                     Margin="0,0,0,8"/>
                             <Button x:Name="StartButton"
                                     Click="StartButton_Click"
+                                    Style="{StaticResource MpPrimaryButton}"
+                                    Padding="14,12"
+                                    HorizontalContentAlignment="Center"
+                                    FontSize="{StaticResource FontSizeBody}"
+                                    Margin="0,0,0,8"
+                                    Visibility="Collapsed"/>
+                            <!-- Reopen AoE3 after it closed while the room kept playing.
+                                 Guests only: a host in that state ends the match for
+                                 everyone as they exit, so their own Start button is
+                                 already the correct way back (see RoomMatchState).
+                                 Shown by RefreshRejoinButton; hidden the rest of the
+                                 time, and covered by InGameOverlay while playing. -->
+                            <Button x:Name="RejoinGameButton"
+                                    Click="RejoinGameButton_Click"
                                     Style="{StaticResource MpPrimaryButton}"
                                     Padding="14,12"
                                     HorizontalContentAlignment="Center"

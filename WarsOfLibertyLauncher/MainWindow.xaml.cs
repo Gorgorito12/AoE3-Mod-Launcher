@@ -582,6 +582,9 @@ public partial class MainWindow : Window
             // After the hide, so the balloon anchors to a tray icon that's already
             // there — and so an auto-started launch explains itself on the spot.
             MaybeShowBackgroundSeedNotice();
+            // Owed from a previous session: recording is enabled during a launch, where there is
+            // no window to say so on, so the notice waits for the launcher to be on screen again.
+            MaybeShowGameRecordingNotice();
         };
 
         Loaded += async (_, _) =>
@@ -2067,6 +2070,13 @@ public partial class MainWindow : Window
                 // on the Task with a short timeout — the dialog runs
                 // on the UI thread anyway, this is effectively
                 // synchronous from the user's POV.
+                //
+                // This Wait is exactly why ConfirmCloseDuringMatchAsync still uses a MessageBox
+                // while the lobby's own leave confirmation moved to MpAlertOverlay: an awaited
+                // in-app overlay would need the UI thread this line is blocking, so it would
+                // freeze for ten seconds and then refuse to close. The lobby window cancels its
+                // close and re-closes instead, which is only possible because nothing is waiting
+                // on it.
                 var task = MultiplayerView.ConfirmCloseDuringMatchAsync();
                 task.Wait(TimeSpan.FromSeconds(10));
                 if (!task.IsCompleted || task.Result == false)
@@ -2741,6 +2751,45 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Background seed balloon failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Announce, exactly once, that the launcher switched Age of Empires III's game recording on.
+    /// Recording is enabled by default because a match with no recording has no result — but a
+    /// default that edits a file in the player's Documents folder must never be silent.
+    ///
+    /// <para><b>Why the flag is persisted rather than a field.</b> The write happens inside
+    /// <see cref="Services.GameLauncher"/> at the instant the player leaves for the game: there is
+    /// no window to put a message on, and a balloon raised then would land behind a full-screen
+    /// game. So the notice waits for the next moment the launcher is actually on screen, and has
+    /// to survive the launcher being closed in between.</para>
+    ///
+    /// <para><b>Returns without clearing the flag while the game is running</b> — the notice is
+    /// owed to the player either way, and clearing it here would spend it on a balloon nobody can
+    /// see. Bypasses the <c>ShowToastNotifications</c> gate like the other one-time onboarding
+    /// notices; this is not an operational toast.</para>
+    /// </summary>
+    private void MaybeShowGameRecordingNotice()
+    {
+        if (!_config.GameRecordingNoticePending) return;
+        if (_isGameRunning) return;
+
+        _config.GameRecordingNoticePending = false;
+        _config.GameRecordingNoticeShown = true;
+        try { _config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Game recording notice flag save failed: {ex.Message}"); }
+
+        try
+        {
+            TrayIcon.ShowBalloonTip(
+                WarsOfLibertyLauncher.Localization.Strings.Get("TrayGameRecordingTitle"),
+                WarsOfLibertyLauncher.Localization.Strings.Get("TrayGameRecordingBody"),
+                Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Game recording balloon failed: {ex.Message}");
         }
     }
 
@@ -10964,6 +11013,30 @@ public partial class MainWindow : Window
         {
             try { Services.GameSettingsStore.CaptureFrom(played, _config); }
             catch (Exception ex) { DiagnosticLog.Write($"Capturing shared settings failed: {ex.Message}"); }
+        }
+
+        // The launch that just ended is where recording got enabled, and there was nowhere to say
+        // so at the time. This is the first moment the launcher is back on screen.
+        MaybeShowGameRecordingNotice();
+
+        // Clean up after the recording we just caused. Off the UI thread because it enumerates a
+        // folder, and passing the launch time protects the recording of the game that just ended —
+        // multiplayer may still be reading it to work out who won.
+        if (played != null && _config.EnableGameRecording)
+        {
+            var purgeProfile = played;
+            var purgeFrom = launchedAtUtc == default ? DateTime.UtcNow : launchedAtUtc;
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var folder = Services.UserDataService.GetUserDataFolder(
+                        Services.UserDataService.ResolveFolderName(purgeProfile, _config));
+                    if (!string.IsNullOrEmpty(folder))
+                        Services.GameRecordingPurge.Run(folder!, purgeFrom);
+                }
+                catch (Exception ex) { DiagnosticLog.Write($"Recording cleanup failed: {ex.Message}"); }
+            });
         }
 
         // A game that dies seconds after launching didn't get played — it failed. Until

@@ -152,7 +152,20 @@ guards against silently re-enabling auto-start after the user turned it off), an
 sanitisation — the REJECTION cases are the point, see the `SafeUrl` gotcha), and
 `AppCompatLayerTests` (`AppCompatLayerService.Parse` — the `~` marker separating a layer
 Windows applied itself from one the user set deliberately, which is the only thing gating
-whether the launcher offers to remove it).
+whether the launcher offers to remove it), and three that guard writes the launcher makes
+into the player's own files: `GameRecordingPlanTests`
+(`GameSettingsStore.PlanGameRecording` — the sibling of `BackgroundStartupPlanTests` for
+game recording; `OptedOut_WritesFalseOnceAndNeverReArms` is its centrepiece, and
+`EveryModIsSeededSeparately_NotJustTheFirst` is the one a single launcher-wide marker would
+fail), `GameRecordingPurgeTests` (**the KEPT cases are the point** — a recording the player
+renamed is never deleted and never counts against the budget), and `MatchResultResolverTests`
+(who gets credited with winning a multiplayer match — `TheTwoScoresAlwaysSumToOne` is what
+the backend validates against), plus the two that guard the match lifecycle around a room that
+goes away underneath it: `MatchContextTests` (the facts of a match, captured at launch —
+`AClosedRoomCannotChangeTheAnswer` is the regression test for a real match that was never
+reported because the host closed the room mid-game) and `RoomMatchStateTests`
+(**`TheHostIsNeverOfferedIt`** — who may reopen their game without disturbing anyone, and what
+leaving the room mid-match has to warn about).
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -2607,6 +2620,25 @@ Two cheap gates beyond a green build:
   `MultiplayerTab.OnGameExitedAsync`. Every path is best-effort, and `Graft` returns **null**
   rather than a partial document: this runs moments before the game starts, and the worst outcome
   would be a profile the game can no longer read.
+  **The same file now also does SURGICAL single-setting writes — `ReadSetting` / `EnsureSetting`
+  — and one setting is deliberately excluded from the sharing.** `EnsureSetting` keeps `Graft`'s
+  contract exactly (**null when there is nothing to change**, so an already-correct profile is
+  never rewritten on the launch path) and **never fabricates a `GameSettings` or `Settings`
+  element**: a profile without that shape is not one we understand, and inventing structure risks
+  a file the game refuses to load. A missing `Setting` IS created, since that is an absent value
+  inside a shape we do recognise. `ReadSetting` exists because `EnsureSetting`'s null conflates
+  "already correct" with "unreadable", and a caller that records having applied something must not
+  confuse the two. Both look at **direct children only** — the same rule as `FindSection`, because
+  `optionsoundlevel` in `GameOptions` sits beside a `civ` in `RandomMapGameSettings`.
+  **The exclusion: `optionrecordgame` never travels between mods.** It lives inside `GameOptions`,
+  which the sync grafts wholesale, so without this a capture would carry it into the shared copy
+  and re-enable game recording over a player who had just turned it off — with the code that owns
+  that preference correctly concluding it had already applied what was asked, so nothing could
+  notice. `ExtractSections` strips it and **`Graft` carries the target's own value across**:
+  omitting it alone would DELETE the setting, since a graft replaces the entire section. It cuts
+  both ways on purpose — a mod where recording was switched off in-game must not export that over
+  one where it is wanted. Recording is a launcher preference, not a setting the player asked to
+  share; the rest of its story lives in `.claude/rules/multiplayer.md`.
 
 - **WHICH `My Games` folder belongs to a mod is resolved by
   `UserDataService.ResolveFolderName(profile, config)` — the single source of truth.

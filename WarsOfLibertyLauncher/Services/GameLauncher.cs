@@ -282,6 +282,28 @@ public static class GameLauncher
         {
             DiagnosticLog.Write($"ApplyLaunchRedirects (shared settings) failed: {ex.Message}");
         }
+
+        // Make sure Age of Empires III records the game. It ships with recording OFF, and the
+        // recording is the only place a match result is written — so without this every
+        // multiplayer game is stored as "nobody knows who won" and no rating ever moves.
+        //
+        // Must stay AFTER the shared-settings graft above, for a reason a green build will never
+        // show: `optionrecordgame` lives inside the GameOptions section, which that graft replaces
+        // wholesale. Writing first would simply have the graft overwrite it moments later. (The
+        // graft carries the setting across rather than dropping it, so the two no longer fight —
+        // but the ordering is what makes that hold at launch time.) It also has to come after the
+        // My Games junction, for the same reason the graft does.
+        //
+        // At most one write per mod per change of preference; best-effort, and a launch must never
+        // fail over it.
+        try
+        {
+            GameSettingsStore.EnsureGameRecording(profile, config);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ApplyLaunchRedirects (game recording) failed: {ex.Message}");
+        }
     }
 
     /// <summary>

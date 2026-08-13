@@ -100,19 +100,30 @@ public class ReplayMatchSelectionTests
     public void RejectsANullHeader()
         => Assert.False(ReplayParserService.LooksLikeThisMatch(null, "Gorgorito", 2));
 
+    /// <summary>
+    /// A head count of zero means the room's roster was lost, which is the moment there is LEAST
+    /// to go on — so it confirms nothing, exactly like a blank host name.
+    ///
+    /// <para>This assertion used to run the other way: zero skipped the check and a recording
+    /// naming the host was accepted on two checks instead of three. The caller announces the
+    /// recording through its own path when it only wants to name the file, so failing here costs
+    /// nothing but a result nobody could stand behind.</para>
+    /// </summary>
     [Fact]
-    public void AHumanCountOfZeroSkipsThatCheck()
+    public void AHumanCountOfZeroConfirmsNothing()
     {
-        // The caller passes 0 when it doesn't know how many were in the room; the host
-        // check still has to hold.
-        Assert.True(ReplayParserService.LooksLikeThisMatch(Ours, "Gorgorito", 0));
+        Assert.False(ReplayParserService.LooksLikeThisMatch(Ours, "Gorgorito", 0));
         Assert.False(ReplayParserService.LooksLikeThisMatch(SomeoneElses, "Gorgorito", 0));
+        Assert.False(ReplayParserService.LooksLikeThisMatch(Ours, "Gorgorito", -1));
     }
 
     // ---------------- the walk over candidates ----------------
 
+    private static ReplayUploadService.CandidateVerdict Verdict(bool ours) =>
+        ours ? ReplayUploadService.CandidateVerdict.Match : ReplayUploadService.CandidateVerdict.NotOurs;
+
     [Fact]
-    public void WalksPastANewerRecordingThatIsNotOurs()
+    public void WalksPastANewerRecordingThatIsNotVerdict()
     {
         // Exactly the disk that prompted this: a downloaded replay copied in after the
         // match started, sitting newer than the real one.
@@ -122,22 +133,22 @@ public class ReplayMatchSelectionTests
 
         var picked = ReplayUploadService.FindMatchReplay(
             dir.Path, DateTime.UtcNow.AddMinutes(-10),
-            f => f.Name == Path.GetFileName(mine));
+            f => Verdict(f.Name == Path.GetFileName(mine)));
 
-        Assert.NotNull(picked);
-        Assert.Equal(Path.GetFileName(mine), picked!.Name);
-        Assert.NotEqual(Path.GetFileName(theirs), picked.Name);
+        Assert.NotNull(picked.File);
+        Assert.Equal(Path.GetFileName(mine), picked.File!.Name);
+        Assert.NotEqual(Path.GetFileName(theirs), picked.File.Name);
     }
 
     [Fact]
-    public void ReturnsNullWhenNoCandidateIsOurs()
+    public void ReturnsNullWhenNoCandidateIsVerdict()
     {
         // Better no result than a stranger's. The caller reports a draw.
         using var dir = new TempDir();
         dir.Write("someone else.age3Yrec", DateTime.UtcNow);
 
         Assert.Null(ReplayUploadService.FindMatchReplay(
-            dir.Path, DateTime.UtcNow.AddMinutes(-10), _ => false));
+            dir.Path, DateTime.UtcNow.AddMinutes(-10), _ => Verdict(false)).File);
     }
 
     [Fact]
@@ -147,7 +158,7 @@ public class ReplayMatchSelectionTests
         dir.Write("old.age3Yrec", DateTime.UtcNow.AddHours(-3));
 
         Assert.Null(ReplayUploadService.FindMatchReplay(
-            dir.Path, DateTime.UtcNow.AddMinutes(-10), _ => true));
+            dir.Path, DateTime.UtcNow.AddMinutes(-10), _ => Verdict(true)).File);
     }
 
     [Fact]
@@ -162,9 +173,9 @@ public class ReplayMatchSelectionTests
             dir.Path, DateTime.UtcNow.AddMinutes(-10),
             f => f.Name == "locked.age3Yrec"
                 ? throw new IOException("in use")
-                : f.Name == Path.GetFileName(mine));
+                : Verdict(f.Name == Path.GetFileName(mine)));
 
-        Assert.Equal(Path.GetFileName(mine), picked?.Name);
+        Assert.Equal(Path.GetFileName(mine), picked.File?.Name);
     }
 
     [Fact]
@@ -179,16 +190,87 @@ public class ReplayMatchSelectionTests
 
         var examined = 0;
         ReplayUploadService.FindMatchReplay(
-            dir.Path, now.AddMinutes(-10), _ => { examined++; return false; });
+            dir.Path, now.AddMinutes(-10), _ => { examined++; return Verdict(false); });
 
         Assert.Equal(ReplayUploadService.MaxCandidatesExamined, examined);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the retry. The search runs the instant the game process dies, so
+    /// the recording we want is often still being flushed. Unreadable files used to consume the
+    /// budget of five, which meant a handful of them could hide the real recording behind a
+    /// quota that had already been spent on nothing — and the match went down as a draw.
+    /// </summary>
+    [Fact]
+    public void AnUnreadableCandidateDoesNotConsumeTheBudget()
+    {
+        using var dir = new TempDir();
+        var now = DateTime.UtcNow;
+        for (var i = 0; i < ReplayUploadService.MaxCandidatesExamined; i++)
+            dir.Write($"flushing{i}.age3Yrec", now.AddSeconds(-i));
+        var mine = dir.Write("mine.age3Yrec", now.AddMinutes(-1));
+
+        var picked = ReplayUploadService.FindMatchReplay(
+            dir.Path, now.AddMinutes(-10),
+            f => f.Name.StartsWith("flushing", StringComparison.Ordinal)
+                ? ReplayUploadService.CandidateVerdict.Unreadable
+                : Verdict(f.Name == Path.GetFileName(mine)));
+
+        Assert.Equal(Path.GetFileName(mine), picked.File?.Name);
+        Assert.Equal(ReplayUploadService.MaxCandidatesExamined, picked.Unreadable);
+    }
+
+    /// <summary>A folder full of unreadable files still has to stop somewhere.</summary>
+    [Fact]
+    public void StopsAtTheHardCeilingWhenNothingIsReadable()
+    {
+        using var dir = new TempDir();
+        var now = DateTime.UtcNow;
+        for (var i = 0; i < ReplayUploadService.MaxCandidatesOpened + 5; i++)
+            dir.Write($"r{i}.age3Yrec", now.AddSeconds(-i));
+
+        var opened = 0;
+        var search = ReplayUploadService.FindMatchReplay(
+            dir.Path, now.AddMinutes(-10),
+            _ => { opened++; return ReplayUploadService.CandidateVerdict.Unreadable; });
+
+        Assert.Null(search.File);
+        Assert.Equal(ReplayUploadService.MaxCandidatesOpened, opened);
+    }
+
+    /// <summary>
+    /// Retry only buys something when a file could not be READ. One that parsed cleanly and
+    /// belongs to another game will parse identically in three seconds, so waiting on it is pure
+    /// delay between the game closing and the match being reported.
+    /// </summary>
+    [Fact]
+    public void ShouldRetry_OnlyWhenSomethingWasUnreadable()
+    {
+        var unreadable = new ReplayUploadService.ReplaySearch(null, Parsed: 2, Unreadable: 1);
+        var justNotOurs = new ReplayUploadService.ReplaySearch(null, Parsed: 3, Unreadable: 0);
+
+        Assert.True(ReplayUploadService.ShouldRetry(unreadable, attempt: 0, maxAttempts: 4));
+        Assert.False(ReplayUploadService.ShouldRetry(justNotOurs, attempt: 0, maxAttempts: 4));
+    }
+
+    [Fact]
+    public void ShouldRetry_StopsOnceFoundOrOutOfAttempts()
+    {
+        using var dir = new TempDir();
+        var found = new ReplayUploadService.ReplaySearch(
+            new FileInfo(dir.Write("x.age3Yrec", DateTime.UtcNow)), Parsed: 1, Unreadable: 3);
+        var stillUnreadable = new ReplayUploadService.ReplaySearch(null, Parsed: 0, Unreadable: 2);
+
+        Assert.False(ReplayUploadService.ShouldRetry(found, attempt: 0, maxAttempts: 4));
+        Assert.False(ReplayUploadService.ShouldRetry(stillUnreadable, attempt: 3, maxAttempts: 4));
+        Assert.True(ReplayUploadService.ShouldRetry(stillUnreadable, attempt: 2, maxAttempts: 4));
     }
 
     [Fact]
     public void MissingFolderIsNullNotAThrow()
         => Assert.Null(ReplayUploadService.FindMatchReplay(
             Path.Combine(Path.GetTempPath(), "no-such-" + Guid.NewGuid()),
-            DateTime.UtcNow.AddMinutes(-10), _ => true));
+            DateTime.UtcNow.AddMinutes(-10), _ => Verdict(true)).File);
 
     private sealed class TempDir : IDisposable
     {

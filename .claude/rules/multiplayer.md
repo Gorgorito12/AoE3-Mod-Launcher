@@ -229,6 +229,132 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   273-byte fixed header + raw DEFLATE, not `l33t` + zlib. Everything above came from
   reading real files.
 
+  **THE GAME DOES NOT RECORD BY DEFAULT, and that — not the identity gap — is why almost
+  every stored match is a 0.5.** Measured, not assumed: `optionrecordgame` was `false` in
+  ALL FIVE installed mods' profiles on the maintainer's machine, and had never once been
+  `true`. Without a recording there is nothing to read and the match silently becomes "no
+  result", so this outranks everything else in this section. The setting lives in
+  `<GameSettings Name="GameOptions">` → `<Settings Version="53">` →
+  `<Setting Name="optionrecordgame">`, as lowercase `true`/`false` plain text with **no type
+  attribute** (the typed value table belongs to the `.age3Yrec` container, not to profile
+  XML — don't carry it over). Read from a real profile; do not guess it.
+
+  **The launcher enables it once per mod, and the whole design is about not doing it
+  twice.** `GameSettingsStore.PlanGameRecording` (pure, `GameRecordingPlanTests`) keys off
+  the **per-mod** `ModState.GameRecordingApplied` (`bool?`) against the launcher-wide
+  `LauncherConfig.EnableGameRecording` (default true). Three rules, each load-bearing:
+  (1) **per-mod, because the profile is** — five mods means five separate files, so the
+  single launcher-wide "seeded" marker that would mirror `BackgroundDefaultSeeded` seeds
+  whichever mod is launched first and silently skips the other four; (2) `applied == wants`
+  ⇒ do nothing, **even when the game has changed the setting since** — AoE3 rewrites the
+  whole profile on exit, so writing every launch would permanently override a player who
+  turned recording off inside the game; (3) the marker is set **only after the profile was
+  actually reached**, which deliberately INVERTS the `BackgroundDefaultSeeded` precedent — a
+  Run-key failure is a machine policy that will fail identically forever, but a missing
+  `Users3\` is a legitimate *not yet* (the game creates it on first run) and marking it done
+  would mean that mod never records at all. Opting out writes `false` once per mod, then
+  stops. Hooked as the **last** step of `GameLauncher.ApplyLaunchRedirects`.
+
+  **That hook must stay after the `ApplyTo` graft, and `optionrecordgame` must stay out of
+  the shared copy — two halves of the same trap.** `GameSettingsSync.SharedSections`
+  includes `GameOptions`, which the sync grafts **wholesale**, and the recording setting
+  lives inside it. So (a) writing before the graft has the graft overwrite it moments later,
+  and (b) `CaptureFrom` would carry `true` into `shared-profile.xml`, and after an opt-out
+  the next launch of any sync-group mod would graft it straight back — with the planner
+  correctly concluding it had already applied what the player asked for, so **nothing could
+  ever notice the opt-out undoing itself.** `ExtractSections` therefore strips it, and
+  `Graft` **carries the target profile's own value across** rather than merely omitting it:
+  omitting alone would DELETE the setting, since a graft replaces the whole section. Both
+  directions are pinned (`ExtractSections_LeavesGameRecordingBehind`,
+  `Graft_NeverOverwritesGameRecording`).
+
+  **MEASURED: writing the profile does NOT make multiplayer record. AoE3's per-match "Record
+  Game" box is an independent control.** The box lives on the game's own setup screen
+  (`mpsetup-recordCheckButton` in `data/uiMPGameSetupPage.xml`; single-player
+  `SPS-CheckRecordGame`), and it came up **unchecked with `optionrecordgame=true` already on
+  disk before the game started** — the precondition that matters, and one that took two
+  attempts to establish, because AoE3 only writes the profile when it EXITS: the first test
+  looked conclusive but had the setting reaching disk five seconds after the screenshot. So
+  the box has to be ticked by hand, per match, and the profile write alone does not fix
+  multiplayer. **Second thing that test settled, in the other direction: the game PRESERVES
+  our written value** across a launch/exit cycle, so the launcher's write is stable and is not
+  fought.
+
+  **So the host is reminded before every launch, and only an explicit
+  `LauncherConfig.GameRecordingReminderMuted` stops it.** It was first gated on "a recording
+  was read, so it must be working" — and that is exactly what the measurement above kills: if
+  the box resets each match, that rule goes quiet after the first success and lets every match
+  afterwards go unrecorded in silence, the reminder vanishing precisely when it is needed.
+  **Never re-derive that gate from a match that happened to record**; one success says nothing
+  about the next. Host only (his recording is the one whose result is read), a chat line rather
+  than a toast (the lobby window is on screen at that instant and the game is about to take
+  over), and the string itself names where to switch it off, since a chat line cannot carry a
+  button. Paired with it, `MaybeReportMissingRecording` reads the profile BACK after a match
+  that should have been recorded and names the actual cause: still `true` ⇒ the per-match box,
+  `false` ⇒ the game overwrote us on exit. Toast first, chat second — a successful report
+  closes the room and tears the lobby window down, so a chat line can vanish milliseconds
+  after it is written.
+
+  **There is NO way to enable it automatically. Both candidates were tested and both failed —
+  don't re-derive them.** (1) The profile's `optionrecordgame`, above. (2) **`+RecordGame` as a
+  launch argument: tested twice and dead.** It was the strong candidate — `RecordGame` is a
+  registered engine config (no-help-text block, beside `BroadenMPSearchOption`) and this
+  launcher already proves `+` cvars work, since it injects
+  `+noIntroCinematics +disableESOProfile +dontDetectNAT` on every multiplayer launch. Launching
+  `age3y.exe +noIntroCinematics +RecordGame` left the multiplayer setup box unchecked; and
+  because an unchecked box does not prove the config was ignored — the engine could plausibly
+  read the config at match start while the checkbox tracks separate UI state — a **LAN game was
+  hosted and played through with that argument and no box ticked, and no recording was
+  written**. That second run is the one that settles it: the argument has no effect on
+  recording at all. **Test the multiplayer path, not a skirmish** — the two setup screens carry
+  DIFFERENT controls (`mpsetup-recordCheckButton` vs `SPS-CheckRecordGame`), so a skirmish
+  result would not have generalised. A LAN game can be hosted and started solo by filling the
+  other slot with an AI, so this needs no second player. `Startup\user.cfg` was never tried and
+  is not worth it: it needs elevation (the install lives in Program Files), it is per mod copy,
+  and it breaks byte-faithfulness. **Mind the two argument mechanisms** if you ever revisit
+  this — they already cost two flip-flops with `OverrideAddress`: `+name` is a console cvar,
+  `Name="value"` is a config assignment, and they are not interchangeable.
+
+  So the per-match box is ticked by hand or the match has no result. That is why the reminder
+  fires every launch rather than once — and why it is not only a chat line.
+
+  **The primary surface is a standing band in the lobby's left column, `RecordReminderBand`,
+  sitting immediately above the Start button.** Three placement facts are load-bearing.
+  (a) **Not in the chat**: the chat auto-scrolls and keeps 500 rows, so the line posted at launch
+  is gone by the next message — which is exactly how a competitive match gets played unrecorded.
+  (b) **Not inside `RoomInfoCard`**: that card collapses as a whole when the room has no mod name,
+  no password and no extra copy (`RenderRoomPanel` ~:2634), so a notice parked in it would vanish
+  silently for those rooms. (c) It is `Grid.Column="0"`, which `InGameOverlay` covers during a
+  match, so it hides itself for the match with no code at all — visible in Lobby and during the
+  countdown, which is the correct lifetime.
+  **Everyone sees it, worded differently** (`MpRecordBandHost` / `MpRecordBandGuest`): only the
+  host can tick the box, but if he forgets, his opponent loses the result too, and hosts rotate.
+  The wording picks itself in `RenderRoomPanel` beside the `RenameRoomButton` host gate, so a
+  **host migration re-words it for free** — put it anywhere else and it goes stale. Static title
+  and dismiss caption live in `ApplyLobbyStaticLabels` so a mid-room language switch catches them.
+  **Nothing on that Border may be animated**: its brushes come from `DynamicResource` and are
+  frozen, and animating one throws — the trap that froze the countdown line once.
+  The chat line survives alongside it, promoted to `ChatSeverity.Warning` (both non-Info branches
+  in `AppendChatRow` had been dead code): the band is ambient, the line is the nudge at the moment
+  you leave for the game.
+  **Verifying the lobby XAML needs more than the usual smoke test** — it only opens `MainWindow`,
+  and this window's XAML is not parsed until someone signs in and enters a room, so a bad
+  `{StaticResource}` here would ship unseen. Construct `LobbyWindow` on an STA thread with the
+  `Styles/*.xaml` dictionaries loaded by explicit `pack://` URIs (App.xaml's own `Source` values
+  are relative and resolve against the entry assembly).
+
+  **Recording costs ~1.4 MB a game forever, so `GameRecordingPurge` cleans up — but only
+  after files the GAME named.** Measured on real recordings: 765 KB – 2.1 MB.
+  `IsAutoNamed` matches `^Record Game \d+$` exactly (the game's own
+  `cStringRecordGameFileName` + a number); a **renamed** recording is never deleted and never
+  counts against the `KeepNewest` budget either, because renaming one is the player saying
+  they care. Nothing newer than the launch time is touched, so the match still being read
+  can't be swept up by its own cleanup. Top level of `Savegame\` only — deliberately unlike
+  the recursive search used to FIND a recording, since looking further is harmless and
+  deleting further is not. Note the auto-name comes from a string table, so a localized
+  install may write something else and the purge simply does nothing there: the safe
+  direction.
+
   **The identity gap is the blocker for scoring, not the parsing.** The replay names
   players by their *AoE3 profile name* (`'69metal69'`); the backend needs the Discord
   `users.id`. Nothing links them. Only the host's own name is knowable, and it comes from
@@ -267,12 +393,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
 - **The result is read BEFORE the match is reported, and that order is load-bearing.**
   `OnGameExitedAsync` runs `AnalyseMatchReplayAsync` first, then hands its
-  `MatchReplayInfo?` to `TryReportMatchAsync`. Two reasons, both real: the report clears
-  `_matchParticipantSnapshot` in its `finally`, and the analysis needs that head count to
-  tell our recording from a downloaded one. The old order (report first) existed to stop
-  a missing user-data folder from skipping the report via an early `return`; that `return`
-  is gone — the analysis returns null instead, and null reports the same all-draws it
-  always did.
+  `MatchReplayInfo?` to `TryReportMatchAsync`: the analysis needs the room's head count to
+  tell our recording from a downloaded one, and the report is what consumes the result. The
+  old order (report first) existed to stop a missing user-data folder from skipping the
+  report via an early `return`; that `return` is gone — the analysis returns null instead,
+  and null reports the same all-draws it always did.
+
+  **`_matchContext` is cleared in `OnGameExitedAsync`'s `finally`, NOT in the
+  report's.** It used to live in `TryReportMatchAsync`'s `finally`, which sits *below* that
+  method's early-return guards — so on a **joiner**, who leaves at the very first of
+  them (not the host), the snapshot was never cleared at all and survived into
+  the next match. Same for a host whose game was too short or had too few players. It
+  belongs to the MATCH, and `OnGameExitedAsync` is the end of the match on every
+  client, host or not. Don't move it back. That `finally` carries **two** guards —
+  `ReferenceEquals` (a whole new match may have started during the recording retries) and
+  `GameRestartedSince()` (a REOPENED game deliberately keeps the same instance, so the
+  reference matches and clearing would still be wrong).
 
   **The host's slot comes from the trailer, not from a second name match.**
   `LooksLikeThisMatch` only accepts a recording when `recorderSlot == host.Slot`, so after
@@ -280,12 +416,37 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `HostResultFrom` returns null, which is consistent because a missing trailer is
   Ambiguous anyway.
 
-  **`ResolveHostResult` is where the recording's verdict meets the room**, and it refuses
-  unless the room had exactly 2 participants and the host is among them — with three or
-  more, "the host scored X" leaves everyone else's score a guess. **The decision itself is
-  the pure `ReplayParserService.HostResultFrom`** (`MultiplayerTab` is WPF and untestable,
-  and this is the one line where a mistake silently moves rating points between two real
-  people). Every refusal logs its reason.
+  **`Services/Multiplayer/MatchResultResolver` is where the recording's verdict meets the
+  room**, and it refuses unless the room had exactly 2 participants and the host is among
+  them — with three or more, "the host scored X" leaves everyone else's score a guess. It
+  was a private, untested method on `MultiplayerTab`; it is now a pure sibling of
+  `PlayerStanding` taking a plain `double?` so nothing WPF crosses the boundary, because
+  this is the one line where a mistake silently moves rating points between two real
+  people. It returns a `HostResultDecision(Result, Reason)` rather than logging — the
+  caller logs the reason, so "it refused" and "it refused for the right cause" are separate,
+  testable claims. `ParticipantResult(hostResult, isHost)` owns the `1.0 - x` mirror, pinned
+  by `TheTwoScoresAlwaysSumToOne` — which is exactly the `sum == N/2` the backend validates.
+  The per-recording decision upstream is still the pure `ReplayParserService.HostResultFrom`.
+
+  **`LooksLikeThisMatch` fails CLOSED on an unknown head count.** `expectedHumans <= 0` now
+  rejects; it used to *skip* the check, quietly reducing three gates to two at the moment
+  there was least to go on. Paired with that, `AnalyseMatchReplayAsync` has an explicit
+  announce-only branch for an empty roster — mirroring its no-in-game-name one — so the
+  `MpChatReplaySaved` chat line naming the file doesn't disappear as a side effect.
+  (`ReplayMatchSelectionTests.AHumanCountOfZeroConfirmsNothing` is the inverted test; it
+  used to assert the opposite.)
+
+  **The search RETRIES, and only for the one reason worth waiting on.** It runs the instant
+  the game process dies, so the recording is often still being flushed: it fails to parse
+  and the match silently becomes a draw. Two coupled fixes — `FindMatchReplay` now returns
+  `ReplaySearch(File, Parsed, Unreadable)` and its callback a
+  `CandidateVerdict{Match,NotOurs,Unreadable}`, so `MaxCandidatesExamined` (5) counts files
+  that actually PARSED rather than files opened (a few half-written ones used to spend the
+  whole budget and hide the real recording behind it), bounded by `MaxCandidatesOpened` (12)
+  so a folder of junk can't spin. And `ShouldRetry` only fires when something was
+  **unreadable** — one that parsed cleanly and belongs to another game will parse identically
+  in three seconds. Delays `0/1000/2500/5000 ms`, so a match with no recording at all still
+  reports at once and the worst case is ~8.5 s on the path that is wrong today.
 
   **Runs on a background thread** (`Task.Run`): each candidate costs an inflate of a
   multi-megabyte file and this fires the instant the game closes, with the player looking
@@ -330,13 +491,14 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `MultiplayerTab.TryReportMatchAsync` (invoked from `OnGameExitedAsync`, AFTER
   `AnalyseMatchReplayAsync` — see the result-wiring bullet below) posts the
   finished match. **Load-bearing rules:**
-  (1) **host-only** (`if (!_isHostInCurrentRoom) return;`) — `OnGameExitedAsync`
+  (1) **host-only** (now `ctx.IsHost`, decided when the match STARTED — see the
+  `MatchContext` bullet below) — `OnGameExitedAsync`
   fires on EVERY player's client and the backend inserts a `match_participants`
   row for each participant (so every player's own `GET /matches/history/:userId`
   returns it), so a single host report fills everyone's history; without the gate
   you get N duplicate matches. (2) The participant list is a SNAPSHOT taken at
-  match START (`_matchParticipantSnapshot`, filled in `EnterInGamePhase` from
-  `_roomMembers.Keys`, cleared on leave), NOT the roster at exit — the honest
+  match START (`MatchContext.Participants`, captured in `EnterInGamePhase` from
+  `_roomMembers.Keys`), NOT the roster at exit — the honest
   "who was in the room when we launched" (AoE3 never tells the launcher who
   actually entered the LAN game). (3) It uses the **`lobby_id`-present** branch of
   `POST /matches`, which the backend host-validates AND **closes the room**
@@ -359,15 +521,23 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   hidden). **Resource cost is negligible** (1 POST per match, 1 GET per tab open,
   <1 MB per 1000 matches — no sockets/timers), which was the user's concern.
   **Known limitations:** a host crash = no report (match lost from all histories);
-  lobby membership ≠ guaranteed in-game; no map/civs. Server change lives in the
+  lobby membership ≠ guaranteed in-game; no map/civs. (A host who merely CLOSES the
+  room mid-match is no longer one of these — that used to lose the match and is what
+  `MatchContext` fixed.) Server change lives in the
   sibling repo `wol-launcher-lobby-node` (`src/matches/rest.ts`) and needs a
   redeploy (`git pull` + `systemctl restart wol-lobby`) for `player_count`.
   **Observability (load-bearing for diagnosis):** `TryReportMatchAsync` LOGS the
   reason for every skip (`not host` / `< 2 participants` / `< 3 min` / missing
   lobby+mod) and, on a real attempt, surfaces the outcome VISIBLY —
-  `AppendChatSystem` "Match recorded" on success (`MpChatMatchRecorded`) and, on
+  "Match recorded" on success (`MpChatMatchRecorded`) and, on
   failure, the HTTP status + code (`MpChatMatchNotRecorded`, e.g. `HTTP 404 ·
-  http_error`). This exists because a match that didn't record used to look
+  http_error`). **Both go through `AnnounceMatchOutcome`, NOT `AppendChatSystem`
+  directly, and that is load-bearing:** `AppendChatRow` returns in silence when
+  `_lobbyWindow == null`, and a SUCCESSFUL report closes the room, which tears the
+  lobby window down — so the success line was being written to a window that had
+  just disappeared. The helper falls back to a toast when there is no window (same
+  lesson `MaybeReportMissingRecording` already encodes one method further down).
+  This exists because a match that didn't record used to look
   identical (silent) whether it was skipped or failed — "nothing happened" was
   undiagnosable (the recurring confusion: creating a room records nothing, because
   the report only fires from `OnGameExitedAsync` when the GAME process exits, not
@@ -376,9 +546,101 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   DISPLAY half is verifiable SOLO with no code — `GET /matches/history/:userId`
   has no ≥2 check (that lives only in POST), so seeding one `matches` +
   `match_participants` row with your own `users.id` renders the row; the REPORT
-  half needs 2 real Discord users + a >3 min game. `_matchParticipantSnapshot`
+  half needs 2 real Discord users + a >3 min game. `MatchContext.Participants`
   keys are backend `users.id` (the room_state member dict is keyed by the JWT
   `sub`), so the `match_participants` FK is satisfied.
+
+- **The facts of a match are CAPTURED at launch and CONSUMED at exit —
+  `Services/Multiplayer/MatchContext.cs`. Nothing on the post-match path may ask the
+  ROOM what just happened.** The incident: geaf hosted, closed the room while the
+  game was still running, and the match never reached anyone's history. One action,
+  two independent consequences, all in the same log second —
+  `SyncRoomSocketSubscription` (socket → null) cleared the roster, **killed the game**
+  and set `_isHostInCurrentRoom = false`, and the `OnGameExited` that its own kill
+  triggered then arrived to find the state gone and logged
+  `skipped — not host of this room`. (The other consequence, a recording with no
+  outcome trailer because the process was killed, is CORRECT and not fixable — a
+  match cut short has no winner.) So `_matchParticipantSnapshot` and
+  `_matchStartedAtUtc` were **deleted** (not kept alongside — two lifetimes, one of
+  which a teardown clears, is the bug) in favour of one immutable `_matchContext`
+  captured in `EnterInGamePhase` and read by `OnGameExitedAsync` /
+  `AnalyseMatchReplayAsync` / `TryReportMatchAsync` / `MaybeReportMissingRecording`.
+  Same shape as `MainWindow._settingsSyncProfile` ("the profile captured AT LAUNCH").
+  **The property that matters is negative: `CanReport` has no parameter and no field
+  through which live room state can enter** — pinned by
+  `MatchContextTests.AClosedRoomCannotChangeTheAnswer`. Four things stay LIVE on
+  purpose and carry comments: the `game_ended` send (it operates on a live room),
+  `_session.Api` and `_computeModFingerprint` (dependencies of the POST, not facts of
+  the match), and every other `_isHostInCurrentRoom` read, which is UI.
+  **The guard this INTRODUCED:** with the context surviving a teardown, a host who
+  lost the socket would now report — and so would the player the room promoted, so
+  `HandleHostChanged` calls `WithHostLost()`. **One way only**: losing the role
+  silences us, gaining it does NOT arm us (the old host may be disconnected and never
+  receive the frame that would have silenced them). A false negative costs one history
+  row; a false positive corrupts two people's rating, and `ReportMatchRequest` has no
+  idempotency key for the backend to catch it with. For the same reason there is
+  **no retry without `lobby_id`** on a 404: that branch only checks you are among the
+  participants, so it would downgrade a host-validated report to an unvalidated one on
+  the strength of an HTTP code.
+
+- **A player whose AoE3 closes while the ROOM keeps playing gets "Abrir el juego" —
+  and it is GUESTS ONLY, by protocol, not by taste.** Reported: close the game
+  mid-match and you are stuck — `ExitInGamePhase` drops you to the Lobby phase where
+  `StartButton` is host-only, so a guest had nothing to press, and leaving the room to
+  re-join is refused by the backend with `Conflict('Lobby already in game.')`
+  (`rest.ts`) until the match ends. `RejoinGameButton` (LobbyWindow row 4, between
+  Start and Leave) calls `RejoinGame` → `LaunchActiveModGame()` +
+  `EnterInGamePhase(process, resume: true)` — **exactly what the countdown does when
+  it expires, and no frame is sent to the server**: the room is already `in_game`
+  there, and the launch args carry the player's OWN Radmin address, so AoE3 finds the
+  host's LAN game over the VPN unchanged. Nobody else can tell.
+  **Never the host**, because when the host's game exits the launcher sends
+  `game_ended`, the room reverts to `open` and everyone must relaunch — which is what
+  their own Start button does; they only get a caption change to "Volver a abrir el
+  juego" while `_roomMatchLive` (via `StartButtonCaption()`, read by BOTH writers of
+  that button or they drift). The rule is the pure
+  `Services/Multiplayer/RoomMatchState.ShouldOfferRejoin`, pinned by
+  `RoomMatchStateTests`. **Three load-bearing details:**
+  (1) **`_roomMatchLive` is a THIRD lifetime**, distinct from `_matchPhase` ("am I
+  playing") and `_matchContext` ("the match I will report"): set in `StartCountdown`
+  (the one point every member passes, including one whose launch fails), cleared by
+  `game_cancelled`, by the socket teardown, and by the host's own successful
+  `SendGameEndedAsync` — the server excludes the sender from that broadcast, so
+  nobody else will tell them.
+  (2) **`resume: true` must NOT re-stamp `_matchTimerStartTicks` /
+  `MatchContext.StartedAtUtc` / `_matchBaselineBytes`.** `WithinAbortWindow` is
+  "InGame and < 60 s since the tick stamp", so re-stamping would REOPEN the
+  abort window twenty minutes in and the overlay button would go back to reading
+  "Abort match" — which cuts the match for everyone — plus MATCH TIME would reset to
+  00:00 and the reporter would measure the duration from the relaunch.
+  (3) **`GameRestartedSince()`** (`_matchPhase == InGame`) guards the two things the
+  PREVIOUS game's exit handler does after its awaits (the recording retries take up to
+  ~8.5 s): sending `game_ended`, which would make the server broadcast
+  `game_cancelled` to everyone EXCEPT us and kill the AoE3 the others had just
+  reopened; and clearing `_matchContext`, which a resume deliberately keeps (so the
+  `ReferenceEquals` guard alone is not enough — both are needed).
+
+- **Leaving a room mid-match now CONFIRMS, and the guard lives in
+  `LobbyWindow.OnClosing`, not `Closed`.** Leaving used to be the only destructive
+  multiplayer action with no confirmation at all — it kills every player's AoE3 in
+  silence, which is the root cause of the incident above; only closing the LAUNCHER
+  ever asked. `Closed` runs with the window already going, too late, so the guard is
+  an `OnClosing` override using **cancel-then-reclose** (it is synchronous and
+  `MpAlertOverlay.ConfirmAsync` is awaited), plus `SuppressLeaveConfirm()` which
+  `CloseLobbyWindow()` calls for every PROGRAMMATIC close (kicked, signed out, tab
+  teardown) — those must never ask. `LeaveRoomButton_Click` calls the same confirm as
+  its first line (that button IS reachable during the countdown, when `InGameOverlay`
+  is not covering the column yet) and then suppresses the window's own, so the
+  question is asked exactly once. Which text appears comes from the pure
+  `RoomMatchState.WarnOnLeave`: a running game of our own outranks a running room
+  (host → "closes it for everyone", guest → "closes yours"), and only once ours is
+  already closed does `RoomStillPlayingCannotRejoin` ("you will not be able to come
+  back") become the point. **Host-vs-guest wording reads `_matchContext?.IsHost`, not
+  the live flag** — if the room has already collapsed the live one says `false` and
+  the host would be shown the mild version of what they are about to do.
+  **`MainWindow.OnClosing` stays a `MessageBox`** (it does `task.Wait(10 s)` on the
+  confirm; an awaited in-app overlay needs the UI thread that `Wait` is holding, so it
+  would freeze for ten seconds and then refuse to close) — comment on both sides.
 
 - **AoE3 taunts in the LOBBY chat — `Services/TauntService.cs`. A message whose body
   is JUST a number (1..33) plays that taunt for everyone in the room, each in THEIR

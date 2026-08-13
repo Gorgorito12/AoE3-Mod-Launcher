@@ -254,6 +254,12 @@
                         <CheckBox x:Name="EnableJoinLinksCheck"/>
                         <TextBlock x:Name="EnableJoinLinksHint" Style="{StaticResource HintText}"/>
 
+                        <CheckBox x:Name="GameRecordingCheck"/>
+                        <TextBlock x:Name="GameRecordingHint" Style="{StaticResource HintText}"/>
+
+                        <CheckBox x:Name="RecordReminderCheck"/>
+                        <TextBlock x:Name="RecordReminderHint" Style="{StaticResource HintText}"/>
+
                         <CheckBox x:Name="CloseOnGameCheck"/>
                         <TextBlock x:Name="CloseOnGameHint" Style="{StaticResource HintText}"/>
 

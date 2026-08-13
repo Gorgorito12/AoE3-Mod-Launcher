@@ -3116,10 +3116,13 @@ public static class Strings
             [LangEn] = "Game closed.",
             [LangEs] = "La partida se cerró.",
         },
+        // No "upload it from History": uploading a replay is not implemented anywhere in the
+        // launcher, and telling the player to go and do it sent them looking for a button that
+        // has never existed. The format arity is unchanged so the call site stays as it was.
         ["MpChatReplaySaved"] = new()
         {
-            [LangEn] = "Replay saved: {0} ({1} KB). Upload from History.",
-            [LangEs] = "Repetición guardada: {0} ({1} KB). Súbela desde Historial.",
+            [LangEn] = "Replay saved: {0} ({1} KB).",
+            [LangEs] = "Repetición guardada: {0} ({1} KB).",
         },
         ["MpChatYouCancelled"] = new()
         {
@@ -3670,6 +3673,165 @@ public static class Strings
         {
             [LangEn] = "It now starts with Windows and waits here, so your friends see you connected. You can turn this off in Settings → General.",
             [LangEs] = "Ahora arranca con Windows y espera aquí, así tus amigos te ven conectado. Lo puedes apagar en Configuración → General.",
+        },
+
+        // --- Game recording (how a match result is known at all) ---
+        ["DlgSettingsGameRecording"] = new()
+        {
+            [LangEn] = "Let the launcher turn on AoE3's game recording",
+            [LangEs] = "Permitir que el launcher active la grabación de partidas de AoE3",
+        },
+        ["DlgSettingsGameRecordingHint"] = new()
+        {
+            [LangEn] = "Age of Empires III doesn't record games by default, and the recording is the only place a match result is written. The launcher switches it on once per mod; after that the setting is yours.",
+            [LangEs] = "Age of Empires III no graba las partidas por defecto, y la grabación es el único lugar donde queda escrito el resultado. El launcher la activa una sola vez por mod; después, la opción es tuya.",
+        },
+        ["DlgSettingsGameRecordingTip"] = new()
+        {
+            [LangEn] = "Writes optionrecordgame in Documents\\My Games\\<mod>\\Users3\\<profile>.xml, keeping a one-time backup. Changes apply the next time you launch each mod. Old automatic recordings (\"Record Game 7\") are cleaned up, keeping the 10 most recent — anything you renamed is kept forever. Off = the launcher writes false once per mod and then leaves your profile alone.",
+            [LangEs] = "Escribe optionrecordgame en Documentos\\My Games\\<mod>\\Users3\\<perfil>.xml, con una copia de seguridad única. Los cambios se aplican la próxima vez que inicies cada mod. Las grabaciones automáticas viejas (\"Record Game 7\") se limpian y se conservan las 10 más recientes; lo que hayas renombrado se conserva siempre. Apagado = el launcher escribe false una vez por mod y después no vuelve a tocar tu perfil.",
+        },
+        ["TrayGameRecordingTitle"] = new()
+        {
+            [LangEn] = "Game recording is on",
+            [LangEs] = "La grabación de partidas está activada",
+        },
+        ["TrayGameRecordingBody"] = new()
+        {
+            [LangEn] = "Age of Empires III doesn't record by default, so the launcher turned it on — that's the only way it can tell who won a match. You can turn it off in Settings → General.",
+            [LangEs] = "Age of Empires III no graba por defecto, así que el launcher lo activó: es la única forma de saber quién ganó una partida. Lo puedes apagar en Configuración → General.",
+        },
+        ["MpChatRecordReminder"] = new()
+        {
+            [LangEn] = "⚠ Tick \"Record Game\" on AoE3's setup screen, or this match won't count.",
+            [LangEs] = "⚠ Marca \"Record Game\" en la pantalla de configuración de AoE3, o esta partida no contará.",
+        },
+        ["MpRecordBandTitle"] = new()
+        {
+            [LangEn] = "So the match counts",
+            [LangEs] = "Para que la partida cuente",
+        },
+        ["MpRecordBandHost"] = new()
+        {
+            [LangEn] = "Tick \"Record Game\" on Age of Empires III's own setup screen before you start. Without the recording there is no way to tell who won, and the match counts for nobody's rating.",
+            [LangEs] = "Marca \"Record Game\" en la pantalla de configuración de Age of Empires III antes de empezar. Sin la grabación no hay forma de saber quién ganó, y la partida no cuenta para la puntuación de nadie.",
+        },
+        ["MpRecordBandGuest"] = new()
+        {
+            [LangEn] = "Remind the host to tick \"Record Game\" in Age of Empires III. Only their recording is read, so without it this match counts for nobody's rating — yours included.",
+            [LangEs] = "Recuérdale al anfitrión que marque \"Record Game\" en Age of Empires III. Solo se lee su grabación, así que sin ella la partida no cuenta para la puntuación de nadie, incluida la tuya.",
+        },
+        ["MpRecordBandDismiss"] = new()
+        {
+            [LangEn] = "Don't show this again",
+            [LangEs] = "No mostrar más",
+        },
+        ["DlgSettingsRecordReminder"] = new()
+        {
+            [LangEn] = "Remind me to tick \"Record Game\" before each match",
+            [LangEs] = "Recordarme marcar \"Record Game\" antes de cada partida",
+        },
+        ["DlgSettingsRecordReminderHint"] = new()
+        {
+            [LangEn] = "AoE3 keeps its own \"Record Game\" box on the game setup screen, and it does not follow the option above — so it has to be ticked by hand each time. One chat line when you host.",
+            [LangEs] = "AoE3 tiene su propia casilla \"Record Game\" en la pantalla de configuración de la partida, y no sigue a la opción de arriba: hay que marcarla a mano cada vez. Es una línea en el chat cuando eres anfitrión.",
+        },
+        ["DlgSettingsRecordReminderTip"] = new()
+        {
+            [LangEn] = "Only the host is reminded, because only the host's recording is read to work out who won. Turn this off once you always remember — the launcher will never decide on its own that you no longer need it, since a match that recorded doesn't prove the next one will.",
+            [LangEs] = "Solo se avisa al anfitrión, porque solo se lee su grabación para saber quién ganó. Apágalo cuando ya te acuerdes siempre: el launcher nunca decide por su cuenta que ya no lo necesitas, porque una partida que se grabó no prueba que la siguiente lo haga.",
+        },
+        ["MpNoRecordingTitle"] = new()
+        {
+            [LangEn] = "The match was saved without a result",
+            [LangEs] = "La partida se guardó sin resultado",
+        },
+        ["MpNoRecordingCheckbox"] = new()
+        {
+            [LangEn] = "No recording of this match was found. Check the \"Record Game\" box on AoE3's setup screen before starting the next one.",
+            [LangEs] = "No se encontró la grabación de esta partida. Marca la casilla \"Record Game\" en la pantalla de configuración de AoE3 antes de empezar la próxima.",
+        },
+        ["MpNoRecordingProfileOff"] = new()
+        {
+            [LangEn] = "No recording of this match was found: Age of Empires III turned recording off again. Turn it back on in the game's options.",
+            [LangEs] = "No se encontró la grabación de esta partida: Age of Empires III volvió a desactivar la grabación. Actívala de nuevo en las opciones del juego.",
+        },
+        ["MpNoRecordingUnknown"] = new()
+        {
+            [LangEn] = "No recording of this match was found, so it was saved without a result.",
+            [LangEs] = "No se encontró la grabación de esta partida, así que se guardó sin resultado.",
+        },
+
+        // --- Match report: titles for the toast that replaces the chat line when a successful
+        // report has already closed the room and taken the lobby window with it. ---
+        ["MpMatchReportedTitle"] = new()
+        {
+            [LangEn] = "Match saved",
+            [LangEs] = "Partida guardada",
+        },
+        ["MpMatchNotReportedTitle"] = new()
+        {
+            [LangEn] = "The match could not be saved",
+            [LangEs] = "No se pudo guardar la partida",
+        },
+
+        // --- Reopening the game while the room is still playing ---
+        ["MpRoomRejoinGame"] = new()
+        {
+            [LangEn] = "Open the game",
+            [LangEs] = "Abrir el juego",
+        },
+        ["MpRoomRejoinTooltip"] = new()
+        {
+            [LangEn] = "Opens Age of Empires III again without leaving the room. The others keep playing — nothing is interrupted.",
+            [LangEs] = "Vuelve a abrir Age of Empires III sin salir de la sala. Los demás siguen jugando: no se interrumpe nada.",
+        },
+        ["MpRoomReopenGame"] = new()
+        {
+            [LangEn] = "Reopen the game",
+            [LangEs] = "Volver a abrir el juego",
+        },
+        ["MpChatRejoiningGame"] = new()
+        {
+            [LangEn] = "Opening the game again…",
+            [LangEs] = "Abriendo el juego de nuevo…",
+        },
+        ["MpChatRoomStillPlaying"] = new()
+        {
+            [LangEn] = "The room is still in a match. Press \"Open the game\" to get back in — if you leave the room you won't be able to return until the match is over.",
+            [LangEs] = "La sala sigue en partida. Pulsa \"Abrir el juego\" para volver a entrar: si sales de la sala no vas a poder regresar hasta que la partida termine.",
+        },
+
+        // --- Leaving a room while a match is running ---
+        ["MpLeaveDuringMatchTitle"] = new()
+        {
+            [LangEn] = "There's a match in progress",
+            [LangEs] = "Hay una partida en curso",
+        },
+        ["MpLeaveDuringMatchHost"] = new()
+        {
+            [LangEn] = "You are the host. Leaving now closes Age of Empires III for every player and the match goes down with no winner. Leave anyway?",
+            [LangEs] = "Eres el anfitrión. Si sales ahora se cierra el Age of Empires III de todos los jugadores y la partida queda registrada sin ganador. ¿Salir de todos modos?",
+        },
+        ["MpLeaveDuringMatchGuest"] = new()
+        {
+            [LangEn] = "Your Age of Empires III will be closed and you will leave the room. The others keep playing. Leave anyway?",
+            [LangEs] = "Se va a cerrar tu Age of Empires III y vas a salir de la sala. Los demás siguen jugando. ¿Salir de todos modos?",
+        },
+        ["MpLeaveDuringMatchCannotRejoin"] = new()
+        {
+            [LangEn] = "The room is still in a match, so you will not be able to come back until it ends. If you closed the game by mistake, use \"Open the game\" instead. Leave anyway?",
+            [LangEs] = "La sala sigue en partida, así que no vas a poder volver hasta que termine. Si cerraste el juego sin querer, usa \"Abrir el juego\" en vez de salir. ¿Salir de todos modos?",
+        },
+        ["MpLeaveDuringMatchYes"] = new()
+        {
+            [LangEn] = "Leave",
+            [LangEs] = "Salir",
+        },
+        ["MpLeaveDuringMatchNo"] = new()
+        {
+            [LangEn] = "Stay",
+            [LangEs] = "Quedarme",
         },
 
         // --- Notification bell (Steam-style) ---

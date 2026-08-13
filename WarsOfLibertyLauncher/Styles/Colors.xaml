@@ -280,6 +280,13 @@
          compete with the dark base. -->
     <SolidColorBrush x:Key="MpBlueSubtle" Color="#14264A"/>
 
+    <!-- The amber counterpart of MpBlueSubtle, for a standing notice that is a
+         caution rather than an error: paired with the solid WarningBrush as its
+         border, exactly like MpBlueSubtle pairs with MpBlue on the countdown
+         line. Desaturated to the same degree so it reads as "pay attention"
+         without shouting at the player every time they open a room. -->
+    <SolidColorBrush x:Key="MpWarnSubtle" Color="#2A2113"/>
+
     <!-- Multiplayer-specific surfaces — deep navy for the premium refresh so
          the room table / chat cards read as "raised" above the navy tab
          gradient (MpTabBackground bottom #07111F is darker than this). -->

@@ -81,11 +81,24 @@ public partial class LobbyWindow : Window
     /// <summary>"Cancel game" / "Leave game" while a match is running.</summary>
     public Action? OnInGameCancel { get; set; }
 
+    /// <summary>
+    /// "Open the game" — relaunch AoE3 after it closed while the room carried on playing.
+    /// Purely local: it sends nothing to the server and does not disturb the other players.
+    /// </summary>
+    public Action? OnRejoinGame { get; set; }
+
     /// <summary>Pencil beside the room name — rename the room (host only).</summary>
     public Action? OnRenameRoom { get; set; }
 
     /// <summary>"Clear chat" — wipes the local chat log only.</summary>
     public Action? OnClearChat { get; set; }
+
+    /// <summary>
+    /// "Don't show this again" on the Record Game band. The ONLY way that reminder is ever
+    /// silenced — it is never inferred from a match that happened to record, because one
+    /// success says nothing about whether the next match's checkbox will be ticked.
+    /// </summary>
+    public Action? OnDismissRecordReminder { get; set; }
 
     /// <summary>"Send" button on the chat input bar.</summary>
     public Action? OnSendChat { get; set; }
@@ -100,6 +113,19 @@ public partial class LobbyWindow : Window
     /// <see cref="KeyEventArgs"/> so the handler can read Key + check
     /// modifiers.</summary>
     public Action<KeyEventArgs>? OnChatKeyDown { get; set; }
+
+    /// <summary>
+    /// Cheap, synchronous "would closing this window cost something the user should be told
+    /// about?". Kept separate from <see cref="ConfirmLeave"/> so the ordinary close — the vast
+    /// majority — stays fully synchronous instead of taking a dispatcher hop.
+    /// </summary>
+    public Func<bool>? NeedsLeaveConfirm { get; set; }
+
+    /// <summary>
+    /// Ask the question, and answer true when the window may go. Only consulted after
+    /// <see cref="NeedsLeaveConfirm"/> said there was something to ask.
+    /// </summary>
+    public Func<System.Threading.Tasks.Task<bool>>? ConfirmLeave { get; set; }
 
     public LobbyWindow(MultiplayerSession session)
     {
@@ -126,12 +152,66 @@ public partial class LobbyWindow : Window
     // TitleBar.xaml.cs). Closing still routes through Window.Close(), so the
     // Closed handler's leave-room flow runs identically for ✕ / Esc / Alt+F4.
 
+    // ------------------------------------------------------------------
+    // Closing: ask before walking out of a live match
+    // ------------------------------------------------------------------
+
+    /// <summary>Set once the user has answered, or when the close is not theirs to approve.</summary>
+    private bool _leaveConfirmSuppressed;
+
+    /// <summary>
+    /// Close without asking. Every PROGRAMMATIC close goes through here — being kicked, signing
+    /// out, the tab tearing the room down — because those are not a decision the player is making
+    /// and a confirmation box would be nonsense (worse: on the kick path it would ask them to
+    /// approve something that has already happened).
+    /// </summary>
+    public void SuppressLeaveConfirm() => _leaveConfirmSuppressed = true;
+
+    /// <summary>
+    /// The guard has to be here, in <c>OnClosing</c>: the <c>Closed</c> event that MultiplayerTab
+    /// hangs the leave-room flow off already runs with the window on its way out, far too late to
+    /// change anyone's mind.
+    ///
+    /// <para>Cancel-then-reclose, because <c>OnClosing</c> is synchronous and the confirmation is
+    /// an awaited <c>MpAlertOverlay</c>. The first pass always cancels; the answer arrives later
+    /// and calls <see cref="Window.Close"/> again with the flag set. Anything that throws or is
+    /// missing lets the close through — being unable to shut a window is worse than any warning
+    /// it could have shown.</para>
+    /// </summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_leaveConfirmSuppressed
+            && NeedsLeaveConfirm?.Invoke() == true
+            && ConfirmLeave != null)
+        {
+            e.Cancel = true;
+            _ = ConfirmThenCloseAsync();
+            return;
+        }
+
+        base.OnClosing(e);
+    }
+
+    private async System.Threading.Tasks.Task ConfirmThenCloseAsync()
+    {
+        bool proceed;
+        try { proceed = await ConfirmLeave!(); }
+        catch { proceed = true; }
+
+        if (!proceed) return;
+
+        _leaveConfirmSuppressed = true;
+        Close();
+    }
+
     private void LeaveRoomButton_Click(object sender, RoutedEventArgs e) => OnLeaveRoom?.Invoke();
     private void ReadyButton_Click(object sender, RoutedEventArgs e) => OnReady?.Invoke();
     private void StartButton_Click(object sender, RoutedEventArgs e) => OnStart?.Invoke();
     private void InGameCancelButton_Click(object sender, RoutedEventArgs e) => OnInGameCancel?.Invoke();
+    private void RejoinGameButton_Click(object sender, RoutedEventArgs e) => OnRejoinGame?.Invoke();
     private void RenameRoomButton_Click(object sender, RoutedEventArgs e) => OnRenameRoom?.Invoke();
     private void ClearChatButton_Click(object sender, RoutedEventArgs e) => OnClearChat?.Invoke();
+    private void RecordReminderDismiss_Click(object sender, RoutedEventArgs e) => OnDismissRecordReminder?.Invoke();
     private void ChatSendButton_Click(object sender, RoutedEventArgs e) => OnSendChat?.Invoke();
     private void ChatEmojiButton_Click(object sender, RoutedEventArgs e) => OnEmoji?.Invoke();
     private void ChatInputBox_TextChanged(object sender, TextChangedEventArgs e) => OnChatTextChanged?.Invoke();

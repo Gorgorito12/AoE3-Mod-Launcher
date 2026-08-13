@@ -158,6 +158,158 @@ public static class GameSettingsStore
         => ResolveProfilePath(profile, config) != null;
 
     /// <summary>
+    /// The profile file this mod's settings live in, or null when there isn't one yet.
+    ///
+    /// <para>Exposed so a caller can READ a setting back — the multiplayer tab checks whether
+    /// recording is still enabled before telling the host why a match went unrecorded. Resolution
+    /// is non-trivial (dual Documents roots, the active profile named inside
+    /// <c>LastProfile3.dat</c>), so it must not be rebuilt by hand elsewhere.</para>
+    /// </summary>
+    public static string? ProfilePathFor(ModProfile profile, LauncherConfig config)
+        => ResolveProfilePath(profile, config);
+
+    // ---------------- game recording ----------------
+
+    /// <summary>What <see cref="EnsureGameRecording"/> did, for the log and for the caller's notice.</summary>
+    public enum GameRecordingWrite
+    {
+        /// <summary>Nothing to do: already where we left it, or a preference we have never acted on.</summary>
+        NotNeeded,
+        /// <summary>The profile now says what the player asked for.</summary>
+        Wrote,
+        /// <summary>No profile on disk yet — the game creates one on its first run. Try again next launch.</summary>
+        NoProfile,
+        /// <summary>A profile we could not understand or could not write. Left alone; try again next launch.</summary>
+        Failed,
+    }
+
+    /// <param name="Write">Whether to touch the profile at all.</param>
+    /// <param name="Value">What <c>optionrecordgame</c> should say.</param>
+    /// <param name="ShowNotice">First time only: tell the player we turned recording on.</param>
+    public readonly record struct GameRecordingPlan(bool Write, bool Value, bool ShowNotice);
+
+    /// <summary>
+    /// Decides whether to write game recording into one mod's profile. Pure, so the rule that
+    /// keeps the launcher out of a player's profile is pinned by tests rather than inferred from
+    /// the I/O around it.
+    ///
+    /// <para><b>The invariant: an opt-out is final.</b> Recording is on by default, so something
+    /// has to write it for a new player — but if that write were driven by "the setting is off"
+    /// instead of by <paramref name="applied"/>, then turning recording off would re-enable itself
+    /// on the next launch, forever. Same reasoning as
+    /// <see cref="StartupRegistrationService.PlanStartup"/>, and the same test guards it.</para>
+    ///
+    /// <para>Once <paramref name="applied"/> matches the preference there is nothing to do — even
+    /// when the game has since changed the setting itself, which happens because Age of Empires III
+    /// rewrites the whole profile when it exits. That is the player's own choice, made in the
+    /// game's options screen, and the launcher must not sit on top of it every launch.</para>
+    /// </summary>
+    /// <param name="applied">What we last wrote here, or null if we never have.</param>
+    /// <param name="wants">The player's launcher-wide preference.</param>
+    public static GameRecordingPlan PlanGameRecording(bool? applied, bool wants, bool noticeAlreadyShown)
+    {
+        // Never touched this profile and recording isn't wanted: there is nothing to undo, and
+        // writing "false" would mean editing a profile on behalf of a switched-off feature.
+        // This is the branch the nullable marker exists for.
+        if (applied == null && !wants) return default;
+
+        if (applied == wants) return default;
+
+        return new GameRecordingPlan(
+            Write: true,
+            Value: wants,
+            ShowNotice: applied == null && wants && !noticeAlreadyShown);
+    }
+
+    /// <summary>
+    /// Brings one mod's <c>optionrecordgame</c> in line with the player's preference, at most once
+    /// per change. Saves the config when it acts.
+    ///
+    /// <para><b>Independent of <see cref="ModState.SyncGameSettings"/></b>, despite living beside
+    /// it and being called two lines away from it: recording is a launcher-wide preference, not
+    /// one of the settings the player asked to share between mods. <c>GameSettingsSync</c> keeps
+    /// the two apart in the other direction too, by refusing to let recording travel in the shared
+    /// copy.</para>
+    ///
+    /// <para><b>The marker is set only once the profile has actually been reached</b> — not before
+    /// the attempt, which is where <see cref="LauncherConfig.BackgroundDefaultSeeded"/>
+    /// deliberately differs. The reasoning inverts: a Run-key write that fails has hit a machine
+    /// policy that will fail identically forever, so retrying is noise; but a missing
+    /// <c>Users3\</c> is a legitimate "not yet" — the game creates it on its first run — and
+    /// marking that mod as done would mean it never records at all, which is the bug this whole
+    /// feature exists to fix. Retrying costs one no-op per launch.</para>
+    /// </summary>
+    public static GameRecordingWrite EnsureGameRecording(ModProfile profile, LauncherConfig config)
+    {
+        try
+        {
+            var state = config.GetState(profile.Id);
+            var plan = PlanGameRecording(
+                state.GameRecordingApplied, config.EnableGameRecording, config.GameRecordingNoticeShown);
+            if (!plan.Write) return GameRecordingWrite.NotNeeded;
+
+            var profilePath = ResolveProfilePath(profile, config);
+            if (profilePath == null)
+            {
+                DiagnosticLog.Write(
+                    $"GameRecording: no profile for '{profile.DisplayName}' yet — will try again next launch.");
+                return GameRecordingWrite.NoProfile;
+            }
+
+            var wanted = plan.Value ? "true" : "false";
+            var current = ReadProfile(profilePath);
+
+            // Already correct in the file, just not recorded by us — adopt it without a write.
+            if (string.Equals(
+                    GameSettingsSync.ReadSetting(
+                        current, GameSettingsSync.GameOptionsSection, GameSettingsSync.RecordGameSetting),
+                    wanted, StringComparison.Ordinal))
+            {
+                state.GameRecordingApplied = plan.Value;
+                SaveQuietly(config);
+                return GameRecordingWrite.NotNeeded;
+            }
+
+            var updated = GameSettingsSync.EnsureSetting(
+                current, GameSettingsSync.GameOptionsSection, GameSettingsSync.RecordGameSetting, wanted);
+            if (updated == null)
+            {
+                // Unreadable, or a shape we don't recognise. Leave the marker alone so a profile
+                // that becomes readable later still gets its turn.
+                DiagnosticLog.Write(
+                    $"GameRecording: could not set it in '{profile.DisplayName}' ({profilePath}) — left alone.");
+                return GameRecordingWrite.Failed;
+            }
+
+            BackUpOnce(profilePath);
+            File.WriteAllText(profilePath, updated, Encoding.Unicode);
+
+            state.GameRecordingApplied = plan.Value;
+            if (plan.ShowNotice) config.GameRecordingNoticePending = true;
+            SaveQuietly(config);
+
+            // Naming the file matters: ResolveProfilePath falls back to the newest .xml when the
+            // active profile can't be resolved, so on a multi-profile install this can land
+            // somewhere the player isn't using — a silent no-effect that is otherwise invisible.
+            DiagnosticLog.Write(
+                $"GameRecording: set {GameSettingsSync.RecordGameSetting}={wanted} " +
+                $"for '{profile.DisplayName}' in {profilePath}");
+            return GameRecordingWrite.Wrote;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"GameRecording: '{profile.DisplayName}' failed: {ex.Message}");
+            return GameRecordingWrite.Failed;
+        }
+    }
+
+    private static void SaveQuietly(LauncherConfig config)
+    {
+        try { config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"GameRecording: config save failed: {ex.Message}"); }
+    }
+
+    /// <summary>
     /// Keeps one untouched copy of the profile as it was before this feature ever wrote to it.
     /// Written once and never overwritten: the point is the state the player had BEFORE settings
     /// started travelling, which a per-write backup would lose after the second launch.

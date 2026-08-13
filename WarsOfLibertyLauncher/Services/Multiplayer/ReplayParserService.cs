@@ -233,6 +233,13 @@ public static class ReplayParserService
     /// <para>The host's name comes from his AoE3 profile, so it is compared
     /// case-insensitively and trimmed; anything blank fails, because an unknown host
     /// cannot confirm anything.</para>
+    ///
+    /// <para><b>An unknown head count fails too</b>, for exactly that reason —
+    /// <paramref name="expectedHumans"/> of zero means the room's roster was lost, not that the
+    /// check is optional. It used to be skipped instead, which quietly reduced three checks to
+    /// two at precisely the moment there was least to go on. The caller announces the recording
+    /// separately when it only wants to name the file, so failing here costs nothing but a
+    /// result nobody could stand behind.</para>
     /// </summary>
     public static bool LooksLikeThisMatch(
         ReplayHeader? header, string hostProfileName, int expectedHumans, int recorderSlot = -1)
@@ -241,7 +248,7 @@ public static class ReplayParserService
         if (string.IsNullOrWhiteSpace(hostProfileName)) return false;
 
         var humans = header.Players.Where(p => p.IsHuman).ToList();
-        if (expectedHumans > 0 && humans.Count != expectedHumans) return false;
+        if (expectedHumans <= 0 || humans.Count != expectedHumans) return false;
 
         var host = humans.FirstOrDefault(p =>
             string.Equals(p.Name.Trim(), hostProfileName.Trim(), StringComparison.OrdinalIgnoreCase));

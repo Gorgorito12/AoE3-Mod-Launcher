@@ -214,6 +214,24 @@ public class ModState
     public bool SyncGameSettings { get; set; } = false;
 
     /// <summary>
+    /// The value of <c>optionrecordgame</c> the launcher last wrote into THIS mod's profile, or
+    /// <b>null</b> when it has never written one.
+    ///
+    /// <para><b>Per mod because the profile is</b> — each mod keeps its own
+    /// <c>My Games\&lt;mod&gt;\Users3\&lt;profile&gt;.xml</c>, so a single launcher-wide "already
+    /// seeded" marker would enable recording for whichever mod happened to be launched first and
+    /// leave every other one alone, forever.</para>
+    ///
+    /// <para><b>It records what we wrote, not merely that we wrote</b>, and that is what makes the
+    /// opt-out final. When this equals the user's current preference there is nothing to do —
+    /// including when the game itself has changed the setting since, which is the player's
+    /// business, not ours. Only a change to the preference makes the launcher touch the profile
+    /// again. See <see cref="Services.GameSettingsStore.PlanGameRecording"/>.</para>
+    /// </summary>
+    [JsonPropertyName("gameRecordingApplied")]
+    public bool? GameRecordingApplied { get; set; }
+
+    /// <summary>
     /// ETag of the last 200 response from <c>/releases/latest</c> for this mod
     /// (follow-latest GitHubReleases mods only). Sent as <c>If-None-Match</c> so
     /// an unchanged latest release is a free 304 (conditional requests don't
@@ -985,6 +1003,65 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("backgroundDefaultSeeded")]
     public bool BackgroundDefaultSeeded { get; set; } = false;
+
+    /// <summary>
+    /// Whether the launcher may switch Age of Empires III's own game recording on.
+    ///
+    /// <para><b>Default ON, because without a recording a multiplayer match has no result.</b>
+    /// The winner is read out of the <c>.age3Yrec</c> file the game writes, and AoE3 ships with
+    /// recording OFF — so every match was being stored as "nobody knows who won" and nobody's
+    /// rating ever moved. Verified on this machine: <c>optionrecordgame</c> was <c>false</c> in
+    /// all five installed mods' profiles.</para>
+    ///
+    /// <para><b>Launcher-wide, not per-mod</b>: wanting your games recorded is a property of the
+    /// player. What IS per-mod is the bookkeeping of which profiles we have already written —
+    /// see <see cref="ModState.GameRecordingApplied"/>.</para>
+    ///
+    /// <para>Turning this off writes <c>false</c> back once per mod, so unchecking the box has a
+    /// visible effect, and then the launcher stops touching the profile entirely.</para>
+    /// </summary>
+    [JsonPropertyName("enableGameRecording")]
+    public bool EnableGameRecording { get; set; } = true;
+
+    /// <summary>
+    /// Set once the "recording is on" notice has actually been shown, so it never repeats — one
+    /// notice for the launcher, not one per mod, even though five separate profiles get written.
+    /// </summary>
+    [JsonPropertyName("gameRecordingNoticeShown")]
+    public bool GameRecordingNoticeShown { get; set; } = false;
+
+    /// <summary>
+    /// Armed when a profile was seeded, cleared when the notice is finally shown.
+    ///
+    /// <para><b>Persisted, and separate from <see cref="GameRecordingNoticeShown"/>, because the
+    /// write happens somewhere with no way to talk to the user.</b> Recording is enabled inside
+    /// <c>GameLauncher</c> at the instant the player leaves for the game — there is no window to
+    /// put a message on, and a toast raised while the game is running is deliberately dropped so
+    /// it cannot knock AoE3 out of full screen. So the notice has to be deferred to the next
+    /// moment the launcher is actually on screen, and survive the launcher being closed in
+    /// between. Without this the "never silently" rule would hold on paper and not in
+    /// reality.</para>
+    /// </summary>
+    [JsonPropertyName("gameRecordingNoticePending")]
+    public bool GameRecordingNoticePending { get; set; } = false;
+
+    /// <summary>
+    /// Silences the pre-match reminder telling the host to tick "Record Game" on Age of Empires
+    /// III's own setup screen.
+    ///
+    /// <para><b>An explicit choice is the only thing that stops that reminder, and that is the
+    /// point.</b> It was first gated on "we have read a recording, so it must be working" —
+    /// which was wrong, and measurably so: AoE3's per-match box does NOT inherit from the
+    /// profile setting the launcher writes (tested with <c>optionrecordgame=true</c> in place
+    /// before the game started, box still unchecked). If the box resets every match, that rule
+    /// would have gone quiet after the first success and let every match afterwards go
+    /// unrecorded in silence — the reminder disappearing exactly when it is needed most.</para>
+    ///
+    /// <para>So the reminder fires every time and the way out is one click. Never infer this
+    /// from a match that happened to record.</para>
+    /// </summary>
+    [JsonPropertyName("gameRecordingReminderMuted")]
+    public bool GameRecordingReminderMuted { get; set; } = false;
 
     /// <summary>
     /// Marks that the first-launch "Install a stable copy on this PC?" offer has

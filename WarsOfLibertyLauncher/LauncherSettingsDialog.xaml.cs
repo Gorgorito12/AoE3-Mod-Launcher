@@ -170,6 +170,12 @@ public partial class LauncherSettingsDialog : Window
         EnableJoinLinksCheck.Content = Strings.Get("DlgLauncherSettingsJoinLinks");
         EnableJoinLinksHint.Text = Strings.Get("DlgLauncherSettingsJoinLinksHint");
         SetTip(EnableJoinLinksCheck, "DlgLauncherSettingsJoinLinksTip");
+        GameRecordingCheck.Content = Strings.Get("DlgSettingsGameRecording");
+        GameRecordingHint.Text = Strings.Get("DlgSettingsGameRecordingHint");
+        SetTip(GameRecordingCheck, "DlgSettingsGameRecordingTip");
+        RecordReminderCheck.Content = Strings.Get("DlgSettingsRecordReminder");
+        RecordReminderHint.Text = Strings.Get("DlgSettingsRecordReminderHint");
+        SetTip(RecordReminderCheck, "DlgSettingsRecordReminderTip");
         CloseOnGameCheck.Content = Strings.Get("DlgLauncherSettingsCloseOnGame");
         CloseOnGameHint.Text = Strings.Get("DlgLauncherSettingsCloseOnGameHint");
         SetTip(CloseOnGameCheck, "DlgLauncherSettingsCloseOnGameTip");
@@ -323,6 +329,9 @@ public partial class LauncherSettingsDialog : Window
         // honours its own disable regardless of what we write.
         StartWithWindowsCheck.IsChecked = StartupRegistrationService.IsRegistered();
         EnableJoinLinksCheck.IsChecked = _config.EnableJoinLinks;
+        GameRecordingCheck.IsChecked = _config.EnableGameRecording;
+        // Shown the positive way round — the config stores "muted", the box offers "remind me".
+        RecordReminderCheck.IsChecked = !_config.GameRecordingReminderMuted;
         CloseOnGameCheck.IsChecked = _config.CloseLauncherOnGameStart;
         // Close-to-tray opt-out — independent of the master toggle above.
         MinimizeToTrayCheck.IsChecked = _config.CloseToTray;
@@ -1112,6 +1121,11 @@ public partial class LauncherSettingsDialog : Window
         // X / close-button behaviour (default on; unchecking restores "X = quit").
         _config.CloseToTray = MinimizeToTrayCheck.IsChecked == true;
         _config.EnableJoinLinks = EnableJoinLinksCheck.IsChecked == true;
+        // No side effect here on purpose: each mod's profile is written on its next launch, by
+        // GameSettingsStore.EnsureGameRecording. Touching five profiles from a settings dialog
+        // would be writing to files the launcher has no reason to hold open.
+        _config.EnableGameRecording = GameRecordingCheck.IsChecked == true;
+        _config.GameRecordingReminderMuted = RecordReminderCheck.IsChecked != true;
 
         // Top-tab order (Interface section). Persist the working copy;
         // MainWindow re-applies it to the nav bar on the post-save
