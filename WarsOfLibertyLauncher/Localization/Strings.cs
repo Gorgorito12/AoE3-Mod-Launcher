@@ -2388,6 +2388,11 @@ public static class Strings
         ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
         ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
         ["MpChipElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
+        ["MpChipReconnecting"] = new() { [LangEn] = "Reconnecting…", [LangEs] = "Reconectando…" },
+        // Title-bar account menu. Sign out lives ONLY here now — the account row that
+        // used to carry it was removed with the bar-2 redesign.
+        ["MpAccountMenuProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
+        ["MpAccountMenuSignOut"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
         ["MpRadminLaunchFailed"] = new()
         {
             [LangEn] = "Could not launch Radmin VPN.",

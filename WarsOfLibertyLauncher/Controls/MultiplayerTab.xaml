@@ -13,34 +13,41 @@
              on hover (the "muy blancos" bug). TemplateBinding the
              BorderBrush + BorderThickness so the code-behind active-
              state setters still work without re-templating. -->
+        <!-- Sub-tab (design handoff 1a). A filled pill, not the old underline: the
+             underline read as a second tab row stacked under the main one, and the
+             reference distinguishes the two levels by shape instead. Idle is Medium
+             weight and lifts to SemiBold + white when active. -->
         <Style x:Key="SubTab" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpPillIdleText}"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0,0,0,2"/>
-            <Setter Property="Padding" Value="2,8"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Margin" Value="0,0,24,0"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{StaticResource RadiusControl}"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <!-- No background fill, just lift the
-                                     text to soft sky. The blue identity
-                                     stays in the underline (active) +
-                                     hover text, never in a tile. -->
-                                <Setter Property="Foreground" Value="{DynamicResource FgHoverBlue}"/>
+                                <Setter Property="Foreground" Value="#E6EEF8"/>
+                            </Trigger>
+                            <!-- Active pill. UpdateSubtabHighlights sets Tag; it used to
+                                 paint the underline via BorderBrush, so that code moved
+                                 to the Tag as part of this change. -->
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource MpPillActiveBg}"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -121,17 +128,25 @@
              into the room chat â€” those now live here, where the user
              expects to look for them.
              ============================================================ -->
+        <!-- BAR 2 (design handoff 1a). Was a transparent strip carrying the sub-tabs
+             plus a right-hand cluster of connection status, player and room counts and
+             a NAT badge. All of that restated something shown elsewhere — the
+             connection state is now the title-bar chip, and the counts already appear
+             in the right-hand panel — so per the reference this bar holds only
+             navigation and the two room actions, which came up from the account row
+             below it. -->
         <Border Grid.Row="0"
-                Background="Transparent"
-                BorderBrush="{DynamicResource MpDivider}"
+                Height="{StaticResource MpSubBarHeight}"
+                Background="{DynamicResource MpPanel}"
+                BorderBrush="{DynamicResource MpRimSoft}"
                 BorderThickness="0,0,0,1"
-                Padding="24,8,24,0">
+                Padding="14,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Grid>
                         <Button x:Name="SubtabRooms" Click="SubtabRooms_Click" Style="{StaticResource SubTab}"/>
                         <!-- "New room created" dot: shown via SetNewRoomIndicator(true)
@@ -152,69 +167,22 @@
                     <Button x:Name="SubtabHistory" Click="SubtabHistory_Click" Style="{StaticResource SubTab}"/>
                 </StackPanel>
 
+                <!-- Room actions, moved up from the account row below (which the
+                     reference deletes: the identity went to the title bar). -->
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
-                    <!-- Connection status: a coloured dot + label
-                         ("Connected", "Reconnectingâ€¦", "Offline").
-                         Updated by UpdateConnectionStatus() from
-                         the session / WS state â€” no more disconnect
-                         messages leaking into the chat log. -->
-                    <StackPanel Style="{StaticResource HeaderStatChip}">
-                        <Ellipse x:Name="ConnDot"
-                                 Width="8" Height="8"
-                                 Fill="{DynamicResource MpStatusOnline}"
-                                 VerticalAlignment="Center"
-                                 Margin="0,0,6,0"/>
-                        <TextBlock x:Name="ConnStatusText"
-                                   Text="Connected"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeCaption}"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- Static "players online" count. The detailed list (with
-                         per-player status) lives in the players panel in the
-                         right column, so this is just the headline number. -->
-                    <StackPanel Style="{StaticResource HeaderStatChip}">
-                        <TextBlock Text="👥"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeCaption}"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,6,0"/>
-                        <TextBlock x:Name="OnlinePlayersText"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeCaption}"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- Static "active rooms" count (NOT clickable). Pulled
-                         from /quota by RefreshQuotaAsync. -->
-                    <StackPanel x:Name="ActiveRoomsChip" Style="{StaticResource HeaderStatChip}">
-                        <TextBlock x:Name="ActiveRoomsText"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeCaption}"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- NAT badge â€” kept as-is, drives the colour
-                         tint from NatTypeDetector probe. Pushed
-                         right so the user sees it but it doesn't
-                         dominate. -->
-                    <Border x:Name="NatBadgeBorder"
-                            Background="{DynamicResource MpSurfaceAlt}"
-                            BorderBrush="{DynamicResource BorderSubtle}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusSm}"
-                            Padding="8,2"
-                            Margin="14,0,0,0"
-                            Cursor="Help">
-                        <TextBlock x:Name="NatBadgeText"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeCaption}"
-                                   FontWeight="SemiBold"/>
-                    </Border>
+                    <Button x:Name="RefreshButton"
+                            Click="RefreshButton_Click"
+                            Style="{StaticResource MpSecondaryButton}"
+                            Height="32"
+                            Padding="12,0"
+                            Margin="0,0,16,0"/>
+                    <Button x:Name="CreateRoomButton"
+                            Click="CreateRoomButton_Click"
+                            Style="{StaticResource MpPrimaryButton}"
+                            Height="32"
+                            Padding="15,0"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -413,75 +381,6 @@
                     </Grid>
                 </Border>
 
-                <!-- Toolbar -->
-                <Grid Grid.Row="1" Margin="24,18,24,10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <!-- User chip: avatar circle + login + sign out. -->
-                    <StackPanel Grid.Column="0"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center">
-                        <Border Width="{StaticResource DiscSizeMd}" Height="{StaticResource DiscSizeMd}"
-                                CornerRadius="{StaticResource DiscRadiusMd}"
-                                Background="{DynamicResource MpSurfaceAlt}"
-                                BorderBrush="{DynamicResource BorderSubtle}"
-                                BorderThickness="1"
-                                Margin="0,0,10,0">
-                            <Grid>
-                                <Ellipse x:Name="UserAvatarEllipse">
-                                    <Ellipse.Fill>
-                                        <ImageBrush x:Name="UserAvatarBrush"
-                                                    Stretch="UniformToFill"/>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-                                <TextBlock x:Name="UserAvatarInitial"
-                                           Text=""
-                                           Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeBody}"
-                                           FontWeight="Bold"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                            </Grid>
-                        </Border>
-                        <TextBlock x:Name="SignedInAsText"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBody}"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="|"
-                                   Foreground="{DynamicResource BorderSubtle}"
-                                   FontSize="{StaticResource FontSizeBody}"
-                                   Margin="8,0"
-                                   VerticalAlignment="Center"/>
-                        <Button x:Name="SignOutLink"
-                                Click="SignOutLink_Click"
-                                Background="Transparent"
-                                BorderBrush="Transparent"
-                                Foreground="{DynamicResource MpBlue}"
-                                FontSize="{StaticResource FontSizeBody}"
-                                Cursor="Hand"
-                                Padding="0"/>
-                    </StackPanel>
-
-                    <Button Grid.Column="1"
-                            x:Name="RefreshButton"
-                            Click="RefreshButton_Click"
-                            Style="{StaticResource MpSecondaryButton}"
-                            Padding="16,8"
-                            MinWidth="110"
-                            Margin="0,0,10,0"/>
-
-                    <Button Grid.Column="2"
-                            x:Name="CreateRoomButton"
-                            Click="CreateRoomButton_Click"
-                            Style="{StaticResource MpPrimaryButton}"
-                            Padding="18,8"
-                            MinWidth="150"/>
-                </Grid>
 
                 <!-- Row 2: two-column content — active rooms (left) +
                      persistent global chat (right). The rooms table and

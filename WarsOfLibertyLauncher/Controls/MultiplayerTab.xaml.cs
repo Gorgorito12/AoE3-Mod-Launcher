@@ -554,15 +554,10 @@ public partial class MultiplayerTab : UserControl
             RadminBanner.Visibility = Visibility.Collapsed;
         }
 
-        // Push the chip AFTER the branches so it always reflects the state just
-        // computed. Only the ready state gets a chip: the not-ready cases are what
-        // the banner is for, and showing both would restate the same fact twice —
-        // the duplication the handoff is removing.
-        _setConnectionChip?.Invoke(
-            status.IsServiceRunning ? Strings.Get("MpChipConnected") : null,
-            status.IsServiceRunning
-                ? Strings.Format("MpChipVpnDetail", status.AdapterIp ?? "26.x.x.x")
-                : null);
+        // Radmin owns only the chip's ADDRESS half; the word comes from the lobby
+        // session. Refreshing through the shared method keeps this poll from
+        // overwriting the other half every ~3 s.
+        PushConnectionChip();
     }
 
     /// <summary>
@@ -908,8 +903,8 @@ public partial class MultiplayerTab : UserControl
         // RefreshRoomsListAsync — are gated below so they only run
         // when the user is actually looking at the Multiplayer tab.
         // No async bootstrap to fire anymore — the game-network layer
-        // (Radmin VPN) is user-managed; the launcher just paints the
-        // static badge once via RenderNatBadge() further down.
+        // (Radmin VPN) is user-managed, and its state now surfaces in the
+        // title-bar chip rather than a badge in this header.
 
         // Auto-refresh the quota bar every 60 s. Only ticks while
         // the control is *visible* — when the user switches to
@@ -1052,7 +1047,6 @@ public partial class MultiplayerTab : UserControl
         SignInBodyText.Text = Strings.Get("MpSignInBody");
         SignInButton.Content = Strings.Get("MpSignInButton");
 
-        SignOutLink.Content = Strings.Get("MpSignOutButton");
         // Compose icon + label using inline runs so the look stays
         // close to the reference (small glyph + word). Plain content
         // strings would be fine too — we keep them simple to avoid
@@ -1101,30 +1095,7 @@ public partial class MultiplayerTab : UserControl
         UpdateRoomsUpdatedLabel();
 
         UpdateSubtabHighlights();
-        RenderNatBadge();
         UpdateConnectionStatus();
-    }
-
-    /// <summary>
-    /// Paint the header badge. Used to flip between NAT-type colours
-    /// and later between n2n bootstrap states; now that the actual
-    /// game network is Radmin VPN (managed by the user outside the
-    /// launcher), the badge is purely informational — it reminds the
-    /// user that Radmin is the connectivity layer and points at the
-    /// banner above the rooms list for setup instructions.
-    /// </summary>
-    private void RenderNatBadge()
-    {
-        if (NatBadgeText == null || NatBadgeBorder == null) return;
-        NatBadgeText.Text = "Radmin VPN";
-        NatBadgeBorder.Background = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString("#182740"));
-        NatBadgeText.Foreground = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString("#94A3B8"));
-        NatBadgeBorder.ToolTip =
-            "Multiplayer rooms and chat run through this launcher, but the actual game-to-game " +
-            "connection is established over Radmin VPN. Make sure Radmin is installed and you " +
-            "have joined the community network before starting a game.";
     }
 
     private void OnSessionStateChanged(object? sender, EventArgs e) =>
@@ -2533,48 +2504,12 @@ public partial class MultiplayerTab : UserControl
 
     private void RenderBrowser()
     {
-        var user = _session?.CurrentUser;
-        SignedInAsText.Text = user != null
-            ? $"@{user.DiscordUsername}"
-            : "";
-
-        // Mirror the identity into the launcher's title bar (design handoff 1a: the
-        // account ROW here is replaced by that cluster). The rating comes from the
-        // once-per-session cache — it is a rate-limited endpoint, so this reads
-        // whatever has already been fetched and never triggers a fetch of its own.
-        PushAccountChip(user);
-
-        // Fill the avatar circle either with the user's Discord
-        // avatar (cached_user.avatar_url) or, when we have no URL
-        // / it fails to load, with the uppercase first letter of
-        // the login as a placeholder. Both cases keep the circle
-        // the same physical size so the toolbar layout doesn't
-        // shift when the network is slow.
-        try
-        {
-            if (user != null && !string.IsNullOrEmpty(user.AvatarUrl))
-            {
-                UserAvatarBrush.ImageSource = new System.Windows.Media.Imaging.BitmapImage(
-                    new Uri(user.AvatarUrl, UriKind.Absolute));
-                UserAvatarInitial.Text = "";
-            }
-            else
-            {
-                UserAvatarBrush.ImageSource = null;
-                UserAvatarInitial.Text = !string.IsNullOrEmpty(user?.DiscordUsername)
-                    ? user.DiscordUsername.Substring(0, 1).ToUpperInvariant()
-                    : "?";
-            }
-        }
-        catch
-        {
-            // BitmapImage throws on malformed URLs; fall back to
-            // the initial so the toolbar still renders cleanly.
-            UserAvatarBrush.ImageSource = null;
-            UserAvatarInitial.Text = !string.IsNullOrEmpty(user?.DiscordUsername)
-                ? user.DiscordUsername.Substring(0, 1).ToUpperInvariant()
-                : "?";
-        }
+        // The account ROW this used to fill (avatar + @login + Sign out) is gone —
+        // the reference moves the identity to the title bar, so rendering it is now
+        // a push rather than a local paint. The rating comes from the once-per-session
+        // cache: it is a rate-limited endpoint, so this reads what has already been
+        // fetched and never triggers a fetch of its own.
+        PushAccountChip(_session?.CurrentUser);
     }
 
     /// <summary>
@@ -3032,20 +2967,14 @@ public partial class MultiplayerTab : UserControl
 
     private void UpdateSubtabHighlights()
     {
-        // Multiplayer subtabs use the blue accent instead of the
-        // per-mod red — the redesign brief makes blue the section's
-        // own identity colour. The underline is the only visual
-        // indicator (no background pill), matching the reference.
-        var accent = (Brush)Application.Current.FindResource("MpBlue");
-        var transparent = Brushes.Transparent;
-        var dim = (Brush)Application.Current.FindResource("TextSecondary");
-        var bright = (Brush)Application.Current.FindResource("TextPrimary");
-
-        void Paint(Button b, bool active)
-        {
-            b.Foreground = active ? bright : dim;
-            b.BorderBrush = active ? accent : transparent;
-        }
+        // ALL the colour lives in the SubTab style's Tag="active" trigger; this only
+        // sets the flag. It used to assign Foreground and BorderBrush directly, which
+        // has to go with the underline-to-pill change and not merely because the
+        // underline is gone: a LOCAL value (precedence 3) beats a ControlTemplate
+        // trigger (4-6), so leaving these assignments in would silently kill the pill's
+        // own foreground. Same trap the brand button and the lobby Ready button were
+        // each bitten by.
+        static void Paint(Button b, bool active) => b.Tag = active ? "active" : null;
 
         Paint(SubtabRooms, _activeSubtab == Subtab.Rooms);
         Paint(SubtabFriends, _activeSubtab == Subtab.Friends);
@@ -3093,25 +3022,41 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void UpdateConnectionStatus()
     {
-        // Default to "signed out" appearance when there's no session
-        // — keeps the pill from claiming "Connected" before sign-in.
-        if (_session == null
-            || _session.Status != MultiplayerSession.SessionStatus.SignedIn)
+        // The pill this used to paint is gone — the reference makes the title-bar chip
+        // the SINGLE connection indicator, so this now only decides the word and hands
+        // it over. Not signed in leaves it null, which hides the chip: claiming
+        // "Connected" before sign-in was the old pill's behaviour and it was wrong.
+        _connectionLabel =
+            _session == null || _session.Status != MultiplayerSession.SessionStatus.SignedIn
+                ? null
+                : _isReconnecting
+                    ? Strings.Get("MpChipReconnecting")
+                    : Strings.Get("MpChipConnected");
+
+        PushConnectionChip();
+    }
+
+    /// <summary>The lobby-connection word for the title-bar chip; null hides it.</summary>
+    private string? _connectionLabel;
+
+    /// <summary>
+    /// Renders the title-bar chip from the TWO facts it merges: the lobby connection
+    /// (the word) and Radmin (the address). Kept in one method because both feed one
+    /// control and they change on different schedules — the session on state changes,
+    /// Radmin on its ~3 s poll — so either updating alone would drop the other's half.
+    /// </summary>
+    private void PushConnectionChip()
+    {
+        if (_setConnectionChip == null) return;
+
+        string? detail = null;
+        if (_connectionLabel != null)
         {
-            ConnDot.Fill = (Brush)Application.Current.FindResource("MpStatusOffline");
-            ConnStatusText.Text = "Offline";
-            return;
+            var ip = RadminVpnService.TryGetAdapterIp();
+            if (!string.IsNullOrEmpty(ip)) detail = Strings.Format("MpChipVpnDetail", ip);
         }
 
-        if (_isReconnecting)
-        {
-            ConnDot.Fill = (Brush)Application.Current.FindResource("MpStatusReconnect");
-            ConnStatusText.Text = "Reconnecting…";
-            return;
-        }
-
-        ConnDot.Fill = (Brush)Application.Current.FindResource("MpStatusOnline");
-        ConnStatusText.Text = "Connected";
+        _setConnectionChip(_connectionLabel, detail);
     }
 
     // ---------- Subtab clicks ----------
@@ -3379,13 +3324,21 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
-    private void SignOutLink_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Signs out. Public because the affordance moved to the title-bar account menu
+    /// when the account row was removed — this is the same path that link used, not a
+    /// second one, so the rating cache is cleared here and nowhere else.
+    /// </summary>
+    public void SignOut()
     {
         // Or the next person to sign in on this machine would be shown the previous
         // player's rating until the launcher restarts.
         _cachedStanding = null;
         _session?.SignOut();
     }
+
+    /// <summary>Opens the Profile subtab. Called from the title-bar account menu.</summary>
+    public void ShowProfile() => SubtabProfile_Click(this, new RoutedEventArgs());
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
@@ -4553,14 +4506,14 @@ public partial class MultiplayerTab : UserControl
     private readonly HashSet<string> _presenceSeenIds = new(StringComparer.Ordinal);
     private bool _presenceBaselineSeeded;
 
+    /// <summary>
+    /// The header counts this filled are gone with the bar-2 redesign — the reference
+    /// keeps that bar to navigation and actions, and both numbers already appear in the
+    /// right-hand panel ("Players · N" and the chat's connected count), which is where
+    /// the handoff puts them. The underlying fields stay: they still feed that panel.
+    /// </summary>
     private void UpdateTopBarCounts()
     {
-        int players = _lastGlobalOnline ?? _lastQuotaPlayers;
-        // The 👥 icon is static in the XAML chip; here we set just the label.
-        // "active rooms" is its own static chip. The detailed list lives in the
-        // players panel in the right column (RenderPlayersPanel).
-        OnlinePlayersText.Text = $"{players} players online";
-        ActiveRoomsText.Text = $"🏠 {_lastActiveRooms} active rooms";
     }
 
     /// <summary>
@@ -4888,18 +4841,13 @@ public partial class MultiplayerTab : UserControl
             // counter lives in the tooltip so the header strip stays compact.
             _lastQuotaPlayers = q.Players.Active;
             _lastActiveRooms = q.Lobbies.Active;
-            // The /max breakdown lives on the active-rooms chip's tooltip; the
-            // players pill keeps its own "see who's online" tooltip.
-            ActiveRoomsChip.ToolTip = Strings.Format("MpQuotaBar",
-                q.Players.Active, q.Players.Max,
-                q.Lobbies.Active, q.Lobbies.Max);
             UpdateTopBarCounts();
         }
         catch
         {
-            // Quota fetch failed: blank only the quota-derived rooms label; the
-            // players pill is presence-driven and keeps its last value.
-            ActiveRoomsText.Text = "";
+            // Quota fetch failed. Nothing to blank any more — the header labels this
+            // used to clear are gone, and the right-hand panel is presence-driven, so
+            // it simply keeps its last known values.
         }
     }
 

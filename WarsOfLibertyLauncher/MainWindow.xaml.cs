@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -11339,11 +11339,40 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Opens the account menu. For now it routes to Multiplayer, where sign-out lives;
-    /// the dropdown the reference shows (Profile / Sign out) is a follow-up.
+    /// Account menu: Profile / Sign out, per the reference.
+    ///
+    /// <para>This is not decoration — removing the Multiplayer tab's account row took
+    /// its "Sign out" link with it, so without this menu signing out would be
+    /// unreachable. Both items delegate to <c>MultiplayerTab</c>: sign-out has to clear
+    /// the cached rating as well, or the next person to sign in on this machine sees
+    /// the previous player's.</para>
+    ///
+    /// <para>A <see cref="ContextMenu"/> rather than a hand-built Popup on purpose —
+    /// it captures input and auto-dismisses reliably, which is exactly the behaviour
+    /// the hand-built chrome popups need <c>ChromePopups</c> to coordinate for them.</para>
     /// </summary>
     private void AccountButton_Click(object sender, RoutedEventArgs e)
-        => SwitchTopTab(TopTab.Multiplayer);
+    {
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            PlacementTarget = AccountButton,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+        };
+
+        var profile = new System.Windows.Controls.MenuItem { Header = Strings.Get("MpAccountMenuProfile") };
+        profile.Click += (_, _) =>
+        {
+            SwitchTopTab(TopTab.Multiplayer);
+            MultiplayerView.ShowProfile();
+        };
+
+        var signOut = new System.Windows.Controls.MenuItem { Header = Strings.Get("MpAccountMenuSignOut") };
+        signOut.Click += (_, _) => MultiplayerView.SignOut();
+
+        menu.Items.Add(profile);
+        menu.Items.Add(signOut);
+        menu.IsOpen = true;
+    }
 
     /// <summary>
     /// Paints the title-bar account cluster from the multiplayer session, or hides it
