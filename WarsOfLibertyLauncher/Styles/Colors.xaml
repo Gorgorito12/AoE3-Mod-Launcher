@@ -464,6 +464,8 @@
          tints above, so it reads as an event in the log rather than as a button. -->
     <SolidColorBrush x:Key="MpEventBg" Color="#172F7FE0"/>
     <SolidColorBrush x:Key="MpEventRim" Color="#332F7FE0"/>
+    <!-- Quick-reply pill above the chat composer. -->
+    <SolidColorBrush x:Key="MpQuickReplyBg" Color="#1F2F7FE0"/>
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>

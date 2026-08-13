@@ -96,6 +96,41 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Quick-reply pill above the chat composer (design handoff 1a). Clicking one
+             FILLS the box rather than sending: the three canned lines are openers, and
+             one that fired on a single click would be a way to spam the room by
+             accident. CornerRadius is half the height — the reference writes
+             `border-radius:999px`, which is a CSS idiom WPF renders as a distorted
+             ellipse (see RadiusPill). -->
+        <Style x:Key="MpQuickReply" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource MpQuickReplyBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="{StaticResource MpMicroSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="pill"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="12"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Clickable, sortable column header. Transparent button that shows
              the column label + a sort arrow (set in code-behind); brightens on
              hover. Left-aligned so the label sits flush over its column. Zero
@@ -791,6 +826,15 @@
                                     BorderThickness="0,1,0,0"
                                     Padding="10,6">
                                 <StackPanel>
+                                    <!-- Quick replies. Openers for a quiet channel —
+                                         they fill the box, they don't send. -->
+                                    <StackPanel x:Name="QuickReplies"
+                                                Orientation="Horizontal"
+                                                Margin="2,0,2,7">
+                                        <Button x:Name="QuickReplyAnyone" Click="QuickReply_Click" Style="{StaticResource MpQuickReply}"/>
+                                        <Button x:Name="QuickReplyGg" Click="QuickReply_Click" Style="{StaticResource MpQuickReply}"/>
+                                        <Button x:Name="QuickReplyMinute" Click="QuickReply_Click" Style="{StaticResource MpQuickReply}"/>
+                                    </StackPanel>
                                     <!-- Throttle / slow-mode hint: shown when the
                                          server drops a message, cleared on next keystroke. -->
                                     <TextBlock x:Name="GlobalChatNotice"

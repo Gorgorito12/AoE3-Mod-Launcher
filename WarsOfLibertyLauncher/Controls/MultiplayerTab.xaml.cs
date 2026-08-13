@@ -1067,6 +1067,11 @@ public partial class MultiplayerTab : UserControl
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
         GlobalChatHeaderText.Text = Strings.Get("MpGlobalChatTitle");
+        // The pill's Content IS the text that lands in the box, so a language switch
+        // has to reach them or the pills would keep filling in the old language.
+        QuickReplyAnyone.Content = Strings.Get("MpQuickReplyAnyone");
+        QuickReplyGg.Content = Strings.Get("MpQuickReplyGg");
+        QuickReplyMinute.Content = Strings.Get("MpQuickReplyMinute");
         // The players tab's caption is normally rewritten with a live count by
         // RenderPlayersPanel; seed it here so it isn't blank before the first
         // presence frame, and so a language switch reaches it in the meantime.
@@ -3832,6 +3837,20 @@ public partial class MultiplayerTab : UserControl
     /// by visibility rather than one swapped child, so the chat keeps its scroll
     /// position — and its 200-row ring keeps filling — while the user is on Players.
     /// </summary>
+    /// <summary>
+    /// A quick-reply pill FILLS the composer; it does not send. The three are openers
+    /// for a quiet channel, and one that fired on a single click would be a way to spam
+    /// the room by accident — the server's own slow-mode would then be the only thing
+    /// between a stray double-click and a timeout.
+    /// </summary>
+    private void QuickReply_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button b || b.Content is not string text) return;
+        GlobalChatInput.Text = text;
+        GlobalChatInput.CaretIndex = GlobalChatInput.Text.Length;
+        GlobalChatInput.Focus();
+    }
+
     private void PanelTab_Click(object sender, RoutedEventArgs e)
         => ShowPanelTab(ReferenceEquals(sender, PanelTabPlayers));
 

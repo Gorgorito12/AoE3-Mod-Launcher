@@ -2396,6 +2396,12 @@ public static class Strings
         // Centred day divider in the global chat. "Today" instead of a date, because a
         // date on the line you are reading right now is noise.
         ["MpChatToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
+        // Quick replies above the chat composer. These are TYPED into the box, so they
+        // are the player's own words — keep them short and natural in both languages
+        // rather than literal translations of each other.
+        ["MpQuickReplyAnyone"] = new() { [LangEn] = "Anyone playing?", [LangEs] = "¿Alguien juega?" },
+        ["MpQuickReplyGg"] = new() { [LangEn] = "gg", [LangEs] = "gg" },
+        ["MpQuickReplyMinute"] = new() { [LangEn] = "1 min", [LangEs] = "1 min" },
         // Room-opened card in the chat flow. {0} is the host's login.
         ["MpChatRoomOpened"] = new()
         {
