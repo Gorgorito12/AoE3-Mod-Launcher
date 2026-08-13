@@ -532,47 +532,33 @@
                                 <Button x:Name="ColButtonRoom" Grid.Column="0" Style="{StaticResource MpColHeaderButton}" Tag="Room" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Button>
-                                <Button x:Name="ColButtonMod" Grid.Column="1" Style="{StaticResource MpColHeaderButton}" Tag="Mod" Click="RoomHeader_Click">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderMod" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowMod" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
                                 <Button x:Name="ColButtonHost" Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Host" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderHost" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowHost" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderHost" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowHost" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
                                 <Button x:Name="ColButtonPlayers" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
                                 <Button x:Name="ColButtonPing" Grid.Column="4" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPing" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Button>
-                                <Button x:Name="ColButtonStatus" Grid.Column="5" Style="{StaticResource MpColHeaderButton}" Tag="Status" Click="RoomHeader_Click">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderStatus" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowStatus" Text="⇅" Foreground="{DynamicResource MpTableHeader}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPing" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
                                 <TextBlock Grid.Column="6" x:Name="ColHeaderAction"
-                                           Foreground="{DynamicResource MpTableHeader}"
+                                           Foreground="{DynamicResource MpTextLabel}"
                                            FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>

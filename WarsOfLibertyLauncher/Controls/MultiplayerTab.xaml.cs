@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
@@ -131,7 +131,12 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Per-room "open for X" sub-line cells + each room's UTC creation
     /// time, so <see cref="RefreshRoomAgeCells"/> ticks them up in place (no
     /// rebuild). Rebuilt with the rooms list, same as <see cref="_roomPingCells"/>.</summary>
-    private readonly System.Collections.Generic.List<(TextBlock Text, DateTime CreatedUtc)> _roomAgeCells = new();
+    // The subtitle line is ONE TextBlock (the reference gives the row a single second
+    // line), and its tail is a live "hace N" that ticks on the rooms timer — so the
+    // static part travels with it and the timer rewrites the whole string. Splitting the
+    // line in two so only the tail updated would need a horizontal StackPanel, which
+    // measures with infinite width and would leave the ellipsis inert.
+    private readonly System.Collections.Generic.List<(TextBlock Text, DateTime CreatedUtc, string Prefix)> _roomAgeCells = new();
 
     /// <summary>
     /// The rooms-table columns currently on screen, from <see cref="Services.RoomsTableLayout"/>.
@@ -1083,11 +1088,9 @@ public partial class MultiplayerTab : UserControl
 
         // Room-list column headers (localized) + empty-state copy.
         ColHeaderRoom.Text = Strings.Get("MpColRoom");
-        ColHeaderMod.Text = Strings.Get("MpColMod");
         ColHeaderHost.Text = Strings.Get("MpColHost");
         ColHeaderPlayers.Text = Strings.Get("MpColPlayers");
         ColHeaderPing.Text = Strings.Get("MpColPing");
-        ColHeaderStatus.Text = Strings.Get("MpColStatus");
         ColHeaderAction.Text = Strings.Get("MpColAction");
         UpdateSortArrows();
         EmptyTitleText.Text = Strings.Get("MpRoomsEmptyTitle");
@@ -3684,11 +3687,9 @@ public partial class MultiplayerTab : UserControl
             else { arrow.Text = "⇅"; arrow.Foreground = idle; }
         }
         Set(SortArrowRoom, RoomSort.Room);
-        Set(SortArrowMod, RoomSort.Mod);
         Set(SortArrowHost, RoomSort.Host);
         Set(SortArrowPlayers, RoomSort.Players);
         Set(SortArrowPing, RoomSort.Ping);
-        Set(SortArrowStatus, RoomSort.Status);
     }
 
     /// <summary>Mod display name for sorting (falls back to the raw id).</summary>
@@ -3842,8 +3843,13 @@ public partial class MultiplayerTab : UserControl
         foreach (var spec in resolved)
             RoomsHeaderStrip.ColumnDefinitions.Add(new ColumnDefinition
             {
-                Width = new GridLength(spec.Weight, GridUnitType.Star),
-                MinWidth = spec.MinWidth,
+                // A null FixedWidth is the reference's `1fr`: the Room column absorbs
+                // whatever the fixed ones leave. MinWidth stays 0 so it can shrink and
+                // let its text ellipsise, rather than pushing the fixed columns off the
+                // edge of a list that does not scroll horizontally.
+                Width = spec.FixedWidth is double w
+                    ? new GridLength(w, GridUnitType.Pixel)
+                    : new GridLength(1, GridUnitType.Star),
             });
 
         for (var i = 0; i < resolved.Count; i++)
@@ -3866,11 +3872,9 @@ public partial class MultiplayerTab : UserControl
     private FrameworkElement? HeaderElementFor(Services.RoomColumn column) => column switch
     {
         Services.RoomColumn.Room => ColButtonRoom,
-        Services.RoomColumn.Mod => ColButtonMod,
         Services.RoomColumn.Host => ColButtonHost,
         Services.RoomColumn.Players => ColButtonPlayers,
         Services.RoomColumn.Ping => ColButtonPing,
-        Services.RoomColumn.Status => ColButtonStatus,
         Services.RoomColumn.Action => ColHeaderAction,
         _ => null,
     };
@@ -4944,8 +4948,13 @@ public partial class MultiplayerTab : UserControl
         foreach (var spec in _roomColumns)
             grid.ColumnDefinitions.Add(new ColumnDefinition
             {
-                Width = new GridLength(spec.Weight, GridUnitType.Star),
-                MinWidth = spec.MinWidth,
+                // A null FixedWidth is the reference's `1fr`: the Room column absorbs
+                // whatever the fixed ones leave. MinWidth stays 0 so it can shrink and
+                // let its text ellipsise, rather than pushing the fixed columns off the
+                // edge of a list that does not scroll horizontally.
+                Width = spec.FixedWidth is double w
+                    ? new GridLength(w, GridUnitType.Pixel)
+                    : new GridLength(1, GridUnitType.Star),
             });
 
         // === Col 0: ROOM — mod icon disc (★ fallback) + title (wraps to 2
@@ -5043,83 +5052,53 @@ public partial class MultiplayerTab : UserControl
             titleRow.Children.Add(privateChip);
         }
         salaText.Children.Add(titleRow);
-        if (!modInstalled)
-        {
-            salaText.Children.Add(new TextBlock
-            {
-                Text = Strings.Get("MpRoomModNotInstalled"),
-                Foreground = textSecondary,
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 2, 0, 0),
-            });
-        }
-        // Whatever the current width couldn't fit as a column moves here, so narrowing the
-        // window hides the COLUMN but never the information: "Gorgorito12 · Wars of Liberty".
-        // Built from the same resolved set the columns came from, so the two can't disagree
-        // about what is on screen.
-        var relocated = new System.Collections.Generic.List<string>();
+
+        // ONE subtitle line, per the reference: "{mod} · {context} · hace {t}".
+        // The mod name lives here now rather than in a column of its own — it reads as
+        // context, and nobody sorted by it. Anything the current width could not fit as a
+        // column joins it, so narrowing the window hides the COLUMN but never the fact.
+        // Built from the same resolved set the columns came from, so the two can't
+        // disagree about what is on screen.
+        var subtitle = new System.Collections.Generic.List<string>();
+        if (!string.IsNullOrWhiteSpace(modName)) subtitle.Add(modName!);
         foreach (var dropped in Services.RoomsTableLayout.Hidden(_roomColumns))
         {
             switch (dropped)
             {
                 case Services.RoomColumn.Host when hostNameKnown:
-                    relocated.Add(hostName!);
+                    subtitle.Add(hostName!);
                     break;
-                case Services.RoomColumn.Mod when !string.IsNullOrWhiteSpace(modName):
-                    relocated.Add(modName!);
-                    break;
-                // Ping is deliberately absent: it is YOUR latency, identical on every row, so
-                // repeating it per room would add noise rather than information.
+                // Ping is deliberately absent: it is YOUR latency, identical on every row,
+                // so repeating it per room would add noise rather than information.
             }
         }
-        if (relocated.Count > 0)
-        {
-            salaText.Children.Add(new TextBlock
-            {
-                Text = string.Join(" · ", relocated),
-                Foreground = textSecondary,
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 2, 0, 0),
-            });
-        }
+        if (!modInstalled) subtitle.Add(Strings.Get("MpRoomModNotInstalled"));
 
-        // "open for X" — a live count-up sub-line, ticked in place by
-        // RefreshRoomAgeCells (rooms ping timer). Registered so it stays live
-        // without re-rendering the row. Only when we can parse the open time.
+        // The open time is the line's tail and ticks in place on the rooms timer, so the
+        // rest of the line travels with it (see _roomAgeCells).
         var roomCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
-        if (roomCreatedUtc.HasValue)
+        var prefix = string.Join(" · ", subtitle);
+        if (roomCreatedUtc.HasValue || prefix.Length > 0)
         {
-            var ageTb = new TextBlock
+            var age = roomCreatedUtc.HasValue
+                ? Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(DateTime.UtcNow - roomCreatedUtc.Value))
+                : "";
+            var subTb = new TextBlock
             {
-                Text = Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(DateTime.UtcNow - roomCreatedUtc.Value)),
+                Text = prefix.Length > 0 && age.Length > 0 ? prefix + " · " + age
+                     : prefix.Length > 0 ? prefix : age,
                 Foreground = textSecondary,
                 FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 2, 0, 0),
             };
-            salaText.Children.Add(ageTb);
-            _roomAgeCells.Add((ageTb, roomCreatedUtc.Value));
+            salaText.Children.Add(subTb);
+            if (roomCreatedUtc.HasValue) _roomAgeCells.Add((subTb, roomCreatedUtc.Value, prefix));
         }
         Grid.SetColumn(salaText, 1);
         salaCell.Children.Add(salaText);
         PlaceRoomCell(grid, Services.RoomColumn.Room, salaCell);
-
-        // === MOD — the mod's name as a blue chip, in its own column. The chip lives in a
-        // bounded Grid, not a horizontal StackPanel: a StackPanel measures with infinite
-        // width, so the chip rendered at its natural size and ran under the HOST cell. ===
-        var modCell = new Grid { VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
-        var modChip = BuildRoomChip(
-            modName!,
-            (Brush)Application.Current.FindResource("MpModBadgeBg"),
-            (Brush)Application.Current.FindResource("FgHoverBlue"));
-        modChip.HorizontalAlignment = HorizontalAlignment.Left;
-        modCell.Children.Add(modChip);
-        PlaceRoomCell(grid, Services.RoomColumn.Mod, modCell);
 
         // === HOST — colored initial circle + name (Grid{Auto,*} so the name ellipsizes
         // instead of overflowing). hostName was resolved above the ROOM cell because the
@@ -5172,20 +5151,12 @@ public partial class MultiplayerTab : UserControl
         // timer mutates its children in place), but it can no longer draw past its column.
         PlaceRoomCell(grid, Services.RoomColumn.Ping, WrapCell(pingCell));
 
-        // === Col 5: STATUS — colored dot + label. Waiting (blue) / In Game
-        // (green) / Full (amber). ===
-        // Priority: In Game > Full > Private > Waiting. Private is a purple dot
-        // (mockup look), but the room is still JOINABLE — the ACTION below stays
-        // an enabled Join (password prompt on click), it is NOT a hard "Locked".
-        var statusKind = inGame ? RoomStatusKind.InGame
-            : (isFull ? RoomStatusKind.Full
-            : (lobby.IsPrivate ? RoomStatusKind.Locked : RoomStatusKind.Waiting));
-        var statusLabel = inGame ? Strings.Get("MpRoomStatusInGame")
-            : (isFull ? Strings.Get("MpRoomFull")
-            : (lobby.IsPrivate ? Strings.Get("MpRoomStatusLocked") : Strings.Get("MpRoomStatusWaiting")));
-        var statusCell = BuildStatusCell(statusLabel, statusKind);
-        PlaceRoomCell(grid, Services.RoomColumn.Status, WrapCell(statusCell));
-
+        // STATUS had its own column and no longer does: the reference lets the ACTION
+        // button carry it, since "In game" and "Full" are already the reason that button
+        // is disabled and its caption says so. statusKind/statusLabel are gone with it;
+        // the flags they were derived from (inGame, isFull, IsPrivate) still drive the
+        // action below, and the purple PRIVADA chip beside the title still marks a
+        // private room at every status.
         // === Col 6: ACTION — gold-outline button. SAME priority logic: in this
         // room → Re-enter; our own room → "Your room" (disabled); in game →
         // disabled; full → disabled; mod not installed → disabled Join; else →
@@ -5459,8 +5430,11 @@ public partial class MultiplayerTab : UserControl
     private void RefreshRoomAgeCells()
     {
         var now = DateTime.UtcNow;
-        foreach (var (text, createdUtc) in _roomAgeCells)
-            text.Text = Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(now - createdUtc));
+        foreach (var (text, createdUtc, prefix) in _roomAgeCells)
+        {
+            var age = Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(now - createdUtc));
+            text.Text = prefix.Length > 0 ? prefix + " · " + age : age;
+        }
     }
 
     /// <summary>"open for X" text for the CURRENT lobby, or "" when the open time
