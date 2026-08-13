@@ -2782,7 +2782,7 @@ public partial class MultiplayerTab : UserControl
         var modIcon = ResolveRoomModIcon(
             string.IsNullOrEmpty(_currentLobbyModId) ? null : ModRegistry.Find(_currentLobbyModId));
         _lobbyWindow.RoomModIconHost.Background = modIcon
-            ?? (Brush)Application.Current.FindResource("MpBlueSubtle");
+            ?? (Brush)Application.Current.FindResource("MpEventBg");
         _lobbyWindow.RoomModIconGlyph.Visibility = modIcon == null
             ? Visibility.Visible : Visibility.Collapsed;
 
@@ -3269,7 +3269,7 @@ public partial class MultiplayerTab : UserControl
             stack.Children.Add(new TextBlock
             {
                 Text = Strings.Get("MpHistoryLoading"),
-                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
                 FontStyle = FontStyles.Italic,
             });
 
@@ -3281,7 +3281,7 @@ public partial class MultiplayerTab : UserControl
                 stack.Children.Add(new TextBlock
                 {
                     Text = Strings.Get("MpHistoryEmpty"),
-                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                    Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
                     FontStyle = FontStyles.Italic,
                 });
                 return;
@@ -3341,7 +3341,7 @@ public partial class MultiplayerTab : UserControl
         titleRow.Children.Add(new TextBlock
         {
             Text = modName,
-            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
             FontWeight = FontWeights.SemiBold,
             FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -3388,7 +3388,7 @@ public partial class MultiplayerTab : UserControl
         left.Children.Add(new TextBlock
         {
             Text = string.Join(" · ", parts),
-            Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
             FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             Margin = new Thickness(0, 2, 0, 0),
         });
@@ -3856,8 +3856,8 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Paint each header's sort arrow: ⇅ idle, ↑/↓ on the active column.</summary>
     private void UpdateSortArrows()
     {
-        var active = (Brush)Application.Current.FindResource("TextPrimary");
-        var idle = (Brush)Application.Current.FindResource("MpTableHeader");
+        var active = (Brush)Application.Current.FindResource("MpTextPrimary");
+        var idle = (Brush)Application.Current.FindResource("MpTextLabel");
         void Set(TextBlock? arrow, RoomSort col)
         {
             if (arrow == null) return;
@@ -5102,7 +5102,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private static UIElement BuildChatDateSeparator(DateTime day)
     {
-        var rule = (Brush)Application.Current.FindResource("MpDivider");
+        var rule = (Brush)Application.Current.FindResource("MpRimFaint");
         var grid = new Grid { Margin = new Thickness(0, 12, 0, 6) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -5210,7 +5210,7 @@ public partial class MultiplayerTab : UserControl
             PlayersPanel.Children.Add(new TextBlock
             {
                 Text = Strings.Get("MpOnlinePlayersEmpty"),
-                Foreground = R("TextSecondary"),
+                Foreground = R("MpTextMuted"),
                 FontSize = F("FontSizeCaption"),
                 Margin = new Thickness(4, 6, 0, 0),
             });
@@ -5237,7 +5237,7 @@ public partial class MultiplayerTab : UserControl
             headerRow.Children.Add(new TextBlock
             {
                 Text = Strings.Format(headerKey, members.Count),
-                Foreground = R("TextSecondary"),
+                Foreground = R("MpTextMuted"),
                 FontSize = F("FontSizeCaption"),
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -5265,7 +5265,7 @@ public partial class MultiplayerTab : UserControl
                 var nameText = new TextBlock
                 {
                     Text = u.login,
-                    Foreground = R("TextPrimary"),
+                    Foreground = R("MpTextPrimary"),
                     FontSize = F("FontSizeCaption"),
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis,
@@ -5278,7 +5278,7 @@ public partial class MultiplayerTab : UserControl
                     var youTag = new TextBlock
                     {
                         Text = "· " + Strings.Get("MpOnlinePlayersYou"),
-                        Foreground = R("TextSecondary"),
+                        Foreground = R("MpTextMuted"),
                         FontSize = F("FontSizeCaption"),
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(6, 0, 4, 0),
@@ -5301,7 +5301,7 @@ public partial class MultiplayerTab : UserControl
         // Ordered: playing → waiting in a room → idle in the launcher.
         Section("in_game", "MpPlayersInGame", "MpStatusInGame");
         Section("in_room", "MpPlayersInRoom", "MpStatusFull");
-        Section("idle", "MpPlayersInLauncher", "TextSecondary");
+        Section("idle", "MpPlayersInLauncher", "MpTextMuted");
     }
 
     /// <summary>
@@ -5321,13 +5321,13 @@ public partial class MultiplayerTab : UserControl
             Text = "\uE8FA",   // Segoe MDL2 AddFriend (person with +)
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
             FontSize = 14,
-            Foreground = Res(enabled ? "MpBlue" : "TextSecondary"),
+            Foreground = Res(enabled ? "MpBlue" : "MpTextMuted"),
         };
         var btn = new Border
         {
             Child = glyph,
-            Background = Res("MpSurfaceAlt"),               // visible chip (was transparent)
-            BorderBrush = Res(enabled ? "MpCardBorder" : "MpDivider"),
+            Background = Res("MpRowHighlight"),               // visible chip (was transparent)
+            BorderBrush = Res(enabled ? "MpCardBorder" : "MpRimFaint"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(5),
             Padding = new Thickness(6, 3, 6, 3),
@@ -5347,7 +5347,7 @@ public partial class MultiplayerTab : UserControl
             };
             btn.MouseLeave += (_, _) =>
             {
-                btn.Background = Res("MpSurfaceAlt");
+                btn.Background = Res("MpRowHighlight");
                 btn.BorderBrush = Res("MpCardBorder");
                 glyph.Foreground = Res("MpBlue");
             };
@@ -5385,7 +5385,7 @@ public partial class MultiplayerTab : UserControl
         panel.Children.Add(new TextBlock
         {
             Text = string.IsNullOrWhiteSpace(lobby.Title) ? Strings.Get("MpRoomPeekTitle") : lobby.Title,
-            Foreground = R("TextPrimary"),
+            Foreground = R("MpTextPrimary"),
             FontWeight = FontWeights.Bold,
             FontSize = F("FontSizeBodyStrong"),
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -5395,14 +5395,14 @@ public partial class MultiplayerTab : UserControl
         var loading = new TextBlock
         {
             Text = Strings.Get("MpRoomPeekLoading"),
-            Foreground = R("TextSecondary"),
+            Foreground = R("MpTextMuted"),
             FontSize = F("FontSizeBody"),
         };
         panel.Children.Add(loading);
 
         var card = new Border
         {
-            Background = R("MpSurface"),
+            Background = R("MpPanel"),
             BorderBrush = R("MpCardBorder"),
             BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusLg"),
@@ -5434,7 +5434,7 @@ public partial class MultiplayerTab : UserControl
             panel.Children.Add(new TextBlock
             {
                 Text = $"👤 {detail.CurrentPlayers} / {detail.MaxPlayers}",
-                Foreground = R("TextSecondary"),
+                Foreground = R("MpTextMuted"),
                 FontSize = F("FontSizeCaption"),
                 Margin = new Thickness(0, 0, 0, 8),
             });
@@ -5443,7 +5443,7 @@ public partial class MultiplayerTab : UserControl
                 panel.Children.Add(new TextBlock
                 {
                     Text = Strings.Get("MpRoomPeekEmpty"),
-                    Foreground = R("TextSecondary"),
+                    Foreground = R("MpTextMuted"),
                     FontSize = F("FontSizeBody"),
                 });
             }
@@ -5462,7 +5462,7 @@ public partial class MultiplayerTab : UserControl
                 row.Children.Add(new TextBlock
                 {
                     Text = display,
-                    Foreground = isHost ? R("AccentBrush") : R("TextPrimary"),
+                    Foreground = isHost ? R("AccentBrush") : R("MpTextPrimary"),
                     FontSize = F("FontSizeBody"),
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis,
@@ -5539,8 +5539,8 @@ public partial class MultiplayerTab : UserControl
         var inGame = lobby.Status == "in_game";
         var isFull = lobby.CurrentPlayers >= lobby.MaxPlayers;
         var me = _session?.CurrentUser;
-        var textPrimary = (Brush)Application.Current.FindResource("TextPrimary");
-        var textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
+        var textPrimary = (Brush)Application.Current.FindResource("MpTextPrimary");
+        var textSecondary = (Brush)Application.Current.FindResource("MpTextMuted");
 
         var card = new Border
         {
@@ -6123,7 +6123,7 @@ public partial class MultiplayerTab : UserControl
             panel.Children.Add(new TextBlock
             {
                 Text = "—",
-                Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
                 FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 VerticalAlignment = VerticalAlignment.Center,
             });
@@ -6225,7 +6225,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = label,
             Foreground = (Brush)Application.Current.FindResource(
-                kind == RoomStatusKind.InGame ? "MpStatusInGame" : "TextPrimary"),
+                kind == RoomStatusKind.InGame ? "MpStatusInGame" : "MpTextPrimary"),
             FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             FontWeight = kind == RoomStatusKind.InGame ? FontWeights.SemiBold : FontWeights.Normal,
             VerticalAlignment = VerticalAlignment.Center,
@@ -8423,10 +8423,10 @@ public partial class MultiplayerTab : UserControl
         // a fresh probe for the next tick.
         _lobbyWindow!.InGameConnectionText.Text = _connectionPingMs >= 0 ? $"{_connectionPingMs} ms" : "…";
         _lobbyWindow!.InGameConnectionText.Foreground = (Brush)Application.Current.FindResource(
-            _connectionPingMs < 0 ? "TextSecondary"
-            : _connectionPingMs < 80 ? "MpStatusOnline"
-            : _connectionPingMs < 200 ? "MpPingMedium"
-            : "MpStatusOffline");
+            _connectionPingMs < 0 ? "MpTextFaint"
+            : _connectionPingMs < 80 ? "MpOk"
+            : _connectionPingMs < 200 ? "MpCaution"
+            : "MpDestructiveText");
         KickConnectionPing();
         // Keep reporting our Radmin IP (user may have joined the VPN after launch)
         // and refresh the per-peer pings for the rows below.
@@ -8661,10 +8661,10 @@ public partial class MultiplayerTab : UserControl
         if (_lobbyWindow == null) return;
         _lobbyWindow.RoomConnText.Text = _connectionPingMs >= 0 ? $"{_connectionPingMs} ms" : "…";
         _lobbyWindow.RoomConnText.Foreground = (Brush)Application.Current.FindResource(
-            _connectionPingMs < 0 ? "TextSecondary"
-            : _connectionPingMs < 80 ? "MpStatusOnline"
-            : _connectionPingMs < 200 ? "MpPingMedium"
-            : "MpStatusOffline");
+            _connectionPingMs < 0 ? "MpTextFaint"
+            : _connectionPingMs < 80 ? "MpOk"
+            : _connectionPingMs < 200 ? "MpCaution"
+            : "MpDestructiveText");
     }
 
     /// <summary>
@@ -8682,7 +8682,7 @@ public partial class MultiplayerTab : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });               // ping/status
 
         var dotBrush = isSelf
-            ? (Brush)Application.Current.FindResource("MpStatusOnline")
+            ? (Brush)Application.Current.FindResource("MpOk")
             : PeerDotBrush(state);
         var dot = new System.Windows.Shapes.Ellipse
         {
@@ -8697,7 +8697,7 @@ public partial class MultiplayerTab : UserControl
         var nameTb = new TextBlock
         {
             Text = login,
-            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
             FontSize = (double)Application.Current.FindResource("FontSizeBody"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
@@ -8714,13 +8714,13 @@ public partial class MultiplayerTab : UserControl
         if (isSelf)
         {
             statusText = Strings.Get("MpPeerYou");
-            statusBrush = (Brush)Application.Current.FindResource("MpStatusOnline");
+            statusBrush = (Brush)Application.Current.FindResource("MpOk");
         }
         else if (state == PeerLinkState.Online && rttMs >= 0)
         {
             statusText = $"{(int)rttMs} ms";
             statusBrush = (Brush)Application.Current.FindResource(
-                rttMs < 80 ? "MpStatusOnline" : rttMs < 200 ? "MpPingMedium" : "MpStatusOffline");
+                rttMs < 80 ? "MpOk" : rttMs < 200 ? "MpCaution" : "MpDestructiveText");
         }
         else
         {
@@ -8736,7 +8736,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = statusText,
             Foreground = statusBrush,
-            FontFamily = new System.Windows.Media.FontFamily("Consolas, Courier New, monospace"),
+            FontFamily = (System.Windows.Media.FontFamily)Application.Current.FindResource("MonoFont"),
             FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
@@ -8753,10 +8753,10 @@ public partial class MultiplayerTab : UserControl
     private static Brush PeerDotBrush(PeerLinkState state) => (Brush)Application.Current.FindResource(
         state switch
         {
-            PeerLinkState.Online => "MpStatusOnline",
-            PeerLinkState.Unstable => "MpPingMedium",
-            PeerLinkState.Lost => "MpStatusOffline",
-            _ => "TextSecondary",
+            PeerLinkState.Online => "MpOk",
+            PeerLinkState.Unstable => "MpCaution",
+            PeerLinkState.Lost => "MpDestructiveText",
+            _ => "MpTextMuted",
         });
 
     private static string FormatBytes(long bytes)

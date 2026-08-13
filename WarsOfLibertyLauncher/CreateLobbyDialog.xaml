@@ -1,4 +1,4 @@
-<Window x:Class="WarsOfLibertyLauncher.CreateLobbyDialog"
+﻿<Window x:Class="WarsOfLibertyLauncher.CreateLobbyDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WarsOfLibertyLauncher"
@@ -477,6 +477,7 @@
 
             <controls:TitleBar Grid.Row="0"
                                x:Name="TitleBarControl"
+                               Background="{DynamicResource MpTitleBar}"
                                ShowMinimize="False"
                                ShowMaximize="False"
                                ShowClose="True"/>
@@ -510,7 +511,7 @@
                                 x:Name="ModIconHost"
                                 Width="26" Height="26"
                                 CornerRadius="6"
-                                Background="{DynamicResource MpBlueSubtle}"
+                                Background="{DynamicResource MpEventBg}"
                                 VerticalAlignment="Center"
                                 Margin="0,0,11,0">
                             <TextBlock x:Name="ModIconEmoji"

@@ -10,7 +10,7 @@
         WindowStyle="None"
         ResizeMode="CanResize"
         AllowsTransparency="False"
-        Background="{DynamicResource BgBase}"
+        Background="{DynamicResource MpAppBg}"
         ShowInTaskbar="True">
 
     <!--
@@ -74,9 +74,9 @@
          border tone. AllowsTransparency=False rules out a drop shadow, so a
          hard edge is the tool available. -->
     <Border
-            BorderBrush="{DynamicResource BorderSecondary}"
+            BorderBrush="{DynamicResource MpRimMedium}"
             BorderThickness="1"
-            Background="{DynamicResource BgBase}">
+            Background="{DynamicResource MpAppBg}">
     <!-- x:Name="LobbyRootGrid" — host for MpAlertOverlay confirm cards
          (the in-lobby themed replacement for MessageBox). The overlay is
          injected as the last child BEFORE the MinimizedPill so the pill,
@@ -98,6 +98,7 @@
              ========================================================= -->
         <controls:TitleBar Grid.Row="0"
                            x:Name="TitleBarControl"
+                           Background="{DynamicResource MpTitleBar}"
                            Title="Lobby"
                            ShowMinimize="True"
                            ShowMaximize="True"
@@ -152,7 +153,7 @@
                                 x:Name="RoomModIconHost"
                                 Width="42" Height="42"
                                 CornerRadius="8"
-                                Background="{DynamicResource MpBlueSubtle}"
+                                Background="{DynamicResource MpEventBg}"
                                 VerticalAlignment="Center"
                                 Margin="0,0,14,0">
                             <TextBlock x:Name="RoomModIconGlyph"
@@ -570,7 +571,7 @@
                             <TextBlock Grid.Row="1"
                                        x:Name="ChatEmptyHint"
                                        Text="No messages yet — say hi!"
-                                       Foreground="{DynamicResource TextSecondary}"
+                                       Foreground="{DynamicResource MpTextFaint}"
                                        FontSize="{StaticResource FontSizeBody}"
                                        FontStyle="Italic"
                                        HorizontalAlignment="Center"
@@ -593,8 +594,8 @@
                                  players can still ask to abort. -->
                             <Border Grid.Row="2"
                                     x:Name="CountdownOverlay"
-                                    Background="{DynamicResource MpBlueSubtle}"
-                                    BorderBrush="{DynamicResource MpBlue}"
+                                    Background="{DynamicResource MpEventBg}"
+                                    BorderBrush="{DynamicResource MpEventRim}"
                                     BorderThickness="1"
                                     CornerRadius="{StaticResource RadiusMd}"
                                     Margin="20,0,14,10"
@@ -604,13 +605,13 @@
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center">
                                     <TextBlock Text="⏱"
-                                               Foreground="{DynamicResource MpBlue}"
+                                               Foreground="{DynamicResource MpActionText}"
                                                FontSize="{StaticResource FontSizeSubtitle}"
                                                VerticalAlignment="Center"
                                                Margin="0,0,10,0"/>
                                     <TextBlock x:Name="CountdownLabel"
                                                Text="Starting in"
-                                               Foreground="{DynamicResource TextPrimary}"
+                                               Foreground="{DynamicResource MpTextPrimary}"
                                                FontSize="{StaticResource FontSizeBody}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
@@ -619,7 +620,7 @@
                                          runs shows the right starting number. -->
                                     <TextBlock x:Name="CountdownNumber"
                                                Text="10"
-                                               Foreground="{DynamicResource MpBlue}"
+                                               Foreground="{DynamicResource MpActionText}"
                                                FontSize="{StaticResource FontSizeHeading}"
                                                FontWeight="Bold"
                                                VerticalAlignment="Center"
@@ -631,7 +632,7 @@
                                  placeholder for now, future emoji
                                  picker) + textbox + Send. -->
                             <Border Grid.Row="3"
-                                    BorderBrush="{DynamicResource MpDivider}"
+                                    BorderBrush="{DynamicResource MpRimFaint}"
                                     BorderThickness="0,1,0,0"
                                     Padding="14,12">
                                 <Grid>
@@ -719,7 +720,7 @@
                          numbers do not exist until the report comes back. -->
                     <Border x:Name="MatchResultOverlay"
                             Grid.Column="0"
-                            Background="{DynamicResource BgBase}"
+                            Background="{DynamicResource MpAppBg}"
                             BorderBrush="{DynamicResource MpRimMedium}"
                             BorderThickness="1"
                             CornerRadius="{StaticResource RadiusPanel}"

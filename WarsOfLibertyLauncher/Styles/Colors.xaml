@@ -289,7 +289,7 @@
 
     <!-- Multiplayer-specific surfaces — deep navy for the premium refresh so
          the room table / chat cards read as "raised" above the navy tab
-         gradient (MpTabBackground bottom #07111F is darker than this). -->
+         gradient that used to sit behind them. -->
     <SolidColorBrush x:Key="MpSurface" Color="#0F1A2B"/>
     <SolidColorBrush x:Key="MpSurfaceAlt" Color="#182740"/>
     <!-- Card/panel border + hairline divider for all multiplayer
@@ -348,14 +348,12 @@
          (MpRoomRowBg #16243A) so the badge stays legible on the row + hover. -->
     <SolidColorBrush x:Key="MpModBadgeBg" Color="#1F3358"/>
     <SolidColorBrush x:Key="MpModBadgeBorder" Color="#3B558A"/>
-    <!-- Multiplayer tab background: deep navy with a subtle top glow. Vertical;
-         a XAML resource so it's auto-frozen + shared. Bottom (#07111F) is
-         darker than MpSurface (#0F1A2B) so the cards float above it. -->
-    <LinearGradientBrush x:Key="MpTabBackground" StartPoint="0.5,0" EndPoint="0.5,1">
-        <GradientStop Color="#0E1B2E" Offset="0.0"/>
-        <GradientStop Color="#0B1424" Offset="0.35"/>
-        <GradientStop Color="#07111F" Offset="1.0"/>
-    </LinearGradientBrush>
+    <!-- (MpTabBackground, a navy gradient #0E1B2E → #07111F, used to live here and paint
+         the multiplayer tab. It was removed rather than left declared: the design handoff
+         uses ONE flat colour, MpAppBg, across the tab, the room window and the dialogs,
+         and this gradient bottomed out darker than the room's background — so the two
+         surfaces read as different shades of the same idea. A brush nobody paints with is
+         a suggestion that it is still an option.) -->
     <!-- Subtle vertical gradient for the MOD badge (mockup "premium" look). -->
     <LinearGradientBrush x:Key="MpModBadgeGradient" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="#2A3856" Offset="0.0"/>
@@ -482,6 +480,9 @@
          EMPTY box has nothing but its outline to be seen by. -->
     <SolidColorBrush x:Key="MpOkBg" Color="#2E35C46F"/>
     <SolidColorBrush x:Key="MpCautionRimBox" Color="#80E6B455"/>
+    <!-- Paired rim for MpOkBg, for a panel that is tinted green rather than a box that
+         is merely ticked (the Radmin network-name field). -->
+    <SolidColorBrush x:Key="MpOkRim" Color="#4D35C46F"/>
     <SolidColorBrush x:Key="MpCautionBg" Color="#14E6B455"/>
     <SolidColorBrush x:Key="MpCautionRim" Color="#38E6B455"/>
 

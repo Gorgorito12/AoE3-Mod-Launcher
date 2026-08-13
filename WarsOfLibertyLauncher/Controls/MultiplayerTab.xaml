@@ -159,7 +159,12 @@
     <!-- x:Name="TabRootGrid" — host for MpAlertOverlay notice/confirm cards
          (the themed replacement for MessageBox on the join / create / mod
          error paths that fire from the tab, outside a lobby window). -->
-    <Grid x:Name="TabRootGrid" Background="{DynamicResource MpTabBackground}">
+    <!-- Flat, not the navy GRADIENT this used to carry (#0E1B2E → #07111F). The
+         gradient predates the design handoff and bottomed out darker than the room
+         window's own background, so the tab and the room read as two different shades
+         of the same idea. The reference is one flat colour across every multiplayer
+         surface, which is what makes them look like one screen. -->
+    <Grid x:Name="TabRootGrid" Background="{DynamicResource MpAppBg}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>     <!-- Header (subtabs + status bar) -->
             <RowDefinition Height="*"/>        <!-- Active view -->
@@ -198,7 +203,7 @@
                         <Ellipse x:Name="RoomsSubtabDot"
                                  Width="7" Height="7"
                                  Fill="#E5484D"
-                                 Stroke="{DynamicResource MpSurface}"
+                                 Stroke="{DynamicResource MpPanel}"
                                  StrokeThickness="1"
                                  HorizontalAlignment="Right"
                                  VerticalAlignment="Top"
@@ -287,13 +292,13 @@
                         VerticalAlignment="Center"
                         MaxWidth="480">
                 <TextBlock x:Name="SignInTitleText"
-                           Foreground="{DynamicResource TextPrimary}"
+                           Foreground="{DynamicResource MpTextPrimary}"
                            FontSize="{StaticResource FontSizeHeading}"
                            FontWeight="Bold"
                            TextAlignment="Center"
                            TextWrapping="Wrap"/>
                 <TextBlock x:Name="SignInBodyText"
-                           Foreground="{DynamicResource TextSecondary}"
+                           Foreground="{DynamicResource MpTextMuted}"
                            FontSize="{StaticResource FontSizeBody}"
                            TextAlignment="Center"
                            TextWrapping="Wrap"
@@ -339,8 +344,8 @@
                 <Border Grid.Row="0"
                         x:Name="RadminBanner"
                         x:FieldModifier="private"
-                        Background="#1f2c3d"
-                        BorderBrush="#3a5a8c"
+                        Background="{DynamicResource MpPanel}"
+                        BorderBrush="{DynamicResource MpRimSoft}"
                         BorderThickness="1"
                         CornerRadius="{StaticResource RadiusMd}"
                         Margin="24,12,24,0"
@@ -363,7 +368,7 @@
                                 x:Name="RadminStatusIcon"
                                 Width="{StaticResource DiscSizeSm}" Height="{StaticResource DiscSizeSm}"
                                 CornerRadius="{StaticResource DiscRadiusSm}"
-                                Background="#3a5a8c"
+                                Background="{DynamicResource MpEventBg}"
                                 VerticalAlignment="Center"
                                 Margin="0,0,12,0">
                             <TextBlock x:Name="RadminStatusGlyph"
@@ -378,12 +383,12 @@
                         <!-- Title + body -->
                         <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock x:Name="RadminBannerTitle"
-                                       Foreground="{DynamicResource TextPrimary}"
+                                       Foreground="{DynamicResource MpTextPrimary}"
                                        FontSize="{StaticResource FontSizeBody}"
                                        FontWeight="SemiBold"
                                        TextWrapping="Wrap"/>
                             <TextBlock x:Name="RadminBannerBody"
-                                       Foreground="{DynamicResource TextSecondary}"
+                                       Foreground="{DynamicResource MpTextMuted}"
                                        FontSize="{StaticResource FontSizeCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"/>
@@ -420,8 +425,8 @@
                              Connected state. -->
                         <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
                                 x:Name="RadminNetworkNamePanel"
-                                Background="#15282a"
-                                BorderBrush="#3a8c5a"
+                                Background="{DynamicResource MpOkBg}"
+                                BorderBrush="{DynamicResource MpOkRim}"
                                 BorderThickness="1"
                                 CornerRadius="{StaticResource RadiusSm}"
                                 Margin="0,10,0,0"
@@ -440,7 +445,7 @@
                                          BorderThickness="0"
                                          FontFamily="Consolas, Courier New, monospace"
                                          FontSize="{StaticResource FontSizeCaption}"
-                                         Foreground="{DynamicResource TextPrimary}"
+                                         Foreground="{DynamicResource MpTextPrimary}"
                                          VerticalAlignment="Center"
                                          VerticalContentAlignment="Center"/>
                                 <Button Grid.Column="1"
@@ -460,7 +465,7 @@
                              the Connected state. -->
                         <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
                                    x:Name="RadminInstructionsText"
-                                   Foreground="{DynamicResource TextSecondary}"
+                                   Foreground="{DynamicResource MpTextMuted}"
                                    FontSize="{StaticResource FontSizeCaption}"
                                    TextWrapping="Wrap"
                                    Margin="0,8,0,0"
@@ -540,7 +545,7 @@
                                 <TextBlock x:Name="RoomsUpdatedText"
                                            HorizontalAlignment="Right"
                                            VerticalAlignment="Center"
-                                           Foreground="{DynamicResource TextSecondary}"
+                                           Foreground="{DynamicResource MpTextMuted}"
                                            FontSize="{StaticResource FontSizeCaption}"/>
                             </Grid>
 
@@ -561,8 +566,8 @@
                                  at runtime (SyncHeaderScrollbarGutter) so the
                                  header tracks the rows when the vbar shows. -->
                             <Border Grid.Row="1"
-                                    Background="#0C1626"
-                                    BorderBrush="{DynamicResource MpDivider}"
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource MpRimFaint}"
                                     BorderThickness="0,0,0,1">
                             <!-- ClipToBounds: a Grid cell does NOT clip, so without this a
                                  header that outgrows its share draws straight over the next
@@ -694,11 +699,11 @@
                                  scrolls). Left inset matches the header/rows
                                  (30px). -->
                             <Border Grid.Row="3"
-                                    BorderBrush="{DynamicResource MpDivider}"
+                                    BorderBrush="{DynamicResource MpRimFaint}"
                                     BorderThickness="0,1,0,0"
                                     Padding="30,10,30,12">
                                 <TextBlock x:Name="RoomsShowingCount"
-                                           Foreground="{DynamicResource TextSecondary}"
+                                           Foreground="{DynamicResource MpTextMuted}"
                                            FontSize="{StaticResource FontSizeCaption}"
                                            VerticalAlignment="Center"/>
                             </Border>
@@ -902,7 +907,7 @@
                             <!-- Thin divider under the merged header. -->
                             <Border Grid.Row="1"
                                     Height="1"
-                                    Background="{DynamicResource MpDivider}"
+                                    Background="{DynamicResource MpRimFaint}"
                                     Margin="14,0,14,0"/>
 
                             <!-- Chat body and players list share this cell and are
@@ -917,7 +922,7 @@
                                     <StackPanel x:Name="GlobalChatPanel"/>
                                 </ScrollViewer>
                                 <TextBlock x:Name="GlobalChatEmptyHint"
-                                           Foreground="{DynamicResource TextSecondary}"
+                                           Foreground="{DynamicResource MpTextMuted}"
                                            FontSize="{StaticResource FontSizeCaption}"
                                            FontStyle="Italic"
                                            TextWrapping="Wrap"
@@ -939,7 +944,7 @@
                                  message box under a list of players would have nowhere
                                  to send to. -->
                             <Border Grid.Row="3" x:Name="PanelChatComposer"
-                                    BorderBrush="{DynamicResource MpDivider}"
+                                    BorderBrush="{DynamicResource MpRimFaint}"
                                     BorderThickness="0,1,0,0"
                                     Padding="10,6">
                                 <StackPanel>
@@ -974,7 +979,7 @@
                                                  TextChanged="GlobalChatInput_TextChanged"
                                                  KeyDown="GlobalChatInput_KeyDown"/>
                                         <TextBlock x:Name="GlobalChatPlaceholder"
-                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   Foreground="{DynamicResource MpTextMuted}"
                                                    FontSize="{StaticResource FontSizeCaption}"
                                                    Margin="12,0,0,0"
                                                    VerticalAlignment="Center"
@@ -1022,19 +1027,19 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="32,24" MaxWidth="640" HorizontalAlignment="Left">
                     <TextBlock x:Name="ProfileNameText"
-                               Foreground="{DynamicResource TextPrimary}"
+                               Foreground="{DynamicResource MpTextPrimary}"
                                FontSize="{StaticResource FontSizeHeading}"
                                FontWeight="Bold"/>
                     <TextBlock x:Name="ProfileLoginText"
-                               Foreground="{DynamicResource TextSecondary}"
+                               Foreground="{DynamicResource MpTextMuted}"
                                FontSize="{StaticResource FontSizeBody}"
                                Margin="0,2,0,16"/>
                     <TextBlock x:Name="ProfileEloText"
-                               Foreground="{DynamicResource TextPrimary}"
+                               Foreground="{DynamicResource MpTextPrimary}"
                                FontSize="{StaticResource FontSizeBodyStrong}"
                                Margin="0,0,0,4"/>
                     <TextBlock x:Name="ProfileGamesText"
-                               Foreground="{DynamicResource TextSecondary}"
+                               Foreground="{DynamicResource MpTextMuted}"
                                FontSize="{StaticResource FontSizeBody}"/>
                 </StackPanel>
             </ScrollViewer>
@@ -1042,7 +1047,7 @@
 
         <Grid Grid.Row="1" x:Name="HistoryView" Visibility="Collapsed">
             <TextBlock Text="History â€” coming soon"
-                       Foreground="{DynamicResource TextSecondary}"
+                       Foreground="{DynamicResource MpTextMuted}"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        FontStyle="Italic"/>
@@ -1050,7 +1055,7 @@
 
         <Grid Grid.Row="1" x:Name="FriendsView" Visibility="Collapsed">
             <TextBlock Text="Friends â€” coming soon"
-                       Foreground="{DynamicResource TextSecondary}"
+                       Foreground="{DynamicResource MpTextMuted}"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        FontStyle="Italic"/>
