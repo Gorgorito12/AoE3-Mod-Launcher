@@ -3214,6 +3214,62 @@ public static class Strings
         // End-of-match card. The pending line goes up the instant the game closes: the
         // numbers do not exist until the report comes back, and the recording search can
         // take the best part of ten seconds.
+        // Lobby window (design handoff 1e).
+        ["MpLobbyWindowTitle"] = new() { [LangEn] = "Room \u00B7 {0}", [LangEs] = "Sala \u00B7 {0}" },
+        ["MpRoomCodeHeader"] = new() { [LangEn] = "CODE", [LangEs] = "C\u00D3DIGO" },
+        ["MpRoomInvite"] = new() { [LangEn] = "Invite", [LangEs] = "Invitar" },
+        ["MpRoomInviteTitle"] = new() { [LangEn] = "Invite a player", [LangEs] = "Invitar a un jugador" },
+        ["MpRoomInviteBody"] = new()
+        {
+            [LangEn] = "Share the room code, or right-click a player in the Players panel of the "
+                     + "Multiplayer tab and choose \u201CInvite to my room\u201D.",
+            [LangEs] = "Comparte el c\u00F3digo de la sala, o haz clic derecho sobre un jugador en el "
+                     + "panel Jugadores de la pesta\u00F1a Multijugador y elige \u201CInvitar a mi sala\u201D.",
+        },
+        // The roster's second line. The ELO segment is omitted entirely when the rating is
+        // not known — never a placeholder number.
+        ["MpRoomMemberElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
+        ["MpRoomMemberReady"] = new() { [LangEn] = "ready", [LangEs] = "listo" },
+        ["MpRoomMemberWaiting"] = new() { [LangEn] = "waiting", [LangEs] = "esperando" },
+        ["MpRoomSlotOpenShare"] = new()
+        {
+            [LangEn] = "Open slot \u00B7 share the code",
+            [LangEs] = "Hueco libre \u00B7 comparte el c\u00F3digo",
+        },
+        // The two-item checklist that replaced the amber reminder band.
+        ["MpPreflightHeader"] = new() { [LangEn] = "BEFORE YOU START", [LangEs] = "ANTES DE EMPEZAR" },
+        ["MpPreflightModsMatch"] = new()
+        {
+            [LangEn] = "Identical mods across all {0} players",
+            [LangEs] = "Mods id\u00E9nticos en los {0} jugadores",
+        },
+        ["MpPreflightRecordGame"] = new()
+        {
+            [LangEn] = "Tick {0} in AoE3 so the match counts towards ELO",
+            [LangEs] = "Marcar {0} en AoE3 para que cuente el ELO",
+        },
+        ["MpPreflightSeeHow"] = new() { [LangEn] = "See how", [LangEs] = "Ver c\u00F3mo" },
+        ["MpPreflightHelpTitle"] = new()
+        {
+            [LangEn] = "Where the Record Game box is",
+            [LangEs] = "D\u00F3nde est\u00E1 la casilla Record Game",
+        },
+        ["MpPreflightHelpBody"] = new()
+        {
+            [LangEn] = "On the AoE3 multiplayer setup screen, before the match starts, there is a "
+                     + "\u201CRecord Game\u201D checkbox. It comes up unticked EVERY match and the "
+                     + "launcher cannot tick it for you \u2014 both ways of doing that were tried and "
+                     + "neither works. Without a recording the match has no readable winner and counts "
+                     + "for nobody.",
+            [LangEs] = "En la pantalla de configuraci\u00F3n de la partida multijugador de AoE3, antes de "
+                     + "empezar, hay una casilla \u201CRecord Game\u201D. Aparece desmarcada en CADA "
+                     + "partida y el launcher no puede marcarla por ti \u2014 se probaron las dos formas "
+                     + "de hacerlo y ninguna funciona. Sin grabaci\u00F3n la partida no tiene un ganador "
+                     + "legible y no cuenta para nadie.",
+        },
+        ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
+        ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
+        ["MpRoomLeaveShort"] = new() { [LangEn] = "Leave the room", [LangEs] = "Salir de la sala" },
         ["MpResultPending"] = new()
         {
             [LangEn] = "Working out the result…",

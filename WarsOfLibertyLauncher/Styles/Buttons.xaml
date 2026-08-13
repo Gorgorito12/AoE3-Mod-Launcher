@@ -1148,13 +1148,19 @@
          Background/Foreground on the button (LobbyWindow.xaml sets
          neither) — a local value would beat every trigger here. -->
     <Style x:Key="MpReadyButton" TargetType="Button">
+        <!-- Ghost at rest, to match its Leave sibling: the two secondary actions carry
+             the same weight, and the green belongs to the READY state, not to the button
+             that offers it. Still no local Background/Foreground on the instance — a
+             local value beats every trigger below, which is what once left this button
+             stuck grey while the roster row already showed the player as ready. -->
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="#dadde2"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource MpPingGood}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextSecondary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Padding" Value="{StaticResource BtnPadRow}"/>
+        <Setter Property="Height" Value="{StaticResource MpFieldHeight}"/>
+        <Setter Property="FontSize" Value="{StaticResource MpMetaSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="Template">
@@ -1164,15 +1170,14 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource RadiusSm}"
+                            CornerRadius="{StaticResource RadiusControl}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#152a1d"/>
-                            <Setter Property="Foreground" Value="White"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="ready">
                             <Setter TargetName="border" Property="Background" Value="#15803D"/>
@@ -1205,6 +1210,56 @@
         <Setter Property="Padding" Value="{StaticResource BtnPadCompact}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
         <Setter Property="FontWeight" Value="Medium"/>
+    </Style>
+
+    <!-- Ghost buttons for the lobby actions (design handoff 1e). The room used to show
+         three SOLID buttons — green Ready, blue Start, red Leave — competing for the same
+         attention, when only one of them is what the player came to do. The primary keeps
+         its fill; these two carry a rim and nothing else. -->
+    <Style x:Key="MpGhostButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextSecondary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="{StaticResource MpFieldHeight}"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{StaticResource MpMetaSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RadiusControl}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="MpGhostDangerButton" TargetType="Button" BasedOn="{StaticResource MpGhostButton}">
+        <Setter Property="Foreground" Value="{DynamicResource MpDestructiveText}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpDestructiveRim}"/>
+    </Style>
+
+    <Style x:Key="MpGhostCautionButton" TargetType="Button" BasedOn="{StaticResource MpGhostButton}">
+        <Setter Property="Foreground" Value="{DynamicResource MpCautionTextAlt}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpCautionRimBox}"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
     </Style>
 
     <!-- Text link (design handoff 1a). The reference renders the "join" affordance

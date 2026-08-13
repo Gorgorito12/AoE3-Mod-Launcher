@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -98,7 +98,11 @@ public partial class LobbyWindow : Window
     /// silenced — it is never inferred from a match that happened to record, because one
     /// success says nothing about whether the next match's checkbox will be ticked.
     /// </summary>
-    public Action? OnDismissRecordReminder { get; set; }
+    /// <summary>Invite someone to this room (the link beside the PLAYERS header).</summary>
+    public Action? OnInvitePlayers { get; set; }
+
+    /// <summary>Explain where AoE3 hides the per-match Record Game checkbox.</summary>
+    public Action? OnRecordHelp { get; set; }
 
     /// <summary>"Send" button on the chat input bar.</summary>
     public Action? OnSendChat { get; set; }
@@ -211,7 +215,8 @@ public partial class LobbyWindow : Window
     private void RejoinGameButton_Click(object sender, RoutedEventArgs e) => OnRejoinGame?.Invoke();
     private void RenameRoomButton_Click(object sender, RoutedEventArgs e) => OnRenameRoom?.Invoke();
     private void ClearChatButton_Click(object sender, RoutedEventArgs e) => OnClearChat?.Invoke();
-    private void RecordReminderDismiss_Click(object sender, RoutedEventArgs e) => OnDismissRecordReminder?.Invoke();
+    private void InvitePlayersButton_Click(object sender, RoutedEventArgs e) => OnInvitePlayers?.Invoke();
+    private void PreflightRecordHelp_Click(object sender, RoutedEventArgs e) => OnRecordHelp?.Invoke();
     private void ChatSendButton_Click(object sender, RoutedEventArgs e) => OnSendChat?.Invoke();
     private void ChatEmojiButton_Click(object sender, RoutedEventArgs e) => OnEmoji?.Invoke();
     private void ChatInputBox_TextChanged(object sender, TextChangedEventArgs e) => OnChatTextChanged?.Invoke();

@@ -477,6 +477,11 @@
     <SolidColorBrush x:Key="MpPrivateFieldRim" Color="#4DA06EF0"/>
     <SolidColorBrush x:Key="MpPrivateTitle" Color="#E2D5F7"/>
     <SolidColorBrush x:Key="MpPrivateSub" Color="#B39FD0"/>
+    <!-- A ticked checklist box, and the rim of an unticked one. The green fill is the
+         same hue as MpOk at .18; the amber rim is deliberately stronger (.5) because an
+         EMPTY box has nothing but its outline to be seen by. -->
+    <SolidColorBrush x:Key="MpOkBg" Color="#2E35C46F"/>
+    <SolidColorBrush x:Key="MpCautionRimBox" Color="#80E6B455"/>
     <SolidColorBrush x:Key="MpCautionBg" Color="#14E6B455"/>
     <SolidColorBrush x:Key="MpCautionRim" Color="#38E6B455"/>
 

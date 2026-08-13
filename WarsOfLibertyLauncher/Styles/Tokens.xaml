@@ -208,6 +208,14 @@
     <sys:Double x:Key="MpMetaSize">12</sys:Double>
     <sys:Double x:Key="MpPillSize">10.5</sys:Double>
     <sys:Double x:Key="MpMicroSize">10</sys:Double>
+    <!-- The uppercase stat captions in the room header (9.5) and the values under
+         them (14). Both below the type scale's floor, like MpLabelSize, and kept as
+         their own tokens for the same reason. -->
+    <sys:Double x:Key="MpSectionLabelSize">9.5</sys:Double>
+    <sys:Double x:Key="MpStatValueSize">14</sys:Double>
+    <!-- The room name in the lobby header: serif, the one display-type moment in
+         this window. -->
+    <sys:Double x:Key="MpRoomNameSize">16</sys:Double>
     <sys:Double x:Key="MpFieldHeight">34</sys:Double>
     <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
     <sys:Double x:Key="MpControlHeight">30</sys:Double>
