@@ -690,12 +690,14 @@
                     </Grid>
                     <!-- /LEFT card -->
 
-                    <!-- ===================== RIGHT: chat (top) + players (bottom) ===================== -->
+                    <!-- ===================== RIGHT: chat / players, as TABS =====================
+                         The two used to be stacked cards splitting this column in half. The
+                         reference gives them one card and two tabs, which is what hands the
+                         chat the other half's ~300px: a chat you have to scroll three
+                         messages at a time is the thing the split was costing. -->
                     <Grid Grid.Column="2">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>    <!-- global chat (top half) -->
-                        <RowDefinition Height="10"/>   <!-- gutter -->
-                        <RowDefinition Height="*"/>    <!-- live players (bottom half) -->
+                        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <Border Grid.Row="0"
                             Background="{DynamicResource MpSurface}"
@@ -718,37 +720,31 @@
                                 <RowDefinition Height="Auto"/>   <!-- input -->
                             </Grid.RowDefinitions>
 
-                            <!-- Title + presence merged onto one line:
-                                 "💬 Chat global · ● N conectado". The old
-                                 separate "Canal general" label + right-aligned
-                                 presence count were consolidated here so the
-                                 header reads as a single status line. -->
+                            <!-- Panel tabs. GlobalChatHeaderText and PlayersPanelTitle keep
+                                 their names and their localized captions — they are the tab
+                                 labels now, so every existing writer (presence count, player
+                                 count) still lands in the right place. -->
                             <StackPanel Grid.Row="0"
                                         Orientation="Horizontal"
-                                        Margin="14,8,14,6"
+                                        Margin="8,6,8,4"
                                         VerticalAlignment="Center">
-                                <TextBlock Text="💬"
-                                           FontSize="{StaticResource FontSizeCaption}"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,7,0"/>
-                                <TextBlock x:Name="GlobalChatHeaderText"
-                                           Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="{StaticResource FontSizeBody}"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"/>
-                                <TextBlock Text="·"
-                                           Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeBody}"
-                                           Margin="7,0,7,0"
-                                           VerticalAlignment="Center"/>
-                                <Ellipse Width="7" Height="7"
-                                         Fill="{DynamicResource MpStatusOnline}"
-                                         VerticalAlignment="Center"
-                                         Margin="0,0,6,0"/>
-                                <TextBlock x:Name="GlobalChatPresenceText"
-                                           Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeCaption}"
-                                           VerticalAlignment="Center"/>
+                                <Button x:Name="PanelTabChat"
+                                        Click="PanelTab_Click"
+                                        Style="{StaticResource SubTab}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="GlobalChatHeaderText" VerticalAlignment="Center"/>
+                                        <Ellipse Width="6" Height="6"
+                                                 Fill="{DynamicResource MpOk}"
+                                                 VerticalAlignment="Center"
+                                                 Margin="7,0,5,0"/>
+                                        <TextBlock x:Name="GlobalChatPresenceText" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="PanelTabPlayers"
+                                        Click="PanelTab_Click"
+                                        Style="{StaticResource SubTab}">
+                                    <TextBlock x:Name="PlayersPanelTitle" VerticalAlignment="Center"/>
+                                </Button>
                             </StackPanel>
 
                             <!-- Thin divider under the merged header. -->
@@ -757,8 +753,11 @@
                                     Background="{DynamicResource MpDivider}"
                                     Margin="14,0,14,0"/>
 
-                            <!-- Messages list + empty/placeholder hint -->
-                            <Grid Grid.Row="2">
+                            <!-- Chat body and players list share this cell and are
+                                 toggled by PanelTab_Click. Two siblings rather than one
+                                 swapped child, so the chat's scroll position survives a
+                                 trip to the players tab and back. -->
+                            <Grid Grid.Row="2" x:Name="PanelChatBody">
                                 <ScrollViewer x:Name="GlobalChatScroll"
                                               VerticalScrollBarVisibility="Auto"
                                               HorizontalScrollBarVisibility="Disabled"
@@ -776,8 +775,18 @@
                                            Visibility="Collapsed"/>
                             </Grid>
 
-                            <!-- Composer: text box + Send -->
-                            <Border Grid.Row="3"
+                            <ScrollViewer Grid.Row="2"
+                                          x:Name="PlayersScroll"
+                                          Visibility="Collapsed"
+                                          VerticalScrollBarVisibility="Auto"
+                                          Padding="10,4,10,4">
+                                <StackPanel x:Name="PlayersPanel"/>
+                            </ScrollViewer>
+
+                            <!-- Composer: text box + Send. Hidden with the chat — a
+                                 message box under a list of players would have nowhere
+                                 to send to. -->
+                            <Border Grid.Row="3" x:Name="PanelChatComposer"
                                     BorderBrush="{DynamicResource MpDivider}"
                                     BorderThickness="0,1,0,0"
                                     Padding="10,6">
@@ -832,54 +841,6 @@
                         </Grid>
                     </Border>
 
-                    <!-- Players panel (bottom half): live categorized list —
-                         In game / In a room / In launcher. Same card chrome as
-                         the chat above; populated by RenderPlayersPanel. -->
-                    <Border Grid.Row="2"
-                            Background="{DynamicResource MpSurface}"
-                            CornerRadius="{StaticResource RadiusLg}"
-                            Margin="1">
-                        <Border.Effect>
-                            <DropShadowEffect Color="#3A6BD0" BlurRadius="18" ShadowDepth="0" Opacity="0.28"/>
-                        </Border.Effect>
-                    </Border>
-                    <Border Grid.Row="2"
-                            Background="{DynamicResource MpSurface}"
-                            BorderBrush="{DynamicResource MpCardBorder}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusLg}">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>   <!-- title -->
-                                <RowDefinition Height="Auto"/>   <!-- divider -->
-                                <RowDefinition Height="*"/>      <!-- list -->
-                            </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0"
-                                        Orientation="Horizontal"
-                                        Margin="14,8,14,6"
-                                        VerticalAlignment="Center">
-                                <TextBlock Text="👥"
-                                           FontSize="{StaticResource FontSizeCaption}"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,7,0"/>
-                                <TextBlock x:Name="PlayersPanelTitle"
-                                           Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="{StaticResource FontSizeBody}"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <Border Grid.Row="1"
-                                    Height="1"
-                                    Background="{DynamicResource MpDivider}"
-                                    Margin="14,0,14,0"/>
-                            <ScrollViewer Grid.Row="2"
-                                          x:Name="PlayersScroll"
-                                          VerticalScrollBarVisibility="Auto"
-                                          Padding="10,4,10,4">
-                                <StackPanel x:Name="PlayersPanel"/>
-                            </ScrollViewer>
-                        </Grid>
-                    </Border>
                     </Grid>
                     <!-- /RIGHT chat + players -->
                 </Grid>

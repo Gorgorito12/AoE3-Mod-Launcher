@@ -948,6 +948,10 @@ public partial class MultiplayerTab : UserControl
         // the background. If sign-in completes later, OnSessionStateChanged
         // calls SyncGlobalChat again. Idempotent (self-gates on SignedIn).
         SyncGlobalChat();
+
+        // Chat is the panel's default — it is the half people watch, and the one the
+        // reference shows selected.
+        ShowPanelTab(players: false);
     }
 
     /// <summary>
@@ -1063,6 +1067,11 @@ public partial class MultiplayerTab : UserControl
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
         GlobalChatHeaderText.Text = Strings.Get("MpGlobalChatTitle");
+        // The players tab's caption is normally rewritten with a live count by
+        // RenderPlayersPanel; seed it here so it isn't blank before the first
+        // presence frame, and so a language switch reaches it in the meantime.
+        if (_globalOnlineUsers.Count == 0)
+            PlayersPanelTitle.Text = Strings.Format("MpPlayersPanelTitle", 0);
         GlobalChatPlaceholder.Text = Strings.Get("MpGlobalChatPlaceholder");
         // Send is an icon button now — the localized caption lives on its ToolTip.
         GlobalChatSendButton.ToolTip = Strings.Get("MpGlobalChatSend");
@@ -3816,6 +3825,27 @@ public partial class MultiplayerTab : UserControl
         UpdateRoomsShowingCount(ordered.Count);
         Dispatcher.BeginInvoke(new Action(SyncHeaderScrollbarGutter),
             System.Windows.Threading.DispatcherPriority.Render);
+    }
+
+    /// <summary>
+    /// Switches the right panel between Chat and Players. They are two siblings toggled
+    /// by visibility rather than one swapped child, so the chat keeps its scroll
+    /// position — and its 200-row ring keeps filling — while the user is on Players.
+    /// </summary>
+    private void PanelTab_Click(object sender, RoutedEventArgs e)
+        => ShowPanelTab(ReferenceEquals(sender, PanelTabPlayers));
+
+    private void ShowPanelTab(bool players)
+    {
+        var chatVis = players ? Visibility.Collapsed : Visibility.Visible;
+        PanelChatBody.Visibility = chatVis;
+        // The composer goes with the chat: a message box under a list of players would
+        // have nowhere to send to.
+        PanelChatComposer.Visibility = chatVis;
+        PlayersScroll.Visibility = players ? Visibility.Visible : Visibility.Collapsed;
+
+        PanelTabChat.Tag = players ? null : "active";
+        PanelTabPlayers.Tag = players ? "active" : null;
     }
 
     /// <summary>The rooms-browser search text. Empty means no filtering.</summary>
