@@ -601,16 +601,22 @@
          The panel BACKGROUND stays slate (BgSidebar #33414F) — only
          the per-button hover/active are gold.
          ============================================================ -->
+    <!-- REDESIGN NOTE (handoff 1a): these tabs moved OUT of their own strip and INTO
+         the title bar, so the active marker had to change with them. It used to be a
+         2px gold underline on the bottom edge, which worked because that edge WAS the
+         seam between chrome and content. Inside a 46px bar there is no seam to sit on —
+         an underline would just draw a line through the middle of the chrome — so the
+         active tab is now a filled pill, as the handoff specifies. -->
     <Style x:Key="NavTabButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpNavTabIdle}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <!-- Left padding 12 = the header content gutter (TitleBarContentPadding.Left),
-             so the first tab's content lines up with the brand block above it and
-             both sit snug to the top-left corner. Right padding 22 spaces the tabs.
-             2px top padding compensates the 2px bottom underline so the icon+label
-             sit visually centered inside the cell. -->
-        <Setter Property="Padding" Value="12,2,22,0"/>
+        <!-- Pill padding from the handoff (8 vertical / 11 horizontal). Symmetric now:
+             there is no underline left to compensate for, which is what the old
+             12,2,22,0 was doing. The tabs no longer own the window's left gutter either
+             — the brand block does — so they space themselves evenly instead. -->
+        <Setter Property="Padding" Value="11,8"/>
+        <Setter Property="Margin" Value="3,0,0,0"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -623,29 +629,28 @@
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
                             BorderBrush="Transparent"
-                            BorderThickness="0,0,0,2"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <!-- Hover: no background fill, just lift the
-                                 text toward white. Keeps the nav bar
-                                 visually quiet so only the active tab's
-                                 underline reads as the "you are here"
-                                 marker. #E6EEF8 = near-white with a
-                                 cool tint that matches the slate panel. -->
+                            <!-- Hover stays quiet — text only, no fill — so the single
+                                 filled pill remains the unambiguous "you are here". -->
                             <Setter Property="Foreground" Value="#E6EEF8"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="active">
-                            <!-- Active: pure white text + bold + gold
-                                 bottom underline. No background fill —
-                                 the underline alone signals "active",
-                                 matching Steam/Epic-style nav bars. -->
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            <!-- Blue-tinted fill + a brighter inner rim, per the handoff.
+                                 Deliberately NOT bold: the pill already carries the
+                                 emphasis, and re-weighting the text would resize the
+                                 button and shuffle its neighbours on every tab switch —
+                                 the old underline could afford bold because it never
+                                 changed the cell's width. -->
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpTabActiveBg}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpTabActiveRim}"/>
                             <Setter Property="Foreground" Value="#FFFFFF"/>
-                            <Setter Property="FontWeight" Value="Bold"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

@@ -959,22 +959,39 @@ Two cheap gates beyond a green build:
   does NOT yank the user off their current tab; "first opens" is a launch-time
   rule only).
 
-- **MainWindow's title bar + nav strip are deliberately ONE seamless surface.**
-  The custom title bar (`Grid.Row=0`) and the nav-tab strip (`Grid.Row=1`)
-  both fill with the **same** `BgSidebar` brush, and the title bar has **no
-  bottom border on purpose** — adding one draws a visible seam through what's
-  meant to read as a single continuous chrome block from the window top down
-  to the tabs. The only border in that region is the nav strip's own
-  `BorderThickness="0,0,0,1"`, which delimits chrome from content below. Don't
-  "fix" the title bar by giving it a divider — the missing border is the
-  feature. Two related guards keep the **content below** from reading as if it
-  invades this chrome: (1) the content host (`Grid.Row=2`) is
+- **MainWindow is TWO rows now, not three — the nav strip was absorbed into the
+  title bar (design handoff 1a), and the chrome/content divider moved with it.**
+  The three main tabs live inside `TitleBar.Content` (still the `TopTabBar`
+  StackPanel, still in MainWindow's namescope so `ApplyTopTabOrder` can clear and
+  refill its `Children`); `Grid.Row=1` is now the content. **The seam that used
+  to be the nav strip's `BorderThickness="0,0,0,1"` is now a top border on the
+  content wrapper** — it has to live *somewhere*, because Multiplayer replaces it
+  with its own sub-tab bar but Library and Workshop have nothing, and without it
+  the title bar bleeds straight into their content. The title bar itself still has
+  **no bottom border on purpose**; don't give it one. **Three things are coupled to
+  the bar and are easy to break:** the height must only ever be set through
+  `TitleBarHeightMain` (`App.ApplyWindowChrome` derives `WindowChrome.CaptionHeight`
+  from the same token — decouple them and the bottom strip of the bar silently stops
+  dragging the window); every interactive control in the bar needs
+  `IsHitTestVisibleInChrome` or its clicks become drags (content inside
+  `TitleBar.Content` inherits it from the template's `ContentPresenter`, so only
+  things overlaid from MainWindow's own grid set it themselves); and the notification
+  bell + offline chip are still **overlaid** on Row 0 at hand-computed right margins
+  (148 and 200, derived from `ButtonWidth=46`), which is why the bar's content grid
+  carries a matching right margin — folding those two into the bar is what will
+  finally retire all three numbers. **The active-tab marker changed with the move:**
+  it was a 2px gold bottom border that worked because that edge *was* the chrome/
+  content seam; inside the bar there is no seam to sit on, so it's a filled pill
+  (`MpTabActiveBg` + `MpTabActiveRim`). The pill deliberately does **not** bold the
+  text — re-weighting would resize the button and shuffle its neighbours on every tab
+  switch, which the old underline never did. One related guard keeps the **content
+  below** from reading as if it invades the chrome: the content host is
   `ClipToBounds="True"` so nothing in any tab — the PlayView full-bleed
   background image, the hero gradients, the scaled hero block — can render *up*
-  over the title bar / nav strip; it's defensive (clips content only, never the
-  chrome, so the one-surface look is intact) and on its own a near-no-op,
-  because the image is a `Border` background and is already clipped to its
-  bounds. (2) The dashboard hero is a **single-layer brush stretched
+  over the title bar; it's defensive (clips content only, never the
+  chrome) and on its own a near-no-op, because the image is a `Border`
+  background and is already clipped to its bounds. Separately, the dashboard
+  hero is a **single-layer brush stretched
   `Stretch.Fill`** by `DashboardBgFill`'s background — no blur, no scale, no
   overlay, **no aspect-ratio preservation**. It fills the whole panel
   edge-to-edge with no side bands and no crop, at the cost of **distorting the

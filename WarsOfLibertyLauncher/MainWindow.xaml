@@ -278,8 +278,11 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- Custom title bar (shared controls:TitleBar, height = TitleBarHeightMain token = classic 36; the slim 28px is secondary-windows only) -->
-            <RowDefinition Height="38"/>   <!-- Horizontal nav strip (Steam-style); compact, 14px main tabs -->
+            <!-- Custom title bar (shared controls:TitleBar, height = TitleBarHeightMain
+                 token; the slim 28px is secondary-windows only). It now carries the
+                 three main tabs as well — the separate nav strip that used to be row 1
+                 is gone (design handoff 1a: five stacked bars down to two). -->
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>    <!-- App content -->
         </Grid.RowDefinitions>
 
@@ -346,8 +349,32 @@
                      it now sits flush at the TitleBar's content gutter
                      (TitleBarContentPadding.Left = 18), the same left edge the nav
                      tabs use, so brand + tabs are anchored to one consistent gutter. -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch">
+                <!-- Bar 1 layout (design handoff 1a). Four columns:
+                       0  brand (fixed)
+                       1  the three main tabs — this is TopTabBar, which moved up from
+                          the deleted nav strip. It MUST stay a named Panel in
+                          MainWindow's namescope: ApplyTopTabOrder clears and refills
+                          its Children to apply the user's tab order from Settings.
+                       2  flexible gap, carrying the self-update pill
+                       3  reserved (see the right margin below)
+
+                     The right margin reserves the footprint of the notification bell,
+                     which is still OVERLAID on this row from MainWindow's own grid
+                     rather than living in here (bell 48 wide, anchored 148 from the
+                     right; the caption buttons already end this content area 138 from
+                     the right, so ~58px of it sits under the bell). Folding the bell
+                     and the offline chip INTO this grid is the next step, and it is
+                     what finally retires these hand-computed offsets. -->
+                <Grid VerticalAlignment="Stretch" Margin="0,0,58,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
                 <Button x:Name="TitleBarBrandButton"
+                        Grid.Column="0"
+                        VerticalAlignment="Center"
+                        Margin="0,0,14,0"
                         HorizontalAlignment="Left"
                         Background="Transparent"
                         BorderThickness="0"
@@ -471,6 +498,8 @@
                      window-drag handler doesn't swallow the click. Text + tooltip
                      are localized from code-behind. -->
                 <Button x:Name="LauncherUpdatePill"
+                        Grid.Column="2"
+                        HorizontalAlignment="Left"
                         Visibility="Collapsed"
                         Cursor="Hand"
                         VerticalAlignment="Center"
@@ -514,7 +543,83 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
+
+                <!-- =====================================================
+                     MAIN TABS — moved here from the deleted nav strip.
+                     Same x:Names as before so every code-behind consumer
+                     (SwitchTopTab, RefreshTopTabHighlight, ApplyStrings,
+                     ApplyTopTabOrder, the click handlers) keeps working
+                     untouched. Declared HERE in MainWindow.xaml rather than
+                     inside a UserControl for the same reason: TitleBar is a
+                     templated ContentControl precisely so named content can
+                     live in the consumer's namescope.
+
+                     Interactive controls in the title bar would otherwise be
+                     swallowed by the window-drag region — these inherit
+                     IsHitTestVisibleInChrome from the template's
+                     ContentPresenter, so they don't each need to set it.
+
+                     The left-to-right child order is re-applied at startup
+                     from LauncherConfig.TopTabOrder by ApplyTopTabOrder();
+                     the order here is just the default for a fresh config.
+                     ===================================================== -->
+                <StackPanel x:Name="TopTabBar"
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button x:Name="TopTabPlay"
+                            Style="{StaticResource NavTabButton}"
+                            Click="TopTabPlay_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE80F;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="TopTabMods"
+                            Style="{StaticResource NavTabButton}"
+                            Click="TopTabMods_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE7C5;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SidebarLabelCatalog" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="TopTabMultiplayer"
+                            Style="{StaticResource NavTabButton}"
+                            Click="TopTabMultiplayer_Click">
+                        <Grid>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE716;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="14"
+                                           Margin="0,0,8,0"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <!-- "New room created" dot: set from PollNewRoomsAsync,
+                                 cleared when the user switches to Multiplayer. Its
+                                 Stroke reads BgSidebar, which is also the title bar's
+                                 fill, so the dot still blends after the move. -->
+                            <Ellipse x:Name="MultiplayerTabDot"
+                                     Width="7" Height="7"
+                                     Fill="#E5484D"
+                                     Stroke="{DynamicResource BgSidebar}"
+                                     StrokeThickness="1"
+                                     HorizontalAlignment="Right"
+                                     VerticalAlignment="Top"
+                                     Margin="0,-2,-4,0"
+                                     Visibility="Collapsed"/>
+                        </Grid>
+                    </Button>
                 </StackPanel>
+                </Grid>
         </controls:TitleBar>
 
         <!-- =============================================================
@@ -866,96 +971,28 @@
         </Grid>
 
         <!-- =============================================================
-             HORIZONTAL NAVIGATION (Steam-style redesign). Replaces
-             the old 240px vertical sidebar. Three content tabs only
-             — the brand dropdown (Launcher settings / About / Exit)
-             lives EXCLUSIVELY in the title bar above, so it's not
-             duplicated here. Same x:Names as the old vertical
-             sidebar so code-behind (RefreshTopTabHighlight,
-             ApplyStrings, SwitchTopTab) keeps working unchanged.
-             ============================================================= -->
-        <Border Grid.Row="1"
-                Background="{DynamicResource BgSidebar}"
-                BorderBrush="{DynamicResource BorderSecondary}"
-                BorderThickness="0,0,0,1">
-            <StackPanel x:Name="TopTabBar"
-                        Orientation="Horizontal"
-                        VerticalAlignment="Stretch">
-                <!-- Content tabs — icon + label inline. Active state
-                     is driven by Tag="active" via RefreshTopTabHighlight
-                     in code-behind. The left-to-right child order is
-                     re-applied at startup from LauncherConfig.TopTabOrder
-                     by ApplyTopTabOrder() — the XAML order here is just
-                     the default for a fresh config. -->
-                <Button x:Name="TopTabPlay"
-                        Style="{StaticResource NavTabButton}"
-                        Click="TopTabPlay_Click">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="&#xE80F;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="16"
-                                   Margin="0,0,10,0"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button x:Name="TopTabMods"
-                        Style="{StaticResource NavTabButton}"
-                        Click="TopTabMods_Click">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="&#xE7C5;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="16"
-                                   Margin="0,0,10,0"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SidebarLabelCatalog" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button x:Name="TopTabMultiplayer"
-                        Style="{StaticResource NavTabButton}"
-                        Click="TopTabMultiplayer_Click">
-                    <Grid>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="&#xE716;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="16"
-                                       Margin="0,0,10,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <!-- "New room created" dot: set from PollNewRoomsAsync,
-                             cleared when the user switches to Multiplayer. Mirrors
-                             the notification bell's badge (MainWindow.xaml ~645). -->
-                        <Ellipse x:Name="MultiplayerTabDot"
-                                 Width="7" Height="7"
-                                 Fill="#E5484D"
-                                 Stroke="{DynamicResource BgSidebar}"
-                                 StrokeThickness="1"
-                                 HorizontalAlignment="Right"
-                                 VerticalAlignment="Top"
-                                 Margin="0,2,-2,0"
-                                 Visibility="Collapsed"/>
-                    </Grid>
-                </Button>
-            </StackPanel>
-        </Border>
-
-        <!-- =============================================================
              Content area. Now full-width (no sidebar column eating
              240px). PlayView is the "cinema" dashboard. Other tabs
              (Workshop, Multiplayer, Settings) overlay on top when
              active.
 
-             ClipToBounds guards the seamless title-bar + nav chrome above
-             (Rows 0/1): everything in this row — the full-bleed dashboard
-             background image, the hero gradients, the scaled hero block —
-             is clipped to the row so none of it can render up over the
-             chrome. This is the safety net for the maximized full-bleed
-             image reading as if it bleeds into the nav strip; it does NOT
-             touch the chrome itself, so the one-surface look (no title-bar
-             divider) is preserved.
+             ClipToBounds guards the title-bar chrome above (Row 0):
+             everything in this row — the full-bleed dashboard background
+             image, the hero gradients, the scaled hero block — is clipped
+             to the row so none of it can render up over the chrome. This is
+             the safety net for the maximized full-bleed image reading as if
+             it bleeds into the bar; it does NOT touch the chrome itself.
+
+             The top border is what the deleted nav strip used to provide.
+             That strip carried the only chrome/content divider, and it was
+             shared by all three tabs — Multiplayer replaces it with its own
+             sub-tab bar, but Library and Workshop have nothing, so without
+             this line the title bar would bleed straight into their content.
              ============================================================= -->
-        <Grid x:Name="ContentHost" Grid.Row="2" ClipToBounds="True">
+        <Border Grid.Row="1"
+                BorderBrush="{DynamicResource BorderSecondary}"
+                BorderThickness="0,1,0,0">
+        <Grid x:Name="ContentHost" ClipToBounds="True">
 
             <!-- ============================================================
                  PLAY VIEW — cinema dashboard.
@@ -1432,14 +1469,15 @@
                 </StackPanel>
             </Grid>
 
-        </Grid>   <!-- /Content host (root Grid.Column=1) -->
+        </Grid>   <!-- /Content host -->
+        </Border> <!-- /chrome-to-content divider -->
 
         <!-- In-app toast notifications (AppToast): non-modal, stacked, auto-dismiss
              cards in the bottom-right that float over ANY tab. Spans all rows;
              Background is null so it only intercepts clicks on the cards themselves
              (empty areas stay click-through to the content below). -->
         <StackPanel x:Name="ToastHost"
-                    Grid.Row="0" Grid.RowSpan="3"
+                    Grid.Row="0" Grid.RowSpan="2"
                     VerticalAlignment="Bottom"
                     HorizontalAlignment="Right"
                     Margin="0,0,16,16"

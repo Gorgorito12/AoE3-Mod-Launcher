@@ -107,11 +107,23 @@
          App.ApplyWindowChrome (this token for secondaries, TitleBarHeightMain for
          MainWindow) so the whole bar stays the native drag/double-click region. -->
     <sys:Double x:Key="TitleBarHeight">28</sys:Double>
-    <!-- Main launcher header height — the ONLY window pinned to the classic 36px
-         (its brand "AoE3 Mod Launcher" bar + nav strip must stay untouched). MainWindow
-         opts into this explicitly (Height + its CaptionHeight both read it) so the
-         compact secondary bar never shrinks the main header. -->
-    <sys:Double x:Key="TitleBarHeightMain">36</sys:Double>
+    <!-- Main launcher header height — the ONLY window off the slim secondary bar.
+         MainWindow opts into this explicitly (Height + its CaptionHeight both read it)
+         so the compact secondary bar never shrinks the main header.
+
+         46 (was 36): the header absorbed the nav strip in the multiplayer redesign, so
+         one bar now carries the brand, the three main tabs, the connection chip and the
+         account menu. THIS TOKEN IS THE ONLY PLACE THAT HEIGHT MAY BE SET —
+         App.ApplyWindowChrome reads it to set WindowChrome.CaptionHeight, so hardcoding
+         a height on the TitleBar element instead would leave the bottom strip of the bar
+         outside the native caption region: no drag, no double-click-maximize, no compile
+         error and nothing visible to hint at it.
+
+         Note 46 is not DPI-clean at 125% (46×1.25 = 57.5). The global UseLayoutRounding
+         absorbs it — the bar simply lands on 58 physical px and its contents are all
+         centred — but 48 is the nearest value that divides cleanly at both 125% and 150%
+         if the half-pixel ever shows up on a real display. -->
+    <sys:Double x:Key="TitleBarHeightMain">46</sys:Double>
     <!-- Caption-button footprint. Width 40 (down from the classic 46) to match the
          slimmer bar; height fills the bar so they read as one strip. 40 is DPI-clean
          (×1.25=50, ×1.5=60). The main header overrides back to 46 locally. -->
@@ -148,9 +160,18 @@
 
     <!-- MainWindow top-tab text size (NavTabButton: LIBRARY/WORKSHOP/
          MULTIPLAYER). Its OWN knob, independent of the title and the dialog-rail
-         nav. 20 = a touch larger than the old 18 so the main tabs read as the
-         primary navigation without being oversized. -->
-    <sys:Double x:Key="NavTabTextSize">14</sys:Double>
+         nav.
+
+         13 (was 14): the tabs moved into the 46px title bar and now share it with the
+         brand, the connection chip and the account menu, so they had to give up width.
+
+         ⚠ The design handoff asks for 11.5px here. This deliberately does NOT follow it.
+         The typography scale has a measured floor of 13 — 10-11px secondary text was
+         reported as unreadable at 125/150% display scaling, which is what the whole
+         scale was introduced to fix. These are the launcher's PRIMARY navigation, so
+         they are the worst possible place to reintroduce that. Raise to 11.5 only if
+         you have looked at it on a 125% display and disagree. -->
+    <sys:Double x:Key="NavTabTextSize">13</sys:Double>
 
     <!-- ============================================================
          MULTIPLAYER REDESIGN GEOMETRY (design handoff 1a/1d/1e/1f —

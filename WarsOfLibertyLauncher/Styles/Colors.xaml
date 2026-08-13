@@ -435,6 +435,10 @@
          the same hue at a higher alpha so the box reads as one object. -->
     <SolidColorBrush x:Key="MpTabActiveBg" Color="#472F7FE0"/>
     <SolidColorBrush x:Key="MpTabActiveRim" Color="#6678B4FF"/>
+    <!-- Idle main-nav tab text, in the title bar. Dimmer than MpTextSecondary
+         because it sits ON the chrome rather than on a panel, and the active
+         pill has to win against it. -->
+    <SolidColorBrush x:Key="MpNavTabIdle" Color="#A8BCD2"/>
     <SolidColorBrush x:Key="MpChipOkBg" Color="#2435C46F"/>
     <SolidColorBrush x:Key="MpChipOkRim" Color="#4D35C46F"/>
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
