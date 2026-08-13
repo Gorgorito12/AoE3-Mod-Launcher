@@ -1064,6 +1064,10 @@ public partial class MultiplayerTab : UserControl
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
         RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
         ActivityRecentTitle.Text = Strings.Get("MpActivityRecentTitle");
+        JoinByCodeTitle.Text = Strings.Get("MpJoinByCodeTitle");
+        JoinByCodeHint.Text = Strings.Get("MpJoinByCodeHint");
+        JoinByCodePlaceholder.Text = Strings.Get("MpJoinByCodePlaceholder");
+        JoinByCodeButton.Content = Strings.Get("MpJoinByCodeButton");
 
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
@@ -3850,6 +3854,44 @@ public partial class MultiplayerTab : UserControl
     /// the room by accident — the server's own slow-mode would then be the only thing
     /// between a stray double-click and a timeout.
     /// </summary>
+    /// <summary>
+    /// Enter is live only once something is typed — an empty submit can only produce
+    /// "room not available", which reads as a failure rather than as "you typed nothing".
+    /// </summary>
+    private void JoinByCodeBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var text = JoinByCodeBox.Text ?? string.Empty;
+        JoinByCodePlaceholder.Visibility =
+            text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        JoinByCodeButton.IsEnabled = text.Trim().Length > 0;
+    }
+
+    /// <summary>Return submits, so pasting a code and pressing enter is the whole flow.</summary>
+    private void JoinByCodeBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Return) return;
+        e.Handled = true;
+        SubmitRoomCode();
+    }
+
+    private void JoinByCodeButton_Click(object sender, RoutedEventArgs e) => SubmitRoomCode();
+
+    /// <summary>
+    /// Joins by a typed room id. Delegates to the SAME path the deep link and the invite
+    /// toast use, so a pasted code, a Discord link and an invite cannot diverge in what
+    /// they check before letting you in.
+    ///
+    /// <para>The box is cleared straight away: the id is consumed, and leaving it there
+    /// invites a second click that would resolve the room a second time.</para>
+    /// </summary>
+    private void SubmitRoomCode()
+    {
+        var code = (JoinByCodeBox.Text ?? string.Empty).Trim();
+        if (code.Length == 0) return;
+        JoinByCodeBox.Text = string.Empty;
+        _ = JoinByLobbyIdAsync(code);
+    }
+
     /// <summary>Guards the one-shot activity fetch — it is a page-load fact, not a poll.</summary>
     private bool _activityLoaded;
 
@@ -6144,7 +6186,12 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        // 3. Resolve the LobbySummary from the live list (no get-by-id endpoint).
+        // 3. Resolve the room. The live list FIRST, because its LobbySummary is the
+        //    complete record; then, if the id isn't in it, the public GET /lobbies/:id.
+        //    That second step is what makes a pasted code work at all: this used to give
+        //    up after the list scan, with a comment claiming no get-by-id endpoint
+        //    existed — it does, and the roster "peek" popup has been using it all along.
+        //    So any room absent from the list reported itself as "no longer open".
         LobbySummary? lobby = null;
         try
         {
@@ -6152,6 +6199,28 @@ public partial class MultiplayerTab : UserControl
             foreach (var l in list.Lobbies)
             {
                 if (string.Equals(l.Id, lobbyId, StringComparison.OrdinalIgnoreCase)) { lobby = l; break; }
+            }
+
+            if (lobby == null)
+            {
+                var detail = await _session.Api.GetLobbyByIdAsync(lobbyId);
+                if (detail != null && !string.IsNullOrEmpty(detail.Id))
+                {
+                    // The join flow reads exactly these six fields. CreatedAt is the one
+                    // LobbyDetail doesn't carry, and its only consumer is the "open for
+                    // X" counter, which simply doesn't render without it.
+                    lobby = new LobbySummary
+                    {
+                        Id = detail.Id,
+                        Title = detail.Title,
+                        ModId = detail.ModId,
+                        MaxPlayers = detail.MaxPlayers,
+                        CurrentPlayers = detail.CurrentPlayers,
+                        IsPrivate = detail.IsPrivate,
+                        Status = detail.Status,
+                    };
+                    DiagnosticLog.Write($"Resolved lobby '{lobbyId}' by id (absent from the list).");
+                }
             }
         }
         catch (Exception ex)

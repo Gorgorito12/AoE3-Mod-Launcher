@@ -2396,6 +2396,19 @@ public static class Strings
         // Centred day divider in the global chat. "Today" instead of a date, because a
         // date on the line you are reading right now is noise.
         ["MpChatToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
+        // Join-by-code row under the rooms list.
+        ["MpJoinByCodeTitle"] = new()
+        {
+            [LangEn] = "Were you given a room code?",
+            [LangEs] = "¿Te pasaron un código de sala?",
+        },
+        ["MpJoinByCodeHint"] = new()
+        {
+            [LangEn] = "Private rooms don't show up in the list.",
+            [LangEs] = "Las salas privadas no aparecen en la lista.",
+        },
+        ["MpJoinByCodePlaceholder"] = new() { [LangEn] = "room code", [LangEs] = "código" },
+        ["MpJoinByCodeButton"] = new() { [LangEn] = "Enter", [LangEs] = "Entrar" },
         // Community-activity strip under the rooms list.
         ["MpActivityRecentTitle"] = new() { [LangEn] = "RECENT MATCHES", [LangEs] = "ÚLTIMAS PARTIDAS" },
         // A match whose result couldn't be read (no recording, or a team game). Most
