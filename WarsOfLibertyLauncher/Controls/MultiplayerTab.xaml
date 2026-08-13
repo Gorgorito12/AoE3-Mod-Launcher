@@ -486,14 +486,23 @@
                     <!-- Wrapper: glow underlay (Effect, no children) BEHIND the
                          real content card (no Effect → text stays ClearType-crisp). -->
                     <Grid Grid.Column="0">
-                    <Border Background="{DynamicResource MpSurface}"
+                    <!-- Row 0 is the rooms card (glow underlay + content, stacked);
+                         row 1 is the activity strip below it. Without these the strip
+                         would land in the same cell as the card and paint over it. -->
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0"
+                            Background="{DynamicResource MpSurface}"
                             CornerRadius="{StaticResource RadiusLg}"
                             Margin="1">
                         <Border.Effect>
                             <DropShadowEffect Color="#3A6BD0" BlurRadius="18" ShadowDepth="0" Opacity="0.28"/>
                         </Border.Effect>
                     </Border>
-                    <Border Background="{DynamicResource MpSurface}"
+                    <Border Grid.Row="0"
+                            Background="{DynamicResource MpSurface}"
                             BorderBrush="{DynamicResource MpCardBorder}"
                             BorderThickness="1"
                             CornerRadius="{StaticResource RadiusLg}">
@@ -721,6 +730,35 @@
                                            VerticalAlignment="Center"/>
                             </Border>
                         </Grid>
+                    </Border>
+
+                    <!-- COMMUNITY ACTIVITY (design handoff 1a). Sits under the list so
+                         the screen doesn't read as empty when only one room exists —
+                         which is what it replaces, a half-screen illustration.
+
+                         ⚠ The reference gives this strip THREE cards. Only this one is
+                         built, because the other two have no data to build from: PEAK
+                         HOURS needs activity bucketed by time of day and RANKING needs a
+                         top-N by rating, and the backend exposes neither — matches/elo
+                         is per-user, not a leaderboard. Faking either would break the
+                         handoff's own "don't invent backend fields" rule, so they wait
+                         for the endpoints. -->
+                    <Border x:Name="ActivityStrip"
+                            Grid.Row="1"
+                            Visibility="Collapsed"
+                            Margin="0,10,0,0"
+                            Padding="13,12"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusRow}">
+                        <StackPanel>
+                            <TextBlock x:Name="ActivityRecentTitle"
+                                       Foreground="{DynamicResource MpTextLabel}"
+                                       FontSize="{StaticResource MpPillSize}"
+                                       FontWeight="SemiBold"/>
+                            <StackPanel x:Name="ActivityRecentList" Margin="0,8,0,0"/>
+                        </StackPanel>
                     </Border>
                     </Grid>
                     <!-- /LEFT card -->

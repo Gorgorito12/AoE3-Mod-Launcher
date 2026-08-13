@@ -2396,6 +2396,11 @@ public static class Strings
         // Centred day divider in the global chat. "Today" instead of a date, because a
         // date on the line you are reading right now is noise.
         ["MpChatToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
+        // Community-activity strip under the rooms list.
+        ["MpActivityRecentTitle"] = new() { [LangEn] = "RECENT MATCHES", [LangEs] = "ÚLTIMAS PARTIDAS" },
+        // A match whose result couldn't be read (no recording, or a team game). Most
+        // stored matches are these, so the row says so instead of looking like a win.
+        ["MpActivityNotCounted"] = new() { [LangEn] = "didn't count", [LangEs] = "no contó" },
         // Quick replies above the chat composer. These are TYPED into the box, so they
         // are the player's own words — keep them short and natural in both languages
         // rather than literal translations of each other.

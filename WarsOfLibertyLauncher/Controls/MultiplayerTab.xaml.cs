@@ -1063,6 +1063,7 @@ public partial class MultiplayerTab : UserControl
         RefreshButton.Content = "↻  " + Strings.Get("MpRoomsRefresh");
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
         RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
+        ActivityRecentTitle.Text = Strings.Get("MpActivityRecentTitle");
 
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
@@ -3103,7 +3104,11 @@ public partial class MultiplayerTab : UserControl
         // once, without the skeleton flash a full refresh would cause. The
         // 5 s _roomsListTimer keeps it current from here on.
         if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+        {
             _ = RefreshRoomsListAsync(quiet: true);
+            // Self-gating and one-shot, so re-entering the subtab costs nothing.
+            _ = RefreshActivityStripAsync();
+        }
     }
     private void SubtabFriends_Click(object sender, RoutedEventArgs e)
     {
@@ -3843,6 +3848,85 @@ public partial class MultiplayerTab : UserControl
     /// the room by accident — the server's own slow-mode would then be the only thing
     /// between a stray double-click and a timeout.
     /// </summary>
+    /// <summary>Guards the one-shot activity fetch — it is a page-load fact, not a poll.</summary>
+    private bool _activityLoaded;
+
+    /// <summary>
+    /// Fills the community-activity strip's "recent matches" card.
+    ///
+    /// <para>Fetched ONCE per session, never on a timer: it reads the same per-user
+    /// history endpoint the History subtab uses, and the rate limits on this backend are
+    /// per IP — shared behind NAT or an active Radmin network — so a strip that polled
+    /// would spend everyone's budget to re-state a list that changes once a match.</para>
+    ///
+    /// <para>Stays hidden on an empty history or any failure. A card headed "recent
+    /// matches" with nothing under it invites the reading that the matches were lost,
+    /// which for someone who has played none is simply wrong.</para>
+    /// </summary>
+    private async Task RefreshActivityStripAsync()
+    {
+        if (_activityLoaded || _session?.CurrentUser == null || ActivityStrip == null) return;
+        _activityLoaded = true;
+
+        try
+        {
+            var resp = await _session.Api.GetHistoryAsync(_session.CurrentUser.Id);
+            var rows = resp?.Matches;
+            if (rows == null || rows.Count == 0) return;
+
+            ActivityRecentList.Children.Clear();
+            foreach (var m in rows.Take(3))
+                ActivityRecentList.Children.Add(BuildActivityMatchRow(m));
+
+            ActivityStrip.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            // Best-effort decoration: it must never be why the rooms list looks broken.
+            DiagnosticLog.Write($"Activity strip: history fetch failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// One line of the recent-matches card: a dot, the mod, and the map.
+    ///
+    /// <para>The dot is GREEN only when the match was actually decided. A 0.5 means the
+    /// result could not be read — no recording, a team game — and those are the majority
+    /// of stored rows, so painting them like wins would misreport most of the list. They
+    /// get a grey dot and dimmed text, and say so.</para>
+    /// </summary>
+    private static UIElement BuildActivityMatchRow(MatchHistoryRow m)
+    {
+        bool decided = m.Result >= 0.999 || m.Result <= 0.001;
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 5),
+        };
+        row.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Width = 6,
+            Height = 6,
+            Fill = (Brush)Application.Current.FindResource(decided ? "MpOk" : "MpTextFaint"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        });
+
+        var parts = new System.Collections.Generic.List<string> { ResolveModDisplayName(m.ModId) };
+        if (!string.IsNullOrWhiteSpace(m.MapName)) parts.Add(m.MapName!);
+        if (!decided) parts.Add(Strings.Get("MpActivityNotCounted"));
+
+        row.Children.Add(new TextBlock
+        {
+            Text = string.Join(" · ", parts.Where(p => !string.IsNullOrWhiteSpace(p))),
+            Foreground = (Brush)Application.Current.FindResource(decided ? "MpTextBody" : "MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return row;
+    }
+
     private void QuickReply_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button b || b.Content is not string text) return;
