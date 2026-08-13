@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace WarsOfLibertyLauncher.Localization;
@@ -2702,7 +2702,10 @@ public static class Strings
         ["DlgClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
         ["MpRoomsCreate"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
         ["MpRoomsRefresh"] = new() { [LangEn] = "Refresh", [LangEs] = "Actualizar" },
+        // Kept for the skeleton rows' accessibility text; the visible loading state is
+        // three placeholder rows, not a line of prose.
         ["MpRoomsLoading"] = new() { [LangEn] = "Loading rooms…", [LangEs] = "Cargando salas…" },
+        ["MpRoomsErrorRetry"] = new() { [LangEn] = "Retry", [LangEs] = "Reintentar" },
         ["MpRoomsSectionTitle"] = new() { [LangEn] = "Active rooms", [LangEs] = "Salas activas" },
         ["MpGlobalChatTitle"] = new() { [LangEn] = "Global chat", [LangEs] = "Chat global" },
         ["MpGlobalChatPresence"] = new() { [LangEn] = "{0} connected", [LangEs] = "{0} conectados" },

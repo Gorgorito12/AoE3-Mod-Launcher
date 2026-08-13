@@ -450,6 +450,14 @@ public partial class MultiplayerTab : UserControl
     /// Pushes the signed-in identity (and the cached rating, when there is one) to the
     /// title bar. A null user hides the cluster. Called from <see cref="RenderBrowser"/>
     /// so it tracks sign-in and sign-out, and again when a standing arrives.
+    ///
+    /// <para>It also KICKS the standing fetch when there is no cached one. That line is
+    /// what makes the ELO under the name appear at all: the cache was only ever filled by
+    /// <see cref="LoadStandingAsync"/>, which was only reachable by opening the Profile
+    /// subtab — so for everyone who never opened it the chip's rating was permanently
+    /// null, silently, while the doc comment claimed otherwise. The fetch is bounded by
+    /// <c>_standingFetchInFlight</c> and by only firing on a null cache, and the callers
+    /// are session-state changes (sign-in, entering or leaving a room), never a poll.</para>
     /// </summary>
     private void PushAccountChip(Models.Multiplayer.LobbyUserSummary? user)
     {
@@ -464,6 +472,10 @@ public partial class MultiplayerTab : UserControl
             ? Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding.Rating))
             : null;
         _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo);
+
+        // Null cache: either we have never fetched, or a match just invalidated it. Both
+        // want the same thing. LoadStandingAsync re-pushes when it lands.
+        if (_cachedStanding == null) _ = LoadStandingAsync();
     }
 
     private void RefreshRadminBanner()
@@ -2908,6 +2920,10 @@ public partial class MultiplayerTab : UserControl
     /// <summary>The standing, fetched once per session — see <see cref="LoadStandingAsync"/>.</summary>
     private EloSnapshot? _cachedStanding;
 
+    /// <summary>Guards the standing fetch. Two entry points reach it now — the Profile
+    /// subtab and the title-bar chip — and both can fire on the same state change.</summary>
+    private bool _standingFetchInFlight;
+
     private void RenderProfileTab()
     {
         var user = _session?.CurrentUser;
@@ -2950,11 +2966,17 @@ public partial class MultiplayerTab : UserControl
         var userId = session?.CurrentUser?.Id;
         if (session == null || string.IsNullOrEmpty(userId)) return;
         if (ConnectivityState.IsOffline) return;
+        if (_standingFetchInFlight) return;
+        _standingFetchInFlight = true;
 
         try
         {
             var standing = await session.Api.GetEloAsync(userId);
             _cachedStanding = standing;
+
+            // The title-bar chip is the reason this can be reached without the Profile
+            // subtab, so it is repainted regardless of which subtab is on screen.
+            PushAccountChip(session.CurrentUser);
 
             // The user may have moved to another subtab while this was in flight.
             if (ProfileView.IsVisible) ShowStanding(standing);
@@ -2962,6 +2984,10 @@ public partial class MultiplayerTab : UserControl
         catch (Exception ex)
         {
             DiagnosticLog.Write($"MultiplayerTab.LoadStandingAsync: {ex.Message}");
+        }
+        finally
+        {
+            _standingFetchInFlight = false;
         }
     }
 
@@ -3368,11 +3394,43 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Opens the Profile subtab. Called from the title-bar account menu.</summary>
     public void ShowProfile() => SubtabProfile_Click(this, new RoutedEventArgs());
 
+    /// <summary>Shortest time the refresh button stays in its busy state.</summary>
+    private const int RefreshSpinMinMs = 500;
+
+    /// <summary>
+    /// Manual refresh. It holds the busy state for at least
+    /// <see cref="RefreshSpinMinMs"/> even when the round-trip beats it, which the
+    /// reference asks for so "el clic se sienta": the usual response is fast enough that
+    /// the list often comes back identical, and with no acknowledgement at all the button
+    /// reads as broken. Waiting out the remainder is the cheapest honest feedback — it
+    /// delays nothing the user can act on.
+    /// </summary>
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        await RefreshRoomsListAsync();
-        await RefreshQuotaAsync();
+        if (_refreshSpinning) return;
+        _refreshSpinning = true;
+        var started = Environment.TickCount64;
+        RefreshButton.IsEnabled = false;
+        try
+        {
+            await RefreshRoomsListAsync();
+            await RefreshQuotaAsync();
+        }
+        finally
+        {
+            var left = RefreshSpinMinMs - (int)(Environment.TickCount64 - started);
+            if (left > 0) await Task.Delay(left);
+            RefreshButton.IsEnabled = true;
+            _refreshSpinning = false;
+        }
     }
+
+    /// <summary>Guards the manual refresh's minimum-spin window.</summary>
+    private bool _refreshSpinning;
+
+    /// <summary>Retry after a failed rooms fetch — the link in the amber error line.</summary>
+    private async void RoomsErrorRetry_Click(object sender, RoutedEventArgs e)
+        => await RefreshRoomsListAsync();
 
     private async void CreateRoomButton_Click(object sender, RoutedEventArgs e)
     {
@@ -3567,13 +3625,8 @@ public partial class MultiplayerTab : UserControl
                 RoomsListPanel.Children.Clear();
                 RoomsEmptyState.Visibility = Visibility.Collapsed;
                 RoomsErrorBox.Visibility = Visibility.Collapsed;
-                RoomsListPanel.Children.Add(new TextBlock
-                {
-                    Text = Strings.Get("MpRoomsLoading"),
-                    Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
-                    FontStyle = FontStyles.Italic,
-                    Margin = new Thickness(24, 12, 24, 0),
-                });
+                for (int i = 0; i < SkeletonRowCount; i++)
+                    RoomsListPanel.Children.Add(BuildRoomSkeletonRow());
             }
 
             var list = await _session.Api.ListLobbiesAsync();
@@ -3612,6 +3665,7 @@ public partial class MultiplayerTab : UserControl
                 RoomsEmptyState.Visibility = Visibility.Visible;
                 UpdateRoomsShowingCount(0);
                 _lastRenderedRoomsSignature = signature;
+                _roomIdsSeeded = true;
                 return;
             }
             RoomsEmptyState.Visibility = Visibility.Collapsed;
@@ -3623,6 +3677,10 @@ public partial class MultiplayerTab : UserControl
             int idx = 0;
             foreach (var lobby in ordered)
                 RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
+            // From here on a room this render didn't know about is genuinely new. Set
+            // AFTER the loop, so the first paint teaches the set instead of flashing
+            // every row in it.
+            _roomIdsSeeded = true;
             _lastRenderedRoomsSignature = signature;
             UpdateRoomsShowingCount(ordered.Count);
             _ = Dispatcher.BeginInvoke(new Action(SyncHeaderScrollbarGutter),
@@ -3642,6 +3700,7 @@ public partial class MultiplayerTab : UserControl
             {
                 RoomsListPanel.Children.Clear();
                 RoomsErrorText.Text = ex.Message;
+                RoomsErrorRetry.Content = Strings.Get("MpRoomsErrorRetry");
                 RoomsErrorBox.Visibility = Visibility.Visible;
             }
         }
@@ -3678,8 +3737,14 @@ public partial class MultiplayerTab : UserControl
 
     // ---------- Rooms table sorting / footer / header alignment ----------
 
-    /// <summary>Which column the rooms table is sorted by (None = server order).</summary>
-    private enum RoomSort { None, Room, Mod, Host, Players, Ping, Status }
+    /// <summary>
+    /// Which column the rooms table is sorted by (None = server order).
+    ///
+    /// <para>Only the three the reference keeps orderable. Mod, Host and Status were
+    /// dropped along with their headers — a value in an enum whose only remaining use is
+    /// a switch arm nothing can reach is a claim that the feature exists.</para>
+    /// </summary>
+    private enum RoomSort { None, Room, Players, Ping }
     private RoomSort _roomsSort = RoomSort.None;
     private bool _roomsSortAsc = true;
 
@@ -3712,9 +3777,82 @@ public partial class MultiplayerTab : UserControl
             else { arrow.Text = "⇅"; arrow.Foreground = idle; }
         }
         Set(SortArrowRoom, RoomSort.Room);
-        Set(SortArrowHost, RoomSort.Host);
         Set(SortArrowPlayers, RoomSort.Players);
         Set(SortArrowPing, RoomSort.Ping);
+    }
+
+    /// <summary>How many placeholder rows the loading state shows.</summary>
+    private const int SkeletonRowCount = 3;
+
+    /// <summary>
+    /// One placeholder row for the loading state. The reference asks for three of these
+    /// instead of the single italic "cargando…" line that was here, and the reason is
+    /// that they occupy the space the rooms are about to take: the list stops jumping
+    /// when the answer lands, and an empty result is visibly different from a slow one.
+    ///
+    /// <para>Deliberately not animated. A shimmer would need an animated brush on a
+    /// Border, and the brushes here are frozen DynamicResources — animating one throws,
+    /// which is what froze the countdown line once.</para>
+    /// </summary>
+    private Border BuildRoomSkeletonRow()
+    {
+        var bar = (Brush)Application.Current.FindResource("MpField");
+        var row = new Border
+        {
+            Style = (Style)FindResource("MpRoomCard"),
+            Opacity = 0.55,
+        };
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new Border
+        {
+            Width = 30,
+            Height = 30,
+            CornerRadius = new CornerRadius(6),
+            Background = bar,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 11, 0),
+        };
+        Grid.SetColumn(icon, 0);
+        grid.Children.Add(icon);
+
+        var lines = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        lines.Children.Add(new Border
+        {
+            Height = 10,
+            Width = 168,
+            CornerRadius = new CornerRadius(3),
+            Background = bar,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        });
+        lines.Children.Add(new Border
+        {
+            Height = 8,
+            Width = 104,
+            CornerRadius = new CornerRadius(3),
+            Background = bar,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 6, 0, 0),
+        });
+        Grid.SetColumn(lines, 1);
+        grid.Children.Add(lines);
+
+        var action = new Border
+        {
+            Width = 84,
+            Height = 30,
+            CornerRadius = new CornerRadius(7),
+            Background = bar,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(action, 2);
+        grid.Children.Add(action);
+
+        row.Child = grid;
+        return row;
     }
 
     /// <summary>
@@ -3790,11 +3928,8 @@ public partial class MultiplayerTab : UserControl
         IEnumerable<LobbySummary> ordered = _roomsSort switch
         {
             RoomSort.Room => listCopy.OrderBy(l => l.Title, StringComparer.OrdinalIgnoreCase),
-            RoomSort.Mod => listCopy.OrderBy(ModSortName, StringComparer.OrdinalIgnoreCase),
-            RoomSort.Host => listCopy.OrderBy(HostSortName, StringComparer.OrdinalIgnoreCase),
             RoomSort.Players => listCopy.OrderBy(l => l.CurrentPlayers).ThenBy(l => l.MaxPlayers),
             RoomSort.Ping => listCopy, // your latency is identical across rows — no-op
-            RoomSort.Status => listCopy.OrderBy(StatusRank),
             _ => listCopy,
         };
         var result = ordered.ToList();
@@ -4099,7 +4234,9 @@ public partial class MultiplayerTab : UserControl
     private FrameworkElement? HeaderElementFor(Services.RoomColumn column) => column switch
     {
         Services.RoomColumn.Room => ColButtonRoom,
-        Services.RoomColumn.Host => ColButtonHost,
+        // ANFITRIÓN is a plain TextBlock now, not a sort button — the column can still
+        // be moved and hidden, it just can't be clicked.
+        Services.RoomColumn.Host => ColHeaderHost,
         Services.RoomColumn.Players => ColButtonPlayers,
         Services.RoomColumn.Ping => ColButtonPing,
         Services.RoomColumn.Action => ColHeaderAction,
@@ -4582,17 +4719,24 @@ public partial class MultiplayerTab : UserControl
     private DateTime? _lastGlobalChatDate;
 
     /// <summary>
-    /// Build one chat row as a subtle left-aligned bubble: avatar (real Discord
-    /// photo, monogram fallback) + a name/time header line + the message body in
-    /// a rounded bubble. Consecutive messages from the SAME author render as
-    /// continuations — no repeated avatar/name, just the bubble aligned under
-    /// the first one — to cut the visual repetition.
+    /// One chat row: avatar, then a name + time header over the message body.
+    ///
+    /// <para>No bubbles. The body used to sit in a rounded filled Border, and the
+    /// reference drops it — in a narrow column a bubble per line turns the log into a
+    /// column of boxes and the text into the smaller thing inside them. Without the fill
+    /// the reading text is the widest, brightest element in the panel, which is what a
+    /// chat should be.</para>
+    ///
+    /// <para>Consecutive messages from the SAME author render as continuations: body
+    /// only, aligned under the first. That grouping survived the bubble removal because
+    /// it is what keeps a fast exchange from repeating the same avatar six times.</para>
     /// </summary>
     private void AppendGlobalChatRow(string login, string body, long atMs, string? avatarUrl)
     {
-        var textPrimary = (Brush)Application.Current.FindResource("TextPrimary");
-        var textSecondary = (Brush)Application.Current.FindResource("TextSecondary");
-        var bubbleBg = (Brush)Application.Current.FindResource("MpSurfaceAlt");
+        var nameBrush = (Brush)Application.Current.FindResource("MpTextSecondary");
+        var timeBrush = (Brush)Application.Current.FindResource("MpTextDim");
+        var bodyBrush = (Brush)Application.Current.FindResource("MpTextBody");
+        var avatarBg = (Brush)Application.Current.FindResource("MpField");
 
         // A message written on a different day than the previous one breaks the
         // "same author = continuation" grouping, so the new day's first message
@@ -4614,21 +4758,16 @@ public partial class MultiplayerTab : UserControl
             && !string.IsNullOrEmpty(login)
             && string.Equals(login, _lastGlobalChatAuthor, StringComparison.Ordinal);
 
-        // The message body, rendered as a rounded bubble.
-        var bubble = new Border
+        var bodyText = new TextBlock
         {
-            Background = bubbleBg,
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(8, 4, 8, 5),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(0, sameAuthor ? 0 : 2, 0, 0),
-            Child = new TextBlock
-            {
-                Text = body,
-                Foreground = textPrimary,
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                TextWrapping = TextWrapping.Wrap,
-            },
+            Text = body,
+            Foreground = bodyBrush,
+            FontSize = (double)Application.Current.FindResource("MpBodySize"),
+            // The reference's line-height 1.5 on a 12.5 body. WPF wants the absolute
+            // value, not the ratio.
+            LineHeight = 19,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            TextWrapping = TextWrapping.Wrap,
         };
 
         var grid = new Grid
@@ -4636,14 +4775,13 @@ public partial class MultiplayerTab : UserControl
             // Tight gap for a continuation, a clearer gap when the author changes.
             Margin = new Thickness(0, sameAuthor ? 1 : 5, 0, 0),
         };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(33) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         if (sameAuthor)
         {
-            // Continuation: just the bubble, aligned under the first message.
-            Grid.SetColumn(bubble, 1);
-            grid.Children.Add(bubble);
+            Grid.SetColumn(bodyText, 1);
+            grid.Children.Add(bodyText);
         }
         else
         {
@@ -4654,9 +4792,9 @@ public partial class MultiplayerTab : UserControl
             avatarInner.Children.Add(new TextBlock
             {
                 Text = Monogram(login),
-                Foreground = textSecondary,
+                Foreground = nameBrush,
                 FontWeight = FontWeights.Bold,
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                FontSize = (double)Application.Current.FindResource("MpMicroSize"),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             });
@@ -4679,7 +4817,7 @@ public partial class MultiplayerTab : UserControl
                 Width = 24,
                 Height = 24,
                 CornerRadius = new CornerRadius(12),
-                Background = bubbleBg,
+                Background = avatarBg,
                 VerticalAlignment = VerticalAlignment.Top,
                 Child = avatarInner,
             };
@@ -4689,14 +4827,15 @@ public partial class MultiplayerTab : UserControl
             var stack = new StackPanel();
             Grid.SetColumn(stack, 1);
 
+            // Baseline-aligned name and time, per the reference.
             var header = new StackPanel { Orientation = Orientation.Horizontal };
             header.Children.Add(new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(login) ? "—" : login,
-                Foreground = textPrimary,
+                Foreground = nameBrush,
                 FontWeight = FontWeights.SemiBold,
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+                VerticalAlignment = VerticalAlignment.Bottom,
             });
             if (atMs > 0)
             {
@@ -4706,14 +4845,14 @@ public partial class MultiplayerTab : UserControl
                     Text = DateTimeOffset.FromUnixTimeMilliseconds(atMs).LocalDateTime.ToString("HH:mm"),
                     // Full date + time on hover, for precision.
                     ToolTip = FormatChatTimeFull(atMs),
-                    Foreground = textSecondary,
-                    FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                    Margin = new Thickness(8, 1, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = timeBrush,
+                    FontSize = (double)Application.Current.FindResource("MpPillSize"),
+                    Margin = new Thickness(7, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Bottom,
                 });
             }
             stack.Children.Add(header);
-            stack.Children.Add(bubble);
+            stack.Children.Add(bodyText);
             grid.Children.Add(stack);
         }
 
@@ -5665,8 +5804,56 @@ public partial class MultiplayerTab : UserControl
         }
         PlaceRoomCell(grid, Services.RoomColumn.Action, actionBtn);
 
+        // Double-click anywhere on the row does whatever its button does. It fires the
+        // button rather than duplicating the decision above, so a disabled Join stays
+        // disabled and the row can never take an action its own button refuses.
+        card.MouseLeftButtonUp += (_, e) =>
+        {
+            if (e.ClickCount < 2 || !actionBtn.IsEnabled) return;
+            actionBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        };
+
+        // A room that appeared while the user was looking at the list gets a one-second
+        // blue wash, so a new room announces itself instead of silently shifting the
+        // rows. _knownRoomIds is seeded on the first render, or every room would flash
+        // on the first paint and the cue would mean nothing.
+        if (_roomIdsSeeded && !string.IsNullOrEmpty(lobby.Id) && !_knownRoomIds.Contains(lobby.Id))
+            FlashNewRoom(card);
+        if (!string.IsNullOrEmpty(lobby.Id)) _knownRoomIds.Add(lobby.Id);
+
         card.Child = grid;
         return card;
+    }
+
+    /// <summary>Room ids already rendered at least once, so a new one can be spotted.</summary>
+    private readonly HashSet<string> _knownRoomIds = new(StringComparer.Ordinal);
+
+    /// <summary>False until the first render has filled <see cref="_knownRoomIds"/>.</summary>
+    private bool _roomIdsSeeded;
+
+    /// <summary>
+    /// One-second blue wash over a row that has just appeared.
+    ///
+    /// <para>The animated brush is a fresh local <see cref="SolidColorBrush"/>, never the
+    /// row's own: the palette brushes are frozen DynamicResources and animating one
+    /// throws — the bug that once froze the countdown line. The animation restores the
+    /// row's normal fill by animating back to whatever colour it started with.</para>
+    /// </summary>
+    private static void FlashNewRoom(Border card)
+    {
+        var resting = (card.Background as SolidColorBrush)?.Color
+            ?? ((SolidColorBrush)Application.Current.FindResource("MpPanel")).Color;
+        var flash = ((SolidColorBrush)Application.Current.FindResource("MpEventBg")).Color;
+
+        var brush = new SolidColorBrush(resting);
+        card.Background = brush;
+        brush.BeginAnimation(SolidColorBrush.ColorProperty, new System.Windows.Media.Animation.ColorAnimation
+        {
+            From = flash,
+            To = resting,
+            Duration = new Duration(TimeSpan.FromMilliseconds(1000)),
+            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+        });
     }
 
     /// <summary>
@@ -5809,7 +5996,6 @@ public partial class MultiplayerTab : UserControl
         var sortKey = _roomsSort switch
         {
             RoomSort.Room => "MpColRoom",
-            RoomSort.Host => "MpColHost",
             RoomSort.Players => "MpColPlayers",
             RoomSort.Ping => "MpColPing",
             _ => null,

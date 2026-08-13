@@ -596,13 +596,16 @@
                                         <TextBlock Grid.Column="1" x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
-                                <Button x:Name="ColButtonHost" Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Host" Click="RoomHeader_Click">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderHost" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowHost" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Button>
+                                <!-- ANFITRIÓN is a plain label, not a sort button: the reference
+                                     keeps ordering on SALA, JUGADORES and PING only, and says the
+                                     decorative double arrows on columns nobody sorts go away. A
+                                     header that offers an order the list does not need is one more
+                                     thing to try before realising it changed nothing. -->
+                                <TextBlock Grid.Column="2" x:Name="ColHeaderHost"
+                                           Foreground="{DynamicResource MpTextLabel}"
+                                           FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                           Margin="0,0,4,0"/>
                                 <Button x:Name="ColButtonPlayers" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -664,23 +667,27 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Errors box (network/API). Shown when
-                         RefreshLobbiesAsync throws â€” populated by
-                         setting RoomsErrorText.Text + visibility. -->
-                    <Border x:Name="RoomsErrorBox"
-                            VerticalAlignment="Top"
-                            Margin="24,12,24,0"
-                            Padding="14,10"
-                            Background="{DynamicResource StatusErrorBg}"
-                            BorderBrush="{DynamicResource MpStatusOffline}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusSm}"
-                            Visibility="Collapsed">
+                    <!-- Error state (design handoff 1a): "una línea ámbar con reintentar",
+                         not the red bordered box this used to be. A failed refresh is a
+                         transient network hiccup, and the red box read like the room list
+                         itself had broken; amber says try again, and now there is something
+                         to press that does. -->
+                    <StackPanel x:Name="RoomsErrorBox"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Top"
+                                Margin="30,14,30,0"
+                                Visibility="Collapsed">
                         <TextBlock x:Name="RoomsErrorText"
-                                   Foreground="{DynamicResource MpStatusOffline}"
-                                   FontSize="{StaticResource FontSizeCaption}"
-                                   TextWrapping="Wrap"/>
-                    </Border>
+                                   Foreground="{DynamicResource MpCautionText}"
+                                   FontSize="{StaticResource MpLabelSize}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"/>
+                        <Button x:Name="RoomsErrorRetry"
+                                Style="{StaticResource MpLinkButton}"
+                                Margin="9,0,0,0"
+                                VerticalAlignment="Center"
+                                Click="RoomsErrorRetry_Click"/>
+                    </StackPanel>
                 </Grid>
 
                             <!-- Footer: room count (no pagination — the list
