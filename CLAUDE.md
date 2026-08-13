@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -170,6 +170,20 @@ pipeline, which had none at all: `DownloadRetryTests` (which download failures a
 the REJECTION cases are the point: a user's Cancel and a permission error must not be) and
 `UpdateInfoServiceTests` (`ParseXml` + `IsUsable` — the well-formed-but-empty manifest is
 the case that matters).
+
+**`DialogXamlTests` is the guard for every window the smoke test never opens.** The
+smoke-launch below opens `MainWindow` and nothing else, so the XAML of
+`CreateLobbyDialog` and `LobbyWindow` — which is only parsed once a user signs in and
+enters a room — would ship with a broken `{StaticResource}` unseen. It constructs each
+window on an **STA thread** with the `Styles/*.xaml` dictionaries loaded by **explicit
+`pack://` URIs** (App.xaml's own `Source` values are relative and resolve against the
+entry assembly, which under a test host is the runner, not the launcher) and App.xaml's
+INLINE resources — the FontSize scale and the font families — recreated by hand, since
+they live in no dictionary file. It also builds `MatchResultCard`, which is assembled in
+code and therefore checked by nothing at compile time; that test caught two tokens that
+were never added, in a card that is only built when a real match ends. **Add a case here
+whenever you add a window or a code-built card** — a green build is not evidence either
+one loads.
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:

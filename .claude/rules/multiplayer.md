@@ -1,4 +1,4 @@
----
+﻿---
 description: Multiplayer, lobby, Radmin VPN, global chat and Discord-announcement rules for the AoE3 Mod Launcher. Split out of CLAUDE.md so it only loads when working on the multiplayer surface.
 paths:
   - WarsOfLibertyLauncher/Controls/MultiplayerTab.*
@@ -1476,3 +1476,93 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the app (or grep that every `Mp{Alert,Confirm,Notice}*` key used in
   `MultiplayerTab.xaml.cs` exists in `Strings.cs`) — a clean build is NOT
   proof the strings landed.
+
+- **A match that ENDS has its own phase — `MatchPhase.Result` — and without it the lobby
+  window was a zombie.** A reported match closes the room on the backend, which shuts the
+  socket with `4007 match_reported` (`ctx.rooms.close` in `matches/rest.ts`). Nothing in
+  the launcher reacted to that: `LobbyWebSocket` treats a server close like a dropped
+  connection and re-enters its backoff loop (1→30 s, forever), so the window survived with
+  a dead chat, live buttons and a socket pointing at a room that no longer exists. That
+  zombie WAS the de-facto end-of-match state; the phase makes it deliberate.
+  **Three things happen on entry and each is load-bearing:** (1) **`_roomMatchLive` is
+  cleared** — on the reported path nothing else does it, because the `game_ended` branch
+  that normally would is skipped precisely *because* the report already closed the room;
+  left set, `RoomMatchState.WarnOnLeave` tells the player they "will not be able to come
+  back" while they are looking at their own result. (2) **`LobbyWebSocket.StopReconnect()`
+  cancels the retries but KEEPS the object** — disposing it, or nulling
+  `MultiplayerSession.RoomSocket`, raises the state change that runs
+  `RenderRoomsTab`'s else-branch → `CloseLobbyWindow()`, which would tear down the very
+  window the card lives in. (3) `SuppressLeaveConfirm()`, since there is no longer a room
+  to warn about leaving. **The trigger is the 4007 itself**, handled in
+  `OnRoomDisconnected`, so host and guest reach the phase through one line; it is gated on
+  having been in a match because **4007 is also the kick code** and a kick has already
+  closed the window via its own frame. The host ALSO enters from its own POST returning —
+  both signals arrive and whichever is first wins, so entering at both points makes the
+  host's card deterministic rather than a race. `GameRestartedSince()` stays
+  `_matchPhase == InGame`, so the Result phase correctly reads as "no game running".
+
+- **The result card's numbers come from the POST for the host and from the HISTORY for
+  everyone else — and `TryReportMatchAsync` must keep returning its boolean unchanged.**
+  `POST /matches` answers with `ReportMatchResponse.RatingChanges`, a `rating_before` /
+  `rating_after` per participant, which the launcher used to discard; capturing it gives
+  the host their delta and the opponent's new rating for zero extra requests. It is
+  returned as a `record` whose `ClosedRoom` flag has the OLD boolean's exact meaning,
+  because `OnGameExitedAsync` decides from it whether to send `game_ended` — that
+  semantic must not drift. A **guest gets no frame carrying the result**, so
+  `ResolveGuestResultAsync` polls `GET /matches/history/:userId` and matches by mod +
+  start time (±120 s) via the pure `MatchHistoryMatcher` — never "the newest row", which
+  would be a different match of theirs. Three attempts (0 / 6 / 15 s) then a terminal
+  "check History" line; **never a timer beyond that** (20/min · 500/day per IP, shared
+  behind NAT or a Radmin network), and skipped outright when the match was not reportable
+  anyway (solo / under three minutes), where there is no row to find.
+  **`MatchOutcomeView` holds the three refusals** and the card only paints them: a 0.5 is
+  `NoResult` and **never a draw** (it is what the backend stores when the outcome could
+  not be read, which is most rows); an unknown rating yields a **null delta, not "+0"**;
+  and `PlayerStanding.WinPercent` returning null shows an em dash, **never 0 %**.
+  **"Rematch" is deliberately not wired**: it must complete `LeaveCurrentLobbyAsync` on
+  the closed room BEFORE creating the next one or it collides with the backend's "one
+  active lobby" guard, and getting that sequence wrong strands the player in neither room.
+
+- **The in-match RECORDING cell says "requested", never "active" — the one deliberate
+  deviation from the design reference.** The handoff asks for a green "activa" read from
+  `GameRecordingPlan`. That plan answers a narrower question (should the launcher write
+  `optionrecordgame` into this mod's profile), and it is MEASURED above that the profile
+  setting does not drive recording in multiplayer: AoE3's per-match "Record Game" box
+  does, it comes up unticked every match, and both ways of setting it automatically were
+  tried and failed. A green "active" would therefore be a claim the launcher cannot
+  support in the one place where being wrong costs the player their rating — they read
+  "active", skip the box, and the match counts for nobody. `RecordingIndicator.Classify`
+  (pure, tested) returns Requested / Off / Unknown; the cell keeps the reference's
+  position, size and colours, and only the wording drops from a statement about the game
+  to one about the launcher's own setting, with a tooltip naming the real checkbox.
+
+- **The lobby's "BEFORE YOU START" checklist replaced the record-reminder band, but
+  `LauncherConfig.GameRecordingReminderMuted` is NOT gone.** The two-item checklist cannot
+  be silenced — it costs two lines instead of seven, which is what made the old band worth
+  silencing — but that config field still gates the launch-time chat line and has its own
+  Settings checkbox, so deleting it breaks `LauncherSettingsDialog`. **The first item's tick
+  is honest but not verified per member**: everyone present passed `POST /lobbies/:id/join`,
+  which rejects a mismatched `mod_combined_hash`, so the claim follows from their being
+  there; the room-state frame carries no per-member hash, so a truly verified tick needs a
+  backend change. **The second never ticks, by design.**
+
+- **Removing the roster's health dot would have broken the live ping SILENTLY.**
+  `RefreshRosterHealthDots` found its target by walking each row for an `Ellipse` with a
+  string `Tag`; the redesign states the link in words on the row's second line and drops
+  the dot, so that walk would have found nothing, thrown nothing, and left every ping
+  frozen at whatever it read when the row was built. It is now `RefreshRosterLiveCells`
+  and the `Tag` sits on the second line's `TextBlock`. **Any future change to the roster's
+  visual shape has to move that Tag with it** — the update is by structure, not by name,
+  which is exactly why the failure is quiet. The rating segment of that line is **omitted
+  entirely when unknown**, the same refusal `PlayerStanding` makes: the 1500 the server
+  hands new players must never be rendered as if it were earned.
+
+- **Backend gaps the multiplayer redesign is waiting on** (documented, never faked):
+  per-room ping needs `radmin_ip` on `GET /lobbies` — without it the PING column shows
+  YOUR latency, identical on every row, which is why sorting by it is a no-op; per-member
+  ELO in the lobby roster needs `rating` on the room-state member object (or a batch
+  `/matches/elo?ids=`), since 8 single-user calls do not fit in 20/min; the rooms view's
+  PEAK HOURS and RANKING cards need an activity-by-hour endpoint and a top-N that do not
+  exist; a `match_reported` frame carrying the rating changes would replace the guest's
+  four polls with zero; and the REPLAY cell reads "not uploaded" because
+  `ReplayUploadService.UploadAsync` still has no live caller.
