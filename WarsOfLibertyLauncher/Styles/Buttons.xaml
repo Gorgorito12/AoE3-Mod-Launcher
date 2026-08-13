@@ -618,6 +618,12 @@
         <Setter Property="Padding" Value="11,8"/>
         <Setter Property="Margin" Value="3,0,0,0"/>
         <Setter Property="Cursor" Value="Hand"/>
+        <!-- Stretch, so the button fills the title bar's full height. In a caption
+             region every pixel NOT covered by a control is a window-drag handle, so a
+             centred button leaves a dead band above and below it where a click drags
+             the window instead of switching tabs. The PILL stays inset — see the
+             two-Border template below. -->
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
@@ -626,14 +632,21 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="border"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="Transparent"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusMd}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"/>
+                    <!-- TWO borders, deliberately. The outer one is invisible but
+                         fills the whole button, and it is what makes the entire
+                         bar-height strip clickable. The inner one is the visible
+                         pill, sized to its content. Collapsing them into one would
+                         shrink the hit area back to the pill. -->
+                    <Border Background="{TemplateBinding Background}">
+                        <Border x:Name="border"
+                                VerticalAlignment="Center"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusMd}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">

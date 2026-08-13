@@ -365,7 +365,17 @@
                      the right, so ~58px of it sits under the bell). Folding the bell
                      and the offline chip INTO this grid is the next step, and it is
                      what finally retires these hand-computed offsets. -->
-                <Grid VerticalAlignment="Stretch" Margin="0,0,58,0">
+                <!-- Height, not VerticalAlignment="Stretch": the shared TitleBar
+                     template's ContentPresenter is VerticalAlignment="Center"
+                     (Chrome.xaml), so Stretch does nothing here and this grid would
+                     only be as tall as its own content. That is not cosmetic — the
+                     bar is the window's caption region, so any part of it NOT covered
+                     by a control is a drag handle. Left centred, the tabs occupied
+                     ~29 of the 46px and a click on the top or bottom of one dragged
+                     the window instead of switching tabs. Pinning the height makes
+                     every control in here full-bar-height, so the whole strip either
+                     hits a control or drags, with no dead band in between. -->
+                <Grid Height="{StaticResource TitleBarHeightMain}" Margin="0,0,58,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
@@ -373,7 +383,7 @@
                     </Grid.ColumnDefinitions>
                 <Button x:Name="TitleBarBrandButton"
                         Grid.Column="0"
-                        VerticalAlignment="Center"
+                        VerticalAlignment="Stretch"
                         Margin="0,0,14,0"
                         HorizontalAlignment="Left"
                         Background="Transparent"
@@ -566,7 +576,7 @@
                 <StackPanel x:Name="TopTabBar"
                             Grid.Column="1"
                             Orientation="Horizontal"
-                            VerticalAlignment="Center">
+                            VerticalAlignment="Stretch">
                     <Button x:Name="TopTabPlay"
                             Style="{StaticResource NavTabButton}"
                             Click="TopTabPlay_Click">
