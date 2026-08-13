@@ -198,6 +198,10 @@
          after the deviation was raised and declined twice. Kept as its own token so
          reversing it is one number, and so it can't leak into body text. -->
     <sys:Double x:Key="MpLabelSize">11.5</sys:Double>
+    <!-- The two sizes below 11.5 the reference uses in the title bar: the ES/EN pills
+         and the ELO line under the account name. Same floor caveat as MpLabelSize. -->
+    <sys:Double x:Key="MpPillSize">10.5</sys:Double>
+    <sys:Double x:Key="MpMicroSize">10</sys:Double>
     <sys:Double x:Key="MpFieldHeight">34</sys:Double>
     <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
     <sys:Double x:Key="MpControlHeight">30</sys:Double>

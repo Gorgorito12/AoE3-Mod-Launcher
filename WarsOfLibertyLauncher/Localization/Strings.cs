@@ -2387,6 +2387,7 @@ public static class Strings
         // that the VPN is up and which address peers will reach them on.
         ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
         ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
+        ["MpChipElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
         ["MpRadminLaunchFailed"] = new()
         {
             [LangEn] = "Could not launch Radmin VPN.",

@@ -447,6 +447,15 @@
          value the handoff's token table doesn't list. -->
     <SolidColorBrush x:Key="MpChipOkDetail" Color="#A9CBB9"/>
     <SolidColorBrush x:Key="MpChipOkSeparator" Color="#4D78DCAA"/>
+    <!-- Segmented ES/EN pill group in the title bar, and the account cluster beside
+         it. Values read from the prototype markup, which carries several the README's
+         token table doesn't list. -->
+    <SolidColorBrush x:Key="MpPillGroupRim" Color="#38A0BEDC"/>
+    <SolidColorBrush x:Key="MpPillActiveBg" Color="#24FFFFFF"/>
+    <SolidColorBrush x:Key="MpPillIdleText" Color="#93A7C3"/>
+    <SolidColorBrush x:Key="MpAccountName" Color="#E4ECF6"/>
+    <SolidColorBrush x:Key="MpAccountElo" Color="#8FB6EA"/>
+    <SolidColorBrush x:Key="MpChevron" Color="#8EA4C0"/>
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>

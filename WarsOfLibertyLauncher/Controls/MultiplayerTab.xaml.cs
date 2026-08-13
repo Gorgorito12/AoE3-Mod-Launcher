@@ -438,6 +438,29 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private Action<string?, string?>? _setConnectionChip;
 
+    /// <summary>Paints the title-bar account cluster. Set in <see cref="Attach"/>.</summary>
+    private Action<string?, string?, string?>? _setAccountChip;
+
+    /// <summary>
+    /// Pushes the signed-in identity (and the cached rating, when there is one) to the
+    /// title bar. A null user hides the cluster. Called from <see cref="RenderBrowser"/>
+    /// so it tracks sign-in and sign-out, and again when a standing arrives.
+    /// </summary>
+    private void PushAccountChip(Models.Multiplayer.LobbyUserSummary? user)
+    {
+        if (_setAccountChip == null) return;
+        if (user == null)
+        {
+            _setAccountChip(null, null, null);
+            return;
+        }
+
+        var elo = _cachedStanding != null
+            ? Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding.Rating))
+            : null;
+        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo);
+    }
+
     private void RefreshRadminBanner()
     {
         if (RadminBanner == null) return;
@@ -852,9 +875,11 @@ public partial class MultiplayerTab : UserControl
         Func<string, Task>? switchActiveCopy = null,
         Action<AppToast.ToastOptions>? showAppToast = null,
         Action<string, string, string, string, string>? onNewRoomFromWs = null,
-        Action<string?, string?>? setConnectionChip = null)
+        Action<string?, string?>? setConnectionChip = null,
+        Action<string?, string?, string?>? setAccountChip = null)
     {
         _setConnectionChip = setConnectionChip;
+        _setAccountChip = setAccountChip;
         if (_session != null)
         {
             _session.StateChanged -= OnSessionStateChanged;
@@ -2512,6 +2537,12 @@ public partial class MultiplayerTab : UserControl
         SignedInAsText.Text = user != null
             ? $"@{user.DiscordUsername}"
             : "";
+
+        // Mirror the identity into the launcher's title bar (design handoff 1a: the
+        // account ROW here is replaced by that cluster). The rating comes from the
+        // once-per-session cache — it is a rate-limited endpoint, so this reads
+        // whatever has already been fetched and never triggers a fetch of its own.
+        PushAccountChip(user);
 
         // Fill the avatar circle either with the user's Discord
         // avatar (cached_user.avatar_url) or, when we have no URL

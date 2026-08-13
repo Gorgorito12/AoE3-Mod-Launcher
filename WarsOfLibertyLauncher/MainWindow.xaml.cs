@@ -511,7 +511,8 @@ public partial class MainWindow : Window
             // Real-time "new room" push over /global/ws — routed here so it shares
             // the room dedup + tab/subtab dots with the 90 s fallback poll.
             onNewRoomFromWs: OnNewRoomFromWs,
-            setConnectionChip: SetConnectionChip);
+            setConnectionChip: SetConnectionChip,
+            setAccountChip: SetAccountChip);
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -2955,6 +2956,10 @@ public partial class MainWindow : Window
     /// <summary>Refresh every translatable string in the UI from the table.</summary>
     private void ApplyLanguage()
     {
+        // Keep the title-bar ES/EN pills in step with the language, whoever changed it
+        // — the pills themselves, or the Launcher Settings combo.
+        RefreshLanguagePills();
+
         // Mod-dependent UI (window title, banner, accent-tinted PLAY button,
         // banner image) factored out so mod-switch can call just that
         // without paying the cost of re-localising every label in the
@@ -11292,6 +11297,102 @@ public partial class MainWindow : Window
             offline,
             Strings.Get(offline ? "NotifOfflineTitle" : "NotifOnlineTitle"),
             Strings.Get(offline ? "NotifOfflineBody" : "NotifOnlineBody"));
+    }
+
+    /// <summary>
+    /// ES / EN toggle in the title bar. A second entry point to the SAME setting the
+    /// Launcher Settings combo writes — not a second setting.
+    ///
+    /// <para><see cref="LauncherConfig.LanguageExplicitlyChosen"/> is set ONLY when the
+    /// language actually changes, mirroring the guard in the settings dialog. Writing it
+    /// unconditionally would opt the user out of following the Windows display language
+    /// the first time they clicked the language they were already on — silently, and
+    /// permanently.</para>
+    /// </summary>
+    private void LanguagePill_Click(object sender, RoutedEventArgs e)
+    {
+        var lang = ReferenceEquals(sender, LangPillEs) ? "es" : "en";
+        if (string.Equals(lang, _config.Language, StringComparison.OrdinalIgnoreCase))
+        {
+            RefreshLanguagePills();
+            return;
+        }
+
+        _config.Language = lang;
+        _config.LanguageExplicitlyChosen = true;
+        try { _config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Language save failed: {ex.Message}"); }
+
+        // Fans out to every LanguageChanged subscriber (MainWindow.ApplyLanguage and
+        // each open TitleBar's caption tooltips).
+        Strings.SetLanguage(lang);
+        RefreshLanguagePills();
+    }
+
+    /// <summary>Marks the active language pill. Called on click and from ApplyLanguage.</summary>
+    private void RefreshLanguagePills()
+    {
+        if (LangPillEs == null) return;
+        bool es = string.Equals(_config.Language, "es", StringComparison.OrdinalIgnoreCase);
+        LangPillEs.Tag = es ? "active" : null;
+        LangPillEn.Tag = es ? null : "active";
+    }
+
+    /// <summary>
+    /// Opens the account menu. For now it routes to Multiplayer, where sign-out lives;
+    /// the dropdown the reference shows (Profile / Sign out) is a follow-up.
+    /// </summary>
+    private void AccountButton_Click(object sender, RoutedEventArgs e)
+        => SwitchTopTab(TopTab.Multiplayer);
+
+    /// <summary>
+    /// Paints the title-bar account cluster from the multiplayer session, or hides it
+    /// when signed out. Pushed by <c>MultiplayerTab</c> — the session and the
+    /// once-per-session rating cache both live there, and re-fetching either here would
+    /// spend a rate-limited request to obtain a second copy of what it already knows.
+    /// </summary>
+    internal void SetAccountChip(string? login, string? avatarUrl, string? elo)
+    {
+        if (AccountButton == null) return;
+
+        if (string.IsNullOrWhiteSpace(login))
+        {
+            AccountButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        AccountName.Text = login;
+        AccountAvatarInitial.Text = login.Substring(0, 1).ToUpperInvariant();
+
+        bool hasElo = !string.IsNullOrWhiteSpace(elo);
+        AccountElo.Text = hasElo ? elo : string.Empty;
+        AccountElo.Visibility = hasElo ? Visibility.Visible : Visibility.Collapsed;
+
+        // The monogram stays underneath, so a download that fails or never finishes
+        // leaves a readable initial rather than an empty disc.
+        if (!string.IsNullOrWhiteSpace(avatarUrl))
+        {
+            try
+            {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(avatarUrl);
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.EndInit();
+                var brush = new System.Windows.Media.ImageBrush(bmp)
+                {
+                    Stretch = System.Windows.Media.Stretch.UniformToFill,
+                };
+                if (brush.CanFreeze) brush.Freeze();
+                AccountAvatarEllipse.Fill = brush;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Account avatar load failed: {ex.Message}");
+            }
+        }
+
+        AccountButton.Visibility = Visibility.Visible;
     }
 
     /// <summary>

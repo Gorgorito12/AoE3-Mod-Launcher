@@ -187,6 +187,31 @@ Two cheap gates beyond a green build:
   (missing base game), so a real install needs an actual AoE3 + payload download;
   the integrity gate (below) is the in-process backstop.
 
+## Design handoffs: follow the reference 100%
+
+**When a design handoff is in play, match it exactly — colours, sizes, spacing,
+weights, and what is present or absent.** Standing instruction from the maintainer,
+after a first pass that kept the old bar background, kept icons the reference didn't
+have, and substituted "close enough" values. The result read as a different design
+and had to be redone. Assume every value in the reference is deliberate.
+
+Two consequences worth stating, because they are what went wrong:
+- **"I kept the existing X" is not a neutral choice.** Leaving the old title-bar
+  background was the single biggest reason the bar didn't look like the mockup, and it
+  was invisible in a diff because nothing changed.
+- **Read the prototype, not only the README.** The prose spec omitted values the
+  markup carries (the chip's muted `#a9cbb9` address text isn't in the token table).
+  `docs/design_handoff_multiplayer_ui/Launcher Multiplayer.dc.html` has the real
+  numbers; grep it for the element you're building.
+
+**Deviate only where the platform makes fidelity impossible**, and then say so rather
+than silently approximating. The two known cases so far: WPF's `TextBlock` has **no
+letter-spacing** at all (faking it with thin spaces breaks `CharacterEllipsis` on
+localized text), and a CSS `border-radius: 999px` is a clamped-to-50% idiom that WPF
+renders as a distorted ellipse — a pill needs an explicit half-height radius. A house
+rule is NOT such a case: the type scale's 13px floor was raised against the handoff's
+11.5 twice and overruled twice, and 11.5 is what ships (see `MpLabelSize`).
+
 ## Important gotchas
 
 - **AssemblyName ≠ RootNamespace, on purpose.** The shipped binary is

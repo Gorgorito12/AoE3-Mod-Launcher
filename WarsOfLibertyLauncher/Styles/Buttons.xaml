@@ -601,6 +601,47 @@
          The panel BACKGROUND stays slate (BgSidebar #33414F) — only
          the per-button hover/active are gold.
          ============================================================ -->
+    <!-- ES / EN segmented pill in the title bar (design handoff 1a). One button per
+         language inside a rimmed group; the ACTIVE one gets the light fill. Sizes and
+         colours are the reference's. Same two-Border trick as NavTabButton so the
+         whole bar height is clickable rather than just the pill — a caption region
+         turns every uncovered pixel into a window-drag handle. -->
+    <Style x:Key="LangPillButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpPillIdleText}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="7,5"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
+        <Setter Property="FontSize" Value="{StaticResource MpPillSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}">
+                        <Border x:Name="pill"
+                                VerticalAlignment="Center"
+                                CornerRadius="{StaticResource RadiusSm}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="#E6EEF8"/>
+                        </Trigger>
+                        <Trigger Property="Tag" Value="active">
+                            <Setter TargetName="pill" Property="Background" Value="{DynamicResource MpPillActiveBg}"/>
+                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- REDESIGN NOTE (handoff 1a): these tabs moved OUT of their own strip and INTO
          the title bar, so the active marker had to change with them. It used to be a
          2px gold underline on the bottom edge, which worked because that edge WAS the

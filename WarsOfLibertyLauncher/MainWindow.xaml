@@ -389,6 +389,8 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
                 <!-- Connection chip (design handoff 1a). Radmin's full-width green
@@ -437,6 +439,86 @@
                                    VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
+
+                <!-- ES / EN segmented toggle (design handoff 1a). The language used to
+                     live only in Launcher Settings; this is a second entry point to the
+                     SAME config field, not a second setting. LanguageButton_Click sets
+                     LanguageExplicitlyChosen — but ONLY on an actual change, mirroring
+                     the Settings dialog: writing it unconditionally would opt a user out
+                     of following the Windows display language the first time they
+                     clicked the language they were already on. -->
+                <Border x:Name="LanguagePills"
+                        Grid.Column="4"
+                        VerticalAlignment="Center"
+                        Margin="0,0,10,0"
+                        Padding="4,0"
+                        Height="26"
+                        CornerRadius="{StaticResource RadiusControl}"
+                        BorderBrush="{DynamicResource MpPillGroupRim}"
+                        BorderThickness="1">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch">
+                        <Button x:Name="LangPillEs"
+                                Content="ES"
+                                Style="{StaticResource LangPillButton}"
+                                Click="LanguagePill_Click"/>
+                        <Button x:Name="LangPillEn"
+                                Content="EN"
+                                Style="{StaticResource LangPillButton}"
+                                Click="LanguagePill_Click"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Account cluster. Replaces the Multiplayer tab's account ROW
+                     (@user | Sign out), which was one of the five stacked bars. Hidden
+                     until multiplayer reports a signed-in user, so Library and Workshop
+                     don't show an empty avatar before sign-in. -->
+                <Button x:Name="AccountButton"
+                        Grid.Column="5"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Stretch"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0"
+                        Cursor="Hand"
+                        Click="AccountButton_Click">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Monogram disc. The photo, when there is one, is painted
+                             over it from code-behind so a failed download still leaves
+                             a readable initial underneath. -->
+                        <Grid Width="26" Height="26" Margin="0,0,7,0" VerticalAlignment="Center">
+                            <Ellipse x:Name="AccountAvatarEllipse" Fill="#8A4A52"/>
+                            <TextBlock x:Name="AccountAvatarInitial"
+                                       Foreground="#FFFFFF"
+                                       FontFamily="{DynamicResource BodyFont}"
+                                       FontSize="11"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,7,0">
+                            <TextBlock x:Name="AccountName"
+                                       Foreground="{DynamicResource MpAccountName}"
+                                       FontFamily="{DynamicResource BodyFont}"
+                                       FontSize="{StaticResource MpLabelSize}"
+                                       FontWeight="SemiBold"/>
+                            <!-- Collapses when the standing hasn't been fetched. The
+                                 rating is pulled once per session from a rate-limited
+                                 endpoint, so this reads that cache and never polls. -->
+                            <TextBlock x:Name="AccountElo"
+                                       Visibility="Collapsed"
+                                       Margin="0,2,0,0"
+                                       Foreground="{DynamicResource MpAccountElo}"
+                                       FontFamily="{DynamicResource BodyFont}"
+                                       FontSize="{StaticResource MpMicroSize}"
+                                       FontWeight="Medium"/>
+                        </StackPanel>
+                        <TextBlock Text="&#xE70D;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="{StaticResource MpMicroSize}"
+                                   Foreground="{DynamicResource MpChevron}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
                 <Button x:Name="TitleBarBrandButton"
                         Grid.Column="0"
                         VerticalAlignment="Stretch"
