@@ -2697,6 +2697,15 @@ public static class Strings
         ["MpGlobalChatTimedOut"] = new() { [LangEn] = "Muted for spamming — try again shortly.", [LangEs] = "Silenciado por spam. Prueba de nuevo en un rato." },
         ["MpGlobalChatTooLong"] = new() { [LangEn] = "Message too long (max 500).", [LangEs] = "Mensaje demasiado largo (máx 500)." },
         ["MpRoomJoin"] = new() { [LangEn] = "Join", [LangEs] = "Unirse" },
+        // A private room's action says so, because the click opens a password prompt.
+        ["MpRoomJoinPrivate"] = new()
+        {
+            [LangEn] = "Join with password",
+            [LangEs] = "Unirse con contraseña",
+        },
+        // Room sub-line context, the middle segment of "{mod} · {context} · {age}".
+        ["MpRoomCtxYouHost"] = new() { [LangEn] = "you're the host", [LangEs] = "tú eres el anfitrión" },
+        ["MpRoomCtxNeedsPassword"] = new() { [LangEn] = "asks for a password", [LangEs] = "pide contraseña" },
         ["MpRoomReenter"] = new() { [LangEn] = "Re-enter", [LangEs] = "Reingresar" },
         ["MpRoomYours"] = new() { [LangEn] = "Your room", [LangEs] = "Tu sala" },
         ["MpRoomFull"] = new() { [LangEn] = "Full", [LangEs] = "Llena" },

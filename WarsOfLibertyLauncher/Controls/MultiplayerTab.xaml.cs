@@ -5310,13 +5310,15 @@ public partial class MultiplayerTab : UserControl
         FrameworkElement disc;
         if (modIconBrush != null)
         {
-            // Border background is clipped to CornerRadius, so the
-            // UniformToFill brush renders as a centre-cropped circle.
+            // 30px rounded SQUARE, not a circle: the reference shows the mod's own
+            // artwork, and a circular crop eats the corners of a square icon. The Border
+            // background is clipped to CornerRadius, so the UniformToFill brush is
+            // centre-cropped to that shape.
             disc = new Border
             {
-                Width = 24,
-                Height = 24,
-                CornerRadius = new CornerRadius(12),
+                Width = 30,
+                Height = 30,
+                CornerRadius = new CornerRadius(6),
                 Background = modIconBrush,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0),
@@ -5329,7 +5331,7 @@ public partial class MultiplayerTab : UserControl
                 Text = "★",
                 Foreground = (Brush)Application.Current.FindResource("AccentBrush"),
                 // Mod-icon fallback glyph — sized to the icon slot, not a type token.
-                FontSize = 16,
+                FontSize = 20,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0),
             };
@@ -5364,9 +5366,10 @@ public partial class MultiplayerTab : UserControl
             // Same rounded-pill look as the MOD chip, tinted purple: a low-alpha
             // purple fill (mirrors the "Ready" pill idiom #223FB950) + the solid
             // MpStatusLocked purple text. Reuses MpRoomStatusLocked ("Private"/"Privada").
-            var lockedBrush = (Brush)Application.Current.FindResource("MpStatusLocked");
-            var privadaBg = new SolidColorBrush(Color.FromArgb(0x22, 0x8B, 0x5C, 0xF6));
-            var privateChip = BuildRoomChip(Strings.Get("MpRoomStatusLocked"), privadaBg, lockedBrush);
+            var privateChip = BuildRoomChip(
+                Strings.Get("MpRoomStatusLocked"),
+                (Brush)Application.Current.FindResource("MpPrivateBg"),
+                (Brush)Application.Current.FindResource("MpPrivateText"));
             privateChip.Margin = new Thickness(8, 0, 0, 0);
             Grid.SetColumn(privateChip, 1);
             titleRow.Children.Add(privateChip);
@@ -5381,6 +5384,19 @@ public partial class MultiplayerTab : UserControl
         // disagree about what is on screen.
         var subtitle = new System.Collections.Generic.List<string>();
         if (!string.IsNullOrWhiteSpace(modName)) subtitle.Add(modName!);
+
+        // The reference's middle segment: WHY this row is different from the others.
+        // Being the host outranks the password note — if it's yours you already know it
+        // is private, and the action button says "Re-enter" rather than offering a way
+        // in. Computed from the same host identity the action button uses further down.
+        var meCtx = _session?.CurrentUser;
+        bool ctxMine = meCtx != null && lobby.Host != null && (
+            (!string.IsNullOrEmpty(lobby.Host.Id)
+                && string.Equals(lobby.Host.Id, meCtx.Id, StringComparison.Ordinal))
+            || (!string.IsNullOrEmpty(lobby.Host.DiscordUsername)
+                && string.Equals(lobby.Host.DiscordUsername, meCtx.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
+        if (ctxMine) subtitle.Add(Strings.Get("MpRoomCtxYouHost"));
+        else if (lobby.IsPrivate) subtitle.Add(Strings.Get("MpRoomCtxNeedsPassword"));
         foreach (var dropped in Services.RoomsTableLayout.Hidden(_roomColumns))
         {
             switch (dropped)
@@ -5407,8 +5423,8 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = prefix.Length > 0 && age.Length > 0 ? prefix + " · " + age
                      : prefix.Length > 0 ? prefix : age,
-                Foreground = textSecondary,
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                FontSize = (double)Application.Current.FindResource("MpLabelSize"),
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 2, 0, 0),
@@ -5433,8 +5449,9 @@ public partial class MultiplayerTab : UserControl
         var hostNameText = new TextBlock
         {
             Text = hostName,
-            Foreground = textPrimary,
-            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
+            FontSize = 12,
+            FontWeight = FontWeights.Medium,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -5459,7 +5476,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = $"{lobby.CurrentPlayers}/{lobby.MaxPlayers}",
             Foreground = textPrimary,
-            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
@@ -5520,11 +5537,14 @@ public partial class MultiplayerTab : UserControl
             Padding = new Thickness(10, 4, 10, 4),
             Tag = lobby,
         };
-        var outline = (Style)Application.Current.FindResource("MpOutlineBlueButton");
+        // Solid = "come in here"; ghost = "go back to where you already are"; neutral =
+        // can't act. Three weights for three meanings, instead of one outline for all.
+        var solid = (Style)Application.Current.FindResource("MpRoomActionPrimary");
+        var ghost = (Style)Application.Current.FindResource("MpRoomActionGhost");
         var secondary = (Style)Application.Current.FindResource("MpSecondaryButton");
         if (iAmInThisRoom)
         {
-            actionBtn.Style = outline;
+            actionBtn.Style = ghost;
             actionBtn.Content = Strings.Get("MpRoomReenter");
             actionBtn.Click += (_, _) => OpenLobbyWindow();
         }
@@ -5548,8 +5568,14 @@ public partial class MultiplayerTab : UserControl
         }
         else
         {
-            actionBtn.Style = outline;
-            actionBtn.Content = Strings.Get("MpRoomJoin");
+            // A private room says so on the button: the click opens a password prompt,
+            // and finding that out only after committing is a small ambush. A disabled
+            // Join (mod missing) keeps the plain caption — the reason is already the
+            // dimmed row and its "mod not installed" sub-line.
+            actionBtn.Style = modInstalled ? solid : secondary;
+            actionBtn.Content = lobby.IsPrivate && modInstalled
+                ? Strings.Get("MpRoomJoinPrivate")
+                : Strings.Get("MpRoomJoin");
             actionBtn.IsEnabled = modInstalled;
             actionBtn.Click += JoinRoomButton_Click;
         }
@@ -5595,20 +5621,20 @@ public partial class MultiplayerTab : UserControl
     /// it stays legible over the row's hover fill.</summary>
     private Border BuildRoomChip(string text, Brush bg, Brush fg) => new Border
     {
+        // No border: the reference's chip is a tinted fill only. It also never shrinks —
+        // the room name beside it takes the ellipsis instead, because a half-trimmed
+        // "PRIVAD…" would be worse than a shorter title.
         Background = bg,
-        BorderBrush = (Brush)Application.Current.FindResource("MpModBadgeBorder"),
-        BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(4),
-        Padding = new Thickness(8, 2, 8, 2),
+        Padding = new Thickness(6, 2, 6, 2),
         Margin = new Thickness(0, 0, 6, 0),
         VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock
         {
             Text = text,
             Foreground = fg,
-            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            FontSize = 9.5,
             FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
         },
     };
 
@@ -5740,16 +5766,13 @@ public partial class MultiplayerTab : UserControl
 
         panel.Children.Add(new TextBlock
         {
-            Text = "▂▄▆ ",
-            Foreground = brush,
-            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        panel.Children.Add(new TextBlock
-        {
+            // Just the number, coloured by bucket. The reference drops the "▂▄▆" bar
+            // glyphs that used to precede it: the colour already carries the same
+            // three-way reading, and the bars doubled the cell's width to repeat it.
             Text = $"{(int)rtt} ms",
-            Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
-            FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+            Foreground = brush,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
     }
