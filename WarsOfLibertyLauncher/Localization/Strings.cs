@@ -2410,6 +2410,12 @@ public static class Strings
         ["MpJoinByCodePlaceholder"] = new() { [LangEn] = "room code", [LangEs] = "código" },
         ["MpJoinByCodeButton"] = new() { [LangEn] = "Enter", [LangEs] = "Entrar" },
         // Community-activity strip under the rooms list.
+        ["MpActivityStripTitle"] = new()
+        {
+            [LangEn] = "Community activity",
+            [LangEs] = "Actividad de la comunidad",
+        },
+        ["MpActivityStripWindow"] = new() { [LangEn] = "last 24 h", [LangEs] = "últimas 24 h" },
         ["MpActivityRecentTitle"] = new() { [LangEn] = "RECENT MATCHES", [LangEs] = "ÚLTIMAS PARTIDAS" },
         // A match whose result couldn't be read (no recording, or a team game). Most
         // stored matches are these, so the row says so instead of looking like a win.

@@ -635,73 +635,32 @@
                         <StackPanel x:Name="RoomsListPanel"/>
                     </ScrollViewer>
 
-                    <!-- Empty-state card. Visibility is toggled by
-                         RefreshLobbiesAsync() â€” hidden by default,
-                         shown when /lobbies returns zero. Visible
-                         over the scroll so it sits centered. -->
+                    <!-- Empty state: ONE LINE (design handoff 1a). It replaces a 96px
+                         vector illustration of flags and a drum, a 16px headline and a
+                         170px CTA. The reference is explicit that the big illustration
+                         and the giant call to action are gone, and the reason is what
+                         sits below: with no rooms, the activity strip and the join-by-
+                         code row are the useful things on screen, and a half-screen
+                         drawing pushed them out of sight. Creating a room is still one
+                         click away in bar 2, where it always is.
+
+                         EmptyCreateButton is kept but collapsed: RefreshFromSession and
+                         ApplyStrings both still write to it, and this view has been
+                         bitten before by controls that were deleted from the XAML while
+                         the code-behind went on addressing them. -->
                     <Border x:Name="RoomsEmptyState"
-                            Background="Transparent"
-                            BorderBrush="{DynamicResource MpDivider}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusMd}"
-                            Margin="40,30,40,30"
-                            Padding="40,40"
-                            Visibility="Collapsed">
-                        <StackPanel HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
-                            <!-- Simple SVG-style illustration: a
-                                 pair of crossed flags + a drum.
-                                 Pure Path geometry so no asset
-                                 file is needed and it tints with
-                                 the foreground colour. -->
-                            <Viewbox Width="96" Height="96" Margin="0,0,0,18">
-                                <Canvas Width="64" Height="64">
-                                    <!-- Left flag staff + flag -->
-                                    <Path Stroke="{DynamicResource TextSecondary}"
-                                          StrokeThickness="1.5"
-                                          Fill="{DynamicResource MpSurfaceAlt}"
-                                          Data="M 20 4 L 20 50"/>
-                                    <Path Stroke="{DynamicResource TextSecondary}"
-                                          StrokeThickness="1.2"
-                                          Fill="{DynamicResource MpSurfaceAlt}"
-                                          Data="M 20 6 L 32 10 L 20 16 Z"/>
-                                    <!-- Right flag -->
-                                    <Path Stroke="{DynamicResource TextSecondary}"
-                                          StrokeThickness="1.5"
-                                          Fill="{DynamicResource MpSurfaceAlt}"
-                                          Data="M 44 4 L 44 50"/>
-                                    <Path Stroke="{DynamicResource TextSecondary}"
-                                          StrokeThickness="1.2"
-                                          Fill="{DynamicResource MpSurfaceAlt}"
-                                          Data="M 44 6 L 56 10 L 44 16 Z"/>
-                                    <!-- Drum body -->
-                                    <Ellipse Stroke="{DynamicResource TextSecondary}"
-                                             StrokeThickness="1.6"
-                                             Fill="{DynamicResource MpSurfaceAlt}"
-                                             Canvas.Left="18" Canvas.Top="36"
-                                             Width="28" Height="22"/>
-                                    <Ellipse Stroke="{DynamicResource TextSecondary}"
-                                             StrokeThickness="1.4"
-                                             Fill="{DynamicResource MpSurface}"
-                                             Canvas.Left="18" Canvas.Top="32"
-                                             Width="28" Height="8"/>
-                                </Canvas>
-                            </Viewbox>
+                            Visibility="Collapsed"
+                            VerticalAlignment="Top"
+                            Margin="30,18,30,18">
+                        <StackPanel>
                             <TextBlock x:Name="EmptyTitleText"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="{StaticResource FontSizeSubtitle}"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
-                            <TextBlock x:Name="EmptyBodyText"
-                                       Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="{StaticResource FontSizeBody}"
-                                       Margin="0,6,0,18"
-                                       HorizontalAlignment="Center"/>
+                                       Foreground="{DynamicResource MpTextFaint}"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="EmptyBodyText" Visibility="Collapsed"/>
                             <Button x:Name="EmptyCreateButton"
-                                    Click="CreateRoomButton_Click"
-                                    Style="{StaticResource MpOutlineBlueButton}"
-                                    MinWidth="170"
-                                    HorizontalAlignment="Center"/>
+                                    Visibility="Collapsed"
+                                    Click="CreateRoomButton_Click"/>
                         </StackPanel>
                     </Border>
 
@@ -830,13 +789,32 @@
                     <Border x:Name="ActivityStrip"
                             Grid.Row="2"
                             Visibility="Collapsed"
-                            Margin="0,10,0,0"
-                            Padding="13,12"
-                            Background="{DynamicResource MpPanel}"
+                            Margin="0,16,0,0"
+                            Padding="0,14,0,0"
+                            Background="Transparent"
                             BorderBrush="{DynamicResource MpRimFaint}"
-                            BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusRow}">
+                            BorderThickness="0,1,0,0">
                         <StackPanel>
+                            <!-- Strip header, per the reference: what this is, and over
+                                 what window. Without it the loose match lines read as an
+                                 unlabelled appendix to the room list. -->
+                            <Grid Margin="0,0,0,11">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="ActivityStripTitle"
+                                           Grid.Column="0"
+                                           Foreground="{DynamicResource MpTextPrimary}"
+                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="ActivityStripWindow"
+                                           Grid.Column="1"
+                                           Foreground="{DynamicResource MpTextDim}"
+                                           FontSize="{StaticResource MpLabelSize}"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
                             <TextBlock x:Name="ActivityRecentTitle"
                                        Foreground="{DynamicResource MpTextLabel}"
                                        FontSize="{StaticResource MpPillSize}"

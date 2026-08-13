@@ -1063,6 +1063,8 @@ public partial class MultiplayerTab : UserControl
         RefreshButton.Content = "↻  " + Strings.Get("MpRoomsRefresh");
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
         RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
+        ActivityStripTitle.Text = Strings.Get("MpActivityStripTitle");
+        ActivityStripWindow.Text = Strings.Get("MpActivityStripWindow");
         ActivityRecentTitle.Text = Strings.Get("MpActivityRecentTitle");
         JoinByCodeTitle.Text = Strings.Get("MpJoinByCodeTitle");
         JoinByCodeHint.Text = Strings.Get("MpJoinByCodeHint");
@@ -3604,11 +3606,9 @@ public partial class MultiplayerTab : UserControl
 
             if (list.Lobbies.Count == 0)
             {
-                // Show the dedicated empty-state card (defined in
-                // XAML with the crossed-flags illustration and the
-                // outlined Create-room CTA). Better than dumping an
-                // italic line in the table because the table header
-                // strip stays visible above for context.
+                // One line, not a card: the activity strip and the join-by-code
+                // row below stay on screen, which is where someone with no rooms
+                // to join actually has something to do.
                 RoomsEmptyState.Visibility = Visibility.Visible;
                 UpdateRoomsShowingCount(0);
                 _lastRenderedRoomsSignature = signature;
