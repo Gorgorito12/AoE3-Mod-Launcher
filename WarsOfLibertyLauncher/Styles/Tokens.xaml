@@ -50,6 +50,16 @@
     <CornerRadius x:Key="RadiusSm">4</CornerRadius>
     <CornerRadius x:Key="RadiusMd">6</CornerRadius>
     <CornerRadius x:Key="RadiusLg">10</CornerRadius>
+    <!-- Extension of the scale for the multiplayer redesign (design handoff
+         1a/1d/1e/1f). Its radius ladder is finer than Sm/Md/Lg: controls and
+         fields at 7, rows and boxes at 8, panels at 9, and a full pill for
+         chips. Named by ROLE rather than by size so a later retune moves every
+         control together instead of hunting literals. -->
+    <CornerRadius x:Key="RadiusControl">7</CornerRadius>
+    <CornerRadius x:Key="RadiusRow">8</CornerRadius>
+    <CornerRadius x:Key="RadiusPanel">9</CornerRadius>
+    <CornerRadius x:Key="RadiusPill">999</CornerRadius>
+
     <!-- Two-tone "punched-out" popup rim — NOT part of the scale. Outer
          MUST stay inner+1 (the 1px near-black band over the 2px bright
          inner line). See the popup-rim gotcha in CLAUDE.md. -->
@@ -141,5 +151,29 @@
          nav. 20 = a touch larger than the old 18 so the main tabs read as the
          primary navigation without being oversized. -->
     <sys:Double x:Key="NavTabTextSize">14</sys:Double>
+
+    <!-- ============================================================
+         MULTIPLAYER REDESIGN GEOMETRY (design handoff 1a/1d/1e/1f —
+         docs/design_handoff_multiplayer_ui/README.md, "Alturas").
+
+         The main title bar's own height is NOT here: it stays
+         TitleBarHeightMain above, because WindowChrome.CaptionHeight is
+         derived from that same token in App.ApplyWindowChrome. Giving the
+         bar a second height knob is precisely how the visual bar and the
+         native drag region drift apart — and that failure is silent: no
+         compile error, no visual clue, the bottom strip of the bar just
+         stops dragging the window.
+         ============================================================ -->
+    <!-- The multiplayer sub-tab strip (Salas / Amigos / Perfil / Historial). -->
+    <sys:Double x:Key="MpSubBarHeight">48</sys:Double>
+    <!-- Room row. Uniform by contract: the row is ONE line with ellipsis, so
+         its height must not depend on the content. -->
+    <sys:Double x:Key="MpRoomRowHeight">58</sys:Double>
+    <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
+         text input; Control = a normal button; PrimaryButton = the one CTA. -->
+    <sys:Double x:Key="MpFieldHeight">34</sys:Double>
+    <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
+    <sys:Double x:Key="MpControlHeight">30</sys:Double>
+    <sys:Double x:Key="MpPrimaryButtonHeight">42</sys:Double>
 
 </ResourceDictionary>

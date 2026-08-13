@@ -363,6 +363,88 @@
     </LinearGradientBrush>
 
     <!-- =========================================================
+         MULTIPLAYER REDESIGN PALETTE (design handoff 1a/1d/1e/1f —
+         docs/design_handoff_multiplayer_ui/README.md, "Tokens").
+
+         These are ADDITIVE: nothing above is retinted here, so adding
+         this block changes no pixel on its own. Each redesigned screen
+         migrates onto these keys in its own commit, which is what keeps
+         a visual change attributable to the commit that made it.
+
+         Why tokens and not literals in the new XAML: an audit of this
+         repo found ~90 hand-written grey shorthands and three legacy
+         palettes still coexisting. Pasting a fourth one inline is how
+         that happened; declaring it once is how it stops.
+
+         Alpha convention: the handoff writes rgba(...); WPF wants
+         #AARRGGBB, so .09 → 0x17, .14 → 0x24, .18 → 0x2E, .3 → 0x4D,
+         .55 → 0x8C. The rim colours are a light blue (#82AFFF) at low
+         alpha, NOT grey — that tint is what keeps edges readable on the
+         navy surfaces without a hard line.
+         ========================================================= -->
+
+    <!-- Surfaces, darkest → lightest. MpPanel is the workhorse (sub-tab bar,
+         cards, right-hand panel); MpRowHighlight is a row or card that is
+         yours / selected; MpField is any text input. -->
+    <SolidColorBrush x:Key="MpAppBg" Color="#0F1C2E"/>
+    <SolidColorBrush x:Key="MpTitleBar" Color="#233648"/>
+    <SolidColorBrush x:Key="MpPanel" Color="#12213A"/>
+    <SolidColorBrush x:Key="MpRowHighlight" Color="#16263E"/>
+    <SolidColorBrush x:Key="MpField" Color="#0D1828"/>
+
+    <!-- Inner rims. One family at four alphas — the handoff uses .09 for a
+         plain card edge and .18 for an input the user is meant to aim at. -->
+    <SolidColorBrush x:Key="MpRimFaint" Color="#1782AFFF"/>
+    <SolidColorBrush x:Key="MpRimSoft" Color="#1C82AFFF"/>
+    <SolidColorBrush x:Key="MpRimMedium" Color="#2482AFFF"/>
+    <SolidColorBrush x:Key="MpRimStrong" Color="#2E82AFFF"/>
+
+    <!-- Text ramp, brightest → faintest. MpTextLabel is the uppercase
+         section caption (9.5–10.5px, letter-spaced), deliberately the
+         dimmest so it never competes with the data under it. -->
+    <SolidColorBrush x:Key="MpTextHeading" Color="#F0F5FB"/>
+    <SolidColorBrush x:Key="MpTextPrimary" Color="#E8EEF6"/>
+    <SolidColorBrush x:Key="MpTextSecondary" Color="#C3D2E5"/>
+    <SolidColorBrush x:Key="MpTextBody" Color="#B9C9DE"/>
+    <SolidColorBrush x:Key="MpTextMuted" Color="#8EA4C0"/>
+    <SolidColorBrush x:Key="MpTextFaint" Color="#6D829D"/>
+    <SolidColorBrush x:Key="MpTextDim" Color="#5F7592"/>
+    <SolidColorBrush x:Key="MpTextLabel" Color="#61779A"/>
+
+    <!-- Semantic accents. Each has a SOLID value (dots, fills, primary
+         buttons) and a TEXT value bright enough to read on the navy
+         surfaces — using the solid one as text fails contrast at 11px.
+
+         NOTE these do NOT replace MpStatusWaiting / MpStatusInGame, which
+         are pinned to the Discord webhook's embed colours on purpose. Room
+         status dots keep those; everything else uses these. -->
+    <SolidColorBrush x:Key="MpAction" Color="#2F7FE0"/>
+    <SolidColorBrush x:Key="MpActionText" Color="#8CBCF5"/>
+    <SolidColorBrush x:Key="MpOk" Color="#4FD68A"/>
+    <SolidColorBrush x:Key="MpOkText" Color="#8FE0B0"/>
+    <SolidColorBrush x:Key="MpOkTextAlt" Color="#7FDCA6"/>
+    <SolidColorBrush x:Key="MpCaution" Color="#E6B455"/>
+    <SolidColorBrush x:Key="MpCautionText" Color="#D8BD8A"/>
+    <SolidColorBrush x:Key="MpCautionTextAlt" Color="#F0DCAE"/>
+    <SolidColorBrush x:Key="MpDestructiveText" Color="#D99A9A"/>
+    <SolidColorBrush x:Key="MpDestructiveRim" Color="#4DC87878"/>
+    <SolidColorBrush x:Key="MpPrivate" Color="#A06EF0"/>
+    <SolidColorBrush x:Key="MpPrivateText" Color="#CBA7F2"/>
+
+    <!-- Tinted fills + their paired rims. Always used as a pair; the rim is
+         the same hue at a higher alpha so the box reads as one object. -->
+    <SolidColorBrush x:Key="MpTabActiveBg" Color="#472F7FE0"/>
+    <SolidColorBrush x:Key="MpTabActiveRim" Color="#6678B4FF"/>
+    <SolidColorBrush x:Key="MpChipOkBg" Color="#2435C46F"/>
+    <SolidColorBrush x:Key="MpChipOkRim" Color="#4D35C46F"/>
+    <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
+    <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
+    <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>
+    <SolidColorBrush x:Key="MpPrivateRim" Color="#3DA06EF0"/>
+    <SolidColorBrush x:Key="MpCautionBg" Color="#14E6B455"/>
+    <SolidColorBrush x:Key="MpCautionRim" Color="#38E6B455"/>
+
+    <!-- =========================================================
          INTERACTION TOKENS — semantic colors for hover/active
          states. Centralized so changing the dorado interaction
          tint future-proofs every button at once instead of
