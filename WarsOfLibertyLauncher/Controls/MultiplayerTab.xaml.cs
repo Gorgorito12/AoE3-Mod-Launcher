@@ -432,12 +432,23 @@ public partial class MultiplayerTab : UserControl
     /// title, body and primary-action button to match. Cheap (sub-ms
     /// registry + NIC enumeration), safe to call on the UI thread.
     /// </summary>
+    /// <summary>
+    /// Paints the launcher's title-bar connection chip. Set in <see cref="Attach"/>;
+    /// null when the tab is hosted without a chip (tests, or an older MainWindow).
+    /// </summary>
+    private Action<string?, string?>? _setConnectionChip;
+
     private void RefreshRadminBanner()
     {
         if (RadminBanner == null) return;
 
         var status = RadminVpnService.GetStatus();
         _lastRadminStatus = status;
+
+        // Default to shown; only the READY branch below collapses it. This poll runs
+        // every ~3 s, so the banner has to be able to come BACK when Radmin drops —
+        // without this it would collapse once and never return.
+        RadminBanner.Visibility = Visibility.Visible;
 
         // Record every Radmin state TRANSITION to the diagnostic log so a
         // bundle can show WHY IsServiceRunning was false (open-but-Desconectado,
@@ -511,26 +522,24 @@ public partial class MultiplayerTab : UserControl
         }
         else
         {
-            RadminBanner.Background = (Brush)new BrushConverter().ConvertFromString("#123C2B")!;
-            RadminBanner.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#732E7D4F")!;
-            RadminStatusIcon.Background = (Brush)new BrushConverter().ConvertFromString("#22C55E")!;
-            RadminStatusGlyph.Text = "✓";
-            // Compact one-line layout for the running state: the title
-            // carries both the status and the IP, body/copier/steps are
-            // hidden because the RadminAssistantWindow (reachable via
-            // "Show steps") is now the place where the user verifies
-            // the network membership and copies the join name.
-            RadminBannerTitle.Text = Strings.Format(
-                "MpRadminConnectedTitleCompact",
-                status.AdapterIp ?? "26.x.x.x");
-            RadminBannerBody.Text = string.Empty;
-            RadminBannerBody.Visibility = Visibility.Collapsed;
-            RadminPrimaryButton.Content = Strings.Get("MpRadminOpenButton");
-            RadminPrimaryButton.Visibility = Visibility.Visible;
-            RadminPrimaryButton.IsEnabled = true;
-            RadminNetworkNamePanel.Visibility = Visibility.Collapsed;
-            RadminInstructionsText.Visibility = Visibility.Collapsed;
+            // READY. The banner used to stay here as a permanent full-width green
+            // strip restating that everything was fine — one of the five stacked
+            // bars the redesign exists to remove (handoff 1a). It now collapses
+            // entirely and the state moves to the title-bar chip, so the banner
+            // appears ONLY when something needs the user's attention. The two
+            // branches above are unchanged and still show it.
+            RadminBanner.Visibility = Visibility.Collapsed;
         }
+
+        // Push the chip AFTER the branches so it always reflects the state just
+        // computed. Only the ready state gets a chip: the not-ready cases are what
+        // the banner is for, and showing both would restate the same fact twice —
+        // the duplication the handoff is removing.
+        _setConnectionChip?.Invoke(
+            status.IsServiceRunning ? Strings.Get("MpChipConnected") : null,
+            status.IsServiceRunning
+                ? Strings.Format("MpChipVpnDetail", status.AdapterIp ?? "26.x.x.x")
+                : null);
     }
 
     /// <summary>
@@ -842,8 +851,10 @@ public partial class MultiplayerTab : UserControl
         LauncherConfig? config = null,
         Func<string, Task>? switchActiveCopy = null,
         Action<AppToast.ToastOptions>? showAppToast = null,
-        Action<string, string, string, string, string>? onNewRoomFromWs = null)
+        Action<string, string, string, string, string>? onNewRoomFromWs = null,
+        Action<string?, string?>? setConnectionChip = null)
     {
+        _setConnectionChip = setConnectionChip;
         if (_session != null)
         {
             _session.StateChanged -= OnSessionStateChanged;

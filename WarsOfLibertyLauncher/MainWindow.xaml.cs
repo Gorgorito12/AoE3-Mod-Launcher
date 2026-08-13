@@ -510,7 +510,8 @@ public partial class MainWindow : Window
             showAppToast: opts => ShowAppToast(opts),
             // Real-time "new room" push over /global/ws — routed here so it shares
             // the room dedup + tab/subtab dots with the 90 s fallback poll.
-            onNewRoomFromWs: OnNewRoomFromWs);
+            onNewRoomFromWs: OnNewRoomFromWs,
+            setConnectionChip: SetConnectionChip);
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -11291,6 +11292,37 @@ public partial class MainWindow : Window
             offline,
             Strings.Get(offline ? "NotifOfflineTitle" : "NotifOnlineTitle"),
             Strings.Get(offline ? "NotifOfflineBody" : "NotifOnlineBody"));
+    }
+
+    /// <summary>
+    /// Paints the title-bar connection chip, or hides it when <paramref name="status"/>
+    /// is null.
+    ///
+    /// <para>Called by <c>MultiplayerTab</c> from its existing Radmin poll rather than
+    /// probing anything here: that poll already owns the state, already throttles
+    /// itself, and already logs transitions, so a second probe would just be a second
+    /// answer to disagree with. This method only renders.</para>
+    ///
+    /// <para><paramref name="detail"/> (the Radmin IP) is optional — the separator
+    /// collapses with it so a chip without one doesn't show a dangling divider.</para>
+    /// </summary>
+    internal void SetConnectionChip(string? status, string? detail)
+    {
+        if (ConnectionChip == null) return;
+
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            ConnectionChip.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ConnectionChipStatus.Text = status;
+        bool hasDetail = !string.IsNullOrWhiteSpace(detail);
+        ConnectionChipDetail.Text = hasDetail ? detail : string.Empty;
+        var detailVis = hasDetail ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionChipDetail.Visibility = detailVis;
+        ConnectionChipSeparator.Visibility = detailVis;
+        ConnectionChip.Visibility = Visibility.Visible;
     }
 
     /// <summary>

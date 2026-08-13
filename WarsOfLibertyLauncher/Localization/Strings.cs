@@ -2382,6 +2382,11 @@ public static class Strings
             [LangEs] = "Tu IP de Radmin ya es {0}. En Radmin, clic en \"Unirse a la red\" → \"Gaming\", pega \"Age of Empires III: The Asian Dynasties\" (te lo copiamos al portapapeles) y clic Unirse.",
         },
         ["MpRadminOpenButton"] = new() { [LangEn] = "Open Radmin VPN", [LangEs] = "Abrir Radmin VPN" },
+        // Title-bar connection chip. Replaces the permanent green Radmin banner:
+        // when everything is fine this is ALL the user sees, so it has to say both
+        // that the VPN is up and which address peers will reach them on.
+        ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
+        ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
         ["MpRadminLaunchFailed"] = new()
         {
             [LangEn] = "Could not launch Radmin VPN.",

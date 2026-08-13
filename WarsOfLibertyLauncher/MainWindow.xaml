@@ -307,7 +307,14 @@
              36px height + 46/10 buttons so the brand bar + nav strip are
              untouched. Height reads TitleBarHeightMain so it matches the
              CaptionHeight App.ApplyWindowChrome assigns to MainWindow. -->
+        <!-- Background is set LOCALLY (the shared style fills with BgSidebar). The
+             redesign's bar is a distinctly lighter blue-grey than the rest of the
+             window, and that contrast is most of what makes it read as the mockup's
+             bar. Local rather than in the style because the other twenty windows
+             share that template — the handoff wants their bars in this colour too,
+             but that belongs to the dialog passes (1d/1e), one window at a time. -->
         <controls:TitleBar Grid.Row="0"
+                           Background="{DynamicResource MpTitleBar}"
                            Height="{StaticResource TitleBarHeightMain}"
                            ButtonWidth="46"
                            GlyphSize="10"
@@ -381,7 +388,55 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
+
+                <!-- Connection chip (design handoff 1a). Radmin's full-width green
+                     banner used to sit permanently in the Multiplayer tab restating
+                     "everything is fine"; it now collapses to this, and the banner
+                     only returns when something is actually wrong. Driven by
+                     MultiplayerTab's own Radmin poll through SetConnectionChip, so
+                     there is exactly one probe and one source of truth.
+
+                     Collapsed by default: it appears once the poll reports Radmin
+                     ready, and hides again the moment it isn't. Deliberately global
+                     rather than Multiplayer-only, per the handoff. -->
+                <Border x:Name="ConnectionChip"
+                        Grid.Column="3"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center"
+                        Margin="0,0,10,0"
+                        Padding="9,0"
+                        Height="26"
+                        CornerRadius="{StaticResource RadiusPill}"
+                        Background="{DynamicResource MpChipOkBg}"
+                        BorderBrush="{DynamicResource MpChipOkRim}"
+                        BorderThickness="1">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7"
+                                 Fill="{DynamicResource MpOk}"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,7,0"/>
+                        <TextBlock x:Name="ConnectionChipStatus"
+                                   Foreground="{DynamicResource MpOkText}"
+                                   FontFamily="{DynamicResource BodyFont}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <!-- Separator + detail collapse together with the detail, so
+                             a chip with no IP doesn't render a dangling divider. -->
+                        <Rectangle x:Name="ConnectionChipSeparator"
+                                   Width="1" Height="11"
+                                   Fill="{DynamicResource MpChipOkRim}"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0"/>
+                        <TextBlock x:Name="ConnectionChipDetail"
+                                   Foreground="{DynamicResource MpOkTextAlt}"
+                                   FontFamily="{DynamicResource BodyFont}"
+                                   FontSize="{StaticResource FontSizeCaption}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
                 <Button x:Name="TitleBarBrandButton"
                         Grid.Column="0"
                         VerticalAlignment="Stretch"
