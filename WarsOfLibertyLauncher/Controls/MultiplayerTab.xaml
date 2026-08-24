@@ -417,59 +417,15 @@
                                     FontSize="{StaticResource FontSizeCaption}"/>
                         </StackPanel>
 
-                        <!-- Network-name copier. A read-only TextBox so
-                             the name can be selected and inspected
-                             visually, paired with a "Copy" button that
-                             pushes it to the clipboard without needing
-                             to open Radmin first. Only shown in the
-                             Connected state. -->
-                        <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
-                                x:Name="RadminNetworkNamePanel"
-                                Background="{DynamicResource MpOkBg}"
-                                BorderBrush="{DynamicResource MpOkRim}"
-                                BorderThickness="1"
-                                CornerRadius="{StaticResource RadiusSm}"
-                                Margin="0,10,0,0"
-                                Padding="8,6"
-                                Visibility="Collapsed">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0"
-                                         x:Name="RadminNetworkNameBox"
-                                         Text="Age of Empires III: The Asian Dynasties"
-                                         IsReadOnly="True"
-                                         Background="Transparent"
-                                         BorderThickness="0"
-                                         FontFamily="Consolas, Courier New, monospace"
-                                         FontSize="{StaticResource FontSizeCaption}"
-                                         Foreground="{DynamicResource MpTextPrimary}"
-                                         VerticalAlignment="Center"
-                                         VerticalContentAlignment="Center"/>
-                                <Button Grid.Column="1"
-                                        x:Name="RadminCopyNameButton"
-                                        Click="RadminCopyNameButton_Click"
-                                        Style="{StaticResource MpSecondaryButton}"
-                                        Padding="10,4"
-                                        Margin="8,0,0,0"
-                                        FontSize="{StaticResource FontSizeCaption}"
-                                        MinWidth="100"/>
-                            </Grid>
-                        </Border>
-
-                        <!-- Numbered step-by-step instructions. Static
-                             text set by RefreshRadminBanner() so it
-                             follows the language switch. Only shown in
-                             the Connected state. -->
-                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
-                                   x:Name="RadminInstructionsText"
-                                   Foreground="{DynamicResource MpTextMuted}"
-                                   FontSize="{StaticResource FontSizeCaption}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,8,0,0"
-                                   Visibility="Collapsed"/>
+                        <!-- (Rows 1 and 2 of this banner used to carry a network-name
+                             copier and a numbered step-by-step guide. Both moved into
+                             RadminAssistantWindow in May and were left behind here as
+                             markup nothing ever showed: no code path set them Visible,
+                             RadminInstructionsText.Text was never assigned at all, and the
+                             copy button's handler had become unreachable. Removed rather
+                             than left Collapsed — a control nobody can reach reads as a
+                             feature that exists, and this one had a comment claiming
+                             RefreshRadminBanner filled it.) -->
                     </Grid>
                 </Border>
 

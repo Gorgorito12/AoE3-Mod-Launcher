@@ -570,8 +570,6 @@ public partial class MultiplayerTab : UserControl
             RadminPrimaryButton.Visibility = Visibility.Visible;
             RadminPrimaryButton.IsEnabled = true;
             // No actionable network info to show while Radmin isn't on yet.
-            RadminNetworkNamePanel.Visibility = Visibility.Collapsed;
-            RadminInstructionsText.Visibility = Visibility.Collapsed;
         }
         else if (!status.IsServiceRunning)
         {
@@ -596,8 +594,6 @@ public partial class MultiplayerTab : UserControl
             RadminPrimaryButton.Content = Strings.Get("MpRadminOpenButton");
             RadminPrimaryButton.Visibility = Visibility.Visible;
             RadminPrimaryButton.IsEnabled = true;
-            RadminNetworkNamePanel.Visibility = Visibility.Collapsed;
-            RadminInstructionsText.Visibility = Visibility.Collapsed;
         }
         else
         {
@@ -614,24 +610,6 @@ public partial class MultiplayerTab : UserControl
         // session. Refreshing through the shared method keeps this poll from
         // overwriting the other half every ~3 s.
         PushConnectionChip();
-    }
-
-    /// <summary>
-    /// Dedicated "copy the network name" button — separate from the
-    /// auto-copy that happens when "Open Radmin" is clicked, so the
-    /// user can grab a fresh copy without re-launching the GUI (handy
-    /// when they accidentally overwrote the clipboard with something
-    /// else before pasting into Radmin's Join dialog).
-    /// </summary>
-    private void RadminCopyNameButton_Click(object sender, RoutedEventArgs e)
-    {
-        try { Clipboard.SetText(RadminVpnService.AoE3TadNetworkName); }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"RadminCopyNameButton_Click: clipboard: {ex.Message}");
-            return;
-        }
-        FlashCopiedToast(RadminCopyNameButton);
     }
 
     /// <summary>

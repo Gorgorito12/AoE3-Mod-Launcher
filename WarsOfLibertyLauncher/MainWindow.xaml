@@ -947,17 +947,46 @@
 
                          The detail is the bare 26.x address. What that address IS lives
                          in the tooltip instead - which only works because the capsule is
-                         client area now; in the title bar a tooltip could never fire. -->
-                    <Border x:Name="ConnectionChip"
+                         client area now; in the title bar a tooltip could never fire.
+
+                         CLICKABLE, and that is not decoration: it is the ONLY way to open
+                         the Radmin guide once Radmin works. The guide's other entry point
+                         is the "Show steps" button INSIDE the red banner, and the banner
+                         collapses precisely when everything is fine - so retiring the
+                         permanent banner took the guide's last door with it, and
+                         MultiplayerTab.OpenRadminAssistantWindow() sat there with no
+                         caller at all. This is where a user looks when they wonder about
+                         the VPN, so it is where the door belongs.
+
+                         A Button whose template draws the SAME Border, so nothing moves a
+                         pixel - the recipe OfflineChip beside it already uses. -->
+                    <Button x:Name="ConnectionChip"
                             Visibility="Collapsed"
                             VerticalAlignment="Center"
                             Margin="0,0,16,0"
-                            Padding="12,0"
                             Height="{StaticResource ChromeCapsuleHeight}"
-                            CornerRadius="{StaticResource ChromeCapsuleRadius}"
-                            Background="Transparent"
-                            BorderBrush="{DynamicResource ChromeRim}"
-                            BorderThickness="1">
+                            Cursor="Hand"
+                            Click="ConnectionChip_Click">
+                      <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                          <Border x:Name="capsule"
+                                  Padding="12,0"
+                                  CornerRadius="{StaticResource ChromeCapsuleRadius}"
+                                  Background="Transparent"
+                                  BorderBrush="{DynamicResource ChromeRim}"
+                                  BorderThickness="1">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                          </Border>
+                          <ControlTemplate.Triggers>
+                            <!-- Quiet: the capsule is a status readout first and a button
+                                 second, so hovering lifts the rim rather than filling it. -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                              <Setter TargetName="capsule" Property="BorderBrush"
+                                      Value="{DynamicResource ChromeVersionRim}"/>
+                            </Trigger>
+                          </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                      </Button.Template>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Ellipse Width="7" Height="7"
                                      Fill="{DynamicResource ChromeOk}"
@@ -976,7 +1005,7 @@
                                        FontSize="{StaticResource MpMetaSize}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
-                    </Border>
+                    </Button>
 
                     <!-- Hidden with its neighbours rather than left floating: signed
                          out, both the capsule and the account block collapse, and a

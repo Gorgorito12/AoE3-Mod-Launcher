@@ -147,13 +147,47 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `MpChatRadminNotReady`). Don't reword these back to imply Radmin blocks
   create/join, and don't add a Radmin gate to the join path.
 
+- **The nav-row connection capsule OPENS the Radmin guide, and it is the only door
+  to it once Radmin works.** The guide's other entry point is the "Show steps" button
+  INSIDE the red banner — and that banner collapses exactly when everything is fine.
+  So retiring the permanent banner in favour of the capsule silently retired the guide
+  with it: `MultiplayerTab.OpenRadminAssistantWindow()` sat with **zero callers**, its
+  own comment saying it was exposed "so MainWindow could trigger it in the future".
+  Nothing could open the window in the one state the `autoOpened` rule below exists to
+  serve. `MainWindow.ConnectionChip_Click` is that caller.
+  **Two things this depends on.** The capsule had to become a `Button` whose template
+  draws the same `Border`, so nothing moved a pixel; and it works from ANY tab because
+  `ShowRadminAssistant` needs only MultiplayerTab's `_config` (set in `Attach` at
+  startup) and `Window.GetWindow(this)`, both of which resolve while the tab is
+  collapsed. It lives BELOW `CaptionHeight`, so it is ordinary client area — no chrome
+  flag, and its tooltip actually fires. That tooltip always names the guide and only
+  adds the address when there is one: the capsule is clickable either way, and a hint
+  that appeared only sometimes would vanish exactly when the VPN is what is wrong.
+  **Verified by invoking it and watching the window list** — the guide opens and stays
+  open past 15 s with Radmin green, which is the `autoOpened` guard doing its job.
+  Note for whoever checks this next: **UI Automation's `RootElement` children query does
+  NOT enumerate the assistant** (owned + `ShowInTaskbar=false`), so it reports the window
+  as absent and looks exactly like the auto-close bug it is meant to disprove. Use a
+  Win32 `EnumWindows` sweep over the process instead; that sees it.
+
+- **The banner's network-name copier and numbered instructions are GONE, not hidden.**
+  `RadminNetworkNamePanel` / `RadminNetworkNameBox` / `RadminCopyNameButton` /
+  `RadminInstructionsText` were orphaned in May when that content moved into
+  `RadminAssistantWindow`: no code path ever set them Visible again,
+  `RadminInstructionsText.Text` was never assigned at all despite a comment claiming
+  `RefreshRadminBanner()` filled it, and the copy button's handler was unreachable.
+  They were removed rather than left `Collapsed` — a control nobody can reach reads as
+  a feature that exists. The strings only they used went too. **This was never a
+  casualty of the redesign**, which is worth knowing because it looks like one.
+
 - **`RadminAssistantWindow` auto-closes at `InAoE3Network` ONLY when the launcher
   opened it — the `autoOpened` ctor flag is load-bearing, don't drop it back to an
   unconditional close.** The auto-open path (`MultiplayerTab.MaybeAutoOpenAssistant`)
   fires *exclusively* while Radmin is NOT ready (`if (snap.Stage >= RadminStage.LoggedIn)
   return;` — "don't teach someone something that already works"), so a window we pushed
   reaching `InAoE3Network` means the tutorial finished and the ~1.2 s close is a
-  celebration. The **"Show steps" button** (and the public `OpenRadminAssistantWindow`)
+  celebration. The **"Show steps" button** (and the public `OpenRadminAssistantWindow`,
+  which the NAV-ROW CONNECTION CAPSULE now calls — see the next bullet)
   can summon it at ANY stage: with the checklist already green, `Refresh()`'s first tick
   (`_lastStage` starts at `-1`, so it always runs once) saw `InAoE3Network` and slammed
   the window shut ~1.2 s later. That's not just annoying — **once everything is green

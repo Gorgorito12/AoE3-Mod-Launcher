@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -165,7 +165,14 @@ public class LauncherUpdateService
 
             var release = await response.Content.ReadFromJsonAsync<GitHubRelease>(cancellationToken: ct);
             if (release == null || string.IsNullOrEmpty(release.TagName))
+            {
+                // The one path here that used to return without a trace. Every other
+                // outcome logs, so a check that ended in silence was indistinguishable
+                // from one that never finished at all.
+                DiagnosticLog.Write(
+                    "No launcher update: the release response carried no tag_name.");
                 return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
+            }
 
             var remoteTag = release.TagName;
 

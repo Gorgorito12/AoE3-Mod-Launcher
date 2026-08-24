@@ -2387,6 +2387,14 @@ public static class Strings
         // that the VPN is up and which address peers will reach them on.
         ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
         ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
+        // The capsule is the only door to the Radmin guide once Radmin works (the
+        // banner that used to carry "Show steps" collapses exactly then), so the
+        // tooltip has to say it is clickable — nothing else on screen does.
+        ["MpChipOpenGuide"] = new()
+        {
+            [LangEn] = "Click to open the Radmin guide",
+            [LangEs] = "Haz clic para ver la guía de Radmin",
+        },
         ["MpChipElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
         ["MpChipReconnecting"] = new() { [LangEn] = "Reconnecting…", [LangEs] = "Reconectando…" },
         // Title-bar account menu. Sign out lives ONLY here now — the account row that
@@ -2462,11 +2470,6 @@ public static class Strings
         // running: the network-name copier and numbered steps are hidden
         // (the RadminAssistantWindow already covers that flow), so the
         // banner shrinks to a single status line. {0} = own IP.
-        ["MpRadminConnectedTitleCompact"] = new()
-        {
-            [LangEn] = "Radmin VPN is running · IP: {0}",
-            [LangEs] = "Radmin VPN está corriendo · IP: {0}",
-        },
 
         // Button next to the network-name TextBox. Briefly flashes to
         // "Copied!" after the click so the user sees the action worked.

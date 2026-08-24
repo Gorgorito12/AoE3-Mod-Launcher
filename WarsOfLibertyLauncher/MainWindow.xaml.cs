@@ -7741,16 +7741,26 @@ public partial class MainWindow : Window
     // no update is available.
     private LauncherUpdateService.UpdateCheckResult? _pendingLauncherUpdate;
 
-    private Task CheckForLauncherUpdateAsync()
+    /// <summary>
+    /// Runs the self-update check and swallows any failure — it must never take the
+    /// startup path down with it.
+    ///
+    /// <para><b>The await is the point.</b> This used to <c>return</c> the inner task
+    /// instead of awaiting it, and an <c>async Task</c> method hands back its task
+    /// immediately: a failure inside it is captured IN the task, so the catch below could
+    /// only ever fire for a synchronous throw before the first await — which is to say,
+    /// never. The check would fail and log nothing, leaving no way to tell a working
+    /// check from a dead one.</para>
+    /// </summary>
+    private async Task CheckForLauncherUpdateAsync()
     {
         try
         {
-            return CheckForLauncherUpdateInnerAsync();
+            await CheckForLauncherUpdateInnerAsync();
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Launcher self-update error: {ex.Message}");
-            return Task.CompletedTask;
         }
     }
 
@@ -11425,9 +11435,14 @@ public partial class MainWindow : Window
         // The "VPN ·" the reference dropped from the label lives here instead. Only
         // reachable because the capsule sits in the nav row: inside the caption
         // region a control never raises IsMouseOver, so this would never fire.
-        ConnectionChip.ToolTip = string.IsNullOrWhiteSpace(detail)
-            ? null
-            : TooltipHelper.Wrap(Strings.Format("MpChipVpnDetail", detail));
+        //
+        // The guide hint is ALWAYS present, the address only when we have one: the
+        // capsule is clickable either way, and a tooltip that appears only sometimes
+        // would hide the affordance exactly when the VPN is the thing going wrong.
+        var tip = Strings.Get("MpChipOpenGuide");
+        if (!string.IsNullOrWhiteSpace(detail))
+            tip = Strings.Format("MpChipVpnDetail", detail) + "\n" + tip;
+        ConnectionChip.ToolTip = TooltipHelper.Wrap(tip);
         bool hasDetail = !string.IsNullOrWhiteSpace(detail);
         ConnectionChipDetail.Text = hasDetail ? detail : string.Empty;
         ConnectionChipDetail.Visibility = hasDetail ? Visibility.Visible : Visibility.Collapsed;
@@ -11469,6 +11484,27 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write($"Display scaling probe failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// The connection capsule opens the Radmin guide.
+    ///
+    /// <para>This is the guide's ONLY door once Radmin is working. Its other one is the
+    /// "Show steps" button inside the red banner, and that banner collapses exactly when
+    /// everything is fine — so retiring the permanent banner in favour of this capsule
+    /// also retired the guide, and <c>OpenRadminAssistantWindow</c> was left without a
+    /// single caller. The capsule is where someone looks when they wonder about the VPN,
+    /// which is what makes it the right door rather than merely an available one.</para>
+    ///
+    /// <para>Works from any tab: the assistant only needs MultiplayerTab's config (set in
+    /// Attach at startup) and its owning Window, both of which resolve while the tab is
+    /// collapsed. The capsule only renders when signed in, so there is no not-ready
+    /// state to guard here.</para>
+    /// </summary>
+    private void ConnectionChip_Click(object sender, RoutedEventArgs e)
+    {
+        try { MultiplayerView?.OpenRadminAssistantWindow(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Radmin guide open failed: {ex.Message}"); }
     }
 
     /// <summary>
