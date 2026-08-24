@@ -1115,8 +1115,15 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
 
 - **The title-bar brand button's hover illumination has a WPF-precedence
   trap — we hit it as a bug twice.** `TitleBarBrandButton` ("AoE3 Mod
-  Launcher ▾") brightens on hover/press/open like the nav tabs: text idle
-  = `Secondary`, hover = `#E6EEF8`, pressed/open = `#FFFFFF` white. For that
+  Launcher ▾") brightens on hover/press/open like the nav tabs, on the
+  `Chrome*` ramp: idle `ChromeTextDim` `#93A4B5` (7.31:1) → hover
+  `ChromeTextBright` `#F0F5FB` (17.04:1) → pressed/open `#FFFFFF` (18.67:1).
+  **The hover is one rung BELOW pure white on purpose** — pressed and open are
+  already white, and the only other signal that the menu is open is the chevron
+  flip, so collapsing hover into white would leave "open" indistinguishable from
+  "the pointer is on it". It sat at `ChromeTextSoft` (11.79:1) until a screenshot
+  taken WITH the pointer on the button turned out to be indistinguishable from one
+  taken without it. For that
   to work, the idle `Foreground` **must be a `Style` setter (or template
   default), never a local `Foreground="…"` attribute on the `<Button>`** —
   a local value (precedence 3) beats `ControlTemplate.Triggers` (4-6), so a
@@ -1127,10 +1134,16 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   so flipping the Button's `Foreground` in a trigger flows to the wordmark;
   setting `TextElement.Foreground` directly on the ContentPresenter does
   **not** propagate (that looked dead). The icon next to it is a *bitmap*,
-  not a glyph, so it can't follow `Foreground` — it illuminates via
-  `Opacity` (0.7 → 1.0) on an `Image.Style` whose `DataTrigger`s bind to the
-  ancestor button's `IsMouseOver`/`Tag` (the Image lives in the button
-  CONTENT, out of reach of template triggers). The chevron flips ▾↔▴ and
+  not a glyph, so it can't follow `Foreground` — **so it does not illuminate at
+  all, and that is deliberate.** It used to carry `Opacity` 0.7 → 1.0 on an
+  `Image.Style` bound to the ancestor button's `IsMouseOver`/`Tag` (the Image
+  lives in the button CONTENT, out of reach of template triggers); against the
+  near-black bar that cost ~23% of the brightness of artwork already dark on its
+  own (mean luminance 77/255 at render size), and the washed-out brand block was
+  reported twice. The reference specifies a size and a colour for the mark and
+  says nothing about opacity — the dimming was ours. The wordmark and chevron
+  still answer the mouse, so the affordance survives without knocking the mark
+  back at rest. The chevron flips ▾↔▴ and
   the button holds `Tag="open"` while the brand popup lives, both set in
   `BrandMenuButton_Click` + `popup.Closed`. Same precedence rule governs
   `NavTabButton` — copy that recipe for any new chrome button, don't

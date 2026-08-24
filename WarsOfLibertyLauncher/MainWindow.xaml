@@ -327,10 +327,15 @@
                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <Button.Style>
                         <Style TargetType="Button">
-                            <!-- Near-white at rest, per the prototype's wordmark, instead of
-                                 the dim Secondary it used against the old dark bar. Hover
-                                 and open still lift it to pure white, so the button keeps an
-                                 affordance — just a narrower one than before. -->
+                            <!-- Muted at rest so the hover has something to lift AGAINST;
+                                 the scale is rest #93A4B5 (7.31:1) → hover #F0F5FB
+                                 (17.04:1) → pressed/open #FFFFFF (18.67:1). The hover
+                                 used to be ChromeTextSoft, one rung lower, and was
+                                 reported as looking the same as rest: a screenshot taken
+                                 WITH the pointer on the button was indistinguishable from
+                                 one taken without it. Pressed/open stop at pure white so
+                                 the three states remain three — the chevron flip is the
+                                 only other signal that the menu is open. -->
                             <Setter Property="Foreground" Value="{DynamicResource ChromeTextDim}"/>
                             <Setter Property="Template">
                                 <Setter.Value>
@@ -343,7 +348,7 @@
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Foreground" Value="{DynamicResource ChromeTextSoft}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource ChromeTextBright}"/>
                                             </Trigger>
                                             <!-- Pressed + Open after hover so
                                                  they win when both match; pure
@@ -444,24 +449,31 @@
                      also means it can carry no tooltip - a caption hit never raises
                      IsMouseOver - which is fine for a label already fully visible.
 
-                     Its text is ChromeTextDim, not the ChromeTextFaint the reference
-                     names: at 11px that was 3.67:1, under the 4.5:1 floor for normal
-                     text, and it was reported as unreadable. A local Foreground is safe
-                     HERE because the chip is a SIBLING of the brand button, not part of
-                     its content - inside it, a local value would beat the template's
-                     illumination triggers, which is the trap that has broken this button
-                     twice. -->
+                     It took TWO lifts to become legible, and the second is the
+                     interesting one. First the text went from the ChromeTextFaint the
+                     reference names to ChromeTextDim: at 11px faint measured 3.67:1,
+                     under the 4.5:1 floor, and was reported as unreadable. That fixed
+                     the letters and NOT the chip — with no background at all it still
+                     read as loose text beside a hairline, because a 2.09:1 rim has
+                     nothing to cut the shape out of. So it now carries a fill
+                     (ChromeVersionBg) and the text sits at ChromeTextSoft, 11.79:1.
+
+                     A local Foreground is safe HERE because the chip is a SIBLING of the
+                     brand button, not part of its content — inside it, a local value
+                     would beat the template's illumination triggers, which is the trap
+                     that has broken this button twice. -->
                 <Border x:Name="VersionChip"
                         Grid.Column="1"
                         VerticalAlignment="Center"
-                        Padding="5,1"
+                        Padding="6,2"
                         CornerRadius="{StaticResource ChromeVersionRadius}"
+                        Background="{DynamicResource ChromeVersionBg}"
                         BorderBrush="{DynamicResource ChromeVersionRim}"
                         BorderThickness="1">
                     <TextBlock x:Name="VersionChipText"
                                FontFamily="{DynamicResource BodyFont}"
                                FontSize="{StaticResource ChromeVersionSize}"
-                               Foreground="{DynamicResource ChromeTextDim}"
+                               Foreground="{DynamicResource ChromeTextSoft}"
                                VerticalAlignment="Center"/>
                 </Border>
 

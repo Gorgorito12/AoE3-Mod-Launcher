@@ -237,7 +237,39 @@ public partial class MultiplayerTab : UserControl
         /// <summary>Last link state we ANNOUNCED in chat, so RefreshInGamePanel only
         /// posts on the Online↔Lost edge (not every tick). Init WaitingVpn.</summary>
         public PeerLinkState LastLinkState { get; set; } = PeerLinkState.WaitingVpn;
+        /// <summary>The member's Glicko rating and deviation from room_state /
+        /// member_joined. Null for a room whose backend doesn't send them, and null
+        /// for a player who has no rating row yet — both mean "don't paint a number".
+        /// See <see cref="RatingDisplay.ShouldShow"/>.</summary>
+        public double? Rating { get; set; }
+        public double? Rd { get; set; }
     }
+
+    /// <summary>
+    /// Whether the player's own AoE3 profile name could be read when this match started.
+    ///
+    /// <para>Cached because <see cref="UserDataService.GetInGameName"/> reads a file and
+    /// the in-game panel that shows it repaints on a two-second timer. False means the
+    /// launcher cannot find this player inside their own recording, so the match cannot
+    /// produce a result no matter what the recording does — which is why the RECORDING
+    /// cell says so instead of advising them to tick a box that would not help.</para>
+    /// </summary>
+    private bool _canIdentifyPlayerInReplay = true;
+
+    /// <summary>
+    /// Why the last match's recording could not be read, if it could not.
+    ///
+    /// <para>A field because the result card is not always built by the same call that
+    /// did the reading: the host builds it from its own report, the guest from the
+    /// <c>match_reported</c> frame, and the close-the-room path from neither. All three
+    /// want the same explanation, and only the reading knew it.</para>
+    ///
+    /// <para>It NEVER overrides the server. See
+    /// <see cref="Services.Multiplayer.MatchOutcomeView.UnratedNoteKey"/>: a specific
+    /// server reason wins, and this only speaks when the server said "nobody won"
+    /// without saying why.</para>
+    /// </summary>
+    private Services.Multiplayer.LocalReadFailure _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
 
     // -------- Lobby window (replaces the old in-tab popup) ----------
     //
@@ -507,8 +539,12 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        var elo = _cachedStanding != null
-            ? Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding.Rating))
+        // Same gate as the roster: a provisional rating is not shown. The server hands
+        // every new player 1500 at the maximum deviation, and this chip sits under your
+        // name in the title bar — the last place a placeholder should look like a score.
+        // The Profile tab is where it does appear, next to the word "provisional".
+        var elo = RatingDisplay.ShouldShow(_cachedStanding?.Rating, _cachedStanding?.Rd)
+            ? Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding!.Rating))
             : null;
         _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo);
 
@@ -1109,6 +1145,13 @@ public partial class MultiplayerTab : UserControl
         ActivityStripTitle.Text = Strings.Get("MpActivityStripTitle");
         ActivityStripWindow.Text = Strings.Get("MpActivityStripWindow");
         ActivityRecentTitle.Text = Strings.Get("MpActivityRecentTitle");
+        ActivityRankingTitle.Text = Strings.Get("MpActivityRankingTitle");
+        ActivityPeakTitle.Text = Strings.Get("MpActivityPeakTitle");
+        ActivityRankColHash.Text = Strings.Get("MpActivityRankColHash");
+        ActivityRankColPlayer.Text = Strings.Get("MpActivityRankColPlayer");
+        ActivityRankColElo.Text = Strings.Get("MpActivityRankColElo");
+        ActivityRankColDecided.Text = Strings.Get("MpActivityRankColDecided");
+        ActivityRankColPct.Text = Strings.Get("MpActivityRankColPct");
         JoinByCodeTitle.Text = Strings.Get("MpJoinByCodeTitle");
         JoinByCodeHint.Text = Strings.Get("MpJoinByCodeHint");
         JoinByCodePlaceholder.Text = Strings.Get("MpJoinByCodePlaceholder");
@@ -1352,7 +1395,11 @@ public partial class MultiplayerTab : UserControl
             if (reason == RoomClosedByReport
                 && (_matchPhase == MatchPhase.InGame || _matchContext != null))
             {
-                EnterResultPhase();
+                // Not if the match_reported frame already got here. It arrives just
+                // before this close — the server publishes it and then shuts the sockets
+                // — and without this guard we would enter the result phase a second time
+                // and fire the history polls that the frame exists to make unnecessary.
+                if (_matchPhase != MatchPhase.Result) EnterResultPhase();
                 return;
             }
 
@@ -1396,6 +1443,9 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "member_joined":
                         HandleMemberJoined(e.Json);
+                        break;
+                    case "match_reported":
+                        HandleMatchReported(e.Json);
                         break;
                     case "member_left":
                         HandleMemberLeft(e.Json);
@@ -1542,6 +1592,8 @@ public partial class MultiplayerTab : UserControl
                 Ready = kv.Value.Ready,
                 RadminIp = kv.Value.RadminIp,
                 AvatarUrl = kv.Value.AvatarUrl,
+                Rating = kv.Value.Rating,
+                Rd = kv.Value.Rd,
             };
         }
 
@@ -1647,15 +1699,26 @@ public partial class MultiplayerTab : UserControl
         if (string.IsNullOrEmpty(userId)) return;
         var login = json.TryGetProperty("discord_username", out var l) ? (l.GetString() ?? userId) : userId;
         var avatar = json.TryGetProperty("avatar_url", out var av) ? av.GetString() : null;
+        // Read like the avatar, and never written back as null for the same reason: a
+        // backend that doesn't send them must not erase what room_state already gave us.
+        double? rating = json.TryGetProperty("rating", out var rt) && rt.ValueKind == JsonValueKind.Number
+            ? rt.GetDouble() : null;
+        double? rd = json.TryGetProperty("rd", out var rdv) && rdv.ValueKind == JsonValueKind.Number
+            ? rdv.GetDouble() : null;
 
         if (_roomMembers.TryGetValue(userId, out var existing))
         {
             existing.Login = login;
             if (!string.IsNullOrEmpty(avatar)) existing.AvatarUrl = avatar;
+            if (rating.HasValue) existing.Rating = rating;
+            if (rd.HasValue) existing.Rd = rd;
         }
         else
         {
-            _roomMembers[userId] = new RoomMemberEntry { UserId = userId, Login = login, AvatarUrl = avatar };
+            _roomMembers[userId] = new RoomMemberEntry
+            {
+                UserId = userId, Login = login, AvatarUrl = avatar, Rating = rating, Rd = rd,
+            };
         }
         AppendChatSystem(Strings.Format("MpChatMemberJoined", login));
         RenderRoomMembers();
@@ -1995,9 +2058,27 @@ public partial class MultiplayerTab : UserControl
         var me = _session?.CurrentUser;
         var isMe = me != null && string.Equals(m.UserId, me.Id, StringComparison.Ordinal);
 
+        // Everyone's ELO, not just your own: the rating now rides in the room-state
+        // member object, so the roster no longer has to fall back to "only I know mine".
+        //
+        // Withheld while provisional, for everyone including you. The server hands every
+        // new player 1500 and painting it beside a name turns a placeholder into a claim
+        // about their skill — the same refusal the end-of-match card makes. Right after a
+        // ratings reset that means nobody shows an ELO here for a while, and that is
+        // correct, not a bug.
+        double? memberRating = m.Rating;
+        double? memberRd = m.Rd;
+        if (isMe && memberRating == null && _cachedStanding != null)
+        {
+            // Fallback for a backend that doesn't put ratings in the frame yet: we know
+            // our OWN standing from GET /matches/elo. Same gate applies to it.
+            memberRating = _cachedStanding.Rating;
+            memberRd = _cachedStanding.Rd;
+        }
+
         string? rating = null;
-        if (isMe && _cachedStanding != null)
-            rating = Strings.Format("MpRoomMemberElo", (int)Math.Round(_cachedStanding.Rating));
+        if (RatingDisplay.ShouldShow(memberRating, memberRd))
+            rating = Strings.Format("MpRoomMemberElo", (int)Math.Round(memberRating!.Value));
 
         string link;
         if (isMe)
@@ -3394,6 +3475,29 @@ public partial class MultiplayerTab : UserControl
                 new SolidColorBrush(Color.FromArgb(0x33, 0xE5, 0x47, 0x4D)),
                 new SolidColorBrush(Color.FromRgb(0xE5, 0x74, 0x78))));
 
+        // What the match did to your rating. The data has always arrived on this row
+        // (rating_before / rating_after) and was simply dropped on the floor; only the
+        // end-of-match card ever used it, and that card is gone the moment you close it.
+        //
+        // Painted only when BOTH ends are known, which is the same refusal the card
+        // makes: a match that was stored without being rated, or one reported to a
+        // backend too old to answer, shows no badge at all rather than a "+0" that
+        // would claim the game was played for nothing.
+        var ratingDelta = RatingDisplay.FormatDelta(
+            MatchOutcomeView.Delta(row.RatingBefore, row.RatingAfter));
+        if (ratingDelta != null)
+        {
+            var up = !ratingDelta.StartsWith('-');
+            titleRow.Children.Add(BuildBadge(
+                ratingDelta,
+                new SolidColorBrush(up
+                    ? Color.FromArgb(0x33, 0x3F, 0xB9, 0x50)
+                    : Color.FromArgb(0x33, 0xE5, 0x47, 0x4D)),
+                new SolidColorBrush(up
+                    ? Color.FromRgb(0x5B, 0xD1, 0x6E)
+                    : Color.FromRgb(0xE5, 0x74, 0x78))));
+        }
+
         left.Children.Add(titleRow);
 
         // Meta line: "N players · map · duration · date". Every segment is dropped
@@ -4176,11 +4280,142 @@ public partial class MultiplayerTab : UserControl
                 ActivityRecentList.Children.Add(BuildActivityMatchRow(m));
 
             ActivityStrip.Visibility = Visibility.Visible;
+
+            // The other two cards, on the same once-per-session gate as this one. One
+            // extra request when the Rooms subtab is first opened; no timer, nothing
+            // per render — the budget is per IP and shared behind a Radmin network.
+            await RefreshCommunityCardsAsync();
         }
         catch (Exception ex)
         {
             // Best-effort decoration: it must never be why the rooms list looks broken.
             DiagnosticLog.Write($"Activity strip: history fetch failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Fill the ladder and peak-hours cards, or leave them hidden.
+    ///
+    /// <para>Best-effort in every direction. A backend without the route answers 404, a
+    /// ladder can legitimately be empty for weeks after a ratings reset, and a small
+    /// community can go a month without enough rooms to call anything a peak hour. All
+    /// three end the same way: the card is not shown. An empty card under a heading reads
+    /// as broken, and it must never be why the room list looks wrong.</para>
+    /// </summary>
+    private async Task RefreshCommunityCardsAsync()
+    {
+        if (_session?.Api == null) return;
+
+        Models.Multiplayer.CommunityStats? stats;
+        try
+        {
+            stats = await _session.Api.GetCommunityStatsAsync();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Community stats: fetch failed: {ex.Message}");
+            return;
+        }
+
+        // ----- the ladder -----
+        var rows = CommunityStatsView.Rows(stats);
+        if (rows.Count > 0 && ActivityRankingList != null)
+        {
+            ActivityRankingList.Children.Clear();
+            foreach (var row in rows.Take(5))
+                ActivityRankingList.Children.Add(BuildLeaderboardRow(row));
+            ActivityRankingCard.Visibility = Visibility.Visible;
+        }
+
+        // ----- peak hours -----
+        var activity = stats?.Activity;
+        if (activity != null && ActivityPeakBars != null)
+        {
+            var utc = new int[24];
+            foreach (var h in activity.Hours)
+                if (h.Hour >= 0 && h.Hour < 24) utc[h.Hour] = h.Count;
+
+            var local = CommunityStatsView.ToLocalHours(
+                utc, TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.UtcNow));
+            var peak = CommunityStatsView.PeakHour(local, activity.Total);
+
+            if (peak.HasValue)
+            {
+                ActivityPeakHeadline.Text = Strings.Format(
+                    "MpActivityPeakRange", peak.Value, (peak.Value + 1) % 24);
+                ActivityPeakSubtitle.Text = Strings.Format(
+                    "MpActivityPeakSubtitle", activity.Total, activity.WindowDays);
+                DrawPeakBars(local);
+                ActivityPeakCard.Visibility = Visibility.Visible;
+            }
+        }
+    }
+
+    /// <summary>The 24 hour bars, tallest normalised to full height.</summary>
+    private void DrawPeakBars(int[] local)
+    {
+        ActivityPeakBars.Children.Clear();
+        var max = 0;
+        foreach (var c in local) if (c > max) max = c;
+        if (max <= 0) return;
+
+        var nowHour = DateTime.Now.Hour;
+        for (var h = 0; h < 24; h++)
+        {
+            // Bottom-aligned so the bars grow upwards from a common baseline, and a
+            // minimum sliver for a non-zero hour so "one room" is visible at all.
+            var frac = local[h] / (double)max;
+            var bar = new Border
+            {
+                Background = (Brush)FindResource(h == nowHour ? "MpAction" : "MpRimSoft"),
+                CornerRadius = new CornerRadius(1),
+                Margin = new Thickness(1, 0, 1, 0),
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Height = local[h] == 0 ? 1 : Math.Max(3, frac * 30),
+                ToolTip = TooltipHelper.Wrap(Strings.Format("MpActivityPeakBarTip", h, local[h])),
+            };
+            ActivityPeakBars.Children.Add(bar);
+        }
+    }
+
+    /// <summary>One ladder row: rank, player, rating, decided games, win rate.</summary>
+    private UIElement BuildLeaderboardRow(Models.Multiplayer.LeaderboardRow row)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        foreach (var w in new[] { 22.0, -1.0, 52.0, 62.0, 44.0 })
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = w < 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(w),
+            });
+        }
+
+        Cell(0, row.Rank.ToString(), "MpTextFaint", HorizontalAlignment.Left);
+        Cell(1, string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName,
+             "MpTextPrimary", HorizontalAlignment.Left, trim: true);
+        Cell(2, ((int)Math.Round(row.Rating)).ToString(), "MpTextHeading", HorizontalAlignment.Right);
+        Cell(3, (row.Wins + row.Losses).ToString(), "MpTextDim", HorizontalAlignment.Right);
+
+        // Empty, never "0 %", when nothing has been decided — the same refusal the
+        // Profile tab makes about the very same number.
+        var pct = CommunityStatsView.WinPercent(row);
+        Cell(4, pct.HasValue ? pct.Value + "%" : "", "MpTextDim", HorizontalAlignment.Right);
+
+        return grid;
+
+        void Cell(int col, string text, string brush, HorizontalAlignment align, bool trim = false)
+        {
+            var tb = new TextBlock
+            {
+                Text = text,
+                Foreground = (Brush)FindResource(brush),
+                FontSize = (double)FindResource("MpLabelSize"),
+                HorizontalAlignment = align,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            if (trim) tb.TextTrimming = TextTrimming.CharacterEllipsis;
+            Grid.SetColumn(tb, col);
+            grid.Children.Add(tb);
         }
     }
 
@@ -7078,10 +7313,17 @@ public partial class MultiplayerTab : UserControl
 
             // Where the result comes from. Never throws, returns null when there is
             // nothing usable — the report then carries the draws it always did.
-            var replayInfo = await AnalyseMatchReplayAsync(profile, ctx, gameStartedAtUtc);
+            var analysis = await AnalyseMatchReplayAsync(profile, ctx, gameStartedAtUtc);
+            var replayInfo = analysis.Info;
+            _lastLocalReadFailure = analysis.Failure;
 
             var report = await TryReportMatchAsync(profile, ctx, replayInfo);
             var roomClosedByReport = report.ClosedRoom;
+
+            // Everyone who is NOT the host sends their own reading of the same match. The
+            // host's went out in the report above; this is the second opinion nobody was
+            // collecting.
+            await TryConfirmMatchAsync(ctx, replayInfo);
 
             // The host learns the room closed from their own POST, not from the socket —
             // both arrive, and whichever is first wins. Entering here as well makes the
@@ -7154,10 +7396,30 @@ public partial class MultiplayerTab : UserControl
     private bool GameRestartedSince() => _matchPhase == MatchPhase.InGame;
 
     /// <summary>What the recording contributes to the report, or null when it says nothing.</summary>
+    /// <param name="HostResult">
+    /// The score of whoever RECORDED this file — which is always this machine, never
+    /// necessarily the host of the room. <c>AnalyseMatchReplayAsync</c> identifies the
+    /// recording by this machine's own AoE3 profile name and matches the trailer's
+    /// recorder slot against it, so on the host's PC this is the host's result and on
+    /// anyone else's it is theirs.
+    ///
+    /// <para>The name reads the other way round and is kept only because
+    /// <c>ResolveHostResult</c> / <c>HostResultFrom</c> in the tested pure service are
+    /// named to match; renaming half of them would leave the set more confusing, not
+    /// less. Both readers of this field depend on the meaning above.</para>
+    /// </param>
+    /// <param name="RandomSeed">
+    /// The recording's map seed and the host clock beside it — the match's own
+    /// fingerprint. Sent to the server so it can tell whether two players read the SAME
+    /// game, and so one game cannot score twice even if the file's bytes change. Zero
+    /// when the recording did not carry them.
+    /// </param>
     private sealed record MatchReplayInfo(
         System.IO.FileInfo File,
         string? MapName,
-        double? HostResult);
+        double? HostResult,
+        uint RandomSeed = 0,
+        uint HostTime = 0);
 
     /// <summary>
     /// Finds the recording the game just wrote and reads the result out of it.
@@ -7174,7 +7436,18 @@ public partial class MultiplayerTab : UserControl
     /// <para>Every failure returns null, which the caller reports as a draw. A recording
     /// that can't be found or read is not a reason to interrupt anyone.</para>
     /// </summary>
-    private async Task<MatchReplayInfo?> AnalyseMatchReplayAsync(
+    /// <summary>
+    /// What the recording search produced, and — when it produced nothing usable — WHY.
+    ///
+    /// <para>The reason used to exist only in the diagnostic log, so every one of the five
+    /// ways this can fail reached the player as the same sentence: "it was not recorded,
+    /// tick Record Game". That is right for one of them and points at the wrong thing for
+    /// the rest. Carrying it out of here is what lets the end-of-match card say something
+    /// the player can act on.</para>
+    /// </summary>
+    private sealed record MatchReplayResult(MatchReplayInfo? Info, Services.Multiplayer.LocalReadFailure Failure);
+
+    private async Task<MatchReplayResult> AnalyseMatchReplayAsync(
         ModProfile profile, Services.Multiplayer.MatchContext? ctx, DateTime startedUtc)
     {
         try
@@ -7183,7 +7456,8 @@ public partial class MultiplayerTab : UserControl
             // dual-root rule (redirected OneDrive Documents vs the physical folder).
             var modUserData = UserDataService.GetUserDataFolder(
                 UserDataService.ResolveFolderName(profile, _config));
-            if (string.IsNullOrEmpty(modUserData)) return null;
+            if (string.IsNullOrEmpty(modUserData))
+                return new MatchReplayResult(null, Services.Multiplayer.LocalReadFailure.NoProfileName);
 
             var hostName = UserDataService.GetInGameName(profile, _config);
             var expectedHumans = ctx?.ExpectedHumans ?? 0;
@@ -7208,10 +7482,19 @@ public partial class MultiplayerTab : UserControl
 
                 var newest = await Task.Run(
                     () => ReplayUploadService.FindLatestReplay(modUserData, startedUtc));
-                return newest == null ? null : new MatchReplayInfo(newest, null, null);
+                // Two different causes share this exit; they are told apart here so the
+                // card can name the right one.
+                var why = string.IsNullOrWhiteSpace(hostName)
+                    ? Services.Multiplayer.LocalReadFailure.NoProfileName
+                    : Services.Multiplayer.LocalReadFailure.RosterUnknown;
+                return new MatchReplayResult(
+                    newest == null ? null : new MatchReplayInfo(newest, null, null), why);
             }
 
             MatchReplayInfo? found = null;
+            // Kept across attempts so the tail can tell "files were there but none could be
+            // read" from "there was nothing to read" — different causes, different advice.
+            var lastSearch = new ReplayUploadService.ReplaySearch(null, 0, 0);
 
             // The search runs the instant the game process dies, so the recording we want is
             // often still being flushed — it fails to parse, and the match silently becomes a
@@ -7259,9 +7542,12 @@ public partial class MultiplayerTab : UserControl
                         $"hostSlot={hostSlot} outcome={outcome.Confidence} " +
                         $"result={(hostResult.HasValue ? hostResult.Value.ToString("0.0") : "none")}");
 
-                    return (new MatchReplayInfo(result.File, header.MapName, hostResult), result);
+                    return (new MatchReplayInfo(
+                        result.File, header.MapName, hostResult,
+                        header.RandomSeed, header.HostTime), result);
                 });
 
+                lastSearch = search;
                 if (info != null) { found = info; break; }
 
                 if (!ReplayUploadService.ShouldRetry(search, attempt, ReplayRetryDelaysMs.Length))
@@ -7283,12 +7569,23 @@ public partial class MultiplayerTab : UserControl
             // setting (measured), so it may well need ticking again next time. Inferring
             // otherwise is what would silence the reminder exactly when it is still needed; only
             // an explicit mute does that. See LauncherConfig.GameRecordingReminderMuted.
-            return found;
+            //
+            // "Unreadable" only when files were actually opened and none could be parsed —
+            // otherwise there was simply nothing there, which is the ordinary case and the
+            // one whose advice ("tick Record Game") is correct.
+            var failure = found != null
+                ? (found.HostResult == null
+                    ? Services.Multiplayer.LocalReadFailure.RecordingAmbiguous
+                    : Services.Multiplayer.LocalReadFailure.None)
+                : (lastSearch.Unreadable > 0 && lastSearch.Parsed == 0
+                    ? Services.Multiplayer.LocalReadFailure.RecordingUnreadable
+                    : Services.Multiplayer.LocalReadFailure.NoRecordingFound);
+            return new MatchReplayResult(found, failure);
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"MultiplayerTab.AnalyseMatchReplayAsync: {ex.Message}");
-            return null;
+            return new MatchReplayResult(null, Services.Multiplayer.LocalReadFailure.NoRecordingFound);
         }
     }
 
@@ -7376,6 +7673,80 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private sealed record ReportOutcome(bool ClosedRoom, ReportMatchResponse? Response);
 
+    /// <summary>
+    /// Send our own reading of a match somebody else is reporting.
+    ///
+    /// <para>Reporting is host-only and stays that way — every client reaches the end of
+    /// the match, and N reporters would insert N copies of it. But the guest's launcher
+    /// has been reading its own recording all along and discarding the answer, and two
+    /// honest recordings of one match cannot disagree: the trailer names winner and loser
+    /// by ABSOLUTE slot, so this is a real second measurement of the same fact rather than
+    /// an echo of the first.</para>
+    ///
+    /// <para><b>Evidence, not a vote.</b> The server files it beside the host's claim and
+    /// nothing about whether the match scores depends on it. What it buys is a real answer,
+    /// in a few weeks, to whether requiring the two to agree could ever work.</para>
+    ///
+    /// <para>Best-effort in every direction, like the report itself: this runs while the
+    /// player is watching their game close, and it must never be why that goes wrong.</para>
+    /// </summary>
+    private async Task TryConfirmMatchAsync(
+        Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay)
+    {
+        // The host's reading is the report; confirming it against itself proves nothing.
+        if (ctx == null || ctx.IsHost) return;
+        if (string.IsNullOrEmpty(ctx.LobbyId)) return;
+        if (_session?.Api == null) return;
+
+        try
+        {
+            // NOTE ON THE NAME: MatchReplayInfo.HostResult means "the result of whoever
+            // recorded THIS file", not "the host of the room" — AnalyseMatchReplayAsync
+            // identifies the recording by THIS machine's own profile name and slot. On the
+            // host's machine that is the host; here it is us. See the comment on the record.
+            var ownResult = replay?.HostResult
+                            ?? Services.Multiplayer.MatchResultResolver.Unknown;
+
+            // 0.5 is sent, not swallowed. How often a player cannot read their own
+            // recording is exactly the number that decides whether agreement could ever be
+            // required, and staying quiet about it would leave the evidence counting only
+            // the matches that went well.
+            string? replaySha = null;
+            if (replay?.File != null)
+            {
+                try { replaySha = await HashService.ComputeSha256Async(replay.File.FullName); }
+                catch (Exception hashEx)
+                {
+                    DiagnosticLog.Write(
+                        $"MultiplayerTab.TryConfirmMatchAsync: could not hash '{replay.File.Name}' — {hashEx.Message}");
+                }
+            }
+
+            var resp = await _session.Api.ConfirmMatchAsync(new ConfirmMatchRequest
+            {
+                LobbyId = ctx.LobbyId!,
+                Result = ownResult,
+                ReplaySha256 = replaySha,
+                // The half that makes this a real cross-check rather than two opinions
+                // about possibly different games: the seed is shared by both players of
+                // one match, so the server can tell whether we read the same one.
+                GameSeed = replay is { RandomSeed: > 0 } ? replay.RandomSeed : null,
+                GameHostTime = replay is { HostTime: > 0 } ? replay.HostTime : null,
+            });
+
+            DiagnosticLog.Write(
+                $"MultiplayerTab.TryConfirmMatchAsync: sent own reading {ownResult:0.0} " +
+                $"for lobby={ctx.LobbyId} (host had already reported: {resp?.Matched})");
+        }
+        catch (Exception ex)
+        {
+            // Including a 403 from a room whose roster we are not in, and a 404 from one
+            // the sweep already removed. Nothing here is worth telling the player about:
+            // it changes nothing they can see.
+            DiagnosticLog.Write($"MultiplayerTab.TryConfirmMatchAsync: {ex.Message}");
+        }
+    }
+
     private async Task<ReportOutcome> TryReportMatchAsync(
         ModProfile profile, Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay)
     {
@@ -7435,6 +7806,20 @@ public partial class MultiplayerTab : UserControl
                 DiagnosticLog.Write(
                     $"MultiplayerTab.TryReportMatchAsync: no result — {decision.Reason}; logged as a draw");
 
+            // Hashed here rather than server-side, because the server never sees the
+            // file. Best-effort: a recording we cannot read is not a reason to lose the
+            // match report, it just means this one carries no fingerprint.
+            string? replaySha = null;
+            if (replay?.File != null)
+            {
+                try { replaySha = await HashService.ComputeSha256Async(replay.File.FullName); }
+                catch (Exception hashEx)
+                {
+                    DiagnosticLog.Write(
+                        $"MultiplayerTab.TryReportMatchAsync: could not hash '{replay.File.Name}' — {hashEx.Message}");
+                }
+            }
+
             var req = new ReportMatchRequest
             {
                 LobbyId = lobbyId,
@@ -7463,6 +7848,12 @@ public partial class MultiplayerTab : UserControl
                         : Services.Multiplayer.MatchResultResolver.ParticipantResult(
                             hostResult.Value, id == hostId),
                 }).ToList(),
+                ReplaySha256 = replaySha,
+                // Null rather than 0 when the recording did not carry them: the server
+                // indexes this pair to stop one game scoring twice, and a row of zeroes
+                // would collide with every other recording that also lacked them.
+                GameSeed = replay is { RandomSeed: > 0 } ? replay.RandomSeed : null,
+                GameHostTime = replay is { HostTime: > 0 } ? replay.HostTime : null,
             };
 
             var response = await _session.Api.ReportMatchAsync(req);
@@ -7476,7 +7867,8 @@ public partial class MultiplayerTab : UserControl
                 $"MultiplayerTab.TryReportMatchAsync: reported match lobby={lobbyId} " +
                 $"players={participantIds.Count} duration={durationSeconds}s " +
                 $"map='{replay?.MapName}' " +
-                $"hostResult={(hostResult.HasValue ? hostResult.Value.ToString("0.0") : "draw (no result)")}");
+                $"hostResult={(hostResult.HasValue ? hostResult.Value.ToString("0.0") : "draw (no result)")} " +
+                $"rated={response.Rated} reason={response.UnratedReason ?? "-"}");
             // Visible confirmation — and it has to survive the room closing, which is what
             // success itself causes, so it goes through the helper that falls back to a toast
             // when the lobby window is already gone.
@@ -8051,6 +8443,30 @@ public partial class MultiplayerTab : UserControl
             // Capture the facts of this match — roster, room, our role, the clock — so the
             // report at the end reads them instead of asking a room that may be gone by then.
             // See Services/Multiplayer/MatchContext.cs; this line is the fix's whole premise.
+            // Resolved ONCE, here, and never in the in-game panel's tick: GetInGameName
+            // reads the profile XML off disk, and that cell repaints on a timer.
+            _canIdentifyPlayerInReplay = true;
+            _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
+            try
+            {
+                var activeProfile = _currentLobbyModId != null
+                    ? ModRegistry.Find(_currentLobbyModId) : null;
+                if (activeProfile != null && _config != null)
+                {
+                    _canIdentifyPlayerInReplay = !string.IsNullOrWhiteSpace(
+                        UserDataService.GetInGameName(activeProfile, _config));
+                    if (!_canIdentifyPlayerInReplay)
+                        DiagnosticLog.Write(
+                            $"MultiplayerTab: no readable AoE3 profile name for " +
+                            $"'{activeProfile.DisplayName}' — this match will not be identifiable " +
+                            "in its own recording");
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"MultiplayerTab: profile-name probe failed: {ex.Message}");
+            }
+
             _matchContext = Services.Multiplayer.MatchContext.Capture(
                 _roomMembers.Keys,
                 _session?.CurrentLobbyId,
@@ -8192,10 +8608,90 @@ public partial class MultiplayerTab : UserControl
     /// left to warn about, and asking would imply there is.</item>
     /// </list>
     /// </summary>
+    /// <summary>
+    /// The server telling the room how the match ended.
+    ///
+    /// <para>This is what the GUEST never had. Reporting is host-only, and the room used
+    /// to just close underneath everyone else, so the only way to learn whether you had
+    /// won was to poll your own match history — three times, over fifteen seconds, hoping
+    /// the row had been written. The frame carries every participant's result and rating
+    /// change, so the card is complete the moment it arrives, without a single request.</para>
+    ///
+    /// <para><see cref="ResolveGuestResultAsync"/> stays as the fallback for a backend
+    /// that does not send this yet; it only runs when no frame arrived.</para>
+    /// </summary>
+    private void HandleMatchReported(JsonElement json)
+    {
+        // Only for a match we were actually in. A spectator who joined the room without
+        // playing gets the frame too, and has no business being shown a result card.
+        var ctx = _matchContext;
+        if (ctx == null && _matchPhase != MatchPhase.InGame) return;
+        if (ctx == null) return;
+
+        var myId = _session?.CurrentUser?.Id ?? ctx.ReporterUserId ?? "";
+        if (string.IsNullOrEmpty(myId)) return;
+
+        var report = new ReportMatchResponse
+        {
+            MatchId = json.TryGetProperty("match_id", out var mid) ? (mid.GetString() ?? "") : "",
+            Rated = json.TryGetProperty("rated", out var rd2) && rd2.ValueKind == JsonValueKind.True,
+            UnratedReason = json.TryGetProperty("unrated_reason", out var ur)
+                            && ur.ValueKind == JsonValueKind.String
+                ? ur.GetString() : null,
+        };
+
+        double? myResult = null;
+        if (json.TryGetProperty("participants", out var parts)
+            && parts.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var pEl in parts.EnumerateArray())
+            {
+                var uid = pEl.TryGetProperty("user_id", out var u) ? (u.GetString() ?? "") : "";
+                if (string.IsNullOrEmpty(uid)) continue;
+                var change = new RatingChange
+                {
+                    UserId = uid,
+                    Result = pEl.TryGetProperty("result", out var r)
+                             && r.ValueKind == JsonValueKind.Number ? r.GetDouble() : null,
+                    RatingBefore = pEl.TryGetProperty("rating_before", out var rb)
+                                   && rb.ValueKind == JsonValueKind.Number ? rb.GetDouble() : null,
+                    RatingAfter = pEl.TryGetProperty("rating_after", out var ra)
+                                  && ra.ValueKind == JsonValueKind.Number ? ra.GetDouble() : null,
+                };
+                report.RatingChanges.Add(change);
+                if (string.Equals(uid, myId, StringComparison.Ordinal)) myResult = change.Result;
+            }
+        }
+
+        // Not in the list: we were in the room but not in the match. Nothing to show.
+        if (myResult == null && !report.RatingChanges.Exists(
+                c => string.Equals(c.UserId, myId, StringComparison.Ordinal)))
+        {
+            DiagnosticLog.Write("match_reported: we are not among the participants — ignoring");
+            return;
+        }
+
+        var map = json.TryGetProperty("map_name", out var mn) && mn.ValueKind == JsonValueKind.String
+            ? mn.GetString() : null;
+
+        DiagnosticLog.Write(
+            $"match_reported: match={report.MatchId} rated={report.Rated} " +
+            $"reason={report.UnratedReason ?? "-"} myResult=" +
+            (myResult.HasValue ? myResult.Value.ToString("0.0") : "none"));
+
+        // Idempotent: the host has already painted its own card from the POST's answer,
+        // and it receives this frame too.
+        if (_matchPhase == MatchPhase.Result) return;
+
+        EnterResultPhase(ctx, report, null, myResult, map);
+    }
+
     private void EnterResultPhase(
         Services.Multiplayer.MatchContext? ctx = null,
         ReportMatchResponse? report = null,
-        MatchReplayInfo? replay = null)
+        MatchReplayInfo? replay = null,
+        double? resultOverride = null,
+        string? mapOverride = null)
     {
         _matchPhase = MatchPhase.Result;
         _aoe3Process = null;
@@ -8215,7 +8711,8 @@ public partial class MultiplayerTab : UserControl
         // rating change, so their card costs no extra request. Everyone else has to go
         // looking for it — see ResolveGuestResultAsync.
         var context = ctx ?? _matchContext;
-        if (report != null && context != null) ShowMatchResult(BuildOutcome(context, report, replay));
+        if (report != null && context != null)
+            ShowMatchResult(BuildOutcome(context, report, replay, resultOverride, mapOverride));
         else if (context != null) _ = ResolveGuestResultAsync(context);
     }
 
@@ -8223,8 +8720,16 @@ public partial class MultiplayerTab : UserControl
     /// Turn the report's answer into the card's model. Host-side, so our own participant
     /// row is the one to read.
     /// </summary>
+    /// <param name="resultOverride">
+    /// Our own score, when it came from the server rather than from a recording. The
+    /// GUEST has no recording, so the resolver below has nothing to work with and would
+    /// answer "unknown" for a match they had just won — the server's per-participant
+    /// result is the only thing that can tell them.
+    /// </param>
+    /// <param name="mapOverride">Map name from the same frame, for the same reason.</param>
     private MatchOutcomeView BuildOutcome(
-        Services.Multiplayer.MatchContext ctx, ReportMatchResponse report, MatchReplayInfo? replay)
+        Services.Multiplayer.MatchContext ctx, ReportMatchResponse report, MatchReplayInfo? replay,
+        double? resultOverride = null, string? mapOverride = null)
     {
         var myId = ctx.ReporterUserId ?? "";
         RatingChange? mine = null;
@@ -8237,10 +8742,18 @@ public partial class MultiplayerTab : UserControl
 
         // Our own score, from the same resolver the report itself used — so the card and
         // the row in History can never disagree about who won.
-        var hostResult = replay?.HostResult;
-        var decision = Services.Multiplayer.MatchResultResolver.ResolveHostResult(
-            hostResult, ctx.Participants, myId);
-        var myResult = decision.Result ?? Services.Multiplayer.MatchResultResolver.Unknown;
+        double myResult;
+        if (resultOverride.HasValue)
+        {
+            myResult = resultOverride.Value;
+        }
+        else
+        {
+            var hostResult = replay?.HostResult;
+            var decision = Services.Multiplayer.MatchResultResolver.ResolveHostResult(
+                hostResult, ctx.Participants, myId);
+            myResult = decision.Result ?? Services.Multiplayer.MatchResultResolver.Unknown;
+        }
 
         // Only a 1v1 has "the opponent"; past two players naming one would be a fiction.
         string? rivalLogin = null;
@@ -8251,7 +8764,7 @@ public partial class MultiplayerTab : UserControl
         return new MatchOutcomeView(
             MatchOutcomeView.Classify(myResult),
             ctx.ModId,
-            replay?.MapName,
+            mapOverride ?? replay?.MapName,
             ctx.DurationSeconds(DateTime.UtcNow),
             ctx.Participants.Count,
             mine?.RatingBefore,
@@ -8260,7 +8773,15 @@ public partial class MultiplayerTab : UserControl
             rival?.RatingAfter,
             _cachedStanding?.Wins ?? 0,
             _cachedStanding?.Losses ?? 0,
-            _cachedStanding?.Rd);
+            _cachedStanding?.Rd,
+            // Straight through from the server. The card explains WHY a match did not
+            // count, and only the server knows: the launcher used to guess, and guessed
+            // wrong for every team game and every unranked mod.
+            report.UnratedReason,
+            // Subordinate to it, and consulted only when the server's answer was the
+            // generic "nobody won" — the one thing the server cannot explain is why our
+            // own reading of the recording failed.
+            _lastLocalReadFailure);
     }
 
     /// <summary>
@@ -8478,17 +8999,25 @@ public partial class MultiplayerTab : UserControl
         // RecordingIndicator for why that claim cannot be made from here.
         var recording = Services.Multiplayer.RecordingIndicator.Classify(
             _config?.EnableGameRecording == true,
-            _currentLobbyModId != null ? _config?.GetState(_currentLobbyModId).GameRecordingApplied : null);
-        var (recKey, recBrush) = recording switch
+            _currentLobbyModId != null ? _config?.GetState(_currentLobbyModId).GameRecordingApplied : null,
+            _canIdentifyPlayerInReplay);
+        var (recKey, recBrush, recTip) = recording switch
         {
-            Services.Multiplayer.RecordingState.Requested => ("MpInGameRecordingOn", "MpOk"),
-            Services.Multiplayer.RecordingState.Off => ("MpInGameRecordingOff", "MpCaution"),
-            _ => ("MpInGameRecordingUnknown", "MpCaution"),
+            Services.Multiplayer.RecordingState.Requested =>
+                ("MpInGameRecordingOn", "MpOk", "MpInGameRecordingTooltip"),
+            Services.Multiplayer.RecordingState.Off =>
+                ("MpInGameRecordingOff", "MpCaution", "MpInGameRecordingTooltip"),
+            // Says the wrong noun on purpose — the cell is labelled RECORDING and this is
+            // not about recording — because it answers the question the cell is really
+            // for: whether this match is going to count. The tooltip carries the detail
+            // and the fix.
+            Services.Multiplayer.RecordingState.ProfileUnreadable =>
+                ("MpInGameRecordingNoProfile", "MpCaution", "MpInGameRecordingNoProfileTooltip"),
+            _ => ("MpInGameRecordingUnknown", "MpCaution", "MpInGameRecordingTooltip"),
         };
         _lobbyWindow!.InGameRecordingText.Text = Strings.Get(recKey);
         _lobbyWindow!.InGameRecordingText.Foreground = (Brush)Application.Current.FindResource(recBrush);
-        _lobbyWindow!.InGameRecordingText.ToolTip =
-            TooltipHelper.Wrap(Strings.Get("MpInGameRecordingTooltip"));
+        _lobbyWindow!.InGameRecordingText.ToolTip = TooltipHelper.Wrap(Strings.Get(recTip));
 
         // Peer list. We just enumerate room members minus ourselves
         // — every member that's in the lobby IS reachable on the

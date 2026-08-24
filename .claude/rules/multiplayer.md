@@ -81,8 +81,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
   Worker. Sign-in is **Discord OAuth** (a state flow shaped like device flow),
   **not** GitHub, yielding a JWT cached in `launcher-config.json`. **Match history
-  IS now wired (unranked "match log"); ELO is not surfaced and replay upload
-  (`UploadAsync`) is still scaffolded with no live caller.** Authoritative source:
+  IS wired, and so is the ELO: Glicko-2 lives in the backend
+  (`src/elo/glicko2.ts`) and the launcher shows a rating in five places — the
+  title-bar chip, the Profile tab, every roster line, the end-of-match card and
+  the ladder card. Replay upload (`UploadAsync`) is still scaffolded with no live
+  caller.** Authoritative source:
   the `MultiplayerSession.cs` class doc-comment + `LobbyApiClient.cs`. Scattered
   `WinDivert` / `PeerMesh` / `n2n` / `ZeroTier` mentions are historical comments.
   **Trust the code over both the README and stale comments here.**
@@ -534,8 +537,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   that never happened. Every meta segment is likewise dropped when empty, so an old row
   renders exactly as it always did.
 
-- **The History subtab is fed by a HOST-ONLY, unranked match report at game
-  exit — don't re-add per-player reporting or an ELO/win-loss display.** The
+- **The History subtab is fed by a HOST-ONLY match report at game exit — don't
+  re-add PER-PLAYER reporting.** (This bullet used to also forbid an ELO display.
+  That half is obsolete: showing the rating is now the point. What stays banned is
+  every player reporting the same match, which would insert it N times.) The
   Multiplayer → History tab (`RefreshHistoryAsync`/`BuildHistoryRow`) was fully
   built but empty forever because nothing called `ReportMatchAsync`. Now
   `MultiplayerTab.TryReportMatchAsync` (invoked from `OnGameExitedAsync`, AFTER
@@ -1621,12 +1626,160 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   entirely when unknown**, the same refusal `PlayerStanding` makes: the 1500 the server
   hands new players must never be rendered as if it were earned.
 
-- **Backend gaps the multiplayer redesign is waiting on** (documented, never faked):
+- **Backend gaps the multiplayer redesign is waiting on** (documented, never faked).
+  Four of the six are now CLOSED — see the ELO bullet below — and what remains is:
   per-room ping needs `radmin_ip` on `GET /lobbies` — without it the PING column shows
-  YOUR latency, identical on every row, which is why sorting by it is a no-op; per-member
-  ELO in the lobby roster needs `rating` on the room-state member object (or a batch
-  `/matches/elo?ids=`), since 8 single-user calls do not fit in 20/min; the rooms view's
-  PEAK HOURS and RANKING cards need an activity-by-hour endpoint and a top-N that do not
-  exist; a `match_reported` frame carrying the rating changes would replace the guest's
-  four polls with zero; and the REPLAY cell reads "not uploaded" because
-  `ReplayUploadService.UploadAsync` still has no live caller.
+  YOUR latency, identical on every row, which is why sorting by it is a no-op; and the
+  REPLAY cell reads "not uploaded" because `ReplayUploadService.UploadAsync` still has no
+  live caller. (Closed: per-member ELO now rides on the room-state member object;
+  PEAK HOURS and RANKING are fed by `GET /stats/community`; and `match_reported` carries
+  the result, so the guest's **three** polls — this bullet used to say four — are now only
+  a fallback for an old backend.)
+
+- **What scores, what does not, and who decides — the ELO rules.** The short version:
+  **only Wars of Liberty, only 1v1, only with a readable recording.** The long version is
+  worth reading before touching any of it, because every clause below was a bug first.
+
+  **(1) The SERVER decides, and says WHY.** `POST /matches` answers `rated` plus an
+  `unrated_reason`, and the launcher only renders it (`MatchOutcomeView.UnratedNoteKey`).
+  This is not tidiness. The policy used to live on both sides, and they drifted: the card
+  told the player "no contó para el ELO de nadie" while the backend was busy feeding that
+  exact match to Glicko as a draw between everyone. **Never re-derive "did this count" in
+  the launcher** — it cannot know which mods have a ladder, and the day that list changes
+  it would be wrong again.
+
+  **(2) An unrated match is STORED, never rejected.** The history is a record of what was
+  played; rating is a separate judgement about it. The reasons are `mod_not_ranked`,
+  `not_1v1`, `no_decided_result`, `no_lobby`, `participants_not_in_lobby`,
+  `implausible_timing` and `duplicate_recording`, each with its own string — because
+  "tick Record Game" is the right advice for a missing recording and useless for a team
+  game, and sending someone to fix what was never the problem is worse than saying nothing.
+
+  **(3) 1v1 comes for free, and always did.** `MatchResultResolver.ResolveHostResult`
+  refuses anything but exactly two participants (a recording names ONE loser, which says
+  nothing about the other three), so a team game has only ever reported all-0.5. What was
+  missing was the server declining to rate that — which is why team games silently moved
+  ratings for months. The server now requires exactly two participants itself, which also
+  stops a patched launcher claiming a decided three-player match.
+
+  **(4) `games_played` counts RATED matches**, not played ones — a consequence of (1)
+  that made two launcher strings lie until they were reworded (`MpProfileGames`,
+  `MpProfileProvisional`).
+
+  **(5) The anti-replay fingerprint is the SHA-256 of the recording FILE**
+  (`ReportMatchRequest.ReplaySha256` → `matches.replay_sha256`, partial UNIQUE index).
+  Not the game's contents (map + player names): a rematch on the same map with the same
+  people is a different match and must still score, and a content-derived identity could
+  not tell them apart. Free side effect: it is the idempotency key `POST /matches` never
+  had. **What it does NOT stop is two colluding accounts** — that would need the loser's
+  client to corroborate, or the server to parse the file. Both were considered and left out.
+
+  **(6) Participants are checked against the roster frozen at Start**
+  (`lobbies.roster_at_start`, written by `LobbyRoom.handleStart`), **not against
+  `lobby_members`** — leaving a room DELETES that row, and the player most likely to leave
+  first is the one who just lost, so live membership would reject most real matches while
+  catching almost nothing. The question worth asking is "did these people play", and Start
+  is when it has an answer.
+
+  **(7) A provisional rating is never painted beside a name.** `RatingDisplay.ShouldShow`
+  needs the rating AND its deviation, and refuses while `rd > 110`
+  (`MatchOutcomeView.ProvisionalRd`, matched by the leaderboard's `rd <= 110`). The server
+  hands every new player 1500; showing it turns a placeholder into a claim about their
+  skill. The Profile tab is the one exception, where the word "provisional" sits next to
+  it. **After the 2026-08 ratings reset this means nobody shows an ELO in the roster for
+  a while. That is correct, not a bug.**
+
+  **(8) The reset.** `scripts/reset-elo.ts` emptied `elo_ratings` and nulled every
+  `rating_before`/`rating_after`, because those numbers were produced by the bug in (1).
+  `matches` and `match_participants.result` were untouched — the history is whole. It is a
+  script and NOT a migration on purpose: a migration is remembered in the `_migrations`
+  table of the database it ran against, so restoring the backup and starting up would
+  re-run it and delete the ratings just restored. Rollback is the `.backup` file named in
+  `DEPLOY.md`.
+
+  **(9) `match_reported` is published BEFORE `rooms.close`, and that order is
+  load-bearing.** The room closing is how the match used to end for the guest, who has no
+  recording and so polled their own history three times over fifteen seconds hoping the
+  row had been written. The frame carries every participant's **`result`** — not just the
+  ratings, which is the trap: without the result the guest's card would say "no result"
+  even when they had won. `OnRoomDisconnected` gained a `_matchPhase != Result` guard, or
+  the close arriving behind the frame re-enters the result phase and fires the very polls
+  this removed. `ResolveGuestResultAsync` stays as the old-backend fallback.
+
+  **(10) The ladder and peak-hours cards share ONE endpoint** (`GET /stats/community`),
+  fetched once per session on the same `_activityLoaded` gate as the recent-matches card.
+  The budget is per IP and shared behind a Radmin NAT, so two routes would cost double for
+  nothing. `rank` comes from the server and **must not be renumbered** client-side. Peak
+  hours is bucketed from `lobbies.created_at` — rooms OPENED, which is what the card's
+  wording says, not matches played — sent in UTC and shifted to local by
+  `CommunityStatsView.ToLocalHours`; below `MinSampleRooms` the card hides rather than
+  dressing four rooms up as a finding.
+
+  **(11) Only the HOST measures. The opponent's score is an inference, not a
+  measurement** — `MatchResultResolver.ParticipantResult` is literally
+  `1.0 - hostResult`. Correct for a 1v1, where there is exactly one winner, but it means
+  the server gets ONE reading of something two machines can read.
+
+  Both of them already read it. `OnGameExitedAsync` runs on **every** client and
+  `AnalyseMatchReplayAsync` is not gated on the host, so the guest finds their own
+  recording, validates it against their own slot, and reaches an independent verdict.
+  **Watch the names there:** `hostName` is `GetInGameName` — *this machine's* profile —
+  and `hostSlot` is `outcome.RecorderSlot`, so `MatchReplayInfo.HostResult` means "the
+  result of whoever recorded this file", which on a guest's PC is the guest. They read
+  the other way round and are documented in place rather than renamed, because
+  `ResolveHostResult` / `HostResultFrom` in the tested pure service are named to match
+  and renaming half the set would be worse than leaving it.
+
+  That second reading is now SENT — `TryConfirmMatchAsync` → `POST /matches/confirm` →
+  `match_confirmations` — and it is **evidence, not a vote: it gates nothing**, matches
+  rate exactly as they did before. Reporting stays host-only (N reporters would insert N
+  copies of one match). The server compares it with `compareReadings` and writes a log
+  line; `inconclusive` when either side is 0.5, because "nobody could read it" is not
+  "they contradict each other" and merging the two would make the data measure the wrong
+  thing. The table is keyed by `(lobby_id, user_id)` and NOT by match id, because the
+  guest usually leaves the game before the host and their confirmation routinely arrives
+  before the match row exists; the lobby row always exists, since those are never deleted.
+
+  **What this is for, and what it is not.** With the roster gate in (6), a cheater
+  already needs a second account that really joined and played — and if they control
+  both, they control both readings, so **this does nothing against two colluding
+  accounts**. What it catches is the likelier thing in a small community: **a host who
+  plays a real opponent, loses, and reports a win.** Deciding whether to actually
+  REQUIRE agreement is deferred on purpose until the data says how often the second
+  reading arrives at all; `DEPLOY.md` has the query, and "no confirmation" is the number
+  that decides it.
+
+  **(12) The MATCH is identified by `gamerandomseed` + `gamehosttime`, and matching
+  player NAMES was considered and rejected.** Two keys the `.age3Yrec` settings
+  dictionary has carried all along (`ReplayHeader.RandomSeed` / `HostTime`; the parser
+  already walked the whole dictionary, they are simply surfaced now). The seed is what
+  makes every machine generate the same map, so both players of one game carry it and
+  two different games do not.
+
+  Measured on six real recordings before any of this was written: six different seeds,
+  including **two back-to-back games by the same host, host clocks fifteen apart, seeds
+  22235 and 15346**. Neither a player name nor a timestamp separates that pair. Pinned
+  against the real fixture in `ReplayParserTests` (seed `21427`, clock `1310758`) — the
+  numbers are read out of a genuine file, not invented to match a reading of the format.
+
+  It buys two things: (a) the server can tell whether the host and their opponent read
+  the **same** match, which is what makes the second reading in (11) a real cross-check
+  rather than two opinions about possibly different games; and (b) an anti-reuse key
+  that identifies the **game** rather than the **file**, so re-packing a recording no
+  longer slips past the SHA-256 in (5).
+
+  **Rejected on purpose: comparing AoE3 profile names.** Publishing each player's
+  in-game name in the room and checking the other human in the recording against it was
+  the obvious design and is a worse one — profile names are frequently nothing like the
+  Discord account, changing them in AoE3 barely works, and a player with a blank or odd
+  name would silently stop being verifiable. The seed needs no name at all. Don't
+  re-propose it.
+
+  **Load-bearing details:** the pair is indexed together and **never the seed alone**
+  (largest value seen is 32747, about 15 bits — alone it would collide across unrelated
+  matches); a 0 or absent value is stored as **NULL, never 0**, and the unique index is
+  partial, so a scenario or an unreadable field can never block a legitimate report; and
+  **`game_host_time` is recorded but takes no part in the verdict.** Only one side of
+  each match was available to measure, so whether the guest's recording carries the same
+  clock is plausible and unproven — `same_game` is decided on the seed alone until a
+  two-machine test settles it. `DEPLOY.md` has the query that does.

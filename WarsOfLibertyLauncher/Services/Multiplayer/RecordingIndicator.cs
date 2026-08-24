@@ -1,4 +1,4 @@
-namespace WarsOfLibertyLauncher.Services.Multiplayer;
+﻿namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
 /// <summary>What the launcher can honestly say about recording during a match.</summary>
 public enum RecordingState
@@ -11,6 +11,18 @@ public enum RecordingState
 
     /// <summary>Recording is wanted but this mod's profile has not been written yet.</summary>
     Unknown,
+
+    /// <summary>
+    /// The player's AoE3 profile name cannot be read, so even a perfect recording could
+    /// not be tied to this match.
+    ///
+    /// <para>A different axis from the other three — nothing to do with recording — but
+    /// the same answer to the question the cell actually asks, which is whether this
+    /// match is going to count. It takes precedence: telling somebody to tick Record
+    /// Game while the launcher cannot identify them is sending them to fix the wrong
+    /// thing.</para>
+    /// </summary>
+    ProfileUnreadable,
 }
 
 /// <summary>
@@ -41,8 +53,19 @@ public static class RecordingIndicator
     /// written, which is a legitimate "not yet" — the game creates the profile on its
     /// first run — rather than a failure.
     /// </param>
-    public static RecordingState Classify(bool enableGameRecording, bool? appliedForThisMod)
+    /// <param name="canIdentifyPlayer">
+    /// Whether the player's own AoE3 profile name could be read. Passed in as a plain
+    /// bool rather than looked up here, because reading it touches disk and this cell is
+    /// repainted on a timer — the caller resolves it once when the match starts.
+    /// </param>
+    public static RecordingState Classify(
+        bool enableGameRecording, bool? appliedForThisMod, bool canIdentifyPlayer = true)
     {
+        // First, because it outranks the rest: with no readable profile name the result
+        // cannot be read no matter what the recording does, so leading with anything
+        // about recording would point the player at the wrong thing.
+        if (!canIdentifyPlayer) return RecordingState.ProfileUnreadable;
+
         // The player's own choice wins outright, and it is knowable with certainty whether
         // or not the profile was ever reached.
         if (!enableGameRecording) return RecordingState.Off;

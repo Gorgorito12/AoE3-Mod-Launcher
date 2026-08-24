@@ -2317,10 +2317,15 @@ public static class Strings
 
         // --- Profile: the standing, all of it server-side ---
         ["MpProfileRating"] = new() { [LangEn] = "Rating {0}", [LangEs] = "Puntuación {0}" },
+        // "Rated", not "played". The number is games_played from elo_ratings, and that
+        // counter only advances on a match the server actually scored — a 1v1, on a mod
+        // with a ladder, whose winner could be read. Everything else is in the History
+        // tab and not in here, so "matches played" would tell someone with ten matches
+        // behind them that they had played none.
         ["MpProfileGames"] = new()
         {
-            [LangEn] = "{0} matches played",
-            [LangEs] = "{0} partidas jugadas",
+            [LangEn] = "{0} rated matches",
+            [LangEs] = "{0} partidas puntuadas",
         },
         // The denominator is shown on purpose: most matches have no readable result, so the
         // rate covers far fewer games than the player has played, and hiding that would make
@@ -2332,8 +2337,8 @@ public static class Strings
         },
         ["MpProfileProvisional"] = new()
         {
-            [LangEn] = "provisional — no matches yet",
-            [LangEs] = "provisional — todavía sin partidas",
+            [LangEn] = "provisional — no rated matches yet",
+            [LangEs] = "provisional — todavía sin partidas puntuadas",
         },
         ["MpChatMatchRecorded"] = new()
         {
@@ -2434,6 +2439,34 @@ public static class Strings
         ["MpActivityRecentTitle"] = new() { [LangEn] = "RECENT MATCHES", [LangEs] = "ÚLTIMAS PARTIDAS" },
         // A match whose result couldn't be read (no recording, or a team game). Most
         // stored matches are these, so the row says so instead of looking like a win.
+        // The ladder card. "Decided" is the column that matters and the one that needs a
+        // header of its own: most stored matches have no winner, so a table headed
+        // "matches" would invite the reader to divide by the wrong number.
+        ["MpActivityRankingTitle"] = new() { [LangEn] = "RANKING", [LangEs] = "CLASIFICACI\u00D3N" },
+        ["MpActivityRankColHash"] = new() { [LangEn] = "#", [LangEs] = "#" },
+        ["MpActivityRankColPlayer"] = new() { [LangEn] = "PLAYER", [LangEs] = "JUGADOR" },
+        ["MpActivityRankColElo"] = new() { [LangEn] = "ELO", [LangEs] = "ELO" },
+        ["MpActivityRankColDecided"] = new() { [LangEn] = "DECIDED", [LangEs] = "DECIDIDAS" },
+        ["MpActivityRankColPct"] = new() { [LangEn] = "%", [LangEs] = "%" },
+        // Peak hours. The source is rooms OPENED, not matches played, and the wording says
+        // so on purpose: the two are not the same number and we are not going to imply
+        // they are. Hours are the viewer's own local time.
+        ["MpActivityPeakTitle"] = new() { [LangEn] = "PEAK HOURS", [LangEs] = "HORAS PUNTA" },
+        ["MpActivityPeakRange"] = new()
+        {
+            [LangEn] = "{0}:00 \u2013 {1}:00",
+            [LangEs] = "{0}:00 \u2013 {1}:00",
+        },
+        ["MpActivityPeakSubtitle"] = new()
+        {
+            [LangEn] = "when rooms get opened \u2014 {0} in the last {1} days, your local time",
+            [LangEs] = "cuando se abren salas \u2014 {0} en los \u00FAltimos {1} d\u00EDas, en tu hora local",
+        },
+        ["MpActivityPeakBarTip"] = new()
+        {
+            [LangEn] = "{0}:00 \u2014 {1} rooms",
+            [LangEs] = "{0}:00 \u2014 {1} salas",
+        },
         ["MpActivityNotCounted"] = new() { [LangEn] = "didn't count", [LangEs] = "no contó" },
         // Quick replies above the chat composer. These are TYPED into the box, so they
         // are the player's own words — keep them short and natural in both languages
@@ -3318,6 +3351,23 @@ public static class Strings
             [LangEs] = "Sala abierta en {0} \u2014 c\u00F3digo {1}. Busco con qui\u00E9n jugar.",
         },
         // End-of-match card (design handoff 1f).
+        // The in-game RECORDING cell's fourth state. The label says RECORDING and this
+        // is not about recording, but the cell answers "is this match going to count",
+        // and an unreadable profile answers it just as loudly as recording being off.
+        ["MpInGameRecordingNoProfile"] = new()
+        {
+            [LangEn] = "\u26A0 profile unreadable",
+            [LangEs] = "\u26A0 perfil ilegible",
+        },
+        ["MpInGameRecordingNoProfileTooltip"] = new()
+        {
+            [LangEn] = "Your AoE3 profile name could not be read, so this match cannot be "
+                     + "matched to its recording and will not count towards anyone's rating. "
+                     + "Open AoE3 once and make sure your profile has a name.",
+            [LangEs] = "No se pudo leer el nombre de tu perfil de AoE3, as\u00ED que esta partida no "
+                     + "se podr\u00E1 asociar con su grabaci\u00F3n y no contar\u00E1 para el ELO de nadie. "
+                     + "Abre AoE3 una vez y aseg\u00FArate de que tu perfil tiene nombre.",
+        },
         ["MpResultWin"] = new() { [LangEn] = "Victory", [LangEs] = "Victoria" },
         ["MpResultLoss"] = new() { [LangEn] = "Defeat", [LangEs] = "Derrota" },
         // NOT "draw": 0.5 is what the backend stores when the outcome could not be read.
@@ -3330,6 +3380,89 @@ public static class Strings
             [LangEs] = "La partida no se grab\u00F3, as\u00ED que no hay forma de saber qui\u00E9n gan\u00F3 "
                      + "\u2014 no cont\u00F3 para el ELO de nadie. Marca \u201CRecord Game\u201D en la "
                      + "pantalla de configuraci\u00F3n de AoE3 antes de la siguiente.",
+        },
+        // The rest of the "it didn't count" family. The server says WHY, and the advice
+        // has to match the cause: telling someone to tick Record Game after a team game
+        // sends them to fix something that was never the problem. MpResultNoneBody above
+        // stays the message for a missing recording, and the fallback for a reason this
+        // build has never heard of.
+        ["MpResultUnratedTeam"] = new()
+        {
+            [LangEn] = "Only one-on-one matches count towards the rating — a recording names "
+                     + "one loser, which says nothing about who won a team game. This one is in "
+                     + "your history all the same.",
+            [LangEs] = "Solo las partidas uno contra uno cuentan para el ELO — una grabación "
+                     + "nombra a un perdedor, y eso no dice quién ganó una partida por equipos. "
+                     + "Igualmente queda en tu historial.",
+        },
+        ["MpResultUnratedMod"] = new()
+        {
+            [LangEn] = "This mod has no ladder yet, so the match counted towards no one's rating. "
+                     + "It is in your history all the same.",
+            [LangEs] = "Este mod todavía no tiene clasificación, así que la partida no contó "
+                     + "para el ELO de nadie. Igualmente queda en tu historial.",
+        },
+        ["MpResultUnratedDuplicate"] = new()
+        {
+            [LangEn] = "This recording had already been reported, so it did not count a second "
+                     + "time. If the match was real, it is already in your history.",
+            [LangEs] = "Esta grabación ya se había reportado, así que no contó una segunda vez. "
+                     + "Si la partida fue real, ya está en tu historial.",
+        },
+        ["MpResultUnratedRoster"] = new()
+        {
+            [LangEn] = "Someone in this report was not in the room when the game started, so it "
+                     + "counted towards no one's rating.",
+            [LangEs] = "Alguien de este reporte no estaba en la sala cuando empezó la partida, "
+                     + "así que no contó para el ELO de nadie.",
+        },
+        ["MpResultUnratedTiming"] = new()
+        {
+            [LangEn] = "The times reported for this match don't add up, so it counted towards no "
+                     + "one's rating. A game has to run at least a few minutes.",
+            [LangEs] = "Los tiempos de esta partida no cuadran, así que no contó para el ELO de "
+                     + "nadie. Una partida tiene que durar al menos unos minutos.",
+        },
+        // The LOCAL half: why the launcher could not read a result. These only appear
+        // when the server had nothing more specific to say, and they exist because all
+        // five causes used to produce MpResultNoneBody — "tick Record Game" — which is
+        // right for a missing recording and useless advice for the rest.
+        ["MpResultUnratedNoProfile"] = new()
+        {
+            [LangEn] = "Your AoE3 profile name could not be read, so there was no way to find "
+                     + "you among the players in the recording. The match is in your history "
+                     + "all the same.",
+            [LangEs] = "No se pudo leer el nombre de tu perfil de AoE3, as\u00ED que no hubo forma "
+                     + "de encontrarte entre los jugadores de la grabaci\u00F3n. Igualmente la "
+                     + "partida queda en tu historial.",
+        },
+        ["MpResultUnratedNoRoster"] = new()
+        {
+            [LangEn] = "The room was already gone when the match ended, so there was nobody to "
+                     + "check the recording against.",
+            [LangEs] = "La sala ya no exist\u00EDa cuando termin\u00F3 la partida, as\u00ED que no hab\u00EDa "
+                     + "contra qui\u00E9n contrastar la grabaci\u00F3n.",
+        },
+        ["MpResultUnratedUnreadable"] = new()
+        {
+            [LangEn] = "The recording of this match could not be read \u2014 it may have been cut "
+                     + "short when the game closed.",
+            [LangEs] = "La grabaci\u00F3n de esta partida no se pudo leer \u2014 puede que se cortara "
+                     + "al cerrarse el juego.",
+        },
+        ["MpResultUnratedAmbiguous"] = new()
+        {
+            [LangEn] = "The recording does not say who won, so the match counted towards no "
+                     + "one's rating.",
+            [LangEs] = "La grabaci\u00F3n no dice qui\u00E9n gan\u00F3, as\u00ED que la partida no cont\u00F3 para "
+                     + "el ELO de nadie.",
+        },
+        ["MpResultUnratedNoLobby"] = new()
+        {
+            [LangEn] = "This match was reported without a room, so there was no way to check who "
+                     + "played. It counted towards no one's rating.",
+            [LangEs] = "Esta partida se reportó sin sala, así que no había forma de comprobar "
+                     + "quiénes jugaron. No contó para el ELO de nadie.",
         },
         ["MpResultRatingBefore"] = new() { [LangEn] = "was {0}", [LangEs] = "antes {0}" },
         ["MpResultMinutes"] = new() { [LangEn] = "{0} min", [LangEs] = "{0} min" },

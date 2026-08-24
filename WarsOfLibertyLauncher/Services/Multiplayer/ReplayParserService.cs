@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -93,13 +93,39 @@ public static class ReplayParserService
     /// it reaches the games people care about. <paramref name="MapPool"/> keeps the
     /// other value rather than throwing it away.</para>
     /// </summary>
+    /// <param name="RandomSeed">
+    /// The map seed, and with <paramref name="HostTime"/> the closest thing this format
+    /// has to an identifier for the MATCH itself.
+    ///
+    /// <para>It is the number that makes every machine generate the same map, so by
+    /// construction both players of one game carry it and two different games do not.
+    /// Measured across six real recordings: six different seeds, including two
+    /// back-to-back games by the same host on the same evening (22235 and 15346, host
+    /// clocks fifteen apart) — which is exactly the case that a name or a timestamp
+    /// cannot tell apart.</para>
+    ///
+    /// <para>Only 15 bits in practice (the largest seen is 32747), so it is never used
+    /// alone: paired with the host clock, two distinct matches would have to collide on
+    /// both. Zero when the file did not carry it.</para>
+    /// </param>
+    /// <param name="HostTime">
+    /// The host's clock at match start, as the recording records it. Travels with the
+    /// seed and is never the sole discriminator.
+    ///
+    /// <para><b>Unverified across machines.</b> Only one side of each match was available
+    /// to measure, so whether the guest's recording carries the same value is plausible
+    /// but not established. Nothing is allowed to depend on it until a two-machine test
+    /// settles it — see the multiplayer rules.</para>
+    /// </param>
     public sealed record ReplayHeader(
         string GameVersion,
         string GameName,
         string MapName,
         string MapPool,
         int PlayerCount,
-        IReadOnlyList<ReplayPlayer> Players);
+        IReadOnlyList<ReplayPlayer> Players,
+        uint RandomSeed = 0,
+        uint HostTime = 0);
 
     /// <summary>
     /// Unwraps the container: checks the magic, reads the declared decompressed size
@@ -199,7 +225,11 @@ public static class ReplayParserService
             MapName: file.Length > 0 ? file : pool,
             MapPool: pool,
             PlayerCount: unchecked((int)GetUInt(dict, "gamenumplayers")),
-            Players: players);
+            Players: players,
+            // Already in the dictionary this method walks — nothing new is parsed, two
+            // more keys are simply surfaced. See the record's docs for what they buy.
+            RandomSeed: GetUInt(dict, "gamerandomseed"),
+            HostTime: GetUInt(dict, "gamehosttime"));
     }
 
     /// <summary>Convenience for the whole path: bytes on disk to a parsed header.</summary>

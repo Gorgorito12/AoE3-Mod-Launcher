@@ -141,7 +141,8 @@ public static class MatchResultCard
         });
         line.Children.Add(new TextBlock
         {
-            Text = delta.Value >= 0 ? $"+{delta.Value}" : delta.Value.ToString(),
+            // Non-null: the guard at the top of this method already returned on a null delta.
+            Text = RatingDisplay.FormatDelta(delta)!,
             Foreground = Brush(delta.Value >= 0 ? "MpOk" : "MpDestructiveText"),
             FontSize = Size("MpBodySize"),
             FontWeight = FontWeights.SemiBold,
@@ -237,7 +238,9 @@ public static class MatchResultCard
     private static FrameworkElement? BuildFooter(MatchOutcomeView model, Actions actions)
     {
         string? note = null;
-        if (model.Verdict == MatchVerdict.NoResult) note = Strings.Get("MpResultNoneBody");
+        if (model.Verdict == MatchVerdict.NoResult)
+            note = Strings.Get(MatchOutcomeView.UnratedNoteKey(
+                model.UnratedReason, model.LocalFailure));
         else if (MatchOutcomeView.IsProvisional(model.Rd)) note = Strings.Get("MpResultProvisional");
 
         if (note == null && actions.OnRematch == null && actions.OnDismiss == null) return null;

@@ -174,10 +174,26 @@
          reference specifies #22303e for all three, so brightening the shared brush
          would move two surfaces nobody asked about. 2.09:1 — visible, still quiet. -->
     <SolidColorBrush x:Key="ChromeVersionRim" Color="#3A4B60"/>
+    <!-- Fill of that same chip. It shipped with NO background at all, so it read as
+         loose text with a hairline near it rather than as a label, and was reported
+         as not standing out. 1.28:1 against the title bar is an elevation, not a
+         block: what cuts the chip out is the rim above, which only works once there
+         is a surface behind it. Its own key rather than ChromePopupBg, which happens
+         to carry the same value but means "menu surface" and paints all three
+         dropdowns - one of them changing would silently drag the other along. -->
+    <SolidColorBrush x:Key="ChromeVersionBg" Color="#1C2A3A"/>
     <SolidColorBrush x:Key="ChromeTextDim" Color="#93A4B5"/>       <!-- wordmark, idle tab -->
     <SolidColorBrush x:Key="ChromeTextFaint" Color="#5D7085"/>     <!-- version, IP, ELO -->
     <SolidColorBrush x:Key="ChromeTextSoft" Color="#C3CFDA"/>      <!-- "Connected", caption glyphs -->
     <SolidColorBrush x:Key="ChromeTextStrong" Color="#E6EDF4"/>    <!-- player name -->
+    <!-- One rung above Strong, for the brand button's HOVER only. The hover used to
+         land on ChromeTextSoft (11.79:1) and was reported as indistinguishable from
+         rest - this is 17.04:1, and stops short of the #FFFFFF that pressed/open
+         already use so the three states stay three. MpTextHeading is this exact
+         colour, and is deliberately NOT reused: per the family comment above, the
+         header does not draw from the multiplayer brushes, which LobbyWindow and
+         CreateLobbyDialog share. -->
+    <SolidColorBrush x:Key="ChromeTextBright" Color="#F0F5FB"/>    <!-- brand hover -->
     <SolidColorBrush x:Key="ChromeOk" Color="#3FBF6A"/>            <!-- capsule dot -->
     <!-- Surface of every menu that hangs off the header (brand, MODS, notifications).
          One value for the three, because they had three: #1B2025 (a warm grey from the

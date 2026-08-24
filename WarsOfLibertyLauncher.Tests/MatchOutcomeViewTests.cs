@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Services.Multiplayer;
@@ -186,5 +186,110 @@ public class RecordingIndicatorTests
         // player the one thing they must not believe without ticking the box.
         Assert.Equal(RecordingState.Unknown, RecordingIndicator.Classify(true, null));
         Assert.Equal(RecordingState.Unknown, RecordingIndicator.Classify(true, false));
+    }
+
+    // ---------------- who gets to explain a match that did not count ----------------
+
+    [Fact]
+    public void ASpecificServerReasonWinsOverTheLocalOne()
+    {
+        // THE test. Both statements are true about a team game whose recording was also
+        // unreadable — but only one of them is the thing the player would change, and
+        // telling them their profile was unreadable would send them off to fix something
+        // that was never going to make a 2v2 count.
+        Assert.Equal(
+            "MpResultUnratedTeam",
+            MatchOutcomeView.UnratedNoteKey("not_1v1", LocalReadFailure.RecordingUnreadable));
+
+        Assert.Equal(
+            "MpResultUnratedMod",
+            MatchOutcomeView.UnratedNoteKey("mod_not_ranked", LocalReadFailure.NoProfileName));
+    }
+
+    [Fact]
+    public void TheGenericServerReasonDefersToTheLocalOne()
+    {
+        // "no_decided_result" says nobody won without saying why, and the why is the only
+        // part the launcher knows.
+        Assert.Equal(
+            "MpResultUnratedNoProfile",
+            MatchOutcomeView.UnratedNoteKey("no_decided_result", LocalReadFailure.NoProfileName));
+
+        Assert.Equal(
+            "MpResultUnratedUnreadable",
+            MatchOutcomeView.UnratedNoteKey("no_decided_result", LocalReadFailure.RecordingUnreadable));
+
+        Assert.Equal(
+            "MpResultUnratedAmbiguous",
+            MatchOutcomeView.UnratedNoteKey("no_decided_result", LocalReadFailure.RecordingAmbiguous));
+
+        Assert.Equal(
+            "MpResultUnratedNoRoster",
+            MatchOutcomeView.UnratedNoteKey("no_decided_result", LocalReadFailure.RosterUnknown));
+    }
+
+    [Fact]
+    public void AnOldBackendSaysNothingAndTheLocalReasonStillSpeaks()
+    {
+        // Null is what a backend that predates unrated_reason sends. It must not silence
+        // the one explanation that does not need a server at all.
+        Assert.Equal(
+            "MpResultUnratedNoProfile",
+            MatchOutcomeView.UnratedNoteKey(null, LocalReadFailure.NoProfileName));
+    }
+
+    [Fact]
+    public void NothingWrongLocallyKeepsTheOriginalMessage()
+    {
+        // The regression guard: every match that reads correctly today must keep showing
+        // exactly what it shows today. "No recording found" is the ordinary case, and its
+        // advice — turn recording on — is the one piece of advice that is right.
+        Assert.Equal(
+            "MpResultNoneBody",
+            MatchOutcomeView.UnratedNoteKey("no_decided_result", LocalReadFailure.NoRecordingFound));
+
+        Assert.Equal(
+            "MpResultNoneBody",
+            MatchOutcomeView.UnratedNoteKey("no_decided_result", LocalReadFailure.None));
+
+        Assert.Equal("MpResultNoneBody", MatchOutcomeView.UnratedNoteKey(null));
+    }
+
+    [Fact]
+    public void AnUnknownServerReasonFallsBackRatherThanShowingNothing()
+    {
+        // A server newer than this launcher. Better the general message than a blank.
+        Assert.Equal(
+            "MpResultNoneBody",
+            MatchOutcomeView.UnratedNoteKey("some_future_reason", LocalReadFailure.None));
+    }
+
+    [Fact]
+    public void AnUnreadableProfileOutranksEverythingElse()
+    {
+        // It has to come first: with no readable profile name the match cannot produce a
+        // result whatever the recording does, so leading with "recording is on" would be
+        // reassuring the player about the wrong thing.
+        Assert.Equal(
+            RecordingState.ProfileUnreadable,
+            RecordingIndicator.Classify(true, true, canIdentifyPlayer: false));
+
+        Assert.Equal(
+            RecordingState.ProfileUnreadable,
+            RecordingIndicator.Classify(false, null, canIdentifyPlayer: false));
+    }
+
+    [Fact]
+    public void AReadableProfileChangesNothingThatWorkedBefore()
+    {
+        // The regression guard for the default: every existing caller passes no third
+        // argument and must keep getting exactly what it got.
+        Assert.Equal(RecordingState.Requested, RecordingIndicator.Classify(true, true));
+        Assert.Equal(RecordingState.Off, RecordingIndicator.Classify(false, true));
+        Assert.Equal(RecordingState.Unknown, RecordingIndicator.Classify(true, null));
+
+        Assert.Equal(
+            RecordingState.Requested,
+            RecordingIndicator.Classify(true, true, canIdentifyPlayer: true));
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
@@ -15,6 +15,44 @@ public enum MatchVerdict
     /// Nobody knows. Not a draw — see <see cref="MatchOutcomeView.Classify"/>.
     /// </summary>
     NoResult,
+}
+
+/// <summary>
+/// Why the LAUNCHER could not read a result out of this match, when it could not.
+///
+/// <para>Distinct from the server's <c>unrated_reason</c> and subordinate to it: the
+/// server decides whether a match counts, and only the launcher knows why its own
+/// reading of a recording failed. Every one of these ends up reported as an all-draws
+/// match, so from the outside they are indistinguishable — which is exactly the problem
+/// they exist to fix. Until now all five produced the same advice, "tick Record Game",
+/// which is right for one of them and sends the player to fix the wrong thing in the
+/// other four.</para>
+/// </summary>
+public enum LocalReadFailure
+{
+    /// <summary>Nothing went wrong locally — either it was read, or the reason lies
+    /// with the server.</summary>
+    None,
+
+    /// <summary>The player's own AoE3 profile name could not be read, so there was no
+    /// way to find them among the players in their own recording.</summary>
+    NoProfileName,
+
+    /// <summary>The room's participants were not known by the time the match ended, so
+    /// there was no head count to check the recording against.</summary>
+    RosterUnknown,
+
+    /// <summary>No recording of this match was found. The common case, and the only one
+    /// where "tick Record Game" is the right thing to say.</summary>
+    NoRecordingFound,
+
+    /// <summary>Recordings were found but none could be read — truncated, still being
+    /// written, or corrupt.</summary>
+    RecordingUnreadable,
+
+    /// <summary>The recording was read and simply does not name a winner this launcher
+    /// can use.</summary>
+    RecordingAmbiguous,
 }
 
 /// <summary>
@@ -37,6 +75,13 @@ public enum MatchVerdict
 /// <param name="Wins">Decided wins, all-time — for the DECIDED cell.</param>
 /// <param name="Losses">Decided losses, all-time.</param>
 /// <param name="Rd">Glicko rating deviation, for the provisional note.</param>
+/// <param name="UnratedReason">
+/// Why the server did not score this match, verbatim from its answer, or null when it
+/// did. The launcher deliberately does NOT work this out for itself: the policy of what
+/// counts lives on the server, and the last time a copy of it lived here too the two
+/// drifted — the card told the player "it counted towards no one's rating" while the
+/// backend was rating it. Trailing and defaulted so an older path can leave it out.
+/// </param>
 public sealed record MatchOutcomeView(
     MatchVerdict Verdict,
     string? ModId,
@@ -49,8 +94,59 @@ public sealed record MatchOutcomeView(
     double? RivalRating,
     int Wins,
     int Losses,
-    double? Rd)
+    double? Rd,
+    string? UnratedReason = null,
+    LocalReadFailure LocalFailure = LocalReadFailure.None)
 {
+    /// <summary>
+    /// Which explanation to show for a match that did not score.
+    ///
+    /// <para>The point is that the advice has to fit the cause. "Tick Record Game" is
+    /// the right thing to say about a game nobody recorded, and useless about a team
+    /// game or a mod with no ladder — recording those changes nothing, and telling
+    /// someone otherwise sends them to fix something that was never the problem.</para>
+    ///
+    /// <para>An unrecognised reason — a server newer than this launcher — falls back
+    /// to the recording message, which is the overwhelmingly common cause.</para>
+    /// </summary>
+    public static string UnratedNoteKey(string? reason, LocalReadFailure local = LocalReadFailure.None)
+    {
+        // The SERVER's reason wins whenever it is specific. It knows things the launcher
+        // does not — whether the mod has a ladder, whether the players were really in the
+        // room, whether this recording already scored — and a 2v2 must be told that only
+        // 1v1s count even when the recording was also unreadable. Both are true; only one
+        // is the thing to change.
+        var fromServer = reason switch
+        {
+            "not_1v1" => "MpResultUnratedTeam",
+            "mod_not_ranked" => "MpResultUnratedMod",
+            "duplicate_recording" => "MpResultUnratedDuplicate",
+            "participants_not_in_lobby" => "MpResultUnratedRoster",
+            "implausible_timing" => "MpResultUnratedTiming",
+            "no_lobby" => "MpResultUnratedNoLobby",
+            _ => null,
+        };
+        if (fromServer != null) return fromServer;
+
+        // Left: "no_decided_result", which says nobody won without saying why — and an
+        // older backend, which says nothing at all. Both defer to whatever the launcher
+        // learned while trying to read the recording itself.
+        //
+        // This is NOT the policy moving back to the client. The server still decides
+        // WHETHER the match counts; the launcher only explains why its own reading
+        // failed, which is the one thing the server cannot know.
+        return local switch
+        {
+            LocalReadFailure.NoProfileName => "MpResultUnratedNoProfile",
+            LocalReadFailure.RosterUnknown => "MpResultUnratedNoRoster",
+            LocalReadFailure.RecordingUnreadable => "MpResultUnratedUnreadable",
+            LocalReadFailure.RecordingAmbiguous => "MpResultUnratedAmbiguous",
+            // NoRecordingFound and None both land on the original message, whose advice
+            // — turn recording on — is exactly right for them.
+            _ => "MpResultNoneBody",
+        };
+    }
+
     /// <summary>
     /// Turn a stored per-player score into a verdict.
     ///

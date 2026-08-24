@@ -774,13 +774,12 @@
                          the screen doesn't read as empty when only one room exists —
                          which is what it replaces, a half-screen illustration.
 
-                         ⚠ The reference gives this strip THREE cards. Only this one is
-                         built, because the other two have no data to build from: PEAK
-                         HOURS needs activity bucketed by time of day and RANKING needs a
-                         top-N by rating, and the backend exposes neither — matches/elo
-                         is per-user, not a leaderboard. Faking either would break the
-                         handoff's own "don't invent backend fields" rule, so they wait
-                         for the endpoints. -->
+                         All THREE of the reference's cards are built now: the backend
+                         grew GET /stats/community, which answers the top-N by rating and
+                         the activity histogram in one request (one, because the budget
+                         is per IP and both cards open on the same click). Each still
+                         hides itself when its data is missing — see the comment on the
+                         card grid below. -->
                     <Border x:Name="ActivityStrip"
                             Grid.Row="2"
                             Visibility="Collapsed"
@@ -810,11 +809,101 @@
                                            FontSize="{StaticResource MpLabelSize}"
                                            VerticalAlignment="Center"/>
                             </Grid>
-                            <TextBlock x:Name="ActivityRecentTitle"
-                                       Foreground="{DynamicResource MpTextLabel}"
-                                       FontSize="{StaticResource MpPillSize}"
-                                       FontWeight="SemiBold"/>
-                            <StackPanel x:Name="ActivityRecentList" Margin="0,8,0,0"/>
+                            <!-- The reference's THREE cards, side by side. Each one hides
+                                 itself when its data is missing rather than showing a
+                                 heading over nothing: right after a ratings reset the
+                                 ladder is legitimately empty for weeks, and a small
+                                 community can go a month without enough rooms to call
+                                 anything a peak hour. An empty card would read as broken;
+                                 an absent one reads as "not yet". -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel x:Name="ActivityRecentCard" Grid.Column="0">
+                                    <TextBlock x:Name="ActivityRecentTitle"
+                                               Foreground="{DynamicResource MpTextLabel}"
+                                               FontSize="{StaticResource MpPillSize}"
+                                               FontWeight="SemiBold"/>
+                                    <StackPanel x:Name="ActivityRecentList" Margin="0,8,0,0"/>
+                                </StackPanel>
+
+                                <StackPanel x:Name="ActivityRankingCard"
+                                            Grid.Column="2"
+                                            Visibility="Collapsed">
+                                    <TextBlock x:Name="ActivityRankingTitle"
+                                               Foreground="{DynamicResource MpTextLabel}"
+                                               FontSize="{StaticResource MpPillSize}"
+                                               FontWeight="SemiBold"/>
+                                    <Grid x:Name="ActivityRankingHeader" Margin="0,8,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="22"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="52"/>
+                                            <ColumnDefinition Width="62"/>
+                                            <ColumnDefinition Width="44"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="ActivityRankColHash" Grid.Column="0"
+                                                   Foreground="{DynamicResource MpTextFaint}"
+                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="ActivityRankColPlayer" Grid.Column="1"
+                                                   Foreground="{DynamicResource MpTextFaint}"
+                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="ActivityRankColElo" Grid.Column="2"
+                                                   Foreground="{DynamicResource MpTextFaint}"
+                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right"/>
+                                        <TextBlock x:Name="ActivityRankColDecided" Grid.Column="3"
+                                                   Foreground="{DynamicResource MpTextFaint}"
+                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right"/>
+                                        <TextBlock x:Name="ActivityRankColPct" Grid.Column="4"
+                                                   Foreground="{DynamicResource MpTextFaint}"
+                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <StackPanel x:Name="ActivityRankingList"/>
+                                </StackPanel>
+
+                                <StackPanel x:Name="ActivityPeakCard"
+                                            Grid.Column="4"
+                                            Visibility="Collapsed">
+                                    <TextBlock x:Name="ActivityPeakTitle"
+                                               Foreground="{DynamicResource MpTextLabel}"
+                                               FontSize="{StaticResource MpPillSize}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="ActivityPeakHeadline"
+                                               Margin="0,8,0,0"
+                                               Foreground="{DynamicResource MpTextHeading}"
+                                               FontSize="{StaticResource MpStatValueSize}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="ActivityPeakSubtitle"
+                                               Margin="0,3,0,0"
+                                               Foreground="{DynamicResource MpTextDim}"
+                                               FontSize="{StaticResource MpLabelSize}"
+                                               TextWrapping="Wrap"/>
+                                    <UniformGrid x:Name="ActivityPeakBars"
+                                                 Rows="1" Columns="24"
+                                                 Height="34"
+                                                 Margin="0,10,0,0"/>
+                                </StackPanel>
+
+                                <Border Grid.Column="1" Width="1" Margin="18,2,18,2"
+                                        Background="{DynamicResource MpRimFaint}"/>
+                                <Border Grid.Column="3" Width="1" Margin="18,2,18,2"
+                                        Background="{DynamicResource MpRimFaint}"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
                     </Grid>
