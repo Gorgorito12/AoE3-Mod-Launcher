@@ -955,8 +955,11 @@
                          door with it. That failed on both halves at once: a status
                          readout does not read as pressable (its whole affordance was a
                          hand cursor and a rim shift between two nearly invisible greys),
-                         and even pressed it never said what it did. The door is the "?"
-                         button beside it now. One control, one job. -->
+                         and even pressed it never said what it did. A "?" beside it was tried
+                         next and failed for the other half of the same reason: a symbol
+                         says help exists but never says about what. The door is now a
+                         LABELLED button in the Multiplayer tab, which is where Radmin
+                         matters at all. -->
                     <Border x:Name="ConnectionChip"
                             Visibility="Collapsed"
                             VerticalAlignment="Center"
@@ -989,20 +992,6 @@
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-
-                    <!-- The guide's door. Shares the capsule's visibility (both are set
-                         by SetConnectionChip) so it appears exactly when multiplayer has
-                         something to say — including when Radmin is OFF, where the
-                         capsule still shows the lobby's "Connected" with no address and
-                         the guide is needed most. All of its colours live in
-                         ChromeHelpButton; nothing here paints. -->
-                    <Button x:Name="RadminGuideButton"
-                            Content="?"
-                            Visibility="Collapsed"
-                            VerticalAlignment="Center"
-                            Margin="0,0,16,0"
-                            Style="{StaticResource ChromeHelpButton}"
-                            Click="RadminGuideButton_Click"/>
 
                     <!-- Hidden with its neighbours rather than left floating: signed
                          out, both the capsule and the account block collapse, and a

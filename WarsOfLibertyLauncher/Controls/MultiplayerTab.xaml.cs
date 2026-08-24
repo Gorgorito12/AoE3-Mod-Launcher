@@ -649,6 +649,15 @@ public partial class MultiplayerTab : UserControl
     /// turned auto-open off can still summon the overlay when they
     /// genuinely need the tutorial.
     /// </summary>
+    /// <summary>
+    /// "Help connecting" in the Rooms toolbar — the assistant's entry point when the
+    /// red banner is not on screen, which is exactly when Radmin is working and the
+    /// banner has collapsed. Same destination as the banner's "Show steps"; two doors
+    /// for two situations, not a duplicate.
+    /// </summary>
+    private void RadminHelpButton_Click(object sender, RoutedEventArgs e)
+        => ShowRadminAssistant();
+
     private void RadminShowStepsButton_Click(object sender, RoutedEventArgs e)
     {
         ShowRadminAssistant();
@@ -879,13 +888,6 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Wired to the new "Show steps" button on the Radmin banner.
-    /// Exposed publicly so MainWindow could trigger it from a global
-    /// shortcut in the future without re-implementing the same logic.
-    /// </summary>
-    public void OpenRadminAssistantWindow() => ShowRadminAssistant();
-
-    /// <summary>
     /// Wires the control to its dependencies. Called once from
     /// MainWindow after the session is constructed. The
     /// <paramref name="computeModFingerprint"/> callback hashes the
@@ -1076,10 +1078,22 @@ public partial class MultiplayerTab : UserControl
         // (RadminPrimaryButton) stays for them.
         RadminShowStepsButton.Content = Strings.Get("RadAsstBannerShowSteps");
         var mode = _config?.RadminAssistantMode;
-        RadminShowStepsButton.Visibility =
-            string.Equals(mode, "Never", StringComparison.OrdinalIgnoreCase)
-                ? Visibility.Collapsed
-                : Visibility.Visible;
+        var assistantOff = string.Equals(mode, "Never", StringComparison.OrdinalIgnoreCase);
+        RadminShowStepsButton.Visibility = assistantOff ? Visibility.Collapsed : Visibility.Visible;
+
+        // The toolbar door follows the SAME gate. That setting is called "Never" and
+        // its own hint says the assistant is disabled — leaving a visible way in would
+        // make the option a lie. (The header "?" this replaced ignored the mode, which
+        // was one more reason it was the wrong place for it.)
+        // Prefixed like its neighbours ("↻  Actualizar", "+  Crear sala") so the three
+        // read as one row. A plain Unicode mark, not an emoji and not an icon font —
+        // the house rule bans emoji in labels and this row deliberately avoids pulling
+        // a glyph font. Note the "?" is a PREFIX to a word here, never the whole label:
+        // on its own it was tried in the header and said help existed without ever
+        // saying about what.
+        RadminHelpButton.Content = "?  " + Strings.Get("MpRoomsRadminHelp");
+        RadminHelpButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRadminHelpTooltip"));
+        RadminHelpButton.Visibility = assistantOff ? Visibility.Collapsed : Visibility.Visible;
 
         SignInTitleText.Text = Strings.Get("MpSignInTitle");
         SignInBodyText.Text = Strings.Get("MpSignInBody");

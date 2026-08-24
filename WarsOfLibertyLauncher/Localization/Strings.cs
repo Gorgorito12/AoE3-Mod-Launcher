@@ -2282,6 +2282,21 @@ public static class Strings
         },
         // -------- Multiplayer (v1.0) --------
         ["MpSubtabRooms"] = new() { [LangEn] = "Rooms", [LangEs] = "Salas" },
+        // The Radmin assistant's door in the Rooms toolbar. It names the PROBLEM it
+        // solves, not the tool: someone who needs this guide is precisely someone who
+        // does not yet know what Radmin is. It also has to stay true once you ARE
+        // connected — the window's own title, "Connect to the AoE3 network", would be
+        // a lie then, since in that state it is a status panel rather than a guide.
+        ["MpRoomsRadminHelp"] = new()
+        {
+            [LangEn] = "Help connecting",
+            [LangEs] = "Ayuda para conectar",
+        },
+        ["MpRoomsRadminHelpTooltip"] = new()
+        {
+            [LangEn] = "How to connect with other players through Radmin VPN",
+            [LangEs] = "Cómo conectarte con otros jugadores mediante Radmin VPN",
+        },
         ["MpSubtabFriends"] = new() { [LangEn] = "Friends", [LangEs] = "Amigos" },
         ["MpSubtabProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
         ["MpSubtabHistory"] = new() { [LangEn] = "History", [LangEs] = "Historial" },
@@ -2387,16 +2402,6 @@ public static class Strings
         // that the VPN is up and which address peers will reach them on.
         ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
         ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
-        // Tooltip of the "?" beside the capsule — the only door to the Radmin guide
-        // once Radmin works (the banner carrying "Show steps" collapses exactly then).
-        // It names the destination and nothing else: this string used to open with
-        // "Click to…", which was the capsule apologising for not looking clickable.
-        // A question mark does not need to be told it is a button.
-        ["MpChipOpenGuide"] = new()
-        {
-            [LangEn] = "Radmin VPN guide — how to connect with other players",
-            [LangEs] = "Guía de Radmin VPN — cómo conectarte con otros jugadores",
-        },
         ["MpChipElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
         ["MpChipReconnecting"] = new() { [LangEn] = "Reconnecting…", [LangEs] = "Reconectando…" },
         // Title-bar account menu. Sign out lives ONLY here now — the account row that

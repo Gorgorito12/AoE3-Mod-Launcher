@@ -264,6 +264,22 @@
                             </Grid>
                         </Grid>
                     </Border>
+                    <!-- The door to the Radmin assistant, and the third attempt at
+                         making it findable. It was the connection capsule (an action
+                         with no sign it was one), then a "?" beside it (a sign with no
+                         hint of what it opened) — a symbol says help exists but never
+                         says about what. A word does both, and here it has room for one.
+
+                         In THIS toolbar rather than the header because Radmin only
+                         matters in multiplayer: this is where someone goes when they
+                         cannot get online, beside controls they already use. It costs
+                         the header nothing, which was the point of the redesign. -->
+                    <Button x:Name="RadminHelpButton"
+                            Click="RadminHelpButton_Click"
+                            Style="{StaticResource MpSecondaryButton}"
+                            Height="32"
+                            Padding="12,0"
+                            Margin="0,0,16,0"/>
                     <Button x:Name="RefreshButton"
                             Click="RefreshButton_Click"
                             Style="{StaticResource MpSecondaryButton}"

@@ -11428,7 +11428,6 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(status))
         {
             ConnectionChip.Visibility = Visibility.Collapsed;
-            if (RadminGuideButton != null) RadminGuideButton.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -11447,14 +11446,6 @@ public partial class MainWindow : Window
         ConnectionChipDetail.Text = hasDetail ? detail : string.Empty;
         ConnectionChipDetail.Visibility = hasDetail ? Visibility.Visible : Visibility.Collapsed;
         ConnectionChip.Visibility = Visibility.Visible;
-        // Same visibility as the capsule: the guide is worth offering whenever
-        // multiplayer has anything to report, and that includes Radmin being OFF —
-        // the capsule still shows the lobby's "Connected" with no address there.
-        if (RadminGuideButton != null)
-        {
-            RadminGuideButton.Visibility = Visibility.Visible;
-            RadminGuideButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpChipOpenGuide"));
-        }
         // The capsule is one of the two halves the divider separates, so it decides
         // the divider's fate together with the account block.
         RefreshChromeDivider();
@@ -11492,29 +11483,6 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write($"Display scaling probe failed: {ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// The "?" beside the connection capsule opens the Radmin guide.
-    ///
-    /// <para>It is the guide's only door once Radmin is working: the other one is the
-    /// "Show steps" button inside the red banner, and that banner collapses exactly when
-    /// everything is fine — so retiring the permanent banner also retired the guide, and
-    /// <c>OpenRadminAssistantWindow</c> was left without a single caller.</para>
-    ///
-    /// <para>The capsule itself briefly played this role and it did not work: a status
-    /// readout does not read as pressable, and pressing it never announced what it did.
-    /// A question mark answers both at once, which is why the door is its own control
-    /// rather than a second job bolted onto the readout.</para>
-    ///
-    /// <para>Works from any tab: the assistant only needs MultiplayerTab's config (set in
-    /// Attach at startup) and its owning Window, both of which resolve while the tab is
-    /// collapsed.</para>
-    /// </summary>
-    private void RadminGuideButton_Click(object sender, RoutedEventArgs e)
-    {
-        try { MultiplayerView?.OpenRadminAssistantWindow(); }
-        catch (Exception ex) { DiagnosticLog.Write($"Radmin guide open failed: {ex.Message}"); }
     }
 
     /// <summary>
