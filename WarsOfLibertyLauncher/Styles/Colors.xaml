@@ -166,7 +166,14 @@
     <SolidColorBrush x:Key="ChromeTitleBg" Color="#0C131B"/>       <!-- title bar -->
     <SolidColorBrush x:Key="ChromeNavBg" Color="#141E29"/>         <!-- nav row -->
     <SolidColorBrush x:Key="ChromeNavRule" Color="#1E2B38"/>       <!-- nav → content seam -->
-    <SolidColorBrush x:Key="ChromeRim" Color="#22303E"/>           <!-- version chip, capsule, divider -->
+    <SolidColorBrush x:Key="ChromeRim" Color="#22303E"/>           <!-- capsule, divider -->
+    <!-- The version chip's rim alone. ChromeRim (#22303E) is 1.39:1 against the title
+         bar — a hairline nobody can see — and the chip is the one place that was
+         reported as too faint to read. It gets its own token rather than lifting
+         ChromeRim, which also paints the connection capsule and the nav divider: the
+         reference specifies #22303e for all three, so brightening the shared brush
+         would move two surfaces nobody asked about. 2.09:1 — visible, still quiet. -->
+    <SolidColorBrush x:Key="ChromeVersionRim" Color="#3A4B60"/>
     <SolidColorBrush x:Key="ChromeTextDim" Color="#93A4B5"/>       <!-- wordmark, idle tab -->
     <SolidColorBrush x:Key="ChromeTextFaint" Color="#5D7085"/>     <!-- version, IP, ELO -->
     <SolidColorBrush x:Key="ChromeTextSoft" Color="#C3CFDA"/>      <!-- "Connected", caption glyphs -->

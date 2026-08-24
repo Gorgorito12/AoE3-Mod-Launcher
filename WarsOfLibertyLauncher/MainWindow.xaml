@@ -376,12 +376,16 @@
                              App.OnStartup pin it to integer device pixels).
                              DecodePixelWidth=256 decodes the NATIVE frame so the
                              only resample is the renderer's single HighQuality
-                             bicubic downscale (256 → 20-40 physical px). The
+                             bicubic downscale (256 → the physical box). The
                              earlier 64 cap pre-shrank in the decoder first, so a
-                             non-integer 64→40 second downscale softened the icon;
-                             decoding native keeps it sharp. Costs ~256 KB RAM
-                             instead of ~16 KB — trivial, and worth it for a crisp
-                             brand mark. (Size stays 20x20: sharper, not bigger.) -->
+                             non-integer second downscale softened the icon;
+                             decoding native keeps it as sharp as it can be. Costs
+                             ~256 KB RAM instead of ~16 KB — trivial, and worth it
+                             for a crisp brand mark. (16x16 per the header reference;
+                             this replaced an earlier 20x20 rule — the maintainer was
+                             shown that a detailed raster mark loses detail at that
+                             size and chose fidelity, so softness here is accepted,
+                             not a regression.) -->
                         <Image Width="16" Height="16"
                                Margin="0,0,10,0"
                                VerticalAlignment="Center"
@@ -391,30 +395,18 @@
                                              DecodePixelWidth="256"
                                              CacheOption="OnLoad"/>
                             </Image.Source>
-                            <!-- Illuminate with the text. The icon is a
-                                 bitmap, not a glyph, so it can't follow
-                                 Foreground like the wordmark does — it
-                                 brightens via Opacity instead: 0.7 dimmed
-                                 at rest (same rest tone as the chevron),
-                                 1.0 full on hover or while the brand menu
-                                 is open. Bound to the ancestor brand
-                                 button's IsMouseOver / Tag because the
-                                 Image lives in the button CONTENT, not its
-                                 template, so the template's Foreground
-                                 triggers can't reach it. -->
-                            <Image.Style>
-                                <Style TargetType="Image">
-                                    <Setter Property="Opacity" Value="0.7"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
-                                            <Setter Property="Opacity" Value="1"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" Value="open">
-                                            <Setter Property="Opacity" Value="1"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Image.Style>
+                            <!-- FULL opacity, and no Style at all. The icon used to sit
+                                 at 0.7 and brighten to 1.0 on hover, back when the
+                                 wordmark beside it was near-white serif and the mark had
+                                 to stay behind it. Against the near-black bar that costs
+                                 ~23% of the brightness of artwork that is already dark
+                                 (mean luminance 77/255 at render size), which is what made
+                                 the whole block read as washed out. The reference asks for
+                                 a size and a colour and says nothing about opacity — the
+                                 dimming was ours. The button still answers the mouse: the
+                                 wordmark and the chevron follow the template's Foreground
+                                 triggers, so the affordance survives without knocking the
+                                 mark back at rest. -->
                         </Image>
                         <!-- Body font, 12, muted — the prototype's wordmark. Its COLOUR is
                              not set here on purpose: it comes from the button's Style
@@ -427,16 +419,22 @@
                                    FontSize="{StaticResource MpMetaSize}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
-                        <!-- Chevron flips ▾↔▴ in code-behind on open/close
-                             to signal the dropdown is expanded. Named so
-                             BrandMenuButton_Click can swap the glyph. -->
+                        <!-- Chevron flips ▾↔▴ in code-behind on open/close to signal
+                             the dropdown is expanded. Named so BrandMenuButton_Click can
+                             swap the glyph.
+
+                             No Opacity: it carried a LOCAL 0.7 that nothing ever raised —
+                             unlike the icon's, which at least lifted on hover — so it was
+                             the one permanently dimmed element in the bar, compositing to
+                             4.13:1 against 7.31:1 for the text it sits beside. With it
+                             gone the chevron inherits the button's Foreground and finally
+                             illuminates WITH the wordmark. -->
                         <TextBlock x:Name="BrandChevron"
                                    Text="&#xE70D;"
                                    FontFamily="Segoe MDL2 Assets"
                                    FontSize="10"
                                    VerticalAlignment="Center"
-                                   Margin="6,1,0,0"
-                                   Opacity="0.7"/>
+                                   Margin="6,1,0,0"/>
                     </StackPanel>
                 </Button>
                 <!-- Version of the RUNNING binary, from
@@ -444,18 +442,26 @@
                      and the only source that keeps a WoL-style letter suffix). Static:
                      no IsHitTestVisibleInChrome, so it is part of the drag handle. That
                      also means it can carry no tooltip - a caption hit never raises
-                     IsMouseOver - which is fine for a label already fully visible. -->
+                     IsMouseOver - which is fine for a label already fully visible.
+
+                     Its text is ChromeTextDim, not the ChromeTextFaint the reference
+                     names: at 11px that was 3.67:1, under the 4.5:1 floor for normal
+                     text, and it was reported as unreadable. A local Foreground is safe
+                     HERE because the chip is a SIBLING of the brand button, not part of
+                     its content - inside it, a local value would beat the template's
+                     illumination triggers, which is the trap that has broken this button
+                     twice. -->
                 <Border x:Name="VersionChip"
                         Grid.Column="1"
                         VerticalAlignment="Center"
                         Padding="5,1"
                         CornerRadius="{StaticResource ChromeVersionRadius}"
-                        BorderBrush="{DynamicResource ChromeRim}"
+                        BorderBrush="{DynamicResource ChromeVersionRim}"
                         BorderThickness="1">
                     <TextBlock x:Name="VersionChipText"
                                FontFamily="{DynamicResource BodyFont}"
                                FontSize="{StaticResource ChromeVersionSize}"
-                               Foreground="{DynamicResource ChromeTextFaint}"
+                               Foreground="{DynamicResource ChromeTextDim}"
                                VerticalAlignment="Center"/>
                 </Border>
 
