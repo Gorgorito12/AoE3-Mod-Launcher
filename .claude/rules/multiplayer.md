@@ -1721,12 +1721,42 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   "provisional", because there the word explains something real (you have no rated
   matches; that swing was large) rather than qualifying a bare number.
 
-  **The two backend feeds this needs, and the trap in one of them.** `GET /lobbies`
-  returns `host.rating` and the global presence frame carries `rating` per user, both
-  added for this. The lobby query joins with **`LEFT JOIN elo_ratings`** and it has to
-  stay that way: an inner join would make **every room whose host has no rating row
-  vanish from the rooms list** — worse than a missing number, and silent. Same trap as
-  the membership query in `LobbyRoom`'s hello.
+  **WHO fills in the starting 1500 is the SERVER, and the client must never do it.**
+  This is what the reversal above actually cost, and it took a second report to find:
+  the rule was applied in the launcher and NOT in the backend, which kept three copies
+  of the old one. `GET /lobbies`, the presence frame and the room roster all sent `null`
+  for a player with no `elo_ratings` row, and after the ratings reset that is EVERY
+  player — so the rooms table and the Players panel stayed blank while the chip read
+  1500, because `GET /matches/elo/:userId` had always synthesised the default. Two
+  endpoints of the same server disagreeing about the same person.
+
+  The server fills it in because **the server is the only side that can tell the two
+  cases apart**: it ran the query, so it knows the difference between "no row, therefore
+  unrated, therefore 1500" and "I could not answer". The launcher cannot — a missing
+  field looks identical to an older backend or a failed fetch, so substituting there
+  would paint 1500 for both and that IS the invention the surviving rule forbids.
+  `src/elo/glicko2.ts` settles it: `row?.rating ?? DEFAULT_RATING` is what already
+  RATES an unrated player's first match, so refusing to SHOW that same number was the
+  incoherence. The defaults are exported from there (`DEFAULT_RATING` / `DEFAULT_RD` /
+  `DEFAULT_VOLATILITY`) and used at all four sites, because typing 1500 out per site is
+  how they came to disagree.
+
+  **`null` on the wire now has ONE meaning: no answer.** `GlobalChatRoom.onlineUsers`
+  keeps a `ratingsKnown` flag for exactly that — a user missing from the map after a
+  SUCCESSFUL query is unrated and gets the default, while a query that THREW leaves
+  everybody null, because it told us nothing about anyone. Collapsing those two would
+  either hide every rating again or invent one for a lookup that failed.
+
+  **The two `LEFT JOIN`s stay, for a reason unrelated to the default.** In
+  `lobbies/rest.ts` an inner join would make **every room whose host has no rating row
+  vanish from the rooms list** — worse than a missing number, and silent. In
+  `LobbyRoom`'s hello that same query **is the membership check**, so an inner join
+  would throw everyone with no rating out of the room with `4004 not_in_lobby` — right
+  after a reset, everyone.
+
+  **The RANKING is untouched by all of this** because it selects `FROM elo_ratings`
+  (`stats/rest.ts`), i.e. real rows only: a synthesised default cannot reach it, so
+  someone who never played still does not appear in the table.
 
   **(8) The reset.** `scripts/reset-elo.ts` emptied `elo_ratings` and nulled every
   `rating_before`/`rating_after`, because those numbers were produced by the bug in (1).
