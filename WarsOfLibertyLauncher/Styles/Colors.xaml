@@ -179,6 +179,13 @@
     <SolidColorBrush x:Key="ChromeTextSoft" Color="#C3CFDA"/>      <!-- "Connected", caption glyphs -->
     <SolidColorBrush x:Key="ChromeTextStrong" Color="#E6EDF4"/>    <!-- player name -->
     <SolidColorBrush x:Key="ChromeOk" Color="#3FBF6A"/>            <!-- capsule dot -->
+    <!-- Surface of every menu that hangs off the header (brand, MODS, notifications).
+         One value for the three, because they had three: #1B2025 (a warm grey from the
+         old theme), #314556 (literally the colour the title bar itself used to be), and
+         #0F1A2B. Measured elevation, not eyeballed — 1.28 against the title bar, 1.16
+         against the nav row, 1.30 against the content beneath. It does not need to
+         shout: the two-tone rim is what cuts the card out of its backdrop. -->
+    <SolidColorBrush x:Key="ChromePopupBg" Color="#1C2A3A"/>
 
     <!-- Caption-button states, as KEYS so a single window can restyle its own
          min/max/close without touching the other ~15 that share the TitleBar

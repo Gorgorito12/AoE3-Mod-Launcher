@@ -1171,19 +1171,36 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   outer band (`MenuBorderOuter` = `#000000`), painted via the outer
   `Border`'s `Background` + `Padding="1"`. Together that's a 3px effective
   boundary that reads as a discrete card over **any** backdrop: the dark
-  outer rim pops against bright surfaces (hero image, the lighter
-  `BgSidebar` chrome), and the bright inner line pops against dark
-  surfaces (`BgPanel` interior, `BgBase` content). The first attempt was a
+  outer rim pops against bright surfaces (the hero image), and the bright
+  inner line pops against dark ones. The first attempt was a
   single brighter brush at 2px (the `MpDivider` lift recipe `#2C313A →
   #3A434F` reapplied) — the maintainer reported "yo lo veo igual", so the
   recipe escalated to two-tone. The drop shadow lives on the OUTER band so
   it skirts the whole composite rim; don't move it to the inner Border or
-  the shadow gets clipped behind the black band. **Don't apply this rim to
-  the brand popup** (`BuildBrandPopup`) — that one uses an `AccentBrush`
-  (gold) border on purpose, which is already visually distinctive and
-  marks it as the launcher's primary menu. Standard sibling popups
-  (settings, mod switch, gear) get the two-tone rim; the gold brand popup
-  is the deliberate exception.
+  the shadow gets clipped behind the black band.
+  **The brand popup used to be the documented EXCEPTION to this — a single
+  gold `AccentBrush` border — and it no longer is.** That exception was
+  written when the chrome was `BgSidebar` `#314556`; the title bar is
+  `ChromeTitleBg` `#0C131B` now, and a warm gold rim over a cold near-black
+  bar made the menu read as belonging to a different application. Reported
+  as "no se ve bien". **When the chrome moves, the rules that justified
+  themselves by naming the old chrome colour have to move with it** — that
+  is the general lesson, and this bullet's own "lighter BgSidebar chrome"
+  phrasing was a second instance of it.
+  **All three menus that hang off the header — brand, MODS switcher,
+  notifications — now share one recipe**: surface `ChromePopupBg` `#1C2A3A`,
+  the two-tone rim, `RadiusPopupInner`/`Outer` (6/7), and a 20/4/0.6 shadow.
+  They previously disagreed on every one of those axes AND with each other
+  (`#1B2025` warm grey / `#314556`, literally the pre-redesign title-bar
+  colour / `#0F1A2B`), which is why "align it with its siblings" had no
+  single target. Text follows the chrome ramp: `ChromeTextStrong` for
+  titles (12.3:1), `ChromeTextDim` for secondary (5.7:1) — measured, after
+  a first pass left subtitles at 2.4-2.6:1 by stacking `Opacity = 0.85` on
+  top of an already-faint brush. **Gold survives in exactly one place here,
+  deliberately: the "AOE3 LAUNCHER" / "CAMBIAR JUEGO" caption** (7.5:1),
+  which still marks these as the launcher's own menus without the frame
+  fighting the bar. The gear ContextMenu is NOT part of this set — it hangs
+  off the dashboard, not the header.
 
 - **Hand-built `Popup`s are coordinated centrally by `Controls/ChromePopups.cs`
   — don't add per-handler close logic.** The launcher's code-behind transient

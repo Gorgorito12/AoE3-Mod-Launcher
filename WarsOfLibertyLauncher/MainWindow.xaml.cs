@@ -5353,32 +5353,48 @@ public partial class MainWindow : Window
             PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
         };
 
-        // BgPanelAlt (darker than BgSidebar) so the popup pops
-        // against the sidebar's lighter slate background. Brighter
-        // gold border + heavier drop shadow makes the popup feel
-        // like a clearly separated panel hovering above the chrome.
+        // The two-tone rim its siblings already use: a bright 2px inner line inside a
+        // 1px near-black outer band, so the card cuts itself out of ANY backdrop — the
+        // hero image, the chrome, the content. A single brighter border was tried first
+        // and the verdict was "yo lo veo igual", which is why this recipe exists.
+        //
+        // This popup used to be the documented EXCEPTION: one border, in gold. That rule
+        // was written when the chrome was BgSidebar #314556; the bar is #0C131B now, and
+        // a warm gold rim on a cold near-black bar is what made the menu read as
+        // belonging to a different application. The gold survives where it still says
+        // something — the "AOE3 LAUNCHER" caption below.
         var border = new System.Windows.Controls.Border
         {
-            Background = (System.Windows.Media.Brush)FindResource("BgPanelAlt"),
-            BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
+            Background = (System.Windows.Media.Brush)FindResource("ChromePopupBg"),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
+            BorderThickness = new Thickness(2),
+            CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
             Padding = new Thickness(10),
             MinWidth = 260,
             MaxWidth = 360,
+        };
+
+        // Shadow on the OUTER band so it skirts the whole composite rim; on the inner
+        // Border it would be clipped behind the black band.
+        var rim = new System.Windows.Controls.Border
+        {
+            Background = (System.Windows.Media.Brush)FindResource("MenuBorderOuter"),
+            CornerRadius = (CornerRadius)FindResource("RadiusPopupOuter"),
+            Padding = new Thickness(1),
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
-                BlurRadius = 28,
-                ShadowDepth = 6,
+                BlurRadius = 20,
+                ShadowDepth = 4,
                 Color = System.Windows.Media.Colors.Black,
-                Opacity = 0.75,
+                Opacity = 0.6,
             },
         };
 
         var content = new System.Windows.Controls.StackPanel();
         border.Child = content;
-        ApplyPopupScale(border);
-        popup.Child = border;
+        rim.Child = border;
+        ApplyPopupScale(rim);
+        popup.Child = rim;
 
         // Header — same dorado caption treatment as the other
         // popups (SETTINGS / MODS).
@@ -5571,7 +5587,7 @@ public partial class MainWindow : Window
     private FrameworkElement BuildSettingsDivider() => new System.Windows.Controls.Border
     {
         Height = 1,
-        Background = (System.Windows.Media.Brush)FindResource("BorderSecondary"),
+        Background = (System.Windows.Media.Brush)FindResource("ChromeRim"),
         Margin = new Thickness(8, 6, 8, 6),
         Opacity = 0.6,
     };
@@ -5597,12 +5613,12 @@ public partial class MainWindow : Window
             ? (System.Windows.Media.Brush)FindResource("ErrorBrush")
             : (activeAccent
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"));
+                : (System.Windows.Media.Brush)FindResource("ChromeTextDim"));
         var labelBrush = destructive
             ? (System.Windows.Media.Brush)FindResource("ErrorBrush")
             : (activeAccent
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : (System.Windows.Media.Brush)FindResource("SecondaryFixed"));
+                : (System.Windows.Media.Brush)FindResource("ChromeTextStrong"));
 
         var row = new System.Windows.Controls.Grid();
         row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
@@ -5648,8 +5664,7 @@ public partial class MainWindow : Window
                 FontWeight = FontWeights.Normal,
                 // Slightly dimmed cool tone — present but recedes
                 // behind the main label.
-                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                Opacity = 0.85,
+                Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
                 Margin = new Thickness(0, 1, 0, 0),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             });
@@ -5666,7 +5681,7 @@ public partial class MainWindow : Window
                 FontSize = 11,
                 Margin = new Thickness(8, 0, 2, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
             };
             System.Windows.Controls.Grid.SetColumn(chevron, 2);
             row.Children.Add(chevron);
@@ -5894,7 +5909,10 @@ public partial class MainWindow : Window
         // composite rim instead of being clipped by the inner one.
         var panel = new System.Windows.Controls.Border
         {
-            Background = (System.Windows.Media.Brush)FindResource("BgSidebar"),
+            // ChromePopupBg, not BgSidebar: that brush is literally the colour the title
+            // bar had before the redesign, so this menu was still wearing it while the
+            // bar it drops from had moved on.
+            Background = (System.Windows.Media.Brush)FindResource("ChromePopupBg"),
             BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
             BorderThickness = new Thickness(2),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
@@ -5969,7 +5987,7 @@ public partial class MainWindow : Window
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = Strings.Get("ModSelectorNotInstalled"),
-                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
                 FontSize = (double)FindResource("FontSizeBody"),
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(8, 8, 8, 12),
@@ -6050,7 +6068,7 @@ public partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = isActive
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                : (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
         };
         // The checkmark moved off the left edge — the mod's own icon leads the row now —
         // to its own column beside the favourite star, where it REINFORCES the gold bold
@@ -6089,7 +6107,7 @@ public partial class MainWindow : Window
                     // so the gold/cool tonal contrast matches the main UI.
                     Foreground = isActive
                         ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                        : (System.Windows.Media.Brush)FindResource("SecondaryFixed"),
+                        : (System.Windows.Media.Brush)FindResource("ChromeTextStrong"),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                 },
                 new System.Windows.Controls.TextBlock
@@ -6097,9 +6115,8 @@ public partial class MainWindow : Window
                     Text = p.Subtitle ?? "",
                     FontSize = (double)FindResource("FontSizeCaption"),
                     FontWeight = FontWeights.Normal,
-                    Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                    Opacity = 0.85,
-                    Margin = new Thickness(0, 1, 0, 0),
+                    Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
+                        Margin = new Thickness(0, 1, 0, 0),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     Visibility = string.IsNullOrWhiteSpace(p.Subtitle)
                         ? Visibility.Collapsed
@@ -6116,7 +6133,7 @@ public partial class MainWindow : Window
         {
             Text = LastPlayedLabel(p.Id),
             FontSize = (double)FindResource("FontSizeCaption"),
-            Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+            Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
             Opacity = 0.75,
             Margin = new Thickness(12, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -6288,7 +6305,7 @@ public partial class MainWindow : Window
                             VerticalAlignment = VerticalAlignment.Center,
                             Foreground = isAct
                                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                                : (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
                         },
                         new System.Windows.Controls.StackPanel
                         {
@@ -6303,16 +6320,15 @@ public partial class MainWindow : Window
                                     FontWeight = isAct ? FontWeights.Bold : FontWeights.Medium,
                                     Foreground = isAct
                                         ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                                        : (System.Windows.Media.Brush)FindResource("SecondaryFixed"),
+                                        : (System.Windows.Media.Brush)FindResource("ChromeTextStrong"),
                                     TextTrimming = TextTrimming.CharacterEllipsis,
                                 },
                                 new System.Windows.Controls.TextBlock
                                 {
                                     Text = PathDisplay.CompactPathMiddle(row.Path),
                                     FontSize = (double)FindResource("FontSizeCaption"),
-                                    Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                                    Opacity = 0.85,
-                                    Margin = new Thickness(0, 1, 0, 0),
+                                    Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
+                                                        Margin = new Thickness(0, 1, 0, 0),
                                     TextTrimming = TextTrimming.CharacterEllipsis,
                                     MaxWidth = 280,
                                 },

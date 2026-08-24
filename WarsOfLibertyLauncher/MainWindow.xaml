@@ -632,22 +632,29 @@
                    PopupAnimation="Fade"
                    HorizontalOffset="-316"
                    VerticalOffset="2">
-                <Border Width="360"
-                        Background="{DynamicResource MpSurface}"
-                        BorderBrush="{DynamicResource MpDivider}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Margin="8"
+                <!-- Same two-tone rim + surface as the brand and MODS menus: the three
+                     hang off this one bar and used to disagree on surface, rim, radius
+                     and shadow all at once. The shadow rides the OUTER band so it skirts
+                     the whole composite rim instead of being clipped behind it. -->
+                <Border Margin="8"
+                        Background="{DynamicResource MenuBorderOuter}"
+                        CornerRadius="{StaticResource RadiusPopupOuter}"
+                        Padding="1"
                         SnapsToDevicePixels="True">
                     <Border.Effect>
-                        <DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="3" Opacity="0.5"/>
+                        <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="4" Opacity="0.6"/>
                     </Border.Effect>
+                <Border Width="360"
+                        Background="{DynamicResource ChromePopupBg}"
+                        BorderBrush="{DynamicResource MenuBorder}"
+                        BorderThickness="2"
+                        CornerRadius="{StaticResource RadiusPopupInner}">
                     <DockPanel LastChildFill="True">
                         <!-- Header -->
                         <Grid DockPanel.Dock="Top" Margin="14,12,10,8">
                             <TextBlock x:Name="NotificationPanelTitle"
                                        Text="Notifications"
-                                       Foreground="{DynamicResource TextPrimary}"
+                                       Foreground="{DynamicResource ChromeTextStrong}"
                                        FontFamily="{DynamicResource DisplayFont}"
                                        FontSize="{StaticResource FontSizeBody}"
                                        FontWeight="SemiBold"
@@ -678,7 +685,7 @@
                         <TextBlock x:Name="NotificationEmptyText"
                                    DockPanel.Dock="Top"
                                    Text="No notifications"
-                                   Foreground="{DynamicResource TextSecondary}"
+                                   Foreground="{DynamicResource ChromeTextDim}"
                                    HorizontalAlignment="Center"
                                    Margin="0,28,0,30"
                                    Visibility="Collapsed"/>
@@ -724,7 +731,7 @@
                                                                    VerticalAlignment="Center"
                                                                    FontFamily="Segoe MDL2 Assets"
                                                                    FontSize="8"
-                                                                   Foreground="{DynamicResource TextSecondary}">
+                                                                   Foreground="{DynamicResource ChromeTextDim}">
                                                             <TextBlock.Style>
                                                                 <Style TargetType="TextBlock">
                                                                     <Setter Property="Text" Value="&#xEA8F;"/>
@@ -769,7 +776,7 @@
                                                            FontFamily="Segoe MDL2 Assets"
                                                            FontSize="16"
                                                            Visibility="{Binding ModId, Converter={StaticResource ModIconPresentConv}, ConverterParameter=invert}"
-                                                           Foreground="{DynamicResource TextSecondary}">
+                                                           Foreground="{DynamicResource ChromeTextDim}">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Setter Property="Text" Value="&#xEA8F;"/>
@@ -809,16 +816,16 @@
                                                 <!-- Title + body + time -->
                                                 <StackPanel Grid.Column="1">
                                                     <TextBlock Text="{Binding Title}"
-                                                               Foreground="{DynamicResource TextPrimary}"
+                                                               Foreground="{DynamicResource ChromeTextStrong}"
                                                                FontWeight="SemiBold"
                                                                TextWrapping="Wrap"/>
                                                     <TextBlock Text="{Binding Body}"
-                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               Foreground="{DynamicResource ChromeTextDim}"
                                                                FontSize="12"
                                                                TextWrapping="Wrap"
                                                                Margin="0,1,0,0"/>
                                                     <TextBlock Text="{Binding CreatedLocal, StringFormat='{}{0:dd MMM, HH:mm}'}"
-                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               Foreground="{DynamicResource ChromeTextDim}"
                                                                FontSize="11"
                                                                Opacity="0.7"
                                                                Margin="0,3,0,0"/>
@@ -847,6 +854,7 @@
                             </ItemsControl>
                         </ScrollViewer>
                     </DockPanel>
+                </Border>
                 </Border>
             </Popup>
         </Grid>
