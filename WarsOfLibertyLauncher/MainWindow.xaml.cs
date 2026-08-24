@@ -595,6 +595,10 @@ public partial class MainWindow : Window
             // Owed from a previous session: recording is enabled during a launch, where there is
             // no window to say so on, so the notice waits for the launcher to be on screen again.
             MaybeShowGameRecordingNotice();
+
+            // --preview-toasts: sample cards, once the window and its ToastHost exist.
+            // Last in the handler so nothing it does can disturb a real startup path.
+            if (App.PreviewToasts) PreviewNotificationToasts();
         };
 
         Loaded += async (_, _) =>
@@ -2303,7 +2307,9 @@ public partial class MainWindow : Window
         {
             bool userIsLooking = IsVisible && WindowState != WindowState.Minimized && IsActive;
 
-            if (userIsLooking)
+            // PreferDesktop skips this branch on purpose — see ToastOptions. An invite is
+            // worth interrupting for wherever the eyes are; "a room opened" is not.
+            if (userIsLooking && !opts.PreferDesktop)
             {
                 Controls.AppToast.Show(ToastHost, opts);
                 DiagnosticLog.Write($"AppToast '{opts.Title}' → in-window.");
@@ -2329,6 +2335,62 @@ public partial class MainWindow : Window
             Controls.DesktopToastWindow.Show(opts);
             DiagnosticLog.Write($"AppToast '{opts.Title}' → desktop popup.");
         });
+    }
+
+    /// <summary>
+    /// Fire sample notification cards so their appearance can be judged without waiting
+    /// for a real one.
+    ///
+    /// <para>An invite only arrives when another player sends one, from another machine,
+    /// while you happen to be signed in — which makes "how does it look" almost impossible
+    /// to answer by trying. This shows the same cards the real events build, through the
+    /// same routing, so what appears is what will appear.</para>
+    ///
+    /// <para>Two ways in, one method: a button in Settings → Developer, and the
+    /// <c>--preview-toasts</c> argument. The argument exists because it is the only way to
+    /// reach this without clicking through menus, which is what makes a screenshot
+    /// scriptable.</para>
+    ///
+    /// <para>The buttons are real but inert — they log and dismiss. A preview that could
+    /// actually try to join a lobby that does not exist would be worse than no preview.</para>
+    /// </summary>
+    /// <summary>How long a preview card stays up. Long on purpose — see the call sites.</summary>
+    private const int PreviewDismissMs = 40_000;
+
+    public void PreviewNotificationToasts()
+    {
+        // The invite: always on the desktop, with its two buttons — the case that prompted
+        // this. Sent through ShowAppToast rather than DesktopToastWindow directly, so the
+        // preview exercises the routing too and cannot flatter it.
+        ShowAppToast(new Controls.AppToast.ToastOptions(
+            "📨",
+            Strings.Format("MpInviteToastTitle", Strings.Get("PreviewToastSampleUser")),
+            Strings.Get("PreviewToastSampleRoom"),
+            new[]
+            {
+                new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), true,
+                    () => DiagnosticLog.Write("Toast preview: Join pressed (no-op).")),
+                new Controls.AppToast.ToastAction(Strings.Get("MpToastMute"), false,
+                    () => DiagnosticLog.Write("Toast preview: Mute pressed (no-op).")),
+            },
+            // Longer than the 9 s a real card gets: this one exists to be LOOKED at, and
+            // a preview that vanishes before you have finished judging it is no preview.
+            AutoDismissMs: PreviewDismissMs, PreferDesktop: true));
+
+        // And a room-created card beside it, unchanged, so the two can be compared —
+        // this one still follows the normal "wherever you are looking" routing.
+        ShowAppToast(new Controls.AppToast.ToastOptions(
+            "⚔",
+            Strings.Get("PreviewToastRoomTitle"),
+            Strings.Get("PreviewToastSampleRoom"),
+            new[]
+            {
+                new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), true,
+                    () => DiagnosticLog.Write("Toast preview: room Join pressed (no-op).")),
+            },
+            AutoDismissMs: PreviewDismissMs));
+
+        DiagnosticLog.Write("Toast preview: sample invite + room cards shown.");
     }
 
     private void ShowToast(string title, string message)

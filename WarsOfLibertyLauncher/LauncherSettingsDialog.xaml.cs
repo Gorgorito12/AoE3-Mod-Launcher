@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -194,6 +194,8 @@ public partial class LauncherSettingsDialog : Window
         ReceiveInvitesCheck.Content = Strings.Get("DlgSettingsReceiveInvites");
         ReceiveInvitesHint.Text = Strings.Get("DlgSettingsReceiveInvitesHint");
         SetTip(ReceiveInvitesCheck, "DlgSettingsReceiveInvitesTip");
+        PreviewToastsButton.Content = Strings.Get("DlgSettingsPreviewToasts");
+        PreviewToastsHint.Text = Strings.Get("DlgSettingsPreviewToastsHint");
         DeveloperModeCheck.Content = Strings.Get("DlgSettingsDeveloperMode");
         DeveloperModeHint.Text = Strings.Get("DlgSettingsDeveloperModeHint");
         SetTip(DeveloperModeCheck, "DlgSettingsDeveloperModeTip");
@@ -727,6 +729,21 @@ public partial class LauncherSettingsDialog : Window
     /// Launches the modder-facing incremental patch generator (diffs two overlay zips into a
     /// small delta patch + descriptor for a GitHubReleases mod). Mod-agnostic like the packager.
     /// </summary>
+    /// <summary>
+    /// Show sample notification cards so their look can be judged on the spot.
+    ///
+    /// <para>Goes through <c>MainWindow.PreviewNotificationToasts</c>, which uses the same
+    /// routing the real events use — a preview that drew the card by a shortcut could
+    /// flatter it and hide exactly the bug worth finding.</para>
+    ///
+    /// <para>The dialog stays open: the cards land on the DESKTOP, not inside the
+    /// launcher, so there is nothing for this window to be covering.</para>
+    /// </summary>
+    private void PreviewToastsButton_Click(object sender, RoutedEventArgs e)
+    {
+        (Application.Current?.MainWindow as MainWindow)?.PreviewNotificationToasts();
+    }
+
     private void OpenPatchGeneratorButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new PatchGeneratorDialog

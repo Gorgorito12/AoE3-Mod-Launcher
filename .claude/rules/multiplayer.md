@@ -531,6 +531,19 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   were earned. Verified against the live backend: today's deployment answers without the tally
   and the rate is correctly hidden.
 
+  **One documented exception to "once per session", and it is an EVENT, not a timer.** A
+  session that starts while the backend is down never gets a standing at all, and the only
+  retry was a session-state change (`PushAccountChip` → `LoadStandingAsync` on a null cache).
+  Measured: a launcher opened during a 502 outage logged four failed fetches and then showed
+  no ELO under the player's name for the rest of the session, with the server back up the
+  whole time. So `RefreshRoomsListAsync` now keeps a `_roomsFetchFailed` flag and, on the
+  first fetch that SUCCEEDS after one that failed, re-requests the standing if it is still
+  missing. **The trigger is the transition, never the poll** — hanging the request off the
+  poll itself would fire it every few seconds for exactly as long as the server stayed down,
+  which is what the 20/min · 500/day per-IP budget cannot pay for. The check sits ABOVE the
+  quiet diff's early return on purpose: a poll that finds the rooms unchanged repaints
+  nothing but still proves the backend answered.
+
   **The History row shows Win/Loss and NOTHING for 0.5 — the omission is the rule.** A 0.5
   means the result could not be read (no recording, a team game, a skirmish, or any match
   reported before this existed), so a "Draw" label would show all of them as drawn games
@@ -1681,13 +1694,39 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   catching almost nothing. The question worth asking is "did these people play", and Start
   is when it has an answer.
 
-  **(7) A provisional rating is never painted beside a name.** `RatingDisplay.ShouldShow`
-  needs the rating AND its deviation, and refuses while `rd > 110`
-  (`MatchOutcomeView.ProvisionalRd`, matched by the leaderboard's `rd <= 110`). The server
-  hands every new player 1500; showing it turns a placeholder into a claim about their
-  skill. The Profile tab is the one exception, where the word "provisional" sits next to
-  it. **After the 2026-08 ratings reset this means nobody shows an ELO in the roster for
-  a while. That is correct, not a bug.**
+  **(7) A rating is shown wherever a player's name appears — and "provisional" is
+  NOT part of it.** This reverses an earlier rule of mine, so read the reason before
+  reinstating it.
+
+  The old rule withheld the server's starting 1500 (`rd > 110`) on the grounds that
+  showing it passes a placeholder off as earned skill, and labelled it "provisional"
+  where it did appear. **The flaw: every player who has not played is on exactly 1500.**
+  A number everybody starts from, shown to everybody, claims nothing about anyone —
+  while hiding it left the rating blank in the chip, the room roster and everywhere
+  else, which is what actually got reported, twice.
+
+  So `RatingDisplay.ShouldShow(double? rating)` is now simply "is there one", and the
+  rating appears in five places: the title-bar chip, the Profile tab, the room roster,
+  the rooms table (beside the host) and the global players panel.
+
+  **The refusal that SURVIVES is the one that was always the point: a null rating paints
+  nothing.** Null is not somebody's 1500, it is not knowing — the state the app was in
+  the day the backend answered 502 to every rating fetch — and putting a number there
+  would be the actual invention. Pinned by `RatingDisplayTests`.
+
+  **Two deliberate exceptions.** The RANKING card keeps its `rd <= 110` +
+  `wins + losses >= 3` filter: showing 1500 next to a name informs, but ordering a
+  league table of people who never played does not — they would all tie, in an
+  arbitrary order. And the Profile tab plus the end-of-match note still say
+  "provisional", because there the word explains something real (you have no rated
+  matches; that swing was large) rather than qualifying a bare number.
+
+  **The two backend feeds this needs, and the trap in one of them.** `GET /lobbies`
+  returns `host.rating` and the global presence frame carries `rating` per user, both
+  added for this. The lobby query joins with **`LEFT JOIN elo_ratings`** and it has to
+  stay that way: an inner join would make **every room whose host has no rating row
+  vanish from the rooms list** — worse than a missing number, and silent. Same trap as
+  the membership query in `LobbyRoom`'s hello.
 
   **(8) The reset.** `scripts/reset-elo.ts` emptied `elo_ratings` and nulled every
   `rating_before`/`rating_after`, because those numbers were produced by the bug in (1).

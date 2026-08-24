@@ -1,4 +1,4 @@
-using WarsOfLibertyLauncher.Services.Multiplayer;
+﻿using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
 
 namespace WarsOfLibertyLauncher.Tests;
@@ -39,38 +39,24 @@ public class RatingDisplayTests
     }
 
     [Fact]
-    public void ASettledRatingIsShown()
+    public void ARatingIsShownWheneverThereIsOne()
     {
-        Assert.True(RatingDisplay.ShouldShow(1712, 78));
+        // The provisional gate is gone, deliberately. It withheld the server's starting
+        // 1500 so a placeholder could not pass as earned skill — but EVERY player who has
+        // not played is on exactly 1500, so a number everybody starts from, shown to
+        // everybody, claims nothing about anyone. What the gate actually did was leave
+        // the rating blank across the whole app, which read as broken.
+        Assert.True(RatingDisplay.ShouldShow(1712));
+        Assert.True(RatingDisplay.ShouldShow(1500));
     }
 
     [Fact]
-    public void AProvisionalRatingIsWithheld()
+    public void NoRatingAtAllStillShowsNothing()
     {
-        // A brand-new player: the server's default 1500 at the maximum deviation. This
-        // is exactly the number that must never appear beside a name in the roster.
-        Assert.False(RatingDisplay.ShouldShow(1500, 350));
-    }
-
-    [Fact]
-    public void TheProvisionalBoundaryMatchesTheBackend()
-    {
-        // MatchOutcomeView.IsProvisional compares with a strict >, and the leaderboard
-        // query filters with rd <= 110, so exactly 110 counts as settled on both sides.
-        // If these two ever disagree, a player is ranked in the table and blank in the
-        // room at the same instant.
-        Assert.True(RatingDisplay.ShouldShow(1600, MatchOutcomeView.ProvisionalRd));
-        Assert.False(RatingDisplay.ShouldShow(1600, MatchOutcomeView.ProvisionalRd + 0.1));
-    }
-
-    [Fact]
-    public void HalfAnAnswerIsNoAnswer()
-    {
-        // A rating with no deviation comes from a backend that only tells half the
-        // story — and the missing half is precisely what decides whether the number
-        // means anything yet. In that doubt, nothing is shown.
-        Assert.False(RatingDisplay.ShouldShow(1712, null));
-        Assert.False(RatingDisplay.ShouldShow(null, 78));
-        Assert.False(RatingDisplay.ShouldShow(null, null));
+        // THE refusal that survives, and the one that was always the point. A null is not
+        // somebody's 1500 — it is not knowing, which is exactly the state the app was in
+        // the day the backend went down and every rating fetch came back 502. Painting a
+        // number there would be the real invention.
+        Assert.False(RatingDisplay.ShouldShow(null));
     }
 }

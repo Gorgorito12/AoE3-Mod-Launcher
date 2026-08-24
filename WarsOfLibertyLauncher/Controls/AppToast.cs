@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -31,12 +31,25 @@ public static class AppToast
     public sealed record ToastAction(string Label, bool IsPrimary, Action OnClick);
 
     /// <summary>What to show. <paramref name="Icon"/> is a short glyph/emoji.</summary>
+    /// <param name="PreferDesktop">
+    /// Put this card on the DESKTOP even when the user is looking at the launcher.
+    ///
+    /// <para>For the notifications that expire and carry a button worth pressing — a room
+    /// invite — rather than the ambient ones. An invite drawn inside the window is easy to
+    /// miss from another tab or another monitor, and by the time it is noticed the room
+    /// may be gone. It does NOT add a second surface: the card still appears exactly once,
+    /// just always in the same place.</para>
+    ///
+    /// <para>It does not override the game-is-running suppression: nothing floats over
+    /// AoE3, which can be knocked out of full-screen by a topmost window.</para>
+    /// </param>
     public sealed record ToastOptions(
         string Icon,
         string Title,
         string? Body,
         IReadOnlyList<ToastAction> Actions,
-        int AutoDismissMs = 9000);
+        int AutoDismissMs = 9000,
+        bool PreferDesktop = false);
 
     /// <summary>Max cards visible at once; the oldest is evicted past this.</summary>
     private const int MaxVisible = 4;

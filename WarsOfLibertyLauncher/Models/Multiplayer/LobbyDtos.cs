@@ -97,6 +97,12 @@ public class LobbyHost
 
     [JsonPropertyName("avatar_url")]
     public string? AvatarUrl { get; set; }
+
+    /// <summary>The host's rating, so the rooms table can show it beside their name.
+    /// Null on a backend that predates it, and null for a player with no rating row —
+    /// both mean "don't paint a number", never "1500".</summary>
+    [JsonPropertyName("rating")]
+    public double? Rating { get; set; }
 }
 
 public class LobbySummary

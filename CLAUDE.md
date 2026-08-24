@@ -3337,7 +3337,17 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   (Join/Ignore). Wired to `MultiplayerTab` via the `showAppToast` callback in
   `MultiplayerView.Attach`.
   **`MainWindow.ShowAppToast` ROUTES the card to the surface the user can actually see —
-  ONE surface per event, never two.** Looking at the window → in-window (`ToastHost`);
+  ONE surface per event, never two.** Looking at the window → in-window (`ToastHost`)
+  — **unless the card asks for `ToastOptions.PreferDesktop`, which skips that branch and
+  goes to the desktop even with the launcher in front.** Exactly one card still appears;
+  it just always appears in the same place. **The room INVITE sets it** (and so does the
+  "muted" confirmation, which answers a button pressed on a desktop card): an invite
+  expires and carries a Join worth pressing, and drawn inside the window it is missed from
+  another tab or another monitor — which is what was reported. "A room opened" is ambient
+  and keeps the normal routing. `PreferDesktop` does NOT override the suppression below,
+  and the ORDER of the two checks is load-bearing: the suppression sits AFTER the
+  in-window branch, so a launcher in the foreground during a game still draws in-window,
+  which is harmless because the game is not the frontmost window then. Continuing:
   **game running (`_isGameRunning`) → nothing** (a topmost window can knock AoE3 out of
   full-screen, and a room invite is useless mid-match; the bell entry and sound still
   happen); otherwise (minimised, in the tray, buried) → **`Controls/DesktopToastWindow`**,
@@ -3349,6 +3359,18 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   deliberate exception to the repo's no-transparency rule for dialogs — the card has
   rounded corners and a shadow over an arbitrary desktop, and it is small and transient),
   and it closes itself once its panel empties so an invisible topmost window can't linger.
+  **Seeing any of this without a second player: `MainWindow.PreviewNotificationToasts`**,
+  reachable from Settings → Developer and from the **`--preview-toasts`** launch argument.
+  A real invite needs another account on another machine, which makes "how does it look"
+  almost untestable by waiting; the preview builds the same cards through the same routing
+  — never by calling `DesktopToastWindow` directly, which would flatter it and hide the
+  very bug worth finding — with inert buttons and a long dismiss so there is time to look.
+  The ARGUMENT is what makes a screenshot scriptable; the Settings route needs clicks. To
+  capture it: `EnumWindows` finds the window (UI Automation does not — it is
+  `ShowInTaskbar=false`), but use a SCREEN capture, **not `PrintWindow`**: PrintWindow
+  draws onto an opaque DC, so the transparent margin comes out black and cannot answer
+  whether the real thing leaves a black box on the desktop. It does not — verified on
+  screen, composited over another app.
   **It replaced a tray-balloon fallback** (`ShowToast`) that Windows drops easily and —
   the real defect — **cannot carry action buttons**, so a "new room" arrived with no way to
   Join. `ShowToast` still serves the BELL (`NotificationCenter.ToastRequested`); don't
