@@ -1149,10 +1149,24 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `Grid{Auto,*}` (disc in col0, text in col1), NOT horizontal StackPanels** — a
   horizontal StackPanel measures children with infinite width so wrap/ellipsis
   never fire; the text must live in a bounded `*` column.
-  **The seven columns now live ONCE, in `Services/RoomsTableLayout.All`, which both the header
-  strip and `BuildRoomCard` read — the old "keep the two lists in lockstep" comment is gone
-  because the two lists are gone. Don't re-add literal `ColumnDefinition`s to either side, and
-  don't revert to fixed px.** `RoomsTableLayout.Resolve(width)` also DROPS columns as the card
+  **The columns live ONCE, in `Services/RoomsTableLayout.All`, which both the header strip and
+  `BuildRoomCard` read — the old "keep the two lists in lockstep" comment is gone because the
+  two lists are gone. Don't re-add literal `ColumnDefinition`s to either side, and don't revert
+  to fixed px.**
+  **That single-source claim was FALSE in practice for a while, and the way it failed is worth
+  keeping.** `ApplyRoomColumns` skips its work when the resolved set matches `_roomColumns` —
+  but that field is SEEDED with `RoomsTableLayout.All`, which is exactly what `Resolve()`
+  returns at any comfortable width. So on a wide window the very FIRST call decided nothing had
+  changed and returned before building the header's `ColumnDefinitions` and re-indexing the
+  header labels. The header silently kept the XAML design-time placeholder — then a stale
+  SEVEN-column set including MOD and STATUS, columns that no longer exist — while the rows used
+  the real five, so every row rendered ~500px right of its own heading. Two things now prevent
+  it: a separate `_roomColumnsApplied` flag, so the first application can never be skipped
+  (the sets matching on the first call is the NORMAL case, not an edge case), and the XAML
+  placeholder now mirrors `RoomsTableLayout.All` exactly, so even a skipped apply would render
+  correctly. The lesson generalises: **a "these two cannot drift" invariant is only real if the
+  code that enforces it always runs** — and a guard that compares against a seeded value will
+  silently no-op on the path where the seed is already right. `RoomsTableLayout.Resolve(width)` also DROPS columns as the card
   narrows — ping → host → mod, never Room/Players/Action — and `Hidden(resolved)` tells
   `BuildRoomCard` which values to fold into the room's sub-line instead, so nothing is lost at
   any width. `ApplyRoomColumns` (hooked to `RoomsHeaderStrip.SizeChanged`) re-renders **only

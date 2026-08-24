@@ -1155,9 +1155,13 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   pre-shrank in the decoder, so a non-integer 64→40 second downscale
   *softened* the icon at some DPIs (reported as "se ve en baja
   resolución"); decoding native keeps it crisp. Costs ~256 KB RAM vs
-  ~16 KB — trivial, and the right trade for a sharp brand mark. The Image
-  stays 20x20 (sharper, NOT bigger — the user explicitly didn't want it
-  enlarged). Don't drop it back to 64 to "save memory".
+  ~16 KB — trivial, and the right trade for a sharp brand mark. Don't drop it back
+  to 64 to "save memory". **The Image is 16x16 as of the two-row header, and that
+  SUPERSEDES the old "stays 20x20" rule** — the header reference specifies 16, the
+  maintainer was shown the trade-off (a detailed raster logo loses detail at that
+  size, and the identical "se ve en baja resolución" complaint was raised again) and
+  chose fidelity to the reference. So a future report of the icon looking soft is a
+  known, accepted cost, not a regression to fix — unless the maintainer revisits it.
 
 - **Popup menus use a TWO-TONE "punched-out" rim — don't reduce it back to a
   single border.** The gear ContextMenu + its cascading submenu
@@ -1242,7 +1246,7 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   per-element font sizes.** The PlayView "Layer 4" Grid (title + description +
   version chip + action row + progress strip, `HeroContentGrid`) is scaled by
   the **shared window-size scaler** — `UiScale.Attach(HeroContentGrid, PlayView,
-  1500, 760, Kind.Render, (0,1))` in `MainWindow`'s ctor (`Controls/UiScale.cs`,
+  1500, 710, Kind.Render, (0,1))` in `MainWindow`'s ctor (`Controls/UiScale.cs`,
   see its own bullet). The hero-private `HeroScaleTransform` / `UpdateHeroScale()`
   / `Hero*` consts are **retired** — folded into the shared scaler with the
   hero's SAME reference + floor + render-pin + crispness toggle, so the hero

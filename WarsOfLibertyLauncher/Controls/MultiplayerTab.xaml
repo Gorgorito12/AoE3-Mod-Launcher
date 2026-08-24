@@ -549,22 +549,25 @@
                                            FontSize="{StaticResource FontSizeCaption}"/>
                             </Grid>
 
-                            <!-- Column headers for the room list. The rows
-                                 (BuildRoomCard) mirror these EXACT 7 column defs,
-                                 and the 30px side margin matches each row's
-                                 content inset (ScrollViewer pad 16 + row padding
-                                 14; the row has no side border) so the columns
-                                 line up under the labels. Keep the two grids in
-                                 sync (lockstep invariant). Columns 0-5 are
-                                 clickable/sortable buttons (label + sort arrow,
-                                 arrows set by UpdateSortArrows); ACTION (6) is a
-                                 plain centered label. Columns are STAR-sized with
-                                 Min/Max so the row never overflows a narrow
-                                 window (horizontal scroll is disabled); ROOM has
-                                 no MaxWidth so it absorbs slack (no empty band).
-                                 The right margin is bumped by the scrollbar width
-                                 at runtime (SyncHeaderScrollbarGutter) so the
-                                 header tracks the rows when the vbar shows. -->
+                            <!-- Column headers for the room list. The header and the rows
+                                 (BuildRoomCard) are NOT kept in sync by hand — they both read
+                                 the one list in Services/RoomsTableLayout, applied here by
+                                 ApplyRoomColumns. The old "mirror these EXACT column defs"
+                                 lockstep rule is gone, and so are the MOD and STATUS columns
+                                 it described.
+
+                                 The 30px side margin matches each row's content inset
+                                 (ScrollViewer padding 16 + card border 1 + card padding 12 =
+                                 29) so the columns line up under the labels; the right margin
+                                 is bumped by the scrollbar width at runtime
+                                 (SyncHeaderScrollbarGutter) so the header tracks the rows when
+                                 the vertical bar appears.
+
+                                 ROOM/PLAYERS/PING are clickable sort buttons (label + arrow,
+                                 arrows set by UpdateSortArrows); HOST and ACTION are plain
+                                 labels. Widths come from RoomsTableLayout: fixed pixels for
+                                 every column except ROOM, which is the reference's `1fr` and
+                                 absorbs the slack. -->
                             <Border Grid.Row="1"
                                     Background="Transparent"
                                     BorderBrush="{DynamicResource MpRimFaint}"
@@ -574,20 +577,23 @@
                                  column instead of being cut. Belt and braces behind the
                                  bounded layouts below. -->
                             <Grid x:Name="RoomsHeaderStrip" Margin="30,7,30,7" ClipToBounds="True">
-                                <!-- The columns are built at runtime from
-                                     Services/RoomsTableLayout.All, which BuildRoomCard reads
-                                     too — one list, so the header and the rows cannot drift
-                                     apart and misalign the table. These seven are only the
-                                     design-time placeholder so the strip looks right in the
-                                     designer; ApplyRoomColumns replaces them. -->
+                                <!-- Design-time placeholder ONLY — ApplyRoomColumns rebuilds
+                                     these from Services/RoomsTableLayout at the first layout
+                                     pass, and re-indexes the labels below with them.
+
+                                     It mirrors RoomsTableLayout.All exactly (Room 1fr, Host
+                                     152, Players 88, Ping 66, Action 96) on purpose. It used
+                                     to be a stale SEVEN-column set carrying two columns that
+                                     no longer exist, and when ApplyRoomColumns took an early
+                                     return this placeholder was what shipped: every row drew
+                                     ~500px right of its own heading. A placeholder that
+                                     matches reality cannot cause that again. -->
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="2.3*" MinWidth="120"/>
-                                    <ColumnDefinition Width="1.05*" MinWidth="58"/>
-                                    <ColumnDefinition Width="1.35*" MinWidth="66"/>
-                                    <ColumnDefinition Width="0.62*" MinWidth="46"/>
-                                    <ColumnDefinition Width="0.62*" MinWidth="48"/>
-                                    <ColumnDefinition Width="0.9*" MinWidth="60"/>
-                                    <ColumnDefinition Width="0.95*" MinWidth="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="152"/>
+                                    <ColumnDefinition Width="88"/>
+                                    <ColumnDefinition Width="66"/>
+                                    <ColumnDefinition Width="96"/>
                                 </Grid.ColumnDefinitions>
                                 <!-- Label in the * column, sort arrow in Auto. These used to be
                                      a horizontal StackPanel, which measures its children with
@@ -606,26 +612,26 @@
                                      decorative double arrows on columns nobody sorts go away. A
                                      header that offers an order the list does not need is one more
                                      thing to try before realising it changed nothing. -->
-                                <TextBlock Grid.Column="2" x:Name="ColHeaderHost"
+                                <TextBlock Grid.Column="1" x:Name="ColHeaderHost"
                                            Foreground="{DynamicResource MpTextLabel}"
                                            FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                            Margin="0,0,4,0"/>
-                                <Button x:Name="ColButtonPlayers" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
+                                <Button x:Name="ColButtonPlayers" Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="1" x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
-                                <Button x:Name="ColButtonPing" Grid.Column="4" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
+                                <Button x:Name="ColButtonPing" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" x:Name="ColHeaderPing" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="1" x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
-                                <TextBlock Grid.Column="6" x:Name="ColHeaderAction"
+                                <TextBlock Grid.Column="4" x:Name="ColHeaderAction"
                                            Foreground="{DynamicResource MpTextLabel}"
                                            FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -884,14 +890,29 @@
                                         Margin="0,0,2,0"
                                         Click="PanelTab_Click"
                                         Style="{StaticResource SubTab}">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock x:Name="GlobalChatHeaderText" VerticalAlignment="Center"/>
-                                        <Ellipse Width="6" Height="6"
+                                    <!-- A Grid, NOT a horizontal StackPanel: a StackPanel
+                                         measures its children with INFINITE width, so the
+                                         title's ellipsis never fires and the caption grows
+                                         straight past its half of the strip — centred, so it
+                                         was cut at BOTH ends ("t global · 1 conecta"). The
+                                         title takes the star column and trims; the dot and
+                                         the count are Auto and always survive. -->
+                                    <Grid HorizontalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="GlobalChatHeaderText"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+                                        <Ellipse Grid.Column="1" Width="6" Height="6"
                                                  Fill="{DynamicResource MpOk}"
                                                  VerticalAlignment="Center"
                                                  Margin="7,0,5,0"/>
-                                        <TextBlock x:Name="GlobalChatPresenceText" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                        <TextBlock Grid.Column="2" x:Name="GlobalChatPresenceText"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
                                 </Button>
                                 <Button x:Name="PanelTabPlayers"
                                         Grid.Column="1"

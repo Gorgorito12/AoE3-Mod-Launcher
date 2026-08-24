@@ -578,6 +578,7 @@ public partial class MainWindow : Window
         // A manual double-click carries no --minimized arg, so it shows normally.
         Loaded += (_, _) =>
         {
+            LogDisplayScaling();
             if (App.StartMinimized)
             {
                 DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
@@ -2057,7 +2058,12 @@ public partial class MainWindow : Window
     /// </summary>
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        if (!HardExitRequested && _config.CloseToTray)
+        // _config is null when the constructor threw before loading it — which is what a
+        // failed InitializeComponent does, since the dispatcher handler logs and lets the
+        // app limp on. Closing that half-built window then raised a NullReferenceException
+        // here, and THAT crash is the one the user reported: it buried the real error.
+        // A window with no config has nothing to keep resident, so close normally.
+        if (!HardExitRequested && _config != null && _config.CloseToTray)
         {
             e.Cancel = true;
             HideToTray();
@@ -11429,6 +11435,40 @@ public partial class MainWindow : Window
         // The capsule is one of the two halves the divider separates, so it decides
         // the divider's fate together with the account block.
         RefreshChromeDivider();
+    }
+
+    /// <summary>
+    /// Record, once per launch, what scaling this machine is actually rendering at.
+    ///
+    /// <para>The log said nothing about DPI, so a "the text looks low-resolution" report
+    /// could not be told apart from the two things that produce it. The discriminator is
+    /// here: <see cref="VisualTreeHelper.GetDpi"/> reports what WPF is rendering AT, and
+    /// Windows reports what the desktop is scaled TO. When the two agree, the app is
+    /// DPI-aware and any softness is the type scale. When WPF says 1.0 on a scaled
+    /// desktop, the process lost its PerMonitorV2 manifest and Windows is bitmap-
+    /// stretching the whole window — which looks exactly like a low-resolution render,
+    /// because it is one.</para>
+    ///
+    /// <para>Called from Loaded, not the constructor: the window needs an HWND before it
+    /// can be asked which monitor it is on. Whole thing is best-effort — a diagnostic may
+    /// never be the reason a launch fails.</para>
+    /// </summary>
+    private void LogDisplayScaling()
+    {
+        try
+        {
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+            DiagnosticLog.Write(
+                $"Display: WPF renders at {dpi.DpiScaleX:0.###}x ({dpi.PixelsPerInchX:0.#} dpi), " +
+                $"window {ActualWidth:0}x{ActualHeight:0} DIP, " +
+                $"desktop {SystemParameters.PrimaryScreenWidth:0}x{SystemParameters.PrimaryScreenHeight:0} DIP. " +
+                $"A scale of 1.0 on a scaled desktop means the DPI manifest did not take " +
+                $"effect and Windows is stretching the window.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Display scaling probe failed: {ex.Message}");
+        }
     }
 
     /// <summary>

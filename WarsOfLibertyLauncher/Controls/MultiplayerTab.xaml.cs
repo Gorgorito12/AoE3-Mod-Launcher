@@ -141,10 +141,29 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// The rooms-table columns currently on screen, from <see cref="Services.RoomsTableLayout"/>.
     /// Both the header strip and every row read this, so they cannot drift apart and misalign.
-    /// Starts as the full set and is narrowed by <see cref="ApplyRoomColumns"/> as the card shrinks.
+    /// Starts as the full set and is narrowed by <see cref="ApplyRoomColumns"/> as the card
+    /// shrinks. It must ALWAYS hold a usable set: rows can be built from a cached response
+    /// before the header has ever been measured, and a row built against an empty list gets
+    /// no columns and drops every cell.
     /// </summary>
     private System.Collections.Generic.IReadOnlyList<Services.RoomColumnSpec> _roomColumns =
         Services.RoomsTableLayout.All;
+
+    /// <summary>
+    /// Whether <see cref="ApplyRoomColumns"/> has actually built the header strip yet.
+    ///
+    /// <para><b>Load-bearing.</b> The guard in that method used to be "did the resolved set
+    /// differ from <see cref="_roomColumns"/>?" alone — but the field is SEEDED with the full
+    /// set, which is exactly what <c>Resolve()</c> returns at any comfortable width. So on a
+    /// wide window the very first call decided nothing had changed, took its early return, and
+    /// never ran the code that builds the header's ColumnDefinitions and re-indexes the header
+    /// labels. The header kept the seven-column design-time placeholder from the XAML — two of
+    /// whose columns (MOD, STATUS) no longer exist — while the rows used the real five, so
+    /// every row sat ~500px to the right of its own heading. The set genuinely matching on the
+    /// first call is the NORMAL case, not an edge case, which is why this needs its own flag
+    /// rather than a cleverer comparison.</para>
+    /// </summary>
+    private bool _roomColumnsApplied;
 
     // Radmin banner state. The timer polls the install/connection
     // status every 3 s while the tab is visible so the user gets
@@ -403,7 +422,23 @@ public partial class MultiplayerTab : UserControl
         // so the MpAlertOverlay scrim injected into the root keeps covering the
         // full tab.
         if (Content is FrameworkElement mpRoot)
+        {
             UiScale.Attach(mpRoot, this, 1100, 560);
+
+            // A tab taller than its slot is CLIPPED in silence: ContentHost is
+            // ClipToBounds, so the bottom rows just are not there and nothing errors.
+            // Logged once per size, and only when it actually overflows, so a healthy
+            // layout stays quiet.
+            mpRoot.SizeChanged += (_, _) =>
+            {
+                var want = mpRoot.DesiredSize.Height;
+                var got = ActualHeight;
+                if (got > 0 && want > got + 0.5)
+                    DiagnosticLog.Write(
+                        $"Multiplayer tab OVERFLOWS its slot: wants {want:0} DIP, has {got:0} " +
+                        $"(short by {want - got:0}). The bottom of the left column is being clipped.");
+            };
+        }
         // Keep the rooms header aligned with the rows as the vertical scrollbar
         // comes and goes (see SyncHeaderScrollbarGutter).
         RoomsListScroll.ScrollChanged += (_, _) => SyncHeaderScrollbarGutter();
@@ -4288,8 +4323,13 @@ public partial class MultiplayerTab : UserControl
         if (available <= 0) return;   // not laid out yet; the next SizeChanged will do it
 
         var resolved = Services.RoomsTableLayout.Resolve(available);
-        if (Services.RoomsTableLayout.SameColumns(resolved, _roomColumns)) return;
+        // _roomColumnsApplied FIRST: the set matching on the very first call is the normal
+        // case (the field is seeded with the full set), and skipping then leaves the header
+        // on its XAML placeholder for the whole session. See the field's own comment.
+        if (_roomColumnsApplied && Services.RoomsTableLayout.SameColumns(resolved, _roomColumns))
+            return;
 
+        _roomColumnsApplied = true;
         _roomColumns = resolved;
 
         RoomsHeaderStrip.ColumnDefinitions.Clear();
@@ -4393,6 +4433,7 @@ public partial class MultiplayerTab : UserControl
         _lastGlobalChatAuthor = null;
         _lastGlobalChatDate = null;
         GlobalChatPresenceText.Text = "";
+        if (PanelTabChat != null) PanelTabChat.ToolTip = null;
         GlobalChatNotice.Visibility = Visibility.Collapsed;
         UpdateGlobalChatEmptyHint();
     }
@@ -4973,7 +5014,13 @@ public partial class MultiplayerTab : UserControl
     private void UpdateGlobalPresence(int online)
     {
         // The presence dot lives in the merged header now, so just the count text.
-        GlobalChatPresenceText.Text = Strings.Format("MpGlobalChatPresence", online);
+        // Just the number on the tab: it shares half a ~290px strip with the title, and
+        // "N conectados" does not fit beside it. The green dot already says what the
+        // dropped word said, and the full sentence moves to the tooltip — which works
+        // here because this is ordinary client area, unlike the title bar.
+        GlobalChatPresenceText.Text = online.ToString(System.Globalization.CultureInfo.CurrentCulture);
+        if (PanelTabChat != null)
+            PanelTabChat.ToolTip = TooltipHelper.Wrap(Strings.Format("MpGlobalChatPresence", online));
         // This live presence is also the top-bar "players online" source now, so
         // both read the same real connected-user count.
         _lastGlobalOnline = online;
@@ -5560,19 +5607,6 @@ public partial class MultiplayerTab : UserControl
         // (The card's illumination — a STATIC, subtle BLUE rim + faint blue
         // glow — lives in the MpRoomCard style now; no per-card animation.)
 
-        // Seven columns mirroring the header Grid (MultiplayerTab.xaml): ROOM,
-        // MOD, HOST, PLAYERS, PING, STATUS, ACTION. STAR-sized with Min/Max (NOT
-        // fixed px) — fixed widths overflowed a narrow window (the rooms list
-        // shares its row with the flexible chat, and the ScrollViewer has
-        // horizontal scroll disabled), clipping the right-most ACTION column off
-        // screen. Stars always divide the available width so the row never
-        // overflows; ROOM has NO MaxWidth so it absorbs slack (no empty band);
-        // MaxWidth caps the others; MinWidth (esp. ACTION) keeps the button fully
-        // visible when space is tight. Keep these in lockstep with the header
-        // definitions (RoomsHeaderStrip in MultiplayerTab.xaml).
-        // Proportional, NO MaxWidth: columns grow together on a wide window so the air
-        // distributes evenly instead of ROOM eating all the slack.
-        //
         // The set comes from Services/RoomsTableLayout, which the header strip reads too —
         // one list rather than two lists of literals kept in step by a comment. It also
         // shrinks: on a narrow window the least useful columns are dropped and their values
