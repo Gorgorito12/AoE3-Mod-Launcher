@@ -1,4 +1,4 @@
-<Window x:Class="WarsOfLibertyLauncher.LauncherSettingsDialog"
+﻿<Window x:Class="WarsOfLibertyLauncher.LauncherSettingsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -540,6 +540,20 @@
                                 HorizontalAlignment="Left"
                                 Click="OpenPatchGeneratorButton_Click"/>
                         <TextBlock x:Name="PatchGenHint"
+                                   Style="{StaticResource HintText}"
+                                   Margin="0,10,0,0"/>
+
+                        <!-- Notification preview. A real room invite needs a second
+                             player on a second machine, so "how does it look" is nearly
+                             impossible to answer by waiting for one. Same cards, same
+                             routing — an invitation always lands on the desktop. -->
+                        <Button x:Name="PreviewToastsButton"
+                                Style="{StaticResource PrimaryButton}"
+                                MinWidth="240"
+                                HorizontalAlignment="Left"
+                                Margin="0,22,0,0"
+                                Click="PreviewToastsButton_Click"/>
+                        <TextBlock x:Name="PreviewToastsHint"
                                    Style="{StaticResource HintText}"
                                    Margin="0,10,0,0"/>
                     </StackPanel>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
@@ -219,6 +219,13 @@ public partial class App : System.Windows.Application
         // hides to the tray before it paints.
         StartMinimized = minimized;
 
+        // Developer aid: show sample notification cards once the window is up. It exists
+        // because a real room invite needs a second player on a second machine, which
+        // makes "how does it look" nearly untestable — and because reaching the same
+        // preview through Settings takes clicks, which a screenshot script cannot make.
+        PreviewToasts = Array.Exists(e.Args, a =>
+            string.Equals(a, "--preview-toasts", StringComparison.OrdinalIgnoreCase));
+
         // StartupUri was removed from App.xaml so this guard can suppress a second
         // window; create + show the main window ourselves for the primary instance.
         var main = new WarsOfLibertyLauncher.MainWindow();
@@ -236,6 +243,11 @@ public partial class App : System.Windows.Application
     /// argument the Run-key registration appends. MainWindow drains it on Loaded.
     /// </summary>
     public static bool StartMinimized { get; private set; }
+
+    /// <summary>True when <c>--preview-toasts</c> was passed: MainWindow fires sample
+    /// notification cards from Loaded so their appearance can be inspected (and
+    /// screenshotted) without a real invitation arriving. Inert otherwise.</summary>
+    public static bool PreviewToasts { get; private set; }
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 

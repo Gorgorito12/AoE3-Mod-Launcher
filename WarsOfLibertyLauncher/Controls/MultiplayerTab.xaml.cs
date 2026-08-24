@@ -539,11 +539,10 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        // Same gate as the roster: a provisional rating is not shown. The server hands
-        // every new player 1500 at the maximum deviation, and this chip sits under your
-        // name in the title bar — the last place a placeholder should look like a score.
-        // The Profile tab is where it does appear, next to the word "provisional".
-        var elo = RatingDisplay.ShouldShow(_cachedStanding?.Rating, _cachedStanding?.Rd)
+        // Plain, with no qualifier: 1500 is where everyone starts, so showing it says
+        // nothing about anybody. Still hidden when there is no standing at all — that is
+        // not a 1500, it is not knowing, which is what the backend outage looked like.
+        var elo = RatingDisplay.ShouldShow(_cachedStanding?.Rating)
             ? Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding!.Rating))
             : null;
         _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo);
@@ -2058,26 +2057,19 @@ public partial class MultiplayerTab : UserControl
         var me = _session?.CurrentUser;
         var isMe = me != null && string.Equals(m.UserId, me.Id, StringComparison.Ordinal);
 
-        // Everyone's ELO, not just your own: the rating now rides in the room-state
-        // member object, so the roster no longer has to fall back to "only I know mine".
-        //
-        // Withheld while provisional, for everyone including you. The server hands every
-        // new player 1500 and painting it beside a name turns a placeholder into a claim
-        // about their skill — the same refusal the end-of-match card makes. Right after a
-        // ratings reset that means nobody shows an ELO here for a while, and that is
-        // correct, not a bug.
+        // Everyone's ELO, not just your own: the rating rides in the room-state member
+        // object. No provisional gate any more — 1500 is the shared starting point, and
+        // hiding it left the roster blank for everybody.
         double? memberRating = m.Rating;
-        double? memberRd = m.Rd;
         if (isMe && memberRating == null && _cachedStanding != null)
         {
             // Fallback for a backend that doesn't put ratings in the frame yet: we know
-            // our OWN standing from GET /matches/elo. Same gate applies to it.
+            // our OWN standing from GET /matches/elo.
             memberRating = _cachedStanding.Rating;
-            memberRd = _cachedStanding.Rd;
         }
 
         string? rating = null;
-        if (RatingDisplay.ShouldShow(memberRating, memberRd))
+        if (RatingDisplay.ShouldShow(memberRating))
             rating = Strings.Format("MpRoomMemberElo", (int)Math.Round(memberRating!.Value));
 
         string link;
@@ -3113,6 +3105,22 @@ public partial class MultiplayerTab : UserControl
     /// Recreated by each <see cref="RenderRoomPanel"/>; null when no age is shown.</summary>
     private System.Windows.Documents.Run? _lobbyAgeRun;
 
+    /// <summary>
+    /// Whether the last rooms fetch failed, so the next one that succeeds can tell it is
+    /// a RECOVERY rather than just another poll.
+    ///
+    /// <para>It exists for one thing: the player's standing is fetched once per session,
+    /// and a session that starts while the backend is down never gets it. Four attempts
+    /// hit a 502 once and the ELO stayed blank under the player's name for the rest of the
+    /// session — with the server back up the whole time — because nothing retried.</para>
+    ///
+    /// <para>The transition is what is being detected, NOT the poll. Retrying on every
+    /// tick would fire every few seconds for as long as the server stayed down, which is
+    /// precisely when it is failing, and <c>/matches/elo</c> allows 20 a minute and 500 a
+    /// day PER IP — shared by everyone behind the same Radmin network.</para>
+    /// </summary>
+    private bool _roomsFetchFailed;
+
     /// <summary>The standing, fetched once per session — see <see cref="LoadStandingAsync"/>.</summary>
     private EloSnapshot? _cachedStanding;
 
@@ -3864,6 +3872,23 @@ public partial class MultiplayerTab : UserControl
             _lastRoomsRenderedAt = DateTime.Now;
             UpdateRoomsUpdatedLabel();
 
+            // The backend just answered after failing. Deliberately here, above the quiet
+            // diff's early return: a poll that finds the rooms unchanged repaints nothing
+            // but still proves the server is back, and that is the case this exists for.
+            if (_roomsFetchFailed)
+            {
+                _roomsFetchFailed = false;
+                // Only when it is still missing — a standing we already have is not
+                // re-fetched, and LoadStandingAsync's own in-flight guard covers the rest.
+                if (_cachedStanding == null && _session?.CurrentUser != null)
+                {
+                    DiagnosticLog.Write(
+                        "MultiplayerTab: backend recovered — re-fetching the standing that "
+                        + "was lost while it was down");
+                    _ = LoadStandingAsync();
+                }
+            }
+
             // Quiet auto-refresh: bail out without touching the visual
             // tree when the rooms are exactly what we already rendered.
             // That keeps Join buttons, hover and scroll position intact
@@ -3914,6 +3939,10 @@ public partial class MultiplayerTab : UserControl
             // is looking at over a transient network blip — keep the
             // last good render and just log. Manual / activation
             // refreshes still surface the error banner.
+            // Marked whichever way the failure is surfaced: the next success is a
+            // recovery regardless of whether this attempt was a quiet poll or a manual one.
+            _roomsFetchFailed = true;
+
             if (quiet)
             {
                 DiagnosticLog.Write($"RefreshRoomsList (quiet) failed: {ex.Message}");
@@ -4804,11 +4833,18 @@ public partial class MultiplayerTab : UserControl
                 new AppToast.ToastAction(Strings.Get("MpToastMute"), false, () =>
                 {
                     _ignoredInviters.Add(senderKey);
+                    // On the desktop too: this is the reply to a button pressed on a
+                    // desktop card, and it should appear where the hand already was.
                     _showAppToast?.Invoke(new AppToast.ToastOptions(
                         "🔕", Strings.Format("MpInviteMutedConfirm", muteLabel), null,
-                        System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 4000));
+                        System.Array.Empty<AppToast.ToastAction>(),
+                        AutoDismissMs: 4000, PreferDesktop: true));
                 }),
-            }));
+            },
+            // ALWAYS on the desktop, even with the launcher in front. An invite expires
+            // and needs a click; drawn inside the window it is missed from another tab or
+            // another monitor, which is exactly what was reported.
+            PreferDesktop: true));
         Services.SoundService.PlayConnect();
     }
 

@@ -531,6 +531,19 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   were earned. Verified against the live backend: today's deployment answers without the tally
   and the rate is correctly hidden.
 
+  **One documented exception to "once per session", and it is an EVENT, not a timer.** A
+  session that starts while the backend is down never gets a standing at all, and the only
+  retry was a session-state change (`PushAccountChip` → `LoadStandingAsync` on a null cache).
+  Measured: a launcher opened during a 502 outage logged four failed fetches and then showed
+  no ELO under the player's name for the rest of the session, with the server back up the
+  whole time. So `RefreshRoomsListAsync` now keeps a `_roomsFetchFailed` flag and, on the
+  first fetch that SUCCEEDS after one that failed, re-requests the standing if it is still
+  missing. **The trigger is the transition, never the poll** — hanging the request off the
+  poll itself would fire it every few seconds for exactly as long as the server stayed down,
+  which is what the 20/min · 500/day per-IP budget cannot pay for. The check sits ABOVE the
+  quiet diff's early return on purpose: a poll that finds the rooms unchanged repaints
+  nothing but still proves the backend answered.
+
   **The History row shows Win/Loss and NOTHING for 0.5 — the omission is the rule.** A 0.5
   means the result could not be read (no recording, a team game, a skirmish, or any match
   reported before this existed), so a "Draw" label would show all of them as drawn games
@@ -1681,13 +1694,32 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   catching almost nothing. The question worth asking is "did these people play", and Start
   is when it has an answer.
 
-  **(7) A provisional rating is never painted beside a name.** `RatingDisplay.ShouldShow`
-  needs the rating AND its deviation, and refuses while `rd > 110`
-  (`MatchOutcomeView.ProvisionalRd`, matched by the leaderboard's `rd <= 110`). The server
-  hands every new player 1500; showing it turns a placeholder into a claim about their
-  skill. The Profile tab is the one exception, where the word "provisional" sits next to
-  it. **After the 2026-08 ratings reset this means nobody shows an ELO in the roster for
-  a while. That is correct, not a bug.**
+  **(7) A provisional rating is never painted beside SOMEBODY ELSE'S name.** The line is
+  drawn between your own surfaces and other people's, not between "shown" and "hidden":
+
+  - **Yours — the Profile tab and the title-bar chip — show it WITH the word
+    "provisional"** next to the number (`RatingDisplay.ChipKey` →
+    `MpChipEloProvisional`). The qualifier is what stops the 1500 the server hands new
+    players from reading as a score they earned, and there is room for it.
+  - **Theirs — the roster line and the leaderboard — stay silent until it settles**
+    (`RatingDisplay.ShouldShow`, and the leaderboard's `rd <= 110` filter). A roster row
+    has no room for the qualifier, and a bare number there would read as a ranking of
+    that person.
+
+  Both use `MatchOutcomeView.ProvisionalRd` (`rd > 110`), so the two can never disagree
+  about where "settled" begins — a player ranked in the table while labelled provisional
+  under their own name would be exactly that drift.
+
+  **The chip used to hide it too, and that was the wrong trade:** it left the header blank
+  while the Profile tab showed 1500 for the same player, and it was read as a bug the
+  first time it happened. Note the case it must NOT be confused with — **no standing at
+  all returns null and stays hidden.** A launcher opened while the backend is down has no
+  rating to describe, and saying "provisional" there would invent one; a missing or
+  non-positive `rd` counts as provisional for the same reason, since Glicko has no
+  deviation of zero and `EloSnapshot.Rd` is not nullable.
+
+  **After a ratings reset this means nobody shows an ELO in the ROSTER for a while, and
+  everyone's own chip reads "provisional". That is correct, not a bug.**
 
   **(8) The reset.** `scripts/reset-elo.ts` emptied `elo_ratings` and nulled every
   `rating_before`/`rating_after`, because those numbers were produced by the bug in (1).

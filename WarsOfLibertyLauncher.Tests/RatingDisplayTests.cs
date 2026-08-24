@@ -1,4 +1,4 @@
-using WarsOfLibertyLauncher.Services.Multiplayer;
+﻿using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
 
 namespace WarsOfLibertyLauncher.Tests;
@@ -72,5 +72,56 @@ public class RatingDisplayTests
         Assert.False(RatingDisplay.ShouldShow(1712, null));
         Assert.False(RatingDisplay.ShouldShow(null, 78));
         Assert.False(RatingDisplay.ShouldShow(null, null));
+    }
+
+    // ---------------- the player's own chip, under their name ----------------
+
+    [Fact]
+    public void NoStandingAtAllShowsNothing()
+    {
+        // THE regression to avoid, and it is not hypothetical: a launcher opened while
+        // the backend was down showed no rating for a whole session, correctly, because
+        // there was none to show. That must not become the word "provisional" — not
+        // knowing a rating and knowing it is unsettled are different facts.
+        Assert.Null(RatingDisplay.ChipKey(null, null));
+        Assert.Null(RatingDisplay.ChipKey(null, 350));
+    }
+
+    [Fact]
+    public void AProvisionalRatingIsLabelled_NotHidden()
+    {
+        // The chip is the player's OWN rating, so it can carry the qualifier the way the
+        // Profile tab always has. Hiding it made the two surfaces disagree about the same
+        // person, which is what prompted this.
+        Assert.Equal("MpChipEloProvisional", RatingDisplay.ChipKey(1500, 350));
+    }
+
+    [Fact]
+    public void ASettledRatingIsJustTheNumber()
+    {
+        Assert.Equal("MpChipElo", RatingDisplay.ChipKey(1712, 78));
+    }
+
+    [Fact]
+    public void AnUnreportedDeviationCountsAsProvisional()
+    {
+        // Glicko has no deviation of zero, so a 0 means the backend never sent one — and
+        // EloSnapshot.Rd is not nullable, so an older backend lands exactly here. An
+        // unreported deviation cannot be claimed as settled.
+        Assert.Equal("MpChipEloProvisional", RatingDisplay.ChipKey(1500, 0));
+        Assert.Equal("MpChipEloProvisional", RatingDisplay.ChipKey(1500, null));
+        Assert.Equal("MpChipEloProvisional", RatingDisplay.ChipKey(1500, -1));
+    }
+
+    [Fact]
+    public void TheChipAgreesWithTheRosterAboutWhereSettledBegins()
+    {
+        // Both sides of the same line, and the leaderboard filters with rd <= 110 to
+        // match. If these ever drift, a player is ranked in the table and labelled
+        // provisional under their own name at the same moment.
+        Assert.Equal("MpChipElo", RatingDisplay.ChipKey(1600, MatchOutcomeView.ProvisionalRd));
+        Assert.Equal(
+            "MpChipEloProvisional",
+            RatingDisplay.ChipKey(1600, MatchOutcomeView.ProvisionalRd + 0.1));
     }
 }

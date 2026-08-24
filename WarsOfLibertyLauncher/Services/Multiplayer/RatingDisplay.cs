@@ -1,4 +1,4 @@
-namespace WarsOfLibertyLauncher.Services.Multiplayer;
+﻿namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
 /// <summary>
 /// How a rating is allowed to appear on screen. Pure, so the rules can be tested
@@ -30,19 +30,23 @@ public static class RatingDisplay
          : delta.Value.ToString();
 
     /// <summary>
-    /// Whether someone else's rating may be painted beside their name.
+    /// Whether a rating may be painted beside a name. It may, whenever there is one.
     ///
-    /// <para>Both halves are required. A rating without its deviation comes from a
-    /// backend that only tells half the story, and the missing half is exactly what
-    /// decides whether the number means anything yet — so in that doubt, nothing is
-    /// shown.</para>
+    /// <para><b>This used to withhold a provisional rating</b> — the server's starting
+    /// 1500 — on the grounds that showing it would pass a placeholder off as earned
+    /// skill. That reasoning does not survive the fact that <b>every player who has not
+    /// played is on exactly 1500</b>: a number everybody starts from, shown to everybody,
+    /// claims nothing about anyone. What it did instead was leave the rating blank across
+    /// the whole app for weeks, which read as broken.</para>
     ///
-    /// <para>And a provisional rating is withheld: the server hands every new player
-    /// 1500, and rendering that next to a name turns a placeholder into a claim about
-    /// their skill. The player's own Profile tab is the one place it does appear,
-    /// because there it sits beside the word "provisional"; a roster line has no room
-    /// for the qualifier, and the bare number would read as a ranking.</para>
+    /// <para>The refusal that REMAINS is the one that was always the point: a null rating
+    /// paints nothing. That is not somebody's 1500, it is not knowing — the state the app
+    /// was in the day the backend went down — and inventing a number there would be the
+    /// actual lie.</para>
+    ///
+    /// <para>The ranking table is the deliberate exception and keeps its own filter:
+    /// showing 1500 next to a name informs, but ordering a league table of people who
+    /// never played does not.</para>
     /// </summary>
-    public static bool ShouldShow(double? rating, double? rd)
-        => rating.HasValue && rd.HasValue && !MatchOutcomeView.IsProvisional(rd);
+    public static bool ShouldShow(double? rating) => rating.HasValue;
 }
