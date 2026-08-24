@@ -39,89 +39,24 @@ public class RatingDisplayTests
     }
 
     [Fact]
-    public void ASettledRatingIsShown()
+    public void ARatingIsShownWheneverThereIsOne()
     {
-        Assert.True(RatingDisplay.ShouldShow(1712, 78));
+        // The provisional gate is gone, deliberately. It withheld the server's starting
+        // 1500 so a placeholder could not pass as earned skill — but EVERY player who has
+        // not played is on exactly 1500, so a number everybody starts from, shown to
+        // everybody, claims nothing about anyone. What the gate actually did was leave
+        // the rating blank across the whole app, which read as broken.
+        Assert.True(RatingDisplay.ShouldShow(1712));
+        Assert.True(RatingDisplay.ShouldShow(1500));
     }
 
     [Fact]
-    public void AProvisionalRatingIsWithheld()
+    public void NoRatingAtAllStillShowsNothing()
     {
-        // A brand-new player: the server's default 1500 at the maximum deviation. This
-        // is exactly the number that must never appear beside a name in the roster.
-        Assert.False(RatingDisplay.ShouldShow(1500, 350));
-    }
-
-    [Fact]
-    public void TheProvisionalBoundaryMatchesTheBackend()
-    {
-        // MatchOutcomeView.IsProvisional compares with a strict >, and the leaderboard
-        // query filters with rd <= 110, so exactly 110 counts as settled on both sides.
-        // If these two ever disagree, a player is ranked in the table and blank in the
-        // room at the same instant.
-        Assert.True(RatingDisplay.ShouldShow(1600, MatchOutcomeView.ProvisionalRd));
-        Assert.False(RatingDisplay.ShouldShow(1600, MatchOutcomeView.ProvisionalRd + 0.1));
-    }
-
-    [Fact]
-    public void HalfAnAnswerIsNoAnswer()
-    {
-        // A rating with no deviation comes from a backend that only tells half the
-        // story — and the missing half is precisely what decides whether the number
-        // means anything yet. In that doubt, nothing is shown.
-        Assert.False(RatingDisplay.ShouldShow(1712, null));
-        Assert.False(RatingDisplay.ShouldShow(null, 78));
-        Assert.False(RatingDisplay.ShouldShow(null, null));
-    }
-
-    // ---------------- the player's own chip, under their name ----------------
-
-    [Fact]
-    public void NoStandingAtAllShowsNothing()
-    {
-        // THE regression to avoid, and it is not hypothetical: a launcher opened while
-        // the backend was down showed no rating for a whole session, correctly, because
-        // there was none to show. That must not become the word "provisional" — not
-        // knowing a rating and knowing it is unsettled are different facts.
-        Assert.Null(RatingDisplay.ChipKey(null, null));
-        Assert.Null(RatingDisplay.ChipKey(null, 350));
-    }
-
-    [Fact]
-    public void AProvisionalRatingIsLabelled_NotHidden()
-    {
-        // The chip is the player's OWN rating, so it can carry the qualifier the way the
-        // Profile tab always has. Hiding it made the two surfaces disagree about the same
-        // person, which is what prompted this.
-        Assert.Equal("MpChipEloProvisional", RatingDisplay.ChipKey(1500, 350));
-    }
-
-    [Fact]
-    public void ASettledRatingIsJustTheNumber()
-    {
-        Assert.Equal("MpChipElo", RatingDisplay.ChipKey(1712, 78));
-    }
-
-    [Fact]
-    public void AnUnreportedDeviationCountsAsProvisional()
-    {
-        // Glicko has no deviation of zero, so a 0 means the backend never sent one — and
-        // EloSnapshot.Rd is not nullable, so an older backend lands exactly here. An
-        // unreported deviation cannot be claimed as settled.
-        Assert.Equal("MpChipEloProvisional", RatingDisplay.ChipKey(1500, 0));
-        Assert.Equal("MpChipEloProvisional", RatingDisplay.ChipKey(1500, null));
-        Assert.Equal("MpChipEloProvisional", RatingDisplay.ChipKey(1500, -1));
-    }
-
-    [Fact]
-    public void TheChipAgreesWithTheRosterAboutWhereSettledBegins()
-    {
-        // Both sides of the same line, and the leaderboard filters with rd <= 110 to
-        // match. If these ever drift, a player is ranked in the table and labelled
-        // provisional under their own name at the same moment.
-        Assert.Equal("MpChipElo", RatingDisplay.ChipKey(1600, MatchOutcomeView.ProvisionalRd));
-        Assert.Equal(
-            "MpChipEloProvisional",
-            RatingDisplay.ChipKey(1600, MatchOutcomeView.ProvisionalRd + 0.1));
+        // THE refusal that survives, and the one that was always the point. A null is not
+        // somebody's 1500 — it is not knowing, which is exactly the state the app was in
+        // the day the backend went down and every rating fetch came back 502. Painting a
+        // number there would be the real invention.
+        Assert.False(RatingDisplay.ShouldShow(null));
     }
 }

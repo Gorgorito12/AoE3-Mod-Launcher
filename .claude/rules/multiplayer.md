@@ -1694,32 +1694,39 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   catching almost nothing. The question worth asking is "did these people play", and Start
   is when it has an answer.
 
-  **(7) A provisional rating is never painted beside SOMEBODY ELSE'S name.** The line is
-  drawn between your own surfaces and other people's, not between "shown" and "hidden":
+  **(7) A rating is shown wherever a player's name appears — and "provisional" is
+  NOT part of it.** This reverses an earlier rule of mine, so read the reason before
+  reinstating it.
 
-  - **Yours — the Profile tab and the title-bar chip — show it WITH the word
-    "provisional"** next to the number (`RatingDisplay.ChipKey` →
-    `MpChipEloProvisional`). The qualifier is what stops the 1500 the server hands new
-    players from reading as a score they earned, and there is room for it.
-  - **Theirs — the roster line and the leaderboard — stay silent until it settles**
-    (`RatingDisplay.ShouldShow`, and the leaderboard's `rd <= 110` filter). A roster row
-    has no room for the qualifier, and a bare number there would read as a ranking of
-    that person.
+  The old rule withheld the server's starting 1500 (`rd > 110`) on the grounds that
+  showing it passes a placeholder off as earned skill, and labelled it "provisional"
+  where it did appear. **The flaw: every player who has not played is on exactly 1500.**
+  A number everybody starts from, shown to everybody, claims nothing about anyone —
+  while hiding it left the rating blank in the chip, the room roster and everywhere
+  else, which is what actually got reported, twice.
 
-  Both use `MatchOutcomeView.ProvisionalRd` (`rd > 110`), so the two can never disagree
-  about where "settled" begins — a player ranked in the table while labelled provisional
-  under their own name would be exactly that drift.
+  So `RatingDisplay.ShouldShow(double? rating)` is now simply "is there one", and the
+  rating appears in five places: the title-bar chip, the Profile tab, the room roster,
+  the rooms table (beside the host) and the global players panel.
 
-  **The chip used to hide it too, and that was the wrong trade:** it left the header blank
-  while the Profile tab showed 1500 for the same player, and it was read as a bug the
-  first time it happened. Note the case it must NOT be confused with — **no standing at
-  all returns null and stays hidden.** A launcher opened while the backend is down has no
-  rating to describe, and saying "provisional" there would invent one; a missing or
-  non-positive `rd` counts as provisional for the same reason, since Glicko has no
-  deviation of zero and `EloSnapshot.Rd` is not nullable.
+  **The refusal that SURVIVES is the one that was always the point: a null rating paints
+  nothing.** Null is not somebody's 1500, it is not knowing — the state the app was in
+  the day the backend answered 502 to every rating fetch — and putting a number there
+  would be the actual invention. Pinned by `RatingDisplayTests`.
 
-  **After a ratings reset this means nobody shows an ELO in the ROSTER for a while, and
-  everyone's own chip reads "provisional". That is correct, not a bug.**
+  **Two deliberate exceptions.** The RANKING card keeps its `rd <= 110` +
+  `wins + losses >= 3` filter: showing 1500 next to a name informs, but ordering a
+  league table of people who never played does not — they would all tie, in an
+  arbitrary order. And the Profile tab plus the end-of-match note still say
+  "provisional", because there the word explains something real (you have no rated
+  matches; that swing was large) rather than qualifying a bare number.
+
+  **The two backend feeds this needs, and the trap in one of them.** `GET /lobbies`
+  returns `host.rating` and the global presence frame carries `rating` per user, both
+  added for this. The lobby query joins with **`LEFT JOIN elo_ratings`** and it has to
+  stay that way: an inner join would make **every room whose host has no rating row
+  vanish from the rooms list** — worse than a missing number, and silent. Same trap as
+  the membership query in `LobbyRoom`'s hello.
 
   **(8) The reset.** `scripts/reset-elo.ts` emptied `elo_ratings` and nulled every
   `rating_before`/`rating_after`, because those numbers were produced by the bug in (1).

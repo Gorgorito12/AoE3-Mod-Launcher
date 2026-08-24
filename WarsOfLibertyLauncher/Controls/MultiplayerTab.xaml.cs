@@ -2057,9 +2057,11 @@ public partial class MultiplayerTab : UserControl
         var me = _session?.CurrentUser;
         var isMe = me != null && string.Equals(m.UserId, me.Id, StringComparison.Ordinal);
 
-        // Everyone's ELO, not just your own: the rating rides in the room-state member
-        // object. No provisional gate any more — 1500 is the shared starting point, and
-        // hiding it left the roster blank for everybody.
+        // Everyone's ELO, not just your own: the rating now rides in the room-state
+        // member object, so the roster no longer has to fall back to "only I know mine".
+        //
+        // No provisional gate any more: 1500 is the shared starting point, and hiding it
+        // left this line blank for everybody.
         double? memberRating = m.Rating;
         if (isMe && memberRating == null && _cachedStanding != null)
         {
@@ -5067,7 +5069,9 @@ public partial class MultiplayerTab : UserControl
                 var login = u.TryGetProperty("login", out var lEl) ? (lEl.GetString() ?? "") : "";
                 var avatarUrl = u.TryGetProperty("avatarUrl", out var avEl) ? avEl.GetString() : null;
                 var status = u.TryGetProperty("status", out var stEl) ? (stEl.GetString() ?? "idle") : "idle";
-                _globalOnlineUsers.Add((userId, login, avatarUrl, status));
+                double? rating = u.TryGetProperty("rating", out var rtEl)
+                                 && rtEl.ValueKind == JsonValueKind.Number ? rtEl.GetDouble() : null;
+                _globalOnlineUsers.Add((userId, login, avatarUrl, status, rating));
 
                 // A genuinely new arrival (after the baseline, not us) pops once.
                 if (_presenceBaselineSeeded
@@ -5481,7 +5485,7 @@ public partial class MultiplayerTab : UserControl
     // The connected global-chat users + each one's live status, cached from the
     // presence / global_state frames' onlineUsers array (see ParseOnlineUsers).
     // Status: "in_game" / "in_room" / "idle". Rendered by RenderPlayersPanel.
-    private readonly List<(string userId, string login, string? avatarUrl, string status)> _globalOnlineUsers = new();
+    private readonly List<(string userId, string login, string? avatarUrl, string status, double? rating)> _globalOnlineUsers = new();
 
     // Presence "someone came online" sound: the set of userIds seen in the last
     // presence frame + a one-time baseline flag. The FIRST frame seeds the set
@@ -5531,7 +5535,7 @@ public partial class MultiplayerTab : UserControl
         }
 
         var me = _session?.CurrentUser;
-        bool IsMe((string userId, string login, string? avatarUrl, string status) u) =>
+        bool IsMe((string userId, string login, string? avatarUrl, string status, double? rating) u) =>
             me != null && (
                 (!string.IsNullOrEmpty(u.userId) && string.Equals(u.userId, me.Id, StringComparison.Ordinal))
                 || (!string.IsNullOrEmpty(u.login)
@@ -5568,6 +5572,9 @@ public partial class MultiplayerTab : UserControl
                 var row = new Grid { Margin = new Thickness(6, 1, 0, 1) };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                // The rating sits BEFORE the action column so the invite icon and the
+                // "you" tag stay flush right whatever the number is.
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
                 var disc = BuildAvatarDisc(u.login, u.avatarUrl, 20);
@@ -5586,6 +5593,25 @@ public partial class MultiplayerTab : UserControl
                 Grid.SetColumn(nameText, 1);
                 row.Children.Add(nameText);
 
+                // Everyone's rating, right here in the players panel — the point of the
+                // whole change. Dim, because the name is what you scan for. Absent rather
+                // than zeroed when the backend sent nothing.
+                if (RatingDisplay.ShouldShow(u.rating))
+                {
+                    var eloText = new TextBlock
+                    {
+                        Text = "· " + (int)Math.Round(u.rating!.Value),
+                        Foreground = R("MpTextDim"),
+                        FontSize = F("FontSizeCaption"),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(6, 0, 0, 0),
+                        ToolTip = TooltipHelper.Wrap(
+                            Strings.Format("MpChipElo", (int)Math.Round(u.rating.Value))),
+                    };
+                    Grid.SetColumn(eloText, 2);
+                    row.Children.Add(eloText);
+                }
+
                 if (IsMe(u))
                 {
                     var youTag = new TextBlock
@@ -5596,7 +5622,7 @@ public partial class MultiplayerTab : UserControl
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(6, 0, 4, 0),
                     };
-                    Grid.SetColumn(youTag, 2);
+                    Grid.SetColumn(youTag, 3);
                     row.Children.Add(youTag);
                 }
                 else if (!string.IsNullOrEmpty(u.userId))
@@ -5604,7 +5630,7 @@ public partial class MultiplayerTab : UserControl
                     // Always show the invite icon (active in a room, dimmed otherwise)
                     // — no more hidden/ugly right-click menu.
                     var inviteBtn = BuildInviteIconButton(u.userId, u.login, enabled: inRoom);
-                    Grid.SetColumn(inviteBtn, 2);
+                    Grid.SetColumn(inviteBtn, 3);
                     row.Children.Add(inviteBtn);
                 }
                 PlayersPanel.Children.Add(row);
@@ -6053,6 +6079,9 @@ public partial class MultiplayerTab : UserControl
         var hostCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // A third column rather than a second LINE: the reference builds this table out of
+        // one-line rows, and growing them is what would stop it reading at a glance.
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var hostDisc = BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, 20);
         hostDisc.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(hostDisc, 0);
@@ -6068,6 +6097,26 @@ public partial class MultiplayerTab : UserControl
         };
         Grid.SetColumn(hostNameText, 1);
         hostCell.Children.Add(hostNameText);
+
+        // The host's rating. Dimmer than the name, because it is the secondary fact in
+        // this cell — you scan for who is hosting first. Absent (not zeroed) when the
+        // backend did not send one.
+        if (RatingDisplay.ShouldShow(lobby.Host?.Rating))
+        {
+            var hostElo = new TextBlock
+            {
+                Text = "\u00B7 " + (int)Math.Round(lobby.Host!.Rating!.Value),
+                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+                FontSize = 12,
+                Margin = new Thickness(6, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = TooltipHelper.Wrap(
+                    Strings.Format("MpChipElo", (int)Math.Round(lobby.Host.Rating.Value))),
+            };
+            Grid.SetColumn(hostElo, 2);
+            hostCell.Children.Add(hostElo);
+        }
+
         PlaceRoomCell(grid, Services.RoomColumn.Host, hostCell);
 
         // === PLAYERS — "1/8" plus the reference's capacity segments: four bars that
