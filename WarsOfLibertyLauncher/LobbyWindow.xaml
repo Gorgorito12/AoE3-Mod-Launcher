@@ -13,6 +13,13 @@
         Background="{DynamicResource MpAppBg}"
         ShowInTaskbar="True">
 
+    <Window.Resources>
+        <!-- The gold focus ring belongs to the launcher's other surfaces. Here every
+             field sits on navy, and the template's trigger targets its inner Border by
+             name, so a field cannot opt out on its own — this is the only lever. -->
+        <SolidColorBrush x:Key="TextBoxFocusBrush" Color="#2F7FE0"/>
+    </Window.Resources>
+
     <!--
         Non-modal lobby window. Replaces the in-tab Canvas overlay that
         used to live inside MultiplayerTab (`RoomPanel` Grid + Canvas +

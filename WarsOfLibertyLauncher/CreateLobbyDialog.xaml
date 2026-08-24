@@ -124,7 +124,6 @@
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="{StaticResource RadiusRow}">
                             <ScrollViewer x:Name="PART_ContentHost"
-                                          Margin="{TemplateBinding Padding}"
                                           VerticalAlignment="Center"
                                           Focusable="False"
                                           HorizontalScrollBarVisibility="Hidden"

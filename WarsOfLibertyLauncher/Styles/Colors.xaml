@@ -195,6 +195,13 @@
          scoped to that window). All six exist because hover is only half of a
          button's state machine: parameterize the background alone and MainWindow
          ends up with a cold fill under a gold glyph that flashes gold when pressed. -->
+    <!-- Focus ring of the global TextBox template. A KEY, not a literal, for the same
+         reason the caption-button states are: the template trigger targets the inner
+         Border BY NAME, so it beats any BorderBrush the call site sets — a field cannot
+         opt out of the gold on its own. The multiplayer surface overrides this to blue
+         in its own resources; everywhere else keeps the launcher's accent. -->
+    <SolidColorBrush x:Key="TextBoxFocusBrush" Color="#D8B66A"/>
+
     <SolidColorBrush x:Key="TitleBarButtonHoverBg" Color="#1FD8B66A"/>
     <SolidColorBrush x:Key="TitleBarButtonHoverFg" Color="#FFF4E0"/>
     <SolidColorBrush x:Key="TitleBarButtonPressedBg" Color="#33D8B66A"/>

@@ -3927,7 +3927,25 @@ engine** and the UI binds to it.
   `Buttons.xaml` (incl. the implicit global `Button` style — every bare button
   is themed by it, so there are no "white" buttons to chase), `Chrome.xaml`, and
   `Inputs.xaml` (implicit global `ComboBox`/`TextBox`/`CheckBox`/`RadioButton`
-  styles). **Input theming is global — don't recolour inputs per-dialog.** A
+  styles). **A TextBox applies its OWN `Padding` — never bind it onto
+  `PART_ContentHost` as well.** The shared template did
+  (`Margin="{TemplateBinding Padding}"`), which counted it TWICE: measured on the
+  chat composer, `Padding="11"` put the caret 22.4 DIP in, not 11. That doubling is
+  why placeholder TextBlocks overlaid on these boxes never lined up — every call site
+  was tuning a number that was silently multiplied, so the "fixes" were compensations
+  for a bug, and an audit that read the template literally computed the wrong offsets
+  for all five pairs. The idiom IS correct on a `ContentPresenter` (ComboBox, Button),
+  which does not self-apply Padding; it is only wrong on a TextBox's content host.
+  **A ~2 px residual is the platform floor** — `TextBoxView` has a small inherent
+  inset that a sibling `TextBlock` does not, and every correctly-built field in the
+  launcher shows exactly that much; don't chase it with a hand-tuned compensation.
+  Give the placeholder the SAME `FontSize` as the box, or the text jumps the moment
+  you type even with the insets right.
+  **The focus ring is `TextBoxFocusBrush`, not a local `BorderBrush`.** The template's
+  focus trigger targets its inner Border BY NAME, so it beats anything the call site
+  sets — a field cannot opt out of the gold on its own. The multiplayer surfaces
+  override that key to blue in their own resources.
+  **Input theming is global — don't recolour inputs per-dialog.** A
   ComboBox in particular MUST be *retemplated*, not just recoloured: WPF's
   default ComboBox template paints its toggle + dropdown popup with the OS light
   theme and ignores `Background`, so colour-only styles leave a white dropdown
