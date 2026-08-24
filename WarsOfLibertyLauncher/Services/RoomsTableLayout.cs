@@ -8,6 +8,7 @@ public enum RoomColumn
 {
     Room,
     Host,
+    Elo,
     Players,
     Ping,
     Action,
@@ -65,6 +66,11 @@ public static class RoomsTableLayout
     {
         new RoomColumnSpec(RoomColumn.Room,    null, 210),
         new RoomColumnSpec(RoomColumn.Host,    152,  152),
+        // ELO is not in the reference, which predates ratings entirely. It is a column
+        // rather than a third item inside the HOST cell because that cell is a fixed
+        // 152px with an elastic name in it: the name expands, so the rating was pushed
+        // hard against the column edge and ended up touching the "1/2" of PLAYERS.
+        new RoomColumnSpec(RoomColumn.Elo,      58,   58),
         new RoomColumnSpec(RoomColumn.Players,  88,   88),
         new RoomColumnSpec(RoomColumn.Ping,     66,   66),
         new RoomColumnSpec(RoomColumn.Action,   96,   96),
@@ -77,10 +83,16 @@ public static class RoomsTableLayout
     /// whether there is space in it, and the way in are the entire point of the table. Ping goes
     /// first because it is a nicety, then Host — and neither is actually lost, because
     /// <see cref="Hidden"/> tells the row builder to fold it into the room's second line.</para>
+    ///
+    /// <para><b>Elo must come before Host and can never outlive it.</b> A rating with no name
+    /// beside it says nothing about anyone — it would be a bare number in a column of its own
+    /// while the person it belongs to had already been dropped. Pinned by
+    /// <c>RoomsTableLayoutTests</c>, because the order here is the only thing enforcing it.</para>
     /// </summary>
     private static readonly RoomColumn[] DropOrder =
     {
         RoomColumn.Ping,
+        RoomColumn.Elo,
         RoomColumn.Host,
     };
 

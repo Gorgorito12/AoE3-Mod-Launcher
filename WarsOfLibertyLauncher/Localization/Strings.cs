@@ -2795,6 +2795,8 @@ public static class Strings
         ["MpColRoom"] = new() { [LangEn] = "ROOM", [LangEs] = "SALA" },
         ["MpColMod"] = new() { [LangEn] = "MOD", [LangEs] = "MOD" },
         ["MpColHost"] = new() { [LangEn] = "HOST", [LangEs] = "ANFITRIÓN" },
+        // The same word in both: it is the name of the rating, not a translatable label.
+        ["MpColElo"] = new() { [LangEn] = "ELO", [LangEs] = "ELO" },
         ["MpColPlayers"] = new() { [LangEn] = "PLAYERS", [LangEs] = "JUGADORES" },
         ["MpColPing"] = new() { [LangEn] = "PING", [LangEs] = "PING" },
         ["MpColStatus"] = new() { [LangEn] = "STATUS", [LangEs] = "ESTADO" },
