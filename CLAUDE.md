@@ -998,26 +998,46 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   does NOT yank the user off their current tab; "first opens" is a launch-time
   rule only).
 
-- **MainWindow is TWO rows now, not three — the nav strip was absorbed into the
-  title bar (design handoff 1a), and the chrome/content divider moved with it.**
-  The three main tabs live inside `TitleBar.Content` (still the `TopTabBar`
-  StackPanel, still in MainWindow's namescope so `ApplyTopTabOrder` can clear and
-  refill its `Children`); `Grid.Row=1` is now the content. **The seam that used
-  to be the nav strip's `BorderThickness="0,0,0,1"` is now a top border on the
-  content wrapper** — it has to live *somewhere*, because Multiplayer replaces it
-  with its own sub-tab bar but Library and Workshop have nothing, and without it
-  the title bar bleeds straight into their content. The title bar itself still has
-  **no bottom border on purpose**; don't give it one. **Three things are coupled to
-  the bar and are easy to break:** the height must only ever be set through
-  `TitleBarHeightMain` (`App.ApplyWindowChrome` derives `WindowChrome.CaptionHeight`
-  from the same token — decouple them and the bottom strip of the bar silently stops
-  dragging the window); **every interactive control in the bar needs
-  `IsHitTestVisibleInChrome` set EXPLICITLY — do NOT rely on it being inherited into
-  `TitleBar.Content`**; and the notification
-  bell + offline chip are still **overlaid** on Row 0 at hand-computed right margins
-  (148 and 200, derived from `ButtonWidth=46`), which is why the bar's content grid
-  carries a matching right margin — folding those two into the bar is what will
-  finally retire all three numbers.
+- **MainWindow is THREE rows: title bar (36) / nav (54) / content — and the tabs
+  have now moved between them twice, so read this before moving them again.**
+  Handoff 1a folded the separate nav strip INTO the title bar (five stacked bars
+  down to two); the later header reference split it back out, because a chrome row
+  carrying only a wordmark can afford to BE the drag handle. Row 0 is the shared
+  `controls:TitleBar` holding the brand, the version chip, and — in the SAME grid,
+  right-aligned — the self-update pill, the offline chip and the notification bell.
+  Row 1 is `MainNav`, a plain `Border` with the three tabs (`TopTabBar`, still a
+  named panel in MainWindow's namescope so `ApplyTopTabOrder` can clear and refill
+  its `Children`) and, on the right, the connection capsule, a divider and the
+  account block. Row 2 is the content.
+  **The seam belongs to whichever bar sits directly above the content.** It was the
+  nav strip's bottom border, then a TOP border on the content wrapper while the tabs
+  lived in the bar, and it is the nav row's `BorderThickness="0,0,0,1"` again now —
+  the content wrapper's was removed, since two 1px rules in different greys stack
+  into a visible double line. Multiplayer draws its own sub-tab bar under this, but
+  Library and Workshop have nothing, so the rule cannot simply be dropped. The title
+  bar itself still has **no bottom border on purpose**; don't give it one.
+  **Three things are coupled to this and are easy to break:**
+  (1) the bar height must only ever be set through `TitleBarHeightMain`, because
+  `App.ApplyWindowChrome` derives `WindowChrome.CaptionHeight` from the same token
+  and the caption region *is* the drag region — the nav row's height is a SEPARATE
+  token (`MainNavHeight`) for exactly that reason. Grow `TitleBarHeightMain` to
+  cover both rows and the top of every tab starts dragging the window instead of
+  switching tabs; leave it at 46 while the bar renders at 36 and you get the same
+  bug in a 10px band. Silent either way.
+  (2) **every interactive control in the bar needs `IsHitTestVisibleInChrome` set
+  EXPLICITLY, and it must NOT be set on the content grid** — on the grid it makes
+  the whole bar hit-testable and kills the drag. Nothing in the NAV row needs it at
+  all: that row is below `CaptionHeight`, so it gets ordinary client hit-testing,
+  hover and tooltips for free (which is what lets the connection capsule carry a
+  tooltip at all — in the caption region one could never fire).
+  (3) the right-hand affordances are **in the bar's own grid now**, not overlaid.
+  That retired the hand-computed right margins this bullet used to warn about (bell
+  148, offline chip 200, content grid 58, all derived from `ButtonWidth=46 x 3`):
+  column 0 of the shared template ends exactly where the caption buttons begin, so
+  right-aligned content lands beside them with no arithmetic. Don't reintroduce a
+  hand-computed inset. The notification *popup* stays a sibling of the TitleBar —
+  a `Popup` renders in its own HWND against its `PlacementTarget`, so it has no
+  reason to live inside the bar.
   **The hit-test rule bit us and the symptom was bizarre, so it's worth the detail:**
   `WindowChrome.IsHitTestVisibleInChrome` IS declared `Inherits`, but that inheritance
   does **not** reach an element placed in a `ContentControl`'s `Content` — the content's
@@ -1028,13 +1048,29 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   opening the brand popup — a `StaysOpen=false` popup takes mouse capture, and while
   captured every click is routed as a normal client hit, bypassing the caption
   hit-test entirely. So "click the brand, then a tab works, then it's dead again"
-  is the signature of this exact bug. The fix is one attribute on the content grid,
-  which every OTHER control in the bar had already been setting on itself. **The active-tab marker changed with the move:**
-  it was a 2px gold bottom border that worked because that edge *was* the chrome/
-  content seam; inside the bar there is no seam to sit on, so it's a filled pill
-  (`MpTabActiveBg` + `MpTabActiveRim`). The pill deliberately does **not** bold the
-  text — re-weighting would resize the button and shuffle its neighbours on every tab
-  switch, which the old underline never did. One related guard keeps the **content
+  is the signature of this exact bug. It no longer applies to the tabs (they left the
+  caption region) but it governs every control that stays in the bar.
+  **`UiScale`'s references are tied to the chrome height, and getting them wrong looks
+  like a font bug, not a layout one.** The chrome went 47px (bar 46 + content seam) to
+  90 (36 + 54), so `ContentHost` at the default 700-tall window drops 653 → 610 and the
+  three `1100, 604` references became `1100, 560` (`MainWindow.xaml.cs`,
+  `ModsBrowser.xaml.cs`, `MultiplayerTab.xaml.cs`), the hero's `1500, 760` became
+  `1500, 710`. A fresh install would have looked fine either way — the danger is that
+  the window height is PERSISTED, so anyone with a saved height near the break-even
+  lands at 0.98-0.999, and `UiScale.SetTextCrispForScale` switches at `< 0.999`: the
+  whole Workshop and Multiplayer surface swaps `Display`/`ClearType` for
+  `Ideal`/`Grayscale` and every glyph goes soft for a 1% size change. Re-tune these
+  whenever a chrome row's height changes.
+  **The launcher-wide ES/EN toggle that lived in the bar is GONE** — the language is
+  changed in Launcher Settings, which was always the primary place;
+  `LauncherConfig.LanguageExplicitlyChosen` is now written from there alone.
+  **The active-tab marker follows the tabs, and has now
+  changed twice:** a 2px underline (it worked because that edge *was* the chrome/
+  content seam), then a filled pill once the tabs moved INSIDE the bar and there was
+  no seam left to sit on, and a 2px `MpAction` underline again now that the nav row
+  gives them a rule to land on. The 2px is reserved as `Transparent` at rest rather
+  than added when active, and the active tab is deliberately **not** bolded — either
+  would resize the button and shuffle its neighbours on every tab switch. One related guard keeps the **content
   below** from reading as if it invades the chrome: the content host is
   `ClipToBounds="True"` so nothing in any tab — the PlayView full-bleed
   background image, the hero gradients, the scaled hero block — can render *up*

@@ -150,6 +150,45 @@
     <SolidColorBrush x:Key="BgSidebar" Color="#314556"/>
 
     <!-- =========================================================
+         MAIN HEADER (MainWindow only) — the two-row chrome from the header
+         reference: a near-black title bar over a slightly lifted nav row.
+
+         Deliberately its OWN family rather than a reuse of MpTitleBar (#233648) or
+         MpAppBg (#0F1C2E): those two are the multiplayer surface's, shared with
+         LobbyWindow and CreateLobbyDialog, and repointing either would restyle
+         windows nobody asked about. The header sits above ALL THREE tabs, so it
+         answers to the header reference, not to the multiplayer handoff.
+
+         The one value shared with multiplayer is the accent: the reference's
+         #2f7ee0 for the active tab's underline and the avatar disc is MpAction
+         exactly, so that one is reused rather than duplicated under a new name.
+         ========================================================= -->
+    <SolidColorBrush x:Key="ChromeTitleBg" Color="#0C131B"/>       <!-- title bar -->
+    <SolidColorBrush x:Key="ChromeNavBg" Color="#141E29"/>         <!-- nav row -->
+    <SolidColorBrush x:Key="ChromeNavRule" Color="#1E2B38"/>       <!-- nav → content seam -->
+    <SolidColorBrush x:Key="ChromeRim" Color="#22303E"/>           <!-- version chip, capsule, divider -->
+    <SolidColorBrush x:Key="ChromeTextDim" Color="#93A4B5"/>       <!-- wordmark, idle tab -->
+    <SolidColorBrush x:Key="ChromeTextFaint" Color="#5D7085"/>     <!-- version, IP, ELO -->
+    <SolidColorBrush x:Key="ChromeTextSoft" Color="#C3CFDA"/>      <!-- "Connected", caption glyphs -->
+    <SolidColorBrush x:Key="ChromeTextStrong" Color="#E6EDF4"/>    <!-- player name -->
+    <SolidColorBrush x:Key="ChromeOk" Color="#3FBF6A"/>            <!-- capsule dot -->
+
+    <!-- Caption-button states, as KEYS so a single window can restyle its own
+         min/max/close without touching the other ~15 that share the TitleBar
+         template. These are the DEFAULTS — the gold/red the launcher has always
+         had; MainWindow overrides them in its Window.Resources (a DynamicResource
+         lookup walks up to the Window before Application, so the override is
+         scoped to that window). All six exist because hover is only half of a
+         button's state machine: parameterize the background alone and MainWindow
+         ends up with a cold fill under a gold glyph that flashes gold when pressed. -->
+    <SolidColorBrush x:Key="TitleBarButtonHoverBg" Color="#1FD8B66A"/>
+    <SolidColorBrush x:Key="TitleBarButtonHoverFg" Color="#FFF4E0"/>
+    <SolidColorBrush x:Key="TitleBarButtonPressedBg" Color="#33D8B66A"/>
+    <SolidColorBrush x:Key="TitleBarCloseHoverBg" Color="#8E2A22"/>
+    <SolidColorBrush x:Key="TitleBarClosePressedBg" Color="#B85A4A"/>
+    <SolidColorBrush x:Key="TitleBarCloseHoverFg" Color="#FFFFFF"/>
+
+    <!-- =========================================================
          PER-OPERATION PROGRESS GRADIENTS.
          Painted onto the dashboard's progress bar via the
          ProgressBar.Foreground property. Each gradient runs dark →
@@ -447,10 +486,11 @@
          value the handoff's token table doesn't list. -->
     <SolidColorBrush x:Key="MpChipOkDetail" Color="#A9CBB9"/>
     <SolidColorBrush x:Key="MpChipOkSeparator" Color="#4D78DCAA"/>
-    <!-- Segmented ES/EN pill group in the title bar, and the account cluster beside
-         it. Values read from the prototype markup, which carries several the README's
-         token table doesn't list. -->
-    <SolidColorBrush x:Key="MpPillGroupRim" Color="#38A0BEDC"/>
+    <!-- Pill groups and the account cluster. Values read from the prototype markup,
+         which carries several the README's token table doesn't list. (The rim of the
+         segmented ES/EN group lived here too; that control was removed from the header
+         — the language is changed in Launcher Settings — and the brush went with it
+         rather than staying declared as a suggestion that it is still an option.) -->
     <SolidColorBrush x:Key="MpPillActiveBg" Color="#24FFFFFF"/>
     <SolidColorBrush x:Key="MpPillIdleText" Color="#93A7C3"/>
     <SolidColorBrush x:Key="MpAccountName" Color="#E4ECF6"/>

@@ -117,19 +117,32 @@
          MainWindow opts into this explicitly (Height + its CaptionHeight both read it)
          so the compact secondary bar never shrinks the main header.
 
-         46 (was 36): the header absorbed the nav strip in the multiplayer redesign, so
-         one bar now carries the brand, the three main tabs, the connection chip and the
-         account menu. THIS TOKEN IS THE ONLY PLACE THAT HEIGHT MAY BE SET —
-         App.ApplyWindowChrome reads it to set WindowChrome.CaptionHeight, so hardcoding
-         a height on the TitleBar element instead would leave the bottom strip of the bar
-         outside the native caption region: no drag, no double-click-maximize, no compile
-         error and nothing visible to hint at it.
+         36 (was 46): the tabs moved back OUT of the bar into their own nav row
+         (MainNavHeight below), leaving the title bar with just the brand, the version
+         chip and the three chrome affordances beside the caption buttons.
 
-         Note 46 is not DPI-clean at 125% (46×1.25 = 57.5). The global UseLayoutRounding
-         absorbs it — the bar simply lands on 58 physical px and its contents are all
-         centred — but 48 is the nearest value that divides cleanly at both 125% and 150%
-         if the half-pixel ever shows up on a real display. -->
-    <sys:Double x:Key="TitleBarHeightMain">46</sys:Double>
+         THIS TOKEN IS THE ONLY PLACE THAT HEIGHT MAY BE SET, and with two chrome rows
+         it is load-bearing in a second way: App.ApplyWindowChrome reads it to set
+         WindowChrome.CaptionHeight, and the caption region is *defined* as "the top N
+         DIPs" — WindowChrome only consults IsHitTestVisibleInChrome inside it. Leave
+         this at 46 while the bar renders at 36 and the top 10px of the NAV row stays
+         caption: every tab would drag the window instead of switching tabs along its
+         upper edge. No compile error, nothing visible to hint at it.
+
+         36 is DPI-clean where 46 was not: ×1.25 = 45, ×1.5 = 54, whole pixels both. -->
+    <sys:Double x:Key="TitleBarHeightMain">36</sys:Double>
+    <!-- Nav row height — the strip under the title bar carrying the three main tabs and
+         the player's status. MainWindow only; it is a plain content row, NOT part of the
+         caption region, which is exactly why it gets its own knob instead of extending
+         TitleBarHeightMain: growing that token would hand the nav row's top edge to the
+         window-drag handler (see above).
+
+         54 is the reference's value and is not DPI-clean at 125% (×1.25 = 67.5). The
+         global UseLayoutRounding absorbs it, but the half pixel lands on the row's
+         BOTTOM edge — where the 1px rule and the active tab's 2px underline sit — so 56
+         (70 / 84) is the nearest clean value if either ever looks fuzzy on a real 125%
+         display. -->
+    <sys:Double x:Key="MainNavHeight">54</sys:Double>
     <!-- Caption-button footprint. Width 40 (down from the classic 46) to match the
          slimmer bar; height fills the bar so they read as one strip. 40 is DPI-clean
          (×1.25=50, ×1.5=60). The main header overrides back to 46 locally. -->
@@ -145,6 +158,20 @@
     <!-- Left gutter before the icon/title; right side is flush with the
          buttons. -->
     <Thickness x:Key="TitleBarContentPadding">12,0,8,0</Thickness>
+
+    <!-- MainWindow header geometry (the two-row reference). Side gutter of the nav
+         row; the version chip beside the wordmark; the connection capsule's radius.
+
+         The two radii are tokens rather than literals for the reason the house rule
+         gives: a pill in WPF needs an EXPLICIT half-height radius, because CSS's
+         `border-radius: 999px` is a clamped-to-50% idiom that WPF renders as a
+         distorted ellipse. RadiusPill (13) belongs to the 26px chips elsewhere and is
+         wrong for a 30px capsule. -->
+    <Thickness x:Key="MainNavPadding">20,0</Thickness>
+    <sys:Double x:Key="ChromeVersionSize">11</sys:Double>
+    <CornerRadius x:Key="ChromeVersionRadius">3</CornerRadius>
+    <sys:Double x:Key="ChromeCapsuleHeight">30</sys:Double>
+    <CornerRadius x:Key="ChromeCapsuleRadius">15</CornerRadius>
 
     <!-- ============================================================
          SIDEBAR NAV RAIL — the settings/properties dialogs' left tab rail
@@ -168,9 +195,11 @@
          MULTIPLAYER). Its OWN knob, independent of the title and the dialog-rail
          nav.
 
-         Now MpLabelSize (11.5), the handoff's value — see that token for why this sits
-         below the type scale's documented floor of 13 and whose call that was. -->
-    <sys:Double x:Key="NavTabTextSize">11.5</sys:Double>
+         13, the new header reference's value. It was briefly MpLabelSize (11.5) while
+         the tabs lived INSIDE the title bar, where they had to fit a 46px strip beside
+         everything else. Back in a row of their own they fit the type scale's
+         documented floor again — so this is one deviation that closed itself. -->
+    <sys:Double x:Key="NavTabTextSize">13</sys:Double>
 
     <!-- ============================================================
          MULTIPLAYER REDESIGN GEOMETRY (design handoff 1a/1d/1e/1f —

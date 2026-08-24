@@ -403,7 +403,7 @@ public partial class MultiplayerTab : UserControl
         // so the MpAlertOverlay scrim injected into the root keeps covering the
         // full tab.
         if (Content is FrameworkElement mpRoot)
-            UiScale.Attach(mpRoot, this, 1100, 604);
+            UiScale.Attach(mpRoot, this, 1100, 560);
         // Keep the rooms header aligned with the rows as the vertical scrollbar
         // comes and goes (see SyncHeaderScrollbarGutter).
         RoomsListScroll.ScrollChanged += (_, _) => SyncHeaderScrollbarGutter();
@@ -3178,7 +3178,7 @@ public partial class MultiplayerTab : UserControl
     private string? _connectionLabel;
 
     /// <summary>
-    /// Renders the title-bar chip from the TWO facts it merges: the lobby connection
+    /// Renders the header chip from the TWO facts it merges: the lobby connection
     /// (the word) and Radmin (the address). Kept in one method because both feed one
     /// control and they change on different schedules — the session on state changes,
     /// Radmin on its ~3 s poll — so either updating alone would drop the other's half.
@@ -3190,8 +3190,11 @@ public partial class MultiplayerTab : UserControl
         string? detail = null;
         if (_connectionLabel != null)
         {
+            // BARE, per the header reference — no "VPN ·" prefix and no separator
+            // glyph. Saying what the address is happens in the capsule's tooltip,
+            // which only became possible once the capsule left the caption region.
             var ip = RadminVpnService.TryGetAdapterIp();
-            if (!string.IsNullOrEmpty(ip)) detail = Strings.Format("MpChipVpnDetail", ip);
+            if (!string.IsNullOrEmpty(ip)) detail = ip;
         }
 
         _setConnectionChip(_connectionLabel, detail);

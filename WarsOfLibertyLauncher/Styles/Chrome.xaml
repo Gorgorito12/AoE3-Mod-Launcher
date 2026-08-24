@@ -34,12 +34,19 @@
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <!-- Every state colour is a KEY, not a literal, so one window can
+                             restyle its own caption buttons without touching the other
+                             ~15 that share this template (MainWindow does; see the
+                             TitleBar* defaults in Colors.xaml). All three matter: leave
+                             the foreground or the pressed fill hardcoded and a window
+                             that overrides only the hover fill gets a cold button under
+                             a gold glyph that flashes gold when clicked. -->
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TintGoldHover}"/>
-                            <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonHoverBg}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TitleBarButtonHoverFg}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#33D8B66A"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBg}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4"/>
@@ -60,13 +67,14 @@
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <!-- Keyed for the same reason as TitleBarButton above. -->
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerAlert}"/>
-                            <Setter Property="Foreground" Value="White"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarCloseHoverBg}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TitleBarCloseHoverFg}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerBrush}"/>
-                            <Setter Property="Foreground" Value="White"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarClosePressedBg}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TitleBarCloseHoverFg}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4"/>

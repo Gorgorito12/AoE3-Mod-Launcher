@@ -205,7 +205,7 @@ public partial class MainWindow : Window
         // the dashboard tab is re-shown: switching away collapses PlayView to a
         // 0-size (guarded no-op), switching back grows it from 0 — a size change
         // even though the window itself never resized.
-        UiScale.Attach(HeroContentGrid, PlayView, 1500, 760,
+        UiScale.Attach(HeroContentGrid, PlayView, 1500, 710,
             UiScale.Kind.Render, new System.Windows.Point(0, 1));
         // Drive the rotating-hero crossfade only while the dashboard is actually
         // on screen — stop the timer when another tab is shown, resume on return.
@@ -214,7 +214,14 @@ public partial class MainWindow : Window
         // footprint, so a default-sized window resolves to 1.0) for the code-
         // built brand / mod-switch popups, which live in their own top-level
         // visual tree and can't ride a content-root transform.
-        UiScale.Track(ContentHost, 1100, 604);
+        UiScale.Track(ContentHost, 1100, 560);
+
+        // The running binary's own tag. Read ONCE into the chip rather than bound:
+        // CurrentInformationalTag walks the assembly's custom attributes on every
+        // read. It always carries its own "v" — do not prefix another — and it is
+        // the only source that survives a WoL-style letter suffix (v1.0.5a), which
+        // the numeric AssemblyVersion physically cannot hold.
+        VersionChipText.Text = LauncherUpdateService.CurrentInformationalTag;
 
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
@@ -2956,10 +2963,6 @@ public partial class MainWindow : Window
     /// <summary>Refresh every translatable string in the UI from the table.</summary>
     private void ApplyLanguage()
     {
-        // Keep the title-bar ES/EN pills in step with the language, whoever changed it
-        // — the pills themselves, or the Launcher Settings combo.
-        RefreshLanguagePills();
-
         // Mod-dependent UI (window title, banner, accent-tinted PLAY button,
         // banner image) factored out so mod-switch can call just that
         // without paying the cost of re-localising every label in the
@@ -5450,7 +5453,7 @@ public partial class MainWindow : Window
 
     // The dashboard hero's window-size scaling moved to the shared scaler
     // (Controls/UiScale.cs): see the UiScale.Attach(HeroContentGrid, PlayView,
-    // 1500, 760, Kind.Render, (0,1)) call in the constructor. The reference,
+    // 1500, 710, Kind.Render, (0,1)) call in the constructor. The reference,
     // [0.82, 1.0] band, bottom-left render-pin and the Display<->Ideal text
     // crispness toggle are all preserved there, so the hero looks identical;
     // the rest of the UI now rides the same scaler (Kind.Layout) per view.
@@ -11300,45 +11303,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// ES / EN toggle in the title bar. A second entry point to the SAME setting the
-    /// Launcher Settings combo writes — not a second setting.
-    ///
-    /// <para><see cref="LauncherConfig.LanguageExplicitlyChosen"/> is set ONLY when the
-    /// language actually changes, mirroring the guard in the settings dialog. Writing it
-    /// unconditionally would opt the user out of following the Windows display language
-    /// the first time they clicked the language they were already on — silently, and
-    /// permanently.</para>
-    /// </summary>
-    private void LanguagePill_Click(object sender, RoutedEventArgs e)
-    {
-        var lang = ReferenceEquals(sender, LangPillEs) ? "es" : "en";
-        if (string.Equals(lang, _config.Language, StringComparison.OrdinalIgnoreCase))
-        {
-            RefreshLanguagePills();
-            return;
-        }
-
-        _config.Language = lang;
-        _config.LanguageExplicitlyChosen = true;
-        try { _config.Save(); }
-        catch (Exception ex) { DiagnosticLog.Write($"Language save failed: {ex.Message}"); }
-
-        // Fans out to every LanguageChanged subscriber (MainWindow.ApplyLanguage and
-        // each open TitleBar's caption tooltips).
-        Strings.SetLanguage(lang);
-        RefreshLanguagePills();
-    }
-
-    /// <summary>Marks the active language pill. Called on click and from ApplyLanguage.</summary>
-    private void RefreshLanguagePills()
-    {
-        if (LangPillEs == null) return;
-        bool es = string.Equals(_config.Language, "es", StringComparison.OrdinalIgnoreCase);
-        LangPillEs.Tag = es ? "active" : null;
-        LangPillEn.Tag = es ? null : "active";
-    }
-
-    /// <summary>
     /// Account menu: Profile / Sign out, per the reference.
     ///
     /// <para>This is not decoration — removing the Multiplayer tab's account row took
@@ -11387,6 +11351,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(login))
         {
             AccountButton.Visibility = Visibility.Collapsed;
+            RefreshChromeDivider();
             return;
         }
 
@@ -11422,6 +11387,7 @@ public partial class MainWindow : Window
         }
 
         AccountButton.Visibility = Visibility.Visible;
+        RefreshChromeDivider();
     }
 
     /// <summary>
@@ -11433,8 +11399,11 @@ public partial class MainWindow : Window
     /// itself, and already logs transitions, so a second probe would just be a second
     /// answer to disagree with. This method only renders.</para>
     ///
-    /// <para><paramref name="detail"/> (the Radmin IP) is optional — the separator
-    /// collapses with it so a chip without one doesn't show a dangling divider.</para>
+    /// <para><paramref name="detail"/> (the Radmin IP) is optional, and is rendered
+    /// BARE per the header reference — no "VPN ·" prefix, no separator glyph. What the
+    /// address is lives in the capsule's tooltip instead, which only works because the
+    /// capsule sits in the nav row: a control inside the caption region never raises
+    /// IsMouseOver, so a tooltip there could not have fired at all.</para>
     /// </summary>
     internal void SetConnectionChip(string? status, string? detail)
     {
@@ -11447,12 +11416,36 @@ public partial class MainWindow : Window
         }
 
         ConnectionChipStatus.Text = status;
+        // The "VPN ·" the reference dropped from the label lives here instead. Only
+        // reachable because the capsule sits in the nav row: inside the caption
+        // region a control never raises IsMouseOver, so this would never fire.
+        ConnectionChip.ToolTip = string.IsNullOrWhiteSpace(detail)
+            ? null
+            : TooltipHelper.Wrap(Strings.Format("MpChipVpnDetail", detail));
         bool hasDetail = !string.IsNullOrWhiteSpace(detail);
         ConnectionChipDetail.Text = hasDetail ? detail : string.Empty;
-        var detailVis = hasDetail ? Visibility.Visible : Visibility.Collapsed;
-        ConnectionChipDetail.Visibility = detailVis;
-        ConnectionChipSeparator.Visibility = detailVis;
+        ConnectionChipDetail.Visibility = hasDetail ? Visibility.Visible : Visibility.Collapsed;
         ConnectionChip.Visibility = Visibility.Visible;
+        // The capsule is one of the two halves the divider separates, so it decides
+        // the divider's fate together with the account block.
+        RefreshChromeDivider();
+    }
+
+    /// <summary>
+    /// The 1px rule between the connection capsule and the account block, shown only
+    /// when there is something on BOTH sides of it.
+    ///
+    /// <para>Signed out — on Library or Workshop before multiplayer reports a user —
+    /// the capsule and the account block both collapse, and a divider left standing in
+    /// an otherwise empty row reads as a rendering glitch rather than as a separator.
+    /// Every writer of either neighbour calls this.</para>
+    /// </summary>
+    private void RefreshChromeDivider()
+    {
+        if (ChromeDivider == null) return;
+        bool both = ConnectionChip?.Visibility == Visibility.Visible
+                    && AccountButton?.Visibility == Visibility.Visible;
+        ChromeDivider.Visibility = both ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>

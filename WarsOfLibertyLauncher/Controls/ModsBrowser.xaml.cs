@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -160,12 +160,12 @@ public partial class ModsBrowser : UserControl
 
         // Window-size scaling (Controls/UiScale.cs): the whole Workshop content
         // shrinks to fit windows smaller than MainWindow's default footprint
-        // (ref 1100x604 → a default-sized window is exactly 1.0, no regression).
+        // (ref 1100x560 → a default-sized window is exactly 1.0, no regression).
         // sizeSource is the UserControl itself: its size is set by the content
         // host and is NOT affected by the LayoutTransform on the content root,
         // so there's no measure feedback loop.
         if (Content is FrameworkElement modsRoot)
-            UiScale.Attach(modsRoot, this, 1100, 604);
+            UiScale.Attach(modsRoot, this, 1100, 560);
 
         // Search.
         SearchBox.TextChanged += (_, _) =>

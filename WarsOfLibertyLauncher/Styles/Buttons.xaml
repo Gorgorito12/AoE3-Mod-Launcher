@@ -601,69 +601,33 @@
          The panel BACKGROUND stays slate (BgSidebar #33414F) — only
          the per-button hover/active are gold.
          ============================================================ -->
-    <!-- ES / EN segmented pill in the title bar (design handoff 1a). One button per
-         language inside a rimmed group; the ACTIVE one gets the light fill. Sizes and
-         colours are the reference's. Same two-Border trick as NavTabButton so the
-         whole bar height is clickable rather than just the pill — a caption region
-         turns every uncovered pixel into a window-drag handle. -->
-    <Style x:Key="LangPillButton" TargetType="Button">
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{DynamicResource MpPillIdleText}"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Padding" Value="7,5"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="VerticalAlignment" Value="Stretch"/>
-        <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
-        <Setter Property="FontSize" Value="{StaticResource MpPillSize}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}">
-                        <Border x:Name="pill"
-                                VerticalAlignment="Center"
-                                CornerRadius="{StaticResource RadiusSm}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="#E6EEF8"/>
-                        </Trigger>
-                        <Trigger Property="Tag" Value="active">
-                            <Setter TargetName="pill" Property="Background" Value="{DynamicResource MpPillActiveBg}"/>
-                            <Setter Property="Foreground" Value="#FFFFFF"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
+    <!-- (LangPillButton, the ES/EN segmented pill, used to sit here. The header
+         reference has no language control — it is changed in Launcher Settings, which
+         was always the primary place — so the style went with the markup rather than
+         staying declared for a control nothing builds.) -->
 
-    <!-- REDESIGN NOTE (handoff 1a): these tabs moved OUT of their own strip and INTO
-         the title bar, so the active marker had to change with them. It used to be a
-         2px gold underline on the bottom edge, which worked because that edge WAS the
-         seam between chrome and content. Inside a 46px bar there is no seam to sit on —
-         an underline would just draw a line through the middle of the chrome — so the
-         active tab is now a filled pill, as the handoff specifies. -->
+    <!-- REDESIGN NOTE: the active marker is a 2px underline on the button's bottom
+         edge — and whether that is right depends entirely on where the tabs live.
+         Originally an underline; changed to a filled pill by handoff 1a, which moved
+         the tabs INTO the title bar, where there is no chrome/content seam for a line
+         to sit on and an underline just drew through the middle of the chrome; back to
+         an underline now that the header reference gives the tabs a row of their own
+         with a rule under it. The line lands ON that rule, which is the whole point.
+         If the tabs ever move again, this marker moves with them. -->
     <Style x:Key="NavTabButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{DynamicResource MpNavTabIdle}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ChromeTextDim}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <!-- Pill padding from the handoff (8 vertical / 11 horizontal). Symmetric now:
-             there is no underline left to compensate for, which is what the old
-             12,2,22,0 was doing. The tabs no longer own the window's left gutter either
-             — the brand block does — so they space themselves evenly instead. -->
-        <Setter Property="Padding" Value="11,8"/>
-        <Setter Property="Margin" Value="3,0,0,0"/>
+        <!-- 16 horizontal from the reference; no vertical padding because the button
+             stretches to the row height and the label is centred in it. -->
+        <Setter Property="Padding" Value="16,0"/>
+        <Setter Property="Margin" Value="4,0,0,0"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <!-- Stretch, so the button fills the title bar's full height. In a caption
-             region every pixel NOT covered by a control is a window-drag handle, so a
-             centred button leaves a dead band above and below it where a click drags
-             the window instead of switching tabs. The PILL stays inset — see the
-             two-Border template below. -->
+        <!-- Stretch, so the button fills the nav row's full height — which is what lets
+             the underline sit on the row's bottom edge rather than floating under the
+             text. (It also used to matter for a second reason, back when these lived in
+             the caption region: any pixel not covered by a control dragged the window.
+             The nav row is ordinary client area, so that hazard is gone.) -->
         <Setter Property="VerticalAlignment" Value="Stretch"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -673,37 +637,26 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <!-- TWO borders, deliberately. The outer one is invisible but
-                         fills the whole button, and it is what makes the entire
-                         bar-height strip clickable. The inner one is the visible
-                         pill, sized to its content. Collapsing them into one would
-                         shrink the hit area back to the pill. -->
-                    <Border Background="{TemplateBinding Background}">
-                        <Border x:Name="border"
-                                VerticalAlignment="Center"
-                                BorderBrush="Transparent"
-                                BorderThickness="1"
-                                CornerRadius="{StaticResource RadiusMd}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
+                    <!-- The 2px underline is reserved as TRANSPARENT at rest rather than
+                         added when active: a 0→2 flip would shift the label 2px on every
+                         tab switch. Same class of jitter as re-weighting the text, which
+                         is why the active tab is deliberately not bold either. -->
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0,0,0,2"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <!-- Hover stays quiet — text only, no fill — so the single
-                                 filled pill remains the unambiguous "you are here". -->
-                            <Setter Property="Foreground" Value="#E6EEF8"/>
+                            <!-- Hover stays quiet — text only, no fill — so the underline
+                                 remains the unambiguous "you are here". -->
+                            <Setter Property="Foreground" Value="{DynamicResource ChromeTextSoft}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="active">
-                            <!-- Blue-tinted fill + a brighter inner rim, per the handoff.
-                                 Deliberately NOT bold: the pill already carries the
-                                 emphasis, and re-weighting the text would resize the
-                                 button and shuffle its neighbours on every tab switch —
-                                 the old underline could afford bold because it never
-                                 changed the cell's width. -->
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpTabActiveBg}"/>
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpTabActiveRim}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
                             <Setter Property="Foreground" Value="#FFFFFF"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -786,34 +739,6 @@
                             BorderBrush="Transparent"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Left"
-                                          VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="White"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <Style x:Key="LangToggle" TargetType="Button">
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="#666"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Padding" Value="8,3"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="border"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="3"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -1403,27 +1328,30 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <!-- Dark blue-grey tile (a touch darker than the bar): filled at
-                         rest, a bit lighter on hover, lighter still while pressed or
-                         while the panel is open (Tag=open). The bell (a Path in the
-                         content) is translucent white with a thin black outline. -->
+                    <!-- Transparent at rest; fills only on hover, press, or while the
+                         panel is open (Tag=open). It used to be a filled #283844 tile
+                         with rounded corners, which read as a lighter block sitting
+                         next to the caption buttons — more so against the near-black
+                         title bar the header reference asks for. Squared off and
+                         full-height so it behaves like the min/max/close beside it, and
+                         sharing their hover so that corner of the bar is one strip.
+                         The bell (a Path in the content) is translucent white with a
+                         thin black outline. -->
                     <Border x:Name="border"
-                            Background="#283844"
-                            CornerRadius="6"
-                            Margin="0,3"
+                            Background="Transparent"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#2E4150"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonHoverBg}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="open">
-                            <Setter TargetName="border" Property="Background" Value="#3C5468"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBg}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#3C5468"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
