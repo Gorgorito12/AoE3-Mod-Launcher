@@ -11428,6 +11428,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(status))
         {
             ConnectionChip.Visibility = Visibility.Collapsed;
+            if (RadminGuideButton != null) RadminGuideButton.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -11436,17 +11437,24 @@ public partial class MainWindow : Window
         // reachable because the capsule sits in the nav row: inside the caption
         // region a control never raises IsMouseOver, so this would never fire.
         //
-        // The guide hint is ALWAYS present, the address only when we have one: the
-        // capsule is clickable either way, and a tooltip that appears only sometimes
-        // would hide the affordance exactly when the VPN is the thing going wrong.
-        var tip = Strings.Get("MpChipOpenGuide");
-        if (!string.IsNullOrWhiteSpace(detail))
-            tip = Strings.Format("MpChipVpnDetail", detail) + "\n" + tip;
-        ConnectionChip.ToolTip = TooltipHelper.Wrap(tip);
+        // It says what the capsule IS and nothing else. What you can DO is the "?"
+        // beside it, which carries its own tooltip — the two used to be crammed into
+        // this one, which is part of why neither landed.
+        ConnectionChip.ToolTip = string.IsNullOrWhiteSpace(detail)
+            ? null
+            : TooltipHelper.Wrap(Strings.Format("MpChipVpnDetail", detail));
         bool hasDetail = !string.IsNullOrWhiteSpace(detail);
         ConnectionChipDetail.Text = hasDetail ? detail : string.Empty;
         ConnectionChipDetail.Visibility = hasDetail ? Visibility.Visible : Visibility.Collapsed;
         ConnectionChip.Visibility = Visibility.Visible;
+        // Same visibility as the capsule: the guide is worth offering whenever
+        // multiplayer has anything to report, and that includes Radmin being OFF —
+        // the capsule still shows the lobby's "Connected" with no address there.
+        if (RadminGuideButton != null)
+        {
+            RadminGuideButton.Visibility = Visibility.Visible;
+            RadminGuideButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpChipOpenGuide"));
+        }
         // The capsule is one of the two halves the divider separates, so it decides
         // the divider's fate together with the account block.
         RefreshChromeDivider();
@@ -11487,21 +11495,23 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The connection capsule opens the Radmin guide.
+    /// The "?" beside the connection capsule opens the Radmin guide.
     ///
-    /// <para>This is the guide's ONLY door once Radmin is working. Its other one is the
+    /// <para>It is the guide's only door once Radmin is working: the other one is the
     /// "Show steps" button inside the red banner, and that banner collapses exactly when
-    /// everything is fine — so retiring the permanent banner in favour of this capsule
-    /// also retired the guide, and <c>OpenRadminAssistantWindow</c> was left without a
-    /// single caller. The capsule is where someone looks when they wonder about the VPN,
-    /// which is what makes it the right door rather than merely an available one.</para>
+    /// everything is fine — so retiring the permanent banner also retired the guide, and
+    /// <c>OpenRadminAssistantWindow</c> was left without a single caller.</para>
+    ///
+    /// <para>The capsule itself briefly played this role and it did not work: a status
+    /// readout does not read as pressable, and pressing it never announced what it did.
+    /// A question mark answers both at once, which is why the door is its own control
+    /// rather than a second job bolted onto the readout.</para>
     ///
     /// <para>Works from any tab: the assistant only needs MultiplayerTab's config (set in
     /// Attach at startup) and its owning Window, both of which resolve while the tab is
-    /// collapsed. The capsule only renders when signed in, so there is no not-ready
-    /// state to guard here.</para>
+    /// collapsed.</para>
     /// </summary>
-    private void ConnectionChip_Click(object sender, RoutedEventArgs e)
+    private void RadminGuideButton_Click(object sender, RoutedEventArgs e)
     {
         try { MultiplayerView?.OpenRadminAssistantWindow(); }
         catch (Exception ex) { DiagnosticLog.Write($"Radmin guide open failed: {ex.Message}"); }

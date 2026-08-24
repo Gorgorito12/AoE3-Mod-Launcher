@@ -2387,13 +2387,15 @@ public static class Strings
         // that the VPN is up and which address peers will reach them on.
         ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
         ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
-        // The capsule is the only door to the Radmin guide once Radmin works (the
-        // banner that used to carry "Show steps" collapses exactly then), so the
-        // tooltip has to say it is clickable — nothing else on screen does.
+        // Tooltip of the "?" beside the capsule — the only door to the Radmin guide
+        // once Radmin works (the banner carrying "Show steps" collapses exactly then).
+        // It names the destination and nothing else: this string used to open with
+        // "Click to…", which was the capsule apologising for not looking clickable.
+        // A question mark does not need to be told it is a button.
         ["MpChipOpenGuide"] = new()
         {
-            [LangEn] = "Click to open the Radmin guide",
-            [LangEs] = "Haz clic para ver la guía de Radmin",
+            [LangEn] = "Radmin VPN guide — how to connect with other players",
+            [LangEs] = "Guía de Radmin VPN — cómo conectarte con otros jugadores",
         },
         ["MpChipElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
         ["MpChipReconnecting"] = new() { [LangEn] = "Reconnecting…", [LangEs] = "Reconectando…" },

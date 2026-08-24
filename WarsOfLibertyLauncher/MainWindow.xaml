@@ -949,44 +949,24 @@
                          in the tooltip instead - which only works because the capsule is
                          client area now; in the title bar a tooltip could never fire.
 
-                         CLICKABLE, and that is not decoration: it is the ONLY way to open
-                         the Radmin guide once Radmin works. The guide's other entry point
-                         is the "Show steps" button INSIDE the red banner, and the banner
-                         collapses precisely when everything is fine - so retiring the
-                         permanent banner took the guide's last door with it, and
-                         MultiplayerTab.OpenRadminAssistantWindow() sat there with no
-                         caller at all. This is where a user looks when they wonder about
-                         the VPN, so it is where the door belongs.
-
-                         A Button whose template draws the SAME Border, so nothing moves a
-                         pixel - the recipe OfflineChip beside it already uses. -->
-                    <Button x:Name="ConnectionChip"
+                         NOT clickable, and that is the second answer to the same
+                         question. It WAS briefly a Button — the door to the Radmin guide,
+                         because retiring the permanent banner took the guide's only other
+                         door with it. That failed on both halves at once: a status
+                         readout does not read as pressable (its whole affordance was a
+                         hand cursor and a rim shift between two nearly invisible greys),
+                         and even pressed it never said what it did. The door is the "?"
+                         button beside it now. One control, one job. -->
+                    <Border x:Name="ConnectionChip"
                             Visibility="Collapsed"
                             VerticalAlignment="Center"
-                            Margin="0,0,16,0"
+                            Margin="0,0,10,0"
+                            Padding="12,0"
                             Height="{StaticResource ChromeCapsuleHeight}"
-                            Cursor="Hand"
-                            Click="ConnectionChip_Click">
-                      <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                          <Border x:Name="capsule"
-                                  Padding="12,0"
-                                  CornerRadius="{StaticResource ChromeCapsuleRadius}"
-                                  Background="Transparent"
-                                  BorderBrush="{DynamicResource ChromeRim}"
-                                  BorderThickness="1">
-                            <ContentPresenter VerticalAlignment="Center"/>
-                          </Border>
-                          <ControlTemplate.Triggers>
-                            <!-- Quiet: the capsule is a status readout first and a button
-                                 second, so hovering lifts the rim rather than filling it. -->
-                            <Trigger Property="IsMouseOver" Value="True">
-                              <Setter TargetName="capsule" Property="BorderBrush"
-                                      Value="{DynamicResource ChromeVersionRim}"/>
-                            </Trigger>
-                          </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                      </Button.Template>
+                            CornerRadius="{StaticResource ChromeCapsuleRadius}"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource ChromeRim}"
+                            BorderThickness="1">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Ellipse Width="7" Height="7"
                                      Fill="{DynamicResource ChromeOk}"
@@ -998,14 +978,31 @@
                                        FontSize="{StaticResource MpMetaSize}"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"/>
+                            <!-- ChromeTextDim, not the reference's ChromeTextFaint: that
+                                 is 3.30:1 on this row, under the 4.5:1 floor, and it is
+                                 the same brush at the same ratio as the ELO beside it. -->
                             <TextBlock x:Name="ConnectionChipDetail"
                                        Margin="8,0,0,0"
-                                       Foreground="{DynamicResource ChromeTextFaint}"
+                                       Foreground="{DynamicResource ChromeTextDim}"
                                        FontFamily="{DynamicResource BodyFont}"
                                        FontSize="{StaticResource MpMetaSize}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
-                    </Button>
+                    </Border>
+
+                    <!-- The guide's door. Shares the capsule's visibility (both are set
+                         by SetConnectionChip) so it appears exactly when multiplayer has
+                         something to say — including when Radmin is OFF, where the
+                         capsule still shows the lobby's "Connected" with no address and
+                         the guide is needed most. All of its colours live in
+                         ChromeHelpButton; nothing here paints. -->
+                    <Button x:Name="RadminGuideButton"
+                            Content="?"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Center"
+                            Margin="0,0,16,0"
+                            Style="{StaticResource ChromeHelpButton}"
+                            Click="RadminGuideButton_Click"/>
 
                     <!-- Hidden with its neighbours rather than left floating: signed
                          out, both the capsule and the account block collapse, and a
@@ -1057,10 +1054,15 @@
                                      rating is pulled once per session from a
                                      rate-limited endpoint, so this reads that cache and
                                      never polls. -->
+                                <!-- MpAccountElo, the token that exists for exactly this
+                                     and that LobbyWindow's roster uses. The header rewrite
+                                     swapped it for the reference's ChromeTextFaint, which
+                                     is 3.30:1 at the app's smallest size — measured
+                                     unreadable, and the third time that tone has been. -->
                                 <TextBlock x:Name="AccountElo"
                                            Visibility="Collapsed"
                                            Margin="0,1,0,0"
-                                           Foreground="{DynamicResource ChromeTextFaint}"
+                                           Foreground="{DynamicResource MpAccountElo}"
                                            FontFamily="{DynamicResource BodyFont}"
                                            FontSize="{StaticResource MpMicroSize}"
                                            FontWeight="Medium"/>
