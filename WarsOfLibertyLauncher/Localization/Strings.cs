@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace WarsOfLibertyLauncher.Localization;
@@ -2282,6 +2282,21 @@ public static class Strings
         },
         // -------- Multiplayer (v1.0) --------
         ["MpSubtabRooms"] = new() { [LangEn] = "Rooms", [LangEs] = "Salas" },
+        // The Radmin assistant's door in the Rooms toolbar. It names the PROBLEM it
+        // solves, not the tool: someone who needs this guide is precisely someone who
+        // does not yet know what Radmin is. It also has to stay true once you ARE
+        // connected — the window's own title, "Connect to the AoE3 network", would be
+        // a lie then, since in that state it is a status panel rather than a guide.
+        ["MpRoomsRadminHelp"] = new()
+        {
+            [LangEn] = "Help connecting",
+            [LangEs] = "Ayuda para conectar",
+        },
+        ["MpRoomsRadminHelpTooltip"] = new()
+        {
+            [LangEn] = "How to connect with other players through Radmin VPN",
+            [LangEs] = "Cómo conectarte con otros jugadores mediante Radmin VPN",
+        },
         ["MpSubtabFriends"] = new() { [LangEn] = "Friends", [LangEs] = "Amigos" },
         ["MpSubtabProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
         ["MpSubtabHistory"] = new() { [LangEn] = "History", [LangEs] = "Historial" },
@@ -2302,10 +2317,15 @@ public static class Strings
 
         // --- Profile: the standing, all of it server-side ---
         ["MpProfileRating"] = new() { [LangEn] = "Rating {0}", [LangEs] = "Puntuación {0}" },
+        // "Rated", not "played". The number is games_played from elo_ratings, and that
+        // counter only advances on a match the server actually scored — a 1v1, on a mod
+        // with a ladder, whose winner could be read. Everything else is in the History
+        // tab and not in here, so "matches played" would tell someone with ten matches
+        // behind them that they had played none.
         ["MpProfileGames"] = new()
         {
-            [LangEn] = "{0} matches played",
-            [LangEs] = "{0} partidas jugadas",
+            [LangEn] = "{0} rated matches",
+            [LangEs] = "{0} partidas puntuadas",
         },
         // The denominator is shown on purpose: most matches have no readable result, so the
         // rate covers far fewer games than the player has played, and hiding that would make
@@ -2317,8 +2337,8 @@ public static class Strings
         },
         ["MpProfileProvisional"] = new()
         {
-            [LangEn] = "provisional — no matches yet",
-            [LangEs] = "provisional — todavía sin partidas",
+            [LangEn] = "provisional — no rated matches yet",
+            [LangEs] = "provisional — todavía sin partidas puntuadas",
         },
         ["MpChatMatchRecorded"] = new()
         {
@@ -2382,6 +2402,96 @@ public static class Strings
             [LangEs] = "Tu IP de Radmin ya es {0}. En Radmin, clic en \"Unirse a la red\" → \"Gaming\", pega \"Age of Empires III: The Asian Dynasties\" (te lo copiamos al portapapeles) y clic Unirse.",
         },
         ["MpRadminOpenButton"] = new() { [LangEn] = "Open Radmin VPN", [LangEs] = "Abrir Radmin VPN" },
+        // Title-bar connection chip. Replaces the permanent green Radmin banner:
+        // when everything is fine this is ALL the user sees, so it has to say both
+        // that the VPN is up and which address peers will reach them on.
+        ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
+        ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
+        ["MpChipElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
+        ["MpChipReconnecting"] = new() { [LangEn] = "Reconnecting…", [LangEs] = "Reconectando…" },
+        // Title-bar account menu. Sign out lives ONLY here now — the account row that
+        // used to carry it was removed with the bar-2 redesign.
+        ["MpAccountMenuProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
+        ["MpAccountMenuSignOut"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
+        // Centred day divider in the global chat. "Today" instead of a date, because a
+        // date on the line you are reading right now is noise.
+        ["MpChatToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
+        // Join-by-code row under the rooms list.
+        ["MpJoinByCodeTitle"] = new()
+        {
+            [LangEn] = "Were you given a room code?",
+            [LangEs] = "¿Te pasaron un código de sala?",
+        },
+        ["MpJoinByCodeHint"] = new()
+        {
+            [LangEn] = "Private rooms don't show up in the list.",
+            [LangEs] = "Las salas privadas no aparecen en la lista.",
+        },
+        ["MpJoinByCodePlaceholder"] = new() { [LangEn] = "room code", [LangEs] = "código" },
+        ["MpJoinByCodeButton"] = new() { [LangEn] = "Enter", [LangEs] = "Entrar" },
+        // Community-activity strip under the rooms list.
+        ["MpActivityStripTitle"] = new()
+        {
+            [LangEn] = "Community activity",
+            [LangEs] = "Actividad de la comunidad",
+        },
+        ["MpActivityStripWindow"] = new() { [LangEn] = "last 24 h", [LangEs] = "últimas 24 h" },
+        ["MpActivityRecentTitle"] = new() { [LangEn] = "RECENT MATCHES", [LangEs] = "ÚLTIMAS PARTIDAS" },
+        // A match whose result couldn't be read (no recording, or a team game). Most
+        // stored matches are these, so the row says so instead of looking like a win.
+        // The ladder card. "Decided" is the column that matters and the one that needs a
+        // header of its own: most stored matches have no winner, so a table headed
+        // "matches" would invite the reader to divide by the wrong number.
+        ["MpActivityRankingTitle"] = new() { [LangEn] = "RANKING", [LangEs] = "CLASIFICACI\u00D3N" },
+        ["MpActivityRankColHash"] = new() { [LangEn] = "#", [LangEs] = "#" },
+        ["MpActivityRankColPlayer"] = new() { [LangEn] = "PLAYER", [LangEs] = "JUGADOR" },
+        ["MpActivityRankColElo"] = new() { [LangEn] = "ELO", [LangEs] = "ELO" },
+        ["MpActivityRankColDecided"] = new() { [LangEn] = "DECIDED", [LangEs] = "DECIDIDAS" },
+        ["MpActivityRankColPct"] = new() { [LangEn] = "%", [LangEs] = "%" },
+        // Peak hours. The source is rooms OPENED, not matches played, and the wording says
+        // so on purpose: the two are not the same number and we are not going to imply
+        // they are. Hours are the viewer's own local time.
+        ["MpActivityPeakTitle"] = new() { [LangEn] = "PEAK HOURS", [LangEs] = "HORAS PUNTA" },
+        ["MpActivityPeakRange"] = new()
+        {
+            [LangEn] = "{0}:00 \u2013 {1}:00",
+            [LangEs] = "{0}:00 \u2013 {1}:00",
+        },
+        ["MpActivityPeakSubtitle"] = new()
+        {
+            [LangEn] = "when rooms get opened \u2014 {0} in the last {1} days, your local time",
+            [LangEs] = "cuando se abren salas \u2014 {0} en los \u00FAltimos {1} d\u00EDas, en tu hora local",
+        },
+        ["MpActivityPeakBarTip"] = new()
+        {
+            [LangEn] = "{0}:00 \u2014 {1} rooms",
+            [LangEs] = "{0}:00 \u2014 {1} salas",
+        },
+        ["MpActivityNotCounted"] = new() { [LangEn] = "didn't count", [LangEs] = "no contó" },
+        // Quick replies above the chat composer. These are TYPED into the box, so they
+        // are the player's own words — keep them short and natural in both languages
+        // rather than literal translations of each other.
+        ["MpQuickReplyAnyone"] = new() { [LangEn] = "Anyone playing?", [LangEs] = "¿Alguien juega?" },
+        ["MpQuickReplyGg"] = new() { [LangEn] = "gg", [LangEs] = "gg" },
+        ["MpQuickReplyMinute"] = new() { [LangEn] = "1 min", [LangEs] = "1 min" },
+        // Room-opened card in the chat flow. {0} is the host's login.
+        ["MpChatRoomOpened"] = new()
+        {
+            [LangEn] = "{0} opened a room",
+            [LangEs] = "{0} abrió una sala",
+        },
+        ["MpRoomsSearchPlaceholder"] = new()
+        {
+            [LangEn] = "Search room, mod or player",
+            [LangEs] = "Buscar sala, mod o jugador",
+        },
+        // Shown INSTEAD of the list when a search matches nothing. Without it an empty
+        // panel reads as "there are no rooms" when they are only filtered out.
+        ["MpRoomsNoMatches"] = new()
+        {
+            [LangEn] = "No rooms match your search.",
+            [LangEs] = "Ninguna sala coincide con tu búsqueda.",
+        },
         ["MpRadminLaunchFailed"] = new()
         {
             [LangEn] = "Could not launch Radmin VPN.",
@@ -2400,11 +2510,6 @@ public static class Strings
         // running: the network-name copier and numbered steps are hidden
         // (the RadminAssistantWindow already covers that flow), so the
         // banner shrinks to a single status line. {0} = own IP.
-        ["MpRadminConnectedTitleCompact"] = new()
-        {
-            [LangEn] = "Radmin VPN is running · IP: {0}",
-            [LangEs] = "Radmin VPN está corriendo · IP: {0}",
-        },
 
         // Button next to the network-name TextBox. Briefly flashes to
         // "Copied!" after the click so the user sees the action worked.
@@ -2640,7 +2745,10 @@ public static class Strings
         ["DlgClose"] = new() { [LangEn] = "Close", [LangEs] = "Cerrar" },
         ["MpRoomsCreate"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
         ["MpRoomsRefresh"] = new() { [LangEn] = "Refresh", [LangEs] = "Actualizar" },
+        // Kept for the skeleton rows' accessibility text; the visible loading state is
+        // three placeholder rows, not a line of prose.
         ["MpRoomsLoading"] = new() { [LangEn] = "Loading rooms…", [LangEs] = "Cargando salas…" },
+        ["MpRoomsErrorRetry"] = new() { [LangEn] = "Retry", [LangEs] = "Reintentar" },
         ["MpRoomsSectionTitle"] = new() { [LangEn] = "Active rooms", [LangEs] = "Salas activas" },
         ["MpGlobalChatTitle"] = new() { [LangEn] = "Global chat", [LangEs] = "Chat global" },
         ["MpGlobalChatPresence"] = new() { [LangEn] = "{0} connected", [LangEs] = "{0} conectados" },
@@ -2654,6 +2762,15 @@ public static class Strings
         ["MpGlobalChatTimedOut"] = new() { [LangEn] = "Muted for spamming — try again shortly.", [LangEs] = "Silenciado por spam. Prueba de nuevo en un rato." },
         ["MpGlobalChatTooLong"] = new() { [LangEn] = "Message too long (max 500).", [LangEs] = "Mensaje demasiado largo (máx 500)." },
         ["MpRoomJoin"] = new() { [LangEn] = "Join", [LangEs] = "Unirse" },
+        // A private room's action says so, because the click opens a password prompt.
+        ["MpRoomJoinPrivate"] = new()
+        {
+            [LangEn] = "Join with password",
+            [LangEs] = "Unirse con contraseña",
+        },
+        // Room sub-line context, the middle segment of "{mod} · {context} · {age}".
+        ["MpRoomCtxYouHost"] = new() { [LangEn] = "you're the host", [LangEs] = "tú eres el anfitrión" },
+        ["MpRoomCtxNeedsPassword"] = new() { [LangEn] = "asks for a password", [LangEs] = "pide contraseña" },
         ["MpRoomReenter"] = new() { [LangEn] = "Re-enter", [LangEs] = "Reingresar" },
         ["MpRoomYours"] = new() { [LangEn] = "Your room", [LangEs] = "Tu sala" },
         ["MpRoomFull"] = new() { [LangEn] = "Full", [LangEs] = "Llena" },
@@ -2667,6 +2784,9 @@ public static class Strings
         ["MpRoomModNotInstalled"] = new() { [LangEn] = "Mod not installed", [LangEs] = "Mod no instalado" },
         ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms available right now", [LangEs] = "No hay salas disponibles ahora" },
         ["MpRoomsEmptyBody"] = new() { [LangEn] = "Be the first to create one and start a game!", [LangEs] = "¡Sé el primero en crear una y empezar a jugar!" },
+        // Appended to the "updated N ago" line when a column sort is active. {0} is the
+        // lowercased column name.
+        ["MpRoomsSortedBy"] = new() { [LangEn] = "sorted by {0}", [LangEs] = "orden por {0}" },
         ["MpRoomsUpdatedNow"] = new() { [LangEn] = "Updated just now", [LangEs] = "Actualizado ahora" },
         ["MpRoomsUpdatedSecs"] = new() { [LangEn] = "Updated {0}s ago", [LangEs] = "Actualizado hace {0} s" },
         ["MpRoomsUpdatedMins"] = new() { [LangEn] = "Updated {0}m ago", [LangEs] = "Actualizado hace {0} min" },
@@ -3134,6 +3254,241 @@ public static class Strings
             [LangEn] = "You left the game. Other players continue.",
             [LangEs] = "Saliste de la partida. Los demás jugadores siguen.",
         },
+        // End-of-match card. The pending line goes up the instant the game closes: the
+        // numbers do not exist until the report comes back, and the recording search can
+        // take the best part of ten seconds.
+        // Lobby window (design handoff 1e).
+        ["MpLobbyWindowTitle"] = new() { [LangEn] = "Room \u00B7 {0}", [LangEs] = "Sala \u00B7 {0}" },
+        ["MpRoomCodeHeader"] = new() { [LangEn] = "CODE", [LangEs] = "C\u00D3DIGO" },
+        ["MpRoomInvite"] = new() { [LangEn] = "Invite", [LangEs] = "Invitar" },
+        ["MpRoomInviteTitle"] = new() { [LangEn] = "Invite a player", [LangEs] = "Invitar a un jugador" },
+        ["MpRoomInviteBody"] = new()
+        {
+            [LangEn] = "Share the room code, or right-click a player in the Players panel of the "
+                     + "Multiplayer tab and choose \u201CInvite to my room\u201D.",
+            [LangEs] = "Comparte el c\u00F3digo de la sala, o haz clic derecho sobre un jugador en el "
+                     + "panel Jugadores de la pesta\u00F1a Multijugador y elige \u201CInvitar a mi sala\u201D.",
+        },
+        // The roster's second line. The ELO segment is omitted entirely when the rating is
+        // not known — never a placeholder number.
+        ["MpRoomMemberElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
+        ["MpRoomMemberReady"] = new() { [LangEn] = "ready", [LangEs] = "listo" },
+        ["MpRoomMemberWaiting"] = new() { [LangEn] = "waiting", [LangEs] = "esperando" },
+        ["MpRoomSlotOpenShare"] = new()
+        {
+            [LangEn] = "Open slot \u00B7 share the code",
+            [LangEs] = "Hueco libre \u00B7 comparte el c\u00F3digo",
+        },
+        // The two-item checklist that replaced the amber reminder band.
+        ["MpPreflightHeader"] = new() { [LangEn] = "BEFORE YOU START", [LangEs] = "ANTES DE EMPEZAR" },
+        ["MpPreflightModsMatch"] = new()
+        {
+            [LangEn] = "Identical mods across all {0} players",
+            [LangEs] = "Mods id\u00E9nticos en los {0} jugadores",
+        },
+        ["MpPreflightRecordGame"] = new()
+        {
+            [LangEn] = "Tick {0} in AoE3 so the match counts towards ELO",
+            [LangEs] = "Marcar {0} en AoE3 para que cuente el ELO",
+        },
+        ["MpPreflightSeeHow"] = new() { [LangEn] = "See how", [LangEs] = "Ver c\u00F3mo" },
+        ["MpPreflightHelpTitle"] = new()
+        {
+            [LangEn] = "Where the Record Game box is",
+            [LangEs] = "D\u00F3nde est\u00E1 la casilla Record Game",
+        },
+        ["MpPreflightHelpBody"] = new()
+        {
+            [LangEn] = "On the AoE3 multiplayer setup screen, before the match starts, there is a "
+                     + "\u201CRecord Game\u201D checkbox. It comes up unticked EVERY match and the "
+                     + "launcher cannot tick it for you \u2014 both ways of doing that were tried and "
+                     + "neither works. Without a recording the match has no readable winner and counts "
+                     + "for nobody.",
+            [LangEs] = "En la pantalla de configuraci\u00F3n de la partida multijugador de AoE3, antes de "
+                     + "empezar, hay una casilla \u201CRecord Game\u201D. Aparece desmarcada en CADA "
+                     + "partida y el launcher no puede marcarla por ti \u2014 se probaron las dos formas "
+                     + "de hacerlo y ninguna funciona. Sin grabaci\u00F3n la partida no tiene un ganador "
+                     + "legible y no cuenta para nadie.",
+        },
+        ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
+        ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
+        ["MpRoomLeaveShort"] = new() { [LangEn] = "Leave the room", [LangEs] = "Salir de la sala" },
+        // In-match panel (design handoff 1f). The recording cell states what the LAUNCHER
+        // asked for; what the GAME will do is decided by a per-match checkbox nothing here
+        // can read, so none of these three words claims it is recording.
+        ["MpInGameRecordingHeader"] = new() { [LangEn] = "RECORDING", [LangEs] = "GRABACI\u00D3N" },
+        ["MpInGameRecordingOn"] = new() { [LangEn] = "requested", [LangEs] = "solicitada" },
+        ["MpInGameRecordingOff"] = new() { [LangEn] = "turned off", [LangEs] = "desactivada" },
+        ["MpInGameRecordingUnknown"] = new() { [LangEn] = "not checked", [LangEs] = "sin comprobar" },
+        ["MpInGameRecordingTooltip"] = new()
+        {
+            [LangEn] = "This is the launcher's own setting. Whether the match is actually recorded "
+                     + "depends on the \u201CRecord Game\u201D box on AoE3's setup screen, which "
+                     + "comes up unticked every match and cannot be read from here.",
+            [LangEs] = "Es el ajuste del propio launcher. Que la partida se grabe de verdad depende "
+                     + "de la casilla \u201CRecord Game\u201D de la pantalla de configuraci\u00F3n de "
+                     + "AoE3, que aparece desmarcada en cada partida y no se puede leer desde aqu\u00ED.",
+        },
+        ["MpInGameSoloTitle"] = new()
+        {
+            [LangEn] = "You are the only player in the room",
+            [LangEs] = "Eres el \u00FAnico jugador en la sala",
+        },
+        ["MpInGameSoloBody"] = new()
+        {
+            [LangEn] = "The P2P network is ready, but another launcher has to join this room "
+                     + "before any game traffic can flow.",
+            [LangEs] = "La red P2P est\u00E1 lista, pero hace falta que otro launcher entre en esta "
+                     + "sala para que circule tr\u00E1fico de juego.",
+        },
+        ["MpInGameSoloCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar c\u00F3digo" },
+        ["MpRoomCopied"] = new() { [LangEn] = "Copied \u2713", [LangEs] = "Copiado \u2713" },
+        ["MpInGameSoloAnnounce"] = new() { [LangEn] = "Say it in chat", [LangEs] = "Avisar en el chat" },
+        ["MpInGameSoloAnnounced"] = new() { [LangEn] = "Sent \u2713", [LangEs] = "Enviado \u2713" },
+        ["MpAnnounceRoomInGlobal"] = new()
+        {
+            [LangEn] = "Room open in {0} \u2014 code {1}. Looking for someone to play.",
+            [LangEs] = "Sala abierta en {0} \u2014 c\u00F3digo {1}. Busco con qui\u00E9n jugar.",
+        },
+        // End-of-match card (design handoff 1f).
+        // The in-game RECORDING cell's fourth state. The label says RECORDING and this
+        // is not about recording, but the cell answers "is this match going to count",
+        // and an unreadable profile answers it just as loudly as recording being off.
+        ["MpInGameRecordingNoProfile"] = new()
+        {
+            [LangEn] = "\u26A0 profile unreadable",
+            [LangEs] = "\u26A0 perfil ilegible",
+        },
+        ["MpInGameRecordingNoProfileTooltip"] = new()
+        {
+            [LangEn] = "Your AoE3 profile name could not be read, so this match cannot be "
+                     + "matched to its recording and will not count towards anyone's rating. "
+                     + "Open AoE3 once and make sure your profile has a name.",
+            [LangEs] = "No se pudo leer el nombre de tu perfil de AoE3, as\u00ED que esta partida no "
+                     + "se podr\u00E1 asociar con su grabaci\u00F3n y no contar\u00E1 para el ELO de nadie. "
+                     + "Abre AoE3 una vez y aseg\u00FArate de que tu perfil tiene nombre.",
+        },
+        ["MpResultWin"] = new() { [LangEn] = "Victory", [LangEs] = "Victoria" },
+        ["MpResultLoss"] = new() { [LangEn] = "Defeat", [LangEs] = "Derrota" },
+        // NOT "draw": 0.5 is what the backend stores when the outcome could not be read.
+        ["MpResultNone"] = new() { [LangEn] = "No result", [LangEs] = "Sin resultado" },
+        ["MpResultNoneBody"] = new()
+        {
+            [LangEn] = "The match was not recorded, so nobody can tell who won \u2014 it counted "
+                     + "towards no one's rating. Tick \u201CRecord Game\u201D on the AoE3 setup "
+                     + "screen before the next one.",
+            [LangEs] = "La partida no se grab\u00F3, as\u00ED que no hay forma de saber qui\u00E9n gan\u00F3 "
+                     + "\u2014 no cont\u00F3 para el ELO de nadie. Marca \u201CRecord Game\u201D en la "
+                     + "pantalla de configuraci\u00F3n de AoE3 antes de la siguiente.",
+        },
+        // The rest of the "it didn't count" family. The server says WHY, and the advice
+        // has to match the cause: telling someone to tick Record Game after a team game
+        // sends them to fix something that was never the problem. MpResultNoneBody above
+        // stays the message for a missing recording, and the fallback for a reason this
+        // build has never heard of.
+        ["MpResultUnratedTeam"] = new()
+        {
+            [LangEn] = "Only one-on-one matches count towards the rating — a recording names "
+                     + "one loser, which says nothing about who won a team game. This one is in "
+                     + "your history all the same.",
+            [LangEs] = "Solo las partidas uno contra uno cuentan para el ELO — una grabación "
+                     + "nombra a un perdedor, y eso no dice quién ganó una partida por equipos. "
+                     + "Igualmente queda en tu historial.",
+        },
+        ["MpResultUnratedMod"] = new()
+        {
+            [LangEn] = "This mod has no ladder yet, so the match counted towards no one's rating. "
+                     + "It is in your history all the same.",
+            [LangEs] = "Este mod todavía no tiene clasificación, así que la partida no contó "
+                     + "para el ELO de nadie. Igualmente queda en tu historial.",
+        },
+        ["MpResultUnratedDuplicate"] = new()
+        {
+            [LangEn] = "This recording had already been reported, so it did not count a second "
+                     + "time. If the match was real, it is already in your history.",
+            [LangEs] = "Esta grabación ya se había reportado, así que no contó una segunda vez. "
+                     + "Si la partida fue real, ya está en tu historial.",
+        },
+        ["MpResultUnratedRoster"] = new()
+        {
+            [LangEn] = "Someone in this report was not in the room when the game started, so it "
+                     + "counted towards no one's rating.",
+            [LangEs] = "Alguien de este reporte no estaba en la sala cuando empezó la partida, "
+                     + "así que no contó para el ELO de nadie.",
+        },
+        ["MpResultUnratedTiming"] = new()
+        {
+            [LangEn] = "The times reported for this match don't add up, so it counted towards no "
+                     + "one's rating. A game has to run at least a few minutes.",
+            [LangEs] = "Los tiempos de esta partida no cuadran, así que no contó para el ELO de "
+                     + "nadie. Una partida tiene que durar al menos unos minutos.",
+        },
+        // The LOCAL half: why the launcher could not read a result. These only appear
+        // when the server had nothing more specific to say, and they exist because all
+        // five causes used to produce MpResultNoneBody — "tick Record Game" — which is
+        // right for a missing recording and useless advice for the rest.
+        ["MpResultUnratedNoProfile"] = new()
+        {
+            [LangEn] = "Your AoE3 profile name could not be read, so there was no way to find "
+                     + "you among the players in the recording. The match is in your history "
+                     + "all the same.",
+            [LangEs] = "No se pudo leer el nombre de tu perfil de AoE3, as\u00ED que no hubo forma "
+                     + "de encontrarte entre los jugadores de la grabaci\u00F3n. Igualmente la "
+                     + "partida queda en tu historial.",
+        },
+        ["MpResultUnratedNoRoster"] = new()
+        {
+            [LangEn] = "The room was already gone when the match ended, so there was nobody to "
+                     + "check the recording against.",
+            [LangEs] = "La sala ya no exist\u00EDa cuando termin\u00F3 la partida, as\u00ED que no hab\u00EDa "
+                     + "contra qui\u00E9n contrastar la grabaci\u00F3n.",
+        },
+        ["MpResultUnratedUnreadable"] = new()
+        {
+            [LangEn] = "The recording of this match could not be read \u2014 it may have been cut "
+                     + "short when the game closed.",
+            [LangEs] = "La grabaci\u00F3n de esta partida no se pudo leer \u2014 puede que se cortara "
+                     + "al cerrarse el juego.",
+        },
+        ["MpResultUnratedAmbiguous"] = new()
+        {
+            [LangEn] = "The recording does not say who won, so the match counted towards no "
+                     + "one's rating.",
+            [LangEs] = "La grabaci\u00F3n no dice qui\u00E9n gan\u00F3, as\u00ED que la partida no cont\u00F3 para "
+                     + "el ELO de nadie.",
+        },
+        ["MpResultUnratedNoLobby"] = new()
+        {
+            [LangEn] = "This match was reported without a room, so there was no way to check who "
+                     + "played. It counted towards no one's rating.",
+            [LangEs] = "Esta partida se reportó sin sala, así que no había forma de comprobar "
+                     + "quiénes jugaron. No contó para el ELO de nadie.",
+        },
+        ["MpResultRatingBefore"] = new() { [LangEn] = "was {0}", [LangEs] = "antes {0}" },
+        ["MpResultMinutes"] = new() { [LangEn] = "{0} min", [LangEs] = "{0} min" },
+        ["MpResultPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
+        ["MpResultDecidedHeader"] = new() { [LangEn] = "DECIDED", [LangEs] = "DECIDIDAS" },
+        ["MpResultReplayHeader"] = new() { [LangEn] = "REPLAY", [LangEs] = "REPETICI\u00D3N" },
+        ["MpResultReplayNone"] = new() { [LangEn] = "not uploaded", [LangEs] = "no subida" },
+        ["MpResultRivalHeader"] = new() { [LangEn] = "OPPONENT", [LangEs] = "RIVAL" },
+        ["MpResultUnknownValue"] = new() { [LangEn] = "\u2014", [LangEs] = "\u2014" },
+        ["MpResultProvisional"] = new()
+        {
+            [LangEn] = "Your rating is still provisional \u2014 it settles after a few more decided matches.",
+            [LangEs] = "Tu rating sigue siendo provisional \u2014 se estabiliza tras unas cuantas partidas decididas m\u00E1s.",
+        },
+        ["MpResultRematch"] = new() { [LangEn] = "Rematch", [LangEs] = "Revancha" },
+        ["MpResultBackToRooms"] = new() { [LangEn] = "Back to rooms", [LangEs] = "Volver a salas" },
+        ["MpResultPendingTimeout"] = new()
+        {
+            [LangEn] = "The result has not come through yet \u2014 it will show up under History.",
+            [LangEs] = "El resultado todav\u00EDa no ha llegado \u2014 aparecer\u00E1 en Historial.",
+        },
+        ["MpResultPending"] = new()
+        {
+            [LangEn] = "Working out the result…",
+            [LangEs] = "Calculando el resultado…",
+        },
         ["MpCreateDialogTitle"] = new() { [LangEn] = "Create a room", [LangEs] = "Crear una sala" },
         ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "Room title", [LangEs] = "Título de la sala" },
         ["MpCreateDialogMaxPlayers"] = new() { [LangEn] = "Max players", [LangEs] = "Jugadores máx." },
@@ -3177,6 +3532,72 @@ public static class Strings
         {
             [LangEn] = "Mod fingerprint",
             [LangEs] = "Huella del mod",
+        },
+        // Fingerprint state, shown UNDER the mod name in the create-room dialog. It was
+        // hidden behind an "Advanced details" toggle; a mismatched fingerprint is the
+        // usual reason another player cannot join, so it belongs on screen.
+        ["MpCreateDialogFingerprintOk"] = new()
+        {
+            [LangEn] = "Fingerprint verified · {0}",
+            [LangEs] = "Huella verificada · {0}",
+        },
+        ["MpCreateDialogFingerprintLoading"] = new()
+        {
+            [LangEn] = "Computing fingerprint…",
+            [LangEs] = "Calculando huella…",
+        },
+        ["MpCreateDialogFingerprintFailed"] = new()
+        {
+            [LangEn] = "Couldn't read the fingerprint — verify the install",
+            [LangEs] = "No se pudo leer la huella — verifica la instalación",
+        },
+        // Title suggestions. They are appended to the room title, so they read as
+        // things a host announces about the match, not as titles by themselves.
+        ["MpCreateDialogSuggest1"] = new() { [LangEn] = "Quick 1v1", [LangEs] = "1v1 rápido" },
+        ["MpCreateDialogSuggest2"] = new() { [LangEn] = "No rush 10 min", [LangEs] = "Sin rush 10 min" },
+        ["MpCreateDialogSuggest3"] = new() { [LangEn] = "LatAm only", [LangEs] = "Solo LatAm" },
+        ["MpCreateDialogPrivateBody"] = new()
+        {
+            [LangEn] = "Not announced. Share the code or the password.",
+            [LangEs] = "No se anuncia. Comparte el código o la contraseña.",
+        },
+        ["MpCreateDialogShowPassword"] = new() { [LangEn] = "Show", [LangEs] = "Mostrar" },
+        ["MpCreateDialogHidePassword"] = new() { [LangEn] = "Hide", [LangEs] = "Ocultar" },
+        // The recording warning belongs here, BEFORE the match: by the time the game is
+        // over there is nothing left to fix. {0} is the in-game checkbox's own name,
+        // which stays in English because that is what AoE3 shows.
+        ["MpCreateDialogRecordWarn"] = new()
+        {
+            [LangEn] = "For the match to count towards ELO, tick {0} on the AoE3 setup screen. "
+                     + "Without a recording nobody knows who won.",
+            [LangEs] = "Para que la partida cuente en el ELO, marca {0} en la pantalla de configuración de AoE3. "
+                     + "Sin grabación nadie sabe quién ganó.",
+        },
+        ["MpCreateDialogRecordWarnName"] = new() { [LangEn] = "Record Game", [LangEs] = "Record Game" },
+        ["MpCreateDialogAnnounceNote"] = new()
+        {
+            [LangEn] = "It will be announced in the global chat and on Discord.",
+            [LangEs] = "Se anunciará en el chat global y en Discord.",
+        },
+        ["MpCreateDialogAnnounceNotePrivate"] = new()
+        {
+            [LangEn] = "A private room is not announced anywhere.",
+            [LangEs] = "Una sala privada no se anuncia en ningún sitio.",
+        },
+        ["MpCreateDialogTitleTooShort"] = new()
+        {
+            [LangEn] = "The title needs at least 3 characters.",
+            [LangEs] = "El título necesita al menos 3 caracteres.",
+        },
+        ["MpCreateDialogNoFingerprint"] = new()
+        {
+            [LangEn] = "Pick a mod — the fingerprint is still being computed.",
+            [LangEs] = "Elige un mod — la huella todavía se está calculando.",
+        },
+        ["MpCreateDialogDefaultTitle"] = new()
+        {
+            [LangEn] = "{0} room",
+            [LangEs] = "Sala de {0}",
         },
         ["MpCreateDialogCreate"] = new() { [LangEn] = "Create", [LangEs] = "Crear" },
         ["MpCreateDialogCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },

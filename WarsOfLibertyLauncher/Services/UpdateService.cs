@@ -108,14 +108,13 @@ public class UpdateService
         // 1. Cached install path. A few file-system syscalls (Directory.Exists
         //    + File.Exists for the probe file + the content marker) →
         //    essentially free. Avoids flashing "Not installed" on mod switch.
-        //    LooksLikeRealModInstall rejects stale entries that point at a
-        //    vanilla AoE3 folder — the probe file alone isn't enough (vanilla
-        //    AoE3 carries data\stringtabley.xml too), so we also require the
-        //    mod's content marker (WoL: art\zulushield) when one is declared.
+        //    IsRealInstall rejects stale entries that point at a vanilla AoE3
+        //    folder — the probe file alone isn't enough (vanilla AoE3 carries
+        //    data\stringtabley.xml too), so the mod's content marker
+        //    (WoL: art\zulushield) is required as well when one is declared.
         var cachedPath = state.InstallPath;
         bool pathCacheHit = !string.IsNullOrWhiteSpace(cachedPath)
-            && IsProfileInstalled(cachedPath)
-            && LooksLikeRealModInstall(cachedPath);
+            && IsRealInstall(cachedPath);
         if (pathCacheHit)
         {
             InstallPath = cachedPath.TrimEnd('\\', '/');
@@ -307,14 +306,12 @@ public class UpdateService
         // is honoured even if the normal cached-path resolution can't see it.
         status?.Report(Strings.Format("StatusDetectingInstall", _profile.DisplayName));
         InstallPath = ResolveInstallPath(forceInstallPath);
-        // Both gates, deliberately: this `valid` becomes CheckResult.IsValidInstall, which
-        // drives _modIsInstalled and therefore the PLAY-vs-INSTALL CTA. On the probe file
-        // alone it was LOOSER than the resolution above, so a path arriving from a route
-        // that skips the content gate (registry, broad scan) could still read as a real
-        // install and offer PLAY for a folder the game can't run.
-        bool valid = !string.IsNullOrEmpty(InstallPath)
-                     && IsProfileInstalled(InstallPath)
-                     && LooksLikeRealModInstall(InstallPath);
+        // The full gate, deliberately: this `valid` becomes CheckResult.IsValidInstall,
+        // which drives _modIsInstalled and therefore the PLAY-vs-INSTALL CTA. On the
+        // probe file alone it was LOOSER than the resolution above, so a path arriving
+        // from a route that skips the content gate (registry, broad scan) could still
+        // read as a real install and offer PLAY for a folder the game can't run.
+        bool valid = IsRealInstall(InstallPath);
         DiagnosticLog.Write($"Install path detected: '{InstallPath}' (valid: {valid})");
 
         // Broad fallback (OFF the UI thread): when the cheap resolution above
@@ -332,7 +329,10 @@ public class UpdateService
             if (!string.IsNullOrEmpty(found))
             {
                 InstallPath = found;
-                valid = IsProfileInstalled(InstallPath);
+                // Same gate as above. This site used to ask only the probe-file half,
+                // which happened to be harmless (BroadFallbackScan validates its hits)
+                // but is exactly how the two halves drift apart.
+                valid = IsRealInstall(InstallPath);
                 DiagnosticLog.Write($"Broad fallback resolved install: '{InstallPath}' (valid: {valid})");
             }
         }
@@ -543,8 +543,10 @@ public class UpdateService
         }
 
         status?.Report(Strings.Get("StatusFetchingManifest"));
+        // cacheKey: keeps the last VALIDATED manifest per mod, so a flaky host can't
+        // leave a good install with no known version (see UpdateInfoService.IsUsable).
         var info = await _infoService.FetchAsync(
-            EffectiveUpdateInfoUrl(), EffectiveUpdateInfoUrlAlt(), ct);
+            EffectiveUpdateInfoUrl(), EffectiveUpdateInfoUrlAlt(), ct, _profile.Id);
 
         VersionInfo? current = null;
         if (valid)
@@ -574,7 +576,7 @@ public class UpdateService
         // from frame zero (see ctor's cache-hit logic).
         //   * Current version: only saved when we actually identified one;
         //     leaving the cache stale on a failed detection is fine, the
-        //     constructor's IsProfileInstalled gate prevents misleading the
+        //     constructor's IsRealInstall gate prevents misleading the
         //     user, and the next successful CheckAsync will repair it.
         //   * Latest version: saved whenever the manifest fetch returns
         //     something — it's a server-side fact that doesn't depend on
@@ -1084,9 +1086,7 @@ public class UpdateService
         //    leaving a valid manual pick un-adopted. Re-validate defensively; an
         //    invalid `forced` falls through to normal resolution (we never adopt a
         //    folder that isn't a real install of this mod).
-        if (!string.IsNullOrWhiteSpace(forced)
-            && IsProfileInstalled(forced)
-            && LooksLikeRealModInstall(forced))
+        if (!string.IsNullOrWhiteSpace(forced) && IsRealInstall(forced))
         {
             var picked = forced.TrimEnd('\\', '/');
             state.InstallPath = picked;
@@ -1101,18 +1101,16 @@ public class UpdateService
         }
 
         // 1. Path cached for THIS mod from a previous detection (per-mod —
-        //    cannot leak across profiles). On top of the probe-file check we
-        //    require the mod's content marker when one is declared: a stale
-        //    cache pointing at a vanilla AoE3 location (e.g.
-        //    <Steam>\…\Age Of Empires 3\bin) can pass IsProfileInstalled by
-        //    accident — the probe file (data\stringtabley.xml etc.) exists in
-        //    vanilla AoE3 too — but it lacks the marker (WoL: art\zulushield).
-        //    Detection is by content, not folder name, so a renamed install
-        //    folder still resolves here instead of being wiped.
+        //    cannot leak across profiles). The content marker is what saves this
+        //    from a stale cache pointing at a vanilla AoE3 location (e.g.
+        //    <Steam>\…\Age Of Empires 3\bin): the probe file
+        //    (data\stringtabley.xml etc.) exists in vanilla AoE3 too, but the
+        //    marker (WoL: art\zulushield) does not. Detection is by content, not
+        //    folder name, so a renamed install folder still resolves here instead
+        //    of being wiped.
         if (!string.IsNullOrWhiteSpace(state.InstallPath))
         {
-            if (IsProfileInstalled(state.InstallPath)
-                && LooksLikeRealModInstall(state.InstallPath))
+            if (IsRealInstall(state.InstallPath))
             {
                 return state.InstallPath.TrimEnd('\\', '/');
             }
@@ -1189,7 +1187,7 @@ public class UpdateService
 
             foreach (var candidate in candidates)
             {
-                if (IsProfileInstalled(candidate) && LooksLikeRealModInstall(candidate))
+                if (IsRealInstall(candidate))
                 {
                     DiagnosticLog.Write(
                         $"Found '{_profile.Id}' via disk scan: {candidate}");
@@ -1245,7 +1243,7 @@ public class UpdateService
             foreach (var hit in ModInstallScanner.FindBroad(
                 _profile, maxDepth: 2, ct, includeDriveRoots: false, maxDirs: 6000))
             {
-                if (IsProfileInstalled(hit) && LooksLikeRealModInstall(hit))
+                if (IsRealInstall(hit))
                 {
                     DiagnosticLog.Write($"Found '{_profile.Id}' via broad fallback scan: {hit}");
                     var state = _config.GetState(_profile.Id);
@@ -1339,44 +1337,40 @@ public class UpdateService
     }
 
     /// <summary>
-    /// Generic "is the active mod installed at this path" check, driven by
-    /// <see cref="ModProfile.InstallProbeFile"/>. When a profile doesn't
-    /// declare a probe we fall back to the WoL-specific marker for
-    /// backward compatibility.
+    /// <b>The</b> question "is this folder a real install of the active mod", asked in
+    /// exactly one place. Every adoption route in this class — the constructor's cache
+    /// fast-path, a user's manual pick, the saved path, the registry, the near-AoE3
+    /// scan, the broad scan — goes through here.
+    ///
+    /// <para>The rule is <see cref="ModInstallProbe"/>'s (folder → probe file → content
+    /// marker → base-game engine), plus one legacy allowance: a profile that declares
+    /// NO probe file falls back to the WoL marker via
+    /// <see cref="RegistryService.IsValidInstall"/>, which is how installs made before
+    /// probe files existed are still recognised. <see cref="ModInstallProbe.Inspect"/>
+    /// skips the probe step for such a profile, so without this the fallback would be
+    /// lost.</para>
+    ///
+    /// <para><b>Why one method and not two calls.</b> This used to be a pair —
+    /// <c>IsProfileInstalled(p) &amp;&amp; LooksLikeRealModInstall(p)</c> — written out at six
+    /// sites, and the second half had already gone missing at one of them (the
+    /// post-broad-scan validity computation). The first half was also redundant
+    /// wherever a probe file IS declared, because Inspect checks it too. A conjunction
+    /// you have to remember to write is not a single source of truth; a method is. The
+    /// hazard it guards is real and documented: dropping the content gate is what let
+    /// a folder holding only a mod's overlay — no engine — read as installed, offer
+    /// PLAY, and launch an executable that died two seconds later with nothing
+    /// explaining why.</para>
     /// </summary>
-    private bool IsProfileInstalled(string path)
+    private bool IsRealInstall(string? path)
     {
-        if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+        if (string.IsNullOrEmpty(path)) return false;
+
+        if (string.IsNullOrEmpty(_profile.InstallProbeFile)
+            && !RegistryService.IsValidInstall(path))
             return false;
 
-        if (string.IsNullOrEmpty(_profile.InstallProbeFile))
-            return RegistryService.IsValidInstall(path);
-
-        return File.Exists(Path.Combine(path, _profile.InstallProbeFile));
+        return ModInstallProbe.LooksLikeModInstall(path, _profile);
     }
-
-    /// <summary>
-    /// The content gate layered on top of <see cref="IsProfileInstalled"/>'s probe-file
-    /// check. Detection is by CONTENT, never by folder name, so a mod is recognised under
-    /// any folder name — see <see cref="ModInstallProbe"/> for the full rule (probe file,
-    /// optional marker, and the base-game engine for an isolated-folder install).
-    ///
-    /// <para><b>This MUST delegate to <see cref="ModInstallProbe"/> rather than re-check
-    /// anything itself.</b> It used to be a local two-liner: require the marker when the
-    /// profile declares one, otherwise return true. That "otherwise" was the hole — for a
-    /// profile with no marker it returned true WITHOUT LOOKING AT THE DISK, so every
-    /// adoption path in this class (ctor cache, forced pick, cached path, registry, disk
-    /// scan, broad scan) collapsed to "the probe file exists". A leftover folder holding
-    /// only Napoleonic Era's overlay — its <c>age3n.exe</c> present, no engine DLLs, no
-    /// base <c>data\</c> — satisfied that, so the launcher reported it installed, offered
-    /// PLAY, and the game died two seconds after every launch with nothing explaining
-    /// why. <see cref="ModInstallProbe.Inspect"/> already rejected exactly that case
-    /// (<see cref="ProbeOutcome.EngineMissing"/>); this class simply never asked it. Keep
-    /// the one source of truth: a second opinion about what counts as an install is how
-    /// the two drifted apart in the first place.</para>
-    /// </summary>
-    private bool LooksLikeRealModInstall(string path)
-        => ModInstallProbe.LooksLikeModInstall(path, _profile);
 
     /// <summary>
     /// Identifies the user's current mod version by computing MD5 of three key files
@@ -1601,8 +1595,8 @@ public class UpdateService
         {
             // Migration path for installs written before baseline recording:
             // trust the recorded Version. The caller only reaches here when the
-            // install is valid (IsProfileInstalled + marker gate already
-            // passed), so this can't mask a missing/partial install. The next
+            // install is valid (IsRealInstall — probe, marker and engine — has
+            // already passed), so this can't mask a missing/partial install. The next
             // Repair re-stamps a real baseline and self-heals.
             DiagnosticLog.Write(
                 $"No manifest baseline (pre-baseline manifest); trusting recorded version {manifest.Version}.");

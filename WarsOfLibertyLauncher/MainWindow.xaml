@@ -1,4 +1,4 @@
-<Window x:Class="WarsOfLibertyLauncher.MainWindow"
+﻿<Window x:Class="WarsOfLibertyLauncher.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:tb="http://www.hardcodet.net/taskbar"
@@ -149,34 +149,6 @@
             </Setter>
         </Style>
 
-        <Style x:Key="LangToggle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#666"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="8,3"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="3"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
         <Style TargetType="ProgressBar">
             <Setter Property="Background" Value="{DynamicResource BgPanelAlt}"/>
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
@@ -278,76 +250,74 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- Custom title bar (shared controls:TitleBar, height = TitleBarHeightMain token = classic 36; the slim 28px is secondary-windows only) -->
-            <RowDefinition Height="38"/>   <!-- Horizontal nav strip (Steam-style); compact, 14px main tabs -->
-            <RowDefinition Height="*"/>    <!-- App content -->
+            <!-- Custom title bar (shared controls:TitleBar, height = TitleBarHeightMain
+                 token; the slim 28px is secondary-windows only). It now carries the
+                 three main tabs as well — the separate nav strip that used to be row 1
+                 is gone (design handoff 1a: five stacked bars down to two). -->
+            <RowDefinition Height="Auto"/>   <!-- Title bar -->
+            <RowDefinition Height="Auto"/>   <!-- Nav tabs -->
+            <RowDefinition Height="*"/>      <!-- App content -->
         </Grid.RowDefinitions>
 
         <!-- =============================================================
-             CUSTOM TITLE BAR — replaces the white Windows-default
-             chrome with our own painted strip in BgSidebar so the
-             whole window reads as one cohesive dark surface. App
-             icon + window title on the left; min / max / close on
-             the right. Drag works automatically over CaptionHeight
-             (set in WindowChrome above); buttons mark themselves
-             hit-test-visible-in-chrome so they aren't blocked by
-             the drag area.
+             ROW 0 - TITLE BAR (36px). Deliberately almost empty: the brand,
+             the version chip, and the three chrome affordances that belong
+             beside the caption buttons. Every other pixel is window-drag.
 
-             NO bottom border here on purpose: the nav-tab strip
-             below (Grid.Row=1) shares the exact same BgSidebar fill,
-             so a divider between them would draw a visible seam
-             through what should read as one continuous chrome
-             surface. The seam below the nav tabs is the nav strip's
-             OWN bottom border — that one stays, since it delimits
-             chrome from content. -->
-        <!-- Main header opts OUT of the slim secondary bar: pins the classic
-             36px height + 46/10 buttons so the brand bar + nav strip are
-             untouched. Height reads TitleBarHeightMain so it matches the
-             CaptionHeight App.ApplyWindowChrome assigns to MainWindow. -->
+             The three main tabs used to live in here (handoff 1a folded the
+             nav strip into the bar); the header reference splits them back
+             out into row 1. Not a revert for its own sake - a chrome row with
+             nothing but a wordmark can afford to BE the drag handle, which is
+             what makes the window feel native, and it gives the active tab a
+             seam to underline.
+
+             NO bottom border, on purpose: the nav row below is a different
+             fill, so the two read as separate surfaces with no rule between
+             them, and the rule the CONTENT needs is the nav row's own.
+
+             Height is TitleBarHeightMain and nothing else may set it -
+             App.ApplyWindowChrome derives WindowChrome.CaptionHeight from that
+             same token, and the caption region IS the drag region. Set one
+             without the other and part of a row silently stops (or starts)
+             dragging the window.
+             ============================================================= -->
         <controls:TitleBar Grid.Row="0"
+                           Background="{DynamicResource ChromeTitleBg}"
                            Height="{StaticResource TitleBarHeightMain}"
                            ButtonWidth="46"
                            GlyphSize="10"
+                           CloseGlyphSize="13"
                            ShowMinimize="True"
                            ShowMaximize="True"
                            ShowClose="True">
-                <!-- Title-bar brand button — clickable, opens the same
-                     brand menu as the AOE3 LAUNCHER button in the nav
-                     strip below. Steam-pattern: clicking the launcher
-                     name in the title bar should open the launcher
-                     menu (Launcher settings / About / Exit).
-                     IsHitTestVisibleInChrome=True so WindowChrome's
-                     drag handler doesn't swallow the click. -->
-                <!-- Title-bar brand button uses the SAME interaction recipe
-                     as NavTabButton (the LIBRARY/WORKSHOP/MULTIPLAYER tabs):
-                     the text illuminates instead of painting a background
-                     tile. Implemented as a Button.Style — NOT inline
-                     attributes — on purpose:
-                       • idle Foreground is a STYLE setter (precedence 7),
-                         so the template's hover/press/open Foreground
-                         triggers (precedence 4-6) can override it. A local
-                         Foreground ATTRIBUTE (precedence 3) beats the
-                         triggers and the colour never changes — that was
-                         the earlier bug.
-                       • the ContentPresenter is left DEFAULT (no explicit
-                         Foreground): a ContentControl's ContentPresenter
-                         auto-propagates the templated parent's Foreground to
-                         the content text, so when a trigger flips the
-                         Button's Foreground the icon-label TextBlocks follow.
-                         (Setting TextElement.Foreground directly on the
-                         ContentPresenter did NOT propagate — that's why the
-                         previous attempt looked dead.)
-                     States: idle = dim Secondary, hover = #E6EEF8 (near-white,
-                     the same token the nav tabs lift to), pressed/open =
-                     #FFFFFF pure white (open held while the brand popup lives
-                     via Tag="open", set in BrandMenuButton_Click). -->
-                <!-- Brand block = the TitleBar's Content. No left Padding and no
-                     Grid.Column (dead from when it lived in MainWindow's own grid):
-                     it now sits flush at the TitleBar's content gutter
-                     (TitleBarContentPadding.Left = 18), the same left edge the nav
-                     tabs use, so brand + tabs are anchored to one consistent gutter. -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch">
+                <!-- Column 0 of the shared TitleBar template ends exactly where the
+                     caption buttons begin, so anything right-aligned in here lands
+                     immediately left of them with no arithmetic. That is what retired
+                     the hand-computed insets this row used to carry (bell at 148 from
+                     the right, offline chip at 200, the content grid stopping at 58 -
+                     all derived from ButtonWidth 46 x 3).
+
+                     NOTE what is NOT set here: IsHitTestVisibleInChrome. On the grid it
+                     would make the whole bar hit-testable and kill the drag; each
+                     interactive child sets it for itself instead. The flag does NOT
+                     inherit into a ContentControl's Content (the content's inheritance
+                     parent is the TitleBar, not the template's ContentPresenter), so
+                     "the template already sets it" is no substitute - that exact
+                     assumption once left these controls dead to the first click. -->
+                <Grid Height="{StaticResource TitleBarHeightMain}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>   <!-- brand -->
+                        <ColumnDefinition Width="Auto"/>   <!-- version chip -->
+                        <ColumnDefinition Width="*"/>      <!-- drag handle -->
+                        <ColumnDefinition Width="Auto"/>   <!-- self-update pill -->
+                        <ColumnDefinition Width="Auto"/>   <!-- offline chip -->
+                        <ColumnDefinition Width="Auto"/>   <!-- notification bell -->
+                    </Grid.ColumnDefinitions>
+
                 <Button x:Name="TitleBarBrandButton"
+                        Grid.Column="0"
+                        VerticalAlignment="Stretch"
+                        Margin="0,0,10,0"
                         HorizontalAlignment="Left"
                         Background="Transparent"
                         BorderThickness="0"
@@ -357,7 +327,16 @@
                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <Button.Style>
                         <Style TargetType="Button">
-                            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+                            <!-- Muted at rest so the hover has something to lift AGAINST;
+                                 the scale is rest #93A4B5 (7.31:1) → hover #F0F5FB
+                                 (17.04:1) → pressed/open #FFFFFF (18.67:1). The hover
+                                 used to be ChromeTextSoft, one rung lower, and was
+                                 reported as looking the same as rest: a screenshot taken
+                                 WITH the pointer on the button was indistinguishable from
+                                 one taken without it. Pressed/open stop at pure white so
+                                 the three states remain three — the chevron flip is the
+                                 only other signal that the menu is open. -->
+                            <Setter Property="Foreground" Value="{DynamicResource ChromeTextDim}"/>
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="Button">
@@ -369,7 +348,7 @@
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Foreground" Value="#E6EEF8"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource ChromeTextBright}"/>
                                             </Trigger>
                                             <!-- Pressed + Open after hover so
                                                  they win when both match; pure
@@ -402,13 +381,17 @@
                              App.OnStartup pin it to integer device pixels).
                              DecodePixelWidth=256 decodes the NATIVE frame so the
                              only resample is the renderer's single HighQuality
-                             bicubic downscale (256 → 20-40 physical px). The
+                             bicubic downscale (256 → the physical box). The
                              earlier 64 cap pre-shrank in the decoder first, so a
-                             non-integer 64→40 second downscale softened the icon;
-                             decoding native keeps it sharp. Costs ~256 KB RAM
-                             instead of ~16 KB — trivial, and worth it for a crisp
-                             brand mark. (Size stays 20x20: sharper, not bigger.) -->
-                        <Image Width="20" Height="20"
+                             non-integer second downscale softened the icon;
+                             decoding native keeps it as sharp as it can be. Costs
+                             ~256 KB RAM instead of ~16 KB — trivial, and worth it
+                             for a crisp brand mark. (16x16 per the header reference;
+                             this replaced an earlier 20x20 rule — the maintainer was
+                             shown that a detailed raster mark loses detail at that
+                             size and chose fidelity, so softness here is accepted,
+                             not a regression.) -->
+                        <Image Width="16" Height="16"
                                Margin="0,0,10,0"
                                VerticalAlignment="Center"
                                RenderOptions.BitmapScalingMode="HighQuality">
@@ -417,48 +400,83 @@
                                              DecodePixelWidth="256"
                                              CacheOption="OnLoad"/>
                             </Image.Source>
-                            <!-- Illuminate with the text. The icon is a
-                                 bitmap, not a glyph, so it can't follow
-                                 Foreground like the wordmark does — it
-                                 brightens via Opacity instead: 0.7 dimmed
-                                 at rest (same rest tone as the chevron),
-                                 1.0 full on hover or while the brand menu
-                                 is open. Bound to the ancestor brand
-                                 button's IsMouseOver / Tag because the
-                                 Image lives in the button CONTENT, not its
-                                 template, so the template's Foreground
-                                 triggers can't reach it. -->
-                            <Image.Style>
-                                <Style TargetType="Image">
-                                    <Setter Property="Opacity" Value="0.7"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
-                                            <Setter Property="Opacity" Value="1"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" Value="open">
-                                            <Setter Property="Opacity" Value="1"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Image.Style>
+                            <!-- FULL opacity, and no Style at all. The icon used to sit
+                                 at 0.7 and brighten to 1.0 on hover, back when the
+                                 wordmark beside it was near-white serif and the mark had
+                                 to stay behind it. Against the near-black bar that costs
+                                 ~23% of the brightness of artwork that is already dark
+                                 (mean luminance 77/255 at render size), which is what made
+                                 the whole block read as washed out. The reference asks for
+                                 a size and a colour and says nothing about opacity — the
+                                 dimming was ours. The button still answers the mouse: the
+                                 wordmark and the chevron follow the template's Foreground
+                                 triggers, so the affordance survives without knocking the
+                                 mark back at rest. -->
                         </Image>
+                        <!-- Body font, 12, muted — the prototype's wordmark. Its COLOUR is
+                             not set here on purpose: it comes from the button's Style
+                             setter so the hover/open triggers can still override it.
+                             A local Foreground would beat those triggers and kill the
+                             illumination, which is the precedence trap this button has
+                             already been bitten by twice. -->
                         <TextBlock Text="AoE3 Mod Launcher"
-                                   FontFamily="{DynamicResource DisplayFont}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontFamily="{DynamicResource BodyFont}"
+                                   FontSize="{StaticResource MpMetaSize}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
-                        <!-- Chevron flips ▾↔▴ in code-behind on open/close
-                             to signal the dropdown is expanded. Named so
-                             BrandMenuButton_Click can swap the glyph. -->
+                        <!-- Chevron flips ▾↔▴ in code-behind on open/close to signal
+                             the dropdown is expanded. Named so BrandMenuButton_Click can
+                             swap the glyph.
+
+                             No Opacity: it carried a LOCAL 0.7 that nothing ever raised —
+                             unlike the icon's, which at least lifted on hover — so it was
+                             the one permanently dimmed element in the bar, compositing to
+                             4.13:1 against 7.31:1 for the text it sits beside. With it
+                             gone the chevron inherits the button's Foreground and finally
+                             illuminates WITH the wordmark. -->
                         <TextBlock x:Name="BrandChevron"
                                    Text="&#xE70D;"
                                    FontFamily="Segoe MDL2 Assets"
                                    FontSize="10"
                                    VerticalAlignment="Center"
-                                   Margin="6,1,0,0"
-                                   Opacity="0.7"/>
+                                   Margin="6,1,0,0"/>
                     </StackPanel>
                 </Button>
+                <!-- Version of the RUNNING binary, from
+                     LauncherUpdateService.CurrentInformationalTag (always "v"-prefixed,
+                     and the only source that keeps a WoL-style letter suffix). Static:
+                     no IsHitTestVisibleInChrome, so it is part of the drag handle. That
+                     also means it can carry no tooltip - a caption hit never raises
+                     IsMouseOver - which is fine for a label already fully visible.
+
+                     It took TWO lifts to become legible, and the second is the
+                     interesting one. First the text went from the ChromeTextFaint the
+                     reference names to ChromeTextDim: at 11px faint measured 3.67:1,
+                     under the 4.5:1 floor, and was reported as unreadable. That fixed
+                     the letters and NOT the chip — with no background at all it still
+                     read as loose text beside a hairline, because a 2.09:1 rim has
+                     nothing to cut the shape out of. So it now carries a fill
+                     (ChromeVersionBg) and the text sits at ChromeTextSoft, 11.79:1.
+
+                     A local Foreground is safe HERE because the chip is a SIBLING of the
+                     brand button, not part of its content — inside it, a local value
+                     would beat the template's illumination triggers, which is the trap
+                     that has broken this button twice. -->
+                <Border x:Name="VersionChip"
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Padding="6,2"
+                        CornerRadius="{StaticResource ChromeVersionRadius}"
+                        Background="{DynamicResource ChromeVersionBg}"
+                        BorderBrush="{DynamicResource ChromeVersionRim}"
+                        BorderThickness="1">
+                    <TextBlock x:Name="VersionChipText"
+                               FontFamily="{DynamicResource BodyFont}"
+                               FontSize="{StaticResource ChromeVersionSize}"
+                               Foreground="{DynamicResource ChromeTextSoft}"
+                               VerticalAlignment="Center"/>
+                </Border>
+
                 <!-- Persistent, non-invasive launcher self-update reminder.
                      Replaces the old auto-modal that got permanently silenced
                      on Cancel (SkippedLauncherTag). Shown whenever a newer
@@ -471,10 +489,11 @@
                      window-drag handler doesn't swallow the click. Text + tooltip
                      are localized from code-behind. -->
                 <Button x:Name="LauncherUpdatePill"
+                        Grid.Column="3"
                         Visibility="Collapsed"
                         Cursor="Hand"
                         VerticalAlignment="Center"
-                        Margin="14,0,0,0"
+                        Margin="0,0,10,0"
                         FontFamily="{DynamicResource BodyFont}"
                         FontSize="{StaticResource FontSizeCaption}"
                         Click="LauncherUpdatePill_Click"
@@ -514,26 +533,11 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
-                </StackPanel>
-        </controls:TitleBar>
 
-        <!-- =============================================================
-             OFFLINE CHIP. Overlaid on the title bar (Grid.Row=0), to the
-             LEFT of the notification bell (inset clears the bell + caption
-             buttons). Visible only when ConnectivityState.IsOffline (driven
-             from code-behind). Reuses the MpStatusOffline brush; a colored
-             dot avoids depending on a specific Segoe MDL2 glyph. Click forces
-             a connectivity re-check so the user can retry without waiting for
-             the periodic refresh. IsHitTestVisibleInChrome so the window-drag
-             handler doesn't eat the click (same recipe as the bell/brand).
-             ============================================================= -->
-        <Grid Grid.Row="0"
-              HorizontalAlignment="Right"
-              VerticalAlignment="Stretch"
-              Margin="0,0,200,0"
-              Panel.ZIndex="10"
-              shell:WindowChrome.IsHitTestVisibleInChrome="True">
-            <Button x:Name="OfflineChip"
+                <Button x:Name="OfflineChip"
+                        Grid.Column="4"
+                        Margin="0,0,6,0"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True"
                     Visibility="Collapsed"
                     Cursor="Hand"
                     VerticalAlignment="Center"
@@ -573,23 +577,9 @@
                     </ControlTemplate>
                 </Button.Template>
             </Button>
-        </Grid>
-
-        <!-- =============================================================
-             NOTIFICATION BELL (Steam-style). Overlaid on the title bar
-             (Grid.Row=0), right-aligned and inset by the width of the 3
-             caption buttons (ButtonWidth 46 × 3 = 138) so it sits just to
-             their left. IsHitTestVisibleInChrome=True so the window-drag
-             handler doesn't swallow the click (same recipe as the brand
-             button above). Badge + one-shot pulse are driven from code.
-             ============================================================= -->
-        <Grid Grid.Row="0"
-              HorizontalAlignment="Right"
-              VerticalAlignment="Stretch"
-              Margin="0,0,148,0"
-              Panel.ZIndex="10"
-              shell:WindowChrome.IsHitTestVisibleInChrome="True">
-            <Button x:Name="NotificationBellButton"
+                <Button x:Name="NotificationBellButton"
+                        Grid.Column="5"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True"
                     Click="NotificationBell_Click"
                     MouseEnter="NotificationBell_MouseEnter"
                     MouseLeave="NotificationBell_MouseLeave"
@@ -626,7 +616,7 @@
                     <Ellipse x:Name="NotificationDot"
                              Width="7" Height="7"
                              Fill="#E5484D"
-                             Stroke="{DynamicResource BgBase}"
+                             Stroke="{DynamicResource ChromeTitleBg}"
                              StrokeThickness="1"
                              HorizontalAlignment="Right"
                              VerticalAlignment="Top"
@@ -635,6 +625,14 @@
                 </Grid>
             </Button>
 
+                </Grid>
+        </controls:TitleBar>
+
+        <!-- The notification panel stays a sibling of the TitleBar rather than a child
+             of it: a Popup renders in its own HWND and is positioned against its
+             PlacementTarget, so it does not need to live inside the bar - and keeping
+             it out means the bar's content grid holds only bar-height controls. -->
+        <Grid Grid.Row="0" Panel.ZIndex="10">
             <!-- Dropdown panel. Right-aligned under the bell (HorizontalOffset
                  shifts the 360-wide card left so its right edge lands near the
                  bell). Items + empty-state visibility are wired in code-behind. -->
@@ -646,22 +644,29 @@
                    PopupAnimation="Fade"
                    HorizontalOffset="-316"
                    VerticalOffset="2">
-                <Border Width="360"
-                        Background="{DynamicResource MpSurface}"
-                        BorderBrush="{DynamicResource MpDivider}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Margin="8"
+                <!-- Same two-tone rim + surface as the brand and MODS menus: the three
+                     hang off this one bar and used to disagree on surface, rim, radius
+                     and shadow all at once. The shadow rides the OUTER band so it skirts
+                     the whole composite rim instead of being clipped behind it. -->
+                <Border Margin="8"
+                        Background="{DynamicResource MenuBorderOuter}"
+                        CornerRadius="{StaticResource RadiusPopupOuter}"
+                        Padding="1"
                         SnapsToDevicePixels="True">
                     <Border.Effect>
-                        <DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="3" Opacity="0.5"/>
+                        <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="4" Opacity="0.6"/>
                     </Border.Effect>
+                <Border Width="360"
+                        Background="{DynamicResource ChromePopupBg}"
+                        BorderBrush="{DynamicResource MenuBorder}"
+                        BorderThickness="2"
+                        CornerRadius="{StaticResource RadiusPopupInner}">
                     <DockPanel LastChildFill="True">
                         <!-- Header -->
                         <Grid DockPanel.Dock="Top" Margin="14,12,10,8">
                             <TextBlock x:Name="NotificationPanelTitle"
                                        Text="Notifications"
-                                       Foreground="{DynamicResource TextPrimary}"
+                                       Foreground="{DynamicResource ChromeTextStrong}"
                                        FontFamily="{DynamicResource DisplayFont}"
                                        FontSize="{StaticResource FontSizeBody}"
                                        FontWeight="SemiBold"
@@ -692,7 +697,7 @@
                         <TextBlock x:Name="NotificationEmptyText"
                                    DockPanel.Dock="Top"
                                    Text="No notifications"
-                                   Foreground="{DynamicResource TextSecondary}"
+                                   Foreground="{DynamicResource ChromeTextDim}"
                                    HorizontalAlignment="Center"
                                    Margin="0,28,0,30"
                                    Visibility="Collapsed"/>
@@ -738,7 +743,7 @@
                                                                    VerticalAlignment="Center"
                                                                    FontFamily="Segoe MDL2 Assets"
                                                                    FontSize="8"
-                                                                   Foreground="{DynamicResource TextSecondary}">
+                                                                   Foreground="{DynamicResource ChromeTextDim}">
                                                             <TextBlock.Style>
                                                                 <Style TargetType="TextBlock">
                                                                     <Setter Property="Text" Value="&#xEA8F;"/>
@@ -783,7 +788,7 @@
                                                            FontFamily="Segoe MDL2 Assets"
                                                            FontSize="16"
                                                            Visibility="{Binding ModId, Converter={StaticResource ModIconPresentConv}, ConverterParameter=invert}"
-                                                           Foreground="{DynamicResource TextSecondary}">
+                                                           Foreground="{DynamicResource ChromeTextDim}">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Setter Property="Text" Value="&#xEA8F;"/>
@@ -823,16 +828,16 @@
                                                 <!-- Title + body + time -->
                                                 <StackPanel Grid.Column="1">
                                                     <TextBlock Text="{Binding Title}"
-                                                               Foreground="{DynamicResource TextPrimary}"
+                                                               Foreground="{DynamicResource ChromeTextStrong}"
                                                                FontWeight="SemiBold"
                                                                TextWrapping="Wrap"/>
                                                     <TextBlock Text="{Binding Body}"
-                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               Foreground="{DynamicResource ChromeTextDim}"
                                                                FontSize="12"
                                                                TextWrapping="Wrap"
                                                                Margin="0,1,0,0"/>
                                                     <TextBlock Text="{Binding CreatedLocal, StringFormat='{}{0:dd MMM, HH:mm}'}"
-                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               Foreground="{DynamicResource ChromeTextDim}"
                                                                FontSize="11"
                                                                Opacity="0.7"
                                                                Margin="0,3,0,0"/>
@@ -862,82 +867,219 @@
                         </ScrollViewer>
                     </DockPanel>
                 </Border>
+                </Border>
             </Popup>
         </Grid>
 
         <!-- =============================================================
-             HORIZONTAL NAVIGATION (Steam-style redesign). Replaces
-             the old 240px vertical sidebar. Three content tabs only
-             — the brand dropdown (Launcher settings / About / Exit)
-             lives EXCLUSIVELY in the title bar above, so it's not
-             duplicated here. Same x:Names as the old vertical
-             sidebar so code-behind (RefreshTopTabHighlight,
-             ApplyStrings, SwitchTopTab) keeps working unchanged.
+             ROW 1 - NAV. The three main tabs, and the player's state on the
+             right. Ordinary client area: it sits BELOW CaptionHeight, so every
+             control in here gets normal hit-testing, hover and tooltips with
+             no chrome flags at all.
+
+             Its bottom rule is the chrome/content seam for all three tabs.
+             Multiplayer draws its own sub-tab bar under this, but Library and
+             Workshop have nothing, so without this line the chrome would bleed
+             straight into their content. (That rule used to live on the content
+             wrapper below, back when the bar it separated from was the title
+             bar itself.)
              ============================================================= -->
         <Border Grid.Row="1"
-                Background="{DynamicResource BgSidebar}"
-                BorderBrush="{DynamicResource BorderSecondary}"
+                x:Name="MainNav"
+                Height="{StaticResource MainNavHeight}"
+                Background="{DynamicResource ChromeNavBg}"
+                BorderBrush="{DynamicResource ChromeNavRule}"
                 BorderThickness="0,0,0,1">
-            <StackPanel x:Name="TopTabBar"
-                        Orientation="Horizontal"
-                        VerticalAlignment="Stretch">
-                <!-- Content tabs — icon + label inline. Active state
-                     is driven by Tag="active" via RefreshTopTabHighlight
-                     in code-behind. The left-to-right child order is
-                     re-applied at startup from LauncherConfig.TopTabOrder
-                     by ApplyTopTabOrder() — the XAML order here is just
-                     the default for a fresh config. -->
-                <Button x:Name="TopTabPlay"
-                        Style="{StaticResource NavTabButton}"
-                        Click="TopTabPlay_Click">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="&#xE80F;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="16"
-                                   Margin="0,0,10,0"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button x:Name="TopTabMods"
-                        Style="{StaticResource NavTabButton}"
-                        Click="TopTabMods_Click">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="&#xE7C5;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="16"
-                                   Margin="0,0,10,0"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock x:Name="SidebarLabelCatalog" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button x:Name="TopTabMultiplayer"
-                        Style="{StaticResource NavTabButton}"
-                        Click="TopTabMultiplayer_Click">
-                    <Grid>
+            <Grid Margin="{StaticResource MainNavPadding}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- MAIN TABS. Same x:Names as ever, so every code-behind consumer
+                     (SwitchTopTab, RefreshTopTabHighlight, ApplyStrings,
+                     ApplyTopTabOrder, the click handlers) keeps working untouched.
+                     Declared HERE rather than in a UserControl because ApplyTopTabOrder
+                     clears and refills TopTabBar.Children, which needs the panel in
+                     MainWindow's namescope - the same reason TitleBar is a templated
+                     ContentControl.
+
+                     The left-to-right child order is re-applied at startup from
+                     LauncherConfig.TopTabOrder; the order here is just the default for
+                     a fresh config. -->
+                <StackPanel x:Name="TopTabBar"
+                            Grid.Column="0"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Stretch">
+                    <Button x:Name="TopTabPlay"
+                            Style="{StaticResource NavTabButton}"
+                            Click="TopTabPlay_Click">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="&#xE716;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="16"
-                                       Margin="0,0,10,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <!-- "New room created" dot: set from PollNewRoomsAsync,
-                             cleared when the user switches to Multiplayer. Mirrors
-                             the notification bell's badge (MainWindow.xaml ~645). -->
-                        <Ellipse x:Name="MultiplayerTabDot"
-                                 Width="7" Height="7"
-                                 Fill="#E5484D"
-                                 Stroke="{DynamicResource BgSidebar}"
-                                 StrokeThickness="1"
-                                 HorizontalAlignment="Right"
-                                 VerticalAlignment="Top"
-                                 Margin="0,2,-2,0"
-                                 Visibility="Collapsed"/>
-                    </Grid>
-                </Button>
-            </StackPanel>
+                    </Button>
+                    <Button x:Name="TopTabMods"
+                            Style="{StaticResource NavTabButton}"
+                            Click="TopTabMods_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="SidebarLabelCatalog" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="TopTabMultiplayer"
+                            Style="{StaticResource NavTabButton}"
+                            Click="TopTabMultiplayer_Click">
+                        <Grid>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock x:Name="SidebarLabelMultiplayer" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <!-- "New room created" dot: set from PollNewRoomsAsync,
+                                 cleared when the user switches to Multiplayer. Its
+                                 Stroke must track the fill of whatever bar the tab
+                                 sits on, so the ring reads as a cut-out and not a halo — hence the NAV
+                                 row's brush, not the title bar's. It has moved once
+                                 already; move it again if the tabs do. -->
+                            <Ellipse x:Name="MultiplayerTabDot"
+                                     Width="7" Height="7"
+                                     Fill="#E5484D"
+                                     Stroke="{DynamicResource ChromeNavBg}"
+                                     StrokeThickness="1"
+                                     HorizontalAlignment="Right"
+                                     VerticalAlignment="Top"
+                                     Margin="0,-2,-4,0"
+                                     Visibility="Collapsed"/>
+                        </Grid>
+                    </Button>
+                </StackPanel>
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <!-- Connection capsule. Radmin's full-width green banner used to sit
+                         permanently in the Multiplayer tab restating "everything is
+                         fine"; it collapses to this, and the banner only returns when
+                         something is actually wrong. Driven by MultiplayerTab's own
+                         Radmin poll through SetConnectionChip, so there is exactly one
+                         probe and one source of truth.
+
+                         Collapsed by default: it appears once the poll reports Radmin
+                         ready and hides the moment it isn't. Global rather than
+                         Multiplayer-only, per the reference.
+
+                         The detail is the bare 26.x address. What that address IS lives
+                         in the tooltip instead - which only works because the capsule is
+                         client area now; in the title bar a tooltip could never fire.
+
+                         NOT clickable, and that is the second answer to the same
+                         question. It WAS briefly a Button — the door to the Radmin guide,
+                         because retiring the permanent banner took the guide's only other
+                         door with it. That failed on both halves at once: a status
+                         readout does not read as pressable (its whole affordance was a
+                         hand cursor and a rim shift between two nearly invisible greys),
+                         and even pressed it never said what it did. A "?" beside it was tried
+                         next and failed for the other half of the same reason: a symbol
+                         says help exists but never says about what. The door is now a
+                         LABELLED button in the Multiplayer tab, which is where Radmin
+                         matters at all. -->
+                    <Border x:Name="ConnectionChip"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Center"
+                            Margin="0,0,10,0"
+                            Padding="12,0"
+                            Height="{StaticResource ChromeCapsuleHeight}"
+                            CornerRadius="{StaticResource ChromeCapsuleRadius}"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource ChromeRim}"
+                            BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="7" Height="7"
+                                     Fill="{DynamicResource ChromeOk}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,8,0"/>
+                            <TextBlock x:Name="ConnectionChipStatus"
+                                       Foreground="{DynamicResource ChromeTextSoft}"
+                                       FontFamily="{DynamicResource BodyFont}"
+                                       FontSize="{StaticResource MpMetaSize}"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                            <!-- ChromeTextDim, not the reference's ChromeTextFaint: that
+                                 is 3.30:1 on this row, under the 4.5:1 floor, and it is
+                                 the same brush at the same ratio as the ELO beside it. -->
+                            <TextBlock x:Name="ConnectionChipDetail"
+                                       Margin="8,0,0,0"
+                                       Foreground="{DynamicResource ChromeTextDim}"
+                                       FontFamily="{DynamicResource BodyFont}"
+                                       FontSize="{StaticResource MpMetaSize}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Hidden with its neighbours rather than left floating: signed
+                         out, both the capsule and the account block collapse, and a
+                         divider alone in an empty row reads as a rendering glitch.
+                         RefreshChromeDivider owns it. -->
+                    <Rectangle x:Name="ChromeDivider"
+                               Width="1" Height="20"
+                               Visibility="Collapsed"
+                               Fill="{DynamicResource ChromeRim}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,16,0"/>
+
+                    <!-- Account cluster. Replaces the Multiplayer tab's account ROW
+                         (user | Sign out), one of the five stacked bars. Hidden until
+                         multiplayer reports a signed-in user, so Library and Workshop
+                         don't show an empty avatar before sign-in.
+
+                         No chevron: the reference doesn't draw one. It is still a
+                         button and still lifts on hover, which is the affordance. -->
+                    <Button x:Name="AccountButton"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Center"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            Cursor="Hand"
+                            Click="AccountButton_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Monogram disc. The photo, when there is one, is painted
+                                 over it from code-behind so a failed download still
+                                 leaves a readable initial underneath. -->
+                            <Grid Width="26" Height="26" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Ellipse x:Name="AccountAvatarEllipse" Fill="{DynamicResource MpAction}"/>
+                                <TextBlock x:Name="AccountAvatarInitial"
+                                           Foreground="#FFFFFF"
+                                           FontFamily="{DynamicResource BodyFont}"
+                                           FontSize="11"
+                                           FontWeight="Bold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock x:Name="AccountName"
+                                           Foreground="{DynamicResource ChromeTextStrong}"
+                                           FontFamily="{DynamicResource BodyFont}"
+                                           FontSize="{StaticResource MpMetaSize}"
+                                           FontWeight="SemiBold"/>
+                                <!-- Collapses when the standing hasn't been fetched. The
+                                     rating is pulled once per session from a
+                                     rate-limited endpoint, so this reads that cache and
+                                     never polls. -->
+                                <!-- MpAccountElo, the token that exists for exactly this
+                                     and that LobbyWindow's roster uses. The header rewrite
+                                     swapped it for the reference's ChromeTextFaint, which
+                                     is 3.30:1 at the app's smallest size — measured
+                                     unreadable, and the third time that tone has been. -->
+                                <TextBlock x:Name="AccountElo"
+                                           Visibility="Collapsed"
+                                           Margin="0,1,0,0"
+                                           Foreground="{DynamicResource MpAccountElo}"
+                                           FontFamily="{DynamicResource BodyFont}"
+                                           FontSize="{StaticResource MpMicroSize}"
+                                           FontWeight="Medium"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- =============================================================
@@ -946,16 +1088,21 @@
              (Workshop, Multiplayer, Settings) overlay on top when
              active.
 
-             ClipToBounds guards the seamless title-bar + nav chrome above
-             (Rows 0/1): everything in this row — the full-bleed dashboard
-             background image, the hero gradients, the scaled hero block —
-             is clipped to the row so none of it can render up over the
-             chrome. This is the safety net for the maximized full-bleed
-             image reading as if it bleeds into the nav strip; it does NOT
-             touch the chrome itself, so the one-surface look (no title-bar
-             divider) is preserved.
+             ClipToBounds guards the title-bar chrome above (Row 0):
+             everything in this row — the full-bleed dashboard background
+             image, the hero gradients, the scaled hero block — is clipped
+             to the row so none of it can render up over the chrome. This is
+             the safety net for the maximized full-bleed image reading as if
+             it bleeds into the bar; it does NOT touch the chrome itself.
+
+             The top border is what the deleted nav strip used to provide.
+             That strip carried the only chrome/content divider, and it was
+             shared by all three tabs — Multiplayer replaces it with its own
+             sub-tab bar, but Library and Workshop have nothing, so without
+             this line the title bar would bleed straight into their content.
              ============================================================= -->
-        <Grid x:Name="ContentHost" Grid.Row="2" ClipToBounds="True">
+        <Border Grid.Row="2">
+        <Grid x:Name="ContentHost" ClipToBounds="True">
 
             <!-- ============================================================
                  PLAY VIEW — cinema dashboard.
@@ -1432,7 +1579,8 @@
                 </StackPanel>
             </Grid>
 
-        </Grid>   <!-- /Content host (root Grid.Column=1) -->
+        </Grid>   <!-- /Content host -->
+        </Border> <!-- /chrome-to-content divider -->
 
         <!-- In-app toast notifications (AppToast): non-modal, stacked, auto-dismiss
              cards in the bottom-right that float over ANY tab. Spans all rows;

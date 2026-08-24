@@ -130,6 +130,26 @@ public class TitleBar : ContentControl
         set => SetValue(GlyphSizeProperty, value);
     }
 
+    public static readonly DependencyProperty CloseGlyphSizeProperty =
+        DependencyProperty.Register(nameof(CloseGlyphSize), typeof(double), typeof(TitleBar),
+            new PropertyMetadata(double.NaN, OnChromeChanged));
+
+    /// <summary>
+    /// Glyph size for the CLOSE button alone. <see cref="double.NaN"/> (the default)
+    /// means "same as <see cref="GlyphSize"/>", so every window that doesn't set it is
+    /// byte-for-byte unchanged.
+    ///
+    /// <para>It exists because the ✕ (E8BB) reads smaller than the minimize rule (E921)
+    /// and the maximize box (E922) at the same point size, so the header reference
+    /// gives it its own, larger value. Applied from <see cref="RefreshChrome"/> rather
+    /// than TemplateBound, because a NaN FontSize throws.</para>
+    /// </summary>
+    public double CloseGlyphSize
+    {
+        get => (double)GetValue(CloseGlyphSizeProperty);
+        set => SetValue(CloseGlyphSizeProperty, value);
+    }
+
     public static readonly DependencyProperty TitleSizeProperty =
         DependencyProperty.Register(nameof(TitleSize), typeof(double), typeof(TitleBar),
             new PropertyMetadata(16.0));
@@ -229,6 +249,10 @@ public class TitleBar : ContentControl
         {
             _closeButton.Visibility = ShowClose ? Visibility.Visible : Visibility.Collapsed;
             _closeButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TitleBarClose"));
+            // Only override the template's GlyphSize binding when a window actually
+            // asked for a different ✕ — clearing it back to GlyphSize would need a
+            // local-value clear, and no window goes from set to unset at runtime.
+            if (!double.IsNaN(CloseGlyphSize)) _closeButton.FontSize = CloseGlyphSize;
         }
         if (_minButton != null)
             _minButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TitleBarMinimize"));

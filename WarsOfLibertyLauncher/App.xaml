@@ -53,6 +53,15 @@
                  swap in real Inter later. -->
             <FontFamily x:Key="BodyFont">Segoe UI, Tahoma</FontFamily>
 
+            <!-- Monospace, for the values the handoff wants in fixed pitch: ping, ELO,
+                 room code, traffic, the match clock, character counters. There were a
+                 dozen inline copies of this list; one token means they cannot drift.
+
+                 NOTE it deliberately omits the CSS generic `monospace`, which WPF does
+                 not resolve — see the DisplayFont comment above for what an unresolvable
+                 family costs at construction time. -->
+            <FontFamily x:Key="MonoFont">Consolas, Courier New</FontFamily>
+
             <!-- ============================================================
                  Typography SCALE — semantic FontSize tokens.
 

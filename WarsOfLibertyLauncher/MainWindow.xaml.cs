@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -205,7 +205,7 @@ public partial class MainWindow : Window
         // the dashboard tab is re-shown: switching away collapses PlayView to a
         // 0-size (guarded no-op), switching back grows it from 0 — a size change
         // even though the window itself never resized.
-        UiScale.Attach(HeroContentGrid, PlayView, 1500, 760,
+        UiScale.Attach(HeroContentGrid, PlayView, 1500, 710,
             UiScale.Kind.Render, new System.Windows.Point(0, 1));
         // Drive the rotating-hero crossfade only while the dashboard is actually
         // on screen — stop the timer when another tab is shown, resume on return.
@@ -214,7 +214,14 @@ public partial class MainWindow : Window
         // footprint, so a default-sized window resolves to 1.0) for the code-
         // built brand / mod-switch popups, which live in their own top-level
         // visual tree and can't ride a content-root transform.
-        UiScale.Track(ContentHost, 1100, 604);
+        UiScale.Track(ContentHost, 1100, 560);
+
+        // The running binary's own tag. Read ONCE into the chip rather than bound:
+        // CurrentInformationalTag walks the assembly's custom attributes on every
+        // read. It always carries its own "v" — do not prefix another — and it is
+        // the only source that survives a WoL-style letter suffix (v1.0.5a), which
+        // the numeric AssemblyVersion physically cannot hold.
+        VersionChipText.Text = LauncherUpdateService.CurrentInformationalTag;
 
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
@@ -510,7 +517,9 @@ public partial class MainWindow : Window
             showAppToast: opts => ShowAppToast(opts),
             // Real-time "new room" push over /global/ws — routed here so it shares
             // the room dedup + tab/subtab dots with the 90 s fallback poll.
-            onNewRoomFromWs: OnNewRoomFromWs);
+            onNewRoomFromWs: OnNewRoomFromWs,
+            setConnectionChip: SetConnectionChip,
+            setAccountChip: SetAccountChip);
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -569,6 +578,7 @@ public partial class MainWindow : Window
         // A manual double-click carries no --minimized arg, so it shows normally.
         Loaded += (_, _) =>
         {
+            LogDisplayScaling();
             if (App.StartMinimized)
             {
                 DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
@@ -2048,7 +2058,12 @@ public partial class MainWindow : Window
     /// </summary>
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        if (!HardExitRequested && _config.CloseToTray)
+        // _config is null when the constructor threw before loading it — which is what a
+        // failed InitializeComponent does, since the dispatcher handler logs and lets the
+        // app limp on. Closing that half-built window then raised a NullReferenceException
+        // here, and THAT crash is the one the user reported: it buried the real error.
+        // A window with no config has nothing to keep resident, so close normally.
+        if (!HardExitRequested && _config != null && _config.CloseToTray)
         {
             e.Cancel = true;
             HideToTray();
@@ -5338,32 +5353,48 @@ public partial class MainWindow : Window
             PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
         };
 
-        // BgPanelAlt (darker than BgSidebar) so the popup pops
-        // against the sidebar's lighter slate background. Brighter
-        // gold border + heavier drop shadow makes the popup feel
-        // like a clearly separated panel hovering above the chrome.
+        // The two-tone rim its siblings already use: a bright 2px inner line inside a
+        // 1px near-black outer band, so the card cuts itself out of ANY backdrop — the
+        // hero image, the chrome, the content. A single brighter border was tried first
+        // and the verdict was "yo lo veo igual", which is why this recipe exists.
+        //
+        // This popup used to be the documented EXCEPTION: one border, in gold. That rule
+        // was written when the chrome was BgSidebar #314556; the bar is #0C131B now, and
+        // a warm gold rim on a cold near-black bar is what made the menu read as
+        // belonging to a different application. The gold survives where it still says
+        // something — the "AOE3 LAUNCHER" caption below.
         var border = new System.Windows.Controls.Border
         {
-            Background = (System.Windows.Media.Brush)FindResource("BgPanelAlt"),
-            BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
+            Background = (System.Windows.Media.Brush)FindResource("ChromePopupBg"),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
+            BorderThickness = new Thickness(2),
+            CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
             Padding = new Thickness(10),
             MinWidth = 260,
             MaxWidth = 360,
+        };
+
+        // Shadow on the OUTER band so it skirts the whole composite rim; on the inner
+        // Border it would be clipped behind the black band.
+        var rim = new System.Windows.Controls.Border
+        {
+            Background = (System.Windows.Media.Brush)FindResource("MenuBorderOuter"),
+            CornerRadius = (CornerRadius)FindResource("RadiusPopupOuter"),
+            Padding = new Thickness(1),
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
-                BlurRadius = 28,
-                ShadowDepth = 6,
+                BlurRadius = 20,
+                ShadowDepth = 4,
                 Color = System.Windows.Media.Colors.Black,
-                Opacity = 0.75,
+                Opacity = 0.6,
             },
         };
 
         var content = new System.Windows.Controls.StackPanel();
         border.Child = content;
-        ApplyPopupScale(border);
-        popup.Child = border;
+        rim.Child = border;
+        ApplyPopupScale(rim);
+        popup.Child = rim;
 
         // Header — same dorado caption treatment as the other
         // popups (SETTINGS / MODS).
@@ -5444,7 +5475,7 @@ public partial class MainWindow : Window
 
     // The dashboard hero's window-size scaling moved to the shared scaler
     // (Controls/UiScale.cs): see the UiScale.Attach(HeroContentGrid, PlayView,
-    // 1500, 760, Kind.Render, (0,1)) call in the constructor. The reference,
+    // 1500, 710, Kind.Render, (0,1)) call in the constructor. The reference,
     // [0.82, 1.0] band, bottom-left render-pin and the Display<->Ideal text
     // crispness toggle are all preserved there, so the hero looks identical;
     // the rest of the UI now rides the same scaler (Kind.Layout) per view.
@@ -5556,7 +5587,7 @@ public partial class MainWindow : Window
     private FrameworkElement BuildSettingsDivider() => new System.Windows.Controls.Border
     {
         Height = 1,
-        Background = (System.Windows.Media.Brush)FindResource("BorderSecondary"),
+        Background = (System.Windows.Media.Brush)FindResource("ChromeRim"),
         Margin = new Thickness(8, 6, 8, 6),
         Opacity = 0.6,
     };
@@ -5582,12 +5613,12 @@ public partial class MainWindow : Window
             ? (System.Windows.Media.Brush)FindResource("ErrorBrush")
             : (activeAccent
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"));
+                : (System.Windows.Media.Brush)FindResource("ChromeTextDim"));
         var labelBrush = destructive
             ? (System.Windows.Media.Brush)FindResource("ErrorBrush")
             : (activeAccent
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : (System.Windows.Media.Brush)FindResource("SecondaryFixed"));
+                : (System.Windows.Media.Brush)FindResource("ChromeTextStrong"));
 
         var row = new System.Windows.Controls.Grid();
         row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
@@ -5633,8 +5664,7 @@ public partial class MainWindow : Window
                 FontWeight = FontWeights.Normal,
                 // Slightly dimmed cool tone — present but recedes
                 // behind the main label.
-                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                Opacity = 0.85,
+                Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
                 Margin = new Thickness(0, 1, 0, 0),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             });
@@ -5651,7 +5681,7 @@ public partial class MainWindow : Window
                 FontSize = 11,
                 Margin = new Thickness(8, 0, 2, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
             };
             System.Windows.Controls.Grid.SetColumn(chevron, 2);
             row.Children.Add(chevron);
@@ -5879,7 +5909,10 @@ public partial class MainWindow : Window
         // composite rim instead of being clipped by the inner one.
         var panel = new System.Windows.Controls.Border
         {
-            Background = (System.Windows.Media.Brush)FindResource("BgSidebar"),
+            // ChromePopupBg, not BgSidebar: that brush is literally the colour the title
+            // bar had before the redesign, so this menu was still wearing it while the
+            // bar it drops from had moved on.
+            Background = (System.Windows.Media.Brush)FindResource("ChromePopupBg"),
             BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
             BorderThickness = new Thickness(2),
             CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
@@ -5954,7 +5987,7 @@ public partial class MainWindow : Window
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = Strings.Get("ModSelectorNotInstalled"),
-                Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
                 FontSize = (double)FindResource("FontSizeBody"),
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(8, 8, 8, 12),
@@ -6035,7 +6068,7 @@ public partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = isActive
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                : (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
         };
         // The checkmark moved off the left edge — the mod's own icon leads the row now —
         // to its own column beside the favourite star, where it REINFORCES the gold bold
@@ -6074,7 +6107,7 @@ public partial class MainWindow : Window
                     // so the gold/cool tonal contrast matches the main UI.
                     Foreground = isActive
                         ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                        : (System.Windows.Media.Brush)FindResource("SecondaryFixed"),
+                        : (System.Windows.Media.Brush)FindResource("ChromeTextStrong"),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                 },
                 new System.Windows.Controls.TextBlock
@@ -6082,9 +6115,8 @@ public partial class MainWindow : Window
                     Text = p.Subtitle ?? "",
                     FontSize = (double)FindResource("FontSizeCaption"),
                     FontWeight = FontWeights.Normal,
-                    Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                    Opacity = 0.85,
-                    Margin = new Thickness(0, 1, 0, 0),
+                    Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
+                        Margin = new Thickness(0, 1, 0, 0),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     Visibility = string.IsNullOrWhiteSpace(p.Subtitle)
                         ? Visibility.Collapsed
@@ -6101,7 +6133,7 @@ public partial class MainWindow : Window
         {
             Text = LastPlayedLabel(p.Id),
             FontSize = (double)FindResource("FontSizeCaption"),
-            Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+            Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
             Opacity = 0.75,
             Margin = new Thickness(12, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -6273,7 +6305,7 @@ public partial class MainWindow : Window
                             VerticalAlignment = VerticalAlignment.Center,
                             Foreground = isAct
                                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                                : (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
+                                : (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
                         },
                         new System.Windows.Controls.StackPanel
                         {
@@ -6288,16 +6320,15 @@ public partial class MainWindow : Window
                                     FontWeight = isAct ? FontWeights.Bold : FontWeights.Medium,
                                     Foreground = isAct
                                         ? (System.Windows.Media.Brush)FindResource("AccentBrush")
-                                        : (System.Windows.Media.Brush)FindResource("SecondaryFixed"),
+                                        : (System.Windows.Media.Brush)FindResource("ChromeTextStrong"),
                                     TextTrimming = TextTrimming.CharacterEllipsis,
                                 },
                                 new System.Windows.Controls.TextBlock
                                 {
                                     Text = PathDisplay.CompactPathMiddle(row.Path),
                                     FontSize = (double)FindResource("FontSizeCaption"),
-                                    Foreground = (System.Windows.Media.Brush)FindResource("OnSecondaryContainer"),
-                                    Opacity = 0.85,
-                                    Margin = new Thickness(0, 1, 0, 0),
+                                    Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
+                                                        Margin = new Thickness(0, 1, 0, 0),
                                     TextTrimming = TextTrimming.CharacterEllipsis,
                                     MaxWidth = 280,
                                 },
@@ -7726,16 +7757,26 @@ public partial class MainWindow : Window
     // no update is available.
     private LauncherUpdateService.UpdateCheckResult? _pendingLauncherUpdate;
 
-    private Task CheckForLauncherUpdateAsync()
+    /// <summary>
+    /// Runs the self-update check and swallows any failure — it must never take the
+    /// startup path down with it.
+    ///
+    /// <para><b>The await is the point.</b> This used to <c>return</c> the inner task
+    /// instead of awaiting it, and an <c>async Task</c> method hands back its task
+    /// immediately: a failure inside it is captured IN the task, so the catch below could
+    /// only ever fire for a synchronous throw before the first await — which is to say,
+    /// never. The check would fail and log nothing, leaving no way to tell a working
+    /// check from a dead one.</para>
+    /// </summary>
+    private async Task CheckForLauncherUpdateAsync()
     {
         try
         {
-            return CheckForLauncherUpdateInnerAsync();
+            await CheckForLauncherUpdateInnerAsync();
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Launcher self-update error: {ex.Message}");
-            return Task.CompletedTask;
         }
     }
 
@@ -11291,6 +11332,190 @@ public partial class MainWindow : Window
             offline,
             Strings.Get(offline ? "NotifOfflineTitle" : "NotifOnlineTitle"),
             Strings.Get(offline ? "NotifOfflineBody" : "NotifOnlineBody"));
+    }
+
+    /// <summary>
+    /// Account menu: Profile / Sign out, per the reference.
+    ///
+    /// <para>This is not decoration — removing the Multiplayer tab's account row took
+    /// its "Sign out" link with it, so without this menu signing out would be
+    /// unreachable. Both items delegate to <c>MultiplayerTab</c>: sign-out has to clear
+    /// the cached rating as well, or the next person to sign in on this machine sees
+    /// the previous player's.</para>
+    ///
+    /// <para>A <see cref="ContextMenu"/> rather than a hand-built Popup on purpose —
+    /// it captures input and auto-dismisses reliably, which is exactly the behaviour
+    /// the hand-built chrome popups need <c>ChromePopups</c> to coordinate for them.</para>
+    /// </summary>
+    private void AccountButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            PlacementTarget = AccountButton,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+        };
+
+        var profile = new System.Windows.Controls.MenuItem { Header = Strings.Get("MpAccountMenuProfile") };
+        profile.Click += (_, _) =>
+        {
+            SwitchTopTab(TopTab.Multiplayer);
+            MultiplayerView.ShowProfile();
+        };
+
+        var signOut = new System.Windows.Controls.MenuItem { Header = Strings.Get("MpAccountMenuSignOut") };
+        signOut.Click += (_, _) => MultiplayerView.SignOut();
+
+        menu.Items.Add(profile);
+        menu.Items.Add(signOut);
+        menu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Paints the title-bar account cluster from the multiplayer session, or hides it
+    /// when signed out. Pushed by <c>MultiplayerTab</c> — the session and the
+    /// once-per-session rating cache both live there, and re-fetching either here would
+    /// spend a rate-limited request to obtain a second copy of what it already knows.
+    /// </summary>
+    internal void SetAccountChip(string? login, string? avatarUrl, string? elo)
+    {
+        if (AccountButton == null) return;
+
+        if (string.IsNullOrWhiteSpace(login))
+        {
+            AccountButton.Visibility = Visibility.Collapsed;
+            RefreshChromeDivider();
+            return;
+        }
+
+        AccountName.Text = login;
+        AccountAvatarInitial.Text = login.Substring(0, 1).ToUpperInvariant();
+
+        bool hasElo = !string.IsNullOrWhiteSpace(elo);
+        AccountElo.Text = hasElo ? elo : string.Empty;
+        AccountElo.Visibility = hasElo ? Visibility.Visible : Visibility.Collapsed;
+
+        // The monogram stays underneath, so a download that fails or never finishes
+        // leaves a readable initial rather than an empty disc.
+        if (!string.IsNullOrWhiteSpace(avatarUrl))
+        {
+            try
+            {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(avatarUrl);
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.EndInit();
+                var brush = new System.Windows.Media.ImageBrush(bmp)
+                {
+                    Stretch = System.Windows.Media.Stretch.UniformToFill,
+                };
+                if (brush.CanFreeze) brush.Freeze();
+                AccountAvatarEllipse.Fill = brush;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Account avatar load failed: {ex.Message}");
+            }
+        }
+
+        AccountButton.Visibility = Visibility.Visible;
+        RefreshChromeDivider();
+    }
+
+    /// <summary>
+    /// Paints the title-bar connection chip, or hides it when <paramref name="status"/>
+    /// is null.
+    ///
+    /// <para>Called by <c>MultiplayerTab</c> from its existing Radmin poll rather than
+    /// probing anything here: that poll already owns the state, already throttles
+    /// itself, and already logs transitions, so a second probe would just be a second
+    /// answer to disagree with. This method only renders.</para>
+    ///
+    /// <para><paramref name="detail"/> (the Radmin IP) is optional, and is rendered
+    /// BARE per the header reference — no "VPN ·" prefix, no separator glyph. What the
+    /// address is lives in the capsule's tooltip instead, which only works because the
+    /// capsule sits in the nav row: a control inside the caption region never raises
+    /// IsMouseOver, so a tooltip there could not have fired at all.</para>
+    /// </summary>
+    internal void SetConnectionChip(string? status, string? detail)
+    {
+        if (ConnectionChip == null) return;
+
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            ConnectionChip.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ConnectionChipStatus.Text = status;
+        // The "VPN ·" the reference dropped from the label lives here instead. Only
+        // reachable because the capsule sits in the nav row: inside the caption
+        // region a control never raises IsMouseOver, so this would never fire.
+        //
+        // It says what the capsule IS and nothing else. What you can DO is the "?"
+        // beside it, which carries its own tooltip — the two used to be crammed into
+        // this one, which is part of why neither landed.
+        ConnectionChip.ToolTip = string.IsNullOrWhiteSpace(detail)
+            ? null
+            : TooltipHelper.Wrap(Strings.Format("MpChipVpnDetail", detail));
+        bool hasDetail = !string.IsNullOrWhiteSpace(detail);
+        ConnectionChipDetail.Text = hasDetail ? detail : string.Empty;
+        ConnectionChipDetail.Visibility = hasDetail ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionChip.Visibility = Visibility.Visible;
+        // The capsule is one of the two halves the divider separates, so it decides
+        // the divider's fate together with the account block.
+        RefreshChromeDivider();
+    }
+
+    /// <summary>
+    /// Record, once per launch, what scaling this machine is actually rendering at.
+    ///
+    /// <para>The log said nothing about DPI, so a "the text looks low-resolution" report
+    /// could not be told apart from the two things that produce it. The discriminator is
+    /// here: <see cref="VisualTreeHelper.GetDpi"/> reports what WPF is rendering AT, and
+    /// Windows reports what the desktop is scaled TO. When the two agree, the app is
+    /// DPI-aware and any softness is the type scale. When WPF says 1.0 on a scaled
+    /// desktop, the process lost its PerMonitorV2 manifest and Windows is bitmap-
+    /// stretching the whole window — which looks exactly like a low-resolution render,
+    /// because it is one.</para>
+    ///
+    /// <para>Called from Loaded, not the constructor: the window needs an HWND before it
+    /// can be asked which monitor it is on. Whole thing is best-effort — a diagnostic may
+    /// never be the reason a launch fails.</para>
+    /// </summary>
+    private void LogDisplayScaling()
+    {
+        try
+        {
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+            DiagnosticLog.Write(
+                $"Display: WPF renders at {dpi.DpiScaleX:0.###}x ({dpi.PixelsPerInchX:0.#} dpi), " +
+                $"window {ActualWidth:0}x{ActualHeight:0} DIP, " +
+                $"desktop {SystemParameters.PrimaryScreenWidth:0}x{SystemParameters.PrimaryScreenHeight:0} DIP. " +
+                $"A scale of 1.0 on a scaled desktop means the DPI manifest did not take " +
+                $"effect and Windows is stretching the window.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Display scaling probe failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The 1px rule between the connection capsule and the account block, shown only
+    /// when there is something on BOTH sides of it.
+    ///
+    /// <para>Signed out — on Library or Workshop before multiplayer reports a user —
+    /// the capsule and the account block both collapse, and a divider left standing in
+    /// an otherwise empty row reads as a rendering glitch rather than as a separator.
+    /// Every writer of either neighbour calls this.</para>
+    /// </summary>
+    private void RefreshChromeDivider()
+    {
+        if (ChromeDivider == null) return;
+        bool both = ConnectionChip?.Visibility == Visibility.Visible
+                    && AccountButton?.Visibility == Visibility.Visible;
+        ChromeDivider.Visibility = both ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>

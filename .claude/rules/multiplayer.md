@@ -1,4 +1,4 @@
----
+﻿---
 description: Multiplayer, lobby, Radmin VPN, global chat and Discord-announcement rules for the AoE3 Mod Launcher. Split out of CLAUDE.md so it only loads when working on the multiplayer surface.
 paths:
   - WarsOfLibertyLauncher/Controls/MultiplayerTab.*
@@ -81,8 +81,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
   Worker. Sign-in is **Discord OAuth** (a state flow shaped like device flow),
   **not** GitHub, yielding a JWT cached in `launcher-config.json`. **Match history
-  IS now wired (unranked "match log"); ELO is not surfaced and replay upload
-  (`UploadAsync`) is still scaffolded with no live caller.** Authoritative source:
+  IS wired, and so is the ELO: Glicko-2 lives in the backend
+  (`src/elo/glicko2.ts`) and the launcher shows a rating in five places — the
+  title-bar chip, the Profile tab, every roster line, the end-of-match card and
+  the ladder card. Replay upload (`UploadAsync`) is still scaffolded with no live
+  caller.** Authoritative source:
   the `MultiplayerSession.cs` class doc-comment + `LobbyApiClient.cs`. Scattered
   `WinDivert` / `PeerMesh` / `n2n` / `ZeroTier` mentions are historical comments.
   **Trust the code over both the README and stale comments here.**
@@ -147,17 +150,67 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `MpChatRadminNotReady`). Don't reword these back to imply Radmin blocks
   create/join, and don't add a Radmin gate to the join path.
 
+- **"Help connecting" in the Rooms toolbar OPENS the Radmin assistant, and it is the
+  only door to it once Radmin works** — the other one is "Show steps" INSIDE the red
+  banner, and that banner collapses exactly when everything is fine. Retiring the
+  permanent banner silently retired the assistant with it. `RadminHelpButton_Click`
+  is the caller.
+  **Three attempts, and the progression is the lesson — do not restart it.** The door
+  was first the header's connection capsule (an action with no sign it was one:
+  its entire affordance was a hand cursor and a rim shift between #22303E, 1.39:1, and
+  #3A4B60, 2.09:1). Then a "?" button beside it — a sign with no hint of what it
+  opened; reported back as "no se sabe que eso tiene una guía", and fairly, because the
+  only way to find out was to hover, which nobody does for a thing they do not know
+  exists. **A symbol says help exists but never says about what; only a word does
+  both.** The "?" survives as a PREFIX to the label, matching its neighbours
+  ("↻  Actualizar", "+  Crear sala") — a plain Unicode mark, not an emoji (banned in
+  labels) and not an icon font (this row deliberately avoids pulling one).
+  **In the Multiplayer tab, not the header**: Radmin only matters here, this is where
+  someone goes when they cannot get online, and it costs the header nothing — which
+  was the point of the redesign. The trade is that it is unreachable from Library and
+  Workshop, which is correct rather than merely acceptable.
+  **It follows the same Mode gate as "Show steps"** — hidden when
+  `RadminAssistantMode == "Never"`, because that setting's own hint says the assistant
+  is disabled and a visible way in would make it a lie. The header "?" ignored the
+  mode, which was one more sign it was in the wrong place.
+  **`OpenRadminAssistantWindow()` is gone.** It was public "so MainWindow could trigger
+  it in the future", sat with zero callers for months, and was what made the missing
+  door hard to spot. The handler calls `ShowRadminAssistant()` directly now; if an
+  external caller ever needs one, add it back with that caller, not before.
+  **Verified by invoking the button and watching the window list** — the assistant
+  opens and stays open past 11 s with Radmin green, which is the `autoOpened` guard
+  doing its job. Two measurement traps cost real time here and will again:
+  **UI Automation's `RootElement` children query does NOT enumerate the assistant**
+  (owned + `ShowInTaskbar=false`), so it reports the window as absent and looks exactly
+  like the auto-close bug it is meant to disprove — sweep with Win32 `EnumWindows`
+  instead. And **the Segoe MDL2 literals in `CopyNetworkBtn_Click` are real Private Use
+  Area characters that print as empty strings** in terminals and greps; they read as
+  `CopyBtnGlyph.Text = ""` in both branches and look like a lost-literal bug. They are
+  `\ue73e` and `\ue8c8` and the code is correct — check `repr()` before "fixing" it.
+
+- **The banner's network-name copier and numbered instructions are GONE, not hidden.**
+  `RadminNetworkNamePanel` / `RadminNetworkNameBox` / `RadminCopyNameButton` /
+  `RadminInstructionsText` were orphaned in May when that content moved into
+  `RadminAssistantWindow`: no code path ever set them Visible again,
+  `RadminInstructionsText.Text` was never assigned at all despite a comment claiming
+  `RefreshRadminBanner()` filled it, and the copy button's handler was unreachable.
+  They were removed rather than left `Collapsed` — a control nobody can reach reads as
+  a feature that exists. The strings only they used went too. **This was never a
+  casualty of the redesign**, which is worth knowing because it looks like one.
+
 - **`RadminAssistantWindow` auto-closes at `InAoE3Network` ONLY when the launcher
   opened it — the `autoOpened` ctor flag is load-bearing, don't drop it back to an
   unconditional close.** The auto-open path (`MultiplayerTab.MaybeAutoOpenAssistant`)
   fires *exclusively* while Radmin is NOT ready (`if (snap.Stage >= RadminStage.LoggedIn)
   return;` — "don't teach someone something that already works"), so a window we pushed
   reaching `InAoE3Network` means the tutorial finished and the ~1.2 s close is a
-  celebration. The **"Show steps" button** (and the public `OpenRadminAssistantWindow`)
+  celebration. The **"Show steps" button** (and the public `OpenRadminAssistantWindow`,
+  which the ROOMS-TOOLBAR "Help connecting" BUTTON now calls — see the next bullet)
   can summon it at ANY stage: with the checklist already green, `Refresh()`'s first tick
   (`_lastStage` starts at `-1`, so it always runs once) saw `InAoE3Network` and slammed
   the window shut ~1.2 s later. That's not just annoying — **once everything is green
-  the ONLY thing that window offers is the copy-network-name button**, so the auto-close
+  that window offers only the copy-network-name button and the "Open Radmin"
+  shortcut** (this used to say the copy button was the only one; it is short by one), so the auto-close
   destroyed the exact reason to open it. Rule: *they opened it, they close it* —
   `ShowRadminAssistant(bool autoOpened = false)` defaults to manual so every
   user-initiated entry point is safe by construction, and only
@@ -484,8 +537,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   that never happened. Every meta segment is likewise dropped when empty, so an old row
   renders exactly as it always did.
 
-- **The History subtab is fed by a HOST-ONLY, unranked match report at game
-  exit — don't re-add per-player reporting or an ELO/win-loss display.** The
+- **The History subtab is fed by a HOST-ONLY match report at game exit — don't
+  re-add PER-PLAYER reporting.** (This bullet used to also forbid an ELO display.
+  That half is obsolete: showing the rating is now the point. What stays banned is
+  every player reporting the same match, which would insert it N times.) The
   Multiplayer → History tab (`RefreshHistoryAsync`/`BuildHistoryRow`) was fully
   built but empty forever because nothing called `ReportMatchAsync`. Now
   `MultiplayerTab.TryReportMatchAsync` (invoked from `OnGameExitedAsync`, AFTER
@@ -1149,10 +1204,24 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `Grid{Auto,*}` (disc in col0, text in col1), NOT horizontal StackPanels** — a
   horizontal StackPanel measures children with infinite width so wrap/ellipsis
   never fire; the text must live in a bounded `*` column.
-  **The seven columns now live ONCE, in `Services/RoomsTableLayout.All`, which both the header
-  strip and `BuildRoomCard` read — the old "keep the two lists in lockstep" comment is gone
-  because the two lists are gone. Don't re-add literal `ColumnDefinition`s to either side, and
-  don't revert to fixed px.** `RoomsTableLayout.Resolve(width)` also DROPS columns as the card
+  **The columns live ONCE, in `Services/RoomsTableLayout.All`, which both the header strip and
+  `BuildRoomCard` read — the old "keep the two lists in lockstep" comment is gone because the
+  two lists are gone. Don't re-add literal `ColumnDefinition`s to either side, and don't revert
+  to fixed px.**
+  **That single-source claim was FALSE in practice for a while, and the way it failed is worth
+  keeping.** `ApplyRoomColumns` skips its work when the resolved set matches `_roomColumns` —
+  but that field is SEEDED with `RoomsTableLayout.All`, which is exactly what `Resolve()`
+  returns at any comfortable width. So on a wide window the very FIRST call decided nothing had
+  changed and returned before building the header's `ColumnDefinitions` and re-indexing the
+  header labels. The header silently kept the XAML design-time placeholder — then a stale
+  SEVEN-column set including MOD and STATUS, columns that no longer exist — while the rows used
+  the real five, so every row rendered ~500px right of its own heading. Two things now prevent
+  it: a separate `_roomColumnsApplied` flag, so the first application can never be skipped
+  (the sets matching on the first call is the NORMAL case, not an edge case), and the XAML
+  placeholder now mirrors `RoomsTableLayout.All` exactly, so even a skipped apply would render
+  correctly. The lesson generalises: **a "these two cannot drift" invariant is only real if the
+  code that enforces it always runs** — and a guard that compares against a seeded value will
+  silently no-op on the path where the seed is already right. `RoomsTableLayout.Resolve(width)` also DROPS columns as the card
   narrows — ping → host → mod, never Room/Players/Action — and `Hidden(resolved)` tells
   `BuildRoomCard` which values to fold into the room's sub-line instead, so nothing is lost at
   any width. `ApplyRoomColumns` (hooked to `RoomsHeaderStrip.SizeChanged`) re-renders **only
@@ -1476,3 +1545,241 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the app (or grep that every `Mp{Alert,Confirm,Notice}*` key used in
   `MultiplayerTab.xaml.cs` exists in `Strings.cs`) — a clean build is NOT
   proof the strings landed.
+
+- **A match that ENDS has its own phase — `MatchPhase.Result` — and without it the lobby
+  window was a zombie.** A reported match closes the room on the backend, which shuts the
+  socket with `4007 match_reported` (`ctx.rooms.close` in `matches/rest.ts`). Nothing in
+  the launcher reacted to that: `LobbyWebSocket` treats a server close like a dropped
+  connection and re-enters its backoff loop (1→30 s, forever), so the window survived with
+  a dead chat, live buttons and a socket pointing at a room that no longer exists. That
+  zombie WAS the de-facto end-of-match state; the phase makes it deliberate.
+  **Three things happen on entry and each is load-bearing:** (1) **`_roomMatchLive` is
+  cleared** — on the reported path nothing else does it, because the `game_ended` branch
+  that normally would is skipped precisely *because* the report already closed the room;
+  left set, `RoomMatchState.WarnOnLeave` tells the player they "will not be able to come
+  back" while they are looking at their own result. (2) **`LobbyWebSocket.StopReconnect()`
+  cancels the retries but KEEPS the object** — disposing it, or nulling
+  `MultiplayerSession.RoomSocket`, raises the state change that runs
+  `RenderRoomsTab`'s else-branch → `CloseLobbyWindow()`, which would tear down the very
+  window the card lives in. (3) `SuppressLeaveConfirm()`, since there is no longer a room
+  to warn about leaving. **The trigger is the 4007 itself**, handled in
+  `OnRoomDisconnected`, so host and guest reach the phase through one line; it is gated on
+  having been in a match because **4007 is also the kick code** and a kick has already
+  closed the window via its own frame. The host ALSO enters from its own POST returning —
+  both signals arrive and whichever is first wins, so entering at both points makes the
+  host's card deterministic rather than a race. `GameRestartedSince()` stays
+  `_matchPhase == InGame`, so the Result phase correctly reads as "no game running".
+
+- **The result card's numbers come from the POST for the host and from the HISTORY for
+  everyone else — and `TryReportMatchAsync` must keep returning its boolean unchanged.**
+  `POST /matches` answers with `ReportMatchResponse.RatingChanges`, a `rating_before` /
+  `rating_after` per participant, which the launcher used to discard; capturing it gives
+  the host their delta and the opponent's new rating for zero extra requests. It is
+  returned as a `record` whose `ClosedRoom` flag has the OLD boolean's exact meaning,
+  because `OnGameExitedAsync` decides from it whether to send `game_ended` — that
+  semantic must not drift. A **guest gets no frame carrying the result**, so
+  `ResolveGuestResultAsync` polls `GET /matches/history/:userId` and matches by mod +
+  start time (±120 s) via the pure `MatchHistoryMatcher` — never "the newest row", which
+  would be a different match of theirs. Three attempts (0 / 6 / 15 s) then a terminal
+  "check History" line; **never a timer beyond that** (20/min · 500/day per IP, shared
+  behind NAT or a Radmin network), and skipped outright when the match was not reportable
+  anyway (solo / under three minutes), where there is no row to find.
+  **`MatchOutcomeView` holds the three refusals** and the card only paints them: a 0.5 is
+  `NoResult` and **never a draw** (it is what the backend stores when the outcome could
+  not be read, which is most rows); an unknown rating yields a **null delta, not "+0"**;
+  and `PlayerStanding.WinPercent` returning null shows an em dash, **never 0 %**.
+  **"Rematch" is deliberately not wired**: it must complete `LeaveCurrentLobbyAsync` on
+  the closed room BEFORE creating the next one or it collides with the backend's "one
+  active lobby" guard, and getting that sequence wrong strands the player in neither room.
+
+- **The in-match RECORDING cell says "requested", never "active" — the one deliberate
+  deviation from the design reference.** The handoff asks for a green "activa" read from
+  `GameRecordingPlan`. That plan answers a narrower question (should the launcher write
+  `optionrecordgame` into this mod's profile), and it is MEASURED above that the profile
+  setting does not drive recording in multiplayer: AoE3's per-match "Record Game" box
+  does, it comes up unticked every match, and both ways of setting it automatically were
+  tried and failed. A green "active" would therefore be a claim the launcher cannot
+  support in the one place where being wrong costs the player their rating — they read
+  "active", skip the box, and the match counts for nobody. `RecordingIndicator.Classify`
+  (pure, tested) returns Requested / Off / Unknown; the cell keeps the reference's
+  position, size and colours, and only the wording drops from a statement about the game
+  to one about the launcher's own setting, with a tooltip naming the real checkbox.
+
+- **The lobby's "BEFORE YOU START" checklist replaced the record-reminder band, but
+  `LauncherConfig.GameRecordingReminderMuted` is NOT gone.** The two-item checklist cannot
+  be silenced — it costs two lines instead of seven, which is what made the old band worth
+  silencing — but that config field still gates the launch-time chat line and has its own
+  Settings checkbox, so deleting it breaks `LauncherSettingsDialog`. **The first item's tick
+  is honest but not verified per member**: everyone present passed `POST /lobbies/:id/join`,
+  which rejects a mismatched `mod_combined_hash`, so the claim follows from their being
+  there; the room-state frame carries no per-member hash, so a truly verified tick needs a
+  backend change. **The second never ticks, by design.**
+
+- **Removing the roster's health dot would have broken the live ping SILENTLY.**
+  `RefreshRosterHealthDots` found its target by walking each row for an `Ellipse` with a
+  string `Tag`; the redesign states the link in words on the row's second line and drops
+  the dot, so that walk would have found nothing, thrown nothing, and left every ping
+  frozen at whatever it read when the row was built. It is now `RefreshRosterLiveCells`
+  and the `Tag` sits on the second line's `TextBlock`. **Any future change to the roster's
+  visual shape has to move that Tag with it** — the update is by structure, not by name,
+  which is exactly why the failure is quiet. The rating segment of that line is **omitted
+  entirely when unknown**, the same refusal `PlayerStanding` makes: the 1500 the server
+  hands new players must never be rendered as if it were earned.
+
+- **Backend gaps the multiplayer redesign is waiting on** (documented, never faked).
+  Four of the six are now CLOSED — see the ELO bullet below — and what remains is:
+  per-room ping needs `radmin_ip` on `GET /lobbies` — without it the PING column shows
+  YOUR latency, identical on every row, which is why sorting by it is a no-op; and the
+  REPLAY cell reads "not uploaded" because `ReplayUploadService.UploadAsync` still has no
+  live caller. (Closed: per-member ELO now rides on the room-state member object;
+  PEAK HOURS and RANKING are fed by `GET /stats/community`; and `match_reported` carries
+  the result, so the guest's **three** polls — this bullet used to say four — are now only
+  a fallback for an old backend.)
+
+- **What scores, what does not, and who decides — the ELO rules.** The short version:
+  **only Wars of Liberty, only 1v1, only with a readable recording.** The long version is
+  worth reading before touching any of it, because every clause below was a bug first.
+
+  **(1) The SERVER decides, and says WHY.** `POST /matches` answers `rated` plus an
+  `unrated_reason`, and the launcher only renders it (`MatchOutcomeView.UnratedNoteKey`).
+  This is not tidiness. The policy used to live on both sides, and they drifted: the card
+  told the player "no contó para el ELO de nadie" while the backend was busy feeding that
+  exact match to Glicko as a draw between everyone. **Never re-derive "did this count" in
+  the launcher** — it cannot know which mods have a ladder, and the day that list changes
+  it would be wrong again.
+
+  **(2) An unrated match is STORED, never rejected.** The history is a record of what was
+  played; rating is a separate judgement about it. The reasons are `mod_not_ranked`,
+  `not_1v1`, `no_decided_result`, `no_lobby`, `participants_not_in_lobby`,
+  `implausible_timing` and `duplicate_recording`, each with its own string — because
+  "tick Record Game" is the right advice for a missing recording and useless for a team
+  game, and sending someone to fix what was never the problem is worse than saying nothing.
+
+  **(3) 1v1 comes for free, and always did.** `MatchResultResolver.ResolveHostResult`
+  refuses anything but exactly two participants (a recording names ONE loser, which says
+  nothing about the other three), so a team game has only ever reported all-0.5. What was
+  missing was the server declining to rate that — which is why team games silently moved
+  ratings for months. The server now requires exactly two participants itself, which also
+  stops a patched launcher claiming a decided three-player match.
+
+  **(4) `games_played` counts RATED matches**, not played ones — a consequence of (1)
+  that made two launcher strings lie until they were reworded (`MpProfileGames`,
+  `MpProfileProvisional`).
+
+  **(5) The anti-replay fingerprint is the SHA-256 of the recording FILE**
+  (`ReportMatchRequest.ReplaySha256` → `matches.replay_sha256`, partial UNIQUE index).
+  Not the game's contents (map + player names): a rematch on the same map with the same
+  people is a different match and must still score, and a content-derived identity could
+  not tell them apart. Free side effect: it is the idempotency key `POST /matches` never
+  had. **What it does NOT stop is two colluding accounts** — that would need the loser's
+  client to corroborate, or the server to parse the file. Both were considered and left out.
+
+  **(6) Participants are checked against the roster frozen at Start**
+  (`lobbies.roster_at_start`, written by `LobbyRoom.handleStart`), **not against
+  `lobby_members`** — leaving a room DELETES that row, and the player most likely to leave
+  first is the one who just lost, so live membership would reject most real matches while
+  catching almost nothing. The question worth asking is "did these people play", and Start
+  is when it has an answer.
+
+  **(7) A provisional rating is never painted beside a name.** `RatingDisplay.ShouldShow`
+  needs the rating AND its deviation, and refuses while `rd > 110`
+  (`MatchOutcomeView.ProvisionalRd`, matched by the leaderboard's `rd <= 110`). The server
+  hands every new player 1500; showing it turns a placeholder into a claim about their
+  skill. The Profile tab is the one exception, where the word "provisional" sits next to
+  it. **After the 2026-08 ratings reset this means nobody shows an ELO in the roster for
+  a while. That is correct, not a bug.**
+
+  **(8) The reset.** `scripts/reset-elo.ts` emptied `elo_ratings` and nulled every
+  `rating_before`/`rating_after`, because those numbers were produced by the bug in (1).
+  `matches` and `match_participants.result` were untouched — the history is whole. It is a
+  script and NOT a migration on purpose: a migration is remembered in the `_migrations`
+  table of the database it ran against, so restoring the backup and starting up would
+  re-run it and delete the ratings just restored. Rollback is the `.backup` file named in
+  `DEPLOY.md`.
+
+  **(9) `match_reported` is published BEFORE `rooms.close`, and that order is
+  load-bearing.** The room closing is how the match used to end for the guest, who has no
+  recording and so polled their own history three times over fifteen seconds hoping the
+  row had been written. The frame carries every participant's **`result`** — not just the
+  ratings, which is the trap: without the result the guest's card would say "no result"
+  even when they had won. `OnRoomDisconnected` gained a `_matchPhase != Result` guard, or
+  the close arriving behind the frame re-enters the result phase and fires the very polls
+  this removed. `ResolveGuestResultAsync` stays as the old-backend fallback.
+
+  **(10) The ladder and peak-hours cards share ONE endpoint** (`GET /stats/community`),
+  fetched once per session on the same `_activityLoaded` gate as the recent-matches card.
+  The budget is per IP and shared behind a Radmin NAT, so two routes would cost double for
+  nothing. `rank` comes from the server and **must not be renumbered** client-side. Peak
+  hours is bucketed from `lobbies.created_at` — rooms OPENED, which is what the card's
+  wording says, not matches played — sent in UTC and shifted to local by
+  `CommunityStatsView.ToLocalHours`; below `MinSampleRooms` the card hides rather than
+  dressing four rooms up as a finding.
+
+  **(11) Only the HOST measures. The opponent's score is an inference, not a
+  measurement** — `MatchResultResolver.ParticipantResult` is literally
+  `1.0 - hostResult`. Correct for a 1v1, where there is exactly one winner, but it means
+  the server gets ONE reading of something two machines can read.
+
+  Both of them already read it. `OnGameExitedAsync` runs on **every** client and
+  `AnalyseMatchReplayAsync` is not gated on the host, so the guest finds their own
+  recording, validates it against their own slot, and reaches an independent verdict.
+  **Watch the names there:** `hostName` is `GetInGameName` — *this machine's* profile —
+  and `hostSlot` is `outcome.RecorderSlot`, so `MatchReplayInfo.HostResult` means "the
+  result of whoever recorded this file", which on a guest's PC is the guest. They read
+  the other way round and are documented in place rather than renamed, because
+  `ResolveHostResult` / `HostResultFrom` in the tested pure service are named to match
+  and renaming half the set would be worse than leaving it.
+
+  That second reading is now SENT — `TryConfirmMatchAsync` → `POST /matches/confirm` →
+  `match_confirmations` — and it is **evidence, not a vote: it gates nothing**, matches
+  rate exactly as they did before. Reporting stays host-only (N reporters would insert N
+  copies of one match). The server compares it with `compareReadings` and writes a log
+  line; `inconclusive` when either side is 0.5, because "nobody could read it" is not
+  "they contradict each other" and merging the two would make the data measure the wrong
+  thing. The table is keyed by `(lobby_id, user_id)` and NOT by match id, because the
+  guest usually leaves the game before the host and their confirmation routinely arrives
+  before the match row exists; the lobby row always exists, since those are never deleted.
+
+  **What this is for, and what it is not.** With the roster gate in (6), a cheater
+  already needs a second account that really joined and played — and if they control
+  both, they control both readings, so **this does nothing against two colluding
+  accounts**. What it catches is the likelier thing in a small community: **a host who
+  plays a real opponent, loses, and reports a win.** Deciding whether to actually
+  REQUIRE agreement is deferred on purpose until the data says how often the second
+  reading arrives at all; `DEPLOY.md` has the query, and "no confirmation" is the number
+  that decides it.
+
+  **(12) The MATCH is identified by `gamerandomseed` + `gamehosttime`, and matching
+  player NAMES was considered and rejected.** Two keys the `.age3Yrec` settings
+  dictionary has carried all along (`ReplayHeader.RandomSeed` / `HostTime`; the parser
+  already walked the whole dictionary, they are simply surfaced now). The seed is what
+  makes every machine generate the same map, so both players of one game carry it and
+  two different games do not.
+
+  Measured on six real recordings before any of this was written: six different seeds,
+  including **two back-to-back games by the same host, host clocks fifteen apart, seeds
+  22235 and 15346**. Neither a player name nor a timestamp separates that pair. Pinned
+  against the real fixture in `ReplayParserTests` (seed `21427`, clock `1310758`) — the
+  numbers are read out of a genuine file, not invented to match a reading of the format.
+
+  It buys two things: (a) the server can tell whether the host and their opponent read
+  the **same** match, which is what makes the second reading in (11) a real cross-check
+  rather than two opinions about possibly different games; and (b) an anti-reuse key
+  that identifies the **game** rather than the **file**, so re-packing a recording no
+  longer slips past the SHA-256 in (5).
+
+  **Rejected on purpose: comparing AoE3 profile names.** Publishing each player's
+  in-game name in the room and checking the other human in the recording against it was
+  the obvious design and is a worse one — profile names are frequently nothing like the
+  Discord account, changing them in AoE3 barely works, and a player with a blank or odd
+  name would silently stop being verifiable. The seed needs no name at all. Don't
+  re-propose it.
+
+  **Load-bearing details:** the pair is indexed together and **never the seed alone**
+  (largest value seen is 32747, about 15 bits — alone it would collide across unrelated
+  matches); a 0 or absent value is stored as **NULL, never 0**, and the unique index is
+  partial, so a scenario or an unreadable field can never block a legitimate report; and
+  **`game_host_time` is recorded but takes no part in the verdict.** Only one side of
+  each match was available to measure, so whether the guest's recording carries the same
+  clock is plausible and unproven — `same_game` is decided on the seed alone until a
+  two-machine test settles it. `DEPLOY.md` has the query that does.

@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}.dv-turn{padding:40px 44px 34px;border-bottom:1px solid rgba(0,0,0,.08)}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1240px;text-wrap:pretty}.dv-card{background:#0f1c2e;border-radius:9px;box-shadow:0 3px 16px rgba(0,0,0,.22);overflow:hidden}.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}.dv-next{margin:24px 0 0;font:12px/1.6 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.5)}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Multiplayer · tres direcciones para Salas + los diálogos</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a><span><b>Compacta.</b> Las cinco barras apiladas se reducen a dos: estado y VPN caben en un chip verde, la cuenta pasa al avatar. Chat y Jugadores comparten panel con pestañas, así el chat gana 300&nbsp;px de alto. El contenido empieza a 96&nbsp;px en lugar de 400. Bajo la lista, una tira de actividad para que la pantalla no se sienta vacía con una sola sala.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:24px;padding:0 14px;height:46px;background:#233648">
+    <div style="display:flex;align-items:center;gap:9px"><img src="AppIcon.png" alt="" style="width:20px;height:20px;border-radius:5px;object-fit:cover"><span style="font:700 13px/1 'Source Serif 4',Georgia,serif;color:#eef3f9">AoE3 Mod Launcher</span></div>
+    <div style="display:flex;align-items:center;gap:3px">
+      <span style="font:600 11.5px/1;letter-spacing:.7px;color:#a8bcd2;padding:8px 11px">BIBLIOTECA</span>
+      <span style="font:600 11.5px/1;letter-spacing:.7px;color:#a8bcd2;padding:8px 11px">TALLER</span>
+      <span style="font:600 11.5px/1;letter-spacing:.7px;color:#fff;padding:8px 11px;border-radius:6px;background:rgba(47,127,224,.28);box-shadow:inset 0 0 0 1px rgba(120,180,255,.4)">MULTIJUGADOR</span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 11px;border-radius:999px;background:rgba(53,196,111,.14);box-shadow:inset 0 0 0 1px rgba(53,196,111,.3)">
+      <span style="width:7px;height:7px;border-radius:50%;background:#4fd68a"></span>
+      <span style="font:600 11.5px/1;color:#8fe0b0">Conectado</span>
+      <span style="width:1px;height:11px;background:rgba(120,220,170,.3)"></span>
+      <span style="font:400 11.5px/1;color:#a9cbb9">VPN · 26.162.244.170</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:3px;height:26px;padding:0 4px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(160,190,220,.22)">
+      <span style="font:600 10.5px/1;color:#fff;padding:5px 7px;border-radius:5px;background:rgba(255,255,255,.14)">ES</span>
+      <span style="font:600 10.5px/1;color:#93a7c3;padding:5px 7px">EN</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="width:26px;height:26px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 11px/1;color:#fff">G</span>
+      <div>
+        <div style="font:600 11.5px/1.2;color:#e4ecf6">gorgorito_12</div>
+        <div style="font:500 10px/1.2;color:#8fb6ea;margin-top:2px">1524 ELO</div>
+      </div>
+      <span style="font:10px/1;color:#8ea4c0">▾</span>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:16px;padding:0 14px;height:48px;background:#12213a;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)">
+    <div style="display:flex;align-items:center;gap:2px">
+      <span style="font:600 13px/1;color:#fff;padding:9px 12px;border-radius:7px;background:rgba(255,255,255,.08)">Salas</span>
+      <span style="font:500 13px/1;color:#93a7c3;padding:9px 12px">Amigos</span>
+      <span style="font:500 13px/1;color:#93a7c3;padding:9px 12px">Perfil</span>
+      <span style="font:500 13px/1;color:#93a7c3;padding:9px 12px">Historial</span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+      <span style="font:12px/1;color:#7e93af">⌕</span><span style="font:400 12px/1;color:#6d829d">Buscar sala, mod o jugador</span>
+    </div>
+    <span style="display:flex;align-items:center;height:32px;padding:0 12px;border-radius:7px;font:500 12px/1;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">↻ Actualizar</span>
+    <span style="display:flex;align-items:center;height:32px;padding:0 15px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1;color:#fff">+ Crear sala</span>
+  </div>
+
+  <div style="display:flex;gap:13px;padding:14px;background:#0f1c2e">
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
+        <span style="font:600 13px/1;color:#e8eef6">Salas activas</span>
+        <span style="font:600 11px/1;color:#cdd9e9;padding:3px 7px;border-radius:999px;background:rgba(255,255,255,.07)">2</span>
+        <div style="flex:1"></div>
+        <span style="font:400 11px/1;color:#5f7592">Actualizado hace 4 s · orden por ping</span>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 152px 88px 66px 96px;gap:0 12px;padding:0 12px 7px;font:600 10.5px/1;letter-spacing:.6px;color:#61779a"><span>SALA</span><span>ANFITRIÓN</span><span>JUGADORES</span><span>PING</span><span></span></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 152px 88px 66px 96px;gap:0 12px;align-items:center;padding:11px 12px;border-radius:8px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <img src="WoL.ico" alt="" style="width:30px;height:30px;border-radius:6px;flex:none;object-fit:cover">
+            <div style="min-width:0"><div style="font:600 13px/1.25;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wars of Liberty room</div><div style="font:400 11px/1.35;color:#6d829d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">Wars of Liberty · tú eres el anfitrión · hace 1 min</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px"><span style="width:20px;height:20px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 9.5px/1;color:#fff">G</span><span style="font:500 12px/1;color:#c3d2e5">Gorgorito12</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12px/1;color:#c3d2e5">1/8</span><div style="display:flex;gap:2px"><span style="width:9px;height:5px;border-radius:2px;background:#2f7fe0"></span><span style="width:9px;height:5px;border-radius:2px;background:rgba(255,255,255,.13)"></span><span style="width:9px;height:5px;border-radius:2px;background:rgba(255,255,255,.13)"></span><span style="width:9px;height:5px;border-radius:2px;background:rgba(255,255,255,.13)"></span></div></div>
+          <span style="font:600 12px/1;color:#7fdca6">5 ms</span>
+          <span style="justify-self:end;display:flex;align-items:center;height:30px;padding:0 14px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 0 0 0 1px rgba(47,127,224,.55);font:600 12px/1;color:#8cbcf5">Volver</span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 152px 88px 66px 96px;gap:0 12px;align-items:center;padding:11px 12px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <div style="width:30px;height:30px;border-radius:6px;background:repeating-linear-gradient(135deg,#2b3d59 0 5px,#233451 5px 10px);flex:none"></div>
+            <div style="min-width:0"><div style="display:flex;align-items:center;gap:7px"><span style="font:600 13px/1.25;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Napoleonic 3v3 sin rush</span><span style="font:600 9.5px/1;letter-spacing:.5px;color:#cba7f2;padding:3px 6px;border-radius:4px;background:rgba(160,110,240,.16);flex:none">PRIVADA</span></div><div style="font:400 11px/1.35;color:#6d829d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">Napoleonic Era · pide contraseña · hace 6 min</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px"><span style="width:20px;height:20px;border-radius:50%;background:#3f5f7a;display:flex;align-items:center;justify-content:center;font:700 9.5px/1;color:#fff">L</span><span style="font:500 12px/1;color:#c3d2e5">lennon047</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12px/1;color:#c3d2e5">4/6</span><div style="display:flex;gap:2px"><span style="width:9px;height:5px;border-radius:2px;background:#2f7fe0"></span><span style="width:9px;height:5px;border-radius:2px;background:#2f7fe0"></span><span style="width:9px;height:5px;border-radius:2px;background:#2f7fe0"></span><span style="width:9px;height:5px;border-radius:2px;background:rgba(255,255,255,.13)"></span></div></div>
+          <span style="font:600 12px/1;color:#e6b455">78 ms</span>
+          <span style="justify-self:end;display:flex;align-items:center;height:30px;padding:0 14px;border-radius:7px;background:#2f7fe0;font:600 12px/1;color:#fff">Unirse</span>
+        </div>
+      </div>
+
+      <sc-if value="{{ showCodeJoin }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:12px;margin-top:11px;padding:11px 13px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+        <div style="flex:1"><div style="font:600 12.5px/1.3;color:#c3d2e5">¿Te pasaron un código de sala?</div><div style="font:400 11px/1.4;color:#6d829d;margin-top:3px">Las salas privadas no aparecen en la lista.</div></div>
+        <div style="display:flex;align-items:center;height:32px;padding:0 12px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:600 12px/1;letter-spacing:1.6px;color:#6d829d">FJ24HJZ6</div>
+        <span style="display:flex;align-items:center;height:32px;padding:0 14px;border-radius:7px;font:600 12px/1;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Entrar</span>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ showActivity }}" hint-placeholder-val="{{ true }}">
+      <div style="margin-top:16px;padding-top:14px;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px"><span style="font:600 13px/1;color:#e8eef6">Actividad de la comunidad</span><div style="flex:1"></div><span style="font:400 11px/1;color:#5f7592">últimas 24 h</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px">
+          <div style="padding:12px 13px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+            <div style="font:600 10.5px/1;letter-spacing:.6px;color:#61779a">HORA PUNTA</div>
+            <div style="display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:11px">
+              <span style="flex:1;height:22%;background:rgba(47,127,224,.35);border-radius:2px"></span><span style="flex:1;height:14%;background:rgba(47,127,224,.35);border-radius:2px"></span><span style="flex:1;height:38%;background:rgba(47,127,224,.35);border-radius:2px"></span><span style="flex:1;height:56%;background:rgba(47,127,224,.5);border-radius:2px"></span><span style="flex:1;height:100%;background:#2f7fe0;border-radius:2px"></span><span style="flex:1;height:78%;background:rgba(47,127,224,.6);border-radius:2px"></span><span style="flex:1;height:44%;background:rgba(47,127,224,.4);border-radius:2px"></span>
+            </div>
+            <div style="font:400 11px/1.4;color:#8ea4c0;margin-top:9px">Hay más gente entre las <b style="color:#cdd9e9">21:00 y 23:00</b></div>
+          </div>
+          <div style="padding:12px 13px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+            <div style="font:600 10.5px/1;letter-spacing:.6px;color:#61779a">ÚLTIMAS PARTIDAS</div>
+            <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px">
+              <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#4fd68a"></span><span style="font:500 11.5px/1.3;color:#b9c9de;flex:1">92serd venció a jeops.</span><span style="font:400 10.5px/1;color:#5f7592">hace 2 h</span></div>
+              <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#4fd68a"></span><span style="font:500 11.5px/1.3;color:#b9c9de;flex:1">lennon047 venció a the_gatoneitor</span><span style="font:400 10.5px/1;color:#5f7592">ayer</span></div>
+              <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#6d829d"></span><span style="font:500 11.5px/1.3;color:#8ea4c0;flex:1">3v3 sin grabación · no contó</span><span style="font:400 10.5px/1;color:#5f7592">ayer</span></div>
+            </div>
+          </div>
+          <sc-if value="{{ showElo }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:12px 13px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+            <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 10.5px/1;letter-spacing:.6px;color:#61779a">CLASIFICACIÓN</span><div style="flex:1"></div><span style="font:500 10.5px/1;color:#8fb6ea">Ver todo</span></div>
+            <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px">
+              <div style="display:flex;align-items:center;gap:9px"><span style="font:600 11px/1;color:#5f7592;width:14px">1</span><span style="width:18px;height:18px;border-radius:50%;background:#6c4f6e"></span><span style="font:500 11.5px/1;color:#b9c9de;flex:1">92serd</span><span style="font:600 11.5px/1;color:#e8eef6">1742</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span style="font:600 11px/1;color:#5f7592;width:14px">2</span><span style="width:18px;height:18px;border-radius:50%;background:#3f5f7a"></span><span style="font:500 11.5px/1;color:#b9c9de;flex:1">lennon047</span><span style="font:600 11.5px/1;color:#e8eef6">1610</span></div>
+              <div style="display:flex;align-items:center;gap:9px;padding:4px 6px;margin:-4px -6px;border-radius:6px;background:rgba(47,127,224,.12)"><span style="font:600 11px/1;color:#8fb6ea;width:14px">3</span><span style="width:18px;height:18px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 9px/1;color:#fff">G</span><span style="font:600 11.5px/1;color:#dce7f5;flex:1">tú</span><span style="font:600 11.5px/1;color:#e8eef6">1524</span></div>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="width:322px;flex:none;display:flex;flex-direction:column;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden;height:632px">
+      <div style="display:flex;gap:2px;padding:8px 8px 0"><span style="flex:1;text-align:center;font:600 12px/1;color:#fff;padding:8px 0;border-radius:6px;background:rgba(255,255,255,.08)">Chat global</span><span style="flex:1;text-align:center;font:500 12px/1;color:#93a7c3;padding:8px 0;border-radius:6px">Jugadores · 3</span></div>
+      <div style="flex:1;padding:12px 12px 0;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;margin:2px 0 10px"><span style="flex:1;height:1px;background:rgba(130,175,255,.12)"></span><span style="font:600 9.5px/1;letter-spacing:.7px;color:#5f7592">7 AGO</span><span style="flex:1;height:1px;background:rgba(130,175,255,.12)"></span></div>
+        <div style="display:flex;gap:9px;padding:5px 0"><span style="width:24px;height:24px;border-radius:50%;background:#3f5f7a;flex:none"></span><div><div style="display:flex;align-items:baseline;gap:7px"><span style="font:600 12px/1.2;color:#cdd9e9">the_gatoneitor</span><span style="font:400 10.5px/1.2;color:#5f7592">19:13</span></div><div style="font:400 12.5px/1.5;color:#b9c9de">hi</div></div></div>
+        <div style="display:flex;gap:9px;padding:5px 0"><span style="width:24px;height:24px;border-radius:50%;background:#6c4f6e;flex:none"></span><div><div style="display:flex;align-items:baseline;gap:7px"><span style="font:600 12px/1.2;color:#cdd9e9">92serd</span><span style="font:400 10.5px/1.2;color:#5f7592">19:20</span></div><div style="font:400 12.5px/1.5;color:#b9c9de">alguien para un 2v2?</div></div></div>
+        <div style="display:flex;gap:9px;padding:5px 0"><span style="width:24px;height:24px;border-radius:50%;background:#8a4a52;flex:none;display:flex;align-items:center;justify-content:center;font:700 9.5px/1;color:#fff">G</span><div><div style="display:flex;align-items:baseline;gap:7px"><span style="font:600 12px/1.2;color:#cdd9e9">gorgorito_12</span><span style="font:400 10.5px/1.2;color:#5f7592">19:22</span></div><div style="font:400 12.5px/1.5;color:#b9c9de">abro sala en Wars of Liberty</div></div></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;margin:8px 0;border-radius:7px;background:rgba(47,127,224,.09);box-shadow:inset 0 0 0 1px rgba(47,127,224,.2)"><span style="width:24px;height:24px;border-radius:6px;background:rgba(47,127,224,.2);display:flex;align-items:center;justify-content:center;font:12px/1;color:#8cbcf5">⚑</span><div style="flex:1"><div style="font:600 11.5px/1.3;color:#cdd9e9">gorgorito_12 abrió una sala</div><div style="font:400 11px/1.35;color:#8ea4c0">Wars of Liberty · 1/8</div></div><span style="font:600 11px/1;color:#8cbcf5">Unirse</span></div>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:7px;margin-bottom:10px"><span style="font:600 11px/1;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12)">¿Alguien juega?</span><span style="font:600 11px/1;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12)">gg</span><span style="font:600 11px/1;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12)">1 min</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.11)"><div style="flex:1;height:34px;display:flex;align-items:center;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 12.5px/1;color:#6d829d">Escribe un mensaje…</div><span style="width:34px;height:34px;border-radius:7px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:13px/1;color:#fff">➤</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a><span><b>Portada de comunidad.</b> Arriba, una fila que responde «¿hay alguien?» antes de que el usuario tenga que interpretar una tabla: gente conectada, hora punta y tu ELO. Las salas se vuelven tarjetas con cupos visibles y avatares reales del roster (<code>GET /lobbies/:id</code>), y queda un conmutador a lista para cuando haya muchas.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:24px;padding:0 14px;height:46px;background:#233648">
+    <div style="display:flex;align-items:center;gap:9px"><img src="AppIcon.png" alt="" style="width:20px;height:20px;border-radius:5px;object-fit:cover"><span style="font:700 13px/1 'Source Serif 4',Georgia,serif;color:#eef3f9">AoE3 Mod Launcher</span></div>
+    <div style="display:flex;align-items:center;gap:3px"><span style="font:600 11.5px/1;letter-spacing:.7px;color:#a8bcd2;padding:8px 11px">BIBLIOTECA</span><span style="font:600 11.5px/1;letter-spacing:.7px;color:#a8bcd2;padding:8px 11px">TALLER</span><span style="font:600 11.5px/1;letter-spacing:.7px;color:#fff;padding:8px 11px;border-radius:6px;background:rgba(47,127,224,.28);box-shadow:inset 0 0 0 1px rgba(120,180,255,.4)">MULTIJUGADOR</span></div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 11px;border-radius:999px;background:rgba(53,196,111,.14);box-shadow:inset 0 0 0 1px rgba(53,196,111,.3)"><span style="width:7px;height:7px;border-radius:50%;background:#4fd68a"></span><span style="font:600 11.5px/1;color:#8fe0b0">Conectado · VPN lista</span></div>
+    <span style="width:26px;height:26px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 11px/1;color:#fff">G</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;padding:0 14px;height:46px;background:#12213a;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)">
+    <div style="display:flex;align-items:center;gap:2px"><span style="font:600 13px/1;color:#fff;padding:9px 12px;border-radius:7px;background:rgba(255,255,255,.08)">Salas</span><span style="font:500 13px/1;color:#93a7c3;padding:9px 12px">Amigos</span><span style="font:500 13px/1;color:#93a7c3;padding:9px 12px">Perfil</span><span style="font:500 13px/1;color:#93a7c3;padding:9px 12px">Historial</span></div>
+    <div style="flex:1"></div>
+    <span style="display:flex;align-items:center;height:31px;padding:0 12px;border-radius:7px;font:500 12px/1;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">↻ Actualizar</span>
+  </div>
+
+  <div style="padding:15px 14px 16px;background:#0f1c2e">
+    <div style="display:flex;gap:12px;margin-bottom:15px">
+      <div style="flex:1;display:flex;align-items:center;gap:18px;padding:17px 19px;border-radius:10px;background:linear-gradient(100deg,#1b2e4c,#16263e);box-shadow:inset 0 0 0 1px rgba(130,175,255,.15)">
+        <div style="flex:1">
+          <div style="font:700 17px/1.25 'Source Serif 4',Georgia,serif;color:#f0f5fb">Hola, gorgorito_12</div>
+          <div style="font:400 12.5px/1.55;color:#a3b8d2;margin-top:5px;max-width:420px">Hay <b style="color:#e8eef6">3 jugadores</b> conectados y <b style="color:#e8eef6">2 salas</b> abiertas. Tu último mod fue Wars of Liberty.</div>
+        </div>
+        <div style="display:flex;gap:9px">
+          <span style="display:flex;align-items:center;height:38px;padding:0 18px;border-radius:8px;background:#2f7fe0;font:600 13px/1;color:#fff">+ Crear sala</span>
+          <span style="display:flex;align-items:center;height:38px;padding:0 15px;border-radius:8px;font:600 13px/1;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22)">Código</span>
+        </div>
+      </div>
+      <div style="width:212px;flex:none;padding:14px 15px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+        <div style="font:600 10.5px/1;letter-spacing:.6px;color:#61779a">EN LÍNEA</div>
+        <div style="display:flex;align-items:center;margin-top:11px"><div style="display:flex"><span style="width:27px;height:27px;border-radius:50%;background:#3f5f7a;box-shadow:0 0 0 2px #12213a"></span><span style="width:27px;height:27px;border-radius:50%;background:#6c4f6e;box-shadow:0 0 0 2px #12213a;margin-left:-9px"></span><span style="width:27px;height:27px;border-radius:50%;background:#8a4a52;box-shadow:0 0 0 2px #12213a;margin-left:-9px;display:flex;align-items:center;justify-content:center;font:700 10px/1;color:#fff">G</span></div></div>
+        <div style="display:flex;gap:13px;margin-top:13px">
+          <div><div style="font:600 15px/1;color:#e8eef6">0</div><div style="font:400 10.5px/1.3;color:#6d829d;margin-top:3px">jugando</div></div>
+          <div><div style="font:600 15px/1;color:#e8eef6">1</div><div style="font:400 10.5px/1.3;color:#6d829d;margin-top:3px">en sala</div></div>
+          <div><div style="font:600 15px/1;color:#e8eef6">2</div><div style="font:400 10.5px/1.3;color:#6d829d;margin-top:3px">esperando</div></div>
+        </div>
+      </div>
+      <sc-if value="{{ showElo }}" hint-placeholder-val="{{ true }}">
+      <div style="width:212px;flex:none;padding:14px 15px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+        <div style="font:600 10.5px/1;letter-spacing:.6px;color:#61779a">TU CLASIFICACIÓN</div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-top:9px"><span style="font:700 26px/1 'Source Serif 4',Georgia,serif;color:#f0f5fb">1524</span><span style="font:600 11.5px/1;color:#4fd68a">+18</span></div>
+        <div style="font:400 11px/1.45;color:#8ea4c0;margin-top:7px">3 de 4 partidas decididas ganadas · 75 %</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding:5px 8px;border-radius:6px;background:rgba(230,180,85,.1)"><span style="width:5px;height:5px;border-radius:50%;background:#e6b455"></span><span style="font:500 10.5px/1.3;color:#e0be7f">Provisional (pocas partidas)</span></div>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:11px">
+      <span style="font:600 13px/1;color:#e8eef6">Salas abiertas</span>
+      <div style="display:flex;gap:5px"><span style="font:600 11px/1;color:#cdd9e9;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.08)">Todas</span><span style="font:500 11px/1;color:#8ea4c0;padding:6px 10px;border-radius:999px">Wars of Liberty</span><span style="font:500 11px/1;color:#8ea4c0;padding:6px 10px;border-radius:999px">Con hueco</span></div>
+      <div style="flex:1"></div>
+      <div style="display:flex;gap:2px;padding:3px;border-radius:7px;background:#12213a"><span style="font:600 11px/1;color:#fff;padding:6px 10px;border-radius:5px;background:rgba(255,255,255,.1)">Tarjetas</span><span style="font:500 11px/1;color:#8ea4c0;padding:6px 10px;border-radius:5px">Lista</span></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div style="border-radius:10px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.15);overflow:hidden">
+        <div style="height:66px;background:repeating-linear-gradient(135deg,#26395a 0 7px,#20314e 7px 14px);display:flex;align-items:flex-end;justify-content:space-between;padding:8px 11px"><span style="font:500 9.5px ui-monospace,Menlo,monospace;color:rgba(220,235,255,.5)">banner del mod</span><span style="font:600 9.5px/1;letter-spacing:.5px;color:#8fe0b0;padding:3px 7px;border-radius:4px;background:rgba(53,196,111,.16)">TU SALA</span></div>
+        <div style="padding:12px 13px 13px">
+          <div style="font:600 13.5px/1.3;color:#e8eef6">Wars of Liberty room</div>
+          <div style="font:400 11px/1.4;color:#6d829d;margin-top:3px">Wars of Liberty · abierta hace 1 min</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:11px">
+            <div style="display:flex"><span style="width:22px;height:22px;border-radius:50%;background:#8a4a52;box-shadow:0 0 0 2px #16263e;display:flex;align-items:center;justify-content:center;font:700 9px/1;color:#fff">G</span></div>
+            <div style="flex:1;display:flex;gap:3px"><span style="flex:1;height:4px;border-radius:2px;background:#2f7fe0"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span></div>
+            <span style="font:600 11.5px/1;color:#c3d2e5">1/8</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:13px"><span style="flex:1;display:flex;align-items:center;justify-content:center;height:34px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 0 0 0 1px rgba(47,127,224,.55);font:600 12.5px/1;color:#8cbcf5">Volver a la sala</span><span style="font:600 11.5px/1;color:#7fdca6">5 ms</span></div>
+        </div>
+      </div>
+      <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);overflow:hidden">
+        <div style="height:66px;background:repeating-linear-gradient(135deg,#26395a 0 7px,#20314e 7px 14px);display:flex;align-items:flex-end;justify-content:space-between;padding:8px 11px"><span style="font:500 9.5px ui-monospace,Menlo,monospace;color:rgba(220,235,255,.5)">banner del mod</span><span style="font:600 9.5px/1;letter-spacing:.5px;color:#cba7f2;padding:3px 7px;border-radius:4px;background:rgba(160,110,240,.18)">PRIVADA</span></div>
+        <div style="padding:12px 13px 13px">
+          <div style="font:600 13.5px/1.3;color:#e8eef6">Napoleonic 3v3 sin rush</div>
+          <div style="font:400 11px/1.4;color:#6d829d;margin-top:3px">Napoleonic Era · lennon047</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:11px">
+            <div style="display:flex"><span style="width:22px;height:22px;border-radius:50%;background:#3f5f7a;box-shadow:0 0 0 2px #12213a"></span><span style="width:22px;height:22px;border-radius:50%;background:#6c4f6e;box-shadow:0 0 0 2px #12213a;margin-left:-7px"></span><span style="width:22px;height:22px;border-radius:50%;background:#4a6b52;box-shadow:0 0 0 2px #12213a;margin-left:-7px"></span><span style="width:22px;height:22px;border-radius:50%;background:#2a3a52;box-shadow:0 0 0 2px #12213a;margin-left:-7px;display:flex;align-items:center;justify-content:center;font:600 9px/1;color:#9fb3cd">+1</span></div>
+            <div style="flex:1;display:flex;gap:3px"><span style="flex:1;height:4px;border-radius:2px;background:#2f7fe0"></span><span style="flex:1;height:4px;border-radius:2px;background:#2f7fe0"></span><span style="flex:1;height:4px;border-radius:2px;background:#2f7fe0"></span><span style="flex:1;height:4px;border-radius:2px;background:#2f7fe0"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span><span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.12)"></span></div>
+            <span style="font:600 11.5px/1;color:#c3d2e5">4/6</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:13px"><span style="flex:1;display:flex;align-items:center;justify-content:center;height:34px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1;color:#fff">Unirse con contraseña</span><span style="font:600 11.5px/1;color:#e6b455">78 ms</span></div>
+        </div>
+      </div>
+      <div style="border-radius:10px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13);border-style:dashed;display:flex;flex-direction:column;justify-content:center;gap:9px;padding:18px 16px">
+        <div style="font:600 13px/1.35;color:#c3d2e5">Abre la tuya en 10 s</div>
+        <div style="font:400 11.5px/1.5;color:#8ea4c0">Se anuncia en el chat y en Discord. La gente suele entrar en menos de un minuto.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding:8px 10px;border-radius:7px;background:#12213a"><img src="WoL.ico" alt="" style="width:22px;height:22px;border-radius:5px;object-fit:cover"><div style="flex:1"><div style="font:600 11.5px/1.2;color:#cdd9e9">Wars of Liberty</div><div style="font:400 10.5px/1.2;color:#6d829d;margin-top:2px">tu último mod</div></div><span style="font:600 11.5px/1;color:#8cbcf5">Crear</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a><span><b>Consola de actividad.</b> La más divergente: un carril de mods a la izquierda como filtro, y una sola columna de <i>Actividad</i> a la derecha que fusiona chat, eventos del sistema y resultados de partida — así una comunidad pequeña siempre parece viva. Filas de sala de una línea, sin tarjetas ni cabecera de tabla. Tono más técnico, con monoespaciada para ping, IDs y ELO.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:20px;padding:0 14px;height:44px;background:#1b2b3d">
+    <div style="display:flex;align-items:center;gap:8px"><img src="AppIcon.png" alt="" style="width:19px;height:19px;border-radius:5px;object-fit:cover"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#eef3f9">AoE3 Mod Launcher</span></div>
+    <div style="display:flex;align-items:center;gap:14px"><span style="font:600 11px/1;letter-spacing:.7px;color:#8ea4c0">BIBLIOTECA</span><span style="font:600 11px/1;letter-spacing:.7px;color:#8ea4c0">TALLER</span><span style="font:600 11px/1;letter-spacing:.7px;color:#fff;padding-bottom:3px;box-shadow:inset 0 -2px 0 #2f7fe0">MULTIJUGADOR</span></div>
+    <div style="flex:1"></div>
+    <span style="font:500 11px ui-monospace,Menlo,monospace;color:#7fdca6">● conectado · vpn 26.162.244.170 · 5 ms</span>
+    <span style="width:24px;height:24px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 10px/1;color:#fff">G</span>
+  </div>
+
+  <div style="display:flex;background:#0b1524;min-height:520px">
+    <div style="width:172px;flex:none;padding:14px 10px;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="font:600 10px/1;letter-spacing:.7px;color:#5f7592;padding:0 8px 9px">MODS</div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:9px;padding:8px;border-radius:7px;background:rgba(47,127,224,.14)"><span style="width:20px;height:20px;border-radius:5px;background:repeating-linear-gradient(135deg,#2b3d59 0 5px,#233451 5px 10px)"></span><span style="font:600 12px/1;color:#e8eef6;flex:1">Todos</span><span style="font:500 11px ui-monospace,Menlo,monospace;color:#8fb6ea">2</span></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:8px;border-radius:7px"><img src="WoL.ico" alt="" style="width:20px;height:20px;border-radius:5px;object-fit:cover"><span style="font:500 12px/1;color:#b9c9de;flex:1">Wars of Liberty</span><span style="font:500 11px ui-monospace,Menlo,monospace;color:#6d829d">1</span></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:8px;border-radius:7px"><span style="width:20px;height:20px;border-radius:5px;background:repeating-linear-gradient(135deg,#2b3d59 0 5px,#233451 5px 10px)"></span><span style="font:500 12px/1;color:#b9c9de;flex:1">Napoleonic</span><span style="font:500 11px ui-monospace,Menlo,monospace;color:#6d829d">1</span></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:8px;border-radius:7px"><span style="width:20px;height:20px;border-radius:5px;background:repeating-linear-gradient(135deg,#2b3d59 0 5px,#233451 5px 10px)"></span><span style="font:500 12px/1;color:#8ea4c0;flex:1">Improvement</span><span style="font:500 11px ui-monospace,Menlo,monospace;color:#4d6183">0</span></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:8px;border-radius:7px"><span style="width:20px;height:20px;border-radius:5px;background:repeating-linear-gradient(135deg,#2b3d59 0 5px,#233451 5px 10px)"></span><span style="font:500 12px/1;color:#8ea4c0;flex:1">Asian Dynasties</span><span style="font:500 11px ui-monospace,Menlo,monospace;color:#4d6183">0</span></div>
+      </div>
+      <div style="margin-top:18px;padding:0 8px 9px;font:600 10px/1;letter-spacing:.7px;color:#5f7592">SESIÓN</div>
+      <div style="padding:0 8px;display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1.3;color:#8ea4c0">tu elo</span><span style="font:600 11px ui-monospace,Menlo,monospace;color:#e8eef6">1524</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1.3;color:#8ea4c0">decididas</span><span style="font:600 11px ui-monospace,Menlo,monospace;color:#e8eef6">3-1</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="font:400 11px/1.3;color:#8ea4c0">racha</span><span style="font:600 11px ui-monospace,Menlo,monospace;color:#4fd68a">+2</span></div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font:700 15px/1 'Source Serif 4',Georgia,serif;color:#f0f5fb">Salas</span>
+        <span style="font:500 11px ui-monospace,Menlo,monospace;color:#5f7592">2 abiertas · 3 en línea</span>
+        <div style="flex:1"></div>
+        <span style="display:flex;align-items:center;height:30px;padding:0 12px;border-radius:6px;font:500 11.5px/1;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Código</span>
+        <span style="display:flex;align-items:center;height:30px;padding:0 14px;border-radius:6px;background:#2f7fe0;font:600 12px/1;color:#fff">+ Crear sala</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;margin-top:14px">
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 10px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+          <span style="width:3px;height:26px;border-radius:2px;background:#4fd68a"></span>
+          <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font:600 13px/1.2;color:#e8eef6">Wars of Liberty room</span><span style="font:500 10.5px ui-monospace,Menlo,monospace;color:#5f7592">FJ24HJZ6</span></div><div style="font:400 11px/1.35;color:#6d829d;margin-top:3px">Wars of Liberty · Gorgorito12 · abierta 1 min</div></div>
+          <span style="font:600 11.5px ui-monospace,Menlo,monospace;color:#c3d2e5">1/8</span>
+          <span style="font:600 11.5px ui-monospace,Menlo,monospace;color:#7fdca6;width:52px;text-align:right">5 ms</span>
+          <span style="display:flex;align-items:center;height:28px;padding:0 13px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(47,127,224,.55);font:600 11.5px/1;color:#8cbcf5">Volver</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 10px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+          <span style="width:3px;height:26px;border-radius:2px;background:#a06ef0"></span>
+          <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font:600 13px/1.2;color:#e8eef6">Napoleonic 3v3 sin rush</span><span style="font:600 9.5px/1;letter-spacing:.5px;color:#cba7f2">PRIVADA</span></div><div style="font:400 11px/1.35;color:#6d829d;margin-top:3px">Napoleonic Era · lennon047 · abierta 6 min</div></div>
+          <span style="font:600 11.5px ui-monospace,Menlo,monospace;color:#c3d2e5">4/6</span>
+          <span style="font:600 11.5px ui-monospace,Menlo,monospace;color:#e6b455;width:52px;text-align:right">78 ms</span>
+          <span style="display:flex;align-items:center;height:28px;padding:0 13px;border-radius:6px;background:#2f7fe0;font:600 11.5px/1;color:#fff">Unirse</span>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;padding:14px 15px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font:600 12.5px/1;color:#e8eef6">Clasificación del mes</span><div style="flex:1"></div><span style="font:500 11px/1;color:#8fb6ea">Historial completo</span></div>
+        <div style="display:grid;grid-template-columns:24px 1fr 66px 78px 64px;gap:0 10px;margin-top:12px;font:600 9.5px/1;letter-spacing:.6px;color:#5f7592"><span>#</span><span>JUGADOR</span><span style="text-align:right">ELO</span><span style="text-align:right">DECIDIDAS</span><span style="text-align:right">%</span></div>
+        <div style="display:flex;flex-direction:column;margin-top:6px">
+          <div style="display:grid;grid-template-columns:24px 1fr 66px 78px 64px;gap:0 10px;align-items:center;padding:8px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)"><span style="font:600 11px ui-monospace,Menlo,monospace;color:#8ea4c0">1</span><div style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;border-radius:50%;background:#6c4f6e"></span><span style="font:500 12px/1;color:#dce7f5">92serd</span></div><span style="font:600 12px ui-monospace,Menlo,monospace;color:#e8eef6;text-align:right">1742</span><span style="font:400 12px ui-monospace,Menlo,monospace;color:#b9c9de;text-align:right">9-3</span><span style="font:400 12px ui-monospace,Menlo,monospace;color:#b9c9de;text-align:right">75</span></div>
+          <div style="display:grid;grid-template-columns:24px 1fr 66px 78px 64px;gap:0 10px;align-items:center;padding:8px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)"><span style="font:600 11px ui-monospace,Menlo,monospace;color:#8ea4c0">2</span><div style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;border-radius:50%;background:#3f5f7a"></span><span style="font:500 12px/1;color:#dce7f5">lennon047</span></div><span style="font:600 12px ui-monospace,Menlo,monospace;color:#e8eef6;text-align:right">1610</span><span style="font:400 12px ui-monospace,Menlo,monospace;color:#b9c9de;text-align:right">6-4</span><span style="font:400 12px ui-monospace,Menlo,monospace;color:#b9c9de;text-align:right">60</span></div>
+          <div style="display:grid;grid-template-columns:24px 1fr 66px 78px 64px;gap:0 10px;align-items:center;padding:8px 0;background:rgba(47,127,224,.1)"><span style="font:600 11px ui-monospace,Menlo,monospace;color:#8fb6ea">3</span><div style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 9px/1;color:#fff">G</span><span style="font:600 12px/1;color:#f0f5fb">gorgorito_12</span><span style="font:600 9.5px/1;color:#e0be7f;padding:2px 5px;border-radius:3px;background:rgba(230,180,85,.14)">PROVISIONAL</span></div><span style="font:600 12px ui-monospace,Menlo,monospace;color:#e8eef6;text-align:right">1524</span><span style="font:400 12px ui-monospace,Menlo,monospace;color:#b9c9de;text-align:right">3-1</span><span style="font:400 12px ui-monospace,Menlo,monospace;color:#b9c9de;text-align:right">75</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width:300px;flex:none;display:flex;flex-direction:column;box-shadow:inset 1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;align-items:center;gap:9px;padding:14px 14px 10px"><span style="font:600 12.5px/1;color:#e8eef6">Actividad</span><div style="flex:1"></div><span style="font:500 10.5px/1;color:#8fb6ea">Solo chat</span></div>
+      <div style="flex:1;padding:0 14px;display:flex;flex-direction:column;gap:11px;overflow:hidden">
+        <div style="display:flex;gap:9px"><span style="width:22px;height:22px;border-radius:50%;background:#3f5f7a;flex:none"></span><div><span style="font:600 11.5px/1.45;color:#cdd9e9">the_gatoneitor </span><span style="font:400 11.5px/1.45;color:#b9c9de">hi</span><div style="font:400 10px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px">19:13</div></div></div>
+        <div style="display:flex;gap:9px;align-items:flex-start"><span style="width:22px;height:22px;border-radius:6px;background:rgba(53,196,111,.16);flex:none;display:flex;align-items:center;justify-content:center;font:10px/1;color:#8fe0b0">✓</span><div><span style="font:400 11.5px/1.45;color:#9fc4ae"><b style="color:#cdd9e9">92serd</b> ganó a jeops. en Wars of Liberty · </span><span style="font:600 11.5px ui-monospace,Menlo,monospace;color:#4fd68a">+21</span><div style="font:400 10px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px">19:18 · 24 min</div></div></div>
+        <div style="display:flex;gap:9px"><span style="width:22px;height:22px;border-radius:50%;background:#6c4f6e;flex:none"></span><div><span style="font:600 11.5px/1.45;color:#cdd9e9">92serd </span><span style="font:400 11.5px/1.45;color:#b9c9de">alguien para un 2v2?</span><div style="font:400 10px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px">19:20</div></div></div>
+        <div style="display:flex;gap:9px;align-items:flex-start"><span style="width:22px;height:22px;border-radius:6px;background:rgba(47,127,224,.16);flex:none;display:flex;align-items:center;justify-content:center;font:10px/1;color:#8cbcf5">⚑</span><div><span style="font:400 11.5px/1.45;color:#a3b8d2"><b style="color:#cdd9e9">gorgorito_12</b> abrió <b style="color:#cdd9e9">Wars of Liberty room</b></span><div style="display:flex;align-items:center;gap:8px;margin-top:5px"><span style="font:400 10px ui-monospace,Menlo,monospace;color:#5f7592">19:22</span><span style="font:600 10.5px/1;color:#8cbcf5">unirse</span></div></div></div>
+        <div style="display:flex;gap:9px;align-items:flex-start"><span style="width:22px;height:22px;border-radius:6px;background:rgba(230,180,85,.14);flex:none;display:flex;align-items:center;justify-content:center;font:10px/1;color:#e6b455">!</span><div><span style="font:400 11.5px/1.45;color:#d8bd8a">Una partida de 3v3 terminó sin grabación: no contó para el ELO de nadie.</span><div style="font:400 10px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px">18:40</div></div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09)"><div style="flex:1;height:32px;display:flex;align-items:center;padding:0 11px;border-radius:6px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 12px/1;color:#6d829d">Escribe…</div><span style="font:600 11.5px/1;color:#8cbcf5">Enviar</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a><span><b>Crear sala.</b> El campo de contraseña ya no aparece deshabilitado junto a un párrafo largo: la casilla lo revela. El mod muestra su estado de huella (<code>mod_combined_hash</code>) donde importa, en vez de esconderlo en «Advanced details», porque es la causa habitual de que otro no pueda unirse. El aviso de grabación vive aquí, antes de la partida.</span></div>
+<div class="dv-card" style="width:596px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Crear una sala</span><div style="flex:1"></div><span style="font:14px/1;color:#9fb3cd">✕</span></div>
+  <div style="padding:18px;background:#12213a">
+    <div style="font:600 11px/1;letter-spacing:.5px;color:#8ea4c0">MOD</div>
+    <div style="display:flex;align-items:center;gap:11px;margin-top:8px;padding:10px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">
+      <img src="WoL.ico" alt="" style="width:26px;height:26px;border-radius:6px;object-fit:cover">
+      <div style="flex:1"><div style="font:600 13px/1.2;color:#e8eef6">Wars of Liberty</div><div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="width:5px;height:5px;border-radius:50%;background:#4fd68a"></span><span style="font:400 10.5px/1;color:#8fe0b0">Huella verificada · 8d31f0…</span></div></div>
+      <span style="font:10px/1;color:#8ea4c0">▾</span>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin-top:16px"><span style="font:600 11px/1;letter-spacing:.5px;color:#8ea4c0">TÍTULO</span><div style="flex:1"></div><span style="font:400 11px ui-monospace,Menlo,monospace;color:#5f7592">20/64</span></div>
+    <div style="display:flex;align-items:center;height:40px;margin-top:8px;padding:0 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 2px rgba(47,127,224,.55);font:400 13px/1;color:#e8eef6">Wars of Liberty room<span style="width:1px;height:16px;background:#8cbcf5;margin-left:2px"></span></div>
+    <div style="display:flex;gap:7px;margin-top:9px"><span style="font:500 11px/1;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12)">1v1 rápido</span><span style="font:500 11px/1;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12)">Sin rush 10 min</span><span style="font:500 11px/1;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12)">Solo LatAm</span></div>
+
+    <div style="font:600 11px/1;letter-spacing:.5px;color:#8ea4c0;margin-top:18px">JUGADORES MÁXIMOS</div>
+    <div style="display:flex;gap:4px;margin-top:8px">
+      <span style="flex:1;text-align:center;padding:8px 0;border-radius:6px;font:500 12px/1;color:#b9c9de;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">2</span>
+      <span style="flex:1;text-align:center;padding:8px 0;border-radius:6px;font:500 12px/1;color:#b9c9de;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">3</span>
+      <span style="flex:1;text-align:center;padding:8px 0;border-radius:6px;font:500 12px/1;color:#b9c9de;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">4</span>
+      <span style="flex:1;text-align:center;padding:8px 0;border-radius:6px;font:500 12px/1;color:#b9c9de;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">5</span>
+      <span style="flex:1;text-align:center;padding:8px 0;border-radius:6px;font:500 12px/1;color:#b9c9de;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">6</span>
+      <span style="flex:1;text-align:center;padding:8px 0;border-radius:6px;font:500 12px/1;color:#b9c9de;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">7</span>
+      <span style="flex:1;text-align:center;padding:8px 0;border-radius:6px;font:600 12px/1;color:#fff;background:#2f7fe0">8</span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:18px;padding:11px 12px;border-radius:8px;background:rgba(160,110,240,.08);box-shadow:inset 0 0 0 1px rgba(160,110,240,.24)">
+      <span style="width:18px;height:18px;border-radius:4px;background:#a06ef0;display:flex;align-items:center;justify-content:center;font:11px/1;color:#fff">✓</span>
+      <div style="flex:1"><div style="font:600 12.5px/1.2;color:#e2d5f7">Sala privada</div><div style="font:400 11px/1.4;color:#b39fd0;margin-top:3px">No se anuncia. Comparte el código o la contraseña.</div></div>
+    </div>
+    <div style="display:flex;align-items:center;height:38px;margin-top:9px;padding:0 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(160,110,240,.3);font:400 12.5px/1;letter-spacing:2px;color:#cba7f2">••••••<div style="flex:1"></div><span style="font:500 11px/1;letter-spacing:0;color:#b39fd0">Mostrar</span></div>
+
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-top:16px;padding:11px 12px;border-radius:8px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+      <span style="font:12px/1.2;color:#e6b455">⚠</span>
+      <div style="font:400 11.5px/1.5;color:#d8bd8a">Para que la partida cuente en el ELO, marca <b style="color:#f0dcae">Record Game</b> en la pantalla de configuración de AoE3. Sin grabación nadie sabe quién ganó.</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;padding:13px 18px;background:#0f1c2e;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+    <span style="font:400 11px/1.4;color:#6d829d;flex:1">Se anunciará en el chat global y en Discord.</span>
+    <span style="display:flex;align-items:center;height:36px;padding:0 16px;border-radius:7px;font:600 12.5px/1;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Cancelar</span>
+    <span style="display:flex;align-items:center;height:36px;padding:0 22px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1;color:#fff">Crear sala</span>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a><span><b>Lobby (sigue siendo ventana).</b> Tres cambios: el roster ocupa el alto que necesita y muestra listo / ping por jugador desde <code>radminIp</code>; el aviso de grabación se vuelve una lista de comprobación de dos líneas que se marca sola; y las acciones se reducen a una primaria más un menú, en lugar de tres botones de colores compitiendo.</span></div>
+<div class="dv-card" style="width:980px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Sala · Wars of Liberty room</span><div style="flex:1"></div><span style="font:12px/1;color:#9fb3cd">—</span><span style="font:12px/1;color:#9fb3cd">▢</span><span style="font:13px/1;color:#9fb3cd">✕</span></div>
+  <div style="padding:14px;background:#0f1c2e">
+    <div style="display:flex;align-items:center;gap:14px;padding:13px 15px;border-radius:9px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">
+      <img src="WoL.ico" alt="" style="width:42px;height:42px;border-radius:8px;object-fit:cover">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:9px"><span style="font:700 16px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Wars of Liberty room</span><span style="font:11px/1;color:#8ea4c0">✎</span></div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:5px"><span style="font:500 11.5px/1;color:#8fe0b0">● En el lobby</span><span style="font:400 11.5px/1;color:#6d829d">LAN P2P lista · abierta hace 44 s</span></div>
+      </div>
+      <div style="display:flex;gap:22px;align-items:flex-start">
+        <div><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">JUGADORES</div><div style="font:600 14px/1;color:#e8eef6;margin-top:6px">1/8</div></div>
+        <div><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">CONEXIÓN</div><div style="font:600 14px/1;color:#7fdca6;margin-top:6px">6 ms</div></div>
+        <div><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">CÓDIGO</div><div style="display:flex;align-items:center;gap:7px;margin-top:6px"><span style="font:600 13px ui-monospace,Menlo,monospace;letter-spacing:1px;color:#e8eef6">FJ24HJZ6</span><span style="font:11px/1;color:#8cbcf5">⧉</span></div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:13px;margin-top:13px">
+      <div style="width:352px;flex:none;display:flex;flex-direction:column;gap:11px">
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);padding:12px 13px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font:600 10.5px/1;letter-spacing:.6px;color:#61779a">JUGADORES</span><div style="flex:1"></div><span style="font:500 11px/1;color:#8fb6ea">Invitar</span></div>
+          <div style="display:flex;flex-direction:column;gap:7px;margin-top:11px">
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:#16263e">
+              <span style="width:26px;height:26px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 10.5px/1;color:#fff">G</span>
+              <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:7px"><span style="font:600 12.5px/1.2;color:#e8eef6">gorgorito_12</span><span style="font:600 9.5px/1;letter-spacing:.4px;color:#8cbcf5;padding:2px 5px;border-radius:3px;background:rgba(47,127,224,.16)">ANFITRIÓN</span></div><div style="font:400 10.5px/1.2;color:#6d829d;margin-top:3px">1524 ELO · 5 ms</div></div>
+              <span style="font:500 11px/1;color:#8fe0b0">listo</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+              <span style="width:26px;height:26px;border-radius:50%;background:#3f5f7a"></span>
+              <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.2;color:#e8eef6">lennon047</div><div style="font:400 10.5px/1.2;color:#6d829d;margin-top:3px">1610 ELO · 41 ms</div></div>
+              <span style="font:500 11px/1;color:#e6b455">esperando</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.07);border-style:dashed">
+              <span style="width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)"></span>
+              <span style="flex:1;font:400 12px/1.2;color:#6d829d">Hueco libre · comparte el código</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);padding:12px 13px">
+          <div style="font:600 10.5px/1;letter-spacing:.6px;color:#61779a">ANTES DE EMPEZAR</div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:10px"><span style="width:16px;height:16px;border-radius:4px;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9px/1;color:#8fe0b0">✓</span><span style="font:400 11.5px/1.4;color:#b9c9de;flex:1">Mods idénticos en los 2 jugadores</span></div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:8px"><span style="width:16px;height:16px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(230,180,85,.5)"></span><span style="font:400 11.5px/1.4;color:#d8bd8a;flex:1">Marcar <b style="color:#f0dcae">Record Game</b> en AoE3 para que cuente el ELO</span><span style="font:500 10.5px/1;color:#8fb6ea">Ver cómo</span></div>
+        </div>
+
+        <span style="display:flex;align-items:center;justify-content:center;height:42px;border-radius:8px;background:#2f7fe0;font:600 14px/1;color:#fff">▶ Empezar partida</span>
+        <div style="display:flex;gap:9px">
+          <span style="flex:1;display:flex;align-items:center;justify-content:center;height:34px;border-radius:7px;font:500 12px/1;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Marcarme listo</span>
+          <span style="flex:1;display:flex;align-items:center;justify-content:center;height:34px;border-radius:7px;font:500 12px/1;color:#d99a9a;box-shadow:inset 0 0 0 1px rgba(200,120,120,.28)">Salir de la sala</span>
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:9px;padding:12px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)"><span style="font:600 12.5px/1;color:#e8eef6">Chat de la sala</span><div style="flex:1"></div><span style="font:500 11px/1;color:#8ea4c0">Limpiar</span></div>
+        <div style="flex:1;padding:13px 14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:9px"><span style="width:22px;height:22px;border-radius:50%;background:#8a4a52;flex:none;display:flex;align-items:center;justify-content:center;font:700 9px/1;color:#fff">G</span><div><span style="font:600 11.5px/1.45;color:#cdd9e9">gorgorito_12 </span><span style="font:400 11.5px/1.45;color:#b9c9de">listo cuando quieras</span></div></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:22px;height:22px;border-radius:6px;background:rgba(47,127,224,.14);flex:none;display:flex;align-items:center;justify-content:center;font:10px/1;color:#8cbcf5">→</span><span style="font:400 11.5px/1.45;color:#a3b8d2">lennon047 entró en la sala</span><span style="font:400 10px ui-monospace,Menlo,monospace;color:#5f7592">11:04</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:22px;height:22px;border-radius:6px;background:rgba(230,180,85,.14);flex:none;display:flex;align-items:center;justify-content:center;font:10px/1;color:#e6b455">!</span><span style="font:400 11.5px/1.45;color:#d8bd8a">Cancelaste la partida. La sala volvió al lobby.</span><span style="font:400 10px ui-monospace,Menlo,monospace;color:#5f7592">11:04</span></div>
+          <div style="flex:1"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)"><div style="flex:1;height:34px;display:flex;align-items:center;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 12.5px/1;color:#6d829d">Escribe un mensaje…</div><span style="display:flex;align-items:center;height:34px;padding:0 15px;border-radius:7px;background:#2f7fe0;font:600 12px/1;color:#fff">Enviar</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="1f">
+<div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a><span><b>Partida en curso y resultado.</b> Durante el juego la ventana se reduce a lo comprobable: tiempo, tráfico, ping por jugador y un aviso claro cuando eres el único en la sala. Al terminar, la tarjeta de resultado usa <code>rating_before → rating_after</code> — y si no hubo grabación lo dice sin rodeos, que es el caso mayoritario según tu propio código.</span></div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div class="dv-card" style="width:596px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Sala · en partida</span><div style="flex:1"></div><span style="font:12px/1;color:#9fb3cd">—</span><span style="font:13px/1;color:#9fb3cd">✕</span></div>
+  <div style="padding:16px;background:#0f1c2e">
+    <div style="display:flex;align-items:center;gap:10px"><span style="width:8px;height:8px;border-radius:50%;background:#4fd68a"></span><span style="font:600 13px/1;letter-spacing:.4px;color:#e8eef6">PARTIDA EN CURSO</span><div style="flex:1"></div><span style="font:600 14px ui-monospace,Menlo,monospace;color:#e8eef6">00:41</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;margin-top:14px">
+      <div style="padding:11px 12px;border-radius:8px;background:#12213a"><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">TRÁFICO</div><div style="font:600 13px ui-monospace,Menlo,monospace;color:#e8eef6;margin-top:7px">640 B</div></div>
+      <div style="padding:11px 12px;border-radius:8px;background:#12213a"><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">CONEXIÓN</div><div style="font:600 13px ui-monospace,Menlo,monospace;color:#7fdca6;margin-top:7px">5 ms</div></div>
+      <div style="padding:11px 12px;border-radius:8px;background:#12213a"><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">GRABACIÓN</div><div style="font:600 13px/1;color:#4fd68a;margin-top:7px">activa</div></div>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-top:12px;padding:12px;border-radius:8px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+      <span style="font:12px/1.2;color:#e6b455">⚠</span>
+      <div style="flex:1"><div style="font:600 12px/1.3;color:#f0dcae">Eres el único jugador en la sala</div><div style="font:400 11.5px/1.5;color:#d8bd8a;margin-top:4px">La red P2P está lista, pero hace falta que otro launcher entre en esta sala para que circule tráfico de juego.</div><div style="display:flex;gap:8px;margin-top:9px"><span style="display:flex;align-items:center;height:28px;padding:0 11px;border-radius:6px;font:600 11.5px/1;color:#f0dcae;box-shadow:inset 0 0 0 1px rgba(230,180,85,.35)">Copiar código</span><span style="display:flex;align-items:center;height:28px;padding:0 11px;border-radius:6px;font:600 11.5px/1;color:#f0dcae;box-shadow:inset 0 0 0 1px rgba(230,180,85,.35)">Avisar en el chat</span></div></div>
+    </div>
+    <span style="display:flex;align-items:center;justify-content:center;height:38px;margin-top:12px;border-radius:7px;font:600 12.5px/1;color:#d99a9a;box-shadow:inset 0 0 0 1px rgba(200,120,120,.3)">✕ Abortar partida</span>
+  </div>
+</div>
+
+<sc-if value="{{ showElo }}" hint-placeholder-val="{{ true }}">
+<div class="dv-card" style="width:596px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Resultado</span><div style="flex:1"></div><span style="font:13px/1;color:#9fb3cd">✕</span></div>
+  <div style="padding:18px;background:#0f1c2e">
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="width:44px;height:44px;border-radius:10px;background:rgba(53,196,111,.16);display:flex;align-items:center;justify-content:center;font:18px/1;color:#4fd68a">✓</span>
+      <div style="flex:1"><div style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Victoria</div><div style="font:400 11.5px/1.4;color:#8ea4c0;margin-top:4px">Wars of Liberty · Great Lakes · 24 min · 2 jugadores</div></div>
+      <div style="text-align:right"><div style="display:flex;align-items:baseline;gap:7px;justify-content:flex-end"><span style="font:600 22px ui-monospace,Menlo,monospace;color:#f0f5fb">1542</span><span style="font:600 12.5px/1;color:#4fd68a">+18</span></div><div style="font:400 10.5px/1;color:#6d829d;margin-top:5px">antes 1524</div></div>
+    </div>
+    <div style="display:flex;gap:11px;margin-top:15px">
+      <div style="flex:1;padding:11px 12px;border-radius:8px;background:#12213a"><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">DECIDIDAS</div><div style="font:600 13px ui-monospace,Menlo,monospace;color:#e8eef6;margin-top:7px">4-1 · 80 %</div></div>
+      <div style="flex:1;padding:11px 12px;border-radius:8px;background:#12213a"><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">REPETICIÓN</div><div style="font:600 12.5px/1;color:#8cbcf5;margin-top:7px">Subida ✓ · ver</div></div>
+      <div style="flex:1;padding:11px 12px;border-radius:8px;background:#12213a"><div style="font:600 9.5px/1;letter-spacing:.6px;color:#61779a">RIVAL</div><div style="font:600 12.5px/1;color:#e8eef6;margin-top:7px">lennon047 1592</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:13px;padding:11px 12px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12)">
+      <span style="font:400 11.5px/1.5;color:#8ea4c0;flex:1">Tu rating sigue siendo provisional: tras <b style="color:#cdd9e9">6 partidas decididas</b> se estabiliza.</span>
+      <span style="display:flex;align-items:center;height:32px;padding:0 14px;border-radius:7px;background:#2f7fe0;font:600 12px/1;color:#fff">Revancha</span>
+    </div>
+  </div>
+</div>
+</sc-if>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Prueba luego: «quédate con <a class="dv-oid" href="#1a">1a</a> pero con las tarjetas de <a class="dv-oid" href="#1b">1b</a>» · «lleva la actividad de <a class="dv-oid" href="#1c">1c</a> al panel derecho de <a class="dv-oid" href="#1a">1a</a>» · «diseña la pestaña Perfil con el ELO» · «versión en inglés de <a class="dv-oid" href="#1d">1d</a>»</p>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showElo&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Contenido&quot;},&quot;showActivity&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Contenido&quot;},&quot;showCodeJoin&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Contenido&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showElo: this.props.showElo ?? true,
+      showActivity: this.props.showActivity ?? true,
+      showCodeJoin: this.props.showCodeJoin ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

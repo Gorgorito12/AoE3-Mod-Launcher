@@ -44,7 +44,10 @@ public class RoomsTableLayoutTests
             previous = now;
         }
 
-        Assert.Equal(new[] { RoomColumn.Ping, RoomColumn.Host, RoomColumn.Mod }, order);
+        // Mod and Status are no longer columns at all — the design handoff folds the mod
+        // into the room's second line and lets the action button carry the status — so
+        // the two that remain droppable are Ping then Host.
+        Assert.Equal(new[] { RoomColumn.Ping, RoomColumn.Host }, order);
     }
 
     [Theory]

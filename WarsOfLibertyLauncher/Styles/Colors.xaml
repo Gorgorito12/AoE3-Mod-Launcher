@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ================================================================
@@ -150,6 +150,82 @@
     <SolidColorBrush x:Key="BgSidebar" Color="#314556"/>
 
     <!-- =========================================================
+         MAIN HEADER (MainWindow only) — the two-row chrome from the header
+         reference: a near-black title bar over a slightly lifted nav row.
+
+         Deliberately its OWN family rather than a reuse of MpTitleBar (#233648) or
+         MpAppBg (#0F1C2E): those two are the multiplayer surface's, shared with
+         LobbyWindow and CreateLobbyDialog, and repointing either would restyle
+         windows nobody asked about. The header sits above ALL THREE tabs, so it
+         answers to the header reference, not to the multiplayer handoff.
+
+         The one value shared with multiplayer is the accent: the reference's
+         #2f7ee0 for the active tab's underline and the avatar disc is MpAction
+         exactly, so that one is reused rather than duplicated under a new name.
+         ========================================================= -->
+    <SolidColorBrush x:Key="ChromeTitleBg" Color="#0C131B"/>       <!-- title bar -->
+    <SolidColorBrush x:Key="ChromeNavBg" Color="#141E29"/>         <!-- nav row -->
+    <SolidColorBrush x:Key="ChromeNavRule" Color="#1E2B38"/>       <!-- nav → content seam -->
+    <SolidColorBrush x:Key="ChromeRim" Color="#22303E"/>           <!-- capsule, divider -->
+    <!-- The version chip's rim alone. ChromeRim (#22303E) is 1.39:1 against the title
+         bar — a hairline nobody can see — and the chip is the one place that was
+         reported as too faint to read. It gets its own token rather than lifting
+         ChromeRim, which also paints the connection capsule and the nav divider: the
+         reference specifies #22303e for all three, so brightening the shared brush
+         would move two surfaces nobody asked about. 2.09:1 — visible, still quiet. -->
+    <SolidColorBrush x:Key="ChromeVersionRim" Color="#3A4B60"/>
+    <!-- Fill of that same chip. It shipped with NO background at all, so it read as
+         loose text with a hairline near it rather than as a label, and was reported
+         as not standing out. 1.28:1 against the title bar is an elevation, not a
+         block: what cuts the chip out is the rim above, which only works once there
+         is a surface behind it. Its own key rather than ChromePopupBg, which happens
+         to carry the same value but means "menu surface" and paints all three
+         dropdowns - one of them changing would silently drag the other along. -->
+    <SolidColorBrush x:Key="ChromeVersionBg" Color="#1C2A3A"/>
+    <SolidColorBrush x:Key="ChromeTextDim" Color="#93A4B5"/>       <!-- wordmark, idle tab -->
+    <SolidColorBrush x:Key="ChromeTextFaint" Color="#5D7085"/>     <!-- version, IP, ELO -->
+    <SolidColorBrush x:Key="ChromeTextSoft" Color="#C3CFDA"/>      <!-- "Connected", caption glyphs -->
+    <SolidColorBrush x:Key="ChromeTextStrong" Color="#E6EDF4"/>    <!-- player name -->
+    <!-- One rung above Strong, for the brand button's HOVER only. The hover used to
+         land on ChromeTextSoft (11.79:1) and was reported as indistinguishable from
+         rest - this is 17.04:1, and stops short of the #FFFFFF that pressed/open
+         already use so the three states stay three. MpTextHeading is this exact
+         colour, and is deliberately NOT reused: per the family comment above, the
+         header does not draw from the multiplayer brushes, which LobbyWindow and
+         CreateLobbyDialog share. -->
+    <SolidColorBrush x:Key="ChromeTextBright" Color="#F0F5FB"/>    <!-- brand hover -->
+    <SolidColorBrush x:Key="ChromeOk" Color="#3FBF6A"/>            <!-- capsule dot -->
+    <!-- Surface of every menu that hangs off the header (brand, MODS, notifications).
+         One value for the three, because they had three: #1B2025 (a warm grey from the
+         old theme), #314556 (literally the colour the title bar itself used to be), and
+         #0F1A2B. Measured elevation, not eyeballed — 1.28 against the title bar, 1.16
+         against the nav row, 1.30 against the content beneath. It does not need to
+         shout: the two-tone rim is what cuts the card out of its backdrop. -->
+    <SolidColorBrush x:Key="ChromePopupBg" Color="#1C2A3A"/>
+
+    <!-- Caption-button states, as KEYS so a single window can restyle its own
+         min/max/close without touching the other ~15 that share the TitleBar
+         template. These are the DEFAULTS — the gold/red the launcher has always
+         had; MainWindow overrides them in its Window.Resources (a DynamicResource
+         lookup walks up to the Window before Application, so the override is
+         scoped to that window). All six exist because hover is only half of a
+         button's state machine: parameterize the background alone and MainWindow
+         ends up with a cold fill under a gold glyph that flashes gold when pressed. -->
+    <!-- Focus ring of the global TextBox template. A KEY, not a literal, for the same
+         reason the caption-button states are: the template trigger targets the inner
+         Border BY NAME, so it beats any BorderBrush the call site sets — a field cannot
+         opt out of the gold on its own. The multiplayer surface overrides this to blue
+         in its own resources; everywhere else keeps the launcher's accent. -->
+    <SolidColorBrush x:Key="TextBoxFocusBrush" Color="#D8B66A"/>
+
+    <SolidColorBrush x:Key="TitleBarButtonHoverBg" Color="#1FD8B66A"/>
+    <SolidColorBrush x:Key="TitleBarButtonHoverFg" Color="#FFF4E0"/>
+    <SolidColorBrush x:Key="TitleBarButtonPressedBg" Color="#33D8B66A"/>
+    <SolidColorBrush x:Key="TitleBarCloseHoverBg" Color="#8E2A22"/>
+    <SolidColorBrush x:Key="TitleBarClosePressedBg" Color="#B85A4A"/>
+    <SolidColorBrush x:Key="TitleBarCloseHoverFg" Color="#FFFFFF"/>
+
+    <!-- =========================================================
          PER-OPERATION PROGRESS GRADIENTS.
          Painted onto the dashboard's progress bar via the
          ProgressBar.Foreground property. Each gradient runs dark →
@@ -289,7 +365,7 @@
 
     <!-- Multiplayer-specific surfaces — deep navy for the premium refresh so
          the room table / chat cards read as "raised" above the navy tab
-         gradient (MpTabBackground bottom #07111F is darker than this). -->
+         gradient that used to sit behind them. -->
     <SolidColorBrush x:Key="MpSurface" Color="#0F1A2B"/>
     <SolidColorBrush x:Key="MpSurfaceAlt" Color="#182740"/>
     <!-- Card/panel border + hairline divider for all multiplayer
@@ -348,19 +424,144 @@
          (MpRoomRowBg #16243A) so the badge stays legible on the row + hover. -->
     <SolidColorBrush x:Key="MpModBadgeBg" Color="#1F3358"/>
     <SolidColorBrush x:Key="MpModBadgeBorder" Color="#3B558A"/>
-    <!-- Multiplayer tab background: deep navy with a subtle top glow. Vertical;
-         a XAML resource so it's auto-frozen + shared. Bottom (#07111F) is
-         darker than MpSurface (#0F1A2B) so the cards float above it. -->
-    <LinearGradientBrush x:Key="MpTabBackground" StartPoint="0.5,0" EndPoint="0.5,1">
-        <GradientStop Color="#0E1B2E" Offset="0.0"/>
-        <GradientStop Color="#0B1424" Offset="0.35"/>
-        <GradientStop Color="#07111F" Offset="1.0"/>
-    </LinearGradientBrush>
+    <!-- (MpTabBackground, a navy gradient #0E1B2E → #07111F, used to live here and paint
+         the multiplayer tab. It was removed rather than left declared: the design handoff
+         uses ONE flat colour, MpAppBg, across the tab, the room window and the dialogs,
+         and this gradient bottomed out darker than the room's background — so the two
+         surfaces read as different shades of the same idea. A brush nobody paints with is
+         a suggestion that it is still an option.) -->
     <!-- Subtle vertical gradient for the MOD badge (mockup "premium" look). -->
     <LinearGradientBrush x:Key="MpModBadgeGradient" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="#2A3856" Offset="0.0"/>
         <GradientStop Color="#212D48" Offset="1.0"/>
     </LinearGradientBrush>
+
+    <!-- =========================================================
+         MULTIPLAYER REDESIGN PALETTE (design handoff 1a/1d/1e/1f —
+         docs/design_handoff_multiplayer_ui/README.md, "Tokens").
+
+         These are ADDITIVE: nothing above is retinted here, so adding
+         this block changes no pixel on its own. Each redesigned screen
+         migrates onto these keys in its own commit, which is what keeps
+         a visual change attributable to the commit that made it.
+
+         Why tokens and not literals in the new XAML: an audit of this
+         repo found ~90 hand-written grey shorthands and three legacy
+         palettes still coexisting. Pasting a fourth one inline is how
+         that happened; declaring it once is how it stops.
+
+         Alpha convention: the handoff writes rgba(...); WPF wants
+         #AARRGGBB, so .09 → 0x17, .14 → 0x24, .18 → 0x2E, .3 → 0x4D,
+         .55 → 0x8C. The rim colours are a light blue (#82AFFF) at low
+         alpha, NOT grey — that tint is what keeps edges readable on the
+         navy surfaces without a hard line.
+         ========================================================= -->
+
+    <!-- Surfaces, darkest → lightest. MpPanel is the workhorse (sub-tab bar,
+         cards, right-hand panel); MpRowHighlight is a row or card that is
+         yours / selected; MpField is any text input. -->
+    <SolidColorBrush x:Key="MpAppBg" Color="#0F1C2E"/>
+    <SolidColorBrush x:Key="MpTitleBar" Color="#233648"/>
+    <SolidColorBrush x:Key="MpPanel" Color="#12213A"/>
+    <SolidColorBrush x:Key="MpRowHighlight" Color="#16263E"/>
+    <SolidColorBrush x:Key="MpField" Color="#0D1828"/>
+
+    <!-- Inner rims. One family at four alphas — the handoff uses .09 for a
+         plain card edge and .18 for an input the user is meant to aim at. -->
+    <SolidColorBrush x:Key="MpRimFaint" Color="#1782AFFF"/>
+    <SolidColorBrush x:Key="MpRimSoft" Color="#1C82AFFF"/>
+    <SolidColorBrush x:Key="MpRimMedium" Color="#2482AFFF"/>
+    <SolidColorBrush x:Key="MpRimStrong" Color="#2E82AFFF"/>
+    <!-- .16 — the reference's search field, between Medium and Strong. -->
+    <SolidColorBrush x:Key="MpRimField" Color="#2982AFFF"/>
+
+    <!-- Text ramp, brightest → faintest. MpTextLabel is the uppercase
+         section caption (9.5–10.5px, letter-spaced), deliberately the
+         dimmest so it never competes with the data under it. -->
+    <SolidColorBrush x:Key="MpTextHeading" Color="#F0F5FB"/>
+    <SolidColorBrush x:Key="MpTextPrimary" Color="#E8EEF6"/>
+    <SolidColorBrush x:Key="MpTextSecondary" Color="#C3D2E5"/>
+    <SolidColorBrush x:Key="MpTextBody" Color="#B9C9DE"/>
+    <SolidColorBrush x:Key="MpTextMuted" Color="#8EA4C0"/>
+    <SolidColorBrush x:Key="MpTextFaint" Color="#6D829D"/>
+    <SolidColorBrush x:Key="MpTextDim" Color="#5F7592"/>
+    <SolidColorBrush x:Key="MpTextLabel" Color="#61779A"/>
+
+    <!-- Semantic accents. Each has a SOLID value (dots, fills, primary
+         buttons) and a TEXT value bright enough to read on the navy
+         surfaces — using the solid one as text fails contrast at 11px.
+
+         NOTE these do NOT replace MpStatusWaiting / MpStatusInGame, which
+         are pinned to the Discord webhook's embed colours on purpose. Room
+         status dots keep those; everything else uses these. -->
+    <SolidColorBrush x:Key="MpAction" Color="#2F7FE0"/>
+    <SolidColorBrush x:Key="MpActionText" Color="#8CBCF5"/>
+    <SolidColorBrush x:Key="MpOk" Color="#4FD68A"/>
+    <SolidColorBrush x:Key="MpOkText" Color="#8FE0B0"/>
+    <SolidColorBrush x:Key="MpOkTextAlt" Color="#7FDCA6"/>
+    <SolidColorBrush x:Key="MpCaution" Color="#E6B455"/>
+    <SolidColorBrush x:Key="MpCautionText" Color="#D8BD8A"/>
+    <SolidColorBrush x:Key="MpCautionTextAlt" Color="#F0DCAE"/>
+    <SolidColorBrush x:Key="MpDestructiveText" Color="#D99A9A"/>
+    <SolidColorBrush x:Key="MpDestructiveRim" Color="#4DC87878"/>
+    <SolidColorBrush x:Key="MpPrivate" Color="#A06EF0"/>
+    <SolidColorBrush x:Key="MpPrivateText" Color="#CBA7F2"/>
+
+    <!-- Tinted fills + their paired rims. Always used as a pair; the rim is
+         the same hue at a higher alpha so the box reads as one object. -->
+    <SolidColorBrush x:Key="MpTabActiveBg" Color="#472F7FE0"/>
+    <SolidColorBrush x:Key="MpTabActiveRim" Color="#6678B4FF"/>
+    <!-- Idle main-nav tab text, in the title bar. Dimmer than MpTextSecondary
+         because it sits ON the chrome rather than on a panel, and the active
+         pill has to win against it. -->
+    <SolidColorBrush x:Key="MpNavTabIdle" Color="#A8BCD2"/>
+    <SolidColorBrush x:Key="MpChipOkBg" Color="#2435C46F"/>
+    <SolidColorBrush x:Key="MpChipOkRim" Color="#4D35C46F"/>
+    <!-- Secondary text inside the OK chip (the VPN address). Deliberately a muted
+         green-GREY rather than the saturated MpOkTextAlt: it sits beside the status
+         word and must not compete with it. Taken from the prototype, which uses a
+         value the handoff's token table doesn't list. -->
+    <SolidColorBrush x:Key="MpChipOkDetail" Color="#A9CBB9"/>
+    <SolidColorBrush x:Key="MpChipOkSeparator" Color="#4D78DCAA"/>
+    <!-- Pill groups and the account cluster. Values read from the prototype markup,
+         which carries several the README's token table doesn't list. (The rim of the
+         segmented ES/EN group lived here too; that control was removed from the header
+         — the language is changed in Launcher Settings — and the brush went with it
+         rather than staying declared as a suggestion that it is still an option.) -->
+    <SolidColorBrush x:Key="MpPillActiveBg" Color="#24FFFFFF"/>
+    <SolidColorBrush x:Key="MpPillIdleText" Color="#93A7C3"/>
+    <SolidColorBrush x:Key="MpAccountName" Color="#E4ECF6"/>
+    <SolidColorBrush x:Key="MpAccountElo" Color="#8FB6EA"/>
+    <SolidColorBrush x:Key="MpChevron" Color="#8EA4C0"/>
+    <!-- Unfilled capacity segment in a room row. -->
+    <SolidColorBrush x:Key="MpCapacityEmpty" Color="#21FFFFFF"/>
+    <!-- "Someone opened a room" card inside the chat flow. Fainter than the action
+         tints above, so it reads as an event in the log rather than as a button. -->
+    <SolidColorBrush x:Key="MpEventBg" Color="#172F7FE0"/>
+    <SolidColorBrush x:Key="MpEventRim" Color="#332F7FE0"/>
+    <!-- Quick-reply pill above the chat composer. -->
+    <SolidColorBrush x:Key="MpQuickReplyBg" Color="#1F2F7FE0"/>
+    <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
+    <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
+    <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>
+    <SolidColorBrush x:Key="MpPrivateRim" Color="#3DA06EF0"/>
+    <!-- The private-room BOX in the create dialog: the same hue as the chip at a
+         lower alpha (.08 vs .16), because a whole box at chip strength shouts. Its
+         two text tones and the password field's rim come from the prototype. -->
+    <SolidColorBrush x:Key="MpPrivateSoftBg" Color="#14A06EF0"/>
+    <SolidColorBrush x:Key="MpPrivateFieldRim" Color="#4DA06EF0"/>
+    <SolidColorBrush x:Key="MpPrivateTitle" Color="#E2D5F7"/>
+    <SolidColorBrush x:Key="MpPrivateSub" Color="#B39FD0"/>
+    <!-- A ticked checklist box, and the rim of an unticked one. The green fill is the
+         same hue as MpOk at .18; the amber rim is deliberately stronger (.5) because an
+         EMPTY box has nothing but its outline to be seen by. -->
+    <SolidColorBrush x:Key="MpOkBg" Color="#2E35C46F"/>
+    <SolidColorBrush x:Key="MpCautionRimBox" Color="#80E6B455"/>
+    <!-- Paired rim for MpOkBg, for a panel that is tinted green rather than a box that
+         is merely ticked (the Radmin network-name field). -->
+    <SolidColorBrush x:Key="MpOkRim" Color="#4D35C46F"/>
+    <SolidColorBrush x:Key="MpCautionBg" Color="#14E6B455"/>
+    <SolidColorBrush x:Key="MpCautionRim" Color="#38E6B455"/>
 
     <!-- =========================================================
          INTERACTION TOKENS — semantic colors for hover/active

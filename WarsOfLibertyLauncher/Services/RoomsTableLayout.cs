@@ -7,18 +7,17 @@ namespace WarsOfLibertyLauncher.Services;
 public enum RoomColumn
 {
     Room,
-    Mod,
     Host,
     Players,
     Ping,
-    Status,
     Action,
 }
 
 /// <summary>
-/// How one column is sized. <paramref name="Weight"/> and <paramref name="MinWidth"/> feed WPF's
-/// star sizing; <paramref name="ComfortWidth"/> is what the column's real content needs before it
-/// starts getting cut, and is what decides whether the column earns its place at a given width.
+/// How one column is sized. A null <paramref name="FixedWidth"/> means the column takes the
+/// remaining space (the reference's <c>1fr</c>); anything else is a fixed pixel width.
+/// <paramref name="ComfortWidth"/> is what the column's content needs before it starts getting
+/// cut, and is what decides whether the column earns its place at a given width.
 /// </summary>
 /// <param name="ComfortWidth">
 /// Measured against the LONGEST of the two shipped languages, because Spanish is the wide one —
@@ -26,25 +25,30 @@ public enum RoomColumn
 /// </param>
 public readonly record struct RoomColumnSpec(
     RoomColumn Column,
-    double Weight,
-    double MinWidth,
+    double? FixedWidth,
     double ComfortWidth);
 
 /// <summary>
 /// The one definition of the rooms table's columns, and the rule for which of them survive at a
 /// given width.
 ///
-/// <para><b>Why this exists.</b> The seven widths used to be written twice — once in
+/// <para><b>Why this exists.</b> The widths used to be written twice — once in
 /// <c>MultiplayerTab.xaml</c> for the header strip and once as literals in
 /// <c>BuildRoomCard</c> for each row — kept in step only by a comment in each place asking the
 /// next reader to keep them identical. Header and rows drifting apart misaligns every row in the
 /// table, so the two lists became one.</para>
 ///
-/// <para><b>Why comfort width, not min width.</b> The seven minimums add up to well under the
-/// space the table actually gets, so by that measure everything always "fits" — and yet the
-/// content overflowed anyway, because a column's STAR SHARE can be narrower than the text inside
-/// it. Deciding on the width the content really wants is what makes the table react before it
-/// looks broken rather than after.</para>
+/// <para><b>Five columns, from the design handoff.</b> MOD and STATUS are gone: the reference
+/// folds the mod name into the room's second line (where it reads as context rather than as a
+/// column nobody sorts by) and lets the action button carry the status, since "In game" and
+/// "Full" are already why that button is disabled. Widths are the reference's own.</para>
+///
+/// <para><b>Why the drop rule survives a fixed-width design.</b> The reference is a static
+/// mockup at 1240px and simply never meets the launcher's 900px minimum, so it is SILENT about
+/// narrow windows rather than in disagreement with this. The rooms list disables horizontal
+/// scrolling, so anything that does not fit is not scrolled to — it is clipped off the edge.
+/// Keeping the rule costs nothing at the widths the reference does cover, where every column
+/// fits and nothing is dropped.</para>
 ///
 /// <para>Pure and WPF-free on purpose, so the drop order is pinned by tests instead of argued
 /// about — see <c>RoomsTableLayoutTests</c>.</para>
@@ -52,19 +56,18 @@ public readonly record struct RoomColumnSpec(
 public static class RoomsTableLayout
 {
     /// <summary>
-    /// Every column, in display order. The weights and minimums are the values the table has
-    /// always used; the comfort widths are measured from the widest shipped label plus the
-    /// adornment that sits beside it (icon disc, ping bars, status dot, sort arrow).
+    /// Every column, in display order. Fixed widths are the reference's
+    /// (<c>minmax(0,1fr) 152px 88px 66px 96px</c>); Room takes what is left. Comfort widths are
+    /// measured from the widest shipped label plus the adornment beside it (icon disc, capacity
+    /// segments, avatar).
     /// </summary>
     public static readonly IReadOnlyList<RoomColumnSpec> All = new[]
     {
-        new RoomColumnSpec(RoomColumn.Room,    2.3,  120, 210),
-        new RoomColumnSpec(RoomColumn.Mod,     1.05,  58, 130),
-        new RoomColumnSpec(RoomColumn.Host,    1.35,  66, 140),
-        new RoomColumnSpec(RoomColumn.Players, 0.62,  46,  86),
-        new RoomColumnSpec(RoomColumn.Ping,    0.62,  48,  84),
-        new RoomColumnSpec(RoomColumn.Status,  0.9,   60, 104),
-        new RoomColumnSpec(RoomColumn.Action,  0.95, 100, 112),
+        new RoomColumnSpec(RoomColumn.Room,    null, 210),
+        new RoomColumnSpec(RoomColumn.Host,    152,  152),
+        new RoomColumnSpec(RoomColumn.Players,  88,   88),
+        new RoomColumnSpec(RoomColumn.Ping,     66,   66),
+        new RoomColumnSpec(RoomColumn.Action,   96,   96),
     };
 
     /// <summary>
@@ -72,15 +75,13 @@ public static class RoomsTableLayout
     ///
     /// <para>Room, Players and Action are absent by design and must stay absent: which room,
     /// whether there is space in it, and the way in are the entire point of the table. Ping goes
-    /// first because it is a nicety, then Host, then Mod — and none of the three is actually lost,
-    /// because <see cref="Hidden"/> tells the row builder to fold them into the room's second
-    /// line.</para>
+    /// first because it is a nicety, then Host — and neither is actually lost, because
+    /// <see cref="Hidden"/> tells the row builder to fold it into the room's second line.</para>
     /// </summary>
     private static readonly RoomColumn[] DropOrder =
     {
         RoomColumn.Ping,
         RoomColumn.Host,
-        RoomColumn.Mod,
     };
 
     /// <summary>

@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ================================================================
@@ -601,17 +601,34 @@
          The panel BACKGROUND stays slate (BgSidebar #33414F) — only
          the per-button hover/active are gold.
          ============================================================ -->
+    <!-- (LangPillButton, the ES/EN segmented pill, used to sit here. The header
+         reference has no language control — it is changed in Launcher Settings, which
+         was always the primary place — so the style went with the markup rather than
+         staying declared for a control nothing builds.) -->
+
+    <!-- REDESIGN NOTE: the active marker is a 2px underline on the button's bottom
+         edge — and whether that is right depends entirely on where the tabs live.
+         Originally an underline; changed to a filled pill by handoff 1a, which moved
+         the tabs INTO the title bar, where there is no chrome/content seam for a line
+         to sit on and an underline just drew through the middle of the chrome; back to
+         an underline now that the header reference gives the tabs a row of their own
+         with a rule under it. The line lands ON that rule, which is the whole point.
+         If the tabs ever move again, this marker moves with them. -->
     <Style x:Key="NavTabButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ChromeTextDim}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <!-- Left padding 12 = the header content gutter (TitleBarContentPadding.Left),
-             so the first tab's content lines up with the brand block above it and
-             both sit snug to the top-left corner. Right padding 22 spaces the tabs.
-             2px top padding compensates the 2px bottom underline so the icon+label
-             sit visually centered inside the cell. -->
-        <Setter Property="Padding" Value="12,2,22,0"/>
+        <!-- 16 horizontal from the reference; no vertical padding because the button
+             stretches to the row height and the label is centred in it. -->
+        <Setter Property="Padding" Value="16,0"/>
+        <Setter Property="Margin" Value="4,0,0,0"/>
         <Setter Property="Cursor" Value="Hand"/>
+        <!-- Stretch, so the button fills the nav row's full height — which is what lets
+             the underline sit on the row's bottom edge rather than floating under the
+             text. (It also used to matter for a second reason, back when these lived in
+             the caption region: any pixel not covered by a control dragged the window.
+             The nav row is ordinary client area, so that hazard is gone.) -->
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
@@ -620,6 +637,10 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
+                    <!-- The 2px underline is reserved as TRANSPARENT at rest rather than
+                         added when active: a 0→2 flip would shift the label 2px on every
+                         tab switch. Same class of jitter as re-weighting the text, which
+                         is why the active tab is deliberately not bold either. -->
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
                             BorderBrush="Transparent"
@@ -630,22 +651,13 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <!-- Hover: no background fill, just lift the
-                                 text toward white. Keeps the nav bar
-                                 visually quiet so only the active tab's
-                                 underline reads as the "you are here"
-                                 marker. #E6EEF8 = near-white with a
-                                 cool tint that matches the slate panel. -->
-                            <Setter Property="Foreground" Value="#E6EEF8"/>
+                            <!-- Hover stays quiet — text only, no fill — so the underline
+                                 remains the unambiguous "you are here". -->
+                            <Setter Property="Foreground" Value="{DynamicResource ChromeTextSoft}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="active">
-                            <!-- Active: pure white text + bold + gold
-                                 bottom underline. No background fill —
-                                 the underline alone signals "active",
-                                 matching Steam/Epic-style nav bars. -->
-                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
                             <Setter Property="Foreground" Value="#FFFFFF"/>
-                            <Setter Property="FontWeight" Value="Bold"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -727,34 +739,6 @@
                             BorderBrush="Transparent"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Left"
-                                          VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="White"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <Style x:Key="LangToggle" TargetType="Button">
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="#666"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Padding" Value="8,3"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="border"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="3"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -860,6 +844,63 @@
     </Style>
 
     <!-- Outline blue (empty-state Create button under the illustration). -->
+    <!-- Room-row action buttons (design handoff 1a). The reference gives the two
+         ENABLED states different weights on purpose: joining a room you are not in is
+         the table's primary act and gets a solid fill, while returning to the room you
+         are already in is a way back rather than an invitation, so it is a ghost. They
+         used to share one outline style, which made every row look equally like a call
+         to action. Disabled states keep the neutral MpSecondaryButton. -->
+    <Style x:Key="MpRoomActionPrimary" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Height" Value="{StaticResource MpControlHeight}"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource RadiusControl}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="{DynamicResource MpBlueHover}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="MpRoomActionGhost" TargetType="Button" BasedOn="{StaticResource MpRoomActionPrimary}">
+        <Setter Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{DynamicResource MpActionRim}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusControl}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="MpOutlineBlueButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="#7fb0ff"/>
@@ -1032,13 +1073,19 @@
          Background/Foreground on the button (LobbyWindow.xaml sets
          neither) — a local value would beat every trigger here. -->
     <Style x:Key="MpReadyButton" TargetType="Button">
+        <!-- Ghost at rest, to match its Leave sibling: the two secondary actions carry
+             the same weight, and the green belongs to the READY state, not to the button
+             that offers it. Still no local Background/Foreground on the instance — a
+             local value beats every trigger below, which is what once left this button
+             stuck grey while the roster row already showed the player as ready. -->
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="#dadde2"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource MpPingGood}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextSecondary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Padding" Value="{StaticResource BtnPadRow}"/>
+        <Setter Property="Height" Value="{StaticResource MpFieldHeight}"/>
+        <Setter Property="FontSize" Value="{StaticResource MpMetaSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="Template">
@@ -1048,15 +1095,14 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource RadiusSm}"
+                            CornerRadius="{StaticResource RadiusControl}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#152a1d"/>
-                            <Setter Property="Foreground" Value="White"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="ready">
                             <Setter TargetName="border" Property="Background" Value="#15803D"/>
@@ -1089,6 +1135,90 @@
         <Setter Property="Padding" Value="{StaticResource BtnPadCompact}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
         <Setter Property="FontWeight" Value="Medium"/>
+    </Style>
+
+    <!-- Ghost buttons for the lobby actions (design handoff 1e). The room used to show
+         three SOLID buttons — green Ready, blue Start, red Leave — competing for the same
+         attention, when only one of them is what the player came to do. The primary keeps
+         its fill; these two carry a rim and nothing else. -->
+    <Style x:Key="MpGhostButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextSecondary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="{StaticResource MpFieldHeight}"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{StaticResource MpMetaSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RadiusControl}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="MpGhostDangerButton" TargetType="Button" BasedOn="{StaticResource MpGhostButton}">
+        <Setter Property="Foreground" Value="{DynamicResource MpDestructiveText}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpDestructiveRim}"/>
+    </Style>
+
+    <Style x:Key="MpGhostCautionButton" TargetType="Button" BasedOn="{StaticResource MpGhostButton}">
+        <Setter Property="Foreground" Value="{DynamicResource MpCautionTextAlt}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpCautionRimBox}"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
+    </Style>
+
+    <!-- Text link (design handoff 1a). The reference renders the "join" affordance
+         on the chat's room-opened card as plain coloured text at the end of the row,
+         not as a bordered button: inside a chat flow a real button reads as heavier
+         than the message it belongs to. Still a Button, so the click, the keyboard
+         focus and the disabled state are the framework's. -->
+    <Style x:Key="MpLinkButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter x:Name="content"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="content" Property="TextBlock.TextDecorations" Value="Underline"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- Row-level Join button: the small one inside each room row in
@@ -1198,27 +1328,30 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <!-- Dark blue-grey tile (a touch darker than the bar): filled at
-                         rest, a bit lighter on hover, lighter still while pressed or
-                         while the panel is open (Tag=open). The bell (a Path in the
-                         content) is translucent white with a thin black outline. -->
+                    <!-- Transparent at rest; fills only on hover, press, or while the
+                         panel is open (Tag=open). It used to be a filled #283844 tile
+                         with rounded corners, which read as a lighter block sitting
+                         next to the caption buttons — more so against the near-black
+                         title bar the header reference asks for. Squared off and
+                         full-height so it behaves like the min/max/close beside it, and
+                         sharing their hover so that corner of the bar is one strip.
+                         The bell (a Path in the content) is translucent white with a
+                         thin black outline. -->
                     <Border x:Name="border"
-                            Background="#283844"
-                            CornerRadius="6"
-                            Margin="0,3"
+                            Background="Transparent"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#2E4150"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonHoverBg}"/>
                         </Trigger>
                         <Trigger Property="Tag" Value="open">
-                            <Setter TargetName="border" Property="Background" Value="#3C5468"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBg}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#3C5468"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

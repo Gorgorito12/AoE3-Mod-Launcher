@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -165,7 +165,25 @@ goes away underneath it: `MatchContextTests` (the facts of a match, captured at 
 `AClosedRoomCannotChangeTheAnswer` is the regression test for a real match that was never
 reported because the host closed the room mid-game) and `RoomMatchStateTests`
 (**`TheHostIsNeverOfferedIt`** — who may reopen their game without disturbing anyone, and what
-leaving the room mid-match has to warn about).
+leaving the room mid-match has to warn about). Two more cover the network edge of the WoL
+pipeline, which had none at all: `DownloadRetryTests` (which download failures are retried —
+the REJECTION cases are the point: a user's Cancel and a permission error must not be) and
+`UpdateInfoServiceTests` (`ParseXml` + `IsUsable` — the well-formed-but-empty manifest is
+the case that matters).
+
+**`DialogXamlTests` is the guard for every window the smoke test never opens.** The
+smoke-launch below opens `MainWindow` and nothing else, so the XAML of
+`CreateLobbyDialog` and `LobbyWindow` — which is only parsed once a user signs in and
+enters a room — would ship with a broken `{StaticResource}` unseen. It constructs each
+window on an **STA thread** with the `Styles/*.xaml` dictionaries loaded by **explicit
+`pack://` URIs** (App.xaml's own `Source` values are relative and resolve against the
+entry assembly, which under a test host is the runner, not the launcher) and App.xaml's
+INLINE resources — the FontSize scale and the font families — recreated by hand, since
+they live in no dictionary file. It also builds `MatchResultCard`, which is assembled in
+code and therefore checked by nothing at compile time; that test caught two tokens that
+were never added, in a card that is only built when a real match ends. **Add a case here
+whenever you add a window or a code-built card** — a green build is not evidence either
+one loads.
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -182,6 +200,31 @@ Two cheap gates beyond a green build:
 - **Install** — the installer can produce a broken-but-"successful" result
   (missing base game), so a real install needs an actual AoE3 + payload download;
   the integrity gate (below) is the in-process backstop.
+
+## Design handoffs: follow the reference 100%
+
+**When a design handoff is in play, match it exactly — colours, sizes, spacing,
+weights, and what is present or absent.** Standing instruction from the maintainer,
+after a first pass that kept the old bar background, kept icons the reference didn't
+have, and substituted "close enough" values. The result read as a different design
+and had to be redone. Assume every value in the reference is deliberate.
+
+Two consequences worth stating, because they are what went wrong:
+- **"I kept the existing X" is not a neutral choice.** Leaving the old title-bar
+  background was the single biggest reason the bar didn't look like the mockup, and it
+  was invisible in a diff because nothing changed.
+- **Read the prototype, not only the README.** The prose spec omitted values the
+  markup carries (the chip's muted `#a9cbb9` address text isn't in the token table).
+  `docs/design_handoff_multiplayer_ui/Launcher Multiplayer.dc.html` has the real
+  numbers; grep it for the element you're building.
+
+**Deviate only where the platform makes fidelity impossible**, and then say so rather
+than silently approximating. The two known cases so far: WPF's `TextBlock` has **no
+letter-spacing** at all (faking it with thin spaces breaks `CharacterEllipsis` on
+localized text), and a CSS `border-radius: 999px` is a clamped-to-50% idiom that WPF
+renders as a distorted ellipse — a pill needs an explicit half-height radius. A house
+rule is NOT such a case: the type scale's 13px floor was raised against the handoff's
+11.5 twice and overruled twice, and 11.5 is what ships (see `MpLabelSize`).
 
 ## Important gotchas
 
@@ -271,6 +314,37 @@ Two cheap gates beyond a green build:
   (bounded 4 levels), so a normal FLAT payload (WoL/Improvement Mod ship several top-level
   dirs) is an immediate no-op. Don't remove it — it's what makes wrapped community zips
   installable without repackaging.
+
+- **Every download RETRIES transient network failures and RESUMES from the `.part` file —
+  the retry lives in `DownloadService.DownloadFileAsync`, deliberately NOT at the call
+  sites.** The failure it closes: WoL's payload is ~4 GB across three parts fetched in a
+  loop by `DownloadAndConcatenatePartsAsync`, with **no mirror** (`WolPatcherSettings` has
+  `UpdateInfoUrlAlt` but no payload alt, and the part loop calls `DownloadFileAsync`
+  directly, not `DownloadWithFallbackAsync`). One dropped connection threw `IOException`
+  straight out of the install — and because `MainWindow.InstallAsync`'s own 3-attempt loop
+  catches only `InvalidDataException` (a corrupt ZIP), it hit the generic `catch (Exception)`
+  and died with a raw `Error: …` after gigabytes had been downloaded. The resume machinery
+  (`.part` + HTTP Range, incl. the 416 branch) already existed and worked; nothing ever
+  re-entered it. **Why per-PART matters:** the retry sits inside `DownloadFileAsync`, so a
+  blip on part 3 never re-fetches parts 1-2, and within a part it picks up at the byte it
+  stopped on. Three details are load-bearing: (1) **`IsTransientDownloadFailure(ex,
+  userCancelled)` takes the token state, not just the exception** — an `HttpClient` TIMEOUT
+  and a user pressing Cancel are BOTH `TaskCanceledException`, so the type cannot tell them
+  apart (the same trap `ConnectivityState.IsNetworkError` documents); retrying a Cancel
+  would make the button take four attempts and a backoff to be obeyed. (2) It walks the
+  inner-exception chain **twice, and the order is the point**: a `UnauthorizedAccessException`
+  ANYWHERE wins over a transport error wrapped around it, so a read-only destination fails
+  once instead of four times. (3) The budget is **two counters** — `MaxAttemptsWithoutProgress`
+  (4) resets whenever an attempt advanced the `.part` file, so a multi-GB download over a
+  flaky link may hiccup more than a handful of times, while `MaxTotalAttempts` (12) bounds a
+  server that accepts the connection and drops it after a few bytes. Those two consts plus
+  `RetryDelay` (2/4/8 s) are the dials. `DownloadWithFallbackAsync` now also **LOGS the
+  primary's failure** before falling over — it was a bare `catch when`, so a mirror failing
+  for every user was invisible in the diagnostic bundle (the download just appeared to work,
+  from the alt). Note the outer `InvalidDataException` retry still wipes the whole temp via
+  `CleanupTempPayload`, which stays correct: there we don't know WHICH part is corrupt.
+  Pinned by `DownloadRetryTests` (the REJECTION cases are the point); `DownloadService` had
+  no test before this.
 
 - **`NativeInstallService.RemoveStaleBuildArtifacts` is now a deliberate NO-OP — the
   launcher installs the WoL payload byte-faithfully and strips NOTHING.** It used to
@@ -526,9 +600,10 @@ Two cheap gates beyond a green build:
 - **A VALID install whose version can't be recognized NEVER gets offered a destructive
   from-scratch reinstall — `ApplyCheckResult` shows PLAY, not Install.** The failure it
   guards: WoL's UpdateInfo (`aoe3wol.com` over HTTP) intermittently returns a
-  short/truncated body; `UpdateInfoService.FetchAsync` uses the primary unless it THROWS
-  (a truncated body fails `LoadXml`), then falls to the ALT **without any version-count /
-  newer-wins validation**. The old ALT was a SourceForge mirror **frozen at 1.0.9h**, so
+  short/truncated body; `UpdateInfoService.FetchAsync` used the primary unless it THREW
+  (a truncated body fails `LoadXml`), then fell to the ALT **without any version-count
+  validation** — see the version-count bullet below, which closed that half. The old ALT
+  was a SourceForge mirror **frozen at 1.0.9h**, so
   the fallback served an ancient UpdateInfo → a real 1.2.0e install matched no `<version>`
   → NO MATCH → (manifest baseline drifted, see above, so no rescue) → the install path was
   VALID but `CurrentVersion==null` with bogus pending downloads → the UI offered a **full
@@ -555,6 +630,31 @@ Two cheap gates beyond a green build:
   philosophy as the offline fallback: a mod on disk stays playable regardless of a
   flaky/stale UpdateInfo; Repair/reinstall stays available via the gear menu but is never
   pushed, and every surface agrees.
+
+- **An `UpdateInfo.xml` that PARSES but lists no versions counts as a FAILED fetch, not a
+  successful one — `UpdateInfoService.IsUsable` — and the last validated manifest is kept
+  on disk as a last resort.** This is the other half of the bullet above. `FetchAsync`
+  only ever treated an EXCEPTION as failure, so a truncated body whose cut happens to land
+  on an element boundary is still well-formed XML: it parsed, `ConnectivityState.ReportSuccess()`
+  was reported, and `CheckCoreAsync` got `Versions = []` → `latest = null` → a perfectly
+  good 1.2.0e install reads as matching no known version. Indistinguishable downstream
+  from the failure that had users re-downloading 4 GB into `Wars of Liberty (2)`, and
+  invisible in a diagnostic bundle because nothing errored. Now `FetchFromUrlAsync` throws
+  `InvalidDataException` when `IsUsable` is false (versions count == 0), so **the ALT URL
+  gets its turn** instead of the empty primary being accepted; if the ALT is empty too,
+  `CheckAsync`'s existing catch degrades to `BuildOfflineResult`, which keeps PLAY and
+  never proposes a reinstall. **The cache is deliberately NOT `DiagnosticLog.SaveSnapshot`'s
+  `UpdateInfo-snapshot.xml`** — that one is a single shared file written even for the
+  garbage bodies (which is exactly what makes it useful in a bundle), so reading it back
+  would reintroduce the truncation this guards against. The validated copy is per-mod
+  (`AppPaths.DataDir\updateinfo-cache-<modId>.xml`, keyed by the `cacheKey` argument
+  `UpdateService` passes as `_profile.Id`), written only after a manifest passes
+  `IsUsable`, and re-validated on read so a half-written cache can't do what a truncated
+  download would have. **Risk direction, and why the cache is safe:** a stale manifest can
+  only list FEWER patches than the live one, never invent one — `ComputePendingDownloads`
+  filters by `MinReqDownload` and id. `IsUsable` and `ParseXml` are pure and pinned by
+  `UpdateInfoServiceTests` (the empty-but-well-formed case is the point); before this the
+  whole file had no test at all, making it the least-guarded link in the WoL version chain.
 
 - **A STALE `translations\_originals\` snapshot used to brick an install — detection
   falls back to the LIVE stringtabley when the snapshot matches nothing, and re-syncs
@@ -623,6 +723,21 @@ Two cheap gates beyond a green build:
   truth for "is this an install"** — a second opinion is how these drifted apart, and an empty
   `InstallMarker` must never again be read as "valid": no marker means *the probe is already
   exclusive*, not *skip the remaining checks*.
+  **That rule is now STRUCTURAL, not just written down: `UpdateService.IsRealInstall` is a
+  METHOD, where it used to be a two-call conjunction you had to remember to type.** The gate
+  was `IsProfileInstalled(p) && LooksLikeRealModInstall(p)`, spelled out at six sites — and
+  the second half had ALREADY gone missing at one of them (the `valid` recomputed after
+  `BroadFallbackScan`). That site happened to be harmless, because the scan validates its own
+  hits, but a conjunction that is correct only by luck at one of six sites is the same drift
+  this bullet is about, one step from repeating. The first half was also redundant wherever a
+  probe file IS declared, since `ModInstallProbe.Inspect` checks it too. `IsRealInstall` is
+  `ModInstallProbe.LooksLikeModInstall` **plus one legacy allowance**: a profile declaring NO
+  probe file must still pass `RegistryService.IsValidInstall` (the WoL `art\zulushield` marker),
+  which is how pre-probe-file installs stay recognised — `Inspect` SKIPS the probe step for
+  such a profile rather than failing it, so dropping that half would have silently widened
+  the gate instead of narrowing it. `LooksLikeRealModInstall` is gone; don't reintroduce a
+  second predicate beside `IsRealInstall`. Pinned by the no-probe-file cases in
+  `ModInstallProbeTests`.
 
   **The engine requirement now covers `InPlaceOverlay` too — the old exemption was a hole,
   not a design.** It was written on the reasoning that an overlay's engine "lives in `bin\`,
@@ -704,10 +819,11 @@ Two cheap gates beyond a green build:
   single rule lives in `ModInstallProbe.LooksLikeModInstall(path, profile)`:
   folder exists → probe present (if declared) → marker present (if declared) →
   true; the **folder name is never consulted**. `UpdateService` uses it two
-  ways: `LooksLikeRealModInstall` (renamed from `CachedPathLeafLooksValid` — the
-  marker gate layered on `IsProfileInstalled`'s probe check, applied to the
-  cached/saved path AND each disk-scan candidate so a renamed install survives
-  the re-check), and `IsolatedCandidates`' SECOND pass, which enumerates one
+  ways: **`IsRealInstall` — the single gate every adoption route in that class
+  goes through** (ctor cache fast-path, the forced/user-picked step 0, the saved
+  path, the registry, the near-AoE3 disk scan, the broad scan, and the `valid`
+  that becomes `CheckResult.IsValidInstall`), so a renamed install survives the
+  re-check; and `IsolatedCandidates`' SECOND pass, which enumerates one
   level under the AoE3 root / its `bin\` / the parent-that-holds-AoE3-as-sibling
   and yields any child that passes the content check — so WoL is auto-detected
   in a folder with ANY name (the first pass still tries the name-based happy
@@ -789,7 +905,7 @@ Two cheap gates beyond a green build:
   check — `MainWindow.CheckAsync(forceInstallPath)` (optional; skips the session cache
   fast-path when set) → `UpdateService.CheckAsync(..., forceInstallPath)` →
   `ResolveInstallPath(forced)`, whose new **step 0** adopts `forced` directly when it passes
-  `IsProfileInstalled` + `LooksLikeRealModInstall` (re-validated defensively; invalid falls
+  `IsRealInstall` (re-validated defensively; invalid falls
   through to normal resolution). So a valid manual pick is adopted **without depending on the
   cached-path read that was observed failing.** Both "Change mod folder" (`BrowseButton_Click`)
   and "Add existing folder" (`AddExistingCopy`, when there is NO active install — otherwise it
@@ -882,22 +998,86 @@ Two cheap gates beyond a green build:
   does NOT yank the user off their current tab; "first opens" is a launch-time
   rule only).
 
-- **MainWindow's title bar + nav strip are deliberately ONE seamless surface.**
-  The custom title bar (`Grid.Row=0`) and the nav-tab strip (`Grid.Row=1`)
-  both fill with the **same** `BgSidebar` brush, and the title bar has **no
-  bottom border on purpose** — adding one draws a visible seam through what's
-  meant to read as a single continuous chrome block from the window top down
-  to the tabs. The only border in that region is the nav strip's own
-  `BorderThickness="0,0,0,1"`, which delimits chrome from content below. Don't
-  "fix" the title bar by giving it a divider — the missing border is the
-  feature. Two related guards keep the **content below** from reading as if it
-  invades this chrome: (1) the content host (`Grid.Row=2`) is
+- **MainWindow is THREE rows: title bar (36) / nav (54) / content — and the tabs
+  have now moved between them twice, so read this before moving them again.**
+  Handoff 1a folded the separate nav strip INTO the title bar (five stacked bars
+  down to two); the later header reference split it back out, because a chrome row
+  carrying only a wordmark can afford to BE the drag handle. Row 0 is the shared
+  `controls:TitleBar` holding the brand, the version chip, and — in the SAME grid,
+  right-aligned — the self-update pill, the offline chip and the notification bell.
+  Row 1 is `MainNav`, a plain `Border` with the three tabs (`TopTabBar`, still a
+  named panel in MainWindow's namescope so `ApplyTopTabOrder` can clear and refill
+  its `Children`) and, on the right, the connection capsule, a divider and the
+  account block. Row 2 is the content.
+  **The seam belongs to whichever bar sits directly above the content.** It was the
+  nav strip's bottom border, then a TOP border on the content wrapper while the tabs
+  lived in the bar, and it is the nav row's `BorderThickness="0,0,0,1"` again now —
+  the content wrapper's was removed, since two 1px rules in different greys stack
+  into a visible double line. Multiplayer draws its own sub-tab bar under this, but
+  Library and Workshop have nothing, so the rule cannot simply be dropped. The title
+  bar itself still has **no bottom border on purpose**; don't give it one.
+  **Three things are coupled to this and are easy to break:**
+  (1) the bar height must only ever be set through `TitleBarHeightMain`, because
+  `App.ApplyWindowChrome` derives `WindowChrome.CaptionHeight` from the same token
+  and the caption region *is* the drag region — the nav row's height is a SEPARATE
+  token (`MainNavHeight`) for exactly that reason. Grow `TitleBarHeightMain` to
+  cover both rows and the top of every tab starts dragging the window instead of
+  switching tabs; leave it at 46 while the bar renders at 36 and you get the same
+  bug in a 10px band. Silent either way.
+  (2) **every interactive control in the bar needs `IsHitTestVisibleInChrome` set
+  EXPLICITLY, and it must NOT be set on the content grid** — on the grid it makes
+  the whole bar hit-testable and kills the drag. Nothing in the NAV row needs it at
+  all: that row is below `CaptionHeight`, so it gets ordinary client hit-testing,
+  hover and tooltips for free (which is what lets the connection capsule carry a
+  tooltip at all — in the caption region one could never fire).
+  (3) the right-hand affordances are **in the bar's own grid now**, not overlaid.
+  That retired the hand-computed right margins this bullet used to warn about (bell
+  148, offline chip 200, content grid 58, all derived from `ButtonWidth=46 x 3`):
+  column 0 of the shared template ends exactly where the caption buttons begin, so
+  right-aligned content lands beside them with no arithmetic. Don't reintroduce a
+  hand-computed inset. The notification *popup* stays a sibling of the TitleBar —
+  a `Popup` renders in its own HWND against its `PlacementTarget`, so it has no
+  reason to live inside the bar.
+  **The hit-test rule bit us and the symptom was bizarre, so it's worth the detail:**
+  `WindowChrome.IsHitTestVisibleInChrome` IS declared `Inherits`, but that inheritance
+  does **not** reach an element placed in a `ContentControl`'s `Content` — the content's
+  inheritance parent is the ContentControl itself, not the template's `ContentPresenter`
+  that carries the flag. So the nav tabs, which relied on it, were **dead**: a click on
+  one landed in the caption region and dragged the window instead. What made it look
+  like a state bug rather than a hit-test bug is that they came ALIVE right after
+  opening the brand popup — a `StaysOpen=false` popup takes mouse capture, and while
+  captured every click is routed as a normal client hit, bypassing the caption
+  hit-test entirely. So "click the brand, then a tab works, then it's dead again"
+  is the signature of this exact bug. It no longer applies to the tabs (they left the
+  caption region) but it governs every control that stays in the bar.
+  **`UiScale`'s references are tied to the chrome height, and getting them wrong looks
+  like a font bug, not a layout one.** The chrome went 47px (bar 46 + content seam) to
+  90 (36 + 54), so `ContentHost` at the default 700-tall window drops 653 → 610 and the
+  three `1100, 604` references became `1100, 560` (`MainWindow.xaml.cs`,
+  `ModsBrowser.xaml.cs`, `MultiplayerTab.xaml.cs`), the hero's `1500, 760` became
+  `1500, 710`. A fresh install would have looked fine either way — the danger is that
+  the window height is PERSISTED, so anyone with a saved height near the break-even
+  lands at 0.98-0.999, and `UiScale.SetTextCrispForScale` switches at `< 0.999`: the
+  whole Workshop and Multiplayer surface swaps `Display`/`ClearType` for
+  `Ideal`/`Grayscale` and every glyph goes soft for a 1% size change. Re-tune these
+  whenever a chrome row's height changes.
+  **The launcher-wide ES/EN toggle that lived in the bar is GONE** — the language is
+  changed in Launcher Settings, which was always the primary place;
+  `LauncherConfig.LanguageExplicitlyChosen` is now written from there alone.
+  **The active-tab marker follows the tabs, and has now
+  changed twice:** a 2px underline (it worked because that edge *was* the chrome/
+  content seam), then a filled pill once the tabs moved INSIDE the bar and there was
+  no seam left to sit on, and a 2px `MpAction` underline again now that the nav row
+  gives them a rule to land on. The 2px is reserved as `Transparent` at rest rather
+  than added when active, and the active tab is deliberately **not** bolded — either
+  would resize the button and shuffle its neighbours on every tab switch. One related guard keeps the **content
+  below** from reading as if it invades the chrome: the content host is
   `ClipToBounds="True"` so nothing in any tab — the PlayView full-bleed
   background image, the hero gradients, the scaled hero block — can render *up*
-  over the title bar / nav strip; it's defensive (clips content only, never the
-  chrome, so the one-surface look is intact) and on its own a near-no-op,
-  because the image is a `Border` background and is already clipped to its
-  bounds. (2) The dashboard hero is a **single-layer brush stretched
+  over the title bar; it's defensive (clips content only, never the
+  chrome) and on its own a near-no-op, because the image is a `Border`
+  background and is already clipped to its bounds. Separately, the dashboard
+  hero is a **single-layer brush stretched
   `Stretch.Fill`** by `DashboardBgFill`'s background — no blur, no scale, no
   overlay, **no aspect-ratio preservation**. It fills the whole panel
   edge-to-edge with no side bands and no crop, at the cost of **distorting the
@@ -935,8 +1115,15 @@ Two cheap gates beyond a green build:
 
 - **The title-bar brand button's hover illumination has a WPF-precedence
   trap — we hit it as a bug twice.** `TitleBarBrandButton` ("AoE3 Mod
-  Launcher ▾") brightens on hover/press/open like the nav tabs: text idle
-  = `Secondary`, hover = `#E6EEF8`, pressed/open = `#FFFFFF` white. For that
+  Launcher ▾") brightens on hover/press/open like the nav tabs, on the
+  `Chrome*` ramp: idle `ChromeTextDim` `#93A4B5` (7.31:1) → hover
+  `ChromeTextBright` `#F0F5FB` (17.04:1) → pressed/open `#FFFFFF` (18.67:1).
+  **The hover is one rung BELOW pure white on purpose** — pressed and open are
+  already white, and the only other signal that the menu is open is the chevron
+  flip, so collapsing hover into white would leave "open" indistinguishable from
+  "the pointer is on it". It sat at `ChromeTextSoft` (11.79:1) until a screenshot
+  taken WITH the pointer on the button turned out to be indistinguishable from one
+  taken without it. For that
   to work, the idle `Foreground` **must be a `Style` setter (or template
   default), never a local `Foreground="…"` attribute on the `<Button>`** —
   a local value (precedence 3) beats `ControlTemplate.Triggers` (4-6), so a
@@ -947,10 +1134,16 @@ Two cheap gates beyond a green build:
   so flipping the Button's `Foreground` in a trigger flows to the wordmark;
   setting `TextElement.Foreground` directly on the ContentPresenter does
   **not** propagate (that looked dead). The icon next to it is a *bitmap*,
-  not a glyph, so it can't follow `Foreground` — it illuminates via
-  `Opacity` (0.7 → 1.0) on an `Image.Style` whose `DataTrigger`s bind to the
-  ancestor button's `IsMouseOver`/`Tag` (the Image lives in the button
-  CONTENT, out of reach of template triggers). The chevron flips ▾↔▴ and
+  not a glyph, so it can't follow `Foreground` — **so it does not illuminate at
+  all, and that is deliberate.** It used to carry `Opacity` 0.7 → 1.0 on an
+  `Image.Style` bound to the ancestor button's `IsMouseOver`/`Tag` (the Image
+  lives in the button CONTENT, out of reach of template triggers); against the
+  near-black bar that cost ~23% of the brightness of artwork already dark on its
+  own (mean luminance 77/255 at render size), and the washed-out brand block was
+  reported twice. The reference specifies a size and a colour for the mark and
+  says nothing about opacity — the dimming was ours. The wordmark and chevron
+  still answer the mouse, so the affordance survives without knocking the mark
+  back at rest. The chevron flips ▾↔▴ and
   the button holds `Tag="open"` while the brand popup lives, both set in
   `BrandMenuButton_Click` + `popup.Closed`. Same precedence rule governs
   `NavTabButton` — copy that recipe for any new chrome button, don't
@@ -975,9 +1168,13 @@ Two cheap gates beyond a green build:
   pre-shrank in the decoder, so a non-integer 64→40 second downscale
   *softened* the icon at some DPIs (reported as "se ve en baja
   resolución"); decoding native keeps it crisp. Costs ~256 KB RAM vs
-  ~16 KB — trivial, and the right trade for a sharp brand mark. The Image
-  stays 20x20 (sharper, NOT bigger — the user explicitly didn't want it
-  enlarged). Don't drop it back to 64 to "save memory".
+  ~16 KB — trivial, and the right trade for a sharp brand mark. Don't drop it back
+  to 64 to "save memory". **The Image is 16x16 as of the two-row header, and that
+  SUPERSEDES the old "stays 20x20" rule** — the header reference specifies 16, the
+  maintainer was shown the trade-off (a detailed raster logo loses detail at that
+  size, and the identical "se ve en baja resolución" complaint was raised again) and
+  chose fidelity to the reference. So a future report of the icon looking soft is a
+  known, accepted cost, not a regression to fix — unless the maintainer revisits it.
 
 - **Popup menus use a TWO-TONE "punched-out" rim — don't reduce it back to a
   single border.** The gear ContextMenu + its cascading submenu
@@ -987,19 +1184,36 @@ Two cheap gates beyond a green build:
   outer band (`MenuBorderOuter` = `#000000`), painted via the outer
   `Border`'s `Background` + `Padding="1"`. Together that's a 3px effective
   boundary that reads as a discrete card over **any** backdrop: the dark
-  outer rim pops against bright surfaces (hero image, the lighter
-  `BgSidebar` chrome), and the bright inner line pops against dark
-  surfaces (`BgPanel` interior, `BgBase` content). The first attempt was a
+  outer rim pops against bright surfaces (the hero image), and the bright
+  inner line pops against dark ones. The first attempt was a
   single brighter brush at 2px (the `MpDivider` lift recipe `#2C313A →
   #3A434F` reapplied) — the maintainer reported "yo lo veo igual", so the
   recipe escalated to two-tone. The drop shadow lives on the OUTER band so
   it skirts the whole composite rim; don't move it to the inner Border or
-  the shadow gets clipped behind the black band. **Don't apply this rim to
-  the brand popup** (`BuildBrandPopup`) — that one uses an `AccentBrush`
-  (gold) border on purpose, which is already visually distinctive and
-  marks it as the launcher's primary menu. Standard sibling popups
-  (settings, mod switch, gear) get the two-tone rim; the gold brand popup
-  is the deliberate exception.
+  the shadow gets clipped behind the black band.
+  **The brand popup used to be the documented EXCEPTION to this — a single
+  gold `AccentBrush` border — and it no longer is.** That exception was
+  written when the chrome was `BgSidebar` `#314556`; the title bar is
+  `ChromeTitleBg` `#0C131B` now, and a warm gold rim over a cold near-black
+  bar made the menu read as belonging to a different application. Reported
+  as "no se ve bien". **When the chrome moves, the rules that justified
+  themselves by naming the old chrome colour have to move with it** — that
+  is the general lesson, and this bullet's own "lighter BgSidebar chrome"
+  phrasing was a second instance of it.
+  **All three menus that hang off the header — brand, MODS switcher,
+  notifications — now share one recipe**: surface `ChromePopupBg` `#1C2A3A`,
+  the two-tone rim, `RadiusPopupInner`/`Outer` (6/7), and a 20/4/0.6 shadow.
+  They previously disagreed on every one of those axes AND with each other
+  (`#1B2025` warm grey / `#314556`, literally the pre-redesign title-bar
+  colour / `#0F1A2B`), which is why "align it with its siblings" had no
+  single target. Text follows the chrome ramp: `ChromeTextStrong` for
+  titles (12.3:1), `ChromeTextDim` for secondary (5.7:1) — measured, after
+  a first pass left subtitles at 2.4-2.6:1 by stacking `Opacity = 0.85` on
+  top of an already-faint brush. **Gold survives in exactly one place here,
+  deliberately: the "AOE3 LAUNCHER" / "CAMBIAR JUEGO" caption** (7.5:1),
+  which still marks these as the launcher's own menus without the frame
+  fighting the bar. The gear ContextMenu is NOT part of this set — it hangs
+  off the dashboard, not the header.
 
 - **Hand-built `Popup`s are coordinated centrally by `Controls/ChromePopups.cs`
   — don't add per-handler close logic.** The launcher's code-behind transient
@@ -1062,7 +1276,7 @@ Two cheap gates beyond a green build:
   per-element font sizes.** The PlayView "Layer 4" Grid (title + description +
   version chip + action row + progress strip, `HeroContentGrid`) is scaled by
   the **shared window-size scaler** — `UiScale.Attach(HeroContentGrid, PlayView,
-  1500, 760, Kind.Render, (0,1))` in `MainWindow`'s ctor (`Controls/UiScale.cs`,
+  1500, 710, Kind.Render, (0,1))` in `MainWindow`'s ctor (`Controls/UiScale.cs`,
   see its own bullet). The hero-private `HeroScaleTransform` / `UpdateHeroScale()`
   / `Hero*` consts are **retired** — folded into the shared scaler with the
   hero's SAME reference + floor + render-pin + crispness toggle, so the hero
@@ -3726,7 +3940,25 @@ engine** and the UI binds to it.
   `Buttons.xaml` (incl. the implicit global `Button` style — every bare button
   is themed by it, so there are no "white" buttons to chase), `Chrome.xaml`, and
   `Inputs.xaml` (implicit global `ComboBox`/`TextBox`/`CheckBox`/`RadioButton`
-  styles). **Input theming is global — don't recolour inputs per-dialog.** A
+  styles). **A TextBox applies its OWN `Padding` — never bind it onto
+  `PART_ContentHost` as well.** The shared template did
+  (`Margin="{TemplateBinding Padding}"`), which counted it TWICE: measured on the
+  chat composer, `Padding="11"` put the caret 22.4 DIP in, not 11. That doubling is
+  why placeholder TextBlocks overlaid on these boxes never lined up — every call site
+  was tuning a number that was silently multiplied, so the "fixes" were compensations
+  for a bug, and an audit that read the template literally computed the wrong offsets
+  for all five pairs. The idiom IS correct on a `ContentPresenter` (ComboBox, Button),
+  which does not self-apply Padding; it is only wrong on a TextBox's content host.
+  **A ~2 px residual is the platform floor** — `TextBoxView` has a small inherent
+  inset that a sibling `TextBlock` does not, and every correctly-built field in the
+  launcher shows exactly that much; don't chase it with a hand-tuned compensation.
+  Give the placeholder the SAME `FontSize` as the box, or the text jumps the moment
+  you type even with the insets right.
+  **The focus ring is `TextBoxFocusBrush`, not a local `BorderBrush`.** The template's
+  focus trigger targets its inner Border BY NAME, so it beats anything the call site
+  sets — a field cannot opt out of the gold on its own. The multiplayer surfaces
+  override that key to blue in their own resources.
+  **Input theming is global — don't recolour inputs per-dialog.** A
   ComboBox in particular MUST be *retemplated*, not just recoloured: WPF's
   default ComboBox template paints its toggle + dropdown popup with the OS light
   theme and ignores `Background`, so colour-only styles leave a white dropdown
@@ -3909,7 +4141,7 @@ engine** and the UI binds to it.
    `stringtabley.xml`) to identify the installed version (falling back to the
    install manifest's baseline when the byte-faithful payload matches no UpdateInfo
    version — see the manifest-recognition gotcha), then download `.tar.xz`
-   patches (resume + mirror fallback), CRC32-verify, back up, and extract — then
+   patches (resume + retry + mirror fallback), CRC32-verify, back up, and extract — then
    re-fingerprint the touched files into the manifest so the patched install stays
    verifiable.
 3. **Multiplayer** — Discord sign-in (JWT cached in config) → REST/WebSocket to a

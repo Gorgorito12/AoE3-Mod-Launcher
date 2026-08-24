@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
@@ -50,6 +50,22 @@
     <CornerRadius x:Key="RadiusSm">4</CornerRadius>
     <CornerRadius x:Key="RadiusMd">6</CornerRadius>
     <CornerRadius x:Key="RadiusLg">10</CornerRadius>
+    <!-- Extension of the scale for the multiplayer redesign (design handoff
+         1a/1d/1e/1f). Its radius ladder is finer than Sm/Md/Lg: controls and
+         fields at 7, rows and boxes at 8, panels at 9, and a full pill for
+         chips. Named by ROLE rather than by size so a later retune moves every
+         control together instead of hunting literals. -->
+    <CornerRadius x:Key="RadiusControl">7</CornerRadius>
+    <CornerRadius x:Key="RadiusRow">8</CornerRadius>
+    <CornerRadius x:Key="RadiusPanel">9</CornerRadius>
+    <!-- Pill = HALF the control's height, NOT a huge number. The handoff writes
+         `border-radius: 999px`, which is a CSS idiom: browsers clamp it to 50%. WPF
+         does NOT clamp — it builds the geometry from the value as given, the corner
+         arcs overlap, and the Border renders as a distorted ellipse that swallows its
+         own content. This value therefore only fits a 26px-high control (the
+         connection chip); a pill of another height needs its own half-height radius. -->
+    <CornerRadius x:Key="RadiusPill">13</CornerRadius>
+
     <!-- Two-tone "punched-out" popup rim — NOT part of the scale. Outer
          MUST stay inner+1 (the 1px near-black band over the 2px bright
          inner line). See the popup-rim gotcha in CLAUDE.md. -->
@@ -97,11 +113,36 @@
          App.ApplyWindowChrome (this token for secondaries, TitleBarHeightMain for
          MainWindow) so the whole bar stays the native drag/double-click region. -->
     <sys:Double x:Key="TitleBarHeight">28</sys:Double>
-    <!-- Main launcher header height — the ONLY window pinned to the classic 36px
-         (its brand "AoE3 Mod Launcher" bar + nav strip must stay untouched). MainWindow
-         opts into this explicitly (Height + its CaptionHeight both read it) so the
-         compact secondary bar never shrinks the main header. -->
+    <!-- Main launcher header height — the ONLY window off the slim secondary bar.
+         MainWindow opts into this explicitly (Height + its CaptionHeight both read it)
+         so the compact secondary bar never shrinks the main header.
+
+         36 (was 46): the tabs moved back OUT of the bar into their own nav row
+         (MainNavHeight below), leaving the title bar with just the brand, the version
+         chip and the three chrome affordances beside the caption buttons.
+
+         THIS TOKEN IS THE ONLY PLACE THAT HEIGHT MAY BE SET, and with two chrome rows
+         it is load-bearing in a second way: App.ApplyWindowChrome reads it to set
+         WindowChrome.CaptionHeight, and the caption region is *defined* as "the top N
+         DIPs" — WindowChrome only consults IsHitTestVisibleInChrome inside it. Leave
+         this at 46 while the bar renders at 36 and the top 10px of the NAV row stays
+         caption: every tab would drag the window instead of switching tabs along its
+         upper edge. No compile error, nothing visible to hint at it.
+
+         36 is DPI-clean where 46 was not: ×1.25 = 45, ×1.5 = 54, whole pixels both. -->
     <sys:Double x:Key="TitleBarHeightMain">36</sys:Double>
+    <!-- Nav row height — the strip under the title bar carrying the three main tabs and
+         the player's status. MainWindow only; it is a plain content row, NOT part of the
+         caption region, which is exactly why it gets its own knob instead of extending
+         TitleBarHeightMain: growing that token would hand the nav row's top edge to the
+         window-drag handler (see above).
+
+         54 is the reference's value and is not DPI-clean at 125% (×1.25 = 67.5). The
+         global UseLayoutRounding absorbs it, but the half pixel lands on the row's
+         BOTTOM edge — where the 1px rule and the active tab's 2px underline sit — so 56
+         (70 / 84) is the nearest clean value if either ever looks fuzzy on a real 125%
+         display. -->
+    <sys:Double x:Key="MainNavHeight">54</sys:Double>
     <!-- Caption-button footprint. Width 40 (down from the classic 46) to match the
          slimmer bar; height fills the bar so they read as one strip. 40 is DPI-clean
          (×1.25=50, ×1.5=60). The main header overrides back to 46 locally. -->
@@ -117,6 +158,20 @@
     <!-- Left gutter before the icon/title; right side is flush with the
          buttons. -->
     <Thickness x:Key="TitleBarContentPadding">12,0,8,0</Thickness>
+
+    <!-- MainWindow header geometry (the two-row reference). Side gutter of the nav
+         row; the version chip beside the wordmark; the connection capsule's radius.
+
+         The two radii are tokens rather than literals for the reason the house rule
+         gives: a pill in WPF needs an EXPLICIT half-height radius, because CSS's
+         `border-radius: 999px` is a clamped-to-50% idiom that WPF renders as a
+         distorted ellipse. RadiusPill (13) belongs to the 26px chips elsewhere and is
+         wrong for a 30px capsule. -->
+    <Thickness x:Key="MainNavPadding">20,0</Thickness>
+    <sys:Double x:Key="ChromeVersionSize">11</sys:Double>
+    <CornerRadius x:Key="ChromeVersionRadius">3</CornerRadius>
+    <sys:Double x:Key="ChromeCapsuleHeight">30</sys:Double>
+    <CornerRadius x:Key="ChromeCapsuleRadius">15</CornerRadius>
 
     <!-- ============================================================
          SIDEBAR NAV RAIL — the settings/properties dialogs' left tab rail
@@ -138,8 +193,66 @@
 
     <!-- MainWindow top-tab text size (NavTabButton: LIBRARY/WORKSHOP/
          MULTIPLAYER). Its OWN knob, independent of the title and the dialog-rail
-         nav. 20 = a touch larger than the old 18 so the main tabs read as the
-         primary navigation without being oversized. -->
-    <sys:Double x:Key="NavTabTextSize">14</sys:Double>
+         nav.
+
+         13, the new header reference's value. It was briefly MpLabelSize (11.5) while
+         the tabs lived INSIDE the title bar, where they had to fit a 46px strip beside
+         everything else. Back in a row of their own they fit the type scale's
+         documented floor again — so this is one deviation that closed itself. -->
+    <sys:Double x:Key="NavTabTextSize">13</sys:Double>
+
+    <!-- ============================================================
+         MULTIPLAYER REDESIGN GEOMETRY (design handoff 1a/1d/1e/1f —
+         docs/design_handoff_multiplayer_ui/README.md, "Alturas").
+
+         The main title bar's own height is NOT here: it stays
+         TitleBarHeightMain above, because WindowChrome.CaptionHeight is
+         derived from that same token in App.ApplyWindowChrome. Giving the
+         bar a second height knob is precisely how the visual bar and the
+         native drag region drift apart — and that failure is silent: no
+         compile error, no visual clue, the bottom strip of the bar just
+         stops dragging the window.
+         ============================================================ -->
+    <!-- The multiplayer sub-tab strip (Salas / Amigos / Perfil / Historial). -->
+    <sys:Double x:Key="MpSubBarHeight">48</sys:Double>
+    <!-- Room row. Uniform by contract: the row is ONE line with ellipsis, so
+         its height must not depend on the content. -->
+    <sys:Double x:Key="MpRoomRowHeight">58</sys:Double>
+    <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
+         text input; Control = a normal button; PrimaryButton = the one CTA. -->
+    <!-- The redesign's small-label size (nav tabs, chips). 11.5 is the handoff's
+         value and it sits BELOW the type scale's documented floor of 13, which exists
+         because 10-11px secondary text was reported unreadable at 125/150% scaling.
+         Used here on the maintainer's explicit call for fidelity to the reference,
+         after the deviation was raised and declined twice. Kept as its own token so
+         reversing it is one number, and so it can't leak into body text. -->
+    <sys:Double x:Key="MpLabelSize">11.5</sys:Double>
+    <!-- The two sizes below 11.5 the reference uses in the title bar: the ES/EN pills
+         and the ELO line under the account name. Same floor caveat as MpLabelSize. -->
+    <!-- The reference's two mid-scale sizes: 12.5 for reading text (chat bodies, the
+         primary caption of a dialog button) and 12 for the name/meta line above it.
+         Same floor caveat as MpLabelSize — they are below the type scale's 13 and are
+         here for fidelity, kept as tokens so reversing them is two numbers. -->
+    <sys:Double x:Key="MpBodySize">12.5</sys:Double>
+    <sys:Double x:Key="MpMetaSize">12</sys:Double>
+    <sys:Double x:Key="MpPillSize">10.5</sys:Double>
+    <sys:Double x:Key="MpMicroSize">10</sys:Double>
+    <!-- The uppercase stat captions in the room header (9.5) and the values under
+         them (14). Both below the type scale's floor, like MpLabelSize, and kept as
+         their own tokens for the same reason. -->
+    <sys:Double x:Key="MpSectionLabelSize">9.5</sys:Double>
+    <sys:Double x:Key="MpStatValueSize">14</sys:Double>
+    <!-- The room name in the lobby header: serif, the one display-type moment in
+         this window. -->
+    <sys:Double x:Key="MpRoomNameSize">16</sys:Double>
+    <!-- The end-of-match card's two display sizes: the verdict, and the new rating in
+         monospace beside it. Both are one-of-a-kind moments, which is why they sit above
+         the rest of the multiplayer scale rather than inside it. -->
+    <sys:Double x:Key="MpResultTitleSize">17</sys:Double>
+    <sys:Double x:Key="MpRatingSize">22</sys:Double>
+    <sys:Double x:Key="MpFieldHeight">34</sys:Double>
+    <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
+    <sys:Double x:Key="MpControlHeight">30</sys:Double>
+    <sys:Double x:Key="MpPrimaryButtonHeight">42</sys:Double>
 
 </ResourceDictionary>

@@ -240,4 +240,58 @@ public class ModInstallProbeTests : IDisposable
         Assert.False(ModInstallProbe.MarkerExists(dirMarker, @"art\missing"));
         Assert.False(ModInstallProbe.MarkerExists(dirMarker, "")); // empty marker → false
     }
+
+    // ---- Profiles that declare no probe file -----------------------------------
+    //
+    // These pin the branch that made UpdateService keep a second, older opinion
+    // alongside this one. Its gate used to be
+    // `IsProfileInstalled(p) && LooksLikeRealModInstall(p)`, where the first half
+    // fell back to the WoL registry marker when a profile declared no probe file.
+    // Collapsing that pair into a single IsRealInstall is only safe because Inspect
+    // SKIPS the probe step for such a profile rather than failing it — otherwise the
+    // legacy no-probe installs would all have stopped being recognised.
+
+    private static ModProfile NoProbeFileProfile() => new()
+    {
+        Id = "legacy",
+        DisplayName = "Legacy Mod",
+        InstallType = ModInstallType.IsolatedFolder,
+        InstallProbeFile = "",              // none declared
+        InstallMarker = @"art\zulushield",
+    };
+
+    [Fact]
+    public void NoProbeFileDeclared_ProbeStepIsSkipped_NotFailed()
+    {
+        // No data\stringtabley.xml anywhere — with a probe declared this would be
+        // ProbeMissing. Without one, the marker and the engine carry the decision.
+        var install = NewTempDir();
+        CreateDirAt(install, @"art\zulushield");
+        CreateEngineAt(install);
+
+        Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(install, NoProbeFileProfile()));
+    }
+
+    [Fact]
+    public void NoProbeFileDeclared_StillRequiresTheMarker()
+    {
+        // Dropping the probe requirement must not drop the anti-vanilla signal too:
+        // a bare AoE3 clone has the engine and no marker, and must not be adopted.
+        var install = NewTempDir();
+        CreateEngineAt(install);
+
+        Assert.Equal(ProbeOutcome.MarkerMissing,
+            ModInstallProbe.Inspect(install, NoProbeFileProfile()));
+    }
+
+    [Fact]
+    public void NoProbeFileDeclared_StillRequiresTheEngine()
+    {
+        // The overlay-only leftover case, for a profile with no probe file.
+        var install = NewTempDir();
+        CreateDirAt(install, @"art\zulushield");
+
+        Assert.Equal(ProbeOutcome.EngineMissing,
+            ModInstallProbe.Inspect(install, NoProbeFileProfile()));
+    }
 }

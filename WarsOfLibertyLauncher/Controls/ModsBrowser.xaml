@@ -1,4 +1,4 @@
-<UserControl x:Class="WarsOfLibertyLauncher.Controls.ModsBrowser"
+﻿<UserControl x:Class="WarsOfLibertyLauncher.Controls.ModsBrowser"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
@@ -109,16 +109,24 @@
                                 Width="200"
                                 Margin="0,0,10,0">
                             <Grid>
+                                <!-- No italic: the placeholder and the text you type have to
+                                     share a metric, or the line reflows the moment you start.
+                                     It is the same defect as the padding below, in the font. -->
                                 <TextBlock x:Name="SearchPlaceholderText"
                                            Foreground="{DynamicResource TextSecondary}"
                                            FontSize="{StaticResource FontSizeBody}"
-                                           FontStyle="Italic"
                                            VerticalAlignment="Center"
                                            IsHitTestVisible="False"/>
+                                <!-- Padding 0, like every other search box in the launcher: the
+                                     containing Border already owns the inset (10,3), and the
+                                     placeholder beside this has no margin at all. With 8,3 here
+                                     the caret started 8px right of the placeholder's first
+                                     glyph — the same bug as the chat composer, eight times
+                                     larger, and nobody had reported it. -->
                                 <TextBox x:Name="SearchBox"
                                          Background="Transparent"
                                          BorderThickness="0"
-                                         Padding="8,3"
+                                         Padding="0"
                                          Foreground="{DynamicResource TextPrimary}"
                                          CaretBrush="{DynamicResource TextPrimary}"
                                          FontSize="{StaticResource FontSizeBody}"

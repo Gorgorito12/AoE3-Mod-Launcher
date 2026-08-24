@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -192,6 +192,15 @@ public class LobbyApiClient : IDisposable
         => GetAsync<EloSnapshot>($"matches/elo/{userId}", requireAuth: false, ct);
 
     /// <summary>
+    /// The ladder and the activity histogram, for the community strip. Unauthenticated
+    /// like the other standings calls, and asked once per session when the Rooms subtab
+    /// is opened — never on a timer. A backend without the route answers 404, which the
+    /// caller treats as "hide the cards", not as an error.
+    /// </summary>
+    public Task<CommunityStats> GetCommunityStatsAsync(int limit = 10, CancellationToken ct = default)
+        => GetAsync<CommunityStats>($"stats/community?limit={limit}", requireAuth: false, ct);
+
+    /// <summary>
     /// Reports a finished match, host-only. Called from
     /// <c>MultiplayerTab.OnGameExitedAsync</c> once the recording has been read, so the
     /// participants carry a real per-player result for a clean 1v1 and 0.5 — meaning "not
@@ -199,6 +208,16 @@ public class LobbyApiClient : IDisposable
     /// </summary>
     public Task<ReportMatchResponse> ReportMatchAsync(ReportMatchRequest req, CancellationToken ct = default)
         => PostAsync<ReportMatchResponse>("matches", req, requireAuth: true, ct);
+
+    /// <summary>
+    /// Our own reading of a match the HOST reports, sent by everyone who is not the host.
+    ///
+    /// <para>Evidence, not a vote: the server records it next to the host's claim and
+    /// nothing about whether the match scores depends on it. See
+    /// <see cref="ConfirmMatchRequest"/>.</para>
+    /// </summary>
+    public Task<ConfirmMatchResponse> ConfirmMatchAsync(ConfirmMatchRequest req, CancellationToken ct = default)
+        => PostAsync<ConfirmMatchResponse>("matches/confirm", req, requireAuth: true, ct);
 
     public Task<ReplayUploadHandle> RequestReplayUploadAsync(string matchId, CancellationToken ct = default)
         => PostAsync<ReplayUploadHandle>(

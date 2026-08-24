@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -34,6 +34,27 @@ public class ReplayParserTests
             AppContext.BaseDirectory, "Fixtures", "zv104-header.age3Yrec"));
 
     // ---------------- the real file ----------------
+
+    [Fact]
+    public void ReadsTheMatchFingerprintFromTheRealFile()
+    {
+        // Measured out of this exact fixture, not chosen: seed 21427, host clock 1310758.
+        // Asserting numbers read from a real recording is the whole reason the fixture is
+        // a genuine file — values invented to match my reading of the format would pass
+        // by construction and prove nothing.
+        //
+        // These two are what identify the MATCH rather than the players. Both machines in
+        // one game must generate the same map, so the seed is shared by construction; two
+        // different games are not. That is what lets the server tell whether the host and
+        // their opponent read the same match, without comparing a single name — profile
+        // names are frequently nothing like the Discord account and were rejected for it.
+        var header = ReplayParserService.TryParse(Fixture());
+
+        Assert.NotNull(header);
+        Assert.Equal(21427u, header!.RandomSeed);
+        Assert.Equal(1310758u, header.HostTime);
+    }
+
 
     [Fact]
     public void ParsesTheRealRecordedGame()
