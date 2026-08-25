@@ -2264,6 +2264,49 @@ public partial class MultiplayerTab : UserControl
     /// Compact rounded pill ("Host", "Ready"). Background +
     /// foreground passed in so the caller controls the colour.
     /// </summary>
+    /// <summary>
+    /// A player's rating rendered as the number followed by a small, dimmer "ELO".
+    ///
+    /// <para>The word is not decoration. A bare "1500" beside a name does not say what it
+    /// is, and the tooltip that used to carry that job is useless here — nobody hovers a
+    /// thing they do not know exists. The rest of the launcher already spells it out (the
+    /// title-bar chip, the room roster, the ladder column), so these two surfaces were the
+    /// only ones showing it naked.</para>
+    ///
+    /// <para>One TextBlock with two Runs, so the two share a BASELINE: the word sits on the
+    /// number rather than being centred against it. Don't "fix" that with
+    /// <c>BaselineAlignment</c>.</para>
+    ///
+    /// <para>It is a shared helper because this exact value has already been corrected twice
+    /// in two copies — the too-dim brush and the stray "·" each had to be fixed in both
+    /// places separately. One function, and that stops.</para>
+    /// </summary>
+    private static TextBlock BuildRatingText(double rating, double numberSize, double unitSize)
+    {
+        var value = (int)Math.Round(rating);
+        var tb = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 0, 0),
+            ToolTip = TooltipHelper.Wrap(Strings.Format("MpChipElo", value)),
+        };
+        tb.Inlines.Add(new System.Windows.Documents.Run(value.ToString())
+        {
+            FontSize = numberSize,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
+        });
+        tb.Inlines.Add(new System.Windows.Documents.Run(" " + Strings.Get("MpEloUnit"))
+        {
+            FontSize = unitSize,
+            FontWeight = FontWeights.SemiBold,
+            // Muted, not Faint or Dim: those are the two tones that already drew a
+            // "you can barely see it" report, and this one still has to be readable.
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+        });
+        return tb;
+    }
+
     private static Border BuildBadge(string text, Brush background, Brush foreground)
     {
         return new Border
@@ -5595,7 +5638,8 @@ public partial class MultiplayerTab : UserControl
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     // An Auto column measures with infinite width, so without this the
                     // ellipsis never fires and a long name pushes the rating off the panel.
-                    MaxWidth = 150,
+                    // 120, not 150: the "ELO" beside the number needs the difference.
+                    MaxWidth = 120,
                 };
                 Grid.SetColumn(nameText, 1);
                 row.Children.Add(nameText);
@@ -5606,17 +5650,8 @@ public partial class MultiplayerTab : UserControl
                 // spans 16px here where the number at the same size spans 11.
                 if (RatingDisplay.ShouldShow(u.rating))
                 {
-                    var eloText = new TextBlock
-                    {
-                        Text = ((int)Math.Round(u.rating!.Value)).ToString(),
-                        Foreground = R("MpTextSecondary"),
-                        FontSize = F("FontSizeBody"),
-                        FontWeight = FontWeights.SemiBold,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Margin = new Thickness(6, 0, 0, 0),
-                        ToolTip = TooltipHelper.Wrap(
-                            Strings.Format("MpChipElo", (int)Math.Round(u.rating.Value))),
-                    };
+                    var eloText = BuildRatingText(
+                        u.rating!.Value, numberSize: F("FontSizeBody"), unitSize: 10.5);
                     Grid.SetColumn(eloText, 2);
                     row.Children.Add(eloText);
                 }
@@ -6128,17 +6163,7 @@ public partial class MultiplayerTab : UserControl
         // the digits level with the name's capitals without towering over the row.
         if (RatingDisplay.ShouldShow(lobby.Host?.Rating))
         {
-            var hostElo = new TextBlock
-            {
-                Text = ((int)Math.Round(lobby.Host!.Rating!.Value)).ToString(),
-                Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(6, 0, 0, 0),
-                ToolTip = TooltipHelper.Wrap(
-                    Strings.Format("MpChipElo", (int)Math.Round(lobby.Host.Rating.Value))),
-            };
+            var hostElo = BuildRatingText(lobby.Host!.Rating!.Value, numberSize: 13, unitSize: 10);
             Grid.SetColumn(hostElo, 2);
             hostCell.Children.Add(hostElo);
         }

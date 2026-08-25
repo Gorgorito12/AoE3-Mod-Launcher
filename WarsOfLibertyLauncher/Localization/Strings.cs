@@ -2407,6 +2407,9 @@ public static class Strings
         // that the VPN is up and which address peers will reach them on.
         ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
         ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
+        // Just the unit, for the places that render the number and the word at different
+        // sizes. The same in both languages: it is the name of the rating scale.
+        ["MpEloUnit"] = new() { [LangEn] = "ELO", [LangEs] = "ELO" },
         ["MpChipElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
         ["MpChipReconnecting"] = new() { [LangEn] = "Reconnecting…", [LangEs] = "Reconectando…" },
         // Title-bar account menu. Sign out lives ONLY here now — the account row that

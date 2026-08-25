@@ -64,13 +64,14 @@ public static class RoomsTableLayout
     public static readonly IReadOnlyList<RoomColumnSpec> All = new[]
     {
         new RoomColumnSpec(RoomColumn.Room,    null, 210),
-        // 188 rather than the reference's 152 because this cell now carries the host's
-        // RATING as well as their name (20+8 disc + 120 name + 6 + ~30 number). The rating
-        // had a column of its own for one revision; it read as a number stranded ~100px
-        // from the name it belongs to, and comparing ratings BETWEEN rooms — the only
-        // thing a column buys — is not something this table is for. Net effect on the
-        // layout is positive: the column it replaced cost 58, so Room gets 22px back.
-        new RoomColumnSpec(RoomColumn.Host,    188,  188),
+        // 208 rather than the reference's 152 because this cell now carries the host's
+        // RATING as well as their name: 20+8 disc + 120 name + 6 + ~30 number + ~23 for the
+        // "ELO" beside it, which is what makes the number legible as a rating at all.
+        // The rating had a column of its own for one revision; it read as a number stranded
+        // ~100px from the name it belongs to, and comparing ratings BETWEEN rooms — the only
+        // thing a column buys — is not what this table is for. Even so this is 2px CHEAPER
+        // than that version, which cost 152 + 58.
+        new RoomColumnSpec(RoomColumn.Host,    208,  208),
         new RoomColumnSpec(RoomColumn.Players,  88,   88),
         new RoomColumnSpec(RoomColumn.Ping,     66,   66),
         new RoomColumnSpec(RoomColumn.Action,   96,   96),
