@@ -66,6 +66,40 @@ public class DialogXamlTests
         Assert.Null(error);
     }
 
+    [Fact]
+    public void RenameRoomDialog_LoadsItsXaml()
+    {
+        // Added when this dialog moved off the launcher's gold styles onto the multiplayer
+        // blue ones. It now resolves MpDialogField, MpSecondaryButton and MpPrimaryButton —
+        // keys it had never referenced — and a StaticResource that fails to resolve throws at
+        // RUNTIME, not compile. Nothing else opens this window: it needs a signed-in host
+        // inside a room to press the button.
+        var error = RunOnStaThread(() =>
+        {
+            var dlg = new RenameRoomDialog("Sala de prueba");
+            Assert.NotNull(dlg.NameEntry);
+            dlg.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void PasswordPromptDialog_LoadsItsXaml()
+    {
+        // Same move, and the better-travelled of the two — it opens on every join of a private
+        // room. Its PasswordBox is the riskier half: WPF ships no implicit style for that
+        // control, so it depends entirely on MpDialogPasswordField resolving.
+        var error = RunOnStaThread(() =>
+        {
+            var dlg = new PasswordPromptDialog();
+            Assert.NotNull(dlg.PasswordEntry);
+            dlg.Close();
+        });
+
+        Assert.Null(error);
+    }
+
     [Theory]
     [InlineData(1.0)]
     [InlineData(0.0)]

@@ -346,8 +346,19 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="b" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
                             </Trigger>
+                            <!-- Disabled is stated in the brushes, NOT with a blanket Opacity.
+                                 At 0.45 over this navy footer both buttons dissolved into the
+                                 background — and the moment they do it is the moment the user
+                                 pressed Create and is waiting to learn whether the click
+                                 registered, so "there is nothing here" was being used to say
+                                 "I am working". They must stay readable while clearly inert. -->
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.45"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MpTextFaint}"/>
+                                <!-- The BUTTON's property, not TargetName="b": the Border already
+                                     TemplateBinds it, and a Style trigger cannot reach a template
+                                     element by name — which is how the derived primary below
+                                     keeps its own edge while busy. -->
+                                <Setter Property="BorderBrush" Value="{DynamicResource MpRimFaint}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -360,6 +371,16 @@
             <Setter Property="Foreground" Value="#FFFFFF"/>
             <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
             <Setter Property="Padding" Value="22,0"/>
+            <Style.Triggers>
+                <!-- Keeps its FILL and its EDGE while busy — it is still the button you pressed,
+                     and it carries the "Creating…" caption; only the text steps back. Style
+                     triggers outrank template triggers in WPF, which is what lets these two
+                     setters beat the inherited ghost treatment. -->
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#CBDCF2"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <!-- The copy picker keeps an ordinary combo look: it is a rare row and does not

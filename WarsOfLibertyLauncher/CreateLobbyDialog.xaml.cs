@@ -82,6 +82,14 @@ public partial class CreateLobbyDialog : Window
     public int CreatedLobbyMaxPlayers { get; private set; }
 
     /// <summary>
+    /// Whether the user ticked "private room". Exposed for the same reason as the two above —
+    /// the response does not echo it — and needed because GET /lobbies excludes your own room,
+    /// so a host has no other way to learn it. Without this the host of a private room was
+    /// shown "Password: none" in their own room.
+    /// </summary>
+    public bool CreatedLobbyIsPrivate { get; private set; }
+
+    /// <summary>
     /// Build the dialog. <paramref name="profiles"/> populates the mod
     /// dropdown; <paramref name="initiallySelected"/> is the entry that
     /// starts highlighted (typically the active profile from the Play
@@ -516,6 +524,9 @@ public partial class CreateLobbyDialog : Window
 
         CreateButton.IsEnabled = false;
         CancelButton.IsEnabled = false;
+        // The busy caption, not just the disabled state: going inert is what a button does
+        // when there is nothing to do, so on its own it says the opposite of what is happening.
+        CreateButton.Content = Strings.Get("MpCreateDialogCreating");
         ErrorText.Visibility = Visibility.Collapsed;
 
         try
@@ -530,6 +541,7 @@ public partial class CreateLobbyDialog : Window
             CreatedLobbyProfile = _selectedProfile;
             CreatedLobbyTitle = title;
             CreatedLobbyMaxPlayers = maxPlayers;
+            CreatedLobbyIsPrivate = isPrivate;
             CreatedLobby = await _session.Api.CreateLobbyAsync(new CreateLobbyRequest
             {
                 Title = title,
@@ -545,6 +557,7 @@ public partial class CreateLobbyDialog : Window
         {
             DiagnosticLog.Write($"CreateLobbyDialog: API error {ex.Code}: {ex.Message}");
             ShowError(ex.Message);
+            CreateButton.Content = Strings.Get("MpCreateDialogCreate");
             CreateButton.IsEnabled = true;
             CancelButton.IsEnabled = true;
         }
@@ -552,6 +565,7 @@ public partial class CreateLobbyDialog : Window
         {
             DiagnosticLog.Write($"CreateLobbyDialog: {ex.GetType().Name}: {ex.Message}");
             ShowError(ex.Message);
+            CreateButton.Content = Strings.Get("MpCreateDialogCreate");
             CreateButton.IsEnabled = true;
             CancelButton.IsEnabled = true;
         }

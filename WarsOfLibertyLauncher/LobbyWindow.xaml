@@ -185,15 +185,19 @@
                                            FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"/>
+                                <!-- Carries the WORD, not just the pencil. As a 24x22 glyph it
+                                     had a tooltip and was still not understood, which is the
+                                     whole point: a symbol says something is there, only a word
+                                     says what. The title beside it already ellipsises, so a long
+                                     room name simply trims a little sooner. Caption is set in
+                                     ApplyLobbyStaticLabels; host-only, per RenderRoomPanel. -->
                                 <Button Grid.Column="1"
                                         x:Name="RenameRoomButton"
                                         Click="RenameRoomButton_Click"
-                                        Style="{StaticResource MpIconButton}"
-                                        Width="24" Height="22"
-                                        Padding="0"
-                                        Margin="9,0,0,0"
+                                        Style="{StaticResource MpGhostButton}"
+                                        Padding="10,3"
+                                        Margin="10,0,0,0"
                                         FontSize="{StaticResource MpLabelSize}"
-                                        Content="&#x270E;"
                                         VerticalAlignment="Center"
                                         Visibility="Collapsed"/>
                             </Grid>

@@ -1,4 +1,4 @@
-<Window x:Class="WarsOfLibertyLauncher.RenameRoomDialog"
+﻿<Window x:Class="WarsOfLibertyLauncher.RenameRoomDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
@@ -8,8 +8,11 @@
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="{DynamicResource BgBase}"
+        Background="{DynamicResource MpSurface}"
         ShowInTaskbar="False">
+  <!-- Navy, not the launcher's gold. This opens from the lobby window, and it used to arrive
+       wearing SidebarPrimaryButton and hardcoded greys — a jump to what looked like a different
+       application. Every brush here is an Mp* one for that reason. -->
   <Grid>
     <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
@@ -19,36 +22,30 @@
                        ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
     <StackPanel Grid.Row="1" Margin="24,20">
         <TextBlock x:Name="PromptText"
-                   Foreground="{DynamicResource TextPrimary}"
+                   Foreground="{DynamicResource MpTextSecondary}"
                    FontSize="{StaticResource FontSizeBody}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,12"/>
         <TextBox x:Name="NameEntry"
-                 Background="#2a2d34"
-                 Foreground="White"
-                 BorderBrush="#3a3d44"
-                 BorderThickness="1"
-                 Padding="8,5"
-                 FontSize="{StaticResource FontSizeBody}"
+                 Style="{StaticResource MpDialogField}"
                  MaxLength="80"
                  TextChanged="NameEntry_TextChanged"/>
         <StackPanel Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,16,0,0">
+            <!-- No local Background here. A local value outranks a ControlTemplate trigger, so
+                 the "#3a3d44" these carried was silently killing their own hover state. -->
             <Button x:Name="CancelButton"
                     Click="CancelButton_Click"
-                    Style="{StaticResource SidebarPrimaryButton}"
-                    Background="#3a3d44"
-                    Padding="18,6"
-                    MinWidth="100"
+                    Style="{StaticResource MpSecondaryButton}"
+                    MinWidth="104"
                     Margin="0,0,8,0"
                     Content="Cancel"/>
             <Button x:Name="OkButton"
                     Click="OkButton_Click"
                     IsDefault="True"
-                    Style="{StaticResource SidebarPrimaryButton}"
-                    Padding="18,6"
-                    MinWidth="100"
+                    Style="{StaticResource MpPrimaryButton}"
+                    MinWidth="104"
                     Content="OK"/>
         </StackPanel>
     </StackPanel>

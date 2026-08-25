@@ -1,4 +1,5 @@
-using System.Windows;
+﻿using System.Windows;
+using WarsOfLibertyLauncher.Localization;
 
 namespace WarsOfLibertyLauncher;
 
@@ -12,10 +13,19 @@ public partial class PasswordPromptDialog : Window
 {
     public string EnteredPassword { get; private set; } = "";
 
-    public PasswordPromptDialog(string prompt)
+    /// <param name="prompt">
+    /// Overrides the default question. Left null by every caller today — the prompt used to be
+    /// a hardcoded English sentence passed in from the join flow, which is how this dialog came
+    /// to be the one untranslated window in the multiplayer surface.
+    /// </param>
+    public PasswordPromptDialog(string? prompt = null)
     {
         InitializeComponent();
-        PromptText.Text = prompt;
+        Title = Strings.Get("MpJoinPasswordTitle");
+        TitleBarControl.Title = Strings.Get("MpJoinPasswordTitle");
+        PromptText.Text = prompt ?? Strings.Get("MpJoinPasswordPrompt");
+        OkButton.Content = Strings.Get("MpJoinPasswordEnter");
+        CancelButton.Content = Strings.Get("BtnCancel");
         Loaded += (_, _) => PasswordEntry.Focus();
     }
 

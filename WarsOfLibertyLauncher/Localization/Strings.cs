@@ -2835,6 +2835,32 @@ public static class Strings
         ["MpRoomPlayersHeader"] = new() { [LangEn] = "PLAYERS", [LangEs] = "JUGADORES" },
         ["MpRoomIdHeader"] = new() { [LangEn] = "ROOM ID", [LangEs] = "ID DE SALA" },
         ["MpRoomCopyCode"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
+        // A WORD, not just the pencil. The glyph already had a tooltip and the button still
+        // was not understood — which is the point: nobody hovers a thing they do not know
+        // exists. Same lesson as the "?" on the connection-help button.
+        // The private-room password prompt. It was hardcoded English at the call site and the
+        // dialog localised nothing at all — an English window in the middle of a Spanish
+        // multiplayer surface, on the path everyone joining a private room takes.
+        ["MpJoinPasswordTitle"] = new()
+        {
+            [LangEn] = "Private room",
+            [LangEs] = "Sala privada",
+        },
+        ["MpJoinPasswordPrompt"] = new()
+        {
+            [LangEn] = "This room is password-protected. Enter the password to join.",
+            [LangEs] = "Esta sala tiene contraseña. Escríbela para entrar.",
+        },
+        ["MpJoinPasswordEnter"] = new()
+        {
+            [LangEn] = "Enter",
+            [LangEs] = "Entrar",
+        },
+        ["MpRoomRenameButton"] = new()
+        {
+            [LangEn] = "✎ Rename",
+            [LangEs] = "✎ Cambiar nombre",
+        },
         ["MpRoomRenameTooltip"] = new()
         {
             [LangEn] = "Change the room name",
@@ -3603,6 +3629,10 @@ public static class Strings
             [LangEs] = "Sala de {0}",
         },
         ["MpCreateDialogCreate"] = new() { [LangEn] = "Create", [LangEs] = "Crear" },
+        // Shown ON the Create button while the request is in flight. Without it the only
+        // thing that happens on click is that both buttons go inert, which reads as "nothing
+        // happened" at the exact moment the user needs to know it did.
+        ["MpCreateDialogCreating"] = new() { [LangEn] = "Creating…", [LangEs] = "Creando…" },
         ["MpCreateDialogCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
         ["MpCreateDialogRadminWarning"] = new()
         {
@@ -4942,11 +4972,6 @@ public static class Strings
             [LangEn] = "Open folder",
             [LangEs] = "Abrir carpeta",
         },
-        ["BtnUninstall"] = new()
-        {
-            [LangEn] = "Uninstall",
-            [LangEs] = "Desinstalar",
-        },
         // -------- New gear-menu items (Maintenance + Advanced) --------
         ["MenuRepairInstall"] = new()
         {
@@ -4971,13 +4996,6 @@ public static class Strings
             [LangEs] = "Re-descarga el contenido del mod y lo aplica sobre " +
                        "la instalación actual — reemplaza archivos faltantes " +
                        "o corruptos sin perder los datos del usuario.",
-        },
-        ["TooltipMenuVerifyFiles"] = new()
-        {
-            [LangEn] = "Quick integrity check — flags missing or empty files " +
-                       "and offers Repair if anything is wrong.",
-            [LangEs] = "Verificación rápida de integridad — marca archivos " +
-                       "faltantes o vacíos y ofrece Reparar si algo no está bien.",
         },
         ["TooltipMenuViewLogs"] = new()
         {
@@ -5017,11 +5035,6 @@ public static class Strings
         {
             [LangEn] = "RESUME",
             [LangEs] = "REANUDAR",
-        },
-        ["BtnCancel"] = new()
-        {
-            [LangEn] = "CANCEL",
-            [LangEs] = "CANCELAR",
         },
         ["StatusPaused"] = new()
         {
@@ -6102,11 +6115,6 @@ public static class Strings
             [LangEn] = "LATER",
             [LangEs] = "MÁS TARDE",
         },
-        ["BtnClose"] = new()
-        {
-            [LangEn] = "CLOSE",
-            [LangEs] = "CERRAR",
-        },
 
         // -------- User-data backup (Documents\<mod>\) --------
         // These once belonged to a modal that interrupted every fresh install to offer
@@ -6303,11 +6311,6 @@ public static class Strings
             [LangEn] = "Manage paths",
             [LangEs] = "Administrar rutas",
         },
-        ["MenuOpenModFolder"] = new()
-        {
-            [LangEn] = "Open Wars of Liberty folder",
-            [LangEs] = "Abrir carpeta de Wars of Liberty",
-        },
         ["MenuOpenAoE3Folder"] = new()
         {
             [LangEn] = "Open Age of Empires III folder",
@@ -6328,11 +6331,6 @@ public static class Strings
         {
             [LangEn] = "Check for updates",
             [LangEs] = "Buscar actualizaciones",
-        },
-        ["MenuVerifyFiles"] = new()
-        {
-            [LangEn] = "Verify files",
-            [LangEs] = "Verificar archivos",
         },
         ["MenuGameLanguage"] = new()
         {

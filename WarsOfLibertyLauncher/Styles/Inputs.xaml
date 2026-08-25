@@ -333,4 +333,88 @@
         </Setter>
     </Style>
 
+
+    <!-- ================= Multiplayer dialog fields =================
+         The small multiplayer dialogs (rename a room, enter a room password) used to paint
+         their inputs with hardcoded greys and wear the launcher's GOLD buttons, so opening one
+         from the navy multiplayer surface jumped to a different application's palette.
+
+         Keyed and applied explicitly, never implicit: the global TextBox style stays the
+         launcher's own, and only a control that asks gets the blue treatment. They are here
+         rather than copied into each dialog because there are two of them and a third would be
+         inevitable. CreateLobbyDialog keeps its own equivalent (MpTitleField) — it is working,
+         its field is a different height, and a cosmetic pass is no reason to disturb it.
+    ============================================================== -->
+    <Style x:Key="MpDialogField" TargetType="TextBox">
+        <Setter Property="Background" Value="{DynamicResource MpField}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource MpActionText}"/>
+        <Setter Property="SelectionBrush" Value="{DynamicResource MpAction}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RadiusRow}">
+                        <!-- No Margin="{TemplateBinding Padding}": a TextBox applies its own
+                             Padding to the text, so binding it here counts it twice. -->
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      VerticalAlignment="Center"
+                                      Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsFocused" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpActionRim}"/>
+                            <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The PasswordBox twin. It needs its own style because WPF ships no implicit one for
+         PasswordBox at all, so an unstyled one falls back to the OS light theme. -->
+    <Style x:Key="MpDialogPasswordField" TargetType="PasswordBox">
+        <Setter Property="Background" Value="{DynamicResource MpField}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource MpActionText}"/>
+        <Setter Property="SelectionBrush" Value="{DynamicResource MpAction}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="PasswordBox">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RadiusRow}">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      VerticalAlignment="Center"
+                                      Focusable="False"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsFocused" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource MpActionRim}"/>
+                            <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

@@ -1300,6 +1300,7 @@ public partial class MultiplayerTab : UserControl
             {
                 _currentLobbyModId = null;
                 _currentLobbyMaxPlayers = 0;
+                _currentLobbyIsPrivate = null;
                 _currentLobbyCreatedUtc = null;
                 // We are out of the room, so it can no longer be "in a match" as far as we're
                 // concerned — this is what takes the reopen button away.
@@ -2776,7 +2777,10 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.RoomIdStatHeader.Text = Strings.Get("MpRoomCodeHeader");
         _lobbyWindow.RoomConnHeader.Text = Strings.Get("MpInGameConnectionHeader");
         _lobbyWindow.CopyRoomIdButton.ToolTip = Strings.Get("MpRoomCopyCode");
-        _lobbyWindow.RenameRoomButton.ToolTip = Strings.Get("MpRoomRenameTooltip");
+        // Caption AND tooltip: the word says what the button does, the tooltip carries the
+        // detail (who sees the new name). It lives here so a mid-room language switch catches it.
+        _lobbyWindow.RenameRoomButton.Content = Strings.Get("MpRoomRenameButton");
+        _lobbyWindow.RenameRoomButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomRenameTooltip"));
         _lobbyWindow.PlayersListHeader.Text = Strings.Get("MpRoomPlayersHeader");
         _lobbyWindow.RoomInfoHeaderText.Text = Strings.Get("MpRoomInfoHeader");
         _lobbyWindow.RoomModLabel.Text = Strings.Get("MpRoomFieldMod");
@@ -3101,15 +3105,29 @@ public partial class MultiplayerTab : UserControl
     {
         hasPwd = false;
         var lobbyId = _session?.CurrentLobbyId;
-        if (string.IsNullOrEmpty(lobbyId) || _lastBrowserList == null) return false;
-        foreach (var l in _lastBrowserList)
+        if (string.IsNullOrEmpty(lobbyId)) return false;
+        if (_lastBrowserList != null)
         {
-            if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
+            foreach (var l in _lastBrowserList)
             {
-                hasPwd = l.IsPrivate;
-                return true;
+                if (string.Equals(l.Id, lobbyId, StringComparison.Ordinal))
+                {
+                    hasPwd = l.IsPrivate;
+                    return true;
+                }
             }
         }
+
+        // The stash, and it is not a nicety: GET /lobbies excludes your OWN room, so for a host
+        // the loop above NEVER matches and this is the only answer there is. Without it the host
+        // of a private room was told their room had no password. Same fallback the mod name and
+        // the capacity already had.
+        if (_currentLobbyIsPrivate is bool priv)
+        {
+            hasPwd = priv;
+            return true;
+        }
+
         return false;
     }
 
@@ -3138,6 +3156,15 @@ public partial class MultiplayerTab : UserControl
     /// PLAYERS stat and the players-list open-slot rows. 0 = unknown.
     /// </summary>
     private int _currentLobbyMaxPlayers;
+
+    /// <summary>
+    /// Whether the CURRENT room is private, mirroring <see cref="_currentLobbyMaxPlayers"/>
+    /// (set on create/join, cleared on leave). Same reason as its sibling: the host is absent
+    /// from the browser snapshot, so without this the HOST of a private room read
+    /// "Password: none" in their own room info — the exact opposite of what they had just
+    /// configured, and the one person guaranteed to know it was wrong. Null = unknown.
+    /// </summary>
+    private bool? _currentLobbyIsPrivate;
 
     /// <summary>UTC time the CURRENT room opened, mirroring <see cref="_currentLobbyMaxPlayers"/>
     /// (set on create/join, cleared on leave). Drives the lobby header's live "open for X".
@@ -3770,6 +3797,7 @@ public partial class MultiplayerTab : UserControl
             // it from the dialog's selected profile.
             _currentLobbyModId = createdModId;
             _currentLobbyMaxPlayers = dlg.CreatedLobbyMaxPlayers;
+            _currentLobbyIsPrivate = dlg.CreatedLobbyIsPrivate;
             // We just created it — the POST returns no created_at, so ~now is the
             // room's open time (good to the second). Drives the "open for X" counter.
             _currentLobbyCreatedUtc = DateTime.UtcNow;
@@ -6805,7 +6833,7 @@ public partial class MultiplayerTab : UserControl
         string? password = null;
         if (lobby.IsPrivate)
         {
-            var prompt = new PasswordPromptDialog("This room is password-protected. Enter the password:")
+            var prompt = new PasswordPromptDialog()
             {
                 Owner = Window.GetWindow(this),
             };
@@ -6820,6 +6848,7 @@ public partial class MultiplayerTab : UserControl
             // the same step in the create-room path above.
             _currentLobbyModId = lobby.ModId;
             _currentLobbyMaxPlayers = lobby.MaxPlayers;
+            _currentLobbyIsPrivate = lobby.IsPrivate;
             // We joined from the browser summary, which carries the real open time.
             _currentLobbyCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
             // Host vs joiner is decided by the WS room_state frame that
