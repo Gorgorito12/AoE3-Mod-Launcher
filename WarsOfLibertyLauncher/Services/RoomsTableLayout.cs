@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 
 namespace WarsOfLibertyLauncher.Services;
@@ -8,7 +8,6 @@ public enum RoomColumn
 {
     Room,
     Host,
-    Elo,
     Players,
     Ping,
     Action,
@@ -65,12 +64,13 @@ public static class RoomsTableLayout
     public static readonly IReadOnlyList<RoomColumnSpec> All = new[]
     {
         new RoomColumnSpec(RoomColumn.Room,    null, 210),
-        new RoomColumnSpec(RoomColumn.Host,    152,  152),
-        // ELO is not in the reference, which predates ratings entirely. It is a column
-        // rather than a third item inside the HOST cell because that cell is a fixed
-        // 152px with an elastic name in it: the name expands, so the rating was pushed
-        // hard against the column edge and ended up touching the "1/2" of PLAYERS.
-        new RoomColumnSpec(RoomColumn.Elo,      58,   58),
+        // 188 rather than the reference's 152 because this cell now carries the host's
+        // RATING as well as their name (20+8 disc + 120 name + 6 + ~30 number). The rating
+        // had a column of its own for one revision; it read as a number stranded ~100px
+        // from the name it belongs to, and comparing ratings BETWEEN rooms — the only
+        // thing a column buys — is not something this table is for. Net effect on the
+        // layout is positive: the column it replaced cost 58, so Room gets 22px back.
+        new RoomColumnSpec(RoomColumn.Host,    188,  188),
         new RoomColumnSpec(RoomColumn.Players,  88,   88),
         new RoomColumnSpec(RoomColumn.Ping,     66,   66),
         new RoomColumnSpec(RoomColumn.Action,   96,   96),
@@ -84,15 +84,13 @@ public static class RoomsTableLayout
     /// first because it is a nicety, then Host — and neither is actually lost, because
     /// <see cref="Hidden"/> tells the row builder to fold it into the room's second line.</para>
     ///
-    /// <para><b>Elo must come before Host and can never outlive it.</b> A rating with no name
-    /// beside it says nothing about anyone — it would be a bare number in a column of its own
-    /// while the person it belongs to had already been dropped. Pinned by
-    /// <c>RoomsTableLayoutTests</c>, because the order here is the only thing enforcing it.</para>
+    /// <para>The rating rides INSIDE the Host cell, so it cannot outlive the name it belongs
+    /// to — they are one element and drop together. That used to be a rule enforced by this
+    /// array's order and a test; making it structural is better than either.</para>
     /// </summary>
     private static readonly RoomColumn[] DropOrder =
     {
         RoomColumn.Ping,
-        RoomColumn.Elo,
         RoomColumn.Host,
     };
 

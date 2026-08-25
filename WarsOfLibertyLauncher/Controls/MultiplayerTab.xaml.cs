@@ -1195,7 +1195,6 @@ public partial class MultiplayerTab : UserControl
         // Room-list column headers (localized) + empty-state copy.
         ColHeaderRoom.Text = Strings.Get("MpColRoom");
         ColHeaderHost.Text = Strings.Get("MpColHost");
-        ColHeaderElo.Text = Strings.Get("MpColElo");
         ColHeaderPlayers.Text = Strings.Get("MpColPlayers");
         ColHeaderPing.Text = Strings.Get("MpColPing");
         UpdateSortArrows();
@@ -4627,8 +4626,6 @@ public partial class MultiplayerTab : UserControl
         // ANFITRIÓN is a plain TextBlock now, not a sort button — the column can still
         // be moved and hidden, it just can't be clicked.
         Services.RoomColumn.Host => ColHeaderHost,
-        // Same treatment as ANFITRIÓN, and for the same reason: a plain label, no sort.
-        Services.RoomColumn.Elo => ColHeaderElo,
         Services.RoomColumn.Players => ColButtonPlayers,
         Services.RoomColumn.Ping => ColButtonPing,
         Services.RoomColumn.Action => ColHeaderAction,
@@ -5572,15 +5569,16 @@ public partial class MultiplayerTab : UserControl
             {
                 // Grid: [avatar][name *][action] so the invite icon / "you" tag
                 // sits flush-right regardless of name length.
+                // Auto | Auto | Auto | * | Auto — same shape as the rooms table's host cell,
+                // for the same reason: the star sits AFTER the rating and soaks up the slack,
+                // so the name and the number stay together on the left while the invite icon
+                // and the "you" tag still end up flush right. A star on the NAME column (what
+                // this was) stretched it and stranded the number at the far edge.
                 var row = new Grid { Margin = new Thickness(6, 1, 0, 1) };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                // The rating sits BEFORE the action column so the invite icon and the
-                // "you" tag stay flush right whatever the number is. FIXED width, not Auto:
-                // this list has no header to align under, so the numbers lining up with each
-                // other down the rows is the only thing that makes it read as a column
-                // rather than as something trailing each name.
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
                 var disc = BuildAvatarDisc(u.login, u.avatarUrl, 20);
@@ -5595,22 +5593,25 @@ public partial class MultiplayerTab : UserControl
                     FontSize = F("FontSizeCaption"),
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis,
+                    // An Auto column measures with infinite width, so without this the
+                    // ellipsis never fires and a long name pushes the rating off the panel.
+                    MaxWidth = 150,
                 };
                 Grid.SetColumn(nameText, 1);
                 row.Children.Add(nameText);
 
-                // Everyone's rating. No leading "·" — with the "you" tag beside it that
-                // produced "· 1500 · tú", two separators in a row reading as clutter — and
-                // MpTextSecondary rather than MpTextDim, which is the faintest brush in the
-                // palette and was why the number was there without being visible.
+                // Everyone's rating, glued to the name. No leading "·" — with the "you" tag
+                // beside it that produced "· 1500 · tú", two separators in a row. One point
+                // larger and SemiBold because digits are cap-height only: measured, a name
+                // spans 16px here where the number at the same size spans 11.
                 if (RatingDisplay.ShouldShow(u.rating))
                 {
                     var eloText = new TextBlock
                     {
                         Text = ((int)Math.Round(u.rating!.Value)).ToString(),
                         Foreground = R("MpTextSecondary"),
-                        FontSize = F("FontSizeCaption"),
-                        HorizontalAlignment = HorizontalAlignment.Right,
+                        FontSize = F("FontSizeBody"),
+                        FontWeight = FontWeights.SemiBold,
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(6, 0, 0, 0),
                         ToolTip = TooltipHelper.Wrap(
@@ -5630,7 +5631,7 @@ public partial class MultiplayerTab : UserControl
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(6, 0, 4, 0),
                     };
-                    Grid.SetColumn(youTag, 3);
+                    Grid.SetColumn(youTag, 4);
                     row.Children.Add(youTag);
                 }
                 else if (!string.IsNullOrEmpty(u.userId))
@@ -5638,7 +5639,7 @@ public partial class MultiplayerTab : UserControl
                     // Always show the invite icon (active in a room, dimmed otherwise)
                     // — no more hidden/ugly right-click menu.
                     var inviteBtn = BuildInviteIconButton(u.userId, u.login, enabled: inRoom);
-                    Grid.SetColumn(inviteBtn, 3);
+                    Grid.SetColumn(inviteBtn, 4);
                     row.Children.Add(inviteBtn);
                 }
                 PlayersPanel.Children.Add(row);
@@ -6047,20 +6048,13 @@ public partial class MultiplayerTab : UserControl
             switch (dropped)
             {
                 case Services.RoomColumn.Host when hostNameKnown:
-                    subtitle.Add(hostName!);
-                    break;
-                // Only once HOST has gone too — and Hidden() returns display order, so it
-                // has already been added just above and the rating reads as part of it.
-                // There is a band of widths where ELO has dropped and ANFITRIÓN has not;
-                // sending the number down here on its own would strand it from the name,
-                // which is the exact problem the column was created to fix.
-                case Services.RoomColumn.Elo
-                    when hostNameKnown
-                         && Services.RoomsTableLayout.Hidden(_roomColumns)
-                                .Contains(Services.RoomColumn.Host)
-                         && RatingDisplay.ShouldShow(lobby.Host?.Rating):
-                    subtitle.Add(Strings.Format(
-                        "MpChipElo", (int)Math.Round(lobby.Host!.Rating!.Value)));
+                    // The rating comes down with the name, never on its own — it lives in
+                    // that cell, so the two are folded by the same case rather than by an
+                    // order-of-drops rule that could put a bare number here.
+                    subtitle.Add(RatingDisplay.ShouldShow(lobby.Host?.Rating)
+                        ? hostName + " " + Strings.Format(
+                              "MpChipElo", (int)Math.Round(lobby.Host!.Rating!.Value))
+                        : hostName!);
                     break;
                 // Ping is deliberately absent: it is YOUR latency, identical on every row,
                 // so repeating it per room would add noise rather than information.
@@ -6094,10 +6088,19 @@ public partial class MultiplayerTab : UserControl
         salaCell.Children.Add(salaText);
         PlaceRoomCell(grid, Services.RoomColumn.Room, salaCell);
 
-        // === HOST — colored initial circle + name (Grid{Auto,*} so the name ellipsizes
-        // instead of overflowing). hostName was resolved above the ROOM cell because the
-        // sub-line needs it when this column is dropped. ===
+        // === HOST — avatar disc, name, and the host's RATING right beside it. hostName was
+        // resolved above the ROOM cell because the sub-line needs it when this column drops.
+        //
+        // Auto | Auto | Auto | *, and the trailing star is the load-bearing part: it absorbs
+        // the leftover width so the name and the number stay together on the LEFT. A star on
+        // the NAME column (what this was) expands it instead, which is what pushed the rating
+        // ~100px away from the person it describes — and, before the cell was widened, hard
+        // against the edge where it collided with the "1/2" of PLAYERS. The name keeps its
+        // ellipsis via MaxWidth, since an Auto column measures with infinite width and would
+        // never trim. ===
         var hostCell = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var hostDisc = BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, 20);
@@ -6111,34 +6114,36 @@ public partial class MultiplayerTab : UserControl
             FontSize = 12,
             FontWeight = FontWeights.Medium,
             TextTrimming = TextTrimming.CharacterEllipsis,
+            // What makes the ellipsis work at all in an Auto column.
+            MaxWidth = 120,
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(hostNameText, 1);
         hostCell.Children.Add(hostNameText);
 
-        PlaceRoomCell(grid, Services.RoomColumn.Host, hostCell);
-
-        // === ELO — its own column, right-aligned under its own header. It used to be a
-        // third item inside the HOST cell, and that cell is a fixed 152px with an elastic
-        // name in it: the name expanded, so the rating was shoved against the column edge
-        // and ended up touching the "1/2" of PLAYERS. Aligning the numbers with each other
-        // is also what makes them comparable down the list. ===
+        // The host's rating, glued to the name. One point LARGER and SemiBold, and that is
+        // not decoration: measured on a real screenshot, "Gorgorito12" spans 14px while
+        // "1500" at the SAME FontSize spans 11 — a name has ascenders and descenders, digits
+        // are cap-height only, so matching the size still reads as smaller. The bump brings
+        // the digits level with the name's capitals without towering over the row.
         if (RatingDisplay.ShouldShow(lobby.Host?.Rating))
         {
-            PlaceRoomCell(grid, Services.RoomColumn.Elo, new TextBlock
+            var hostElo = new TextBlock
             {
                 Text = ((int)Math.Round(lobby.Host!.Rating!.Value)).ToString(),
-                // The host name's own tone, not the dimmest brush in the palette: this is a
-                // column of the table now, not an aside.
                 Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
-                FontSize = 12,
-                HorizontalAlignment = HorizontalAlignment.Right,
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0),
+                Margin = new Thickness(6, 0, 0, 0),
                 ToolTip = TooltipHelper.Wrap(
                     Strings.Format("MpChipElo", (int)Math.Round(lobby.Host.Rating.Value))),
-            });
+            };
+            Grid.SetColumn(hostElo, 2);
+            hostCell.Children.Add(hostElo);
         }
+
+        PlaceRoomCell(grid, Services.RoomColumn.Host, hostCell);
 
         // === PLAYERS — "1/8" plus the reference's capacity segments: four bars that
         // fill in proportion to how full the room is, so occupancy reads at a glance

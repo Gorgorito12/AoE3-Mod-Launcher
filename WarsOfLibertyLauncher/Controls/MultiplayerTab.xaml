@@ -594,31 +594,21 @@
                                            FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                            Margin="0,0,4,0"/>
-                                <!-- ELO: a plain label for the same reason as ANFITRIÓN — the
-                                     reference keeps ordering on SALA, JUGADORES and PING only.
-                                     Right-aligned so the ratings line up as a column of numbers;
-                                     that alignment is what makes them comparable at a glance,
-                                     which was the whole point of giving them a column. -->
-                                <TextBlock Grid.Column="2" x:Name="ColHeaderElo"
-                                           Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                                           HorizontalAlignment="Right" Margin="0,0,10,0"/>
-                                <Button x:Name="ColButtonPlayers" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
+                                <Button x:Name="ColButtonPlayers" Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="1" x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
-                                <Button x:Name="ColButtonPing" Grid.Column="4" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
+                                <Button x:Name="ColButtonPing" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" x:Name="ColHeaderPing" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="1" x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
-                                <TextBlock Grid.Column="5" x:Name="ColHeaderAction"
+                                <TextBlock Grid.Column="4" x:Name="ColHeaderAction"
                                            Foreground="{DynamicResource MpTextLabel}"
                                            FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>

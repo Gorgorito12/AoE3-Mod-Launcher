@@ -46,23 +46,9 @@ public class RoomsTableLayoutTests
 
         // Mod and Status are no longer columns at all — the design handoff folds the mod
         // into the room's second line and lets the action button carry the status — so
-        // what remains droppable is Ping, then Elo, then Host.
-        Assert.Equal(new[] { RoomColumn.Ping, RoomColumn.Elo, RoomColumn.Host }, order);
-    }
-
-    [Fact]
-    public void TheRatingNeverOutlivesTheNameItBelongsTo()
-    {
-        // The one that matters. A rating column standing on its own, with the host column
-        // already dropped, would be a bare number nobody can attribute — and the row builder
-        // folds the rating into the sub-line only when the host went with it, so a width
-        // where Elo survived Host would drop the number entirely instead of moving it.
-        for (var width = 2000d; width >= 0; width -= 5)
-        {
-            var kept = RoomsTableLayout.Resolve(width).Select(c => c.Column).ToList();
-            if (kept.Contains(RoomColumn.Elo))
-                Assert.Contains(RoomColumn.Host, kept);
-        }
+        // the two that remain droppable are Ping then Host. (The rating is not a column:
+        // it lives inside the Host cell, so it drops with the name by construction.)
+        Assert.Equal(new[] { RoomColumn.Ping, RoomColumn.Host }, order);
     }
 
     [Theory]
