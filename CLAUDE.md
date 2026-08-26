@@ -1723,12 +1723,37 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   extraction. Nothing reads either again — `DownloadFileAsync` only ever resumes from a `.part`,
   never from a finished part file, so a retry re-fetches from byte 0 regardless. Peak `%TEMP%` for
   a WoL install goes from ~3× the payload (parts + combined zip + extracted tree, ~12 GB) to ~1×.
-  **Known limitation:** `existed` is read live from disk, so if an attempt dies mid-extraction and
-  the corrupt-payload retry runs a second one over the same folder, files the first wrote read as
-  pre-existing and drop out of `FreshOnDisk`. Inert for WoL (uninstall removes the whole cloned
-  folder, and `ApplyUpdateDeletions` never runs for `WolPatcher`), and `ValidatePayloadZip` makes
-  the common corrupt-zip case abort before the clone so the retry starts clean. **Revisit before
-  this flag is offered to a `GitHubReleases` mod**, where `OverlayNetNew` drives auto-deletion.
+  **Net-new classification survives a retry — `OverlayBaseline`.** `existed` used to be read live
+  from disk, so if an attempt died mid-extraction and MainWindow's corrupt-payload retry ran a
+  second one over the same folder, everything the first attempt wrote read as pre-existing and
+  dropped out of `FreshOnDisk` — and from there out of the manifest's `OverlayNetNew`, which is
+  what `ApplyUpdateDeletions` uses to remove files a later release stopped shipping. Inert for WoL
+  (uninstall removes the whole cloned folder, and `ApplyUpdateDeletions` never runs for
+  `WolPatcher`) but NOT for anyone else: **every other mod is `GitHubReleases`**, where that list
+  is live, and for an `InPlaceOverlay` mod an under-populated one would leave files behind in the
+  player's own game folder on uninstall. `MainWindow.InstallAsync` now creates one
+  `NativeInstallService.OverlayBaseline` **outside** the retry loop and threads it into both
+  branches; the callee captures the destination's file set at the only correct moment — after the
+  clone and flatten for `InstallAsync` (the base game IS the baseline), before writing anything
+  for `InstallModOnlyAsync` — and `CaptureOnce` makes every later attempt reuse it. Passing none
+  (as Repair does, having no retry loop) keeps the live check, so nothing else moves. Pinned by
+  `DirectPayloadInstallTests.Baseline_KeepsNetNewIdenticalAcrossARetry_WhichLiveChecksDoNot`,
+  whose **second half is the point**: without a baseline the second pass reports NOTHING as
+  net-new, which is the bug written down as a test.
+  **`ValidatePayloadZip` runs on the mod-only path too**, not just before the clone. Repair and
+  update write over an install that WORKS; the staged path could not damage it (a bad zip died in
+  `%TEMP%`), and validating first is what preserves that property — a corrupt download aborts
+  before the first file is overwritten instead of halfway through.
+  **Before making this the default for every mod**, two things: (a) let WoL ship one release on it
+  — that is what the per-mod flag is for, and no other mod has an `AntivirusFalsePositiveFile` or a
+  multi-GB multi-part payload, so their staged copy costs seconds and the urgency is low; (b)
+  decide `InPlaceOverlay` deliberately. Nothing ships on that type today (Napoleonic Era and
+  Struggle of Indonesia use `IsolatedFolder` + `privateSetupPath`, and the only `InPlaceOverlay`
+  profile is the detect-only stock game), but its destination IS the player's real Age of Empires
+  III folder, where a half-finished extraction is not recoverable by deleting the folder and the
+  in-progress marker does not apply (that path goes through `InstallModOnlyAsync`). Either keep
+  that type on the staged path or give it rollback-on-failure — `ArchiveService`'s `DeleteCreated`
+  is the existing pattern to reuse, not a new one to invent.
   **Progress:** the merged step reports `InstallPhase.ModOverlay`, and the extract weight is set to
   **0** — which is what keeps the overlay handler's cumulative base (`download + extract + clone`)
   correct for the reordered pipeline with **no other arithmetic change**. Weights become DL 40 /

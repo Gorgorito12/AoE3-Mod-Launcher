@@ -177,6 +177,7 @@ public class NativeInstallService
         string[]? payloadSha256 = null,
         IEnumerable<string>? extraExcludedSubtrees = null,
         string? installLabel = null,
+        OverlayBaseline? overlayBaseline = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install Start ({profile.DisplayName}) ===");
@@ -278,6 +279,11 @@ public class NativeInstallService
         // (Still part of the Clone phase from the UI's perspective.)
         FlattenBinSubfolder(destinationFolder, statusProgress);
 
+        // The base game is now in place, so THIS is the moment "already on disk" means "part
+        // of the cloned base game". Captured once and reused if the caller retries, or a
+        // second attempt would count the first attempt's payload as base-game files.
+        overlayBaseline?.CaptureOnce(() => SnapshotRelativeFiles(destinationFolder));
+
         // ---- Phase 4: Copy mod files on top ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
         statusProgress?.Report($"Installing {profile.DisplayName} mod files...");
@@ -287,7 +293,7 @@ public class NativeInstallService
         // mod's.
         var overlayCapture = directPayload
             ? await ExtractPayloadToDestinationAsync(
-                zipPath, destinationFolder, statusProgress, overlayProgress, ct)
+                zipPath, destinationFolder, statusProgress, overlayProgress, ct, overlayBaseline?.Paths)
             : await CopyPayloadToDestinationAsync(
                 extractedFolder, destinationFolder, statusProgress, overlayProgress, ct, payload!.Written);
 
@@ -520,6 +526,7 @@ public class NativeInstallService
         IProgress<ModOverlayProgress>? overlayProgress = null,
         string[]? payloadSha256 = null,
         string? installLabel = null,
+        OverlayBaseline? overlayBaseline = null,
         CancellationToken ct = default)
     {
         DiagnosticLog.Write($"=== Native Install (mod-only) Start ({profile.DisplayName}) ===");
@@ -533,20 +540,32 @@ public class NativeInstallService
             payloadZipUrls, payloadSha256, downloadProgress, statusProgress, ct);
 
         // ---- Phase 2: Extract ----
-        // Same split as InstallAsync. No clone here, so the direct path simply does
-        // nothing until phase 3 — a corrupt zip throws out of the extraction itself with
-        // nothing wasted, so it needs no separate validation pass.
+        // Same split as InstallAsync: the direct path writes nothing until phase 3.
         bool directPayload = profile.DirectPayloadInstall;
         PayloadExtract? payload = null;
         var extractedFolder = "";
 
-        if (!directPayload)
+        if (directPayload)
+        {
+            // This path is Repair and Update — it writes over an install that WORKS. The
+            // staged path could not damage it (a bad zip died in %TEMP%), so validating here
+            // is what keeps that property: a corrupt download aborts before the first file is
+            // overwritten instead of halfway through.
+            statusProgress?.Report("Checking mod files...");
+            ValidatePayloadZip(zipPath);
+        }
+        else
         {
             phaseProgress?.Report(InstallPhase.Extract);
             statusProgress?.Report("Extracting mod files...");
             payload = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
             extractedFolder = payload.Root;
         }
+
+        // Nothing between here and the overlay touches the destination, so this is the right
+        // moment. Only captured when a caller asked for it — Repair passes none, and it has
+        // no retry loop to protect. See OverlayBaseline.
+        overlayBaseline?.CaptureOnce(() => SnapshotRelativeFiles(destinationFolder));
 
         // ---- Phase 3: Copy mod on top (no Clone phase in mod-only) ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
@@ -557,7 +576,7 @@ public class NativeInstallService
         var previousManifest = InstallManifest.TryLoad(destinationFolder);
         var overlayCapture = directPayload
             ? await ExtractPayloadToDestinationAsync(
-                zipPath, destinationFolder, statusProgress, overlayProgress, ct)
+                zipPath, destinationFolder, statusProgress, overlayProgress, ct, overlayBaseline?.Paths)
             : await CopyPayloadToDestinationAsync(
                 extractedFolder, destinationFolder, statusProgress, overlayProgress, ct, payload!.Written);
 
@@ -1172,6 +1191,63 @@ public class NativeInstallService
     private const int MaxPayloadWrapperDepth = 4;
 
     /// <summary>
+    /// The destination's file set as it stood BEFORE this install laid its payload down —
+    /// captured once and reused across every attempt of MainWindow's corrupt-payload retry
+    /// loop, so "was this file already here?" cannot change between attempts.
+    ///
+    /// <para><b>The bug it prevents.</b> The direct extraction decides net-new vs
+    /// base-shadowing from whether the file was already on disk. Read live, attempt 2 of a
+    /// retry sees everything attempt 1 wrote as pre-existing, so those files drop out of
+    /// <c>FreshOnDisk</c> and out of the manifest's <c>OverlayNetNew</c>. For a
+    /// <c>GitHubReleases</c> mod that list is what <see cref="ApplyUpdateDeletions"/> uses to
+    /// clean up files a later release stopped shipping — so an under-populated one means
+    /// updates quietly stop tidying up, and for an <see cref="ModInstallType.InPlaceOverlay"/>
+    /// mod it means uninstall leaves files behind in the player's own game folder.</para>
+    ///
+    /// <para>A holder rather than a plain set because only the callee knows the right MOMENT
+    /// to capture: <see cref="InstallAsync"/> must wait until after the clone and the flatten
+    /// (the base game is the baseline), while <see cref="InstallModOnlyAsync"/> captures
+    /// before it writes anything. Pass none — as Repair does, having no retry loop — and the
+    /// live <c>File.Exists</c> check is used exactly as before.</para>
+    /// </summary>
+    public sealed class OverlayBaseline
+    {
+        private HashSet<string>? _paths;
+
+        /// <summary>The captured set, or null until the first capture.</summary>
+        public IReadOnlySet<string>? Paths => _paths;
+
+        /// <summary>Captures on the first call; every later call is a no-op.</summary>
+        internal void CaptureOnce(Func<HashSet<string>> capture)
+        {
+            if (_paths != null) return;
+            _paths = capture();
+            DiagnosticLog.Write($"Overlay baseline captured: {_paths.Count} file(s) already in the destination.");
+        }
+    }
+
+    /// <summary>
+    /// Every file under <paramref name="folder"/> as an install-relative, forward-slash path —
+    /// the same shape <see cref="OverlayCaptureResult.AllFiles"/> uses, so the two can be
+    /// compared directly.
+    /// </summary>
+    private static HashSet<string> SnapshotRelativeFiles(string folder)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+                set.Add(Path.GetRelativePath(folder, f).Replace('\\', '/'));
+        }
+        catch (Exception ex)
+        {
+            // Best-effort: an unreadable destination just means we fall back to live checks.
+            DiagnosticLog.Write($"Could not snapshot the destination baseline: {ex.Message}");
+        }
+        return set;
+    }
+
+    /// <summary>
     /// The wrapper-folder prefix (forward slashes, trailing '/') a payload zip nests
     /// everything under, or <c>""</c> for a flat payload. The entry-name twin of
     /// <see cref="NormalizePayloadRoot"/>, needed because the direct path has no
@@ -1275,21 +1351,18 @@ public class NativeInstallService
     /// clone running over an already-extracted payload would replace the mod's own files
     /// with the base game's.</para>
     ///
-    /// <para><b>Known limitation.</b> <c>existed</c> is read live from disk, so if a first
-    /// attempt dies mid-extraction and MainWindow's corrupt-payload retry runs a second one
-    /// over the same folder, files the first attempt wrote read as pre-existing and drop out
-    /// of <c>FreshOnDisk</c>. Harmless for WoL (its uninstall removes the whole cloned
-    /// folder and <see cref="ApplyUpdateDeletions"/> never runs for <c>WolPatcher</c>), and
-    /// the common corrupt-zip case is caught by <see cref="ValidatePayloadZip"/> before the
-    /// clone, so the retry starts clean. Revisit before this flag is offered to a
-    /// <c>GitHubReleases</c> mod, where <c>OverlayNetNew</c> drives auto-deletion.</para>
+    /// <para><paramref name="existedBaseline"/>, when supplied, answers "was this file already
+    /// here?" instead of a live <c>File.Exists</c>, so the net-new classification cannot be
+    /// changed by what a previous failed attempt left behind — see
+    /// <see cref="OverlayBaseline"/>. Null keeps the live check.</para>
     /// </summary>
     internal Task<OverlayCaptureResult> ExtractPayloadToDestinationAsync(
         string zipPath,
         string destinationFolder,
         IProgress<string>? statusProgress,
         IProgress<ModOverlayProgress>? overlayProgress,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlySet<string>? existedBaseline = null)
     {
         return Task.Run(() =>
         {
@@ -1373,7 +1446,9 @@ public class NativeInstallService
                 if (rel.Length == 0) continue;
 
                 var destPath = Path.Combine(destinationFolder, rel.Replace('/', Path.DirectorySeparatorChar));
-                bool existed = File.Exists(destPath);
+                bool existed = existedBaseline != null
+                    ? existedBaseline.Contains(rel)
+                    : File.Exists(destPath);
 
                 var destDir = Path.GetDirectoryName(destPath);
                 if (!string.IsNullOrEmpty(destDir))

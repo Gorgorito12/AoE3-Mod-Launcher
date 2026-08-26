@@ -323,9 +323,97 @@ public class DirectPayloadInstallTests : IDisposable
         Assert.Equal(4, capture.FreshOnDisk.Count);
     }
 
+    // ------------------------------------------------------------------
+    // OverlayBaseline — net-new classification that survives a retry.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void OverlayBaseline_CapturesOnlyOnce()
+    {
+        var baseline = new NativeInstallService.OverlayBaseline();
+        Assert.Null(baseline.Paths);
+
+        baseline.CaptureOnce(() => new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "data/base.xml" });
+        baseline.CaptureOnce(() => new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "something/else.xml" });
+
+        Assert.Single(baseline.Paths!);
+        Assert.Contains("data/base.xml", baseline.Paths!);
+    }
+
+    /// <summary>
+    /// THE test for the baseline. Two passes over the same destination stand in for
+    /// MainWindow's corrupt-payload retry: the second one runs over a folder the first
+    /// already wrote to. With a baseline the answer is identical both times.
+    ///
+    /// <para>The second half is the point. WITHOUT a baseline the second pass reports
+    /// nothing as net-new at all, because every file is now on disk — which is exactly how
+    /// an under-populated <c>OverlayNetNew</c> reaches the manifest, and from there stops
+    /// <c>ApplyUpdateDeletions</c> ever cleaning those files up again.</para>
+    /// </summary>
+    [Fact]
+    public async Task Baseline_KeepsNetNewIdenticalAcrossARetry_WhichLiveChecksDoNot()
+    {
+        var zip = MakeZip("payload.zip", "data/base.xml", "data/mod_a.xml", "art/thing.ddt");
+        var svc = new NativeInstallService();
+
+        // --- with a baseline: the destination as the clone left it ---
+        var withBaseline = NewTempDir();
+        var basePath = Path.Combine(withBaseline, "data", "base.xml");
+        Directory.CreateDirectory(Path.GetDirectoryName(basePath)!);
+        File.WriteAllText(basePath, "the base game's copy");
+
+        var baseline = new NativeInstallService.OverlayBaseline();
+        baseline.CaptureOnce(() => new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "data/base.xml" });
+
+        var first = await svc.ExtractPayloadToDestinationAsync(
+            zip, withBaseline, null, null, default, baseline.Paths);
+        var retry = await svc.ExtractPayloadToDestinationAsync(
+            zip, withBaseline, null, null, default, baseline.Paths);
+
+        Assert.Equal(
+            first.FreshOnDisk.OrderBy(s => s, StringComparer.Ordinal),
+            retry.FreshOnDisk.OrderBy(s => s, StringComparer.Ordinal));
+        Assert.Contains("data/mod_a.xml", retry.FreshOnDisk);
+        Assert.Contains("art/thing.ddt", retry.FreshOnDisk);
+        Assert.DoesNotContain("data/base.xml", retry.FreshOnDisk);   // shadowed the base
+
+        // --- without one: the retry loses every net-new file. This is the bug. ---
+        var noBaseline = NewTempDir();
+        var basePath2 = Path.Combine(noBaseline, "data", "base.xml");
+        Directory.CreateDirectory(Path.GetDirectoryName(basePath2)!);
+        File.WriteAllText(basePath2, "the base game's copy");
+
+        var live1 = await svc.ExtractPayloadToDestinationAsync(zip, noBaseline, null, null, default);
+        var live2 = await svc.ExtractPayloadToDestinationAsync(zip, noBaseline, null, null, default);
+
+        Assert.NotEmpty(live1.FreshOnDisk);
+        Assert.Empty(live2.FreshOnDisk);
+    }
+
+    /// <summary>
+    /// The no-op half: no baseline means the live check, exactly as before the parameter
+    /// existed. Everything that isn't a fresh install keeps its old behaviour.
+    /// </summary>
+    [Fact]
+    public async Task NoBaseline_ClassifiesFromDiskExactlyAsBefore()
+    {
+        var dest = NewTempDir();
+        var basePath = Path.Combine(dest, "data", "base.xml");
+        Directory.CreateDirectory(Path.GetDirectoryName(basePath)!);
+        File.WriteAllText(basePath, "the base game's copy");
+
+        var zip = MakeZip("payload.zip", "data/base.xml", "data/mod_a.xml", "art/thing.ddt");
+        var capture = await new NativeInstallService()
+            .ExtractPayloadToDestinationAsync(zip, dest, null, null, default);
+
+        Assert.Contains("data/mod_a.xml", capture.FreshOnDisk);
+        Assert.DoesNotContain("data/base.xml", capture.FreshOnDisk);
+    }
+
     /// <summary>
     /// Opening the archive IS the corruption check the direct path runs before the caller
-    /// spends minutes cloning AoE3.
+    /// spends minutes cloning AoE3 — and, on the repair/update path, before it overwrites the
+    /// first file of an install that currently works.
     /// </summary>
     [Fact]
     public void ValidatePayloadZip_AcceptsAGoodZipAndRejectsGarbage()

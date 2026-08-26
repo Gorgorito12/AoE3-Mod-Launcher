@@ -10054,6 +10054,12 @@ public partial class MainWindow : Window
             // network errors, IO errors during clone) skip this loop and go
             // straight to the outer catch.
             const int MaxInstallAttempts = 3;
+            // Shared across the attempts on purpose. Whichever branch runs captures the
+            // destination's file set once, and every later attempt reuses it — otherwise a
+            // retry would read the previous attempt's half-written payload as "files that
+            // were always there" and quietly drop them from the manifest's net-new list.
+            // See NativeInstallService.OverlayBaseline.
+            var overlayBaseline = new NativeInstallService.OverlayBaseline();
             for (int attempt = 1; ; attempt++)
             {
                 try
@@ -10094,6 +10100,7 @@ public partial class MainWindow : Window
                             payloadSha256: payloadSha256,
                             extraExcludedSubtrees: siblingExcludes,
                             installLabel: installLabel,
+                            overlayBaseline: overlayBaseline,
                             ct: _operatingCts!.Token);
                     }
                     else
@@ -10111,6 +10118,7 @@ public partial class MainWindow : Window
                             overlayProgress,
                             payloadSha256: payloadSha256,
                             installLabel: installLabel,
+                            overlayBaseline: overlayBaseline,
                             ct: _operatingCts!.Token);
                     }
                     break; // success — exit retry loop
