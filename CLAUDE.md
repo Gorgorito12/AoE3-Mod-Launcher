@@ -4647,9 +4647,19 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   the room controls must be blocked — but the chat stays live. So
   `InGameOverlay` is a `Border` at **`Grid.Column="0"` INSIDE the two-column
   body grid** (it's a sibling of the left column and the chat, NOT a
-  top-level cover): its opaque `BgBase` fill sits over the roster +
-  Ready/Start/Leave actions (blocking them by z-order — later child wins)
-  while the chat in Column 2 is untouched and fully usable. To fit the 340 px
+  top-level cover), while the chat in Column 2 is untouched and fully usable.
+  **It no longer relies on covering that column — `ApplyMatchPhaseUi` COLLAPSES
+  `LobbyLeftColumn` for the `InGame` and `Result` phases.** Covering is not
+  hiding, and the difference showed: the left column is one `*` row over three
+  `Auto` rows, so a short window shrinks the star to zero and the `Auto` rows
+  lay themselves out PAST the bottom of the grid — WPF does not clip — where the
+  overlay, sized to the cell, is not covering anything. The Ready/Leave pair drew
+  in a band under "Abort match" (reported). Collapsing leaves nothing to leak,
+  through the overflow, the overlay's rounded corners, or a hairline seam, and
+  stops rendering a panel nobody can see for the length of a match; the column
+  also carries `ClipToBounds="True"` for the same overflow in the LOBBY phase,
+  where no overlay is up. Renaming `LobbyLeftColumn` would break the hiding
+  SILENTLY — pinned by a `NotNull` on it in `DialogXamlTests`. To fit the 340 px
   column its stats were relaid out from a 4-wide row into a **2×2 grid**
   (MATCH TIME / TRAFFIC over CONNECTION / ROOM) with a stacked header; all
   the `InGame*` x:Names are preserved so `RefreshInGamePanel` needs no

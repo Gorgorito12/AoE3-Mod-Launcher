@@ -60,6 +60,14 @@ public class DialogXamlTests
             var window = new LobbyWindow(new MultiplayerSession(new LauncherConfig()));
             Assert.NotNull(window.StartButton);
             Assert.NotNull(window.MatchResultOverlay);
+
+            // ApplyMatchPhaseUi COLLAPSES this container for the InGame and Result phases
+            // so the lobby underneath cannot leak around the opaque overlays. Rename it and
+            // that hiding stops happening SILENTLY — the overlays still show, the lobby
+            // still peeks out at the edges, and nothing fails. This is the tripwire.
+            Assert.NotNull(window.LobbyLeftColumn);
+            Assert.NotNull(window.InGameOverlay);
+
             window.Close();
         });
 

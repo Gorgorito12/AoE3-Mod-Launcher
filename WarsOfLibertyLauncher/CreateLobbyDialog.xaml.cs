@@ -162,6 +162,24 @@ public partial class CreateLobbyDialog : Window
         BuildMaxPlayersRow();
         RoomTitleBox.Focus();
 
+        // Ceiling for SizeToContent="Height". This form only grows — the Record Game
+        // notice is permanent, and the Radmin warning, the password row, the copy row and
+        // the error line stack on top of it — and with no ceiling the window happily sizes
+        // itself taller than the screen, which puts the FOOTER (Cancel / Create) past the
+        // bottom edge where it reads as "the interface ate the buttons". The body row is a
+        // star with a ScrollViewer in it, so clamping here makes the form scroll instead.
+        // Read at construction rather than in XAML because it depends on the user's screen.
+        try
+        {
+            var work = SystemParameters.WorkArea.Height;
+            if (work > 200) MaxHeight = work - 40;   // leave the window some breathing room
+        }
+        catch (Exception ex)
+        {
+            // Best-effort: without a ceiling we are simply back to the old behaviour.
+            DiagnosticLog.Write($"CreateLobbyDialog: could not read the work area (non-fatal): {ex.Message}");
+        }
+
         // INFORMATIONAL (not blocking, not discouraging) heads-up when Radmin isn't
         // recognised as active. Creating the room and joining it are NEVER gated on
         // Radmin (join is gated only by the mod fingerprint; Create is never disabled),

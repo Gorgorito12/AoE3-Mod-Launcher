@@ -8453,6 +8453,19 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow!.MatchResultOverlay.Visibility = _matchPhase == MatchPhase.Result
             ? Visibility.Visible : Visibility.Collapsed;
 
+        // And HIDE what those two overlays stand in front of, rather than trusting them to
+        // cover it. They are opaque Borders in the same cell as the left column, which is
+        // occlusion by z-order — and that only holds while the thing underneath stays
+        // inside the cell. It does not: the column is one star row over three Auto rows,
+        // so a short window collapses the star to zero and the Auto rows lay themselves
+        // out past the bottom of the grid, where nothing is covering them. The reported
+        // symptom was the Ready/Leave pair showing in a band under "Abort match".
+        // Collapsing the column also stops measuring and rendering a whole panel that
+        // nobody can see for the length of a match.
+        bool columnCovered = _matchPhase is MatchPhase.InGame or MatchPhase.Result;
+        _lobbyWindow!.LobbyLeftColumn.Visibility = columnCovered
+            ? Visibility.Collapsed : Visibility.Visible;
+
         // NO glow call here — load-bearing. The countdown is now a live
         // line INSIDE the chat, whose CountdownOverlay Border uses a shared,
         // frozen DynamicResource (MpBlue) BorderBrush and has no Effect.

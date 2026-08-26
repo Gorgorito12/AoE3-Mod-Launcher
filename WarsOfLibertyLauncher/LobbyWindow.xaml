@@ -273,8 +273,20 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- ===== Left column ===== -->
-                    <Grid Grid.Column="0">
+                    <!-- ===== Left column =====
+                         Named because ApplyMatchPhaseUi COLLAPSES it for the InGame and
+                         Result phases. The two overlays below are opaque and sit in this
+                         same cell, but covering is not hiding: three Auto rows under one
+                         star row will, when the window is short, shrink the star to zero
+                         and then lay themselves out past the bottom of the grid — WPF does
+                         not clip — so the Ready/Leave pair drew BELOW the in-game panel,
+                         which is exactly what got reported. Collapsing leaves nothing to
+                         leak, through the overflow, the overlay's rounded corners, or a
+                         hairline seam.
+
+                         ClipToBounds is the net for the same overflow in the LOBBY phase,
+                         where no overlay is up to hide it. -->
+                    <Grid Grid.Column="0" x:Name="LobbyLeftColumn" ClipToBounds="True">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>      <!-- players card -->
                             <RowDefinition Height="Auto"/>   <!-- before-you-start -->

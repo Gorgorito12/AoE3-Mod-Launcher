@@ -76,6 +76,26 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `MpCreateDialogRadminWarning`) when `RadminVpnService.GetStatus().IsServiceRunning`
   is false at open** — the host can still create the room (peers just can't join until
   Radmin is on); it never disables Create and a probe failure just hides the warning.
+
+- **While a control is BUSY, say it with the WORD, not with opacity — and give the
+  dialog somewhere to scroll.** `CreateLobbyDialog`'s footer disables BOTH buttons while
+  the room is being created, and the disabled treatment kept eating them. It went
+  `Opacity 0.45` (both dissolved into the navy footer), then a two-step drop to
+  `MpTextFaint` plus a rim at 9% alpha — still reported, twice, as "the interface ate the
+  buttons". The moment they go inert is the moment the user has pressed Create and is
+  waiting to learn whether the click registered, so receding is the opposite of the
+  message. Now: **Create keeps its fill, its edge AND white text** (its caption already
+  changed to `MpCreateDialogCreating`, "Creando…" — that IS the state), and **Cancel keeps
+  its `MpRimStrong` rim** and steps its text down exactly ONE notch, to `MpTextMuted`.
+  Don't reintroduce a blanket `Opacity` on a busy control.
+  **Paired with it:** the dialog is `SizeToContent="Height"` and this form only grows (the
+  Record Game notice is permanent; the Radmin warning, password row, copy row and error
+  line stack on top). With no ceiling it sizes itself taller than the screen and puts the
+  footer past the bottom edge — the same complaint by a different mechanism. The body row
+  is `*` with a `ScrollViewer` in it and the constructor clamps `MaxHeight` from
+  `SystemParameters.WorkArea`, so the form scrolls instead. Keep all three: an `Auto` body
+  row, a missing `MaxHeight`, or a removed `ScrollViewer` each re-opens it on its own.
+
   The launcher is
   the *meta layer* (sign-in, lobbies, chat, mod-hash gating) over a **self-hosted
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare
