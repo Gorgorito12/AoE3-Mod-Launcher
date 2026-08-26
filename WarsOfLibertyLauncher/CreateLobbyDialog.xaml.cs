@@ -207,8 +207,14 @@ public partial class CreateLobbyDialog : Window
 
     /// <summary>
     /// The recording warning, built as two Runs so the in-game checkbox's own name can
-    /// be emphasised inside a localized sentence. That name stays English on purpose —
-    /// it is what AoE3 actually shows on its setup screen.
+    /// be emphasised inside a localized sentence.
+    ///
+    /// <para>The name is LOCALIZED (`MpCreateDialogRecordWarnName`), not fixed English. It
+    /// used to be pinned to "Record Game" in both languages, on the assumption that AoE3
+    /// showed that label whatever language it ran in. It does not — the Spanish game calls
+    /// the box "Grabar partida", so the Spanish text was naming a checkbox the reader could
+    /// not find. Anything the launcher tells the player to click in AoE3 has to be quoted in
+    /// the language that player's AoE3 is actually in.</para>
     /// </summary>
     private void BuildRecordWarning()
     {

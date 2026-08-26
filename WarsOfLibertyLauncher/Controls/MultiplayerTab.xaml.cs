@@ -8113,8 +8113,10 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.PreflightModsText.Text =
             Strings.Format("MpPreflightModsMatch", Math.Max(1, _roomMembers.Count));
 
-        // Two Runs so the checkbox's own name stands out inside a localized sentence. It
-        // stays English because that is what AoE3 shows on its setup screen.
+        // Two Runs so the checkbox's own name stands out inside a localized sentence. The
+        // name is LOCALIZED, not fixed English — the Spanish AoE3 calls that box "Grabar
+        // partida", so pinning it to "Record Game" was naming a checkbox the reader could
+        // not find. See BuildRecordWarning in CreateLobbyDialog.
         var name = Strings.Get("MpCreateDialogRecordWarnName");
         var parts = Strings.Format("MpPreflightRecordGame", "\u0000").Split('\u0000');
         var text = _lobbyWindow.PreflightRecordText;

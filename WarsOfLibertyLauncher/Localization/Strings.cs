@@ -3324,7 +3324,7 @@ public static class Strings
         ["MpPreflightHelpTitle"] = new()
         {
             [LangEn] = "Where the Record Game box is",
-            [LangEs] = "D\u00F3nde est\u00E1 la casilla Record Game",
+            [LangEs] = "D\u00F3nde est\u00E1 la casilla Grabar partida",
         },
         ["MpPreflightHelpBody"] = new()
         {
@@ -3334,7 +3334,8 @@ public static class Strings
                      + "neither works. Without a recording the match has no readable winner and counts "
                      + "for nobody.",
             [LangEs] = "En la pantalla de configuraci\u00F3n de la partida multijugador de AoE3, antes de "
-                     + "empezar, hay una casilla \u201CRecord Game\u201D. Aparece desmarcada en CADA "
+                     + "empezar, hay una casilla \u201CGrabar partida\u201D (\u201CRecord Game\u201D si "
+                     + "tienes el juego en ingl\u00E9s). Aparece desmarcada en CADA "
                      + "partida y el launcher no puede marcarla por ti \u2014 se probaron las dos formas "
                      + "de hacerlo y ninguna funciona. Sin grabaci\u00F3n la partida no tiene un ganador "
                      + "legible y no cuenta para nadie.",
@@ -3355,7 +3356,7 @@ public static class Strings
                      + "depends on the \u201CRecord Game\u201D box on AoE3's setup screen, which "
                      + "comes up unticked every match and cannot be read from here.",
             [LangEs] = "Es el ajuste del propio launcher. Que la partida se grabe de verdad depende "
-                     + "de la casilla \u201CRecord Game\u201D de la pantalla de configuraci\u00F3n de "
+                     + "de la casilla \u201CGrabar partida\u201D de la pantalla de configuraci\u00F3n de "
                      + "AoE3, que aparece desmarcada en cada partida y no se puede leer desde aqu\u00ED.",
         },
         ["MpInGameSoloTitle"] = new()
@@ -3407,7 +3408,7 @@ public static class Strings
                      + "towards no one's rating. Tick \u201CRecord Game\u201D on the AoE3 setup "
                      + "screen before the next one.",
             [LangEs] = "La partida no se grab\u00F3, as\u00ED que no hay forma de saber qui\u00E9n gan\u00F3 "
-                     + "\u2014 no cont\u00F3 para el ELO de nadie. Marca \u201CRecord Game\u201D en la "
+                     + "\u2014 no cont\u00F3 para el ELO de nadie. Marca \u201CGrabar partida\u201D en la "
                      + "pantalla de configuraci\u00F3n de AoE3 antes de la siguiente.",
         },
         // The rest of the "it didn't count" family. The server says WHY, and the advice
@@ -3602,7 +3603,7 @@ public static class Strings
             [LangEs] = "Para que la partida cuente en el ELO, marca {0} en la pantalla de configuración de AoE3. "
                      + "Sin grabación nadie sabe quién ganó.",
         },
-        ["MpCreateDialogRecordWarnName"] = new() { [LangEn] = "Record Game", [LangEs] = "Record Game" },
+        ["MpCreateDialogRecordWarnName"] = new() { [LangEn] = "Record Game", [LangEs] = "Grabar partida" },
         ["MpCreateDialogAnnounceNote"] = new()
         {
             [LangEn] = "It will be announced in the global chat and on Discord.",
@@ -4158,7 +4159,7 @@ public static class Strings
         ["MpChatRecordReminder"] = new()
         {
             [LangEn] = "⚠ Tick \"Record Game\" on AoE3's setup screen, or this match won't count.",
-            [LangEs] = "⚠ Marca \"Record Game\" en la pantalla de configuración de AoE3, o esta partida no contará.",
+            [LangEs] = "⚠ Marca \"Grabar partida\" en la pantalla de configuración de AoE3, o esta partida no contará.",
         },
         ["MpRecordBandTitle"] = new()
         {
@@ -4168,12 +4169,12 @@ public static class Strings
         ["MpRecordBandHost"] = new()
         {
             [LangEn] = "Tick \"Record Game\" on Age of Empires III's own setup screen before you start. Without the recording there is no way to tell who won, and the match counts for nobody's rating.",
-            [LangEs] = "Marca \"Record Game\" en la pantalla de configuración de Age of Empires III antes de empezar. Sin la grabación no hay forma de saber quién ganó, y la partida no cuenta para la puntuación de nadie.",
+            [LangEs] = "Marca \"Grabar partida\" en la pantalla de configuración de Age of Empires III antes de empezar. Sin la grabación no hay forma de saber quién ganó, y la partida no cuenta para la puntuación de nadie.",
         },
         ["MpRecordBandGuest"] = new()
         {
             [LangEn] = "Remind the host to tick \"Record Game\" in Age of Empires III. Only their recording is read, so without it this match counts for nobody's rating — yours included.",
-            [LangEs] = "Recuérdale al anfitrión que marque \"Record Game\" en Age of Empires III. Solo se lee su grabación, así que sin ella la partida no cuenta para la puntuación de nadie, incluida la tuya.",
+            [LangEs] = "Recuérdale al anfitrión que marque \"Grabar partida\" en Age of Empires III. Solo se lee su grabación, así que sin ella la partida no cuenta para la puntuación de nadie, incluida la tuya.",
         },
         ["MpRecordBandDismiss"] = new()
         {
@@ -4183,12 +4184,12 @@ public static class Strings
         ["DlgSettingsRecordReminder"] = new()
         {
             [LangEn] = "Remind me to tick \"Record Game\" before each match",
-            [LangEs] = "Recordarme marcar \"Record Game\" antes de cada partida",
+            [LangEs] = "Recordarme marcar \"Grabar partida\" antes de cada partida",
         },
         ["DlgSettingsRecordReminderHint"] = new()
         {
             [LangEn] = "AoE3 keeps its own \"Record Game\" box on the game setup screen, and it does not follow the option above — so it has to be ticked by hand each time. One chat line when you host.",
-            [LangEs] = "AoE3 tiene su propia casilla \"Record Game\" en la pantalla de configuración de la partida, y no sigue a la opción de arriba: hay que marcarla a mano cada vez. Es una línea en el chat cuando eres anfitrión.",
+            [LangEs] = "AoE3 tiene su propia casilla \"Grabar partida\" en la pantalla de configuración de la partida, y no sigue a la opción de arriba: hay que marcarla a mano cada vez. Es una línea en el chat cuando eres anfitrión.",
         },
         ["DlgSettingsRecordReminderTip"] = new()
         {
@@ -4203,7 +4204,7 @@ public static class Strings
         ["MpNoRecordingCheckbox"] = new()
         {
             [LangEn] = "No recording of this match was found. Check the \"Record Game\" box on AoE3's setup screen before starting the next one.",
-            [LangEs] = "No se encontró la grabación de esta partida. Marca la casilla \"Record Game\" en la pantalla de configuración de AoE3 antes de empezar la próxima.",
+            [LangEs] = "No se encontró la grabación de esta partida. Marca la casilla \"Grabar partida\" en la pantalla de configuración de AoE3 antes de empezar la próxima.",
         },
         ["MpNoRecordingProfileOff"] = new()
         {

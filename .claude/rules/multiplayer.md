@@ -77,6 +77,28 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   is false at open** — the host can still create the room (peers just can't join until
   Radmin is on); it never disables Create and a probe failure just hides the warning.
 
+- **A label the launcher tells the player to click INSIDE AoE3 must be quoted in the game's
+  language, not in English.** The recording checkbox was pinned to `"Record Game"` in BOTH
+  languages — `MpCreateDialogRecordWarnName` had it twice, and eleven Spanish strings spelled it
+  out — on the assumption, written into the code comments as fact, that AoE3 shows that label
+  whatever language it runs in. **It does not: the Spanish game calls it "Grabar partida".** So
+  every Spanish reminder, band, tooltip and post-match explanation was naming a checkbox the
+  reader could not find, in the one flow where not finding it means the match counts for nobody.
+  Reported by the maintainer, who plays the Spanish game.
+  The name now comes from the localized `MpCreateDialogRecordWarnName` on both surfaces that
+  emphasise it (`CreateLobbyDialog.BuildRecordWarning` and `MultiplayerTab`'s pre-flight band),
+  and every Spanish string says "Grabar partida".
+  **Two things deliberately NOT changed, and why:** (a) the launcher's UI language and the GAME's
+  are independent, so `MpPreflightHelpBody` — the explainer that exists precisely to help someone
+  find the box — names both ("Grabar partida" («Record Game» si tienes el juego en inglés)); the
+  short reminders stay single-label, since repeating both everywhere costs more than it buys.
+  (b) `DlgSettingsGameRecordingTip` still says `"Record Game 7"` in Spanish, because that is a
+  RECORDING FILE name, not the checkbox, and nobody has confirmed what a Spanish AoE3 names those
+  files. **That is worth checking**: `GameRecordingPurge.IsAutoNamed` matches `^Record Game \d+$`,
+  built from the game's own `cStringRecordGameFileName` — a string-table entry, so it is localized
+  too. If a Spanish install names them "Grabar partida 7", the purge silently matches nothing and
+  never cleans up. It fails SAFE (it deletes less, never more), which is why it has gone unnoticed.
+
 - **"The Create button gets consumed" was the HOVER, not the busy state — and it took three
   reports because the first two fixes chased the wrong state.** The real cause:
   `MpFooterPrimary` is `BasedOn` `MpFooterGhost`, so it inherited the ghost's
