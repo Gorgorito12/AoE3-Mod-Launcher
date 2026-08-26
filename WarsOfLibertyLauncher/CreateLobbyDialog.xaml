@@ -343,9 +343,17 @@
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
-                            </Trigger>
+                            <!-- NO hover setter here, and that is the whole point. This template
+                                 is inherited (MpFooterPrimary is BasedOn this style), and a
+                                 ControlTemplate trigger that paints a template element BY NAME
+                                 is unreachable from any derived style — so a colour hardcoded
+                                 here is imposed on every descendant with no way out. It used to
+                                 set b.Background to MpRowHighlight, which is right for a
+                                 TRANSPARENT ghost and an APAGÓN for the filled primary: hovering
+                                 Create replaced its blue with #16263E, exactly when the user was
+                                 about to click it. Hover now lives in each Style's own triggers,
+                                 on the BUTTON's Background, which reaches the Border through the
+                                 TemplateBinding above. -->
                             <!-- While busy, the state is said with the WORD, not with opacity.
                                  This went through 0.45 opacity (both buttons dissolved into the
                                  navy footer) and then a two-step drop to MpTextFaint + a rim at
@@ -363,6 +371,14 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <!-- Transparent at rest, so a subtle lift is the correct hover here. Declared on
+                     the Button's own Background so a derived style can replace it — see the
+                     template comment above. -->
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="MpFooterPrimary" TargetType="Button" BasedOn="{StaticResource MpFooterGhost}">
@@ -371,6 +387,21 @@
             <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
             <Setter Property="Padding" Value="22,0"/>
             <Style.Triggers>
+                <!-- A FILLED button darkens on hover; it does not go grey. These two come after
+                     the ghost's own hover trigger in the merged BasedOn chain, so they are the
+                     ones that land. Same pair MpPrimaryButton and MpRoomActionPrimary already
+                     use for an MpAction fill — reused rather than reinvented. -->
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpBlueHover}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpBlueHover}"/>
+                </Trigger>
+                <!-- Press feedback exists because this whole complaint started as "I can't tell
+                     whether the click registered". Answering the press is the most direct
+                     possible reply to that. -->
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpBluePressed}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpBluePressed}"/>
+                </Trigger>
                 <!-- Unchanged while busy — fill, edge AND text. It is still the button you
                      pressed and it now reads "Creating…", so the caption already carries the
                      state; dimming it on top of that only subtracts. Style triggers outrank

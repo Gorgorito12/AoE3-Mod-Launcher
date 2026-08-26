@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using WarsOfLibertyLauncher;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
@@ -43,6 +45,69 @@ public class DialogXamlTests
             // Touching a named element proves the tree was really built, not just that
             // the constructor returned.
             Assert.NotNull(dlg.CreateButton);
+            dlg.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The Create button must not inherit the ghost button's hover.
+    ///
+    /// <para>It did, and it took three reports to find. `MpFooterPrimary` is BasedOn
+    /// `MpFooterGhost`, so it inherited the ghost's ControlTemplate — whose IsMouseOver
+    /// trigger painted the template's Border BY NAME with `MpRowHighlight`. A trigger that
+    /// targets a template element by name cannot be overridden by a derived style, so
+    /// pointing at the filled blue Create button replaced its fill with #16263E: the
+    /// primary action went dark at the exact moment the user was about to click it. It
+    /// reads as "the interface eats the buttons", which is what it was reported as.</para>
+    ///
+    /// <para>The FIRST assertion is the general lesson — no state colour hardcoded by
+    /// TargetName in a template other styles build on. The second pins this outcome.</para>
+    /// </summary>
+    [Fact]
+    public void CreateButton_DoesNotInheritTheGhostButtonsHover()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var session = new MultiplayerSession(new LauncherConfig());
+            var dlg = new CreateLobbyDialog(
+                session,
+                new List<ModProfile>(),
+                null,
+                _ => Task.FromResult("0123456789abcdef"),
+                _ => new ModCopyInfo(false, false, Array.Empty<ModCopyChoice>()),
+                _ => Task.CompletedTask);
+
+            var button = dlg.CreateButton;
+            Assert.NotNull(button.Template);
+
+            // (1) Nothing in the shared template may paint a state by TargetName: that is
+            //     the setter shape a derived style is powerless against.
+            foreach (var trigger in button.Template.Triggers.OfType<Trigger>())
+                foreach (var setter in trigger.Setters.OfType<Setter>())
+                    Assert.True(string.IsNullOrEmpty(setter.TargetName),
+                        $"Template trigger on {trigger.Property?.Name} sets {setter.Property?.Name} " +
+                        $"through TargetName='{setter.TargetName}' — a derived style cannot override it.");
+
+            // (2) The hover that actually applies is the primary's blue. Triggers merge
+            //     base-first down the BasedOn chain and the last setter for a property wins,
+            //     so walking the chain in that order leaves the effective one.
+            var chain = new List<Style>();
+            for (var style = button.Style; style != null; style = style.BasedOn)
+                chain.Insert(0, style);
+
+            object? hoverBackground = null;
+            foreach (var style in chain)
+                foreach (var trigger in style.Triggers.OfType<Trigger>())
+                    if (trigger.Property == UIElement.IsMouseOverProperty)
+                        foreach (var setter in trigger.Setters.OfType<Setter>())
+                            if (setter.Property == Control.BackgroundProperty)
+                                hoverBackground = setter.Value;
+
+            var key = (hoverBackground as DynamicResourceExtension)?.ResourceKey as string;
+            Assert.Equal("MpBlueHover", key);
+
             dlg.Close();
         });
 
@@ -159,6 +224,90 @@ public class DialogXamlTests
     /// Runs <paramref name="action"/> on an STA thread with the launcher's resource
     /// dictionaries loaded, and returns the exception it threw (null when it didn't).
     /// </summary>
+    /// <summary>
+    /// No derived style may declare a state that its INHERITED template silently stomps.
+    ///
+    /// <para>The generalisation of the Create-button bug, and the test that would have
+    /// caught it — twice over. A <c>ControlTemplate</c> trigger that paints a template
+    /// element BY NAME is unreachable from a derived style: the derived style can only set
+    /// the control's own property, which the TargetName setter then beats on its way down
+    /// the TemplateBinding. So a derived style that declares, say, a hover Background while
+    /// its inherited template also sets that Background by name is writing code that reads
+    /// as intent and does nothing.</para>
+    ///
+    /// <para>Two real cases existed when this was written: <c>MpFooterPrimary</c> (the Create
+    /// button went grey on hover instead of blue) and <c>PrimaryButton</c>/<c>DangerButton</c>,
+    /// whose gold and red hovers were dead in ~15 dialogs — every confirm and every
+    /// destructive button in the launcher hovered neutral grey.</para>
+    ///
+    /// <para>A style that supplies its own <c>Template</c> is exempt: it inherits no template
+    /// to clash with. That is how several styles here legitimately keep a TargetName trigger.</para>
+    ///
+    /// <para>Scope: the app-wide <c>Styles/*.xaml</c> dictionaries. A style declared inside a
+    /// single window (as <c>MpFooterPrimary</c> is) is not reachable from here — that one has
+    /// its own test above.</para>
+    /// </summary>
+    [Fact]
+    public void NoDerivedStyleDeclaresAStateItsInheritedTemplateStomps()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var app = Application.Current!;
+            var offenders = new List<string>();
+            var examined = 0;
+
+            foreach (var dict in app.Resources.MergedDictionaries)
+                foreach (var key in dict.Keys.Cast<object>().ToList())
+                {
+                    if (dict[key] is not Style style || style.BasedOn == null) continue;
+
+                    // Owns its template → inherits nothing that could stomp it.
+                    if (style.Setters.OfType<Setter>().Any(s => s.Property == Control.TemplateProperty))
+                        continue;
+
+                    var template = InheritedTemplate(style.BasedOn);
+                    if (template == null) continue;
+
+                    var declared = style.Triggers.OfType<Trigger>()
+                        .SelectMany(t => t.Setters.OfType<Setter>())
+                        .Select(s => s.Property)
+                        .Where(p => p != null)
+                        .ToHashSet();
+                    if (declared.Count == 0) continue;
+                    examined++;
+
+                    foreach (var t in template.Triggers.OfType<Trigger>())
+                        foreach (var s in t.Setters.OfType<Setter>())
+                            if (!string.IsNullOrEmpty(s.TargetName) && declared.Contains(s.Property))
+                                offenders.Add(
+                                    $"'{key}' declares {s.Property?.Name} on a trigger, but its inherited " +
+                                    $"template sets {s.Property?.Name} via TargetName='{s.TargetName}' — " +
+                                    "the declaration is dead. Move the template's state off TargetName, " +
+                                    "or give this style its own Template.");
+                }
+
+            // A rule nothing is subject to is a rule that passes for the wrong reason. A few
+            // styles match this shape today; if the count ever reaches zero it means the walk
+            // stopped finding styles, not that the codebase became clean.
+            Assert.True(examined > 0, "the audit examined no derived styles at all");
+            Assert.True(offenders.Count == 0, string.Join("\n", offenders));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>The nearest Template setter walking up the BasedOn chain, or null.</summary>
+    private static ControlTemplate? InheritedTemplate(Style? style)
+    {
+        for (; style != null; style = style.BasedOn)
+        {
+            var setter = style.Setters.OfType<Setter>()
+                .FirstOrDefault(s => s.Property == Control.TemplateProperty);
+            if (setter?.Value is ControlTemplate template) return template;
+        }
+        return null;
+    }
+
     private static Exception? RunOnStaThread(Action action)
     {
         Exception? captured = null;

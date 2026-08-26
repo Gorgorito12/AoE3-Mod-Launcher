@@ -1181,6 +1181,27 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   chose fidelity to the reference. So a future report of the icon looking soft is a
   known, accepted cost, not a regression to fix — unless the maintainer revisits it.
 
+- **A `ControlTemplate` trigger that paints a template element by `TargetName` CANNOT be
+  overridden by a style derived from it — so a template meant to be a `BasedOn` base must
+  not hardcode a state colour there.** The sibling of the local-value precedence trap
+  documented for `TitleBarBrandButton`, and it has now cost three rounds of the wrong fix.
+  A derived style can only set the CONTROL's own property; the base template's
+  `TargetName` setter overrides the `{TemplateBinding}` that would carry it down, so the
+  derived declaration compiles, reads as intent, and does nothing. Two live cases were
+  found together: `MpFooterPrimary` (BasedOn `MpFooterGhost`) hovered to the ghost's dark
+  `MpRowHighlight` instead of blue — the reported "the interface eats the Create button" —
+  and `PrimaryButton`/`DangerButton` (BasedOn `DialogButton`), whose gold and red hovers
+  were **dead in ~15 dialogs**: every confirm and every destructive button in the launcher
+  hovered neutral grey while its style said otherwise. The fix in both: move the state off
+  `TargetName` into each Style's own triggers, on the control's `Background`, which reaches
+  the template through the `TemplateBinding`. Triggers merge base-first down the `BasedOn`
+  chain and the last setter wins, so the derived style's state is the one that lands. A
+  style that supplies its OWN `Template` is exempt — that is why `MpRoomActionGhost` and
+  `MpRowJoinButton` legitimately keep a `TargetName` trigger. The implicit global `Button`
+  style solves it a third way, by animating an overlay's `Opacity` rather than a colour.
+  Pinned by `DialogXamlTests.NoDerivedStyleDeclaresAStateItsInheritedTemplateStomps`, which
+  walks every style in `Styles/*.xaml` and asserts it examined a non-zero number of them.
+
 - **Popup menus use a TWO-TONE "punched-out" rim — don't reduce it back to a
   single border.** The gear ContextMenu + its cascading submenu
   (`ActionPanel.xaml`'s `MoreMenu` template) and the dashboard mod-switch
