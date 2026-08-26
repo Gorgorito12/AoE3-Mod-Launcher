@@ -208,11 +208,42 @@ public class NativeInstallService
         var zipPath = await DownloadAndConcatenatePartsAsync(
             payloadZipUrls, payloadSha256, downloadProgress, statusProgress, ct);
 
-        // ---- Phase 2: Extract payload to temp ----
-        phaseProgress?.Report(InstallPhase.Extract);
-        statusProgress?.Report("Extracting mod files...");
-        var payload = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
-        var extractedFolder = payload.Root;
+        // ---- Phase 2: Extract payload ----
+        // Two shapes. The DIRECT path (ModProfile.DirectPayloadInstall) does not extract
+        // here at all: it defers the whole thing to phase 4 and writes straight into the
+        // destination, so the payload never exists as a loose copy in %TEMP%. What it
+        // still has to do NOW is prove the download is a readable zip — the staged path
+        // got that for free by extracting before the clone, and without it a truncated
+        // download would only surface after the multi-minute clone.
+        bool directPayload = profile.DirectPayloadInstall;
+        PayloadExtract? payload = null;
+        var extractedFolder = "";
+
+        if (directPayload)
+        {
+            statusProgress?.Report("Checking mod files...");
+            ValidatePayloadZip(zipPath);
+        }
+        else
+        {
+            phaseProgress?.Report(InstallPhase.Extract);
+            statusProgress?.Report("Extracting mod files...");
+            payload = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
+            extractedFolder = payload.Root;
+        }
+
+        // From here on the destination gets written to, and it stays half-written until
+        // the manifest lands. Mark it: a folder holding a clone plus part of a payload
+        // satisfies EVERY content signal ModInstallProbe checks — the clone supplies the
+        // probe file and the engine DLLs, and the mod's marker lands early in the payload
+        // — and UpdateService's broad fallback scan adopts the first content match it
+        // finds WITHOUT asking. Without this, an interrupted install could silently
+        // become "the install", and the launcher would offer PLAY on a mod missing most
+        // of its files. Only for a folder with no manifest yet: a reinstall over a
+        // working install must not be strandable behind this marker if it fails.
+        var inProgressMarker = InstallManifest.TryLoad(destinationFolder) == null
+            ? MarkInstallInProgress(destinationFolder)
+            : null;
 
         // ---- Phase 3: Clone AoE3 to destination ----
         // extraExcludedSubtrees carries the install paths of every OTHER
@@ -250,8 +281,19 @@ public class NativeInstallService
         // ---- Phase 4: Copy mod files on top ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
         statusProgress?.Report($"Installing {profile.DisplayName} mod files...");
-        var overlayCapture = await CopyPayloadToDestinationAsync(
-            extractedFolder, destinationFolder, statusProgress, overlayProgress, ct, payload.Written);
+        // The direct path extracts here, onto the just-cloned base. It MUST come after
+        // the clone and the flatten: CloneAsync copies with overwrite, so cloning over an
+        // already-extracted payload would put the base game's files back on top of the
+        // mod's.
+        var overlayCapture = directPayload
+            ? await ExtractPayloadToDestinationAsync(
+                zipPath, destinationFolder, statusProgress, overlayProgress, ct)
+            : await CopyPayloadToDestinationAsync(
+                extractedFolder, destinationFolder, statusProgress, overlayProgress, ct, payload!.Written);
+
+        // The zip has done its job. Drop it now rather than leaving several GB in %TEMP%
+        // through the rest of the install, waiting on the post-install sweep.
+        TryDeleteFile(zipPath);
         // Just-cloned base + overlay: existence at copy time classifies net-new
         // vs base-shadowing. A re-install over an existing one inherits status
         // stickily via the prior manifest. No update-time deletion here — that's
@@ -272,6 +314,10 @@ public class NativeInstallService
 
         statusProgress?.Report("Writing registry entries...");
         WriteRegistryEntries(profile, version, destinationFolder, installLabel);
+
+        // Before WriteManifest, which enumerates the folder and would otherwise record the
+        // marker as an installed file (and hand it to the uninstaller).
+        if (inProgressMarker != null) TryDeleteFile(inProgressMarker);
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath, clonedAoe3: true,
             shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel,
@@ -487,10 +533,20 @@ public class NativeInstallService
             payloadZipUrls, payloadSha256, downloadProgress, statusProgress, ct);
 
         // ---- Phase 2: Extract ----
-        phaseProgress?.Report(InstallPhase.Extract);
-        statusProgress?.Report("Extracting mod files...");
-        var payload = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
-        var extractedFolder = payload.Root;
+        // Same split as InstallAsync. No clone here, so the direct path simply does
+        // nothing until phase 3 — a corrupt zip throws out of the extraction itself with
+        // nothing wasted, so it needs no separate validation pass.
+        bool directPayload = profile.DirectPayloadInstall;
+        PayloadExtract? payload = null;
+        var extractedFolder = "";
+
+        if (!directPayload)
+        {
+            phaseProgress?.Report(InstallPhase.Extract);
+            statusProgress?.Report("Extracting mod files...");
+            payload = await ExtractPayloadAsync(zipPath, statusProgress, extractProgress, ct);
+            extractedFolder = payload.Root;
+        }
 
         // ---- Phase 3: Copy mod on top (no Clone phase in mod-only) ----
         phaseProgress?.Report(InstallPhase.ModOverlay);
@@ -499,8 +555,14 @@ public class NativeInstallService
         // stickily and (b) diff for update-time deletions. The manifest on disk
         // is untouched until WriteManifest below.
         var previousManifest = InstallManifest.TryLoad(destinationFolder);
-        var overlayCapture = await CopyPayloadToDestinationAsync(
-            extractedFolder, destinationFolder, statusProgress, overlayProgress, ct, payload.Written);
+        var overlayCapture = directPayload
+            ? await ExtractPayloadToDestinationAsync(
+                zipPath, destinationFolder, statusProgress, overlayProgress, ct)
+            : await CopyPayloadToDestinationAsync(
+                extractedFolder, destinationFolder, statusProgress, overlayProgress, ct, payload!.Written);
+
+        // Done with the zip — see InstallAsync.
+        TryDeleteFile(zipPath);
 
         // Update-time file deletion: ONLY for a GitHubReleases re-overlay — i.e.
         // a previous manifest that actually tracked an overlay exists. This is
@@ -715,6 +777,49 @@ public class NativeInstallService
         try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); } catch { /* best-effort */ }
     }
 
+    /// <summary>
+    /// Deletes a scratch file we are done with. Logs rather than swallows: these are
+    /// multi-GB payload files, so a delete that keeps failing is worth seeing in a
+    /// diagnostic bundle instead of quietly filling the user's %TEMP%.
+    /// </summary>
+    /// <summary>
+    /// Stamps <see cref="ModInstallProbe.InstallInProgressMarker"/> into a destination
+    /// that is about to be written to, and returns its path (null if it could not be
+    /// written — best-effort, this must never block an install). The caller deletes it
+    /// once the manifest is about to be written; anything left behind means that install
+    /// died, and <see cref="ModInstallProbe.Inspect"/> refuses to adopt the folder.
+    /// </summary>
+    private static string? MarkInstallInProgress(string destinationFolder)
+    {
+        try
+        {
+            Directory.CreateDirectory(destinationFolder);
+            var path = Path.Combine(destinationFolder, ModInstallProbe.InstallInProgressMarker);
+            File.WriteAllText(path,
+                "An install is writing into this folder.\r\n" +
+                "If this file is still here, that install did not finish and the folder is " +
+                "incomplete — reinstall the mod, or delete the folder.\r\n");
+            return path;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Could not write the install-in-progress marker: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Could not delete temp file '{path}': {ex.Message}");
+        }
+    }
+
     // =========================================================================
     // Implementation
     // =========================================================================
@@ -813,10 +918,10 @@ public class NativeInstallService
                 var actualSha = await HashService.ComputeSha256Async(partPath, ct);
                 if (!string.Equals(actualSha, expectedSha, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Wipe the bad part so a retry doesn't pick it up
-                    // from cache. Keep earlier parts — they passed
-                    // their own verifications and a manual retry can
-                    // resume from this index.
+                    // Wipe the bad part so a retry doesn't pick it up from cache. Earlier
+                    // parts are left alone, but note that buys nothing today: a FINISHED
+                    // part file is never resumed from (DownloadFileAsync resumes only from
+                    // a ".part"), so a retry re-fetches them from byte 0 regardless.
                     try { File.Delete(partPath); }
                     catch (Exception ex)
                     {
@@ -839,6 +944,14 @@ public class NativeInstallService
         await ConcatenateFilesAsync(partUrls.Length, combinedZipPath, ct);
 
         DiagnosticLog.Write($"Combined ZIP: {new FileInfo(combinedZipPath).Length} bytes.");
+
+        // The parts are dead weight the moment the combined zip exists: nothing reads them
+        // again (DownloadFileAsync only ever resumes from a ".part", never from a finished
+        // part file, and the corrupt-payload retry wipes the whole temp folder anyway). For
+        // WoL that is several GB sitting in %TEMP% for the rest of the install.
+        for (int i = 1; i <= partUrls.Length; i++)
+            TryDeleteFile(Path.Combine(TempDirectory, $"WolPayload.zip.{i:D3}"));
+
         return combinedZipPath;
     }
 
@@ -910,8 +1023,8 @@ public class NativeInstallService
 
         DiagnosticLog.Write(
             $"Payload integrity FAILED ({phase}): {missing.Count} of {written.Count} extracted " +
-            "file(s) vanished from %TEMP% after being written — real-time antivirus is the " +
-            "overwhelmingly likely cause. Aborting instead of installing an incomplete mod.");
+            "file(s) vanished after being written — real-time antivirus is the overwhelmingly " +
+            "likely cause. Aborting instead of installing an incomplete mod.");
         foreach (var p in missing.Take(20)) DiagnosticLog.Write($"  vanished: {p}");
         if (missing.Count > 20) DiagnosticLog.Write($"  (… {missing.Count - 20} more)");
 
@@ -1052,6 +1165,288 @@ public class NativeInstallService
             break;
         }
         return current;
+    }
+
+
+    /// <summary>Mirrors <see cref="NormalizePayloadRoot"/>'s bound: descend at most this far.</summary>
+    private const int MaxPayloadWrapperDepth = 4;
+
+    /// <summary>
+    /// The wrapper-folder prefix (forward slashes, trailing '/') a payload zip nests
+    /// everything under, or <c>""</c> for a flat payload. The entry-name twin of
+    /// <see cref="NormalizePayloadRoot"/>, needed because the direct path has no
+    /// extracted folder to look at.
+    ///
+    /// <para><b>Feed it FILE entries only.</b> This rule has to agree with the folder
+    /// one, and the folder one only ever sees the directories that FILES imply: the
+    /// staged extraction skips directory entries BEFORE it creates any directory, so an
+    /// explicit empty <c>EmptyDir/</c> entry never reaches disk. Counting such an entry
+    /// here would see two top-level names where the disk sees one, the wrapper would not
+    /// be stripped, and the payload would land one level too deep — the exact failure
+    /// <see cref="NormalizePayloadRoot"/> exists to prevent.</para>
+    ///
+    /// <para>Names must already be normalised the way the disk normalises them
+    /// (backslashes folded, <c>./</c> gone, escaping entries dropped).
+    /// <see cref="ExtractPayloadToDestinationAsync"/> gets that for free by deriving them
+    /// from the same <c>GetFullPath(Combine(root, entry.FullName))</c> the staged path
+    /// uses, so the two rules cannot drift apart.</para>
+    /// </summary>
+    internal static string ResolvePayloadPrefix(IEnumerable<string> fileEntryNames)
+    {
+        var names = fileEntryNames.Where(n => !string.IsNullOrEmpty(n)).ToList();
+        var prefix = "";
+
+        for (int depth = 0; depth < MaxPayloadWrapperDepth && names.Count > 0; depth++)
+        {
+            string? single = null;
+            bool stop = false;
+
+            foreach (var n in names)
+            {
+                int slash = n.IndexOf('/');
+                if (slash < 0) { stop = true; break; }          // a loose file at this level
+                var seg = n.Substring(0, slash);
+                if (single == null) single = seg;
+                else if (!string.Equals(single, seg, StringComparison.OrdinalIgnoreCase))
+                {
+                    stop = true;
+                    break;
+                }
+            }
+
+            if (stop || single == null) break;
+
+            prefix += single + "/";
+            for (int i = 0; i < names.Count; i++)
+                names[i] = names[i].Substring(single.Length + 1);
+            names.RemoveAll(string.IsNullOrEmpty);
+
+            DiagnosticLog.Write(
+                $"Payload wrapped in a single folder '{single}' — extracting its contents at the install root.");
+        }
+
+        return prefix;
+    }
+
+    /// <summary>
+    /// Opens the combined payload zip and walks its central directory, purely so a
+    /// corrupt download fails BEFORE the caller spends minutes cloning AoE3.
+    ///
+    /// <para>The staged path got this for free: it extracted first, so a bad zip threw
+    /// with the destination still untouched. The direct path extracts LAST, so without
+    /// this a truncated download would only surface after the clone — and MainWindow's
+    /// corrupt-payload retry would pay for that clone on every one of its attempts.
+    /// Opening the archive IS the check, and it costs milliseconds.</para>
+    /// </summary>
+    internal static void ValidatePayloadZip(string zipPath)
+    {
+        using var archive = ZipFile.OpenRead(zipPath);   // InvalidDataException on a corrupt zip
+
+        int files = 0;
+        long bytes = 0;
+        foreach (var e in archive.Entries)
+        {
+            if (string.IsNullOrEmpty(e.Name)) continue;
+            files++;
+            bytes += e.Length;
+        }
+
+        DiagnosticLog.Write($"Payload zip validated: {files} file entries, {FormatBytes(bytes)} uncompressed.");
+    }
+
+    /// <summary>
+    /// Extracts the payload zip STRAIGHT into <paramref name="destinationFolder"/>,
+    /// replacing the <see cref="ExtractPayloadAsync"/> + <see cref="CopyPayloadToDestinationAsync"/>
+    /// pair for profiles that set <see cref="ModProfile.DirectPayloadInstall"/>. Returns
+    /// the same <see cref="OverlayCaptureResult"/>, so everything downstream — the
+    /// delete-list strip, <see cref="ClassifyOverlay"/>, <see cref="ApplyUpdateDeletions"/>,
+    /// the private-setup-path patch, <see cref="PruneMissingHashes"/> and the manifest —
+    /// is untouched.
+    ///
+    /// <para><b>Why.</b> The staged path writes every payload file twice and leaves a full
+    /// loose copy of the mod in <c>%TEMP%</c> across the whole AoE3 clone. For WoL that
+    /// copy contains a file Defender flags on sight. This writes each file once, at its
+    /// final path. It is NOT a way to dodge the detection — antivirus scans a write
+    /// wherever it lands, and the same <see cref="PayloadFileBlockedException"/> is raised
+    /// here — it removes the staged copy and roughly a third of the install's disk I/O.</para>
+    ///
+    /// <para><b>Ordering is load-bearing:</b> the caller must run this AFTER the clone and
+    /// <see cref="FlattenBinSubfolder"/>. <c>CloneAsync</c> copies with overwrite, so a
+    /// clone running over an already-extracted payload would replace the mod's own files
+    /// with the base game's.</para>
+    ///
+    /// <para><b>Known limitation.</b> <c>existed</c> is read live from disk, so if a first
+    /// attempt dies mid-extraction and MainWindow's corrupt-payload retry runs a second one
+    /// over the same folder, files the first attempt wrote read as pre-existing and drop out
+    /// of <c>FreshOnDisk</c>. Harmless for WoL (its uninstall removes the whole cloned
+    /// folder and <see cref="ApplyUpdateDeletions"/> never runs for <c>WolPatcher</c>), and
+    /// the common corrupt-zip case is caught by <see cref="ValidatePayloadZip"/> before the
+    /// clone, so the retry starts clean. Revisit before this flag is offered to a
+    /// <c>GitHubReleases</c> mod, where <c>OverlayNetNew</c> drives auto-deletion.</para>
+    /// </summary>
+    internal Task<OverlayCaptureResult> ExtractPayloadToDestinationAsync(
+        string zipPath,
+        string destinationFolder,
+        IProgress<string>? statusProgress,
+        IProgress<ModOverlayProgress>? overlayProgress,
+        CancellationToken ct)
+    {
+        return Task.Run(() =>
+        {
+            Directory.CreateDirectory(destinationFolder);
+
+            var destRoot = Path.GetFullPath(destinationFolder)
+                .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+            using var archive = ZipFile.OpenRead(zipPath);
+
+            // Pass 1 — resolve each entry to the path it will land on, using the SAME
+            // Combine + GetFullPath the staged extraction uses, and drop exactly what its
+            // zip-slip guard drops. Deriving the relative names from those resolved paths
+            // is what makes the wrapper rule agree with NormalizePayloadRoot by
+            // construction: backslash separators, "./" prefixes and rooted entries are
+            // normalised (or rejected) here the same way they are there.
+            var planned = new List<(ZipArchiveEntry Entry, string Rel)>(archive.Entries.Count);
+            foreach (var entry in archive.Entries)
+            {
+                if (string.IsNullOrEmpty(entry.Name)) continue;   // directory entry
+
+                string full;
+                try { full = Path.GetFullPath(Path.Combine(destinationFolder, entry.FullName)); }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Rejecting unusable payload entry '{entry.FullName}': {ex.Message}");
+                    continue;
+                }
+
+                if (!full.StartsWith(destRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    DiagnosticLog.Write(
+                        $"Zip-slip: rejecting entry '{entry.FullName}' that would escape '{destinationFolder}'.");
+                    continue;
+                }
+
+                planned.Add((entry, Path.GetRelativePath(destinationFolder, full).Replace('\\', '/')));
+            }
+
+            var prefix = ResolvePayloadPrefix(planned.Select(p => p.Rel));
+
+            int total = planned.Count;
+            long bytesTotal = 0;
+            foreach (var p in planned) bytesTotal += p.Entry.Length;
+
+            var allFiles = new List<string>(total);
+            var freshOnDisk = new List<string>();
+            var hashes = new Dictionary<string, FileFingerprint>(total, StringComparer.OrdinalIgnoreCase);
+            var written = new List<string>(total);
+            // A zip may legally carry the same path twice. The disk enumeration the staged
+            // path uses reports it once, so record it once here too — otherwise it lands
+            // twice in the manifest's overlay list and twice in OverlayNetNew.
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            int done = 0;
+            long bytesDone = 0;
+            var buffer = new byte[1024 * 1024];
+            using var hasher = System.Security.Cryptography.IncrementalHash.CreateHash(
+                System.Security.Cryptography.HashAlgorithmName.SHA256);
+
+            DiagnosticLog.Write(
+                $"Extracting {total} payload files straight into '{destinationFolder}' (no %TEMP% staging)...");
+
+            foreach (var (entry, plannedRel) in planned)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                // This is the long phase now, so it owns the Pause button. The staged
+                // extraction never honoured Pause — only the copy that followed it did.
+                while (Pause && !ct.IsCancellationRequested)
+                    Thread.Sleep(200);
+
+                done++;
+
+                var rel = plannedRel;
+                if (prefix.Length > 0)
+                {
+                    if (!rel.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                    rel = rel.Substring(prefix.Length);
+                }
+                if (rel.Length == 0) continue;
+
+                var destPath = Path.Combine(destinationFolder, rel.Replace('/', Path.DirectorySeparatorChar));
+                bool existed = File.Exists(destPath);
+
+                var destDir = Path.GetDirectoryName(destPath);
+                if (!string.IsNullOrEmpty(destDir))
+                    Directory.CreateDirectory(destDir);
+
+                long size = 0;
+                string sha;
+                try
+                {
+                    using (var src = entry.Open())
+                    using (var dst = new FileStream(destPath, FileMode.Create, FileAccess.Write,
+                               FileShare.None, buffer.Length))
+                    {
+                        int read;
+                        while ((read = src.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            hasher.AppendData(buffer, 0, read);
+                            dst.Write(buffer, 0, read);
+                            size += read;
+                        }
+                    }
+
+                    // Only now that the stream is CLOSED (last buffer flushed) is the digest
+                    // safe to record. Committing it while the file is still open would let a
+                    // failed flush leave the manifest describing bytes that never reached
+                    // disk — Verify would then call that file corrupt forever and Repair
+                    // would re-download gigabytes to "fix" it.
+                    sha = Convert.ToHexString(hasher.GetHashAndReset()).ToLowerInvariant();
+                }
+                catch (IOException ioex) when (
+                    ioex.HResult == unchecked((int)0x800700E1) ||   // ERROR_VIRUS_INFECTED
+                    ioex.HResult == unchecked((int)0x800700E2))     // ERROR_VIRUS_DELETED
+                {
+                    DiagnosticLog.Write($"Payload file blocked by antivirus during extraction: {rel}");
+                    throw new PayloadFileBlockedException(rel, ioex);
+                }
+
+                // The staged path stamps the zip's timestamp (ExtractToFile) and File.Copy
+                // preserves it, so a direct install has to set it explicitly — otherwise
+                // every file would carry "now" and the install would visibly differ from a
+                // canonical one for anyone diffing against a peer.
+                try { File.SetLastWriteTime(destPath, entry.LastWriteTime.LocalDateTime); }
+                catch { /* an out-of-range zip timestamp is not worth failing an install over */ }
+
+                if (seen.Add(rel))
+                {
+                    allFiles.Add(rel);
+                    if (!existed) freshOnDisk.Add(rel);
+                    written.Add(destPath);
+                }
+                hashes[rel] = new FileFingerprint(size, sha);
+                bytesDone += entry.Length;
+
+                if (done == 1 || done % 100 == 0 || done == total)
+                {
+                    statusProgress?.Report($"Installing mod files ({done}/{total})...");
+                    overlayProgress?.Report(new ModOverlayProgress(done, total, bytesDone, bytesTotal));
+                }
+            }
+
+            overlayProgress?.Report(new ModOverlayProgress(done, total, bytesDone, bytesTotal));
+            DiagnosticLog.Write(
+                $"Direct payload extraction complete: {allFiles.Count} files " +
+                $"({freshOnDisk.Count} net-new on disk).");
+
+            // The same guard the staged path runs, against the destination instead of
+            // %TEMP%: real-time AV quarantines a file a moment AFTER it is written, so
+            // nothing throws and the file is simply gone.
+            VerifyExtractIntact(written, "post-extract-direct");
+
+            return new OverlayCaptureResult(allFiles, freshOnDisk) { Hashes = hashes };
+        }, ct);
     }
 
     /// <summary>

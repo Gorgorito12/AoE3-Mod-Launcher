@@ -23,6 +23,9 @@ namespace WarsOfLibertyLauncher.Tests;
 /// aborting a HEALTHY install with an antivirus message, which is worse than the
 /// bug it fixes — so "an intact payload is a no-op" is what has to stay pinned.
 /// </summary>
+// Shares a collection with DirectPayloadInstallTests: both drive the real
+// ExtractPayloadAsync, which owns one shared %TEMP% folder and wipes it on entry.
+[Collection("payload-extract")]
 public class PayloadIntegrityTests : IDisposable
 {
     private readonly List<string> _tempDirs = new();

@@ -312,7 +312,10 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   (`…\install\Knights and Barbarians\data`) and never merge over the cloned AoE3 → broken.
   `NormalizePayloadRoot` descends while a folder has EXACTLY one subdir and NO loose files
   (bounded 4 levels), so a normal FLAT payload (WoL/Improvement Mod ship several top-level
-  dirs) is an immediate no-op. Don't remove it — it's what makes wrapped community zips
+  dirs) is an immediate no-op. **It has a TWIN that must stay in step** — `ResolvePayloadPrefix`,
+  which answers the same question from the zip's entry names for the direct-install path; see the
+  `DirectPayloadInstall` bullet for why they can diverge and the differential test that proves
+  they don't. Don't remove it — it's what makes wrapped community zips
   installable without repackaging.
 
 - **Every download RETRIES transient network failures and RESUMES from the `.part` file —
@@ -532,7 +535,8 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   the bar **froze at ~60 %** through extraction + overlay even though
   `ExtractPayloadAsync` / `CopyPayloadToDestinationAsync` already report progress
   (passing `null` just discarded it). Fix: define phase weights (DL 60 / Extract
-  20 / Overlay 20) and real `extractProgress`/`overlayProgress`/`phaseProgress`
+  20 / Overlay 20 — a `DirectPayloadInstall` mod folds Extract into Overlay, so
+  DL 60 / Overlay 40) and real `extractProgress`/`overlayProgress`/`phaseProgress`
   handlers, exactly like `InstallAsync` (~7610-7640). The `phaseProgress` (even a
   minimal one that just `speed.Reset()`s + clears Speed/Eta) is load-bearing — its
   shared `SpeedTracker` would otherwise carry the download's byte history into the
@@ -553,7 +557,8 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   the 3 `data\` version-key files), `FileHashes` (Dict→`FileFingerprint`, the overlay
   per-file SHA-256), and `EngineFileHashes` (Dict→`FileFingerprint`, the engine files
   — separate on purpose, see the verify bullet). Overlay hashes are captured **during
-  the copy** in `CopyPayloadToDestinationAsync` (canonical **pre-translation** bytes,
+  the copy** in `CopyPayloadToDestinationAsync` — or, for a `DirectPayloadInstall` mod, while the
+  file is written by `ExtractPayloadToDestinationAsync` — (canonical **pre-translation** bytes,
   consistent with what verify compares against the `_originals` snapshot); `WriteManifest`
   gained a `fileHashes` param, prunes it, and splits it into overlay vs engine. All
   three are empty on manifests written before this feature — verify/recognition degrade
@@ -1649,6 +1654,88 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   (`ModPropertiesDialog.ClearTempBtn_Click`) is NOT gated on `_isBusy`, so a user wiping `%TEMP%`
   mid-install would get the same, misattributed error — still better than today's silent
   zero-overlay install.)
+
+- **WoL extracts its payload STRAIGHT into the install folder — `ModProfile.DirectPayloadInstall`
+  — so no loose copy of the mod ever exists in `%TEMP%`. Read the honesty paragraph before you
+  describe this to anyone as an antivirus fix.** The staged path writes every payload file
+  **twice** (into `…\native-install\extracted\`, then again at the destination) and runs the whole
+  AoE3 clone in between, so for WoL a loose `AI3\wolai.upl` sits in `%TEMP%` for MINUTES — and
+  `%TEMP%` is the folder users report Defender acting on. `NativeInstallService.ExtractPayloadToDestinationAsync`
+  replaces the `ExtractPayloadAsync` + `CopyPayloadToDestinationAsync` pair, returning the SAME
+  `OverlayCaptureResult` so the delete-list strip, `ClassifyOverlay`, `ApplyUpdateDeletions`,
+  `ApplyPrivateSetupPath`, `PruneMissingHashes` and `WriteManifest` are untouched. It covers
+  install, repair AND update (both `InstallAsync` and `InstallModOnlyAsync` used that one pair).
+  **Honesty:** antivirus scans a write wherever it lands, so a detection can still fire at the
+  DESTINATION and raise the same `PayloadFileBlockedException`. What this buys is one write
+  instead of two, no long-lived loose copy, and an exclusion list of one folder instead of two —
+  **not** a way to hide the file. Don't "improve" it by renaming the file, staging it under
+  another extension, or touching AV configuration; that is the evasion this project has always
+  refused. Set on the WoL built-in only and deliberately **NOT** projected from a catalog
+  `mod.json` — it reshapes the pipeline, so it is being run in on one known mod first.
+  **Five things are load-bearing:**
+  (1) **Order.** The extraction MUST run after the clone and `FlattenBinSubfolder` — `CloneAsync`
+  copies with `overwrite:true`, so cloning over an already-extracted payload puts the base game's
+  files back on top of the mod's. That is why `InstallAsync` now goes download → **validate zip**
+  → clone → flatten → extract-to-destination.
+  (2) **`ValidatePayloadZip` before the clone.** The staged path got the corrupt-download check
+  for free by extracting first; extracting last would make a truncated download surface only
+  AFTER the ~2 min clone, and `MainWindow`'s 3-attempt corrupt-payload retry would pay for that
+  clone every time. Opening the archive reads its central directory, which IS the check.
+  (3) **The wrapper rule is a TWIN, and the twins must agree.** `ResolvePayloadPrefix` reads the
+  zip's ENTRY NAMES because there is no extracted folder to inspect, while `NormalizePayloadRoot`
+  reads the FOLDER. They are kept in step by deriving the relative names from the same
+  `GetFullPath(Combine(root, entry.FullName))` the staged path uses (so backslash separators,
+  `./` prefixes and rooted/escaping entries normalise or drop identically) and by feeding the rule
+  **FILE entries only** — the staged extraction skips directory entries BEFORE creating any
+  directory, so an explicit empty `EmptyDir/` never reaches disk; counting it would see two
+  top-level names where the disk sees one and the wrapper would not be stripped. Divergence is not
+  cosmetic: the payload lands one level deep (the mod does nothing) and, for a `GitHubReleases`
+  mod, `ApplyUpdateDeletions` would read every previously-shipped file as "no longer shipped" and
+  delete it. Pinned by `DirectPayloadInstallTests.DirectExtraction_LandsTheSameFilesAsTheStagedPath`,
+  a **differential** test over 10 zip shapes — the highest-value test in the change. It also pins
+  the surprising case where a payload's only top-level folder is `data\`: that folder IS stripped,
+  because the staged path strips it too.
+  (4) **Hash + write in ONE pass, and the digest is recorded only after the stream CLOSES.**
+  `IncrementalHash` (reset per entry) replaces extract → re-read → copy, so the install does about
+  a third less disk I/O. Committing the digest while the file is still open would let a failed
+  flush leave the manifest describing bytes that never reached disk — Verify would call that file
+  corrupt forever and Repair would re-download gigabytes to "fix" it. The loop also stamps
+  `LastWriteTime` from the zip entry: `ExtractToFile` did that and `File.Copy` preserved it, so
+  without it every file would carry "now" and the install would visibly differ from a canonical
+  peer's. And it honours `Pause`, which the staged EXTRACT never did (only the copy that followed
+  it) — this is the long phase now.
+  (5) **A half-written install can no longer be adopted — `ModInstallProbe.InstallInProgressMarker`.**
+  This is the hazard the reorder creates, and it is nasty: a folder holding the clone plus part of
+  the payload satisfies EVERY content signal (the clone supplies the probe file `data\stringtabley.xml`
+  and the engine DLLs; the marker `art\zulushield` lands early in the payload), and
+  `UpdateService.BroadFallbackScan` adopts the first content match it finds **without asking** — so
+  an interrupted install could silently become "the install" and the launcher would offer PLAY on a
+  mod missing most of its files. `InstallAsync` writes `.aoe3ml-install-in-progress` into the
+  destination before the clone and deletes it **immediately before `WriteManifest`** (which
+  enumerates the folder and would otherwise hand the marker to the uninstaller); `Inspect` returns
+  the new `ProbeOutcome.InstallInProgress`. Written **only when the destination has no manifest
+  yet**, so a failed reinstall over a working install can't strand it behind the marker. This also
+  closes the pre-existing, smaller version of the same hole (a cancelled overlay copy). Pinned by
+  the `InterruptedInstall_*` / `FinishedInstall_*` cases in `ModInstallProbeTests` — the
+  finished-install one is the no-op that matters.
+  **Temp lifecycle (all mods, not just WoL):** the `WolPayload.zip.00N` parts are deleted right
+  after a successful `ConcatenateFilesAsync` and the combined zip right after a successful
+  extraction. Nothing reads either again — `DownloadFileAsync` only ever resumes from a `.part`,
+  never from a finished part file, so a retry re-fetches from byte 0 regardless. Peak `%TEMP%` for
+  a WoL install goes from ~3× the payload (parts + combined zip + extracted tree, ~12 GB) to ~1×.
+  **Known limitation:** `existed` is read live from disk, so if an attempt dies mid-extraction and
+  the corrupt-payload retry runs a second one over the same folder, files the first wrote read as
+  pre-existing and drop out of `FreshOnDisk`. Inert for WoL (uninstall removes the whole cloned
+  folder, and `ApplyUpdateDeletions` never runs for `WolPatcher`), and `ValidatePayloadZip` makes
+  the common corrupt-zip case abort before the clone so the retry starts clean. **Revisit before
+  this flag is offered to a `GitHubReleases` mod**, where `OverlayNetNew` drives auto-deletion.
+  **Progress:** the merged step reports `InstallPhase.ModOverlay`, and the extract weight is set to
+  **0** — which is what keeps the overlay handler's cumulative base (`download + extract + clone`)
+  correct for the reordered pipeline with **no other arithmetic change**. Weights become DL 40 /
+  Clone 25 / Overlay 30 / Finalize 5 (install), DL 50 / Overlay 45 / Finalize 5 (mod-only) and
+  DL 60 / Overlay 40 (repair). Accepted cosmetic cost: `SpeedLabelKeyForPhase` maps `ModOverlay` to
+  "💾 Copia" while it is really decompressing — accurate about writing to disk, and the status line
+  says "🔧 Aplicando mod (n/m)".
 
 - **`FolderCloneService.CloneAsync` returns files actually COPIED — keep `filesCopied++` INSIDE the
   try.** It used to sit after the try/catch, so a file skipped for `UnauthorizedAccessException`
@@ -4026,7 +4113,9 @@ engine** and the UI binds to it.
 
 1. **Install** — detect AoE3 → download multi-part payload ZIP → clone AoE3 into
    a standalone mod folder → flatten Steam-layout `bin\` into root → overlay mod
-   files (capturing per-file SHA-256 fingerprints during the copy) → shortcuts +
+   files (capturing per-file SHA-256 fingerprints during the copy — or, for a
+   `DirectPayloadInstall` mod like WoL, extracting the payload straight onto the
+   clone in one pass instead, with no `%TEMP%` staging) → shortcuts +
    uninstall registry entries + `install-manifest.json` (with the hash maps). After
    a fresh install that's recognised but behind the latest version,
    `MaybeAutoContinueUpdateAfterInstall` auto-continues into the update flow

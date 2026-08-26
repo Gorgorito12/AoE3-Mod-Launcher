@@ -6661,6 +6661,11 @@ public partial class MainWindow : Window
         if (reason == ProbeOutcome.EngineMissing)
             return Strings.Format("DlgInvalidFolderEngineBody", profile.DisplayName);
 
+        // Every content signal is present, so the generic "we expected <probe> + <marker>"
+        // message would name two files that ARE there. Say what is actually wrong.
+        if (reason == ProbeOutcome.InstallInProgress)
+            return Strings.Format("DlgInvalidFolderInProgressBody", profile.DisplayName);
+
         if (reason == ProbeOutcome.MarkerMissing && !string.IsNullOrEmpty(profile.InstallMarker))
             return Strings.Format("DlgInvalidFolderMarkerBody", profile.DisplayName, profile.InstallMarker);
 
@@ -7268,9 +7273,12 @@ public partial class MainWindow : Window
             // Phase weights so the OverallProgress bar advances through extract +
             // overlay instead of freezing at the end of the download. Mirrors the
             // scheme InstallAsync uses (DL/Extract/Overlay), summing to 100%.
+            // See InstallAsync: a direct-payload mod folds Extract into ModOverlay, so its
+            // 20 points move there and the overlay handler's base stays correct.
+            bool directPayload = _updateService.Profile.DirectPayloadInstall;
             const double weightDownload = 60;
-            const double weightExtract  = 20;
-            const double weightOverlay  = 20;
+            double weightExtract = directPayload ?  0 : 20;
+            double weightOverlay = directPayload ? 40 : 20;
 
             var dlProgress = new Progress<DownloadProgress>(p =>
             {
@@ -9893,11 +9901,22 @@ public partial class MainWindow : Window
             // weights produce a bar that feels honest.
             //   Full install:  DL 40% | Extract 15% | Clone 25% | Mod 15% | Final 5%
             //   Mod-only:      DL 50% | Extract 20% |            Mod 25% | Final 5%
+            //   Direct payload: DL 40% |             Clone 25% | Mod 30% | Final 5%
+            //   Direct mod-only: DL 50% |                       | Mod 45% | Final 5%
+            // A direct-payload mod (ModProfile.DirectPayloadInstall) has no separate
+            // extract phase — the decompression IS the overlay, reported as ModOverlay —
+            // so Extract's slice moves there. Zeroing the extract weight also keeps the
+            // overlay handler's cumulative base (download + extract + clone) correct for
+            // the reordered pipeline, where the clone now runs BEFORE the extraction. No
+            // other arithmetic changes.
             bool isModOnly = aoe3SourcePath == null;
+            bool directPayload = profile.DirectPayloadInstall;
             double weightDownload = isModOnly ? 50 : 40;
-            double weightExtract  = isModOnly ? 20 : 15;
+            double weightExtract  = directPayload ? 0 : (isModOnly ? 20 : 15);
             double weightClone    = isModOnly ?  0 : 25;
-            double weightOverlay  = isModOnly ? 25 : 15;
+            double weightOverlay  = directPayload
+                ? (isModOnly ? 45 : 30)
+                : (isModOnly ? 25 : 15);
             // weightFinalize = 100 - (sum of above) = 5% in both cases
 
             // SpeedTracker per phase so the figure resets between phases instead
