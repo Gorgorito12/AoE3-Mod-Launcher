@@ -76,6 +76,39 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `MpCreateDialogRadminWarning`) when `RadminVpnService.GetStatus().IsServiceRunning`
   is false at open** — the host can still create the room (peers just can't join until
   Radmin is on); it never disables Create and a probe failure just hides the warning.
+
+- **"The Create button gets consumed" was the HOVER, not the busy state — and it took three
+  reports because the first two fixes chased the wrong state.** The real cause:
+  `MpFooterPrimary` is `BasedOn` `MpFooterGhost`, so it inherited the ghost's
+  `ControlTemplate`, whose `IsMouseOver` trigger painted the template Border **by
+  `TargetName`** with `MpRowHighlight`. A trigger that targets a template element by name
+  is unreachable from a derived style (see the general rule in `CLAUDE.md`), so pointing at
+  the filled blue Create button replaced `#2F7FE0` with `#16263E` — the primary action went
+  dark at the exact instant the user was about to click it. Proven from screenshot pixels:
+  same button, `#2F7FE0` with the pointer away and `#16263E` with it over. Hover now lives
+  in each Style's own triggers, on the BUTTON's `Background`; the primary uses
+  `MpBlueHover` / `MpBluePressed`, the same pair `MpRoomActionPrimary` and `MpPrimaryButton`
+  already use for an `MpAction` fill. Pinned by
+  `DialogXamlTests.CreateButton_DoesNotInheritTheGhostButtonsHover`.
+- **While a control is BUSY, say it with the WORD, not with opacity — and give the
+  dialog somewhere to scroll.** Separate from the above, and a real improvement even though
+  it was not what was being reported. `CreateLobbyDialog`'s footer disables BOTH buttons
+  while the room is being created. That treatment went `Opacity 0.45` (both dissolved into
+  the navy footer), then a two-step drop to `MpTextFaint` plus a rim at 9% alpha. The moment
+  they go inert is the moment the user has pressed Create and is waiting to learn whether
+  the click registered, so receding is the opposite of the message. Now: **Create keeps its
+  fill, its edge AND white text** (its caption already changed to `MpCreateDialogCreating`,
+  "Creando…" — that IS the state), and **Cancel keeps its `MpRimStrong` rim** and steps its
+  text down exactly ONE notch, to `MpTextMuted`. Don't reintroduce a blanket `Opacity` on a
+  busy control.
+  **Paired with it:** the dialog is `SizeToContent="Height"` and this form only grows (the
+  Record Game notice is permanent; the Radmin warning, password row, copy row and error
+  line stack on top). With no ceiling it sizes itself taller than the screen and puts the
+  footer past the bottom edge — the same complaint by a different mechanism. The body row
+  is `*` with a `ScrollViewer` in it and the constructor clamps `MaxHeight` from
+  `SystemParameters.WorkArea`, so the form scrolls instead. Keep all three: an `Auto` body
+  row, a missing `MaxHeight`, or a removed `ScrollViewer` each re-opens it on its own.
+
   The launcher is
   the *meta layer* (sign-in, lobbies, chat, mod-hash gating) over a **self-hosted
   Node/Fastify backend at `wol-lobby.duckdns.org`** — **not** a Cloudflare

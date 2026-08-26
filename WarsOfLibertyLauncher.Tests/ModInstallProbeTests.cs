@@ -294,4 +294,63 @@ public class ModInstallProbeTests : IDisposable
         Assert.Equal(ProbeOutcome.EngineMissing,
             ModInstallProbe.Inspect(install, NoProbeFileProfile()));
     }
+
+    // ---------------- Interrupted install ----------------
+    //
+    // THE case that matters here. An install that dies partway leaves a folder holding
+    // the AoE3 clone (probe file + engine DLLs) plus however much of the payload landed
+    // — and the mod's marker is early in the payload. So every content signal says
+    // "real install", and UpdateService's broad fallback scan adopts the first content
+    // match it finds WITHOUT asking the user. Before the in-progress marker, that meant
+    // a half-extracted folder could silently become "the install" and the launcher would
+    // offer PLAY on a mod missing most of its files.
+
+    [Fact]
+    public void InterruptedInstall_IsNotAdopted_EvenThoughEverySignalIsPresent()
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");   // from the clone
+        CreateDirAt(install, @"art\zulushield");            // landed early in the payload
+        CreateEngineAt(install);                            // from the clone
+        CreateFileAt(install, ModInstallProbe.InstallInProgressMarker);
+
+        Assert.Equal(ProbeOutcome.InstallInProgress,
+            ModInstallProbe.Inspect(install, WolLikeProfile()));
+        Assert.False(ModInstallProbe.LooksLikeModInstall(install, WolLikeProfile()));
+    }
+
+    /// <summary>
+    /// The no-op half: clearing the marker (what a finished install does, right before it
+    /// writes the manifest) restores a normal Match. If this ever fails, the guard is
+    /// rejecting real installs — far worse than the bug it prevents.
+    /// </summary>
+    [Fact]
+    public void FinishedInstall_WithTheMarkerCleared_IsAdoptedNormally()
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");
+        CreateDirAt(install, @"art\zulushield");
+        CreateEngineAt(install);
+        CreateFileAt(install, ModInstallProbe.InstallInProgressMarker);
+        File.Delete(Path.Combine(install, ModInstallProbe.InstallInProgressMarker));
+
+        Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
+
+    /// <summary>
+    /// The marker only vetoes a folder that would otherwise pass. A folder missing the
+    /// marker file must still report the signal it is actually missing, so the picker's
+    /// rejection message keeps naming the real cause.
+    /// </summary>
+    [Fact]
+    public void TheMarkerDoesNotMaskAMoreBasicFailure()
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");
+        CreateEngineAt(install);
+        CreateFileAt(install, ModInstallProbe.InstallInProgressMarker);   // no art\zulushield
+
+        Assert.Equal(ProbeOutcome.MarkerMissing,
+            ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
 }

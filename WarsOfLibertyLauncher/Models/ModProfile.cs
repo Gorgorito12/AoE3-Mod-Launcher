@@ -663,6 +663,34 @@ public class ModProfile
     /// </summary>
     public string AntivirusFalsePositiveFile { get; set; } = "";
 
+    /// <summary>
+    /// Extract the payload ZIP STRAIGHT into the install folder instead of staging a
+    /// full loose copy of it under <c>%TEMP%</c> first. Opt-in; today only Wars of
+    /// Liberty sets it.
+    ///
+    /// <para><b>Why it exists.</b> The staged path writes every payload file TWICE —
+    /// once into <c>…\native-install\extracted\</c>, then again at the destination —
+    /// and the AoE3 clone runs BETWEEN the two, so that loose copy sits in %TEMP% for
+    /// minutes rather than an instant. For WoL it includes
+    /// <see cref="AntivirusFalsePositiveFile"/> (<c>AI3\wolai.upl</c>), and %TEMP% is
+    /// the folder users report Defender acting on. Extracting in place removes the
+    /// staged copy entirely: the payload is written once, at its final path (and the
+    /// install gets faster, since ~10 GB of read+write disappears with it).</para>
+    ///
+    /// <para><b>What it does NOT promise.</b> Antivirus scans a file wherever it is
+    /// written, so a detection can still fire at the DESTINATION — that path is
+    /// unchanged and still raises <see cref="Services.PayloadFileBlockedException"/>.
+    /// This narrows the exposure window and collapses the exclusion advice to one
+    /// folder; it is not a way to hide the file from anything, and nothing here
+    /// touches antivirus configuration.</para>
+    ///
+    /// <para>Deliberately NOT projected from a catalog <c>mod.json</c>
+    /// (<see cref="Services.ModRegistry"/>'s <c>ProjectToProfile</c> never assigns it):
+    /// it reshapes the install pipeline — extraction moves AFTER the clone — so it is
+    /// being run in on one known mod before being offered to community manifests.</para>
+    /// </summary>
+    public bool DirectPayloadInstall { get; set; } = false;
+
     // ------------------------------------------------------------------
     // Image-source resolvers.
     //

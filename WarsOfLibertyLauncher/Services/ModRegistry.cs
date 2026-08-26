@@ -759,6 +759,11 @@ public static class ModRegistry
             // launcher and is already reported upstream, so the launcher warns before
             // installing instead of pretending it is a rare accident.
             AntivirusFalsePositiveFile = @"AI3\wolai.upl",
+            // …and, because of that same file, the one mod that extracts its payload
+            // straight into the install folder instead of staging a full loose copy of
+            // it in %TEMP% first. See ModProfile.DirectPayloadInstall for what this
+            // does and does not promise about the detection above.
+            DirectPayloadInstall = true,
             GameExecutable = "age3y.exe",
             GameArguments = "",
             UpdateMechanism = ModUpdateMechanism.WolPatcher,

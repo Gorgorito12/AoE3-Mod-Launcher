@@ -52,8 +52,16 @@ public enum ProbeOutcome
     /// mod's own files ARE here, just not the cloned game underneath.
     /// </summary>
     EngineMissing = 3,
+    /// <summary>
+    /// Every content signal is present, but the folder is still carrying the
+    /// in-progress marker an install writes before it starts laying files down and
+    /// removes only once the manifest is written — so this is a half-written
+    /// install, not a finished one. Ranked just below <see cref="Match"/> because
+    /// it is the most install-like thing that still must not be adopted.
+    /// </summary>
+    InstallInProgress = 4,
     /// <summary>All required signals present — a real install of this mod.</summary>
-    Match = 4,
+    Match = 5,
 }
 
 public static class ModInstallProbe
@@ -95,6 +103,31 @@ public static class ModInstallProbe
     /// to <paramref name="installPath"/> — exists on disk. An empty marker
     /// returns false; callers treat "no marker declared" as a separate case.
     /// </summary>
+    /// <summary>
+    /// File an install writes into the destination BEFORE it lays anything down and
+    /// deletes only once the manifest has been written. Its presence means "a previous
+    /// install died in the middle of this folder".
+    ///
+    /// <para><b>Why it has to exist.</b> A half-written install passes every content
+    /// signal: the AoE3 clone supplies the probe file (WoL's
+    /// <c>data\stringtabley.xml</c> ships in vanilla) and the engine DLLs, and the mod's
+    /// marker lands early in the payload. So an interrupted install used to leave a
+    /// folder that <see cref="Inspect"/> called a real install — and
+    /// <see cref="UpdateService"/>'s broad fallback scan adopts the first content match
+    /// it finds WITHOUT asking, which meant the launcher could silently start offering
+    /// PLAY on a mod that is missing most of its files.</para>
+    ///
+    /// <para>Written only for an install into a folder that has no manifest yet — a
+    /// reinstall over a working install must not be able to strand it behind this
+    /// marker if it fails. Kept out of the manifest by deleting it before
+    /// <c>WriteManifest</c> enumerates the folder.</para>
+    /// </summary>
+    public const string InstallInProgressMarker = ".aoe3ml-install-in-progress";
+
+    /// <summary>True when an interrupted install left its in-progress marker behind.</summary>
+    public static bool InstallIsInProgress(string path) =>
+        !string.IsNullOrEmpty(path) && File.Exists(Path.Combine(path, InstallInProgressMarker));
+
     public static bool MarkerExists(string installPath, string marker)
     {
         if (string.IsNullOrEmpty(installPath) || string.IsNullOrEmpty(marker))
@@ -146,6 +179,10 @@ public static class ModInstallProbe
             ? HasEngine(path)
             : HasEngineNearby(path);
         if (!engineOk) return ProbeOutcome.EngineMissing;
+
+        // Last, because it is the only check that can reject a folder holding every
+        // other signal: an install that died mid-write looks complete to all of them.
+        if (InstallIsInProgress(path)) return ProbeOutcome.InstallInProgress;
 
         return ProbeOutcome.Match;
     }

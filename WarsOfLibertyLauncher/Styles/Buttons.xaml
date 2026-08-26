@@ -173,11 +173,21 @@
                                           VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BgNeutralHover}"/>
-                        </Trigger>
+                        <!-- No Background here, and it is load-bearing. This template is
+                             INHERITED (PrimaryButton and DangerButton are BasedOn this
+                             style), and a ControlTemplate trigger that paints a template
+                             element BY NAME cannot be overridden by a derived style — a
+                             Style trigger can only set the BUTTON's property, which the
+                             TargetName setter then beats on the way down. It used to set
+                             border.Background here, so PrimaryButton's gold hover and
+                             DangerButton's red one were declared, inherited, and silently
+                             DEAD: every confirm and every destructive button in ~15
+                             dialogs turned neutral grey on hover instead. Background
+                             states now live in each Style's own triggers below, where a
+                             derived style can replace them. The implicit Button style at
+                             the top of this file solves the same problem the other way,
+                             by animating an overlay's Opacity instead of a colour. -->
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource BgPanelAlt}"/>
                             <Setter Property="Foreground" Value="#666"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
@@ -185,10 +195,22 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <!-- The neutral dialog button's own states. Same colours as before; they just
+                 travel through the Button's Background and the TemplateBinding now. -->
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource BgNeutralHover}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{DynamicResource BgPanelAlt}"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- Accent-colored confirm. DynamicResource so the per-mod theme swap
-         in MainWindow propagates to every dialog that's already open. -->
+         in MainWindow propagates to every dialog that's already open.
+         Its hover/disabled triggers below come AFTER DialogButton's in the merged
+         BasedOn chain, so they are the ones that land. -->
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
         <Style.Triggers>

@@ -5311,6 +5311,16 @@ public static class Strings
                        "Instala {0} desde el launcher: copia un Age of Empires III completo y aplica el mod encima.",
         },
         // {0} = mod display name.
+        ["DlgInvalidFolderInProgressBody"] = new()
+        {
+            [LangEn] = "That folder holds an UNFINISHED install of {0}: a previous install was " +
+                       "interrupted before it could complete, so most of the mod's files are missing.\n\n" +
+                       "Install {0} again from the launcher (or delete that folder) instead of pointing it here.",
+            [LangEs] = "Esa carpeta tiene una instalación de {0} SIN TERMINAR: una instalación anterior se " +
+                       "interrumpió antes de completarse, así que faltan casi todos los archivos del mod.\n\n" +
+                       "Instala {0} de nuevo desde el launcher (o borra esa carpeta) en vez de apuntar aquí.",
+        },
+        // {0} = mod display name.
         ["DlgFolderPickerTitle"] = new()
         {
             [LangEn] = "Select {0} folder",

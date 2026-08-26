@@ -343,27 +343,42 @@
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
-                            </Trigger>
-                            <!-- Disabled is stated in the brushes, NOT with a blanket Opacity.
-                                 At 0.45 over this navy footer both buttons dissolved into the
-                                 background — and the moment they do it is the moment the user
-                                 pressed Create and is waiting to learn whether the click
-                                 registered, so "there is nothing here" was being used to say
-                                 "I am working". They must stay readable while clearly inert. -->
+                            <!-- NO hover setter here, and that is the whole point. This template
+                                 is inherited (MpFooterPrimary is BasedOn this style), and a
+                                 ControlTemplate trigger that paints a template element BY NAME
+                                 is unreachable from any derived style — so a colour hardcoded
+                                 here is imposed on every descendant with no way out. It used to
+                                 set b.Background to MpRowHighlight, which is right for a
+                                 TRANSPARENT ghost and an APAGÓN for the filled primary: hovering
+                                 Create replaced its blue with #16263E, exactly when the user was
+                                 about to click it. Hover now lives in each Style's own triggers,
+                                 on the BUTTON's Background, which reaches the Border through the
+                                 TemplateBinding above. -->
+                            <!-- While busy, the state is said with the WORD, not with opacity.
+                                 This went through 0.45 opacity (both buttons dissolved into the
+                                 navy footer) and then a two-step drop to MpTextFaint + a rim at
+                                 9% alpha, which still read as "the interface ate them" — and it
+                                 is reported as such, twice. The shape now stays put: the rim
+                                 keeps its normal strength so the button is still visibly THERE,
+                                 and only the text steps down ONE notch of the ramp. The moment
+                                 these go inert is the moment the user has pressed Create and is
+                                 waiting to learn whether the click registered; receding is the
+                                 opposite of the message. -->
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{DynamicResource MpTextFaint}"/>
-                                <!-- The BUTTON's property, not TargetName="b": the Border already
-                                     TemplateBinds it, and a Style trigger cannot reach a template
-                                     element by name — which is how the derived primary below
-                                     keeps its own edge while busy. -->
-                                <Setter Property="BorderBrush" Value="{DynamicResource MpRimFaint}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <!-- Transparent at rest, so a subtle lift is the correct hover here. Declared on
+                     the Button's own Background so a derived style can replace it — see the
+                     template comment above. -->
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="MpFooterPrimary" TargetType="Button" BasedOn="{StaticResource MpFooterGhost}">
@@ -372,12 +387,28 @@
             <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
             <Setter Property="Padding" Value="22,0"/>
             <Style.Triggers>
-                <!-- Keeps its FILL and its EDGE while busy — it is still the button you pressed,
-                     and it carries the "Creating…" caption; only the text steps back. Style
-                     triggers outrank template triggers in WPF, which is what lets these two
-                     setters beat the inherited ghost treatment. -->
+                <!-- A FILLED button darkens on hover; it does not go grey. These two come after
+                     the ghost's own hover trigger in the merged BasedOn chain, so they are the
+                     ones that land. Same pair MpPrimaryButton and MpRoomActionPrimary already
+                     use for an MpAction fill — reused rather than reinvented. -->
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpBlueHover}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpBlueHover}"/>
+                </Trigger>
+                <!-- Press feedback exists because this whole complaint started as "I can't tell
+                     whether the click registered". Answering the press is the most direct
+                     possible reply to that. -->
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpBluePressed}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpBluePressed}"/>
+                </Trigger>
+                <!-- Unchanged while busy — fill, edge AND text. It is still the button you
+                     pressed and it now reads "Creating…", so the caption already carries the
+                     state; dimming it on top of that only subtracts. Style triggers outrank
+                     template triggers in WPF, which is what lets this beat the inherited ghost
+                     treatment (whose own disabled trigger would grey the text). -->
                 <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Foreground" Value="#CBDCF2"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
                 </Trigger>
             </Style.Triggers>
@@ -491,7 +522,11 @@
         <Grid Margin="0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>     <!-- Title bar -->
-                <RowDefinition Height="Auto"/>     <!-- Body -->
+                <!-- Star, not Auto. With SizeToContent="Height" this still measures to the
+                     content's natural height, but once MaxHeight clamps the window (see the
+                     constructor) it is the row that gives, so the ScrollViewer inside takes
+                     over and the FOOTER cannot be pushed off the screen. -->
+                <RowDefinition Height="*"/>        <!-- Body (scrolls when clamped) -->
                 <RowDefinition Height="Auto"/>     <!-- Footer -->
             </Grid.RowDefinitions>
 
@@ -502,8 +537,16 @@
                                ShowMaximize="False"
                                ShowClose="True"/>
 
-            <!-- Body. 18 px padding, the reference's dialog spacing. -->
-            <StackPanel Grid.Row="1" Margin="18,4,18,18">
+            <!-- Body. 18 px padding, the reference's dialog spacing. Wrapped in a
+                 ScrollViewer because this form keeps growing — the Record Game notice is
+                 permanent, and the Radmin warning, the password row, the copy row and the
+                 error line all pile on top of it. Without somewhere to scroll, a tall
+                 enough form simply pushes its own footer past the bottom of the screen. -->
+            <ScrollViewer Grid.Row="1"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="0">
+            <StackPanel Margin="18,4,18,18">
 
                 <!-- MOD. The card carries the mod's identity AND its fingerprint state.
                      The fingerprint used to live behind an "Advanced details" toggle; it
@@ -728,6 +771,7 @@
                            Margin="0,12,0,0"
                            Visibility="Collapsed"/>
             </StackPanel>
+            </ScrollViewer>
 
             <!-- Footer: what happens when you press Create, then the two actions. The
                  server's error lands HERE, under the button that caused it — it used to
