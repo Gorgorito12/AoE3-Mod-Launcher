@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -504,6 +504,15 @@ public enum NotificationKind
     Installed,
     /// <summary>Any user created a new multiplayer room (for a mod you have installed).</summary>
     RoomCreated,
+    /// <summary>
+    /// A match that had gone down without a result was later decided and rated, from a
+    /// recording one of the two players read after the report had already gone out.
+    ///
+    /// <para>It needs its own kind because it arrives with the room long closed: there is no
+    /// lobby window left to write into, and without a bell the correction would only ever be
+    /// discovered by someone who happened to open their History.</para>
+    /// </summary>
+    MatchRated,
 }
 
 /// <summary>
@@ -1588,6 +1597,14 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("notifiedRoomIds")]
     public List<string> NotifiedRoomIds { get; set; } = new();
+
+    /// <summary>
+    /// Deduplicates the "your match was rated after all" bell. Keyed by match id, so a frame
+    /// delivered twice — or once before a restart and again after — bells once. Capped like
+    /// <see cref="NotifiedRoomIds"/>.
+    /// </summary>
+    [JsonPropertyName("notifiedRatedMatchIds")]
+    public List<string> NotifiedRatedMatchIds { get; set; } = new();
 
     private const string ConfigFileName = "launcher-config.json";
 

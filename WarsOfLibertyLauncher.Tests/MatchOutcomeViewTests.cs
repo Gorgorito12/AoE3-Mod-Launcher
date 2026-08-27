@@ -228,6 +228,34 @@ public class RecordingIndicatorTests
             MatchOutcomeView.UnratedNoteKey("no_decided_result", LocalReadFailure.RosterUnknown));
     }
 
+    /// <summary>
+    /// The three causes that used to be told to the player as "the match was not recorded".
+    ///
+    /// <para>Each of them is a case where that sentence is FALSE, which is what made a real
+    /// player stop trusting the rating: he was sent to tick a box that was already ticked, over
+    /// a match whose recording named the winner correctly.</para>
+    /// </summary>
+    [Theory]
+    // Recordings were found and read perfectly; none of them is this match. Usually an AoE3
+    // profile name that differs from the one the player plays under — which fails every match.
+    [InlineData(LocalReadFailure.RecordingNotOurs, "MpResultUnratedNotOurs")]
+    // The recording IS this match; the game closed before finishing its ending.
+    [InlineData(LocalReadFailure.RecordingNoOutcome, "MpResultUnratedNoOutcome")]
+    // Not a failure at all: their AoE3 is still open and nothing has been read yet.
+    [InlineData(LocalReadFailure.ReadPending, "MpResultUnratedReadPending")]
+    public void TheThreeCausesThatAreNotAMissingRecording(LocalReadFailure local, string expected)
+        => Assert.Equal(expected, MatchOutcomeView.UnratedNoteKey("no_decided_result", local));
+
+    /// <summary>
+    /// And the server still outranks all three: a team game is a team game even while our own
+    /// reading was also pending.
+    /// </summary>
+    [Fact]
+    public void ASpecificServerReasonStillWinsOverTheNewLocalOnes()
+        => Assert.Equal(
+            "MpResultUnratedTeam",
+            MatchOutcomeView.UnratedNoteKey("not_1v1", LocalReadFailure.ReadPending));
+
     [Fact]
     public void AnOldBackendSaysNothingAndTheLocalReasonStillSpeaks()
     {

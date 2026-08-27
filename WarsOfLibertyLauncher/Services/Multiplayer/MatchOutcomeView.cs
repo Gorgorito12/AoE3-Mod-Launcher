@@ -53,6 +53,39 @@ public enum LocalReadFailure
     /// <summary>The recording was read and simply does not name a winner this launcher
     /// can use.</summary>
     RecordingAmbiguous,
+
+    /// <summary>
+    /// Recordings were found and read PERFECTLY, and none of them is this match.
+    ///
+    /// <para>Split out of <see cref="NoRecordingFound"/>, where it used to land — so a player
+    /// whose recordings are all fine was told the match "was not recorded" and sent to tick a box
+    /// that was already ticked. The likeliest cause is worth naming in the message: identifying a
+    /// recording needs the player's AoE3 profile name to appear among its players, so a profile
+    /// whose name differs from the one they play under fails this way in EVERY match, silently,
+    /// for as long as it differs.</para>
+    /// </summary>
+    RecordingNotOurs,
+
+    /// <summary>
+    /// This match's recording was found, but the game never finished writing its outcome — the
+    /// last 32 bytes do not carry the signature that precedes the winner.
+    ///
+    /// <para>Distinct from <see cref="RecordingAmbiguous"/> because the advice differs and is
+    /// actionable: leave the match to the main menu before closing AoE3. Measured on a real file
+    /// (an 18-minute 1v1) where 5 of the outcome block's 12 bytes had been written.</para>
+    /// </summary>
+    RecordingNoOutcome,
+
+    /// <summary>
+    /// Nothing has failed yet — the match was reported while this player's own AoE3 was still
+    /// open, so their recording has not been read.
+    ///
+    /// <para>Exists because the card used to be built once, at the moment the report arrived, and
+    /// a player who left the game open saw "the match was not recorded" for as long as it stayed
+    /// open — while their own recording sat on disk naming the winner. It is a WAITING state, not
+    /// a failure, and it is replaced when the reading lands.</para>
+    /// </summary>
+    ReadPending,
 }
 
 /// <summary>
@@ -82,6 +115,15 @@ public enum LocalReadFailure
 /// drifted — the card told the player "it counted towards no one's rating" while the
 /// backend was rating it. Trailing and defaulted so an older path can leave it out.
 /// </param>
+/// <param name="LocalFailureDetail">
+/// The concrete particulars behind <paramref name="LocalFailure"/>, appended to its message —
+/// today the AoE3 profile name that was read and the names the recordings actually carried.
+///
+/// <para>It is what turns "none of the recordings are yours" from a dead end into something the
+/// player can act on: the two names side by side make a profile-name mismatch obvious, and that
+/// mismatch fails EVERY match until it is fixed. Kept out of the localized string because it is
+/// data, not prose, and it must not be translated.</para>
+/// </param>
 public sealed record MatchOutcomeView(
     MatchVerdict Verdict,
     string? ModId,
@@ -96,7 +138,8 @@ public sealed record MatchOutcomeView(
     int Losses,
     double? Rd,
     string? UnratedReason = null,
-    LocalReadFailure LocalFailure = LocalReadFailure.None)
+    LocalReadFailure LocalFailure = LocalReadFailure.None,
+    string? LocalFailureDetail = null)
 {
     /// <summary>
     /// Which explanation to show for a match that did not score.
@@ -141,6 +184,13 @@ public sealed record MatchOutcomeView(
             LocalReadFailure.RosterUnknown => "MpResultUnratedNoRoster",
             LocalReadFailure.RecordingUnreadable => "MpResultUnratedUnreadable",
             LocalReadFailure.RecordingAmbiguous => "MpResultUnratedAmbiguous",
+            LocalReadFailure.RecordingNotOurs => "MpResultUnratedNotOurs",
+            LocalReadFailure.RecordingNoOutcome => "MpResultUnratedNoOutcome",
+            // Not a failure: the reading has not happened yet because the player still has
+            // AoE3 open. Saying anything about their recording here would be a guess, and the
+            // guess this used to make ("it was not recorded") was wrong precisely when their
+            // recording was fine.
+            LocalReadFailure.ReadPending => "MpResultUnratedReadPending",
             // NoRecordingFound and None both land on the original message, whose advice
             // — turn recording on — is exactly right for them.
             _ => "MpResultNoneBody",

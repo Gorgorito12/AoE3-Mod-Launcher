@@ -71,15 +71,29 @@ public static class AppToast
             while (host.Children.Count >= MaxVisible)
                 host.Children.RemoveAt(host.Children.Count - 1);
 
-            // Two-tone "punched-out" rim: dark outer band wrapping a bright inner card.
-            var outer = new Border
+            // Three layers, and the split exists for the text's sake. `outer` is the
+            // two-tone "punched-out" rim and it holds the card, which holds the title and
+            // body TextBlocks — so an Effect on it would push every glyph of every toast
+            // through a composition pass and disable ClearType, permanently. The shadow
+            // therefore sits on `halo`, a sibling UNDER it, fully covered by `outer` (same
+            // size, same radius) so only the blur spills. Same pattern as the multiplayer
+            // cards, MpAlertOverlay and the PLAY button.
+            //
+            // `root` is what gets added, animated and removed: the fade has to move the
+            // shadow with the card, and it lands back on 1.0 so it leaves no lasting layer.
+            var shell = new Grid
             {
-                Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
-                CornerRadius = new CornerRadius(9),
-                Padding = new Thickness(1),
                 Margin = new Thickness(0, 8, 0, 0),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 MaxWidth = 340,
+                Opacity = 0,
+                RenderTransform = new TranslateTransform(28, 0),
+            };
+            var halo = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
+                CornerRadius = new CornerRadius(9),
+                IsHitTestVisible = false,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
                     Color = Colors.Black,
@@ -87,9 +101,15 @@ public static class AppToast
                     BlurRadius = 18,
                     Opacity = 0.5,
                 },
-                Opacity = 0,
-                RenderTransform = new TranslateTransform(28, 0),
             };
+            var outer = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
+                CornerRadius = new CornerRadius(9),
+                Padding = new Thickness(1),
+            };
+            shell.Children.Add(halo);
+            shell.Children.Add(outer);
             var card = new Border
             {
                 Background = Res("MpSurface"),
@@ -144,9 +164,9 @@ public static class AppToast
                 try { timer?.Stop(); } catch { }
                 // Fade + slide out, then remove.
                 var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(160));
-                fade.Completed += (_, _) => { try { host.Children.Remove(outer); } catch { } };
-                outer.BeginAnimation(UIElement.OpacityProperty, fade);
-                outer.RenderTransform.BeginAnimation(TranslateTransform.XProperty,
+                fade.Completed += (_, _) => { try { host.Children.Remove(shell); } catch { } };
+                shell.BeginAnimation(UIElement.OpacityProperty, fade);
+                shell.RenderTransform.BeginAnimation(TranslateTransform.XProperty,
                     new DoubleAnimation(28, TimeSpan.FromMilliseconds(160)));
             }
 
@@ -201,12 +221,12 @@ public static class AppToast
             root.Children.Add(closeBtn);
 
             // Newest on top.
-            host.Children.Insert(0, outer);
+            host.Children.Insert(0, shell);
 
             // Slide + fade in.
-            outer.BeginAnimation(UIElement.OpacityProperty,
+            shell.BeginAnimation(UIElement.OpacityProperty,
                 new DoubleAnimation(1, TimeSpan.FromMilliseconds(200)));
-            outer.RenderTransform.BeginAnimation(TranslateTransform.XProperty,
+            shell.RenderTransform.BeginAnimation(TranslateTransform.XProperty,
                 new DoubleAnimation(0, TimeSpan.FromMilliseconds(220))
                 { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
 

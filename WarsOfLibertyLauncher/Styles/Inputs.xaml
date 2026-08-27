@@ -240,7 +240,11 @@
                             <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource TextBoxFocusBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                            <!-- PART_ContentHost lives INSIDE `border`, so an Opacity here
+                                 dimmed the typed text and cost it ClearType. The ComboBox
+                                 above gets this right by accident — its Opacity falls on an
+                                 empty sibling Border — and this now does it on purpose. -->
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -286,7 +290,7 @@
                             <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.5"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -325,7 +329,7 @@
                             <Setter TargetName="ring" Property="Stroke" Value="{DynamicResource AccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.5"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

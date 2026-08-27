@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -149,6 +149,32 @@ public sealed class NotificationCenter
             Title = title,
             Body = body,
             TargetId = version,
+        });
+    }
+
+    /// <summary>
+    /// A match that had gone down undecided was rated afterwards, from a recording read late.
+    ///
+    /// <para>Deduped on the MATCH id and persisted, because the frame that carries it rides the
+    /// always-on global socket: it can arrive twice, and it can arrive again after a restart.
+    /// Belling the same correction twice would read as two separate rating changes.</para>
+    /// </summary>
+    public bool RaiseMatchRated(string modId, string matchId, string title, string body)
+    {
+        if (string.IsNullOrWhiteSpace(matchId)) return false;
+        if (_config.NotifiedRatedMatchIds.Contains(matchId, StringComparer.OrdinalIgnoreCase))
+            return false;
+        _config.NotifiedRatedMatchIds.Add(matchId);
+        if (_config.NotifiedRatedMatchIds.Count > 500)
+            _config.NotifiedRatedMatchIds.RemoveRange(0, _config.NotifiedRatedMatchIds.Count - 500);
+
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.MatchRated,
+            ModId = modId ?? "",
+            Title = title,
+            Body = body,
+            TargetId = matchId,
         });
     }
 

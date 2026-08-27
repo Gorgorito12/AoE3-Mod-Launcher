@@ -68,8 +68,7 @@
                                 <Setter Property="Foreground" Value="White"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="Opacity" Value="0.4"/>
-                                <Setter Property="Foreground" Value="#aaa"/>
+<Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -108,7 +107,7 @@
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="border" Property="Background" Value="#22252c"/>
-                                <Setter Property="Foreground" Value="#666"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -679,7 +678,7 @@
                                         Content="Mark all read"
                                         Style="{StaticResource NotifLinkButton}"/>
                                 <TextBlock Text="·"
-                                           Foreground="{DynamicResource MpDivider}"
+                                           Foreground="{DynamicResource ChromeTextDim}"
                                            Margin="6,0"
                                            VerticalAlignment="Center"/>
                                 <Button x:Name="NotificationClearAll"
@@ -772,6 +771,10 @@
                                                                             <Setter Property="Text" Value="&#xE902;"/>
                                                                             <Setter Property="Foreground" Value="#5AA9E6"/>
                                                                         </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="MatchRated">
+                                                                            <Setter Property="Text" Value="&#xE735;"/>
+                                                                            <Setter Property="Foreground" Value="#E0B44C"/>
+                                                                        </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </TextBlock.Style>
@@ -839,7 +842,6 @@
                                                     <TextBlock Text="{Binding CreatedLocal, StringFormat='{}{0:dd MMM, HH:mm}'}"
                                                                Foreground="{DynamicResource ChromeTextDim}"
                                                                FontSize="11"
-                                                               Opacity="0.7"
                                                                Margin="0,3,0,0"/>
                                                 </StackPanel>
                                                 <!-- Unread dot -->
@@ -1215,7 +1217,40 @@
                          keeps the hero copy reading vertically instead of
                          sprawling across the panel, and lets multi-line
                          "Game: Subtitle" titles stack cleanly. -->
-                    <StackPanel Grid.Row="0" MaxWidth="640" HorizontalAlignment="Left">
+                    <!-- The scrim that replaces the two DropShadowEffects that used to sit
+                         ON the title and the paragraph. An Effect on a TextBlock pushes its
+                         glyphs through a composition pass and disables ClearType — measured
+                         at 17.8 mean |R-B| on the paragraph's edges against 73 for chrome
+                         text of the same family. The shadow was NOT decoration, though: this
+                         copy sits over whatever hero image a mod ships, so it is replaced
+                         rather than dropped. Sized off the block itself and blown outward by
+                         a RenderTransform (no layout maths, and a transform on a Rectangle
+                         costs nothing — there is no text under it). -->
+                    <Rectangle Grid.Row="0" IsHitTestVisible="False"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               RenderTransformOrigin="0.5,0.5"
+                               Width="{Binding ElementName=DashboardCopyBlock, Path=ActualWidth}"
+                               Height="{Binding ElementName=DashboardCopyBlock, Path=ActualHeight}">
+                        <Rectangle.RenderTransform>
+                            <!-- Big on purpose. The gradient has to reach ZERO alpha before
+                                 it reaches the Rectangle's own edge or the fill stops on a hard
+                                 cut, which reads as a soft vertical seam across the hero image
+                                 (it did, at the first attempt). Centre 0.5 + radius 0.5 puts the
+                                 transparent stop exactly on the edge midpoints, so the scrim has
+                                 to be roughly twice the copy block for its opaque core to still
+                                 cover the text. -->
+                            <ScaleTransform ScaleX="2.0" ScaleY="2.6"/>
+                        </Rectangle.RenderTransform>
+                        <Rectangle.Fill>
+                            <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.5,0.5"
+                                                 RadiusX="0.5" RadiusY="0.5">
+                                <GradientStop Color="#A6000000" Offset="0.0"/>
+                                <GradientStop Color="#7A000000" Offset="0.45"/>
+                                <GradientStop Color="#00000000" Offset="1.0"/>
+                            </RadialGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                    <StackPanel x:Name="DashboardCopyBlock" Grid.Row="0" MaxWidth="640" HorizontalAlignment="Left">
                         <!-- Mod/game icon (catalog icon.png or built-in packed
                              icon). Filled + shown by RefreshActiveModBanner;
                              collapsed when the active mod has no icon. -->
@@ -1236,11 +1271,7 @@
                                    Foreground="{DynamicResource AccentBrush}"
                                    LineHeight="56"
                                    LineStackingStrategy="BlockLineHeight"
-                                   TextWrapping="Wrap">
-                            <TextBlock.Effect>
-                                <DropShadowEffect BlurRadius="14" ShadowDepth="2" Color="Black" Opacity="0.85"/>
-                            </TextBlock.Effect>
-                        </TextBlock>
+                                   TextWrapping="Wrap"/>
                         <!-- Version chip — installed-version of the active
                              mod. Painted in the green Status-Installed
                              palette (same as the Catalog "Installed"
@@ -1312,11 +1343,7 @@
                                    LineHeight="22"
                                    TextWrapping="Wrap"
                                    MaxWidth="780"
-                                   Margin="0,14,0,0">
-                            <TextBlock.Effect>
-                                <DropShadowEffect BlurRadius="6" ShadowDepth="1" Color="Black" Opacity="0.7"/>
-                            </TextBlock.Effect>
-                        </TextBlock>
+                                   Margin="0,14,0,0"/>
                     </StackPanel>
 
                     <!-- Action row: PLAY (gold gradient + glow) +

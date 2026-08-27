@@ -239,8 +239,15 @@ public static class MatchResultCard
     {
         string? note = null;
         if (model.Verdict == MatchVerdict.NoResult)
+        {
             note = Strings.Get(MatchOutcomeView.UnratedNoteKey(
                 model.UnratedReason, model.LocalFailure));
+            // The particulars go after the sentence, not inside it: they are data (profile
+            // names), they must not be translated, and without them "none of the recordings
+            // are yours" is a dead end rather than something to go and fix.
+            if (!string.IsNullOrWhiteSpace(model.LocalFailureDetail))
+                note += " " + model.LocalFailureDetail;
+        }
         else if (MatchOutcomeView.IsProvisional(model.Rd)) note = Strings.Get("MpResultProvisional");
 
         if (note == null && actions.OnRematch == null && actions.OnDismiss == null) return null;

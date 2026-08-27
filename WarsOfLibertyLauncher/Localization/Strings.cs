@@ -3486,6 +3486,75 @@ public static class Strings
             [LangEs] = "La grabaci\u00F3n no dice qui\u00E9n gan\u00F3, as\u00ED que la partida no cont\u00F3 para "
                      + "el ELO de nadie.",
         },
+        // Recordings were found and read perfectly, and none of them is this match. This used
+        // to fall on MpResultNoneBody — "it was not recorded" — which is the one piece of
+        // advice that is certainly wrong here, since the recordings are fine. The likeliest
+        // cause is named because it fails every single match until it is fixed; the concrete
+        // names are appended by the card from LocalFailureDetail.
+        ["MpResultUnratedNotOurs"] = new()
+        {
+            [LangEn] = "Recordings were found, but none of them has you among its players, so "
+                     + "there was no way to tell which one was this match. Check that your AoE3 "
+                     + "profile name is the one you actually play under.",
+            [LangEs] = "Se encontraron grabaciones, pero en ninguna apareces entre los jugadores, "
+                     + "así que no hubo forma de saber cuál era esta partida. Verifica que el "
+                     + "nombre de tu perfil de AoE3 sea el mismo con el que juegas.",
+        },
+        // Appended to the message above by the card. {0} is the profile name we read, {1} the
+        // names the recordings carried — the two side by side are what make the mismatch
+        // obvious. Names are data: they are never translated, only framed.
+        // The bell for a match decided after its room had already closed. The room is long
+        // gone by then, so this is the only place the correction can surface.
+        ["NotifMatchRatedTitle"] = new()
+        {
+            [LangEn] = "A match of yours was rated",
+            [LangEs] = "Se puntuó una partida tuya",
+        },
+        ["NotifMatchRatedBodyDelta"] = new()
+        {
+            [LangEn] = "The recording was read after the match ended: {0} ({1}).",
+            [LangEs] = "La grabación se leyó después de terminar la partida: {0} ({1}).",
+        },
+        ["NotifMatchRatedBody"] = new()
+        {
+            [LangEn] = "The recording was read after the match ended: {0}.",
+            [LangEs] = "La grabación se leyó después de terminar la partida: {0}.",
+        },
+        // The result itself could not be named — the match still counts, so say so rather
+        // than inventing a verdict for it.
+        ["NotifMatchRatedBodyPlain"] = new()
+        {
+            [LangEn] = "It counted towards the rating after all. It's in your History.",
+            [LangEs] = "Al final sí contó para el ELO. Está en tu historial.",
+        },
+        ["MpResultNotOursDetail"] = new()
+        {
+            [LangEn] = "(yours: “{0}” · in the recordings: {1})",
+            [LangEs] = "(el tuyo: “{0}” · en las grabaciones: {1})",
+        },
+        // The recording exists and is this match; the game just never finished writing its
+        // ending. Measured on a real 18-minute 1v1: 5 of the outcome block's 12 bytes.
+        ["MpResultUnratedNoOutcome"] = new()
+        {
+            [LangEn] = "This match WAS recorded, but the game closed before it finished writing "
+                     + "the ending, so the recording does not say who won. Leave the match to the "
+                     + "main menu before closing AoE3 and the next one will count.",
+            [LangEs] = "Esta partida SÍ se grabó, pero el juego se cerró antes de terminar de "
+                     + "escribir el final, así que la grabación no dice quién ganó. Sal de la "
+                     + "partida hasta el menú principal antes de cerrar AoE3 y la próxima sí "
+                     + "contará.",
+        },
+        // Not a failure — a wait. Nothing is known about this player's recording yet because
+        // their AoE3 is still open, and claiming anything is what produced the wrong message.
+        ["MpResultUnratedReadPending"] = new()
+        {
+            [LangEn] = "The match ended while your AoE3 was still open, so your recording has "
+                     + "not been read yet. Close the game and the launcher will read it — if it "
+                     + "names a winner, the match can still count.",
+            [LangEs] = "La partida terminó con tu AoE3 todavía abierto, así que tu grabación "
+                     + "aún no se leyó. Cierra el juego y el launcher la va a leer — si nombra "
+                     + "un ganador, la partida todavía puede contar.",
+        },
         ["MpResultUnratedNoLobby"] = new()
         {
             [LangEn] = "This match was reported without a room, so there was no way to check who "
@@ -4157,8 +4226,12 @@ public static class Strings
         },
         ["MpChatRecordReminder"] = new()
         {
-            [LangEn] = "⚠ Tick \"Record Game\" on AoE3's setup screen, or this match won't count.",
-            [LangEs] = "⚠ Marca \"Record Game\" en la pantalla de configuración de AoE3, o esta partida no contará.",
+            // Conditional on purpose. It fires on EVERY host launch — the launcher cannot read
+            // AoE3's per-match box — so the old flat "this match won't count" appeared over
+            // matches that recorded and rated perfectly well, and a warning that is wrong half
+            // the time teaches players to ignore the half that isn't.
+            [LangEn] = "⚠ If you haven't ticked \"Record Game\" on AoE3's setup screen, this match won't be able to count.",
+            [LangEs] = "⚠ Si no marcaste \"Record Game\" en la pantalla de configuración de AoE3, esta partida no va a poder contar.",
         },
         ["MpRecordBandTitle"] = new()
         {

@@ -490,6 +490,21 @@ public class ConfirmMatchResponse
     public bool Matched { get; set; }
 }
 
+/// <summary>
+/// A match that had been stored WITHOUT a result was decided afterwards, from a recording one
+/// of its two players read after the report had already gone out.
+///
+/// <para>It arrives on the always-on global socket rather than the room's, because by the time
+/// it exists the room has been closed for minutes: the correction has nowhere else to land.</para>
+/// </summary>
+public sealed record MatchRatedNotice(
+    string MatchId,
+    string ModId,
+    string? MapName,
+    double? Result,
+    double? RatingBefore,
+    double? RatingAfter);
+
 public class ReportMatchResponse
 {
     [JsonPropertyName("match_id")]

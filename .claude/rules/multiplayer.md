@@ -302,6 +302,36 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   instead of assuming it, and why it returns a two-value confidence rather than a bool:
   a missing answer must not be readable as "it was a draw".
 
+  **A third real sample, measured from a reported incident, refines that — and it is NOT
+  "no trailer".** An 18-minute 1v1 (`ESOC_Iowa`, seed 29359) ends with the signature
+  PRESENT but only **5 of the outcome block's 12 bytes** written: the last 32 bytes are
+  `02 00 00 00 | 89 00 00 00 | 00x11 | FFx8 | 00 01 00 00 00`, against a healthy file's
+  `02 00 00 00 | 81 00 00 00 | 00x12 | FFx8 | A B C`. The marker before the zeros changes
+  from **`81` to `89`**, so the game reached the end by a different path. The container is
+  intact (`declared == actual`), so this is not disk corruption — AoE3 wrote a shorter tail.
+  `ReadOutcome` rejects it correctly, because it checks at exactly `len-32`.
+
+  **Do NOT make the signature search tolerant.** The pattern `00x12 FFx8` occurs **3,773
+  times** inside that one file — it is ordinary data in the command stream. The only thing
+  that makes an occurrence the trailer is being at the very end; a parser that hunted for it
+  would find thousands of false positives.
+
+  **And do not guess from a partial block.** Those 5 bytes read two ways: `00 01 00 00` =
+  256 (no such slot), or `01 00 00 00` = slot 1 — the recorder, whose player states he WON
+  that match. Guessing would have taken ~160 points from the winner.
+
+  **`RecorderSlot == -1` is how the caller tells the two apart**, because every later
+  early-return in `ReadOutcome` carries the recorder slot through and only the missing
+  signature returns the pristine `unknown`. That distinction is what feeds
+  `LocalReadFailure.RecordingNoOutcome`, whose advice — leave the match to the main menu
+  before closing AoE3 — is actionable where the generic ambiguous message has none.
+
+  **Weak signal worth recording, n=3, not a basis for anything:** in both complete
+  recordings from that incident `loser == recorder`, and the only cut-short one is the match
+  its owner won. If the loser's machine reliably writes a complete trailer and the winner's
+  often does not, that is *why* a single late reading is usually a conceded defeat — which
+  is exactly the case the backend's upgrade rule accepts without corroboration.
+
   **Confident requires all three:** the exact signature, an A naming a slot the header
   has, and exactly two players. Past a 1v1 "X lost" doesn't name a winner — the others
   may have lost too and nothing records the order — so team games stay draws until the
@@ -529,10 +559,18 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `CandidateVerdict{Match,NotOurs,Unreadable}`, so `MaxCandidatesExamined` (5) counts files
   that actually PARSED rather than files opened (a few half-written ones used to spend the
   whole budget and hide the real recording behind it), bounded by `MaxCandidatesOpened` (12)
-  so a folder of junk can't spin. And `ShouldRetry` only fires when something was
-  **unreadable** — one that parsed cleanly and belongs to another game will parse identically
-  in three seconds. Delays `0/1000/2500/5000 ms`, so a match with no recording at all still
-  reports at once and the worst case is ~8.5 s on the path that is wrong today.
+  so a folder of junk can't spin. And `ShouldRetry` fires when something was
+  **unreadable** OR when **nothing was there at all** — but never for one that parsed cleanly
+  and belongs to another game, which will parse identically in three seconds. Delays
+  `0/1000/2500/5000 ms`.
+
+  **The empty case used to be excluded, and that exclusion was a bug with a good reason
+  behind it.** Requiring `Unreadable > 0` meant a recording that had not been CREATED yet got
+  zero retries — the match reported all-draws instantly and a file that appeared a second
+  later was never seen. It was excluded because waiting is pure latency for the MAJORITY of
+  matches, which have no recording at all. **That reason is gone only because the report no
+  longer waits for it**; if the search is ever moved back in front of the report, this branch
+  has to go with it.
 
   **Runs on a background thread** (`Task.Run`): each candidate costs an inflate of a
   multi-megabyte file and this fires the instant the game closes, with the player looking
@@ -544,6 +582,188 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   (7 = `Indians`, 17 = `Italians` land on real civs, which is not proof). Sending the bare
   number would put a value nobody can interpret into everyone's history. `MapName` IS sent
   now, from `gamefilename` — the real map, not `gamemapname`, which is the POOL.
+
+- **The report NEVER waits for the recording, and a reading that lands afterwards CORRECTS
+  the match instead.** This inverts the order the previous bullet describes, so read them
+  together.
+
+  `OnGameExitedAsync` runs `AnalyseMatchReplayAsync` with **`firstPassOnly: true`** and
+  reports whatever that one pass found. When the recording is there and readable — the good
+  case, measured at under a second end to end (a real match logged its game-exit analysis and
+  its `match_reported` in the same log second) — nothing changes. When it is not, the report
+  goes out immediately with no result and `ContinueSearchingForResultAsync` runs the rest of
+  the ladder BEHIND it.
+
+  **The reason is a ratio, not a preference.** AoE3's per-match "Record Game" box comes up
+  unticked every time, so most matches have no recording at all — putting the retries in front
+  of the report makes the majority slower for the benefit of a few. It also widens the window
+  in which `_matchContext` can be overwritten by a new match, which is the race the
+  `ReferenceEquals` + `GameRestartedSince` guards in the exit `finally` exist for. Those guards
+  are unchanged and must stay.
+
+  **A late reading reaches the server through `TryConfirmMatchAsync`, not a second report.**
+  Reporting is still host-only — N reporters insert N copies of one match. The confirm path
+  gained `allowHost`, off by default because confirming your own report against itself proves
+  nothing; it is passed true in exactly one case, when our own report went out with
+  `unrated_reason == "no_decided_result"` and a reading turned up afterwards. That reading has
+  never reached the server in any form.
+
+  **A later pass may only IMPROVE the diagnosis.** `ContinueSearchingForResultAsync` refuses to
+  overwrite a specific failure with `NoRecordingFound`, because that is the one message already
+  known to be wrong, and putting it back would undo the whole point.
+
+  **It stops early when there is nothing a recording could change**: a server reason of
+  `not_1v1` / `mod_not_ranked` / `duplicate_recording` means reading one would spend seconds of
+  disk to learn something nobody can act on.
+
+- **The end-of-match card is REBUILT, not painted once — and never by re-entering
+  `EnterResultPhase`.** The card used to be built at the instant the report arrived and frozen
+  there. A player whose own AoE3 was still open therefore read "the match was not recorded" for
+  as long as they left it open, while their recording sat on disk naming the winner — nine
+  minutes, in the incident this came from.
+
+  `_outcomeRebuilder` is a closure captured where the card is first painted (both the host's
+  POST path and the guest's history path install one), and `RepaintMatchResult()` re-runs it.
+  Everything that can change — `_lastLocalReadFailure` and `_lastLocalReadDetail` — is read at
+  CALL time, so the rebuild picks it up. It is cleared in `ExitResultPhase` and
+  `EnterInGamePhase`.
+
+  **`EnterResultPhase` must NOT be used to refresh.** It clears `_roomMatchLive`, drops the
+  process handle, kills the tick timer, stops the socket's reconnect and suppresses the leave
+  confirm; running that again over an already-terminal state is a different bug.
+
+- **Five things can stop a match being decided, and telling the player the wrong one is what
+  loses their trust.** `LocalReadFailure` gained three values, and two of them exist because
+  the generic "the match was not recorded — tick Record Game" was being shown when it was
+  provably false:
+
+  **`RecordingNotOurs`** — recordings were found and read PERFECTLY and none of them is this
+  match (`Parsed > 0 && File == null`). This used to fall through to `NoRecordingFound`. The
+  likeliest cause is named in the message because it fails **every** match until it is fixed:
+  `LooksLikeThisMatch` requires the player's AoE3 `<OnlineName>` to appear among the
+  recording's players, so a profile whose name differs from the one they play under never
+  matches anything. `MpResultUnratedNotOurs` + the `LocalFailureDetail`, which carries the
+  profile name we read against the names the recordings actually held — data, appended by the
+  card, never translated.
+
+  **`RecordingNoOutcome`** — the recording IS this match and the game never finished writing
+  its ending (`RecorderSlot < 0`; see the trailer section). Actionable advice: leave the match
+  to the main menu before closing AoE3.
+
+  **`ReadPending`** — a WAIT, not a failure. Set in `HandleMatchReported` when the frame
+  arrives while our own game is still running, and replaced when the reading lands. Read
+  `_matchPhase == InGame` BEFORE calling `EnterResultPhase`, which sets it to `Result`.
+
+- **The launcher tries to read the recording WITHOUT waiting for AoE3 to close —
+  `TryEarlyReplayReadAsync` — and it may only ever improve the state.** Fired from
+  `HandleMatchReported` when the match came back unrated and our game is still open. In the
+  incident it would have turned nine minutes into seconds.
+
+  **Whether AoE3 has finished — or even started — writing the file at that point is NOT
+  established**, and it may hold it open with a lock. So a failure is discarded in SILENCE and
+  every field it touched is restored: counting a locked file as "unreadable" would move the
+  card from an honest "waiting" to a stated cause that is wrong, which is the exact failure
+  being removed. Only a real result is kept. `_replayAnalysisInFlight` keeps this and the exit
+  handler's own search from interleaving.
+
+  **The `replay-index.txt` in the diagnostic bundle is what will settle whether this is worth
+  keeping**: its `mtime` against the game-exit line in the log answers when AoE3 writes the
+  file. If it writes at match end, this early read and the empty-folder retry both become dead
+  weight and should come out.
+
+- **The replay search window has a CEILING now, and it orders rather than rejects.**
+  `FindMatchReplay`'s filter had only ever had a floor (newer than the launch), so a file
+  written long after the match still qualified — not theoretical: the file the launcher
+  analysed in the reported incident was named `bo3 siux vs alucard (3).age3Yrec`, a name its
+  owner gave it while copying recordings to send over Discord, minutes after the match. That
+  window widens further now that the search retries and can also run early.
+
+  `preferBeforeUtc` (game exit + `ReplayWindowMargin`, two minutes) is the FIRST sort key:
+  in-window candidates are judged first, out-of-window ones are still judged afterwards.
+  **Never make it a filter.** The recording is finished as the game closes and its timestamp
+  keeps moving while the retries run, so a tight ceiling would start discarding legitimate
+  recordings — precisely the symptom this area exists to fix. Pinned by
+  `TheWindowOrdersCandidates_ButNeverDiscardsThem`.
+
+  Honest scope: it stops the careless case (an Explorer copy keeps the original write time and
+  is excluded outright) and closes the window the other changes open. It does **not** stop
+  anyone deliberate — the file's timestamp belongs to the machine's owner — and there is no
+  clock inside the file to check it against (`gamehosttime` read 59 / 36 / 1507369 across the
+  three real recordings; it is not wall-clock).
+
+- **A late reading can DECIDE a match the server stored without one — backend
+  `canUpgradeFromConfirmation`, and its anti-abuse clause is the load-bearing half.**
+  This supersedes "it gates nothing" in the confirmation bullet above and the
+  `0004_match_confirmations.sql` header, both of which say confirmations change nothing.
+
+  The failure it closes had two shapes in one incident and the same cause in both: **only the
+  host's reading counted.** In one match the host's recording had no outcome trailer; in the
+  other the host found no recording at all and reported `map_name`, `game_seed` and
+  `game_host_time` all null with both players on 0.5. Both times the OTHER player's recording
+  named the winner correctly, their launcher read it, and `POST /matches/confirm` filed it as
+  evidence and threw it away.
+
+  `matches` now persists `unrated_reason`, `rated` and `decided_by` (migration `0006`), because
+  the verdict used to be computed, returned and logged but never stored — so a row could not
+  remember it was waiting for an answer. Every pre-migration row is NULL and therefore
+  **ineligible by construction**: nothing here can re-rate history.
+
+  **The rule, in order:** the stored reason must be exactly `no_decided_result`; the reading
+  must name a winner; the confirmer must be in `roster_at_start`; and **you may concede your
+  own defeat freely, but claim your own victory only when the fingerprint the reporter already
+  stored matches yours.** That last clause does the work of a verification the server cannot
+  perform — it never reads the recording, `result` is a number the client sends, and
+  `replay_sha256` / `game_seed` are anti-duplicate keys rather than proof. It does not verify
+  the claim; it removes the reason to invent one, since **a liar can only give points away**.
+  It costs little coverage because the player who can read the recording is usually the one who
+  lost (see the `loser == recorder` note in the trailer section).
+
+  **When the row has no fingerprint, the confirmer's is ADOPTED** — which also gives the match
+  the anti-duplicate protection it never had, since a recording-less report sends those as
+  null. Refused if another match already claims that pair, and dropped without dropping the
+  decision if the partial UNIQUE index still collides.
+
+  **Double-rating is the worst outcome and the guard is a conditional UPDATE.** Both call sites
+  (`POST /matches` after the report, `POST /matches/confirm` after tying) can fire for one
+  match. The row is CLAIMED with `WHERE unrated_reason = 'no_decided_result'`; zero changes
+  means somebody else got there and the call stops before touching Glicko. A read-then-write
+  would not do — `applyMatch` awaits, and an await is where two requests interleave. If the
+  rating then fails, the claim is rolled back rather than leaving a match marked rated with no
+  ratings behind it.
+
+  **The correction is announced over `/global/ws`, not the room socket** — by then the room has
+  been closed for minutes. `GlobalChatRoom.announceMatchRated` sends `match_rated` to the two
+  participants only (it carries their rating change), the launcher raises
+  `NotificationKind.MatchRated`, and the bell dedups on the match id in
+  `LauncherConfig.NotifiedRatedMatchIds` because that socket can deliver a frame twice and
+  again after a restart. Best-effort: an offline player sees it in their History.
+
+  **Deliberately NOT done: requiring the two readings to agree.** It would close the older and
+  larger hole — a host can still lie in their own `result`, which predates all of this — but
+  measured against the incident's three matches it would have rated **none**, including the one
+  that works today. `match_confirmations.agreement` / `same_game` are now STORED rather than
+  only logged (the log rotates and is gone) so that decision can be made with numbers; the
+  query that answers it, including "how often does the second reading never arrive", is in
+  `DEPLOY.md`.
+
+  **Also deliberately not done: letting players declare the winner when nobody could read a
+  recording.** It is the only route to full coverage and it was refused — the ELO moves on file
+  evidence or not at all. A match neither player recorded stays undecided, permanently.
+
+- **The diagnostic bundle describes the recordings — `replay-index.txt`.** The newest ten
+  `.age3Yrec` under `Savegame\\`, one block each: name, size, mtime, then `gamefilename`, seed,
+  host time, every player slot with its name and whether it is human, and the outcome trailer's
+  verdict — including the last 16 bytes in hex when the signature is missing. **The files are
+  never copied**, only read.
+
+  It exists because answering the incident meant asking the player for his recordings over
+  Discord and parsing them by hand, over hours. The same answer now travels in the bundle he
+  already sends. The user-data listing also enumerates **directories** now: it was files-only,
+  so a bundle sent specifically about a rating problem could not even show whether `Savegame\\`
+  existed.
+
+  `ShareDiagnostics` is `async` and hands the whole export to `Task.Run` — up to ten inflates
+  of multi-megabyte files is not the UI thread's work.
 
 - **The Profile tab shows a SERVER-side standing, and the win rate divides by DECIDED games —
   never by games played.** Everything on that tab lives in the backend's `elo_ratings` table
@@ -1661,6 +1881,56 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   there; the room-state frame carries no per-member hash, so a truly verified tick needs a
   backend change. **The second never ticks, by design.**
 
+- **Nothing on the multiplayer surface may put an `Opacity` below 1 or an `Effect` on an
+  ancestor of TEXT — both disable ClearType for every glyph underneath.** The rule was
+  already written next to the room cards (`MultiplayerTab.xaml` ~:920, on why the card glow
+  lives on a sibling underlay); two places had broken it, and together they are what a user
+  reported as the multiplayer text looking "blurry and washed out".
+
+  **`BuildRoomCard` dimmed a whole row with `Opacity = modInstalled ? 1.0 : 0.6`.** That is a
+  composition layer over every label in the row: ClearType off, and the real contrast of
+  `MpTextFaint` on `MpPanel` collapsing from 4.09:1 to about **2.1:1**. Blurry and washed out
+  at once, from one line. The dimming now happens through the BRUSHES — both text roles step
+  down one rung of the ramp — and the signal survives regardless, because the action button is
+  already disabled for a mod you do not have.
+
+  **`MpAlertOverlay` hung a `DropShadowEffect` on the Border whose child is the card whose
+  children are the title and body.** Every confirm and notice dialog on the surface rendered
+  its text softer than the text behind it. The shadow is now a SIBLING underlay beneath the
+  card, sized off it by binding `ActualWidth`/`ActualHeight` because the card is
+  content-sized — and it needs its own `host.Children.Remove` in `Close`, which a child would
+  not have.
+
+  A third, minor one survives on purpose: the invite chip's `Opacity` (`~:5836`) wraps a
+  single Segoe MDL2 glyph, where there is no antialiasing quality to lose.
+
+  **Both halves of this rule are now LAUNCHER-WIDE, and the shared styles multiplayer sits
+  on top of changed with them — see the text-legibility bullet in `CLAUDE.md`.** The
+  "colour, not an `Opacity` layer" rule got its own brush (`TextDisabled`, #989898) and
+  replaced the disabled-state `Opacity` in the implicit `Button` style, `MpOutlineGoldButton`,
+  `MpGhostButton`, `MpLinkButton`, `NotifLinkButton`, `SidebarColoredButton` and the
+  `TextBox`/`CheckBox`/`RadioButton` templates — so several multiplayer controls stopped
+  compositing their captions without anything in `MultiplayerTab` changing. The
+  sibling-underlay treatment `MpAlertOverlay` uses spread the other way too, to
+  `SidebarPrimaryButton` (PLAY), `AppToast` and the dashboard hero. Don't reintroduce a
+  disabled `Opacity` in a shared style on the grounds that multiplayer looks fine — these
+  styles are shared, and that is how the rule got broken here in the first place.
+
+- **The bottom three rungs of the multiplayer text ramp were raised to clear 4.5:1, and the
+  sizes were deliberately NOT touched.** `MpTextFaint` `#6D829D` (4.09:1 on `MpPanel`),
+  `MpTextLabel` `#61779A` (3.54, and **3.04** on a hovered room row — the worst pairing on the
+  surface) and `MpTextDim` `#5F7592` (3.41) all failed AA, and they are attached to exactly the
+  SMALLEST tokens: the 9.5 section labels, the 10.5 pills, the 11.5 body. The least legible
+  colours were carrying the least legible sizes.
+
+  Now `#8C9CB1` / `#8394B1` / `#758AA5`. The hue is kept and so is the ORDER — Muted 6.30 >
+  Faint 5.75 > Label 5.24 > Dim 4.55 — so the hierarchy still reads; only the floor moved.
+
+  **The sizes stay where they are.** `MpLabelSize` 11.5 sits below the launcher's documented
+  13-px floor on the maintainer's explicit call, raised and declined twice (see
+  `Tokens.xaml:223-228`). Fixing contrast is how this surface gets more legible without
+  reopening that.
+
 - **Removing the roster's health dot would have broken the live ping SILENTLY.**
   `RefreshRosterHealthDots` found its target by walking each row for an `Ellipse` with a
   string `Tag`; the redesign states the link in words on the row's second line and drops
@@ -1833,8 +2103,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   and renaming half the set would be worse than leaving it.
 
   That second reading is now SENT — `TryConfirmMatchAsync` → `POST /matches/confirm` →
-  `match_confirmations` — and it is **evidence, not a vote: it gates nothing**, matches
-  rate exactly as they did before. Reporting stays host-only (N reporters would insert N
+  `match_confirmations`. **It began as evidence that gated nothing, and it no longer is:**
+  a reading may now DECIDE a match the server stored without a result, under the rule in the
+  late-reading bullet above. What has not changed is that it cannot overturn a decided one,
+  and that reporting is still host-only. Reporting stays host-only (N reporters would insert N
   copies of one match). The server compares it with `compareReadings` and writes a log
   line; `inconclusive` when either side is 0.5, because "nobody could read it" is not
   "they contradict each other" and merging the two would make the data measure the wrong

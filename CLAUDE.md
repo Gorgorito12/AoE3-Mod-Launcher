@@ -4767,7 +4767,24 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   exactly **1.0 — zero regression** vs the pre-scaler build; the scaler only ADDS
   "shrink to fit" below that. Crispness rides the hero's recipe
   (`SetTextCrispForScale`: Ideal/Grayscale/Animated below 1.0,
-  Display/ClearType/Fixed at 1.0). **Two load-bearing rules:** (1) attach only to
+  Display/ClearType/Fixed at 1.0).
+  **The top of the range is a DEAD BAND — `SnapToOneAbove` (0.97) — and removing it
+  re-opens a real bug.** Because the crispness recipe flips at `scale < 0.999`, the
+  clamp alone put that decision two pixels away from a normal window resize: the
+  Multiplayer tab is `min(W/1100, H/560)` against a window that is 1100 wide by default,
+  so the WIDTH term sat at exactly 1.0 with ~2 px of slack while the height had ~50.
+  Narrowing the window **three pixels** turned ClearType off for every glyph on the tab —
+  reported as the text looking blurry — to buy a 0.2% shrink that fits no extra content,
+  since these surfaces are star-column + scroll. Anything ≥ 0.97 now snaps flat to 1.0;
+  below it the transform still does its job. Pinned by `UiScaleTests` (the
+  `AHairNarrowerThanTheReferenceStaysAtOne` cases are the regression).
+  **Measured and REJECTED, so don't re-propose it:** switching the formatting mode to
+  `Ideal` + `Auto` hinting at fractional DPI (125/150%), on the theory that `Display`
+  snaps glyph advances to a non-integer device grid. Captured both builds at the same
+  1100x700 window on a 125% display and measured the text band: `Display` scored a mean
+  edge gradient of **2.260** with **3.63%** partially-covered pixels against `Ideal`'s
+  **2.176 / 3.74%** — i.e. Display is slightly SHARPER, not blurrier. The theory was
+  plausible and wrong. **Two load-bearing rules:** (1) attach only to
   a foreground content root — NEVER a full-bleed background (it must keep filling
   the window) or an alert-overlay host; (2) `sizeSource` must be a container the
   transform does NOT resize (the element's parent / the window) — a
@@ -4784,6 +4801,111 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   (brand, mod-switch), which live in their own visual tree and read it via
   `ApplyPopupScale`; the gear `ContextMenu` + `ComboBox` dropdowns stay base-size
   (a transient menu over scaled content is an accepted minor mismatch).
+- **Launcher-wide text legibility: the rules that came out of measuring it, and the two
+  outright bugs the measurement found.** The palette itself was fine — `TextPrimary`
+  14.55:1, `TextSecondary` 8.63:1, the nav tabs 6.59:1 — so nothing was repainted
+  wholesale. The failures were concentrated, and the size of every string was left alone
+  on the maintainer's call (no text was enlarged; nothing reflows).
+
+  **(a) Disabled state is a COLOUR, never an `Opacity` layer — `TextDisabled` (#989898).**
+  Eight styles each wrote their own `#666`/`#888`/`#aaa` AND stacked an `Opacity` of
+  0.4-0.5 on the Border that contains the caption. `#666` alone is 2.26:1 on `BgNeutral`;
+  with the layer it lands at **1.57:1**, i.e. you cannot read what the button you cannot
+  press says — and the layer turned ClearType off for the caption as a bonus. WCAG exempts
+  inactive controls, so this is not a compliance box; it is that the state was illegible.
+  One brush now, 4.51 / 5.69 / 6.13:1 on the three surfaces it lands on, and it still reads
+  as disabled because it is flat grey against near-white enabled text. This is the SAME
+  rule the multiplayer notes already state for a BUSY control ("say it with the word, not
+  with opacity"); it is now launcher-wide. The `ComboBox` was already right by accident —
+  its `Opacity` falls on an empty sibling Border — and that is the shape to copy.
+
+  **(b) `PrimaryButton` painted WHITE ON GOLD: 1.94:1, and 1.65:1 on hover.** The worst
+  pairing in the launcher, on the button every dialog confirms with. The fix was already in
+  the codebase: PLAY uses the same gold with `#261900` at **8.86:1**. Gold is a LIGHT fill
+  and wants dark text. Also fixed: the bell popup's "·" separator was painted with
+  `MpDivider`, a BORDER brush, used as a foreground — **1.16:1**, invisible.
+
+  **(c) The halo-sibling pattern now covers PLAY and the toasts.** An `Effect` on an
+  ancestor of text disables ClearType for every glyph underneath (the rule written next to
+  the multiplayer room cards). `SidebarPrimaryButton` hung a permanent `DropShadowEffect`
+  on the Border wrapping the **PLAY** caption — the largest button in the app, its text
+  composited all the time — and `AppToast` did the same over every toast's title and body.
+  Both now put the glow on a sibling underlay (`halo` / `shell`) and keep the content
+  Border clean. When you retarget this, move the `IsPressed` and `IsEnabled=False` Effect
+  setters to the halo too, or the triggers put the Effect straight back on the text.
+
+  **(d) The hero's two `TextBlock.Effect`s became a scrim, and the first attempt at that
+  scrim left a visible seam.** The 48px title and the 14px description each carried their
+  own `DropShadowEffect`. That shadow was NOT decoration — the copy sits over whatever hero
+  art a mod ships — so it was replaced, not dropped: a `Rectangle` behind the copy block,
+  sized off it by binding and blown outward with a `ScaleTransform` (no layout maths, and a
+  transform on a Rectangle costs nothing because there is no text under it). Measured on a
+  real capture, contrast went **11.98 -> 13.35:1** and the right half of the image is
+  untouched (mean luminance delta 0.0).
+  **The lesson worth keeping: a `RadialGradientBrush` whose transparent stop lies OUTSIDE
+  its own bounds ends on a hard cut.** The first version used Center 0.42 / RadiusX 0.72,
+  so the fill was still ~30% opaque at the Rectangle's right edge and drew a soft vertical
+  seam across the sky. Centre 0.5 + radius 0.5 puts the zero stop exactly on the edge
+  midpoints; the scrim then has to be about twice the block for its core to still cover the
+  text. Verified by scanning for the largest column-to-column luminance jump in a strip of
+  sky: identical (5.88 at x=563) before and after, i.e. no discontinuity introduced.
+  **The sharpness half of this only pays MAXIMIZED, and that is worth knowing before
+  re-litigating it:** at the default 1100x700 the hero subtree is already under
+  `SetTextCrispForScale`'s sub-1.0 branch, so ClearType is off there for an unrelated
+  reason and removing the Effect changed the fringing not at all (17.8 -> 16.5). At scale
+  1.0 the same paragraph measures **121.5**. So the Effect removal buys contrast at every
+  size and sharpness only at 1.0.
+
+  **(e) THE BUG WORTH REMEMBERING: `ClearValue` restores a STYLE setter, and there was no
+  style setter — so "Ready for operations" rendered BLACK ON BLACK at 1.05:1.**
+  `RefreshIdleProgressPanel` reset the dashboard progress strip with
+  `DashboardProgressLabel.ClearValue(TextBlock.ForegroundProperty)`, with a comment saying
+  it "falls back to the style setter". Their gold is a LOCAL value written on the element in
+  `MainWindow.xaml`, and this app has no implicit `TextBlock` style — so `ClearValue`
+  removed the only thing painting them and let `Foreground` fall back to WPF's default,
+  **Black**, on the darkest corner of the hero. The icon and label are now ASSIGNED
+  `AccentBrush` instead; the ProgressBar keeps its `ClearValue` because its gradient really
+  does come from `ShimmerProgressBar`. Contrast **1.05 -> 10.30:1**.
+  **How it hid for so long, and how to catch the next one:** the strip renders, the string
+  is right, UI Automation reports the element with its text and a normal bounding box, and
+  nothing throws — the text is simply the same colour as what is behind it. It was found by
+  measuring a screenshot, and confirmed by temporarily painting the label pure red and
+  finding **zero red pixels anywhere in the window**, which is what proved the local value
+  was gone rather than merely dark. Before using `ClearValue` to "reset" a brush, check
+  whether the value you expect to reappear is a style setter or the XAML attribute you just
+  erased.
+
+  **(f) How this was measured, and where the metric is invalid.** Contrast is computed from
+  real screen captures (sRGB linearisation, `(L1+0.05)/(L2+0.05)`), never eyeballed, and
+  never with `PrintWindow` — it draws onto an opaque DC and cannot be used to judge
+  antialiasing. ClearType leaves colour fringes on glyph edges and greyscale AA does not, so
+  the mean `|R-B|` over edge pixels is a usable proxy for "is ClearType on here". **It is
+  only valid for GREY text on a GREY background:** over the hero photo, or on the gold
+  title, R and B differ by the colours themselves and the number means nothing (the gold
+  title scores 103 with the Effect still attached). The capture harness gates on
+  `WindowFromPoint` at the window centre returning OUR pid before it saves anything — an
+  earlier run without that gate captured an unrelated window that happened to be on top.
+
+  **(g) The transparent popups are UNCHANGED, and here is the number the decision needs.**
+  `AllowsTransparency="True"` makes a window layered and WPF turns ClearType off for all of
+  its content. That covers the bell popup, the brand and mod-switch popups, every `ComboBox`
+  dropdown and the tooltips. Measured, same grey-on-dark text family, same capture: inside
+  the bell popup the mean edge `|R-B|` is **20.8-32.7**; in the ordinary window it is
+  **70.1-103.1** — about a 3x difference, so they really are losing it. It was NOT changed,
+  because the transparency is what buys the rounded corners and the two-tone rim, and
+  dropping it squares them off. That is a look decision, not a correctness one, so it is
+  the maintainer's to make. All of that popup text passes AA as it stands (12.34 / 6.64 /
+  5.70 / 5.70:1).
+
+  **Left alone on purpose:** enlarging any text; the ~21 hardcoded sub-13px `FontSize`
+  literals (mostly multiplayer, each with a token holding the identical value — tidiness,
+  not legibility); the gear `ContextMenu`, which lives inside the `Collapsed`
+  `LegacyPlayContent` and is unreachable; and `WarnBrush`, a brush key that does not exist
+  and always falls through to a literal (`ModPropertiesDialog.xaml.cs:896`) — a real bug,
+  but not a contrast one. **Also spotted and not fixed:** `DashboardProgressLabel` shows
+  the ENGLISH "Ready for operations" while the rest of the strip is Spanish, so the idle
+  label is populated before the language is applied and never refreshed.
+
 - **Geometry tokens mirror the FontSize scale — bind a token, don't hardcode a
   size. They live in `Styles/Tokens.xaml`, merged FIRST in `App.xaml` (a
   load-bearing placement, see below).** The dictionary defines (all

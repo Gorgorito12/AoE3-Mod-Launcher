@@ -518,6 +518,7 @@ public partial class MainWindow : Window
             // Real-time "new room" push over /global/ws — routed here so it shares
             // the room dedup + tab/subtab dots with the 90 s fallback poll.
             onNewRoomFromWs: OnNewRoomFromWs,
+            onMatchRated: OnMatchRatedFromWs,
             setConnectionChip: SetConnectionChip,
             setAccountChip: SetAccountChip);
         UpdateAccentResources(activeProfile);
@@ -858,6 +859,46 @@ public partial class MainWindow : Window
     /// room + mods I don't have, then shows the in-app toast (with a Join action) and
     /// sets the same tab/subtab dots the poll uses. Runs on the UI thread.
     /// </summary>
+    /// <summary>
+    /// The backend decided a match that had gone down without a result — from a recording one of
+    /// its players read after the report was already in.
+    ///
+    /// <para>The room closed minutes ago, so there is no card and no lobby window left to
+    /// update: without this bell the correction would only ever be found by someone who happened
+    /// to open their History. Deduped on the match id inside
+    /// <see cref="NotificationCenter.RaiseMatchRated"/>, because the global socket can deliver
+    /// the same frame twice and again after a restart.</para>
+    /// </summary>
+    private void OnMatchRatedFromWs(Models.Multiplayer.MatchRatedNotice notice)
+    {
+        try
+        {
+            // Win / loss / neither, on the same thresholds the card and the profile tally use,
+            // so the three can never disagree about the same row.
+            var verdict = notice.Result == null
+                ? null
+                : notice.Result >= 0.999 ? Strings.Get("MpResultWin")
+                : notice.Result <= 0.001 ? Strings.Get("MpResultLoss")
+                : null;
+
+            var delta = Services.Multiplayer.MatchOutcomeView.Delta(
+                notice.RatingBefore, notice.RatingAfter);
+
+            var body = verdict == null
+                ? Strings.Get("NotifMatchRatedBodyPlain")
+                : delta == null
+                    ? Strings.Format("NotifMatchRatedBody", verdict)
+                    : Strings.Format("NotifMatchRatedBodyDelta", verdict, delta);
+
+            _notifications?.RaiseMatchRated(
+                notice.ModId, notice.MatchId, Strings.Get("NotifMatchRatedTitle"), body);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"OnMatchRatedFromWs failed: {ex.Message}");
+        }
+    }
+
     private void OnNewRoomFromWs(string lobbyId, string title, string modId, string hostUserId, string hostLogin)
     {
         try
@@ -2516,6 +2557,7 @@ public partial class MainWindow : Window
         NotificationKind.Installed => _bellGreen,
         NotificationKind.NewTranslation => _bellGold,
         NotificationKind.RoomCreated => _bellBlue,
+        NotificationKind.MatchRated => _bellGold,
         _ => _bellSoftWhite,
     };
 
@@ -2656,6 +2698,15 @@ public partial class MainWindow : Window
         {
             try { SwitchTopTab(TopTab.Multiplayer); MultiplayerView.ShowRooms(); }
             catch (Exception ex) { DiagnosticLog.Write($"Notification → rooms failed: {ex.Message}"); }
+            return;
+        }
+
+        // A match decided after the fact: the only place the correction is visible is the
+        // player's own History. Before the profile guard for the same reason as above.
+        if (item.Kind == NotificationKind.MatchRated)
+        {
+            try { SwitchTopTab(TopTab.Multiplayer); MultiplayerView.ShowHistory(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → history failed: {ex.Message}"); }
             return;
         }
 
@@ -3533,21 +3584,33 @@ public partial class MainWindow : Window
         ProgressPanelControl.EtaText.Text = "";
 
         // Idle state: revert the dashboard bar to its style-default
-        // dorado gradient + reset the label/icon back to AccentBrush
-        // gold so the strip doesn't keep the previous operation's
-        // colour after it finishes. ClearValue drops the local
-        // Foreground brush and falls back to the style setter.
+        // dorado gradient + reset the label/icon back to AccentBrush gold so the
+        // strip doesn't keep the previous operation's colour after it finishes.
+        //
+        // The BAR uses ClearValue because its gold gradient genuinely comes from
+        // the ShimmerProgressBar style, so dropping the local brush falls back to it.
+        //
+        // The ICON and LABEL must be ASSIGNED, not cleared, and the difference is the
+        // whole bug: their gold is a LOCAL value written in MainWindow.xaml, not a
+        // style setter. ClearValue therefore removed the only thing painting them and
+        // let TextBlock.Foreground fall back to its WPF default — BLACK — on top of
+        // the darkest corner of the hero image. Measured on a real capture: "Ready for
+        // operations" rendered at 1.05:1 against its background, i.e. invisible, while
+        // the VELOCIDAD/TIEMPO RESTANTE labels beside it sat at a normal light grey.
+        // The old comment said it "falls back to the style setter"; there is no
+        // implicit TextBlock style in this app, which is what made it wrong.
         if (DashboardProgressBar != null)
         {
             DashboardProgressBar.ClearValue(System.Windows.Controls.ProgressBar.ForegroundProperty);
         }
+        var idleTone = (System.Windows.Media.Brush)FindResource("AccentBrush");
         if (DashboardProgressIcon != null)
         {
-            DashboardProgressIcon.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+            DashboardProgressIcon.Foreground = idleTone;
         }
         if (DashboardProgressLabel != null)
         {
-            DashboardProgressLabel.ClearValue(System.Windows.Controls.TextBlock.ForegroundProperty);
+            DashboardProgressLabel.Foreground = idleTone;
         }
 
         // Mirror into the visible cinema-dashboard progress strip.
@@ -4728,7 +4791,7 @@ public partial class MainWindow : Window
             createBackup: CreateUserDataBackupCore,
             restoreBackup: RestoreUserDataCore,
             viewLogs: () => RaiseMenuClick(ActionPanelControl.MenuViewLogs),
-            shareDiagnostics: () => ShareDiagnostics(),
+            shareDiagnostics: () => _ = ShareDiagnosticsAsync(),
             uninstall: () => RaiseMenuClick(ActionPanelControl.UninstallMenuItem),
             refreshTranslations: async () =>
             {
@@ -6195,8 +6258,9 @@ public partial class MainWindow : Window
         {
             Text = LastPlayedLabel(p.Id),
             FontSize = (double)FindResource("FontSizeCaption"),
+            // ChromeTextDim is already the ramp's quiet rung (5.70:1 here); an Opacity on
+            // top took it to 3.89:1 and cost the line ClearType for nothing.
             Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextDim"),
-            Opacity = 0.75,
             Margin = new Thickness(12, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -8881,7 +8945,7 @@ public partial class MainWindow : Window
     /// ONE file instead of hunting for the log under %LocalAppData%. The bundle
     /// excludes the config (Discord token) — see <see cref="DiagnosticLog.ExportBundle"/>.
     /// </summary>
-    private void ShareDiagnostics()
+    private async Task ShareDiagnosticsAsync()
     {
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         if (string.IsNullOrEmpty(desktop)) desktop = AppPaths.DataDir;
@@ -8918,7 +8982,14 @@ public partial class MainWindow : Window
             // (e.g. the stock game, which has no managed user-data folder) is a no-op.
             var gameUserDataDir = UserDataService.GetUserDataFolder(
                 UserDataService.ResolveFolderName(_updateService.Profile, _config));
-            DiagnosticLog.ExportBundle(zipPath, gameUserDataDir: gameUserDataDir);
+            // Off the UI thread. The bundle now describes the newest recordings, which means
+            // inflating up to ten multi-megabyte files — seconds of work, and the window is on
+            // screen while it happens. ExportBundle is fully synchronous, so this is a plain
+            // hand-off with none of the SynchronizationContext hazard that makes
+            // TryWriteInstallSnapshot's Task.Run load-bearing; here it is simply not the UI
+            // thread's work to do.
+            var userData = gameUserDataDir;
+            await Task.Run(() => DiagnosticLog.ExportBundle(zipPath, gameUserDataDir: userData));
 
             // Reveal the freshly-created zip selected in Explorer (ready to drag
             // into Discord / attach). /select expects a quoted absolute path.

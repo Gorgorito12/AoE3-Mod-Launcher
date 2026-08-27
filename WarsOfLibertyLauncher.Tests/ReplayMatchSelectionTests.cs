@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using WarsOfLibertyLauncher.Services.Multiplayer;
@@ -239,18 +239,72 @@ public class ReplayMatchSelectionTests
     }
 
     /// <summary>
-    /// Retry only buys something when a file could not be READ. One that parsed cleanly and
-    /// belongs to another game will parse identically in three seconds, so waiting on it is pure
-    /// delay between the game closing and the match being reported.
+    /// Retrying buys something in exactly two cases, and "a file that isn't ours" is not one of
+    /// them: a recording that parsed cleanly and belongs to another game will parse identically
+    /// in three seconds.
     /// </summary>
     [Fact]
-    public void ShouldRetry_OnlyWhenSomethingWasUnreadable()
+    public void ShouldRetry_WhenSomethingWasUnreadable_OrNothingWasThereYet()
     {
         var unreadable = new ReplayUploadService.ReplaySearch(null, Parsed: 2, Unreadable: 1);
         var justNotOurs = new ReplayUploadService.ReplaySearch(null, Parsed: 3, Unreadable: 0);
+        // Nothing newer than the launch existed yet — which is what a recording written a moment
+        // AFTER the process exits looks like. This case used to get zero retries, so the match
+        // reported all-draws at once and the file that arrived a second later was never seen.
+        var nothingYet = new ReplayUploadService.ReplaySearch(null, Parsed: 0, Unreadable: 0);
 
         Assert.True(ReplayUploadService.ShouldRetry(unreadable, attempt: 0, maxAttempts: 4));
+        Assert.True(ReplayUploadService.ShouldRetry(nothingYet, attempt: 0, maxAttempts: 4));
         Assert.False(ReplayUploadService.ShouldRetry(justNotOurs, attempt: 0, maxAttempts: 4));
+    }
+
+    /// <summary>
+    /// <b>The case that matters most in this file.</b> The retries above are only affordable
+    /// because they run BEHIND the report — and that is worth nothing if a match whose recording
+    /// is right there still pays for them. A found recording must stop the ladder dead, at
+    /// attempt 0, so the common path is as fast as it ever was.
+    /// </summary>
+    [Fact]
+    public void AFoundRecordingNeverWaits()
+    {
+        using var dir = new TempDir();
+        var found = new ReplayUploadService.ReplaySearch(
+            new FileInfo(dir.Write("ours.age3Yrec", DateTime.UtcNow)), Parsed: 1, Unreadable: 0);
+
+        Assert.False(ReplayUploadService.ShouldRetry(found, attempt: 0, maxAttempts: 4));
+    }
+
+    /// <summary>
+    /// The match's own window ORDERS candidates and must never REJECT one.
+    ///
+    /// <para>A file written long after the game closed — a replay the player renamed to send it
+    /// over Discord, which is exactly what happened in the incident this came from — should rank
+    /// below the match's own recording. But the recording is finished as the game closes and its
+    /// timestamp keeps moving while the retries run, so a ceiling that REJECTED would start
+    /// discarding legitimate recordings: the very symptom this area exists to fix.</para>
+    /// </summary>
+    [Fact]
+    public void TheWindowOrdersCandidates_ButNeverDiscardsThem()
+    {
+        using var dir = new TempDir();
+        var started = DateTime.UtcNow.AddMinutes(-30);
+        var exited = DateTime.UtcNow.AddMinutes(-10);
+
+        // Newest on disk, but written long after the game closed.
+        dir.Write("copied-later.age3Yrec", exited.AddMinutes(5));
+        dir.Write("the-match.age3Yrec", exited.AddSeconds(-3));
+
+        var seen = new System.Collections.Generic.List<string>();
+        var search = ReplayUploadService.FindMatchReplay(
+            dir.Path, started,
+            f => { seen.Add(f.Name); return Verdict(false); },
+            preferBeforeUtc: exited.AddMinutes(1));
+
+        // In-window first...
+        Assert.Equal("the-match.age3Yrec", seen[0]);
+        // ...and the out-of-window one is still examined, not dropped.
+        Assert.Contains("copied-later.age3Yrec", seen);
+        Assert.Null(search.File);
     }
 
     [Fact]

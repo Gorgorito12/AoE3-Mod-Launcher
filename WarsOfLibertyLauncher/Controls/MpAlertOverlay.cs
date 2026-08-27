@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -100,6 +100,27 @@ internal static class MpAlertOverlay
             VerticalAlignment = VerticalAlignment.Center,
             MaxWidth = 460,
             Margin = new Thickness(24),
+        };
+        if (host.RowDefinitions.Count > 0) Grid.SetRowSpan(outer, host.RowDefinitions.Count);
+        if (host.ColumnDefinitions.Count > 0) Grid.SetColumnSpan(outer, host.ColumnDefinitions.Count);
+
+        // The shadow lives on a SIBLING underneath, never on `outer` — whose child is the
+        // card, whose children are the title and the body text. An Effect on an ancestor
+        // sends the whole subtree through a composition pass and ClearType is disabled for
+        // every glyph inside it: the dialog's text renders softer than the text behind it.
+        //
+        // This is the rule the rest of the multiplayer surface already follows and states
+        // in MultiplayerTab.xaml (~:920) — this file simply never got it. The underlay is
+        // sized off `outer` rather than given fixed dimensions because the card is
+        // content-sized and the shadow has to track it.
+        var shadow = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
+            CornerRadius = new CornerRadius(9),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(24),
+            IsHitTestVisible = false,
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
                 Color = Colors.Black,
@@ -108,8 +129,12 @@ internal static class MpAlertOverlay
                 Opacity = 0.55,
             },
         };
-        if (host.RowDefinitions.Count > 0) Grid.SetRowSpan(outer, host.RowDefinitions.Count);
-        if (host.ColumnDefinitions.Count > 0) Grid.SetColumnSpan(outer, host.ColumnDefinitions.Count);
+        shadow.SetBinding(FrameworkElement.WidthProperty,
+            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualWidth)) { Source = outer });
+        shadow.SetBinding(FrameworkElement.HeightProperty,
+            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualHeight)) { Source = outer });
+        if (host.RowDefinitions.Count > 0) Grid.SetRowSpan(shadow, host.RowDefinitions.Count);
+        if (host.ColumnDefinitions.Count > 0) Grid.SetColumnSpan(shadow, host.ColumnDefinitions.Count);
 
         var card = new Border
         {
@@ -169,6 +194,7 @@ internal static class MpAlertOverlay
         void Close(bool result)
         {
             host.Children.Remove(scrim);
+            host.Children.Remove(shadow);   // it is a sibling now, so it needs its own removal
             host.Children.Remove(outer);
             tcs.TrySetResult(result);
         }
@@ -208,6 +234,7 @@ internal static class MpAlertOverlay
             scrim.MouseLeftButtonDown += (_, _) => Close(false);
 
         host.Children.Add(scrim);
+        host.Children.Add(shadow);   // under the card, so its Effect never covers text
         host.Children.Add(outer);
 
         // Focus the primary so Enter confirms / acknowledges immediately.
