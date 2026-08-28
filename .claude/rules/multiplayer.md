@@ -2149,10 +2149,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   a reading may now DECIDE a match the server stored without a result, under the rule in the
   late-reading bullet above. What has not changed is that it cannot overturn a decided one,
   and that reporting is still host-only. Reporting stays host-only (N reporters would insert N
-  copies of one match). The server compares it with `compareReadings` and writes a log
-  line; `inconclusive` when either side is 0.5, because "nobody could read it" is not
-  "they contradict each other" and merging the two would make the data measure the wrong
-  thing. The table is keyed by `(lobby_id, user_id)` and NOT by match id, because the
+  copies of one match). The server compares it with `compareReadings` and STORES the
+  verdict in `match_confirmations.agreement` / `same_game` — it used to only write a log
+  line, and the log rotates; `inconclusive` when either side is 0.5, because "nobody could
+  read it" is not "they contradict each other" and merging the two would make the data
+  measure the wrong thing. The table is keyed by `(lobby_id, user_id)` and NOT by match id, because the
   guest usually leaves the game before the host and their confirmation routinely arrives
   before the match row exists; the lobby row always exists, since those are never deleted.
 

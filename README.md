@@ -135,6 +135,8 @@ pipeline, see [docs/BUILDING.md](docs/BUILDING.md).
   spec for mod authors.
 - **[INSTALL.md](WarsOfLibertyLauncher/INSTALL.md)** — end-user install +
   SmartScreen guide.
+- **[docs/ELO.md](docs/ELO.md)** — player guide to the multiplayer rating:
+  what counts, how many points a match moves, and why one did not (bilingual).
 - **[docs/IS-IT-A-VIRUS.md](docs/IS-IT-A-VIRUS.md)** — why an unsigned build may
   trip antivirus, and how to verify it (VirusTotal / SHA-256 / build from source).
 - **[docs/AUDIT.md](docs/AUDIT.md)** — full transparency & security audit
