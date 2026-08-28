@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Media;
 
@@ -39,6 +39,23 @@ public static class UiScale
     /// <summary>Readability floor — the same 0.82 the hero used.</summary>
     public const double MinScale = 0.82;
 
+    /// <summary>
+    /// Anything at or above this snaps to a clean 1.0 instead of shrinking by a hair.
+    ///
+    /// <para><b>Why a dead band exists at all.</b> Without one the crisp/soft decision below
+    /// hangs off a two-pixel window resize. The Multiplayer tab is driven by
+    /// <c>min(W/1100, H/560)</c> against a window that is 1100 wide by default, so the WIDTH
+    /// term sits at exactly 1.0 with about two pixels of slack while the height has fifty.
+    /// Narrowing the window three pixels used to cross <c>scale &lt; 0.999</c> and flip the
+    /// ENTIRE tab from ClearType to grayscale antialiasing — every glyph on screen going soft
+    /// to buy a 0.2% size reduction nobody asked for.</para>
+    ///
+    /// <para>3% is chosen because it is below the point where shrinking buys anything: the
+    /// surfaces here are laid out with `*` columns and scroll, so a 1-3% squeeze fits no extra
+    /// content — it only costs sharpness. Below the band the transform still does its job.</para>
+    /// </summary>
+    public const double SnapToOneAbove = 0.97;
+
     public enum Kind
     {
         /// <summary>LayoutTransform — reflows + fills the slot; default.</summary>
@@ -54,11 +71,22 @@ public static class UiScale
     /// </summary>
     public static double Current { get; private set; } = 1.0;
 
-    private static double Clamp(double w, double h, double refW, double refH)
+    /// <summary>
+    /// The scale for a footprint against a reference — clamped to
+    /// <c>[<see cref="MinScale"/>, 1.0]</c>, with a dead band at the top.
+    ///
+    /// <para><c>internal</c> rather than private so the dead band can be pinned by a test:
+    /// it is pure arithmetic, and the bug it fixes was invisible on screen until someone
+    /// resized a window by three pixels.</para>
+    /// </summary>
+    internal static double Clamp(double w, double h, double refW, double refH)
     {
         if (w <= 0 || h <= 0 || refW <= 0 || refH <= 0) return 1.0;
         double scale = Math.Min(w / refW, h / refH);
         scale = Math.Min(scale, 1.0);
+        // Snap the top of the range flat. See SnapToOneAbove: the alternative is a surface
+        // whose text rendering mode changes when the window moves two pixels.
+        if (scale >= SnapToOneAbove) return 1.0;
         scale = Math.Max(scale, MinScale);
         return scale;
     }

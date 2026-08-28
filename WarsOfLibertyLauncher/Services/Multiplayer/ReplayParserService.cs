@@ -251,14 +251,23 @@ public static class ReplayParserService
     /// selected a stranger's file and reported a result for two people who never
     /// played it.</para>
     ///
-    /// <para>Three checks, all from data the launcher already holds:</para>
+    /// <para>Two checks, both from data the launcher already holds:</para>
     /// <list type="bullet">
     ///   <item>the host is among the players — the strong one, since another player's
     ///         replay simply does not contain him;</item>
-    ///   <item>the number of humans matches the room's participants;</item>
-    ///   <item>the slot that recorded the file is the host's, which the trailer gives
-    ///         away for free.</item>
+    ///   <item>the number of humans matches the room's participants.</item>
     /// </list>
+    ///
+    /// <para><b>There used to be a third — "the slot that recorded the file is the
+    /// host's", taken from the trailer's B field — and it REJECTED THE WINNER'S OWN
+    /// RECORDING in every multiplayer match.</b> B does not identify the recorder: the
+    /// two players' copies of one match are byte-identical for the last 64 bytes, so no
+    /// field in there can say which of them wrote it. In multiplayer B is the loser, so
+    /// the gate passed only for whoever lost. Combined with <c>HostResultFrom</c> reading
+    /// the same field as the host's slot, a match could be rated only when the host LOST;
+    /// a host who won had his recording thrown away here with "is not this match". Proven
+    /// on three matches with both players' files and both players' logs. See
+    /// <see cref="ReadOutcome"/> for what B actually appears to be.</para>
     ///
     /// <para>The host's name comes from his AoE3 profile, so it is compared
     /// case-insensitively and trimmed; anything blank fails, because an unknown host
@@ -272,24 +281,38 @@ public static class ReplayParserService
     /// result nobody could stand behind.</para>
     /// </summary>
     public static bool LooksLikeThisMatch(
-        ReplayHeader? header, string hostProfileName, int expectedHumans, int recorderSlot = -1)
+        ReplayHeader? header, string hostProfileName, int expectedHumans)
     {
         if (header == null) return false;
-        if (string.IsNullOrWhiteSpace(hostProfileName)) return false;
 
         var humans = header.Players.Where(p => p.IsHuman).ToList();
         if (expectedHumans <= 0 || humans.Count != expectedHumans) return false;
 
-        var host = humans.FirstOrDefault(p =>
-            string.Equals(p.Name.Trim(), hostProfileName.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (host == null) return false;
+        return FindPlayerSlot(header, hostProfileName) >= 0;
+    }
 
-        // Only checked when the trailer supplied one; a recording without it is already
-        // going to be judged Ambiguous, and rejecting it here too would just lose the
-        // map and civilizations for no gain.
-        if (recorderSlot >= 0 && recorderSlot != host.Slot) return false;
+    /// <summary>
+    /// The slot of the human called <paramref name="profileName"/>, or <c>-1</c>.
+    ///
+    /// <para><b>This is the only supported way to learn which slot the local player
+    /// occupies.</b> The name comes from his own AoE3 profile, is written into the
+    /// recording by the game, and is the one thing in the file that differs between two
+    /// people — so it identifies him where the outcome trailer cannot. Matching is
+    /// trimmed and case-insensitive; a blank name finds nobody, because an unknown player
+    /// cannot confirm anything.</para>
+    ///
+    /// <para>Extracted so <see cref="LooksLikeThisMatch"/> and the caller that needs the
+    /// host's slot for <see cref="HostResultFrom"/> cannot drift apart: they used to
+    /// answer "which slot is ours" two different ways, and the other one was wrong.</para>
+    /// </summary>
+    public static int FindPlayerSlot(ReplayHeader? header, string profileName)
+    {
+        if (header == null) return -1;
+        if (string.IsNullOrWhiteSpace(profileName)) return -1;
 
-        return true;
+        var match = header.Players.FirstOrDefault(p => p.IsHuman
+            && string.Equals(p.Name.Trim(), profileName.Trim(), StringComparison.OrdinalIgnoreCase));
+        return match?.Slot ?? -1;
     }
 
     /// <summary>How much the outcome below can be trusted. Two values, not a bool,
@@ -302,13 +325,21 @@ public static class ReplayParserService
     }
 
     /// <summary>
-    /// Who lost, who won, and which slot recorded the file. Slots are -1 when unknown.
+    /// Who lost and who won. Slots are -1 when unknown.
+    ///
+    /// <para><paramref name="SignaturePresent"/> answers a different question from
+    /// <paramref name="Confidence"/>, and the caller needs both: false means the recording
+    /// ends without the trailer at all — the game was closed before it finished writing
+    /// the ending — while an Ambiguous outcome WITH a signature means the trailer was read
+    /// and simply did not name a result we can use. Those are different things to tell a
+    /// player, which is why they are different fields.</para>
     /// </summary>
     public sealed record ReplayOutcome(
         ReplayOutcomeConfidence Confidence,
         int LoserSlot,
         int WinnerSlot,
-        int RecorderSlot);
+        int TrailerSecondSlot,
+        bool SignaturePresent);
 
     /// <summary>The 12 zero bytes + 8 × 0xFF that precede the trailing triple.</summary>
     private const int OutcomeTrailerBytes = 32;
@@ -318,14 +349,27 @@ public static class ReplayParserService
     ///
     /// <para>The last 32 bytes of a normally-finished recording are
     /// <c>[00 × 12][FF × 8][A][B][C]</c>, three uint32 where <b>A is the slot that
-    /// LOST</b>, B is the slot that recorded the file, and C is the number of humans.</para>
+    /// LOST</b>, C is the number of humans, and <b>B is not understood</b>.</para>
     ///
-    /// <para><b>Measured, then predicted, then confirmed.</b> A is the loser across five
-    /// games whose result was known independently: three skirmishes (two resigned, one
-    /// won) and two real 1v1s between humans. The rival readings die on the same case —
-    /// a game the recorder WON reports A = the opponent's slot, so A is neither the
-    /// winner nor the recorder. B was then predicted to be the recorder and held: in two
-    /// files from the same player it points at him in both, across different slots.</para>
+    /// <para><b>A is measured, then predicted, then confirmed.</b> A is the loser across
+    /// five games whose result was known independently: three skirmishes (two resigned,
+    /// one won) and two real 1v1s between humans. The rival readings die on the same case
+    /// — a game the recorder WON reports A = the opponent's slot, so A is neither the
+    /// winner nor the recorder.</para>
+    ///
+    /// <para><b>B was read as "the slot that recorded the file" and that was WRONG. Never
+    /// use it to identify anybody.</b> The evidence for it was two singleplayer files from
+    /// the same human, where B pointed at him across different slots — but with one player
+    /// and one machine, "the recorder" and "the one who ended the game" cannot be told
+    /// apart. Three multiplayer matches captured from BOTH players settle it: the two
+    /// copies of a match are byte-identical for the last 64 bytes, so B cannot name which
+    /// machine wrote one, and in all six copies B equals the loser. The consequence was
+    /// severe — see <see cref="LooksLikeThisMatch"/>.</para>
+    ///
+    /// <para>What fits all eight observations is <i>the slot that ENDED the game</i>: the
+    /// human who destroyed the AI in the singleplayer files, the player who resigned in
+    /// the multiplayer ones. That is a hypothesis, not a reading — nothing depends on it,
+    /// and nothing should. Use <see cref="FindPlayerSlot"/> to find the local player.</para>
     ///
     /// <para><b>Two of seven recordings have no trailer at all</b> — games that ended
     /// abnormally. That is why this checks for the signature instead of assuming it, and
@@ -351,21 +395,24 @@ public static class ReplayParserService
     /// </summary>
     public static ReplayOutcome ReadOutcome(byte[] data, ReplayHeader? header)
     {
-        var unknown = new ReplayOutcome(ReplayOutcomeConfidence.Ambiguous, -1, -1, -1);
-        if (data == null || header == null || data.Length < OutcomeTrailerBytes) return unknown;
+        var noSignature = new ReplayOutcome(ReplayOutcomeConfidence.Ambiguous, -1, -1, -1, false);
+        if (data == null || header == null || data.Length < OutcomeTrailerBytes) return noSignature;
 
         var start = data.Length - OutcomeTrailerBytes;
         for (var i = 0; i < 12; i++)
-            if (data[start + i] != 0x00) return unknown;
+            if (data[start + i] != 0x00) return noSignature;
         for (var i = 12; i < 20; i++)
-            if (data[start + i] != 0xFF) return unknown;
+            if (data[start + i] != 0xFF) return noSignature;
 
         var loser = unchecked((int)BitConverter.ToUInt32(data, start + 20));
-        var recorder = unchecked((int)BitConverter.ToUInt32(data, start + 24));
+        var second = unchecked((int)BitConverter.ToUInt32(data, start + 24));
+
+        // Past the signature, so the trailer exists whatever it turns out to say.
+        var unknown = new ReplayOutcome(ReplayOutcomeConfidence.Ambiguous, -1, -1, second, true);
 
         // The loser has to be someone who was actually in the game.
         if (header.Players.All(p => p.Slot != loser))
-            return unknown with { RecorderSlot = recorder };
+            return unknown;
 
         // Beyond a 1v1, "X lost" doesn't name a winner: the others may have lost too,
         // and nothing here says in what order. Those stay draws until the room state
@@ -375,14 +422,14 @@ public static class ReplayParserService
         // it was read correctly and is worth having in a diagnostic bundle. What the
         // caller loses is permission to treat it as a result.
         if (header.Players.Count != 2)
-            return unknown with { LoserSlot = loser, RecorderSlot = recorder };
+            return unknown with { LoserSlot = loser };
 
         // A skirmish is not a match, whoever the trailer says lost it.
         if (header.Players.Any(p => !p.IsHuman))
-            return unknown with { LoserSlot = loser, RecorderSlot = recorder };
+            return unknown with { LoserSlot = loser };
 
         var winner = header.Players.First(p => p.Slot != loser).Slot;
-        return new ReplayOutcome(ReplayOutcomeConfidence.Confident, loser, winner, recorder);
+        return new ReplayOutcome(ReplayOutcomeConfidence.Confident, loser, winner, second, true);
     }
 
     /// <summary>
@@ -393,6 +440,11 @@ public static class ReplayParserService
     /// played in: an ambiguous outcome, a host whose slot is neither of the two named. The
     /// caller turns null into the 0.5 draw that reporting used before any of this existed,
     /// so the failure mode is "no worse than before" rather than a wrong winner.</para>
+    ///
+    /// <para><b><paramref name="hostSlot"/> must come from <see cref="FindPlayerSlot"/>,
+    /// never from the trailer.</b> It was fed the trailer's B field, which in multiplayer
+    /// is the loser — so this method could only ever return 0.0, and no host ever
+    /// registered a win.</para>
     ///
     /// <para>Kept here, pure, rather than in the caller: <c>MultiplayerTab</c> is WPF and
     /// cannot be tested, and this is the one line where a mistake silently moves rating

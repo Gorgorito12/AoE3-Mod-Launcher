@@ -85,9 +85,23 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private static readonly int[] ReplayRetryDelaysMs = { 0, 1000, 2500, 5000 };
 
+    /// <summary>
+    /// How far past the game closing a recording may be written and still be treated as this
+    /// match's own, for ORDERING candidates — never for rejecting them.
+    ///
+    /// <para>Generous on purpose. The recording is finished as the game closes and its
+    /// timestamp keeps moving while the retries run, so a tight edge would start pushing the
+    /// real recording behind somebody else's file. Two minutes comfortably covers the retry
+    /// ladder and any clock granularity, while still ranking a replay copied into the folder
+    /// half an hour later below the one we actually want.</para>
+    /// </summary>
+    private static readonly TimeSpan ReplayWindowMargin = TimeSpan.FromMinutes(2);
+
     /// <summary>A new room arrived over /global/ws (id, title, modId, hostUserId, hostLogin).
     /// Handed to MainWindow so the room dedup + dots are shared with the 90 s fallback poll.</summary>
     private Action<string, string, string, string, string>? _onNewRoomFromWs;
+    /// <summary>Raised when the backend says a previously-undecided match ended up rated.</summary>
+    private Action<MatchRatedNotice>? _onMatchRated;
 
     private Subtab _activeSubtab = Subtab.Rooms;
     private bool _isRefreshingList;
@@ -270,6 +284,39 @@ public partial class MultiplayerTab : UserControl
     /// without saying why.</para>
     /// </summary>
     private Services.Multiplayer.LocalReadFailure _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
+
+    /// <summary>
+    /// The particulars behind <see cref="_lastLocalReadFailure"/>, appended to its message —
+    /// today the AoE3 profile name we read against the names the recordings actually carried.
+    /// Data, never translated. Null whenever there is nothing specific to add.
+    /// </summary>
+    private string? _lastLocalReadDetail;
+
+    /// <summary>
+    /// How to rebuild the end-of-match card, captured when it is first painted.
+    ///
+    /// <para><b>Why a rebuilder and not a repaint of the same model.</b> The card used to be
+    /// built exactly once, at the moment the report arrived — so a player whose own AoE3 was
+    /// still open saw "the match was not recorded" frozen on screen while their recording sat
+    /// on disk naming the winner. The reading lands seconds or minutes later and has to be able
+    /// to replace that text.</para>
+    ///
+    /// <para>It must NOT be done by re-entering <see cref="EnterResultPhase"/>: that method
+    /// clears <c>_roomMatchLive</c>, drops the process handle, kills the tick timer, stops the
+    /// socket's reconnect and suppresses the leave confirm. Running all of that again over an
+    /// already-terminal state is a different bug. This closure rebuilds the MODEL only, and both
+    /// the host's path and the guest's history path install one, so a late reading corrects
+    /// either card.</para>
+    /// </summary>
+    private Func<Services.Multiplayer.MatchOutcomeView>? _outcomeRebuilder;
+
+    /// <summary>
+    /// One recording analysis at a time. The search now runs from two places — the game exiting
+    /// and the match being reported while the game is still open — and both write
+    /// <see cref="_lastLocalReadFailure"/>. Without this they can interleave and the later,
+    /// worse answer wins.
+    /// </summary>
+    private int _replayAnalysisInFlight;
 
     // -------- Lobby window (replaces the old in-tab popup) ----------
     //
@@ -941,6 +988,7 @@ public partial class MultiplayerTab : UserControl
         Func<string, Task>? switchActiveCopy = null,
         Action<AppToast.ToastOptions>? showAppToast = null,
         Action<string, string, string, string, string>? onNewRoomFromWs = null,
+        Action<MatchRatedNotice>? onMatchRated = null,
         Action<string?, string?>? setConnectionChip = null,
         Action<string?, string?, string?>? setAccountChip = null)
     {
@@ -961,6 +1009,7 @@ public partial class MultiplayerTab : UserControl
         _switchActiveCopy = switchActiveCopy;
         _showAppToast = showAppToast;
         _onNewRoomFromWs = onNewRoomFromWs;
+        _onMatchRated = onMatchRated;
         // Optional so old callers (and the parameterless ctor path
         // used by XAML preview) still work — null _config just means
         // the Radmin assistant features stay dormant.
@@ -3395,6 +3444,15 @@ public partial class MultiplayerTab : UserControl
     /// clicked) to force the Rooms subtab and freshen the list. Mirrors
     /// <see cref="SubtabRooms_Click"/>.
     /// </summary>
+    /// <summary>Open the Multiplayer tab's History subtab and refresh it.</summary>
+    public void ShowHistory()
+    {
+        _activeSubtab = Subtab.History;
+        UpdateSubtabHighlights();
+        RefreshFromSession();
+        _ = RefreshHistoryAsync();
+    }
+
     public void ShowRooms()
     {
         _activeSubtab = Subtab.Rooms;
@@ -4810,6 +4868,9 @@ public partial class MultiplayerTab : UserControl
                     case "lobby_created":
                         HandleLobbyCreatedFrame(e.Json);
                         break;
+                    case "match_rated":
+                        HandleMatchRatedFrame(e.Json);
+                        break;
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
                         DiagnosticLog.Write($"Global chat error frame: {code}");
@@ -4953,6 +5014,33 @@ public partial class MultiplayerTab : UserControl
     /// MainWindow, which shares the room dedup + tab/subtab dots with the 90 s
     /// fallback poll and shows the in-app toast (with a Join action).
     /// </summary>
+    /// <summary>
+    /// A match we played, reported without a result, was decided later — by our own late
+    /// reading or by the other player's.
+    ///
+    /// <para>Rides the global socket because the room is long gone by then. Everything is
+    /// optional except the match id: an older backend, or a rating that could not be computed,
+    /// simply means the bell says less rather than nothing.</para>
+    /// </summary>
+    private void HandleMatchRatedFrame(JsonElement json)
+    {
+        var matchId = json.TryGetProperty("match_id", out var mid) ? (mid.GetString() ?? "") : "";
+        if (string.IsNullOrEmpty(matchId)) return;
+
+        static double? Num(JsonElement e, string name)
+            => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number
+                ? v.GetDouble() : null;
+
+        _onMatchRated?.Invoke(new MatchRatedNotice(
+            matchId,
+            json.TryGetProperty("mod_id", out var mo) ? (mo.GetString() ?? "") : "",
+            json.TryGetProperty("map_name", out var mp) && mp.ValueKind == JsonValueKind.String
+                ? mp.GetString() : null,
+            Num(json, "result"),
+            Num(json, "rating_before"),
+            Num(json, "rating_after")));
+    }
+
     private void HandleLobbyCreatedFrame(JsonElement json)
     {
         if (!json.TryGetProperty("lobby", out var lobby) || lobby.ValueKind != JsonValueKind.Object) return;
@@ -5950,8 +6038,20 @@ public partial class MultiplayerTab : UserControl
         var inGame = lobby.Status == "in_game";
         var isFull = lobby.CurrentPlayers >= lobby.MaxPlayers;
         var me = _session?.CurrentUser;
-        var textPrimary = (Brush)Application.Current.FindResource("MpTextPrimary");
-        var textSecondary = (Brush)Application.Current.FindResource("MpTextMuted");
+
+        // A room whose mod you don't have reads as unavailable through its TEXT, never
+        // through an Opacity layer on the card — which is what this used to do
+        // (`Opacity = modInstalled ? 1.0 : 0.6`). An opacity below 1 on a container forces
+        // the whole subtree through a composition pass: ClearType is disabled for every
+        // glyph inside it, AND the real contrast of the faint labels collapses to roughly
+        // 2:1. Blurry and washed out at once, which is exactly how it was reported.
+        //
+        // The signal survives without it: both text roles step down one rung of the ramp,
+        // and the action button is already disabled for a mod you don't have.
+        var textPrimary = (Brush)Application.Current.FindResource(
+            modInstalled ? "MpTextPrimary" : "MpTextMuted");
+        var textSecondary = (Brush)Application.Current.FindResource(
+            modInstalled ? "MpTextMuted" : "MpTextFaint");
 
         var card = new Border
         {
@@ -5961,7 +6061,6 @@ public partial class MultiplayerTab : UserControl
             Style = (Style)FindResource("MpRoomCard"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0),
-            Opacity = modInstalled ? 1.0 : 0.6,
             Tag = lobby,
         };
 
@@ -7463,6 +7562,9 @@ public partial class MultiplayerTab : UserControl
         // Taken once, up front: the rest of this method can await for several seconds while the
         // recording finishes flushing, and the room can go away underneath it.
         var ctx = _matchContext;
+        // The upper edge of this match's own window, for ordering replay candidates. Taken
+        // before the awaits below, which can run for seconds.
+        var exitedAtUtc = DateTime.UtcNow;
         try
         {
             AppendChatSystem(Strings.Get("MpChatGameClosed"));
@@ -7478,7 +7580,16 @@ public partial class MultiplayerTab : UserControl
 
             // Where the result comes from. Never throws, returns null when there is
             // nothing usable — the report then carries the draws it always did.
-            var analysis = await AnalyseMatchReplayAsync(profile, ctx, gameStartedAtUtc);
+            //
+            // ONE pass, deliberately. When the recording is there and readable this finds it
+            // and nothing is lost; when it is not, the report goes out immediately with no
+            // result and the remaining attempts run BEHIND it (see the continuation below).
+            // Waiting here instead would make every match with no recording — the majority,
+            // since AoE3's per-match box comes up unticked — slower for the benefit of a few.
+            var analysis = await AnalyseMatchReplayAsync(
+                profile, ctx, gameStartedAtUtc,
+                firstPassOnly: true,
+                preferBeforeUtc: exitedAtUtc + ReplayWindowMargin);
             var replayInfo = analysis.Info;
             _lastLocalReadFailure = analysis.Failure;
 
@@ -7522,6 +7633,14 @@ public partial class MultiplayerTab : UserControl
                 }
                 catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.OnGameExitedAsync: SendGameEnded — {ex.Message}"); }
             }
+
+            // The report has gone out, so the rest of the search costs nobody any latency —
+            // which is the only reason it is allowed to exist. A reading that lands now is a
+            // CORRECTION: it goes back through the confirmation path, which is what lets a
+            // late reading still decide a match the server could not.
+            if (replayInfo?.HostResult == null)
+                replayInfo = await ContinueSearchingForResultAsync(
+                    profile, ctx, gameStartedAtUtc, exitedAtUtc, replayInfo, report.Response);
 
             // Already found above, so no second walk over the folder.
             if (replayInfo != null)
@@ -7612,8 +7731,23 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private sealed record MatchReplayResult(MatchReplayInfo? Info, Services.Multiplayer.LocalReadFailure Failure);
 
+    /// <param name="firstPassOnly">
+    /// Run attempt 0 and stop, however it went.
+    ///
+    /// <para><b>This is what keeps the report instant.</b> When a recording is there and
+    /// readable the first pass finds it and nothing is lost; when it is not, the caller reports
+    /// immediately with no result and runs the full ladder AFTERWARDS, so the retries are a
+    /// correction rather than latency every player pays. The alternative — waiting before
+    /// reporting — makes the majority of matches, which have no recording at all, slower for
+    /// the benefit of a few.</para>
+    /// </param>
+    /// <param name="preferBeforeUtc">
+    /// Upper edge of this match's own window, normally when the game closed plus a margin.
+    /// Ordering only, never a filter — see <see cref="ReplayUploadService.FindMatchReplay"/>.
+    /// </param>
     private async Task<MatchReplayResult> AnalyseMatchReplayAsync(
-        ModProfile profile, Services.Multiplayer.MatchContext? ctx, DateTime startedUtc)
+        ModProfile profile, Services.Multiplayer.MatchContext? ctx, DateTime startedUtc,
+        bool firstPassOnly = false, DateTime? preferBeforeUtc = null)
     {
         try
         {
@@ -7660,6 +7794,15 @@ public partial class MultiplayerTab : UserControl
             // Kept across attempts so the tail can tell "files were there but none could be
             // read" from "there was nothing to read" — different causes, different advice.
             var lastSearch = new ReplayUploadService.ReplaySearch(null, 0, 0);
+            // Human names carried by recordings that parsed fine and turned out to be somebody
+            // else's match. Only ever read when nothing matched — see LocalReadFailure.RecordingNotOurs.
+            var seenNames = new List<string>();
+            // Whether the accepted recording ended with the outcome signature at all. That is
+            // what tells "the game never wrote its ending" apart from "it wrote one we cannot
+            // use" — different causes, and only one of them is the player's to avoid. It used
+            // to be carried as the trailer's slot field, which stopped working the moment the
+            // local slot started coming from the player's name instead.
+            var signaturePresent = false;
 
             // The search runs the instant the game process dies, so the recording we want is
             // often still being flushed — it fails to parse, and the match silently becomes a
@@ -7670,7 +7813,7 @@ public partial class MultiplayerTab : UserControl
             {
                 if (attempt > 0) await Task.Delay(ReplayRetryDelaysMs[attempt]);
 
-                var (info, search) = await Task.Run(() =>
+                var (info, search, hadSignature) = await Task.Run(() =>
                 {
                     ReplayParserService.ReplayHeader? header = null;
                     ReplayParserService.ReplayOutcome? outcome = null;
@@ -7687,19 +7830,42 @@ public partial class MultiplayerTab : UserControl
                         if (h == null) return ReplayUploadService.CandidateVerdict.Unreadable;
 
                         var o = ReplayParserService.ReadOutcome(data, h);
-                        if (!ReplayParserService.LooksLikeThisMatch(h, hostName!, expectedHumans, o.RecorderSlot))
+                        if (!ReplayParserService.LooksLikeThisMatch(h, hostName!, expectedHumans))
+                        {
+                            // Remembered so the card can name them. "None of these are yours" is
+                            // a dead end on its own; the names beside the profile we read are
+                            // what make a profile-name mismatch — which fails EVERY match until
+                            // it is fixed — visible to the person who can fix it.
+                            foreach (var p in h.Players)
+                                if (p.IsHuman && !string.IsNullOrWhiteSpace(p.Name)
+                                    && !seenNames.Contains(p.Name))
+                                    seenNames.Add(p.Name);
                             return ReplayUploadService.CandidateVerdict.NotOurs;
+                        }
+
+                        // The one case worth a byte dump: the trailer signature is missing
+                        // entirely, which is how a game that ended abnormally looks. Sixteen
+                        // bytes is the whole evidence, and without it "no outcome" is a claim
+                        // nobody can check from a diagnostic bundle.
+                        if (o.Confidence == ReplayParserService.ReplayOutcomeConfidence.Ambiguous
+                            && !o.SignaturePresent && data.Length >= 16)
+                            DiagnosticLog.Write(
+                                $"Replay: '{candidate.Name}' has no outcome trailer; last 16 bytes = " +
+                                BitConverter.ToString(data, data.Length - 16));
 
                         header = h;
                         outcome = o;
                         return ReplayUploadService.CandidateVerdict.Match;
-                    });
+                    }, preferBeforeUtc);
 
-                    if (result.File == null || header == null) return (null as MatchReplayInfo, result);
+                    if (result.File == null || header == null) return (null as MatchReplayInfo, result, false);
 
-                    // The trailer names the slot that recorded, which is this machine — so the
-                    // host's slot comes from the file rather than from matching names twice.
-                    var hostSlot = outcome!.RecorderSlot;
+                    // BY NAME, never from the trailer. The trailer's second field was read as
+                    // "the slot that recorded this file"; in multiplayer it is the loser, so
+                    // this resolved to the loser on both machines and HostResultFrom could
+                    // only ever answer 0.0 — a host who won never scored. The profile name is
+                    // the one thing in the file that differs between the two players.
+                    var hostSlot = ReplayParserService.FindPlayerSlot(header, hostName!);
                     var hostResult = ReplayParserService.HostResultFrom(outcome, hostSlot);
 
                     DiagnosticLog.Write(
@@ -7709,11 +7875,16 @@ public partial class MultiplayerTab : UserControl
 
                     return (new MatchReplayInfo(
                         result.File, header.MapName, hostResult,
-                        header.RandomSeed, header.HostTime), result);
+                        header.RandomSeed, header.HostTime), result, outcome!.SignaturePresent);
                 });
 
                 lastSearch = search;
+                signaturePresent = hadSignature;
                 if (info != null) { found = info; break; }
+
+                // The caller wants the answer NOW so it can report without waiting; whatever
+                // else is on disk is its follow-up pass's problem, not this one's.
+                if (firstPassOnly) break;
 
                 if (!ReplayUploadService.ShouldRetry(search, attempt, ReplayRetryDelaysMs.Length))
                 {
@@ -7738,13 +7909,43 @@ public partial class MultiplayerTab : UserControl
             // "Unreadable" only when files were actually opened and none could be parsed —
             // otherwise there was simply nothing there, which is the ordinary case and the
             // one whose advice ("tick Record Game") is correct.
-            var failure = found != null
-                ? (found.HostResult == null
-                    ? Services.Multiplayer.LocalReadFailure.RecordingAmbiguous
-                    : Services.Multiplayer.LocalReadFailure.None)
-                : (lastSearch.Unreadable > 0 && lastSearch.Parsed == 0
-                    ? Services.Multiplayer.LocalReadFailure.RecordingUnreadable
-                    : Services.Multiplayer.LocalReadFailure.NoRecordingFound);
+            Services.Multiplayer.LocalReadFailure failure;
+            if (found != null)
+            {
+                failure = found.HostResult != null
+                    ? Services.Multiplayer.LocalReadFailure.None
+                    // No signature means the 12×00 + 8×FF was not at the end of the file at
+                    // all: the game never finished writing its ending. That has its own advice
+                    // — leave the match to the menu before closing AoE3 — where a trailer we
+                    // simply cannot use has none.
+                    : !signaturePresent
+                        ? Services.Multiplayer.LocalReadFailure.RecordingNoOutcome
+                        : Services.Multiplayer.LocalReadFailure.RecordingAmbiguous;
+            }
+            else if (lastSearch.Unreadable > 0 && lastSearch.Parsed == 0)
+            {
+                failure = Services.Multiplayer.LocalReadFailure.RecordingUnreadable;
+            }
+            else if (lastSearch.Parsed > 0)
+            {
+                // Recordings were found and read PERFECTLY, and not one of them is this match.
+                // This used to fall through to NoRecordingFound — "it was not recorded, tick
+                // Record Game" — which is the single piece of advice that is certainly wrong
+                // here, and it is wrong every time for anyone whose AoE3 profile name differs
+                // from the name they play under.
+                failure = Services.Multiplayer.LocalReadFailure.RecordingNotOurs;
+                _lastLocalReadDetail = seenNames.Count > 0
+                    ? Strings.Format("MpResultNotOursDetail", hostName, string.Join(", ", seenNames))
+                    : null;
+            }
+            else
+            {
+                failure = Services.Multiplayer.LocalReadFailure.NoRecordingFound;
+            }
+
+            if (failure != Services.Multiplayer.LocalReadFailure.RecordingNotOurs)
+                _lastLocalReadDetail = null;
+
             return new MatchReplayResult(found, failure);
         }
         catch (Exception ex)
@@ -7752,6 +7953,107 @@ public partial class MultiplayerTab : UserControl
             DiagnosticLog.Write($"MultiplayerTab.AnalyseMatchReplayAsync: {ex.Message}");
             return new MatchReplayResult(null, Services.Multiplayer.LocalReadFailure.NoRecordingFound);
         }
+    }
+
+    /// <summary>
+    /// Keep looking for this match's recording AFTER the report has gone out, and send whatever
+    /// it turns up as a correction.
+    ///
+    /// <para><b>This is what makes the retries affordable.</b> They used to run in front of the
+    /// report, so every match with no recording — the majority — paid seconds of latency for the
+    /// benefit of the few whose file was still being flushed. Behind the report they cost nobody
+    /// anything, which is also why the search may now retry on an EMPTY folder (see
+    /// <see cref="ReplayUploadService.ShouldRetry"/>) rather than only on an unreadable file.</para>
+    ///
+    /// <para>Returns the better reading when there is one, otherwise whatever the caller already
+    /// had. Never throws: this runs while the player is watching their game close.</para>
+    /// </summary>
+    private async Task<MatchReplayInfo?> ContinueSearchingForResultAsync(
+        ModProfile profile,
+        Services.Multiplayer.MatchContext? ctx,
+        DateTime startedUtc,
+        DateTime exitedUtc,
+        MatchReplayInfo? soFar,
+        ReportMatchResponse? report)
+    {
+        if (ctx == null) return soFar;
+
+        // Nothing a recording could change. The server refused this match for a reason that is
+        // not about the outcome — a team game, an unranked mod, a duplicate — so reading one
+        // would spend seconds of disk to learn something nobody can act on. A null report is the
+        // guest (who never posts one) and a host whose POST failed outright; both are worth
+        // continuing for, since the guest's reading is the whole point of this path.
+        if (report != null
+            && (report.Rated
+                || (report.UnratedReason != null && report.UnratedReason != "no_decided_result")))
+            return soFar;
+
+        // One analysis at a time: this and the early read fired by match_reported both write
+        // _lastLocalReadFailure, and interleaved they would let the later, worse answer win.
+        if (System.Threading.Interlocked.CompareExchange(ref _replayAnalysisInFlight, 1, 0) != 0)
+            return soFar;
+
+        try
+        {
+            var again = await AnalyseMatchReplayAsync(
+                profile, ctx, startedUtc, preferBeforeUtc: exitedUtc + ReplayWindowMargin);
+
+            // A later pass may only IMPROVE the diagnosis. Downgrading a specific failure to
+            // "no recording found" would put the one message we know to be wrong back on the
+            // card — which is the bug this whole area exists to fix.
+            if (again.Failure != Services.Multiplayer.LocalReadFailure.NoRecordingFound
+                || _lastLocalReadFailure == Services.Multiplayer.LocalReadFailure.NoRecordingFound
+                || _lastLocalReadFailure == Services.Multiplayer.LocalReadFailure.ReadPending)
+                _lastLocalReadFailure = again.Failure;
+
+            var better = again.Info ?? soFar;
+
+            if (again.Info?.HostResult != null)
+            {
+                DiagnosticLog.Write(
+                    "MultiplayerTab.ContinueSearchingForResultAsync: a late reading of " +
+                    $"'{again.Info.File.Name}' gave {again.Info.HostResult:0.0} — sending it as a correction");
+
+                // allowHost only when our OWN report went out undecided: confirming a report we
+                // made ourselves proves nothing in general, but a host who reported 0.5-0.5 and
+                // then found his recording is the one case where his second reading is new
+                // information rather than an echo.
+                await TryConfirmMatchAsync(
+                    ctx, again.Info,
+                    allowHost: report?.UnratedReason == "no_decided_result");
+            }
+
+            // The card is already on screen saying whatever was known a moment ago. Repaint it
+            // rather than leaving the player looking at a stale reason.
+            RepaintMatchResult();
+            return better;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.ContinueSearchingForResultAsync: {ex.Message}");
+            return soFar;
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _replayAnalysisInFlight, 0);
+        }
+    }
+
+    /// <summary>
+    /// Rebuild and repaint the end-of-match card from whatever is known NOW.
+    ///
+    /// <para>Deliberately not <see cref="EnterResultPhase"/>: that method clears
+    /// <c>_roomMatchLive</c>, drops the process handle, kills the tick timer, stops the socket's
+    /// reconnect and suppresses the leave confirm. Re-running all of that over an already
+    /// terminal state is a different bug. Only the MODEL is rebuilt here.</para>
+    /// </summary>
+    private void RepaintMatchResult()
+    {
+        if (_matchPhase != MatchPhase.Result) return;
+        var rebuild = _outcomeRebuilder;
+        if (rebuild == null) return;
+        try { ShowMatchResult(rebuild()); }
+        catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.RepaintMatchResult: {ex.Message}"); }
     }
 
     /// <summary>
@@ -7860,11 +8162,19 @@ public partial class MultiplayerTab : UserControl
     /// <para>Best-effort in every direction, like the report itself: this runs while the
     /// player is watching their game close, and it must never be why that goes wrong.</para>
     /// </summary>
+    /// <param name="allowHost">
+    /// Let the HOST send one too. Off by default and for a good reason — confirming your own
+    /// report against itself proves nothing — but there is one case where it is new information
+    /// rather than an echo: the report now goes out on the first pass, so a host can report
+    /// 0.5-0.5 and find his recording seconds later. That reading has never reached the server
+    /// in any form, and it is the only thing that can decide the match.
+    /// </param>
     private async Task TryConfirmMatchAsync(
-        Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay)
+        Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay, bool allowHost = false)
     {
+        if (ctx == null) return;
         // The host's reading is the report; confirming it against itself proves nothing.
-        if (ctx == null || ctx.IsHost) return;
+        if (ctx.IsHost && !allowHost) return;
         if (string.IsNullOrEmpty(ctx.LobbyId)) return;
         if (_session?.Api == null) return;
 
@@ -8630,6 +8940,8 @@ public partial class MultiplayerTab : UserControl
             // reads the profile XML off disk, and that cell repaints on a timer.
             _canIdentifyPlayerInReplay = true;
             _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
+            _lastLocalReadDetail = null;
+            _outcomeRebuilder = null;
             try
             {
                 var activeProfile = _currentLobbyModId != null
@@ -8866,7 +9178,78 @@ public partial class MultiplayerTab : UserControl
         // and it receives this frame too.
         if (_matchPhase == MatchPhase.Result) return;
 
+        // Read BEFORE EnterResultPhase, which sets the phase to Result and drops the process.
+        var ourGameStillRunning = _matchPhase == MatchPhase.InGame;
+
+        // Nothing is known about OUR recording yet, because our AoE3 is still open — and the
+        // card is about to go up. Letting it fall through to the generic "the match was not
+        // recorded" is the exact lie this whole area exists to remove: a player who leaves the
+        // game open sees it for as long as it stays open, while their own recording sits on
+        // disk naming the winner. It is a wait, not a failure, and it is replaced below.
+        if (ourGameStillRunning
+            && _lastLocalReadFailure == Services.Multiplayer.LocalReadFailure.None)
+            _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.ReadPending;
+
         EnterResultPhase(ctx, report, null, myResult, map);
+
+        // And try to end that wait now rather than whenever the player gets round to closing
+        // the game. Measured cost of not doing this: nine minutes, in a real match whose
+        // result was readable the whole time.
+        if (ourGameStillRunning && !report.Rated) _ = TryEarlyReplayReadAsync(ctx);
+    }
+
+    /// <summary>
+    /// Read our own recording while AoE3 is STILL OPEN, after the match was reported without a
+    /// result.
+    ///
+    /// <para><b>Best-effort in one direction only.</b> Whether AoE3 has finished — or even
+    /// started — writing the file at this point is not established, and it may well hold it
+    /// open with a lock. So a failure here is discarded in SILENCE and every field it touched
+    /// is put back: counting a locked file as "unreadable" would move the card from "waiting"
+    /// to a stated cause that is wrong, which is the failure mode this is meant to remove. Only
+    /// a real result is kept.</para>
+    /// </summary>
+    private async Task TryEarlyReplayReadAsync(Services.Multiplayer.MatchContext ctx)
+    {
+        var profile = string.IsNullOrWhiteSpace(ctx.ModId) ? null : ModRegistry.Find(ctx.ModId!);
+        if (profile == null) return;
+
+        if (System.Threading.Interlocked.CompareExchange(ref _replayAnalysisInFlight, 1, 0) != 0)
+            return;
+
+        var previousFailure = _lastLocalReadFailure;
+        var previousDetail = _lastLocalReadDetail;
+        try
+        {
+            // One pass. If the file is not readable yet, the exit handler's full ladder will
+            // get it — there is nothing to gain from waiting here with the game still running.
+            var early = await AnalyseMatchReplayAsync(profile, ctx, ctx.StartedAtUtc, firstPassOnly: true);
+            if (early.Info?.HostResult == null)
+            {
+                _lastLocalReadFailure = previousFailure;
+                _lastLocalReadDetail = previousDetail;
+                return;
+            }
+
+            DiagnosticLog.Write(
+                $"MultiplayerTab.TryEarlyReplayReadAsync: read '{early.Info.File.Name}' " +
+                $"while the game was still open — {early.Info.HostResult:0.0}");
+
+            _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
+            _lastLocalReadDetail = null;
+            await TryConfirmMatchAsync(ctx, early.Info, allowHost: true);
+            RepaintMatchResult();
+        }
+        catch (Exception ex)
+        {
+            _lastLocalReadFailure = previousFailure;
+            _lastLocalReadDetail = previousDetail;
+            DiagnosticLog.Write($"MultiplayerTab.TryEarlyReplayReadAsync: {ex.Message}");
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _replayAnalysisInFlight, 0);
+        }
     }
 
     private void EnterResultPhase(
@@ -8895,7 +9278,14 @@ public partial class MultiplayerTab : UserControl
         // looking for it — see ResolveGuestResultAsync.
         var context = ctx ?? _matchContext;
         if (report != null && context != null)
-            ShowMatchResult(BuildOutcome(context, report, replay, resultOverride, mapOverride));
+        {
+            // Captured rather than painted once: the local reading of the recording can land
+            // seconds or minutes after this, and the card has to be able to replace what it
+            // says. Everything the closure reads that can change — _lastLocalReadFailure and
+            // its detail — is read at CALL time, not now.
+            _outcomeRebuilder = () => BuildOutcome(context, report, replay, resultOverride, mapOverride);
+            ShowMatchResult(_outcomeRebuilder());
+        }
         else if (context != null) _ = ResolveGuestResultAsync(context);
     }
 
@@ -8964,7 +9354,8 @@ public partial class MultiplayerTab : UserControl
             // Subordinate to it, and consulted only when the server's answer was the
             // generic "nobody won" — the one thing the server cannot explain is why our
             // own reading of the recording failed.
-            _lastLocalReadFailure);
+            _lastLocalReadFailure,
+            _lastLocalReadDetail);
     }
 
     /// <summary>
@@ -9006,7 +9397,7 @@ public partial class MultiplayerTab : UserControl
                     history?.Matches, ctx.ModId, ctx.StartedAtUtc);
                 if (row == null) continue;
 
-                ShowMatchResult(new MatchOutcomeView(
+                Func<MatchOutcomeView> build = () => new MatchOutcomeView(
                     MatchOutcomeView.Classify(row.Result),
                     row.ModId,
                     row.MapName,
@@ -9020,7 +9411,15 @@ public partial class MultiplayerTab : UserControl
                     null,
                     _cachedStanding?.Wins ?? 0,
                     _cachedStanding?.Losses ?? 0,
-                    _cachedStanding?.Rd));
+                    _cachedStanding?.Rd,
+                    // A history row carries no reason, so a 0.5 here used to fall on the
+                    // generic "it was not recorded" — the same wrong message, reached by the
+                    // other door. Our own reading knows better and belongs on this card too.
+                    null,
+                    _lastLocalReadFailure,
+                    _lastLocalReadDetail);
+                _outcomeRebuilder = build;
+                ShowMatchResult(build());
                 return;
             }
             catch (Exception ex)
@@ -9089,6 +9488,8 @@ public partial class MultiplayerTab : UserControl
     private void ExitResultPhase()
     {
         _matchPhase = MatchPhase.Lobby;
+        // The card is gone; a late reading must not repaint a window that moved on.
+        _outcomeRebuilder = null;
         CloseLobbyWindow();
     }
 

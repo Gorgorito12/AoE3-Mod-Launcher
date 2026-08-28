@@ -83,7 +83,10 @@
                             <Setter TargetName="overlay" Property="Opacity" Value="0.14"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Opacity" Value="0.45"/>
+                            <!-- Colour, never an Opacity layer: `border` wraps the
+                                 ContentPresenter, so dimming it composites the caption and
+                                 costs it ClearType. See TextDisabled in Colors.xaml. -->
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -143,7 +146,7 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BgPanelAlt}"/>
-                            <Setter Property="Foreground" Value="#666"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
@@ -188,7 +191,7 @@
                              the top of this file solves the same problem the other way,
                              by animating an overlay's Opacity instead of a colour. -->
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="#666"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -213,6 +216,11 @@
          BasedOn chain, so they are the ones that land. -->
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        <!-- DialogButton's White is unreadable here: #FFFFFF on AccentBrush #D8B66A is
+             1.94:1, and 1.65:1 against AccentBrushHover. Gold is a LIGHT fill and wants dark
+             text — which SidebarPrimaryButton (PLAY) already does on the same gold with
+             #261900, at 8.86:1. Disabled still comes from DialogButton's template trigger. -->
+        <Setter Property="Foreground" Value="#261900"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource AccentBrushHover}"/>
@@ -257,6 +265,25 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
+                  <!-- Two layers, and the split is the point: the glow lives on `halo`,
+                       UNDER the button, never on `border`. `border` wraps the
+                       ContentPresenter, and an Effect on an ancestor of text pushes the whole
+                       subtree through a composition pass — ClearType off for the PLAY caption,
+                       permanently, on the largest button in the launcher. `halo` is fully
+                       covered by `border` (same size, same radius), so only its shadow shows.
+                       Same pattern as the multiplayer cards and MpAlertOverlay. -->
+                  <Grid>
+                    <Border x:Name="halo"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Background="{DynamicResource AccentBrush}"
+                            IsHitTestVisible="False">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="14"
+                                              ShadowDepth="2"
+                                              Color="{Binding Source={StaticResource AccentBrush}, Path=Color}"
+                                              Opacity="0.55"/>
+                        </Border.Effect>
+                    </Border>
                     <Border x:Name="border"
                             CornerRadius="{StaticResource RadiusMd}"
                             BorderThickness="1"
@@ -274,19 +301,10 @@
                                 <GradientStop Color="{Binding Source={StaticResource AccentDeep}, Path=Color}" Offset="1.0"/>
                             </LinearGradientBrush>
                         </Border.Background>
-                        <Border.Effect>
-                            <!-- Soft warm glow so the button feels lit
-                                 against the dark background. Glow colour
-                                 bound to AccentBrush so a future palette
-                                 swap re-tints the halo automatically. -->
-                            <DropShadowEffect BlurRadius="14"
-                                              ShadowDepth="2"
-                                              Color="{Binding Source={StaticResource AccentBrush}, Path=Color}"
-                                              Opacity="0.55"/>
-                        </Border.Effect>
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                     </Border>
+                  </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="border" Property="Background">
@@ -305,7 +323,7 @@
                             </Setter>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Effect">
+                            <Setter TargetName="halo" Property="Effect">
                                 <Setter.Value>
                                     <!-- Pressed: kill the outer glow so the
                                          button reads as "depressed". -->
@@ -319,7 +337,7 @@
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BgNeutral}"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
-                            <Setter TargetName="border" Property="Effect" Value="{x:Null}"/>
+                            <Setter TargetName="halo" Property="Effect" Value="{x:Null}"/>
                             <Setter Property="Foreground" Value="#888"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
@@ -419,12 +437,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Opacity" Value="0.85"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Opacity" Value="0.4"/>
-                            <Setter Property="Foreground" Value="#aaa"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -460,7 +476,7 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BgPanel}"/>
-                            <Setter Property="Foreground" Value="#666"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -593,7 +609,7 @@
                             <Setter Property="Foreground" Value="{DynamicResource FgHoverGold}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="#5a6271"/>
+                            <Setter Property="Foreground" Value="#747E90"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="#2a323d"/>
                         </Trigger>
@@ -856,7 +872,7 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BgPanel}"/>
-                            <Setter Property="Foreground" Value="#666"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -991,7 +1007,10 @@
                             <Setter Property="Foreground" Value="#F0DCA8"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="border" Property="Opacity" Value="0.45"/>
+                            <!-- Colour, never an Opacity layer: `border` wraps the
+                                 ContentPresenter, so dimming it composites the caption and
+                                 costs it ClearType. See TextDisabled in Colors.xaml. -->
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -1140,7 +1159,7 @@
                         </MultiTrigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource BgNeutral}"/>
-                            <Setter Property="Foreground" Value="#666"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -1189,7 +1208,7 @@
                             <Setter TargetName="b" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.45"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1235,7 +1254,7 @@
                             <Setter TargetName="content" Property="TextBlock.TextDecorations" Value="Underline"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.45"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1270,7 +1289,7 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BgPanel}"/>
-                            <Setter Property="Foreground" Value="#666"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -1326,7 +1345,7 @@
                             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.4"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

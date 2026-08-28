@@ -80,6 +80,18 @@
     <SolidColorBrush x:Key="TextPrimary" Color="#E8E1D1"/>
     <SolidColorBrush x:Key="TextSecondary" Color="#A8B0B8"/>
 
+    <!-- Disabled text, everywhere. One brush rather than the #666 / #888 / #aaa literals
+         that were scattered across eight styles.
+
+         WCAG exempts inactive controls, so this is not about a compliance box — it is that
+         #666 measured 2.26:1 on BgNeutral and every one of those styles ALSO put an Opacity
+         layer on top of it, landing at 1.57:1. At that point the user cannot read what the
+         button they cannot press actually says, and the Opacity was disabling ClearType on
+         the caption as a bonus. 4.5:1 on all three surfaces it lands on (BgNeutral 4.51,
+         BgPanelAlt 5.69, BgPanel 6.13); it still reads as disabled because it is flat grey
+         against near-white enabled text. -->
+    <SolidColorBrush x:Key="TextDisabled" Color="#989898"/>
+
     <!-- =========================================================
          ACCENT — the warm aged-gold "colonial" primary action.
          Used for: PLAY button, Install / Update / Apply CTAs, hover
@@ -304,7 +316,10 @@
            Info    → tip / informational                  (blue)
            Warning → repair / pending / outdated          (amber)
          ========================================================= -->
-    <SolidColorBrush x:Key="ErrorBrush" Color="#B85A4A"/>
+    <!-- Raised from #B85A4A, which measured 4.15:1 on BgBase and is used at 13px for
+         validation errors — the one place text most needs to be read. #BE695A keeps the hue
+         and reaches 4.83:1 on BgBase / 4.51:1 on BgPanel. -->
+    <SolidColorBrush x:Key="ErrorBrush" Color="#BE695A"/>
     <SolidColorBrush x:Key="SuccessBrush" Color="#4FA66A"/>
     <SolidColorBrush x:Key="InfoBrush" Color="#3F6FAE"/>
     <SolidColorBrush x:Key="InfoBrushHover" Color="#4F7FBE"/>
@@ -483,9 +498,19 @@
     <SolidColorBrush x:Key="MpTextSecondary" Color="#C3D2E5"/>
     <SolidColorBrush x:Key="MpTextBody" Color="#B9C9DE"/>
     <SolidColorBrush x:Key="MpTextMuted" Color="#8EA4C0"/>
-    <SolidColorBrush x:Key="MpTextFaint" Color="#6D829D"/>
-    <SolidColorBrush x:Key="MpTextDim" Color="#5F7592"/>
-    <SolidColorBrush x:Key="MpTextLabel" Color="#61779A"/>
+    <!-- The bottom three rungs were raised to clear 4.5:1 on MpPanel (#12213A), which they
+         did not: Faint 4.09, Label 3.54, Dim 3.41 — and Label fell to 3.04 on a hovered
+         room row, the worst pairing on the surface. That would be tolerable on large text
+         and is not: these three are attached to the SMALLEST tokens on the surface (the
+         9.5 section labels, the 10.5 pills, the 11.5 body), so the least legible colours
+         were carrying the least legible sizes. Reported as text looking "washed out".
+
+         The hue is kept and the RAMP is kept — Muted 6.30 > Faint 5.75 > Label 5.24 >
+         Dim 4.55 — so the hierarchy still reads; only the floor moved up. Sizes are
+         deliberately untouched: MpLabelSize stays 11.5 (see Tokens.xaml). -->
+    <SolidColorBrush x:Key="MpTextFaint" Color="#8C9CB1"/>
+    <SolidColorBrush x:Key="MpTextDim" Color="#758AA5"/>
+    <SolidColorBrush x:Key="MpTextLabel" Color="#8394B1"/>
 
     <!-- Semantic accents. Each has a SOLID value (dots, fills, primary
          buttons) and a TEXT value bright enough to read on the navy

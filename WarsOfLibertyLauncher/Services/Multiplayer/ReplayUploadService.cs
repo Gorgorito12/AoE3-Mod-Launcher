@@ -96,14 +96,26 @@ public static class ReplayUploadService
     /// <summary>
     /// Whether the search is worth repeating.
     ///
-    /// <para><b>Only an unreadable candidate justifies waiting.</b> A recording that parsed
-    /// cleanly and belongs to someone else will parse identically in three seconds, so retrying
-    /// over it is pure latency on the path between the game closing and the match being reported.
-    /// An unreadable one, though, is very often the engine still flushing the file we want — the
-    /// search runs the instant the process dies.</para>
+    /// <para><b>Two reasons to wait, and neither of them is "a file that isn't ours".</b> A
+    /// recording that parsed cleanly and belongs to someone else will parse identically in three
+    /// seconds, so retrying over it buys nothing. What IS worth waiting for is an <b>unreadable</b>
+    /// candidate — very often the engine still flushing the file we want, since the search runs
+    /// the instant the process dies — and <b>an empty folder</b>: nothing newer than the launch
+    /// existed yet, which is what a recording written a moment after the process exits looks
+    /// like.</para>
+    ///
+    /// <para><b>The empty case used to be excluded, and that was a real bug</b>: it required
+    /// <c>Unreadable &gt; 0</c>, so a file that had not been CREATED yet got zero retries and the
+    /// match reported all-draws at once. It was excluded for a good reason, though — waiting is
+    /// pure latency for the majority of matches, which have no recording at all. That reason is
+    /// gone now only because <b>the report no longer waits for this</b>: the caller reports on the
+    /// first attempt and lets the remaining ones run behind it, so an extra pass costs nobody
+    /// anything. If that ever changes, this branch has to go back.</para>
     /// </summary>
     public static bool ShouldRetry(ReplaySearch search, int attempt, int maxAttempts)
-        => search.File == null && search.Unreadable > 0 && attempt < maxAttempts - 1;
+        => search.File == null
+           && (search.Unreadable > 0 || search.Parsed == 0)
+           && attempt < maxAttempts - 1;
 
     /// <summary>
     /// Finds the recording that belongs to the match that just ended, newest first,
@@ -121,8 +133,25 @@ public static class ReplayUploadService
     /// having no replay is a normal outcome (a game killed before the engine flushed
     /// one) and is always safer than using a file that isn't ours.</para>
     /// </summary>
+    /// <param name="preferBeforeUtc">
+    /// Optional upper edge of the match's own window — normally the moment the game closed, plus
+    /// a margin. Candidates written at or before it are judged FIRST, newest of them leading.
+    ///
+    /// <para><b>A preference, deliberately not a filter.</b> The window has only ever had a floor
+    /// (newer than the launch), so a file written long afterwards still qualifies — and that is
+    /// not theoretical: a player renaming his recordings to send them over Discord, minutes after
+    /// the match, put a freshly-stamped file in <c>Savegame\</c> while the launcher was still
+    /// looking. Ordering by the window puts the match's own recording first without ever
+    /// REJECTING one, which matters because the recording is finished as the game closes and its
+    /// timestamp keeps moving while the retries run: a ceiling that was even slightly tight would
+    /// start discarding legitimate recordings, which is precisely the symptom this whole area
+    /// exists to fix. Null keeps the previous newest-first order exactly.</para>
+    /// </param>
     public static ReplaySearch FindMatchReplay(
-        string userDataDir, DateTime afterUtc, Func<FileInfo, CandidateVerdict> examine)
+        string userDataDir,
+        DateTime afterUtc,
+        Func<FileInfo, CandidateVerdict> examine,
+        DateTime? preferBeforeUtc = null)
     {
         if (examine == null) throw new ArgumentNullException(nameof(examine));
 
@@ -139,10 +168,15 @@ public static class ReplayUploadService
 
             // Ordered newest-first and taken lazily: the two budgets below decide when to stop,
             // so an unreadable file no longer costs a slot that a readable one needed.
+            //
+            // The first key is the window (see preferBeforeUtc): true sorts before false under
+            // OrderByDescending, so anything inside the match's own window is judged first and
+            // anything outside it is still judged afterwards rather than dropped.
             var candidates = new DirectoryInfo(searchRoot)
                 .EnumerateFiles("*.age3yrec", SearchOption.AllDirectories)
                 .Where(f => f.LastWriteTimeUtc >= afterUtc)
-                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .OrderByDescending(f => preferBeforeUtc == null || f.LastWriteTimeUtc <= preferBeforeUtc.Value)
+                .ThenByDescending(f => f.LastWriteTimeUtc)
                 .Take(MaxCandidatesOpened);
 
             foreach (var candidate in candidates)

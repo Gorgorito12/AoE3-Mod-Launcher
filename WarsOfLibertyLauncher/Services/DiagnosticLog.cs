@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.IO.Compression;
@@ -321,15 +321,123 @@ public static class DiagnosticLog
                 }
             }
 
+            // Directories too. The listing used to enumerate FILES only, so a bundle from a
+            // player reporting an ELO problem showed two .txt files and said nothing about
+            // whether Savegame\ even existed — the one folder the whole question turns on.
+            listing.AppendLine();
+            listing.AppendLine("Top-level folders:");
+            foreach (var dir in Directory.EnumerateDirectories(gameUserDataDir))
+                listing.Append("  ").AppendLine(Path.GetFileName(dir));
+
             listing.AppendLine().Append("Files copied into bundle: ").Append(copied)
                    .Append(" (cap ").Append(GameFileMaxCount).AppendLine(").");
 
             try { File.WriteAllText(Path.Combine(outDir, "game-userdata-listing.txt"), listing.ToString()); }
             catch { /* listing is a nice-to-have */ }
+
+            StageReplayIndex(gameUserDataDir, outDir);
         }
         catch (Exception ex)
         {
             Write($"ExportBundle: could not stage game user-data '{gameUserDataDir}': {ex.Message}");
+        }
+    }
+
+    /// <summary>Recordings described in the bundle's replay index.</summary>
+    private const int ReplayIndexMaxFiles = 10;
+
+    /// <summary>
+    /// Skip anything this big. A recording of a long game is a few MB; well past that and we
+    /// are looking at something else, and inflating it would cost seconds for nothing.
+    /// </summary>
+    private const long ReplayIndexMaxBytes = 64L * 1024 * 1024;
+
+    /// <summary>
+    /// Describe the newest recordings in <c>Savegame\</c> — WITHOUT copying them.
+    ///
+    /// <para><b>Why this exists.</b> Every question worth asking when a match does not score is
+    /// answered by these few lines: whether a recording was written at all, when relative to the
+    /// match, which map and players it names, and whether the game finished writing its outcome.
+    /// Working that out for one reported incident meant asking the player for his files over
+    /// Discord and parsing them by hand; the same answer now travels in the bundle he already
+    /// sends. The files themselves are megabytes each and are never copied — only read.</para>
+    ///
+    /// <para>Also the measurement that settles WHEN AoE3 writes the file: the timestamps here,
+    /// against the game-exit line in the launcher log, are what decide whether the post-report
+    /// retry ladder is buying anything.</para>
+    ///
+    /// <para>Best-effort throughout: a single unreadable recording is described as such and the
+    /// rest are still listed.</para>
+    /// </summary>
+    private static void StageReplayIndex(string gameUserDataDir, string outDir)
+    {
+        try
+        {
+            var saveDir = Path.Combine(gameUserDataDir, "Savegame");
+            var root = Directory.Exists(saveDir) ? saveDir : gameUserDataDir;
+
+            var files = new DirectoryInfo(root)
+                .EnumerateFiles("*.age3yrec", SearchOption.AllDirectories)
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .Take(ReplayIndexMaxFiles)
+                .ToList();
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("Recordings under: ").AppendLine(root);
+            sb.Append("Newest ").Append(ReplayIndexMaxFiles).AppendLine(" shown; files are never copied.");
+            sb.AppendLine();
+
+            if (files.Count == 0) sb.AppendLine("(none)");
+
+            foreach (var f in files)
+            {
+                sb.Append(f.Name).Append(" | ").Append(f.Length).Append(" bytes | ")
+                  .AppendLine(f.LastWriteTimeUtc.ToString("u"));
+
+                if (f.Length > ReplayIndexMaxBytes) { sb.AppendLine("    (too large to parse)"); continue; }
+
+                try
+                {
+                    var data = Multiplayer.ReplayParserService.TryReadContainer(File.ReadAllBytes(f.FullName));
+                    if (data == null) { sb.AppendLine("    (container unreadable)"); continue; }
+
+                    var header = Multiplayer.ReplayParserService.ParseHeader(data);
+                    if (header == null) { sb.AppendLine("    (header unreadable)"); continue; }
+
+                    sb.Append("    map=").Append(header.MapName)
+                      .Append(" seed=").Append(header.RandomSeed)
+                      .Append(" hostTime=").Append(header.HostTime).AppendLine();
+
+                    sb.Append("    players: ");
+                    sb.AppendLine(string.Join(", ", header.Players.Select(
+                        pl => $"[{pl.Slot}] {(string.IsNullOrWhiteSpace(pl.Name) ? "(unnamed)" : pl.Name)}"
+                              + (pl.IsHuman ? "" : " (not human)"))));
+
+                    var outcome = Multiplayer.ReplayParserService.ReadOutcome(data, header);
+                    // The trailer is the whole reason a readable recording can still fail to
+                    // decide a match, so it is spelled out rather than summarised.
+                    sb.Append("    outcome: ").Append(outcome.Confidence)
+                      .Append(" loser=").Append(outcome.LoserSlot)
+                      .Append(" signature=").Append(outcome.SignaturePresent)
+                      // Printed raw, under a name that claims nothing. It was called
+                      // "recorder=" and is not one; a bundle that asserts it again would send
+                      // the next reader down the same path.
+                      .Append(" trailerB=").Append(outcome.TrailerSecondSlot).AppendLine();
+                    if (!outcome.SignaturePresent && data.Length >= 16)
+                        sb.Append("    no trailer; last 16 bytes = ")
+                          .AppendLine(BitConverter.ToString(data, data.Length - 16));
+                }
+                catch (Exception ex)
+                {
+                    sb.Append("    (could not be read: ").Append(ex.Message).AppendLine(")");
+                }
+            }
+
+            File.WriteAllText(Path.Combine(outDir, "replay-index.txt"), sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            Write($"ExportBundle: could not index recordings: {ex.Message}");
         }
     }
 
