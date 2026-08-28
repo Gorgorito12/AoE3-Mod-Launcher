@@ -1833,13 +1833,34 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   and renaming half the set would be worse than leaving it.
 
   That second reading is now SENT — `TryConfirmMatchAsync` → `POST /matches/confirm` →
-  `match_confirmations` — and it is **evidence, not a vote: it gates nothing**, matches
-  rate exactly as they did before. Reporting stays host-only (N reporters would insert N
-  copies of one match). The server compares it with `compareReadings` and writes a log
-  line; `inconclusive` when either side is 0.5, because "nobody could read it" is not
-  "they contradict each other" and merging the two would make the data measure the wrong
-  thing. The table is keyed by `(lobby_id, user_id)` and NOT by match id, because the
-  guest usually leaves the game before the host and their confirmation routinely arrives
+  `match_confirmations` — and **it is no longer inert. This bullet used to say "evidence,
+  not a vote: it gates nothing"; that stopped being true.** The backend's
+  `canUpgradeFromConfirmation` (`src/elo/ratability.ts`, called from `POST /matches/confirm`
+  via `maybeUpgradeFromConfirmation`) lets a confirmation DECIDE a match — live, not from
+  an operator script — in exactly one bounded case: the host stored it with
+  `unrated_reason = 'no_decided_result'`, there are exactly two participants, the confirmer
+  is one of them and was on `roster_at_start`, and their reading names a winner. The server
+  then rates it retroactively through the same `applyMatch` as any other match, and stamps
+  `matches.rated = 1` / `unrated_reason = NULL` / `decided_by = <user_id>` (migration
+  `0006_match_rating_state.sql`). A conditional "claim" UPDATE is what makes it
+  race-safe against two confirmations arriving at once. **Nothing else is rescuable:**
+  `not_1v1`, `mod_not_ranked` and `implausible_timing` stay unrated forever, because those
+  are judgements about the match, not about whether anybody could read it.
+
+  **The anti-abuse rule is asymmetric, and the asymmetry is the whole design: you may
+  concede your own defeat freely, and claim your own victory only when the fingerprint the
+  reporter already stored matches yours.** Conceding costs the confirmer points, so nobody
+  lies in that direction; claiming needs corroboration the confirmer does not control. When
+  the host stored no fingerprint at all, a conceded defeat may ADOPT the confirmer's —
+  unless that fingerprint already belongs to another match.
+
+  Reporting stays host-only (N reporters would insert N copies of one match). The server
+  also compares the two readings with `compareReadings` and now PERSISTS the verdict
+  (`match_confirmations.agreement` / `same_game`) instead of only writing a log line that
+  rotation would eat; `inconclusive` when either side is 0.5, because "nobody could read
+  it" is not "they contradict each other" and merging the two would make the data measure
+  the wrong thing. The table is keyed by `(lobby_id, user_id)` and NOT by match id, because
+  the guest usually leaves the game before the host and their confirmation routinely arrives
   before the match row exists; the lobby row always exists, since those are never deleted.
 
   **What this is for, and what it is not.** With the roster gate in (6), a cheater

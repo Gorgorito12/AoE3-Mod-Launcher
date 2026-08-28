@@ -7848,9 +7848,14 @@ public partial class MultiplayerTab : UserControl
     /// by ABSOLUTE slot, so this is a real second measurement of the same fact rather than
     /// an echo of the first.</para>
     ///
-    /// <para><b>Evidence, not a vote.</b> The server files it beside the host's claim and
-    /// nothing about whether the match scores depends on it. What it buys is a real answer,
-    /// in a few weeks, to whether requiring the two to agree could ever work.</para>
+    /// <para><b>It can DECIDE the match, in one bounded case.</b> This started as evidence
+    /// that gated nothing, and that is no longer what it is: the server now rates a match
+    /// the host stored with <c>no_decided_result</c> from this reading alone — the recording
+    /// the host never had — under an asymmetric rule, conceding your own defeat freely and
+    /// claiming your own victory only when the fingerprint the reporter already stored
+    /// matches yours. Which is why the seed and the hash below are not optional extras: they
+    /// are the corroboration. Nothing else is rescuable this way; a team game or an unranked
+    /// mod stays unrated whatever anybody read.</para>
     ///
     /// <para>Best-effort in every direction, like the report itself: this runs while the
     /// player is watching their game close, and it must never be why that goes wrong.</para>
