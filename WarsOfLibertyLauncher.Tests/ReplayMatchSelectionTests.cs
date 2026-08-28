@@ -65,21 +65,59 @@ public class ReplayMatchSelectionTests
         Assert.False(ReplayParserService.LooksLikeThisMatch(teamGame, "Gorgorito", 2));
     }
 
+    /// <summary>
+    /// <b>The regression test.</b> A recording is ours because our NAME is in it — never
+    /// because of anything in the outcome trailer.
+    ///
+    /// <para>There used to be a third check here: the trailer's B field, read as "the slot
+    /// that recorded this file", had to equal the host's slot. In multiplayer B is the
+    /// LOSER, and it is written identically into BOTH players' copies — so the gate passed
+    /// only for whoever lost, and <b>the winner's own recording was thrown away</b> with
+    /// "is not this match". Together with <c>HostResultFrom</c> being fed that same field
+    /// as the host's slot, a match could be rated only when the host LOST. Three matches
+    /// captured from both players, with both launchers' logs, cost two of their three
+    /// ratings to exactly this.</para>
+    ///
+    /// <para>Which is why the two assertions below are the same header read by two
+    /// different people: nothing in the file says who wrote it, so the answer must not
+    /// depend on who did.</para>
+    /// </summary>
     [Fact]
-    public void RejectsWhenSomeoneElseRecordedIt()
+    public void AcceptsTheRecordingOfWhoeverWon_NotOnlyTheLosers()
     {
-        // The host is in the game but did not record it, so this is a copy of the same
-        // match from the opponent's machine — not what this launcher just produced.
-        Assert.False(ReplayParserService.LooksLikeThisMatch(Ours, "Gorgorito", 2, recorderSlot: 2));
-        Assert.True(ReplayParserService.LooksLikeThisMatch(Ours, "Gorgorito", 2, recorderSlot: 1));
+        Assert.True(ReplayParserService.LooksLikeThisMatch(Ours, "Gorgorito", 2));
+        Assert.True(ReplayParserService.LooksLikeThisMatch(Ours, "Rival", 2));
     }
 
     [Fact]
-    public void IgnoresTheRecorderCheckWhenTheTrailerHadNone()
+    public void FindsTheLocalPlayersSlotByName()
     {
-        // A recording without a trailer is already headed for Ambiguous; rejecting it
-        // here too would throw away the map and civilizations for nothing.
-        Assert.True(ReplayParserService.LooksLikeThisMatch(Ours, "Gorgorito", 2, recorderSlot: -1));
+        // The one supported way to learn which slot is ours, and the reason the check
+        // above can be a name lookup instead of a byte read.
+        Assert.Equal(1, ReplayParserService.FindPlayerSlot(Ours, "Gorgorito"));
+        Assert.Equal(2, ReplayParserService.FindPlayerSlot(Ours, "  rival  "));
+    }
+
+    [Theory]
+    [InlineData("Nobody")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void FindsNoSlotForSomeoneNotInTheGame(string? name)
+        => Assert.Equal(-1, ReplayParserService.FindPlayerSlot(Ours, name!));
+
+    [Fact]
+    public void FindsNoSlotInANullHeader()
+        => Assert.Equal(-1, ReplayParserService.FindPlayerSlot(null, "Gorgorito"));
+
+    [Fact]
+    public void NeverReturnsAnAiSlot()
+    {
+        // A skirmish where the AI carries the player's own name would otherwise hand back
+        // the AI's slot and score the match against a computer.
+        var vsAi = Header((1, "Gorgorito", true), (2, "Gorgorito", false));
+
+        Assert.Equal(1, ReplayParserService.FindPlayerSlot(vsAi, "Gorgorito"));
     }
 
     [Fact]

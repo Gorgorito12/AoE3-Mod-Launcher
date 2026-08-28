@@ -282,13 +282,43 @@ public class ReplayParserTests
                 .ToList(),
         };
 
+    /// <summary>
+    /// Reports the trailer's second field WITHOUT claiming to know what it is.
+    ///
+    /// <para>This test used to be called <c>ReportsWhichSlotRecordedTheFile</c> and read
+    /// the same two values as proof that B names the recorder. It does not. Both fixtures
+    /// are singleplayer games from the same human on the same machine, and with one player
+    /// "the one who recorded it" and "the one who ended it" are the same person — so the
+    /// evidence could never separate them. Three multiplayer matches captured from BOTH
+    /// players did: the two copies of one match are byte-identical for the last 64 bytes,
+    /// so B cannot name the machine that wrote one, and in all six copies B is the loser.
+    /// Use <see cref="ReplayParserService.FindPlayerSlot"/> for identity; this value is
+    /// carried only so a diagnostic bundle can show it.</para>
+    /// </summary>
     [Fact]
-    public void ReportsWhichSlotRecordedTheFile()
+    public void ReportsTheTrailersSecondFieldWithoutInterpretingIt()
     {
-        // Both were recorded by the human in slot 1 — including the one he won, where the
-        // loser field says 2. That difference is what makes these two fields distinct.
-        Assert.Equal(1, OutcomeOf(Loss()).RecorderSlot);
-        Assert.Equal(1, OutcomeOf(Win()).RecorderSlot);
+        Assert.Equal(1, OutcomeOf(Loss()).TrailerSecondSlot);
+        Assert.Equal(1, OutcomeOf(Win()).TrailerSecondSlot);
+    }
+
+    [Fact]
+    public void SeparatesAMissingTrailerFromAnUnusableOne()
+    {
+        // Two different things to tell a player — "the game never wrote its ending" versus
+        // "it wrote one we cannot use" — so they are two fields, not one sentinel. Both
+        // fixtures are skirmishes, hence Ambiguous, but their trailers are right there.
+        Assert.True(OutcomeOf(Win()).SignaturePresent);
+        Assert.True(OutcomeOf(Loss()).SignaturePresent);
+
+        // Break the first of the twelve zero bytes, which is exactly how the real
+        // abnormally-ended recording fails: the signature check dies on byte one.
+        var data = (byte[])ReplayParserService.TryReadContainer(Win())!.Clone();
+        var header = ReplayParserService.ParseHeader(data)!;
+        Assert.True(ReplayParserService.ReadOutcome(data, header).SignaturePresent);
+
+        data[^32] = 0x02;
+        Assert.False(ReplayParserService.ReadOutcome(data, header).SignaturePresent);
     }
 
     [Fact]
@@ -390,6 +420,46 @@ public class ReplayParserTests
 
         Assert.Null(ReplayParserService.HostResultFrom(skirmish, hostSlot: 1));
         Assert.Null(ReplayParserService.HostResultFrom(null, hostSlot: 1));
+    }
+
+    /// <summary>
+    /// <b>The invariant the whole rating rests on:</b> the two players' copies of one match
+    /// must score OPPOSITELY, from the same bytes.
+    ///
+    /// <para>They never did. The local slot was taken from the trailer's B field, which is
+    /// the loser and is identical in both copies — so <c>HostResultFrom</c> answered 0.0 on
+    /// both machines and could not return a win at all. Across two players' complete logs,
+    /// every confident reading ever recorded was 0.0; not one was 1.0. Resolving the slot
+    /// by name is what makes these two assertions able to differ.</para>
+    /// </summary>
+    [Fact]
+    public void EachPlayerScoresTheOppositeFromTheSameBytes()
+    {
+        var data = ReplayParserService.TryReadContainer(Win())!;
+
+        // The real trailer of a game slot 1 won, over a roster naming both people — which
+        // is what a human 1v1 looks like, and what neither fixture can supply on its own.
+        var header = ReplayParserService.ParseHeader(data)! with
+        {
+            Players = new[]
+            {
+                new ReplayParserService.ReplayPlayer(
+                    1, "Winner", 1, 0, ReplayParserService.SlotTypeHuman),
+                new ReplayParserService.ReplayPlayer(
+                    2, "Loser", 1, 0, ReplayParserService.SlotTypeHuman),
+            },
+        };
+
+        var outcome = ReplayParserService.ReadOutcome(data, header);
+
+        var won = ReplayParserService.HostResultFrom(
+            outcome, ReplayParserService.FindPlayerSlot(header, "Winner"));
+        var lost = ReplayParserService.HostResultFrom(
+            outcome, ReplayParserService.FindPlayerSlot(header, "Loser"));
+
+        Assert.Equal(1.0, won);
+        Assert.Equal(0.0, lost);
+        Assert.Equal(1.0, won!.Value + lost!.Value);
     }
 
     [Fact]

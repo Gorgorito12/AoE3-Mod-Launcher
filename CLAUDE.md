@@ -160,7 +160,14 @@ game recording; `OptedOut_WritesFalseOnceAndNeverReArms` is its centrepiece, and
 fail), `GameRecordingPurgeTests` (**the KEPT cases are the point** — a recording the player
 renamed is never deleted and never counts against the budget), and `MatchResultResolverTests`
 (who gets credited with winning a multiplayer match — `TheTwoScoresAlwaysSumToOne` is what
-the backend validates against), plus the two that guard the match lifecycle around a room that
+the backend validates against) and `ReplayParserTests` /
+`ReplayMatchSelectionTests` (**the local player's slot comes from his AoE3 profile NAME,
+never from the recording's outcome trailer** — reading it from the trailer's second field
+meant that field is the LOSER in multiplayer, so the winner's own recording was rejected
+and a match could only ever be rated when the host LOST;
+`EachPlayerScoresTheOppositeFromTheSameBytes` and
+`AcceptsTheRecordingOfWhoeverWon_NotOnlyTheLosers` are the regressions, and the details are
+in `.claude/rules/multiplayer.md`), plus the two that guard the match lifecycle around a room that
 goes away underneath it: `MatchContextTests` (the facts of a match, captured at launch —
 `AClosedRoomCannotChangeTheAnswer` is the regression test for a real match that was never
 reported because the host closed the room mid-game) and `RoomMatchStateTests`

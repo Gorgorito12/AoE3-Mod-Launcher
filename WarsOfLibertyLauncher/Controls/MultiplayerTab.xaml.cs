@@ -7797,11 +7797,12 @@ public partial class MultiplayerTab : UserControl
             // Human names carried by recordings that parsed fine and turned out to be somebody
             // else's match. Only ever read when nothing matched — see LocalReadFailure.RecordingNotOurs.
             var seenNames = new List<string>();
-            // The slot the trailer says recorded the file, or -1 when there was no trailer at
-            // all — which is exactly what tells "the game never wrote its ending" apart from
-            // "it wrote one we cannot use". Different causes, and only one of them is the
-            // player's to avoid.
-            var recorderSlot = -1;
+            // Whether the accepted recording ended with the outcome signature at all. That is
+            // what tells "the game never wrote its ending" apart from "it wrote one we cannot
+            // use" — different causes, and only one of them is the player's to avoid. It used
+            // to be carried as the trailer's slot field, which stopped working the moment the
+            // local slot started coming from the player's name instead.
+            var signaturePresent = false;
 
             // The search runs the instant the game process dies, so the recording we want is
             // often still being flushed — it fails to parse, and the match silently becomes a
@@ -7812,7 +7813,7 @@ public partial class MultiplayerTab : UserControl
             {
                 if (attempt > 0) await Task.Delay(ReplayRetryDelaysMs[attempt]);
 
-                var (info, search, slot) = await Task.Run(() =>
+                var (info, search, hadSignature) = await Task.Run(() =>
                 {
                     ReplayParserService.ReplayHeader? header = null;
                     ReplayParserService.ReplayOutcome? outcome = null;
@@ -7829,7 +7830,7 @@ public partial class MultiplayerTab : UserControl
                         if (h == null) return ReplayUploadService.CandidateVerdict.Unreadable;
 
                         var o = ReplayParserService.ReadOutcome(data, h);
-                        if (!ReplayParserService.LooksLikeThisMatch(h, hostName!, expectedHumans, o.RecorderSlot))
+                        if (!ReplayParserService.LooksLikeThisMatch(h, hostName!, expectedHumans))
                         {
                             // Remembered so the card can name them. "None of these are yours" is
                             // a dead end on its own; the names beside the profile we read are
@@ -7847,7 +7848,7 @@ public partial class MultiplayerTab : UserControl
                         // bytes is the whole evidence, and without it "no outcome" is a claim
                         // nobody can check from a diagnostic bundle.
                         if (o.Confidence == ReplayParserService.ReplayOutcomeConfidence.Ambiguous
-                            && o.RecorderSlot < 0 && data.Length >= 16)
+                            && !o.SignaturePresent && data.Length >= 16)
                             DiagnosticLog.Write(
                                 $"Replay: '{candidate.Name}' has no outcome trailer; last 16 bytes = " +
                                 BitConverter.ToString(data, data.Length - 16));
@@ -7857,11 +7858,14 @@ public partial class MultiplayerTab : UserControl
                         return ReplayUploadService.CandidateVerdict.Match;
                     }, preferBeforeUtc);
 
-                    if (result.File == null || header == null) return (null as MatchReplayInfo, result, -1);
+                    if (result.File == null || header == null) return (null as MatchReplayInfo, result, false);
 
-                    // The trailer names the slot that recorded, which is this machine — so the
-                    // host's slot comes from the file rather than from matching names twice.
-                    var hostSlot = outcome!.RecorderSlot;
+                    // BY NAME, never from the trailer. The trailer's second field was read as
+                    // "the slot that recorded this file"; in multiplayer it is the loser, so
+                    // this resolved to the loser on both machines and HostResultFrom could
+                    // only ever answer 0.0 — a host who won never scored. The profile name is
+                    // the one thing in the file that differs between the two players.
+                    var hostSlot = ReplayParserService.FindPlayerSlot(header, hostName!);
                     var hostResult = ReplayParserService.HostResultFrom(outcome, hostSlot);
 
                     DiagnosticLog.Write(
@@ -7871,11 +7875,11 @@ public partial class MultiplayerTab : UserControl
 
                     return (new MatchReplayInfo(
                         result.File, header.MapName, hostResult,
-                        header.RandomSeed, header.HostTime), result, hostSlot);
+                        header.RandomSeed, header.HostTime), result, outcome!.SignaturePresent);
                 });
 
                 lastSearch = search;
-                recorderSlot = slot;
+                signaturePresent = hadSignature;
                 if (info != null) { found = info; break; }
 
                 // The caller wants the answer NOW so it can report without waiting; whatever
@@ -7910,11 +7914,11 @@ public partial class MultiplayerTab : UserControl
             {
                 failure = found.HostResult != null
                     ? Services.Multiplayer.LocalReadFailure.None
-                    // A recorder slot of -1 is the parser saying the 12×00 + 8×FF signature was
-                    // not at the end of the file at all: the game never finished writing its
-                    // ending. That has its own advice — leave the match to the menu before
-                    // closing AoE3 — where a trailer we simply cannot use has none.
-                    : recorderSlot < 0
+                    // No signature means the 12×00 + 8×FF was not at the end of the file at
+                    // all: the game never finished writing its ending. That has its own advice
+                    // — leave the match to the menu before closing AoE3 — where a trailer we
+                    // simply cannot use has none.
+                    : !signaturePresent
                         ? Services.Multiplayer.LocalReadFailure.RecordingNoOutcome
                         : Services.Multiplayer.LocalReadFailure.RecordingAmbiguous;
             }

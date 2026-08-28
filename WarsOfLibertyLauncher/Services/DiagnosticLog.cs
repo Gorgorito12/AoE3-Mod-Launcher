@@ -418,8 +418,12 @@ public static class DiagnosticLog
                     // decide a match, so it is spelled out rather than summarised.
                     sb.Append("    outcome: ").Append(outcome.Confidence)
                       .Append(" loser=").Append(outcome.LoserSlot)
-                      .Append(" recorder=").Append(outcome.RecorderSlot).AppendLine();
-                    if (outcome.RecorderSlot < 0 && data.Length >= 16)
+                      .Append(" signature=").Append(outcome.SignaturePresent)
+                      // Printed raw, under a name that claims nothing. It was called
+                      // "recorder=" and is not one; a bundle that asserts it again would send
+                      // the next reader down the same path.
+                      .Append(" trailerB=").Append(outcome.TrailerSecondSlot).AppendLine();
+                    if (!outcome.SignaturePresent && data.Length >= 16)
                         sb.Append("    no trailer; last 16 bytes = ")
                           .AppendLine(BitConverter.ToString(data, data.Length - 16));
                 }

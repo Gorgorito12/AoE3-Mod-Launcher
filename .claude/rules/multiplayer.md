@@ -286,7 +286,7 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   ```
   [00 × 12] [FF × 8] [A: uint32] [B: uint32] [C: uint32]
-  A = slot that LOST · B = slot that RECORDED the file · C = number of humans
+  A = slot that LOST · B = NOT UNDERSTOOD, never use it · C = number of humans
   ```
 
   **A is the loser, and the rival readings die on one case:** a game the recorder WON
@@ -294,8 +294,34 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   on five games whose result was known independently — three skirmishes (two resigned,
   one won) and two real 1v1s between humans. The 1v1s were **predicted before the result
   was known** and then confirmed by the player who lost them, which is what separates
-  this from fitting the data afterwards. B was likewise predicted and held: two files
-  from the same player point at him in both, across different slots.
+  this from fitting the data afterwards.
+
+  **B was read as "the slot that RECORDED the file". That was WRONG, and it cost real
+  players their rating for as long as the feature has existed. Never use B to identify
+  anybody.** The evidence for it — "two files from the same player point at him in both,
+  across different slots" — could not have decided the question: with ONE player on ONE
+  machine, *the one who recorded it* and *the one who ended it* are the same person. Three
+  multiplayer matches later captured from **both** players settle it:
+
+  - the two players' copies of one match are **byte-identical for the last 64 bytes**, so
+    nothing in there can name which machine wrote one;
+  - in all six copies **B equals the loser**;
+  - across both players' complete logs, **every confident reading ever recorded was
+    `0,0`** — three of them, not one `1,0`. The system had never produced a win.
+
+  What fits all eight observations is *the slot that ENDED the game*: the human who
+  destroyed the AI in the singleplayer fixtures, the player who resigned in the
+  multiplayer ones. **That is a hypothesis, and nothing depends on it.** The local
+  player's slot comes from `ReplayParserService.FindPlayerSlot` — his AoE3 profile name,
+  the one thing in the file that differs between the two players.
+
+  **What it cost, concretely.** `LooksLikeThisMatch` gated on `recorderSlot == host.Slot`
+  and `HostResultFrom` was fed the same field as the host's slot. In multiplayer that is
+  the loser, so the gate passed only for whoever LOST, and the winner's own recording was
+  thrown away with `is not this match`. **A match could be rated only when the HOST LOST**
+  — roughly half of all 1v1s, silently. Of the three matches above, one had no trailer at
+  all, one was hosted by the loser and rated, and the third was hosted by the winner and
+  lost its rating to this.
 
   **Two of seven recordings have no trailer at all** — games that ended abnormally
   (a disconnect, a killed process). That is why `ReadOutcome` checks for the signature
@@ -320,17 +346,26 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   256 (no such slot), or `01 00 00 00` = slot 1 — the recorder, whose player states he WON
   that match. Guessing would have taken ~160 points from the winner.
 
-  **`RecorderSlot == -1` is how the caller tells the two apart**, because every later
-  early-return in `ReadOutcome` carries the recorder slot through and only the missing
-  signature returns the pristine `unknown`. That distinction is what feeds
+  **`SignaturePresent == false` is how the caller tells the two apart.** It used to be
+  carried as `RecorderSlot == -1`, which worked only while the local slot also came from
+  the trailer; once the slot started coming from the player's NAME that sentinel became
+  unreachable, so the flag is now explicit and separate from `Confidence`. That
+  distinction is what feeds
   `LocalReadFailure.RecordingNoOutcome`, whose advice — leave the match to the main menu
   before closing AoE3 — is actionable where the generic ambiguous message has none.
 
-  **Weak signal worth recording, n=3, not a basis for anything:** in both complete
-  recordings from that incident `loser == recorder`, and the only cut-short one is the match
-  its owner won. If the loser's machine reliably writes a complete trailer and the winner's
-  often does not, that is *why* a single late reading is usually a conceded defeat — which
-  is exactly the case the backend's upgrade rule accepts without corroboration.
+  **That `loser == recorder` note used to live here as a "weak signal, n=3", with the guess
+  that the loser's machine writes a complete trailer and the winner's often does not. Both
+  halves are now answered, and the guess is REFUTED.** The `loser == recorder` part was
+  never a signal at all — it is just B being the loser, restated. And a later incident
+  captured from both sides shows **the trailer's presence is a property of the MATCH, not
+  of the machine**: the `ESOC_Iowa` game above is missing its trailer in BOTH players'
+  copies, identically, while the winner of the other two matches has complete trailers in
+  both of his. So a winner's machine writes the trailer perfectly well.
+
+  What survives is only that a conceded defeat is easy to read on the conceder's machine —
+  which still makes the backend's "a liar can only give points away" rule sound, but is no
+  longer a claim about who *can* read a recording.
 
   **Confident requires all three:** the exact signature, an A naming a slot the header
   has, and exactly two players. Past a 1v1 "X lost" doesn't name a winner — the others
@@ -495,8 +530,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the player's own, so a match played in between selected a stranger's file, whose result
   would have been reported for two people who never played it. `FindMatchReplay` walks
   candidates newest-first (capped at 5, each costs an inflate) and takes the first that
-  passes `LooksLikeThisMatch`: host present, human count matching the room, recorder slot
-  = the host's. Nothing qualifying returns null, and no replay is always safer than the
+  passes `LooksLikeThisMatch`: host present (by name) and human count matching the room.
+  There was a third condition — recorder slot = the host's — and it rejected the winner's
+  own recording every time; see the trailer section. Nothing qualifying returns null, and
+  no replay is always safer than the
   wrong one. `FindLatestReplay` survives for the chat line that names the saved file, where
   "the newest" is exactly right and no identity is needed.
 
@@ -526,11 +563,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `GameRestartedSince()` (a REOPENED game deliberately keeps the same instance, so the
   reference matches and clearing would still be wrong).
 
-  **The host's slot comes from the trailer, not from a second name match.**
-  `LooksLikeThisMatch` only accepts a recording when `recorderSlot == host.Slot`, so after
-  acceptance `RecorderSlot` IS the host's slot; with no trailer it is −1 and
-  `HostResultFrom` returns null, which is consistent because a missing trailer is
-  Ambiguous anyway.
+  **The host's slot comes from his NAME, never from the trailer — `FindPlayerSlot`.**
+  This paragraph used to say the opposite ("the host's slot comes from the trailer, not
+  from a second name match"), and that was the bug: the trailer's B field is the loser in
+  multiplayer, so it resolved to the loser on both machines and `HostResultFrom` could
+  only ever answer `0.0`. One rule now answers "which slot is ours", and both
+  `LooksLikeThisMatch` and the caller go through it — they used to answer it two different
+  ways, and the other one was wrong.
 
   **`Services/Multiplayer/MatchResultResolver` is where the recording's verdict meets the
   room**, and it refuses unless the room had exactly 2 participants and the host is among
@@ -647,7 +686,7 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   card, never translated.
 
   **`RecordingNoOutcome`** — the recording IS this match and the game never finished writing
-  its ending (`RecorderSlot < 0`; see the trailer section). Actionable advice: leave the match
+  its ending (`!SignaturePresent`; see the trailer section). Actionable advice: leave the match
   to the main menu before closing AoE3.
 
   **`ReadPending`** — a WAIT, not a failure. Set in `HandleMatchReported` when the frame
@@ -716,7 +755,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `replay_sha256` / `game_seed` are anti-duplicate keys rather than proof. It does not verify
   the claim; it removes the reason to invent one, since **a liar can only give points away**.
   It costs little coverage because the player who can read the recording is usually the one who
-  lost (see the `loser == recorder` note in the trailer section).
+  lost — though note that is about who tends to concede, not about whose machine can read a
+  recording; see the trailer section, where the stronger version of that claim is refuted.
 
   **When the row has no fingerprint, the confirmer's is ADOPTED** — which also gives the match
   the anti-duplicate protection it never had, since a recording-less report sends those as
@@ -2096,8 +2136,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `AnalyseMatchReplayAsync` is not gated on the host, so the guest finds their own
   recording, validates it against their own slot, and reaches an independent verdict.
   **Watch the names there:** `hostName` is `GetInGameName` — *this machine's* profile —
-  and `hostSlot` is `outcome.RecorderSlot`, so `MatchReplayInfo.HostResult` means "the
-  result of whoever recorded this file", which on a guest's PC is the guest. They read
+  and `hostSlot` is `FindPlayerSlot(header, hostName)`, so `MatchReplayInfo.HostResult`
+  means "the result of the player THIS machine belongs to", which on a guest's PC is the
+  guest. (It used to say `outcome.RecorderSlot`, which is what made both machines read the
+  loser and answer `0.0`.) They read
   the other way round and are documented in place rather than renamed, because
   `ResolveHostResult` / `HostResultFrom` in the tested pure service are named to match
   and renaming half the set would be worse than leaving it.
