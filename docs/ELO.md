@@ -90,9 +90,11 @@ tal cual en la tarjeta del final. Estos son todos los casos:
 
 | Lo que ves | Qué pasó | Qué hacer |
 |---|---|---|
-| «La partida no se grabó, así que no hay forma de saber quién ganó» | Nadie encontró una grabación de esa partida | Marcar «Record Game» antes de la próxima |
-| «La grabación no dice quién ganó» · «La grabación de esta partida no se pudo leer» | Sí se grabó, pero el archivo se cortó o no nombra un ganador utilizable | Suele pasar si el juego se cerró de golpe. Nada que arreglar |
-| «No se pudo leer el nombre de tu perfil de AoE3» | Sin nombre de perfil no hay forma de encontrarte entre los jugadores de la grabación | Abre AoE3 una vez y asegúrate de que tu perfil tiene nombre |
+| «Esta partida **SÍ se grabó**, pero el juego se cerró antes de terminar de escribir el final» | La grabación existe y es la correcta, pero le falta el desenlace | **Sal de la partida hasta el menú principal antes de cerrar AoE3.** Es el arreglo más útil de esta lista |
+| «Se encontraron grabaciones, pero **en ninguna apareces** entre los jugadores» | El nombre de tu perfil de AoE3 no coincide con el que usas al jugar | Verifica el nombre de tu perfil. Mientras no cuadre, **falla en todas tus partidas** |
+| «La partida terminó con tu AoE3 **todavía abierto**» | No es un fallo: tu grabación aún no se ha leído | Cierra el juego. El launcher la lee y **la partida todavía puede contar** |
+| «La partida no se grabó, así que no hay forma de saber quién ganó» | No apareció ninguna grabación de esa partida | Marcar «Record Game» antes de la próxima |
+| «La grabación no dice quién ganó» | Se leyó, pero no nombra un ganador utilizable | Nada que arreglar |
 | «Solo las partidas uno contra uno cuentan para el ELO» | Fue una partida por equipos | Nada: una grabación nombra a un perdedor, y eso no dice quién ganó un 2v2 |
 | «Este mod todavía no tiene clasificación» | Hoy solo Wars of Liberty puntúa | Nada. Los demás mods siguen guardando historial |
 | «Los tiempos de esta partida no cuadran» | Duró menos de **3 minutos**, o los relojes no cuadran | Nada, salvo jugar partidas de verdad |
@@ -102,6 +104,16 @@ tal cual en la tarjeta del final. Estos son todos los casos:
 
 En todos los casos, **la partida queda guardada en tu historial**. Lo único que no ocurre
 es el cambio de puntuación.
+
+### Una partida puede puntuar más tarde
+
+El resultado se guarda **al instante**, sin esperar a la grabación; la lectura del archivo
+sigue por detrás. Así que una partida que aparece «sin resultado» **no está cerrada**: si la
+lectura llega después — la tuya al cerrar AoE3, o la de tu rival — la partida se puntúa
+igual, aunque la sala ya no exista.
+
+Cuando eso pasa te llega una notificación: **«Se puntuó una partida tuya»**. No hay que
+repetir nada ni reclamar nada.
 
 ### Si tu rival grabó y tú no
 
@@ -116,8 +128,12 @@ Hay un límite para que nadie se invente resultados: **reconocer tu propia derro
 acepta siempre; que tu grabación te dé la victoria solo cuenta si el servidor ya tenía
 guardada la huella de esa misma partida** y coincide con la tuya.
 
-Esto **solo** rescata "no se pudo leer quién ganó". Una partida por equipos, un mod sin
-clasificación o unos tiempos que no cuadran no se rescatan de ninguna forma.
+Esto **solo** rescata "no se pudo leer quién ganó", y **nunca cambia una partida que ya
+tenía resultado**. Una partida por equipos, un mod sin clasificación o unos tiempos que no
+cuadran no se rescatan de ninguna forma.
+
+No es teórico: así se recuperaron las partidas que se habían perdido por el fallo que
+arregló la v1.0.12e.
 
 ### La clasificación
 
@@ -163,6 +179,12 @@ iguales o más.
 
 **¿Bajo de puntuación si dejo de jugar?**
 No. Nada baja solo.
+
+**Gané varias partidas como anfitrión y no me contaron. ¿Se perdieron?**
+No. Hasta la v1.0.12e había un fallo por el que una partida solo contaba si el anfitrión
+**perdía** — afectaba a cerca de la mitad de los 1v1. Está arreglado, y **esas partidas ya
+volvieron**: se recuperaron desde la lectura del rival y están en tu historial con los
+puntos aplicados.
 
 **¿Por qué se reinició mi puntuación en su momento?**
 Se reinició una vez, a propósito. Antes las partidas cuyo resultado no se podía leer se
@@ -263,9 +285,11 @@ reason verbatim on the end-of-match card. These are all the cases:
 
 | What you see | What happened | What to do |
 |---|---|---|
-| "The match was not recorded, so nobody can tell who won" | No recording of that match was found | Tick "Record Game" before the next one |
-| "The recording does not say who won" · "The recording could not be read" | It did record, but the file was cut short or names no usable winner | Usually happens when the game was closed abruptly. Nothing to fix |
-| "Your AoE3 profile name could not be read" | Without a profile name there is no way to find you among the players in the recording | Open AoE3 once and make sure your profile has a name |
+| "This match **WAS** recorded, but the game closed before it finished writing the ending" | The recording exists and is the right one, but it has no ending | **Leave the match to the main menu before closing AoE3.** The most useful fix on this list |
+| "Recordings were found, but **none of them has you** among its players" | Your AoE3 profile name isn't the one you actually play under | Check your profile name. Until it matches, **every match of yours fails** |
+| "The match ended while your AoE3 was **still open**" | Not a failure: your recording hasn't been read yet | Close the game. The launcher reads it and **the match can still count** |
+| "The match was not recorded, so nobody can tell who won" | No recording of that match turned up | Tick "Record Game" before the next one |
+| "The recording does not say who won" | It was read, but names no usable winner | Nothing to fix |
 | "Only one-on-one matches count towards the rating" | It was a team game | Nothing: a recording names one loser, which says nothing about who won a 2v2 |
 | "This mod has no ladder yet" | Today only Wars of Liberty is rated | Nothing. Other mods still record history |
 | "The times reported for this match don't add up" | It ran under **3 minutes**, or the clocks disagree | Nothing, other than playing real games |
@@ -275,6 +299,16 @@ reason verbatim on the end-of-match card. These are all the cases:
 
 In every case, **the match is still saved to your history**. The only thing that doesn't
 happen is the rating change.
+
+### A match can be rated later
+
+The result is saved **immediately**, without waiting for the recording; reading the file
+carries on in the background. So a match showing "no result" **is not closed**: if a reading
+turns up afterwards — yours when you close AoE3, or your opponent's — the match is rated all
+the same, even once the room is gone.
+
+When that happens you get a notification: **"A match of yours was rated"**. Nothing to replay,
+nothing to claim.
 
 ### If your opponent recorded and you didn't
 
@@ -289,8 +323,11 @@ There is a limit so nobody can invent results: **you may concede your own defeat
 your recording only grants you a victory if the server already had a fingerprint of that
 same match stored** and it matches yours.
 
-This **only** rescues "who won could not be read". A team game, an unranked mod or times
-that don't add up cannot be rescued at all.
+This **only** rescues "who won could not be read", and it **never overturns a match that
+already had a result**. A team game, an unranked mod or times that don't add up cannot be
+rescued at all.
+
+Not hypothetical: it is how the matches lost to the bug fixed in v1.0.12e were recovered.
 
 ### The ranking
 
@@ -333,6 +370,11 @@ didn't count for some other reason. Decided is always equal or higher.
 
 **Do I lose rating for not playing?**
 No. Nothing drops on its own.
+
+**I won several matches as host and they didn't count. Are they lost?**
+No. Until v1.0.12e there was a bug where a match only counted if the host **lost** — it
+affected around half of all 1v1s. It is fixed, and **those matches are back**: they were
+recovered from the opponent's reading and are in your history with the points applied.
 
 **Why was my rating reset back then?**
 It was reset once, deliberately. Matches whose result couldn't be read used to be counted
