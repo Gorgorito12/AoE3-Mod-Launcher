@@ -569,6 +569,10 @@
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>
+    <!-- Competitive-room chip. Gold rather than a fifth hue: it is the launcher's own accent,
+         and a room that puts rating on the line is exactly the row worth looking at first. -->
+    <SolidColorBrush x:Key="MpCompetitiveBg" Color="#33C9A227"/>
+    <SolidColorBrush x:Key="MpCompetitiveText" Color="#F0D68A"/>
     <SolidColorBrush x:Key="MpPrivateRim" Color="#3DA06EF0"/>
     <!-- The private-room BOX in the create dialog: the same hue as the chip at a
          lower alpha (.08 vs .16), because a whole box at chip strength shouts. Its

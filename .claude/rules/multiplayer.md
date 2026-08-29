@@ -342,6 +342,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   that makes an occurrence the trailer is being at the very end; a parser that hunted for it
   would find thousands of false positives.
 
+  **A THIRD shape, measured from a later report, and it is neither of the two above: the game
+  wrote NO closing block at all.** An ESOC_Baja California 1v1 whose container is perfectly
+  intact (declared size == actual, 17,609,494 bytes — so AoE3 finished writing the file) simply
+  runs out of command-stream data and ends `FF x12`, four zero bytes, then four floats
+  (-1, -1, -1, 1). The healthy closing block — `02 00 00 00 | 81 00 00 00 | 00x11 | FFx8 | A B C`
+  — is nowhere near the end, and neither is Iowa's truncated `89` variant. `ReadOutcome` rejects
+  it correctly, at exactly `len-32`.
+
+  **This is the case that gives the tolerance rule its number.** That same file contains the
+  `00x12 FFx8` pattern **4,253 times**, and the last occurrence sits 44 bytes from the end — close
+  enough that a "search backwards a little" parser would find it and read `A = 0xFFFFFFFF` as a
+  slot. So the temptation is concrete, not hypothetical, and the answer is still no.
+
+  What ends a game this way is not established: the container is intact, so it is not corruption
+  or a truncated write. Don't guess it from one sample.
+
   **And do not guess from a partial block.** Those 5 bytes read two ways: `00 01 00 00` =
   256 (no such slot), or `01 00 00 00` = slot 1 — the recorder, whose player states he WON
   that match. Guessing would have taken ~160 points from the winner.
@@ -543,6 +559,58 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   ownership before its verdict can ever be reported. His own two recordings are accepted
   and then refused a result for being skirmishes. Redundant on purpose: each gate alone
   would have let one of those through.
+
+- **THE GAME'S EXIT IS NOW DETECTED TWO WAYS, and the second one exists because the first
+  silently does not always happen.** `Process.Exited` was the ONLY trigger for
+  `OnGameExitedAsync` — one call site — and the multiplayer path had no polling backstop, unlike
+  the dashboard, which has had `MainWindow.StartGameMonitor` (a 2 s tick) all along.
+
+  **What that cost, from a real bundle.** When AoE3 demands elevation — a Windows compatibility
+  layer pinned on `age3y.exe` is enough — `GameLauncher.LaunchAndWatch` falls back to a
+  ShellExecute launch, and a medium-integrity launcher cannot hold a handle on a
+  higher-integrity child, so no event ever comes. The player's log showed **three launches and
+  zero game-exit handling**: the recording never read, the match never reported,
+  `game_ended` never sent (room and Discord embed stuck "In game"), `_matchContext` leaking into
+  the next match, and — had he hosted — **nothing reported at all, ever**. Nothing warned him,
+  because the failed launch still returned a `Process` object that read as success.
+
+  **`Services/GameExitWatcher.cs`** now owns the answer: the event and a poll both feed it, an
+  `Interlocked` guard makes it report **exactly once**, and the liveness probe is injected so
+  every rule below is testable without launching anything (`GameExitWatcherTests`).
+  **Three rules are load-bearing:**
+  (1) **It never reports an exit before it has SEEN the game running.** On the elevated path the
+  process does not exist while the UAC prompt is on screen, so the first ticks find nothing —
+  and announcing that the match ended seconds before the game opened would be worse than the
+  silence it replaces. `SignalExited` (the real event) skips this rule, because a handle on a
+  real process is proof rather than an inference.
+  (2) **A probe that throws is "don't know", never "it exited"** — the one mistake here moves
+  somebody's rating while they are still playing. `ArmingTimeout` (2 min) stops a launch that
+  never happened from leaving a timer running, and giving up is explicitly NOT an exit.
+  (3) **The poll runs for EVERY multiplayer launch, not only the degraded one.** One way for the
+  event to go missing has been found; assuming it is the only one is how this lasted as long as
+  it did. A 2 s tick costs nothing beside a match that already refreshes at 1 Hz.
+
+  **`LaunchAndWatch` returns `WatchedLaunch`, not a bare `Process?`** (`Services/GameLaunchResult.cs`)
+  — `Process?`, `ProcessId`, `ExePath`, `NeededElevation`, `ExitWatcherAttached`, `Failed`. A
+  non-null process with no watcher on it is precisely what made this invisible. `MultiplayerTab`
+  gates on `Failed` rather than `process == null`, which also stops it telling a player whose
+  elevated game IS opening that it could not be opened. Keeping the pid also rescues the rare
+  case where the reparented launch works but the watcher attach loses a race, which used to
+  return null and drop the callback with it.
+
+  **`IsGameStillRunning` goes by PID first and only falls back to the NAME sweep** (no pid, or a
+  process the integrity barrier will not let us inspect). The fallback's honest limit: WoL and
+  the stock game both run `age3y.exe`, so with an unrelated AoE3 open it reads "still playing"
+  and never fires — the same ambiguity `GameLaunchResult.ProcessId` documents. It never throws.
+
+  **The compat-layer offer reaches multiplayer now** via `MainWindow.OfferPendingCompatLayerFix`,
+  called after the multiplayer exit handler (game already closed, so no modal fights AoE3 for
+  focus) and from the declined-UAC path, which used to be swallowed whole by a catch-all. Before
+  this, the offer hung off the dashboard's exit handling alone, so a multiplayer-only player paid
+  the UAC prompt on every launch and was never told a one-click fix existed. When the 740 fires,
+  `LogCompatLayer` records WHICH layer it is — and records its ABSENCE too, which rules the layer
+  out and points at an executable that demands admin on its own: a different problem, and one no
+  bundle could distinguish before.
 
 - **The result is read BEFORE the match is reported, and that order is load-bearing.**
   `OnGameExitedAsync` runs `AnalyseMatchReplayAsync` first, then hands its
@@ -939,7 +1007,16 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   silences us, gaining it does NOT arm us (the old host may be disconnected and never
   receive the frame that would have silenced them). A false negative costs one history
   row; a false positive corrupts two people's rating, and `ReportMatchRequest` has no
-  idempotency key for the backend to catch it with. For the same reason there is
+  idempotency key for the backend to catch it with.
+  **That last clause is now OUT OF DATE, and the exception it blocks has been carved
+  out — read both together.** Migration `0005` added the UNIQUE index on
+  `(game_seed, game_host_time)`, which IS an idempotency key: two reports of the same game
+  collide and the second is stored `duplicate_recording` rather than rated twice. So in a
+  COMPETITIVE room `HandleHostChanged` now calls the new `WithHostGained()` when the room
+  promotes US mid-match. Without it the abandonment rule is one-sided — a guest who walks
+  out is caught, while a HOST who closes his launcher produces no report at all, because his
+  client was the only one that would have sent one — and a rule that catches one player and
+  not the other is worse than no rule. Still one-way everywhere else. For the same reason there is
   **no retry without `lobby_id`** on a 404: that branch only checks you are among the
   participants, so it would downgrade a host-validated report to an unvalidated one on
   the strength of an HTTP code.
@@ -1992,6 +2069,106 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the result, so the guest's **three** polls — this bullet used to say four — are now only
   a fallback for an old backend.)
 
+- **COMPETITIVE ROOMS are the gate on the whole ladder now: a room created without the box
+  ticked stores its match and scores nothing.** `lobbies.competitive` (migration `0007`) is
+  set once at creation and never again — a host who could tick it after seeing he had won
+  would be choosing his own rating — and `ratabilityReason` refuses everything else with
+  `not_competitive`, checked second, right after `mod_not_ranked`.
+  **`RatabilityInput.roomIsCompetitive` is `boolean | null` and the null is load-bearing:**
+  it means "there was no room to ask", and only an explicit `false` refuses. Collapse the two
+  and a report with no `lobby_id` answers `not_competitive` instead of `no_lobby` — a worse
+  message and, worse, a false one. Pinned by the `no_lobby` case in `ratability.test.ts`.
+  **The launcher asks; the server decides.** `POST /lobbies` accepts `competitive` and CLAMPS
+  it to false for a mod outside `rankedModIds`, then echoes the effective value on the 201.
+  `CreateLobbyDialog` reads `CreatedLobbyIsCompetitive` from the RESPONSE, never from its own
+  checkbox, and says so in the room when the two differ
+  (`MpCreateDialogCompetitiveDowngraded`) — a silent downgrade would leave the host playing
+  as if his rating were on the line when it is not. **Never work out which mods are ranked in
+  the launcher**; that is the same rule as clause (1) below, and the echo is what makes
+  obeying it free.
+  **The badge is derived from the boolean, never from words in the title** — anyone can type
+  "competitive" into a room name, and a badge a stranger can forge is worth less than none. It
+  is painted in `BuildRoomCard`'s title row (sharing column 1 with the private chip, so the
+  name keeps the ellipsis) and beside `RoomTitleText` in the lobby — **not** inside
+  `RoomInfoCard`, which collapses as a whole when the room has no mod name, password or extra
+  copy and would take the badge with it, silently. The Discord embed gains a `Mode` field ONLY
+  when true, so a casual room's embed is byte-for-byte what it was; it does **not** go in
+  `renderKey` (the value cannot change while the room lives) but it **is** read back in
+  `rehydrate`, or the first edit after a restart drops it.
+  **Three protections ride on the flag, and each is shaped the way it is for a reason.**
+  (a) **Record Game is confirmed before EVERY competitive start**, from `BeginHostStart` — the
+  choke point both the button and `MaybeAutoStartOnAllReady` pass through, because gating only
+  the button would let the commoner path skip it. Every match, not once per room: AoE3's box
+  comes up unticked every time and the launcher cannot tick it, so "they were told once" is
+  worth nothing by the third game.
+  (b) **`RoomMatchState.HoldLeave` shuts the Leave button** for a competitive HOST from the
+  moment the game closes until the result is settled, capped at `ResultGraceSeconds` (30).
+  **This is not politeness.** `matches/rest.ts` refuses a report from anyone who is no longer
+  `lobbies.host_user_id`, and leaving hands that role straight to the opponent via
+  `reassignHost` — so walking out in those seconds destroys the result for both players,
+  silently. It covers the READ as well as the send: the report goes out in under a second, but
+  the correction that names the winner arrives up to ~15 s later through the confirm path, so
+  a hold that ended at the report would protect the wrong half. Released on completion, on
+  failure, or at the cap — whichever comes first — and `NeedsLeaveConfirm` includes it, or
+  the window's close button walks straight past a question the Leave button asks.
+  (c) **`IsMatchActive` covers the same window**, so closing the LAUNCHER during it asks too
+  (`MpCloseDuringResultBody`, a different message: nothing is running to be cut short, and
+  `EndMatchAsync` must not fire for a match that is over).
+  **The flag travels in `MatchContext`, never read live.** Everything above runs after the
+  game closed, when the room may be gone — reading `_currentLobbyIsCompetitive` there would
+  reintroduce exactly the bug `AClosedRoomCannotChangeTheAnswer` pins.
+  **It also buys patience:** `ReplayRetryDelaysCompetitiveMs` (~16.5 s of delay, sized to stay
+  inside the 30 s hold — change one, look at the other) and `MaxCandidatesOpenedCompetitive`
+  (24). The short ladder exists because almost no match is recorded, so waiting taxes the
+  majority; a competitive room inverts that ratio by construction, since the host has just
+  confirmed Record Game. `MaxCandidatesExamined` stays at 5 either way — it counts recordings
+  that PARSED, and a sixth real one holds no sixth answer.
+
+- **ABANDONING a competitive match after five minutes counts as a defeat — the one rule in the
+  project that moves rating from an ABSENCE of evidence, so read the brakes before touching
+  it.** The exploit: the player who is losing closes his launcher, the game never writes an
+  ending to the recording, the report goes down as "nobody won", and he keeps his rating.
+  Nothing in the file can fix that; the only witness is the server, which was holding his
+  socket.
+  It is defensible because it is the universal convention of competitive ladders — a
+  disconnect is a loss — and because the host agrees to it in writing before the room exists
+  (`MpCreateDialogCompetitiveHint`). **It is not defensible as a default**, which is why it
+  only ever applies to a competitive room.
+  **Detection is server-side and never claimed by a client.** `handleDisconnectCleanup` writes
+  `lobby_abandons` (migration `0008`) in the SAME batch as the membership cleanup, via
+  `INSERT ... SELECT ... WHERE id = ? AND status = 'in_game' AND competitive = 1` — one
+  statement, no extra round trip on a hot path, and it asks the authoritative row rather than
+  the room object's in-memory `startedAtMs`, which a restart would have cleared while the game
+  carried on. The row is deleted the moment that user says hello again.
+  **The decision is the pure `src/elo/abandon.ts`, evaluated lazily inside `POST /matches`** —
+  no timer, which matters because **there is no periodic sweep in this server**
+  (`sweepOrphanLobbies` runs once, at startup). It only ever runs when ratability said
+  `no_decided_result`: **a recording that names a winner always outranks an inference.**
+  **The brakes, and each closes a specific hole:** exactly two participants; the report must
+  have carried a recording (`replay_sha256`/`game_seed`) — without it farming is "open a room,
+  wait out the timer, alt-F4, repeat" with no game played, and requiring one puts every such
+  match under the existing anti-duplicate index; at most one abandonment-decided match **per
+  pair per 24 h** (`PAIR_COOLDOWN_MS`), because real disconnections are scattered and farming
+  is repetitive; the walkout must be at least `RECONNECT_GRACE_SECONDS` (90) old; and the game
+  must have run at least `Config.competitiveAbandonSeconds` (`COMPETITIVE_ABANDON_SECONDS`,
+  default 300 — policy, tuned with a restart like `rankedModIds`). **Both players gone is a
+  draw**, since the usual cause is the host's connection dying and taking the room with it.
+  **Why 90 seconds, and it is NOT mainly about reconnecting.** Closing the launcher the moment
+  a match ends is normal behaviour and drops the socket exactly like a rage-quit does; only
+  WHEN tells them apart, and the window has to span the gap to the host's report, which
+  stretches while the retry ladder runs. (The reconnect reasoning still applies — the socket
+  retries with backoff up to 30 s — but note that an abrupt close deletes the `lobby_members`
+  row, so a dropped player usually cannot re-enter the room at all; do not lean on that path.)
+  **What it deliberately does NOT cover, and don't widen it on a hunch:** the game is launched
+  re-parented under `explorer.exe` so it survives the launcher being force-closed, so a player
+  CAN close the launcher and keep playing, and that is scored as an abandonment. It is narrow
+  — the match must also have ended with no readable outcome — and it is why protection (c)
+  above warns before the launcher closes.
+  `matches.decided_by = 'abandon'` is a SENTINEL, not a user id (every other writer stores the
+  player whose late reading decided it; uuids cannot collide with the word). `admin.ts
+  match:show` prints it, the room's mode and any walkouts — the first question anyone asks
+  about a match that did not score.
+
 - **What scores, what does not, and who decides — the ELO rules.** The short version:
   **only Wars of Liberty, only 1v1, only with a readable recording.** The long version is
   worth reading before touching any of it, because every clause below was a bug first.
@@ -2006,8 +2183,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   **(2) An unrated match is STORED, never rejected.** The history is a record of what was
   played; rating is a separate judgement about it. The reasons are `mod_not_ranked`,
-  `not_1v1`, `no_decided_result`, `no_lobby`, `participants_not_in_lobby`,
-  `implausible_timing` and `duplicate_recording`, each with its own string — because
+  `not_competitive`, `not_1v1`, `no_decided_result`, `no_lobby`,
+  `participants_not_in_lobby`, `implausible_timing` and `duplicate_recording`, each with its
+  own string — because
   "tick Record Game" is the right advice for a missing recording and useless for a team
   game, and sending someone to fix what was never the problem is worse than saying nothing.
 

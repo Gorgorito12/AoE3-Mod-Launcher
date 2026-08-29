@@ -775,6 +775,13 @@
                                                                             <Setter Property="Text" Value="&#xE735;"/>
                                                                             <Setter Property="Foreground" Value="#E0B44C"/>
                                                                         </DataTrigger>
+                                                                        <!-- Project news. Without a trigger a new kind
+                                                                             silently falls back to the default bell
+                                                                             glyph, which reads as an ordinary update. -->
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="Announcement">
+                                                                            <Setter Property="Text" Value="&#xE789;"/>
+                                                                            <Setter Property="Foreground" Value="#E6A54C"/>
+                                                                        </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </TextBlock.Style>

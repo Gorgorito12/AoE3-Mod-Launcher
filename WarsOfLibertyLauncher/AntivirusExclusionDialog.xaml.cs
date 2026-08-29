@@ -42,6 +42,7 @@ public partial class AntivirusExclusionDialog : Window
         PathsLabel.Text = Strings.Get("DlgAntivirusPathsLabel");
         HowToText.Text = Strings.Get("DlgAntivirusHowTo");
         CopyButton.Content = Strings.Get("DlgAntivirusCopyPaths");
+        SupportLinkHost.Content = Controls.SupportLink.Build();
 
         var tempRoot = AppPaths.InstallTempRoot;
         TempPathText.Text = tempRoot;

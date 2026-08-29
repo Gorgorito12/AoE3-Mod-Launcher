@@ -30,6 +30,54 @@ public static class RoomMatchState
     public static bool ShouldOfferRejoin(bool roomMatchLive, bool ourGameRunning, bool weAreHost)
         => roomMatchLive && !ourGameRunning && !weAreHost;
 
+    /// <summary>
+    /// The longest the launcher may hold a competitive room open after the game closes.
+    ///
+    /// <para>A ceiling, not a duration. In the good case — the recording is there and readable
+    /// on the first pass — the hold lasts under two seconds and nobody notices it. The full
+    /// thirty are only ever spent when the recording is slow or absent, which is exactly when
+    /// leaving early would cost the result.</para>
+    ///
+    /// <para>It exists because the alternative is a hold with no end: the retry ladder can stall
+    /// on a folder of half-written files, and a player trapped in a room by a bug of ours is a
+    /// worse outcome than a lost rating.</para>
+    /// </summary>
+    public const double ResultGraceSeconds = 30;
+
+    /// <summary>What the launcher is still doing with the match that just ended.</summary>
+    public enum ResultPhase
+    {
+        /// <summary>Nothing outstanding — the result is settled, or there was never one to settle.</summary>
+        None,
+
+        /// <summary>Still looking for and reading the recording that says who won.</summary>
+        ReadingRecording,
+
+        /// <summary>The verdict is known and on its way to the server.</summary>
+        SendingResult,
+    }
+
+    /// <summary>
+    /// Whether leaving the room has to wait a moment.
+    ///
+    /// <para><b>Why this is not merely polite.</b> The server refuses a report from anyone who is
+    /// no longer the room's host (<c>matches/rest.ts</c>), and leaving hands the host role
+    /// straight to the opponent (<c>reassignHost</c>) — so a host who walks out in the seconds
+    /// after the game closes destroys the result for both players, silently and with no way to
+    /// get it back. That is what this holds shut.</para>
+    ///
+    /// <para><b>Host only</b>, because only the host reports: a guest leaving costs nothing.
+    /// <b>Competitive only</b>, because in a casual room there is no rating to protect and being
+    /// held anywhere is an annoyance. And always bounded by
+    /// <see cref="ResultGraceSeconds"/>.</para>
+    /// </summary>
+    public static bool HoldLeave(
+        bool competitive, bool weAreHost, ResultPhase phase, double secondsSinceGameExit)
+        => competitive
+           && weAreHost
+           && phase != ResultPhase.None
+           && secondsSinceGameExit < ResultGraceSeconds;
+
     /// <summary>What leaving the room right now would cost, and therefore which warning to show.</summary>
     public enum LeaveWarning
     {

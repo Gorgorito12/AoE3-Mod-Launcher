@@ -32,13 +32,24 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// <param name="Participants">Normalised room roster — see <see cref="Capture"/>.</param>
 /// <param name="ReporterUserId">Our own user id, needed to work out who won from the host's score.</param>
 /// <param name="StartedAtUtc">When AoE3 was launched. Also the start stamp sent to the backend.</param>
+/// <param name="IsCompetitive">
+/// Whether the room put rating on this match, captured at launch like everything else here.
+///
+/// <para><b>It has to live in the snapshot, and reading it live would be the very bug this type
+/// exists for.</b> The room can be gone by the time the game closes — that is the whole premise
+/// of <c>AClosedRoomCannotChangeTheAnswer</c> — so asking "was it competitive?" at exit would
+/// answer from a room that no longer exists. It decides how patiently the recording is read and
+/// whether the host may leave before the result is in, and both of those are questions about the
+/// match that was played, not about the room as it stands now.</para>
+/// </param>
 public sealed record MatchContext(
     bool IsHost,
     IReadOnlyList<string> Participants,
     string? LobbyId,
     string? ModId,
     string? ReporterUserId,
-    DateTime StartedAtUtc)
+    DateTime StartedAtUtc,
+    bool IsCompetitive = false)
 {
     /// <summary>
     /// How many humans the recording should show. Same number the report uses as its
@@ -64,7 +75,8 @@ public sealed record MatchContext(
         string? modId,
         string? reporterUserId,
         bool isHost,
-        DateTime startedAtUtc)
+        DateTime startedAtUtc,
+        bool isCompetitive = false)
     {
         var participants = (roomMemberIds ?? Enumerable.Empty<string?>())
             .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -79,7 +91,8 @@ public sealed record MatchContext(
             string.IsNullOrWhiteSpace(lobbyId) ? null : lobbyId,
             string.IsNullOrWhiteSpace(modId) ? null : modId,
             string.IsNullOrWhiteSpace(reporterUserId) ? null : reporterUserId,
-            startedAtUtc);
+            startedAtUtc,
+            isCompetitive);
     }
 
     /// <summary>Length of the match, in whole seconds, never negative.</summary>
@@ -133,4 +146,26 @@ public sealed record MatchContext(
     /// history; a false positive corrupts two people's rating.</para>
     /// </summary>
     public MatchContext WithHostLost() => this with { IsHost = false };
+
+    /// <summary>
+    /// A copy that WILL report, for the one case where the room hands us the host role
+    /// mid-match and somebody has to.
+    ///
+    /// <para><b>This is a deliberate, narrow exception to the one-way rule above, and the
+    /// asymmetry it removes is the reason for it.</b> With only <see cref="WithHostLost"/>, a
+    /// host who closes his launcher mid-match produces no report at all — his own client is the
+    /// only one that would have sent one — so the guest who abandons is punished and the host who
+    /// abandons walks. A rule that catches one player and not the other is worse than no rule.</para>
+    ///
+    /// <para>The double-report risk that justified the one-way rule is smaller than it was when
+    /// that rule was written: the old host may indeed never receive the frame that silences him,
+    /// but migration 0005 added a UNIQUE index on <c>(game_seed, game_host_time)</c>, so two
+    /// reports of the same game collide and the second is stored as <c>duplicate_recording</c>
+    /// rather than rated twice. The server also validates that the reporter is the CURRENT host,
+    /// so nothing here is taken on the client's word.</para>
+    ///
+    /// <para>Only ever called for a competitive room — see the caller. Everywhere else the
+    /// one-way rule stands.</para>
+    /// </summary>
+    public MatchContext WithHostGained() => this with { IsHost = true };
 }

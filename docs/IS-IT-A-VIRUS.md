@@ -179,6 +179,9 @@ And if you believe you found something genuinely malicious in the code, please
 **[open an issue](https://github.com/Gorgorito12/AoE3-Mod-Launcher/issues)** —
 we review it in the open.
 
+If you would rather just ask someone, **[the Discord](https://discord.gg/WVarbzzzmc)** is the place —
+plenty of people there have already been through the same warning.
+
 ---
 
 *See also: the full code-cited **[Transparency & Security Audit](AUDIT.md)** ·

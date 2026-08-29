@@ -90,6 +90,26 @@ public partial class CreateLobbyDialog : Window
     public bool CreatedLobbyIsPrivate { get; private set; }
 
     /// <summary>
+    /// Whether the room the server actually created is competitive.
+    ///
+    /// <para><b>Taken from the RESPONSE, never from the checkbox.</b> The server refuses a
+    /// competitive room for a mod with no ladder and creates a casual one instead, and it is the
+    /// only side that knows which mods have one. Reading the tick box here would make the whole
+    /// launcher — the badge, the Record Game confirm, the hold on leaving — act on a promise the
+    /// server declined to keep.</para>
+    /// </summary>
+    public bool CreatedLobbyIsCompetitive { get; private set; }
+
+    /// <summary>
+    /// True when the host asked for a competitive room and the server made a casual one.
+    ///
+    /// <para>Silently downgrading would be the worst of both: the player believes their rating is
+    /// on the line, plays accordingly, and the match counts for nobody. The caller says so in the
+    /// room, which is where they will be looking.</para>
+    /// </summary>
+    public bool CreatedLobbyCompetitiveDowngraded { get; private set; }
+
+    /// <summary>
     /// Build the dialog. <paramref name="profiles"/> populates the mod
     /// dropdown; <paramref name="initiallySelected"/> is the entry that
     /// starts highlighted (typically the active profile from the Play
@@ -123,6 +143,10 @@ public partial class CreateLobbyDialog : Window
         PrivateTitleText.Text = Strings.Get("MpCreateDialogPrivate");
         PrivateHint.Text = Strings.Get("MpCreateDialogPrivateBody");
         PrivateRoomCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogPrivateHint"));
+        CompetitiveTitleText.Text = Strings.Get("MpCreateDialogCompetitive");
+        CompetitiveHint.Text = Strings.Get("MpCreateDialogCompetitiveHint");
+        CompetitiveCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogCompetitiveHint"));
+        CompetitiveSizeNote.Text = Strings.Get("MpCreateDialogCompetitiveSizeNote");
         PasswordRevealButton.Content = Strings.Get("MpCreateDialogShowPassword");
         Suggest1.Content = Strings.Get("MpCreateDialogSuggest1");
         Suggest2.Content = Strings.Get("MpCreateDialogSuggest2");
@@ -266,6 +290,26 @@ public partial class CreateLobbyDialog : Window
         _maxPlayers = value;
         foreach (var kv in _maxPlayerButtons)
             kv.Value.Tag = kv.Key == value ? "active" : null;
+        RefreshCompetitiveSizeNote();
+    }
+
+    private void CompetitiveCheck_Changed(object sender, RoutedEventArgs e)
+        => RefreshCompetitiveSizeNote();
+
+    /// <summary>
+    /// Warn — never forbid — when a competitive room is sized so that it can never score.
+    ///
+    /// <para>The server refuses anything but exactly two participants (<c>not_1v1</c>), because a
+    /// recording names one loser and that says nothing about who won a team game. So a
+    /// competitive room for three is playable and will simply never rate, and learning that after
+    /// the match is the bad outcome. Hooked to BOTH inputs it reads, or it goes stale the moment
+    /// the other one changes.</para>
+    /// </summary>
+    private void RefreshCompetitiveSizeNote()
+    {
+        if (CompetitiveSizeNote == null || CompetitiveCheck == null) return;
+        var shout = CompetitiveCheck.IsChecked == true && _maxPlayers > 2;
+        CompetitiveSizeNote.Visibility = shout ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -567,7 +611,14 @@ public partial class CreateLobbyDialog : Window
                 ModCombinedHash = _selectedHash,
                 MaxPlayers = maxPlayers,
                 Password = password,
+                Competitive = CompetitiveCheck.IsChecked == true,
             });
+            // The server's answer, not ours. An older backend does not send the field at all,
+            // which deserialises to false — a casual room, which is exactly how such a backend
+            // will treat the match anyway.
+            CreatedLobbyIsCompetitive = CreatedLobby?.Competitive == true;
+            CreatedLobbyCompetitiveDowngraded =
+                CompetitiveCheck.IsChecked == true && !CreatedLobbyIsCompetitive;
             DialogResult = true;
             Close();
         }

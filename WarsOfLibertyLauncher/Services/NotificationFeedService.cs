@@ -240,6 +240,44 @@ public sealed class NotificationFeed
     [JsonPropertyName("mods")]
     public Dictionary<string, NotificationFeedMod> Mods { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The maintainer's own announcements — news about the launcher rather than about any mod.
+    ///
+    /// <para>This is what turns "join the Discord to see my announcements" around: the launcher
+    /// tells the player, and Discord carries the detail. A link they have to remember to click
+    /// only reaches the people who were already going to look.</para>
+    ///
+    /// <para>Absent on an older feed, which deserialises to an empty list — the same
+    /// forward-compatibility the schema's <see cref="Version"/> field was added for.</para>
+    /// </summary>
+    [JsonPropertyName("announcements")]
+    public List<NotificationFeedAnnouncement> Announcements { get; set; } = new();
+}
+
+/// <summary>One published announcement.</summary>
+public sealed class NotificationFeedAnnouncement
+{
+    /// <summary>
+    /// The dedup key, chosen by whoever wrote the announcement. Without one the same item would
+    /// bell on every poll forever, so the server drops entries that lack it rather than passing
+    /// them on.
+    /// </summary>
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = "";
+
+    [JsonPropertyName("body")]
+    public string Body { get; set; } = "";
+
+    /// <summary>
+    /// Where "read more" goes. Empty falls back to the project's Discord, which is the point of
+    /// the whole thing — the bell is the notice, the conversation is over there.
+    /// </summary>
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = "";
 }
 
 /// <summary>One mod's entry in the <see cref="NotificationFeed"/>.</summary>

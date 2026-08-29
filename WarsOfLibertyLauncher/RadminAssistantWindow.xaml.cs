@@ -314,6 +314,7 @@ public partial class RadminAssistantWindow : Window
         Step4Title.Text = Strings.Get("RadAsstStep4Title");
         DontShowAgainCheck.Content = Strings.Get("RadAsstDontShowAgain");
         CloseBtn.Content = Strings.Get("RadAsstClose");
+        SupportLinkHost.Content = Controls.SupportLink.Build();
         CopyNetworkBtn.ToolTip = Strings.Get("RadAsstCopyNetwork");
     }
 

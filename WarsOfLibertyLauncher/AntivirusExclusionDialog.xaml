@@ -81,6 +81,13 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
 
+        <!-- Filled in code-behind by Controls.SupportLink.Build. Here because this dialog
+             hands the player a set of Windows Security steps and then stops: if they cannot
+             follow them, there was nowhere at all to ask. -->
+        <ContentControl x:Name="SupportLinkHost"
+                        HorizontalAlignment="Left"
+                        Margin="0,0,0,16"/>
+
         <CheckBox x:Name="DontShowAgainCheck"
                   FontSize="{StaticResource FontSizeBody}"
                   Margin="0,0,0,16"/>

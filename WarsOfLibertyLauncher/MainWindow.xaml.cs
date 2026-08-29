@@ -457,22 +457,52 @@ public partial class MainWindow : Window
                     // launch the WRONG game (hosted a WoL room while AoE3 active →
                     // it opened AoE3). Resolve purely from this room mod's folder
                     // and don't write the result back to the shared cache.
-                    var proc = GameLauncher.LaunchAndWatch(
-                        _config, installPath, profile, onExited,
+                    // The exit is reported through onExited by GameLauncher, whichever signal
+                    // gets there first — the wrapper below only adds what MainWindow owns.
+                    var launch = GameLauncher.LaunchAndWatch(
+                        _config, installPath, profile,
+                        (s, e) =>
+                        {
+                            onExited(s, e);
+                            // AFTER the multiplayer handler, never before: that is what defers
+                            // the modal until the game is closed, so it cannot steal focus from
+                            // an AoE3 that is still on screen. Same rule the dashboard follows.
+                            Dispatcher.InvokeAsync(OfferPendingCompatLayerFix);
+                        },
                         extraArgs: extraArgs, trustConfigCache: false);
+
+                    // Windows demanded admin for this exe, which on AoE3 means a compatibility
+                    // layer the player can remove in one click. Until now that offer hung off
+                    // the DASHBOARD's exit handling only, so somebody who just plays multiplayer
+                    // paid the UAC prompt every single launch — and silently lost the
+                    // re-parenting and the exit watcher with it — and was never told there was
+                    // anything to fix.
+                    if (launch.NeededElevation) _pendingCompatLayerExe = launch.ExePath;
 
                     // Record the ROOM's mod as last played — that's the game that
                     // actually started, which needn't be the mod on the dashboard.
                     // Only the play stamp: deliberately NOT ActiveModId, or a
                     // multiplayer match would yank the dashboard to another mod
                     // mid-session (and desync _updateService from the config).
-                    if (proc != null) MarkModPlayed(profile.Id);
-                    return proc;
+                    if (!launch.Failed) MarkModPlayed(profile.Id);
+                    return launch;
+                }
+                catch (Services.GameLaunchCancelledException cancelled)
+                {
+                    // Declining the prompt is a DECISION, not a failure — the same rule the
+                    // dashboard already follows. It used to fall into the catch below and vanish
+                    // into a log line, so saying "no" to UAC in multiplayer did nothing visible
+                    // at all. Arm the offer that removes the reason the prompt appeared.
+                    DiagnosticLog.Write(
+                        "MultiplayerTab launch hook: the user declined the elevation prompt.");
+                    _pendingCompatLayerExe = cancelled.ExePath;
+                    Dispatcher.InvokeAsync(OfferPendingCompatLayerFix);
+                    return default;
                 }
                 catch (Exception ex)
                 {
                     DiagnosticLog.Write($"MultiplayerTab launch hook: {ex.Message}");
-                    return null;
+                    return default;
                 }
             },
             // Switch-active-mod hook. Used by the multiplayer join
@@ -2691,6 +2721,17 @@ public partial class MainWindow : Window
         // Connectivity: informational only — nothing to navigate to.
         if (item.Kind == NotificationKind.Connectivity)
             return;
+
+        // An announcement has nowhere in the launcher to go, so its TargetId carries a URL and
+        // clicking it leaves the app. An empty one falls back to the Discord — the bell is the
+        // notice, the conversation is over there. Above the profile lookup below, because there
+        // is no mod attached to it.
+        if (item.Kind == NotificationKind.Announcement)
+        {
+            if (!string.IsNullOrWhiteSpace(item.TargetId)) Services.SafeUrl.TryOpen(item.TargetId);
+            else Controls.SupportLink.Open();
+            return;
+        }
 
         // New room created: open Multiplayer → Rooms (before the profile guard,
         // since a room's mod need not resolve to a catalog profile here).
@@ -5555,6 +5596,20 @@ public partial class MainWindow : Window
             {
                 popup.IsOpen = false;
                 ShowAboutDialog();
+            }));
+
+        // The project's Discord. Here because this menu is the launcher's own — reachable from
+        // every tab, from the first second, without the player having to already suspect that a
+        // support channel exists. Before this there was NO route from the app to the project at
+        // all: not a repo link, not a "report a bug", nothing.
+        content.Children.Add(BuildSettingsRow(
+            glyph: "",   // Message — the same glyph the Workshop uses for a Discord link
+            label: Strings.Get("BrandMenuCommunity"),
+            subtitle: Strings.Get("BrandMenuCommunitySubtitle"),
+            click: () =>
+            {
+                popup.IsOpen = false;
+                Controls.SupportLink.Open();
             }));
 
         content.Children.Add(BuildSettingsDivider());
@@ -11247,10 +11302,26 @@ public partial class MainWindow : Window
         // all ("I press play and nothing happens").
         if (diedOnItsOwn) WarnGameClosedImmediately();
 
-        // The launch we just finished had to elevate. Now — with nothing running and the
-        // user back at the launcher — is the moment to offer to undo the compat layer
-        // behind it. Deliberately not at launch time: a modal over a game that is opening
-        // steals focus and can knock AoE3 out of fullscreen.
+        OfferPendingCompatLayerFix();
+    }
+
+    /// <summary>
+    /// If the launch that just ended had to elevate, offer to undo the compatibility layer
+    /// behind it — now, with nothing running and the user back at the launcher.
+    ///
+    /// <para><b>Deliberately not at launch time:</b> a modal over a game that is opening steals
+    /// focus and can knock AoE3 out of fullscreen.</para>
+    ///
+    /// <para>Its own method because there are two ways a game ends now. It used to be inline in
+    /// the dashboard's exit handler, which meant a player who only ever launched from
+    /// multiplayer could not reach it at all — so they paid the UAC prompt on every launch, and
+    /// silently lost the re-parenting and the exit watcher along with it, with nothing on screen
+    /// ever mentioning that a one-click fix existed.</para>
+    ///
+    /// <para>Consumes the pending exe, so it is safe to call from both and fires once.</para>
+    /// </summary>
+    private void OfferPendingCompatLayerFix()
+    {
         var pending = _pendingCompatLayerExe;
         _pendingCompatLayerExe = null;
         if (pending != null) MaybeOfferCompatLayerFix(pending);
@@ -12437,6 +12508,11 @@ public partial class MainWindow : Window
             }
         }
 
+        // Before the per-mod loop, and independent of it: an announcement is about the project,
+        // not about anything the player has installed. A 304 still hands back the cached feed,
+        // so this keeps working on the cheap path.
+        if (feed != null) MaybeNotifyAnnouncements(feed);
+
         var activeId = _updateService.Profile.Id;
         foreach (var profile in ModRegistry.All)
         {
@@ -12623,6 +12699,33 @@ public partial class MainWindow : Window
     /// afterwards only genuinely-new ids bell. The detect-only stock game is excluded;
     /// the WoL built-in is caught by the first-run baseline. Never throws.
     /// </summary>
+    /// <summary>
+    /// Bell anything the project has published that this launcher has not already shown.
+    ///
+    /// <para>The whole point of the feature: instead of asking players to remember to go and read
+    /// a Discord, the launcher brings the notice to them and the link carries the detail.</para>
+    ///
+    /// <para><b>The baseline seed is what makes it bearable.</b> The first read must record
+    /// everything already published WITHOUT belling it, or the day somebody installs the launcher
+    /// they are handed the entire back catalogue at once. Same rule the catalog listing and the
+    /// translation index each had to learn.</para>
+    /// </summary>
+    private void MaybeNotifyAnnouncements(NotificationFeed feed)
+    {
+        try
+        {
+            var published = feed.Announcements;
+            if (published == null || published.Count == 0) return;
+            if (_notifications.SeedAnnouncementBaseline(published.Select(a => a.Id))) return;
+            foreach (var a in published)
+                _notifications.RaiseAnnouncement(a.Id, a.Title, a.Body, a.Url);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Announcement notification sweep failed: {ex.Message}");
+        }
+    }
+
     private void MaybeNotifyNewMods()
     {
         try

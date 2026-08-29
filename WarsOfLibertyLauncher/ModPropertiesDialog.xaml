@@ -490,6 +490,15 @@
                                 MinWidth="220"
                                 Margin="0,6,0,0"
                                 Click="ShareDiagnosticsBtn_Click"/>
+                        <!-- Filled in code-behind by Controls.SupportLink.Build. The button
+                             above already tells the player, in its tooltip, to attach the zip
+                             to a bug report on Discord — and until now gave them no way to get
+                             there. A permanent row rather than a popup after the export: the
+                             Explorer window with the file selected has just opened, and a modal
+                             over it would interrupt exactly the thing they asked for. -->
+                        <ContentControl x:Name="SupportLinkHost"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,10,0,0"/>
 
                         <Border Style="{StaticResource DialogDivider}"/>
 

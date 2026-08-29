@@ -27,6 +27,54 @@ namespace WarsOfLibertyLauncher.Services;
 public readonly record struct GameLaunchResult(string ExePath, bool NeededElevation, int ProcessId);
 
 /// <summary>
+/// What a <see cref="GameLauncher.LaunchAndWatch"/> did — the multiplayer sibling of
+/// <see cref="GameLaunchResult"/>.
+///
+/// <para><b>Why this replaced a bare <c>Process?</c>.</b> The elevated fallback returned a
+/// perfectly ordinary-looking Process object with no exit watcher attached to it, so every
+/// caller read it as full success and nothing downstream could tell the difference. That one
+/// silent degradation switched off the entire post-match pipeline — the recording was never
+/// read, the match never reported, <c>game_ended</c> never sent — and left the player with no
+/// way to reach the one-click fix for its cause, because that offer hangs off the dashboard's
+/// own exit handling. A type that has to be unpacked is what makes the degraded path
+/// impossible to mistake for the good one.</para>
+/// </summary>
+/// <param name="Process">
+/// A handle on the game when we have one. Null is not failure here: the game can be running
+/// detached with the watcher attach having lost a race, which is why <paramref name="ProcessId"/>
+/// is carried separately.
+/// </param>
+/// <param name="ProcessId">
+/// The pid, or <c>-1</c> when the OS handed none back. This is what lets the exit be watched
+/// by polling even when there is no Process object and no event — and, as
+/// <see cref="GameLaunchResult.ProcessId"/> explains at length, why the pid rather than the
+/// executable name: Wars of Liberty and the stock game both run <c>age3y.exe</c>.
+/// </param>
+/// <param name="ExePath">The executable that was actually launched.</param>
+/// <param name="NeededElevation">
+/// Windows demanded admin for this exe. On AoE3 that means a compatibility layer the player
+/// can remove — see <see cref="AppCompatLayerService"/>. Surfaced here so the multiplayer
+/// path can offer that fix too; before this it was reachable only from the dashboard, so a
+/// player who only played multiplayer paid the UAC prompt on every single launch and was
+/// never told there was anything to fix.
+/// </param>
+/// <param name="ExitWatcherAttached">
+/// Whether <c>Process.Exited</c> is actually wired. False on the elevated path. The exit is
+/// reported regardless — <see cref="GameExitWatcher"/> polls as well — so this is for
+/// diagnosis, not for deciding whether to watch.
+/// </param>
+public readonly record struct WatchedLaunch(
+    System.Diagnostics.Process? Process,
+    int ProcessId,
+    string ExePath,
+    bool NeededElevation,
+    bool ExitWatcherAttached)
+{
+    /// <summary>Nothing started at all — as opposed to "started, but degraded".</summary>
+    public bool Failed => Process == null && ProcessId <= 0;
+}
+
+/// <summary>
 /// The user declined the UAC prompt, so the game never started.
 ///
 /// This exists to keep a DECISION from being reported as a failure: the raw

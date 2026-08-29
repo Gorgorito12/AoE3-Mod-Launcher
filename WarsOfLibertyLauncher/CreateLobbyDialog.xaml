@@ -732,6 +732,47 @@
                     </Grid>
                 </Border>
 
+                <!-- Competitive. Declared BEFORE the game, and never afterwards: a host who
+                     could tick this once he knew he had won would be choosing his own rating.
+                     The hint is deliberately long and permanent rather than a dialog that can
+                     be clicked away — everything it lists is a restriction the player is
+                     agreeing to, and the one that surprises people is not being able to walk
+                     out freely. -->
+                <Border x:Name="CompetitiveBox"
+                        Margin="0,10,0,0"
+                        Padding="12,11"
+                        CornerRadius="{StaticResource RadiusRow}"
+                        Background="{DynamicResource MpPrivateSoftBg}"
+                        BorderBrush="{DynamicResource MpPrivateRim}"
+                        BorderThickness="1">
+                    <CheckBox x:Name="CompetitiveCheck"
+                              Style="{StaticResource MpPrivateCheck}"
+                              Checked="CompetitiveCheck_Changed"
+                              Unchecked="CompetitiveCheck_Changed">
+                        <StackPanel>
+                            <TextBlock x:Name="CompetitiveTitleText"
+                                       Foreground="{DynamicResource MpPrivateTitle}"
+                                       FontSize="{StaticResource MpBodySize}"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock x:Name="CompetitiveHint"
+                                       Foreground="{DynamicResource MpPrivateSub}"
+                                       FontSize="{StaticResource MpLabelSize}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,3,0,0"/>
+                            <!-- Only when the chosen size cannot ever score. It informs, it
+                                 does not forbid: the room is still perfectly playable, it just
+                                 will not rate, and finding that out afterwards is the bad
+                                 outcome this avoids. -->
+                            <TextBlock x:Name="CompetitiveSizeNote"
+                                       Visibility="Collapsed"
+                                       Foreground="{DynamicResource MpCautionText}"
+                                       FontSize="{StaticResource MpLabelSize}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </CheckBox>
+                </Border>
+
                 <!-- Recording warning. Here, BEFORE the match: once it is over there is
                      nothing left to fix, and this is the most common reason a match that
                      was actually played ends up counting for nobody. -->

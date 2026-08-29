@@ -2265,12 +2265,25 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   multiplayer** (the dashboard `Launch` fallback already used `UseShellExecute=true`, so it at
   least prompted UAC and launched — the MP path was strictly worse). Now the fallback wraps
   `process.Start()` and, on a 740, RETRIES with `UseShellExecute=true` so the game launches
-  (with the UAC Windows imposes). **Load-bearing trade-off:** the retried path loses the exit
-  watcher — a medium-IL launcher can't open a handle to a higher-integrity child, so
-  `Process.Exited` / the cancel-leave `Kill(entireProcessTree)` won't fire for the elevated
-  game; the game starting matters more, and the caller gets a best-effort `Process` (enough for
-  the last-played stamp). It only engages when BOTH the reparent AND the watched launch fail on
-  elevation, so normal `asInvoker` mods (WoL/IM/SoI) keep the reparented watched launch untouched.
+  (with the UAC Windows imposes). It only engages when BOTH the reparent AND the watched launch
+  fail on elevation, so normal `asInvoker` mods (WoL/IM/SoI) keep the reparented watched launch
+  untouched.
+  **CORRECTION — this bullet used to call the lost exit watcher an acceptable trade ("the game
+  starting matters more, and the caller gets a best-effort `Process`, enough for the last-played
+  stamp"). That badly understated it.** `Process.Exited` was the ONLY trigger for
+  `OnGameExitedAsync`, and the multiplayer path had no polling backstop — so losing it did not
+  cost the tree-kill, it switched off **the entire post-match pipeline**, silently: no recording
+  read, no match reported, no `game_ended` sent (the room and its Discord embed stuck "In game"),
+  and `_matchContext` leaking into the next match. A real player's bundle showed **three launches
+  and not one game-exit handler run**; had he hosted, none of his matches would have been
+  reported at all. And it fed itself, because the offer to remove the compat layer causing the
+  elevation hung off the DASHBOARD's exit handling, so a multiplayer-only player could never
+  reach it. **What is actually lost now is only `Kill(entireProcessTree)`** —
+  `Services/GameExitWatcher.cs` reports the exit by polling when the event cannot fire, and the
+  compat offer reaches multiplayer via `MainWindow.OfferPendingCompatLayerFix`. See the
+  exit-detection bullet in `.claude/rules/multiplayer.md`. `LaunchAndWatch` also returns a
+  `WatchedLaunch` rather than a bare `Process?`, because a non-null process with no watcher on it
+  is exactly what made this invisible for so long.
 
 - **Declining the UAC prompt is a DECISION, not a failure — and `StartReparented` must log
   WHY it failed.** Two small gaps that together made the compat-layer bug above cost an hour
@@ -2574,6 +2587,58 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   appends `OverrideAddress="<ip>"` exactly like the mods. Like WoL, the entry is
   mirrored in the catalog repo (`mods/aoe3-tad/mod.json`) for the public listing, but
   the built-in **shadows** it at runtime (built-in wins on id collision).
+
+- **ANNOUNCEMENTS ride the notification feed into the bell, which inverts "join the Discord to
+  see my announcements" into "the launcher tells you, and Discord has the detail".** A link the
+  player has to remember to click only ever reaches the people who were already going to look.
+  The pieces all existed: `NotificationFeedService`, the bell, and `SafeUrl`.
+  **Publishing one is a COMMIT to `announcements.json` in this repo** — no deploy — which the
+  notifier (`notifier-server`, a separate repo) republishes in the manifest every launcher
+  already fetches. `NotificationKind.Announcement` is mod-less, like `LauncherUpdate` and
+  `Connectivity`, so its branch in `NavigateToNotification` must sit ABOVE the
+  `ModRegistry.Find(item.ModId)` guard. Its `TargetId` carries a URL rather than an id, because
+  clicking it leaves the app; an empty one falls back to the Discord.
+  **Three things are load-bearing, and each is a silent total failure if missed:**
+  (1) **The server's `computeEtag` must hash the announcements.** Launchers read the feed with
+  `If-None-Match`, so the ETag alone decides whether anybody ever sees a change — leave them out
+  and every launcher gets a `304` forever and no announcement is ever delivered, with the service
+  looking perfectly healthy. Pinned by the notifier's own `manifest.test.ts`.
+  (2) **`SeedAnnouncementBaseline` on the first read**, or the day somebody installs the launcher
+  they are handed the entire back catalogue at once — the same trap the catalog listing and the
+  translation index each had to solve.
+  (3) **A `DataTrigger` for the new kind in `MainWindow.xaml`'s badge style.** A kind with no
+  trigger falls back to the default bell glyph in silence, so project news would read as an
+  ordinary update.
+  An `id` is permanent: changing one re-announces to everybody, reusing one silently suppresses
+  the new item for everyone who saw the old. Pinned by the announcement cases in
+  `NotificationCenterTests`.
+
+- **The project's Discord has ONE owner on each side — `LauncherConfig.SupportDiscordUrl`
+  (a `const`, like `PrivacyPolicyUrl`) and `Controls/SupportLink` — and WHERE it appears is
+  the whole design.** Before this there was no route from the app to the project at all: no
+  Discord, no repo link, no "report a bug". The word "Discord" appeared in the entire UI
+  exactly once outside the sign-in flow, in a TOOLTIP telling the player to attach their
+  diagnostics zip to a bug report there, with nothing to click.
+  **A support link in an About box is the version that does not work** — it asks the player to
+  remember it exists at the moment they least need it. So the pill lives where the launcher has
+  just told somebody something went wrong and then stopped: `AntivirusExclusionDialog` (which
+  hands them Windows Security's own menus and no way to ask), `CompatibilityLayerDialog`
+  (whose no-remove branch answers "review it yourself in Properties"), `RadminAssistantWindow`
+  (the "Help connecting" button, whose last step is "verify it yourself in Radmin"), and beside
+  the diagnostics button that already promised Discord. Plus one always-reachable entry in the
+  brand menu, which is the launcher's own menu.
+  **`SupportLink.Build()` is a shared builder for a reason**: five copies of "glyph, label,
+  tooltip, open" is five things that drift, and the one most likely to be lost is the tooltip —
+  which carries the FULL url, the same anti-phishing measure the mod link pills make. It reuses
+  `ModLinkPill` and `ModLink.GlyphFor(ModLinkType.Discord)` so it reads as the same kind of
+  thing as a mod's own links, and it opens through `SafeUrl.TryOpen`.
+  **Two moments are deliberately still missing, and both need a slot that does not exist**: an
+  install failure (`ProgressPanel` collapses its action row, because install passes no `retry:`)
+  and a multiplayer error (`MpAlertOverlay`'s card has no room for a second button). Half-fitting
+  a link into either would be worse than the honest gap. Pinned by `SupportLinkTests` — a URL
+  `SafeUrl` refuses would not break the build, would not throw, and would just silently do
+  nothing in five places at once — and by `DialogXamlTests.SupportLink_Builds`, since a
+  code-built control is checked by nothing at compile time.
 
 - **EVERY url the launcher didn't author goes through `Services/SafeUrl.cs` — never
   `Process.Start` directly. That's the whole anti-abuse story for mod-supplied links.**
@@ -4319,6 +4384,16 @@ engine** and the UI binds to it.
    Everything the recording can't answer stays a 0.5 draw, which the History row
    renders as no badge at all rather than as "Draw". Replay UPLOAD remains
    scaffolded/not surfaced.
+   **Rating is opt-in per ROOM**: only a room created with the *competitive* box
+   ticked can score, and in one the launcher confirms Record Game before every
+   start, holds the host in the room until the result is sent, and looks harder for
+   the recording. Walking out of one after five minutes is a forfeit, decided by the
+   server. Both the competitive gate and the abandonment rule have their own bullets
+   in `.claude/rules/multiplayer.md` — read them before touching either; the second
+   is the only rule in the project that moves rating from an absence of evidence.
+   ("Host-only" above now has one narrow, documented exception: the player the room
+   promotes mid-match in a competitive room, or a host could dodge by closing his
+   launcher.)
 
 ### Multi-mod profile system
 

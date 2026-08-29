@@ -251,6 +251,7 @@ public partial class ModPropertiesDialog : Window
         ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
         SetTip(ViewLogsBtn, "TooltipMenuViewLogs");
         ShareDiagnosticsBtn.Content = Strings.Get("ModPropShareDiagnostics");
+        SupportLinkHost.Content = Controls.SupportLink.Build();
         SetTip(ShareDiagnosticsBtn, "TipMpShareDiagnostics");
         LblDangerZone.Text = Strings.Get("ModPropDangerZone");
         LblDangerZoneDesc.Text = Strings.Get("ModPropDangerZoneDesc");

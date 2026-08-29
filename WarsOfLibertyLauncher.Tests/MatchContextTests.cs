@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
@@ -31,9 +31,10 @@ public class MatchContextTests
         string? lobbyId = "lobby-1",
         string? modId = "wol",
         string? me = Me,
-        bool isHost = true)
+        bool isHost = true,
+        bool isCompetitive = false)
         => MatchContext.Capture(
-            members ?? new[] { Me, Rival }, lobbyId, modId, me, isHost, Started);
+            members ?? new[] { Me, Rival }, lobbyId, modId, me, isHost, Started, isCompetitive);
 
     // ---------- Capture ----------
 
@@ -225,5 +226,63 @@ public class MatchContextTests
 
         Assert.Equal(1.0, decision.Result);
         Assert.Equal(0.0, MatchResultResolver.ParticipantResult(decision.Result!.Value, isHost: false));
+    }
+
+    // ---------- Competitive ----------
+
+    /// <summary>
+    /// The flag has to be IN the snapshot, because everything that reads it runs after the game
+    /// has closed — by which time the room may be gone, which is this whole type's premise. It
+    /// decides how patiently the recording is read and whether the host is held in the room, and
+    /// both are facts about the match that was played rather than about the room as it stands.
+    /// </summary>
+    [Fact]
+    public void CompetitivenessIsCapturedWithEverythingElse()
+    {
+        Assert.True(Match(isCompetitive: true).IsCompetitive);
+        Assert.False(Match().IsCompetitive);
+    }
+
+    /// <summary>
+    /// A casual match by default. If the flag ever fails to reach <c>Capture</c>, the match is
+    /// treated as ordinary — no hold, no extra patience — which is the harmless direction to be
+    /// wrong in.
+    /// </summary>
+    [Fact]
+    public void TheDefaultIsCasual()
+        => Assert.False(MatchContext.Capture(
+            new[] { Me, Rival }, "lobby-1", "wol", Me, isHost: true, Started).IsCompetitive);
+
+    /// <summary>
+    /// Losing the host role still silences us, and gaining it back does not resurrect anything by
+    /// accident — the two are separate calls, and only the competitive path makes the second one.
+    /// </summary>
+    [Fact]
+    public void HostLostAndHostGainedAreOppositesAndChangeNothingElse()
+    {
+        var ctx = Match(isCompetitive: true);
+        var demoted = ctx.WithHostLost();
+        var promoted = demoted.WithHostGained();
+
+        Assert.False(demoted.CanReport(Started.AddMinutes(20), 180).Ok);
+        Assert.True(promoted.CanReport(Started.AddMinutes(20), 180).Ok);
+        // Everything else survives the round trip: it is the same match either way.
+        Assert.Equal(ctx.Participants, promoted.Participants);
+        Assert.Equal(ctx.LobbyId, promoted.LobbyId);
+        Assert.Equal(ctx.StartedAtUtc, promoted.StartedAtUtc);
+        Assert.True(promoted.IsCompetitive);
+    }
+
+    /// <summary>
+    /// The negative that matters, extended to the new field: <see cref="MatchContext.CanReport"/>
+    /// still takes no parameter through which live room state could enter, so a room that closed
+    /// mid-match cannot change whether — or how — this match is reported.
+    /// </summary>
+    [Fact]
+    public void CompetitivenessCannotBeChangedByAnythingThatHappensLater()
+    {
+        var ctx = Match(isCompetitive: true);
+        Assert.True(ctx.IsCompetitive);
+        Assert.True(ctx.CanReport(Started.AddMinutes(20), 180).Ok);
     }
 }

@@ -51,6 +51,13 @@
                        TextWrapping="Wrap"/>
         </Border>
 
+        <!-- Filled in code-behind by Controls.SupportLink.Build. It matters most in the
+             branch where the Remove button is hidden, whose entire answer today is "review it
+             yourself in Properties -> Compatibility". -->
+        <ContentControl x:Name="SupportLinkHost"
+                        HorizontalAlignment="Left"
+                        Margin="0,0,0,16"/>
+
         <CheckBox x:Name="DontAskCheck"
                   FontSize="{StaticResource FontSizeCaption}"
                   Margin="0,0,0,18"/>

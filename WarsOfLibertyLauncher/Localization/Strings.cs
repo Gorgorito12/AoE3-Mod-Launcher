@@ -835,6 +835,26 @@ public static class Strings
             [LangEn] = "Version and credits",
             [LangEs] = "Versión y créditos",
         },
+        // The project's Discord, in the launcher's own menu. It sits between About and Exit
+        // because it belongs to the same family — things about the launcher rather than about a
+        // mod — and because it is the only always-reachable route to a human.
+        ["BrandMenuCommunity"] = new()
+        {
+            [LangEn] = "Discord community",
+            [LangEs] = "Comunidad de Discord",
+        },
+        ["BrandMenuCommunitySubtitle"] = new()
+        {
+            [LangEn] = "Support, news and people to play with",
+            [LangEs] = "Soporte, novedades y gente con quien jugar",
+        },
+        // Every place this pill appears is a place where something has already gone wrong, so
+        // it asks the player's question back at them rather than advertising a server.
+        ["SupportDiscordHelpLabel"] = new()
+        {
+            [LangEn] = "Need help? Ask on Discord",
+            [LangEs] = "¿Necesitas ayuda? Pregunta en Discord",
+        },
         ["BrandMenuExit"] = new()
         {
             [LangEn] = "Exit",
@@ -3431,6 +3451,13 @@ public static class Strings
             [LangEs] = "Este mod todavía no tiene clasificación, así que la partida no contó "
                      + "para el ELO de nadie. Igualmente queda en tu historial.",
         },
+        ["MpResultUnratedNotCompetitive"] = new()
+        {
+            [LangEn] = "This room wasn't a competitive one, so the match counted towards nobody's "
+                     + "rating. It is in your history all the same.",
+            [LangEs] = "Esta sala no era competitiva, así que la partida no contó para el ELO de "
+                     + "nadie. Igualmente queda en tu historial.",
+        },
         ["MpResultUnratedDuplicate"] = new()
         {
             [LangEn] = "This recording had already been reported, so it did not count a second "
@@ -3609,6 +3636,44 @@ public static class Strings
             [LangEn] = "A private room isn't announced (on Discord or in-app) and needs the password to join.",
             [LangEs] = "Una sala privada no se anuncia (ni en Discord ni como aviso) y se une con la contraseña.",
         },
+        // Competitive. The hint is long on purpose: everything it lists is a restriction the
+        // host is agreeing to, and the one that surprises people is not being able to walk out
+        // freely. Better read once here than discovered at the worst moment.
+        ["MpCreateDialogCompetitive"] = new()
+        {
+            [LangEn] = "Competitive room (counts towards the rating)",
+            [LangEs] = "Sala competitiva (cuenta para el ELO)",
+        },
+        ["MpCreateDialogCompetitiveHint"] = new()
+        {
+            [LangEn] = "Only matches played in a competitive room count towards anyone's rating. "
+                     + "In exchange the launcher gets strict: it asks you to confirm Record Game "
+                     + "before the countdown, it won't let you leave the room until the result "
+                     + "has been sent, and walking out after the first five minutes counts as a "
+                     + "loss.",
+            [LangEs] = "Solo las partidas de una sala competitiva cuentan para el ELO. A cambio "
+                     + "el launcher se pone estricto: te pide confirmar «Record Game» antes de "
+                     + "la cuenta atrás, no te deja salir de la sala hasta enviar el resultado, "
+                     + "y si abandonas después de los primeros cinco minutos cuenta como "
+                     + "derrota.",
+        },
+        // Shown only when the chosen size can never score. It informs; it does not forbid.
+        ["MpCreateDialogCompetitiveSizeNote"] = new()
+        {
+            [LangEn] = "Only one-on-one matches score. With more than two players the room plays "
+                     + "perfectly well — it just won't count towards anyone's rating.",
+            [LangEs] = "Solo el 1v1 puntúa. Con más de 2 jugadores la sala se juega igual, pero "
+                     + "no va a contar para el ELO de nadie.",
+        },
+        // The server refused the competitive room and made a casual one. Saying nothing would
+        // leave the host playing as if their rating were on the line when it is not.
+        ["MpCreateDialogCompetitiveDowngraded"] = new()
+        {
+            [LangEn] = "This mod has no ladder yet, so the room was created as a normal one — "
+                     + "the match won't count towards anyone's rating.",
+            [LangEs] = "Este mod todavía no tiene clasificación, así que la sala se creó como "
+                     + "normal: la partida no va a contar para el ELO.",
+        },
         ["MpCreateDialogModLabel"] = new()
         {
             [LangEn] = "Mod",
@@ -3696,6 +3761,73 @@ public static class Strings
         {
             [LangEn] = "{0} room",
             [LangEs] = "Sala de {0}",
+        },
+        // Asked before EVERY competitive start, not once per room: AoE3's own Record Game box
+        // comes up unticked for each match and the launcher cannot tick it. This is the last
+        // moment the player is looking at us rather than at the game.
+        ["MpStartConfirmRecordTitle"] = new()
+        {
+            [LangEn] = "Before you start",
+            [LangEs] = "Antes de empezar",
+        },
+        ["MpStartConfirmRecordBody"] = new()
+        {
+            [LangEn] = "When the game opens, tick Record Game on the match setup screen. It is a "
+                     + "box inside Age of Empires III that comes up unticked every single match, "
+                     + "and the launcher can't tick it for you. Without a recording there is no "
+                     + "way to tell who won, and the match won't score.",
+            [LangEs] = "Cuando abra el juego, marca «Record Game» en la pantalla de la partida. "
+                     + "Es una casilla del propio Age of Empires III que vuelve desmarcada en "
+                     + "cada partida, y el launcher no puede activarla por ti. Sin grabación no "
+                     + "hay forma de saber quién ganó, y la partida no puntúa.",
+        },
+        ["MpStartConfirmRecordYes"] = new()
+        {
+            [LangEn] = "Got it — start",
+            [LangEs] = "Entendido, empezar",
+        },
+        ["MpStartConfirmRecordNo"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
+        // Held, not asked: leaving here hands the host role to the opponent and the server then
+        // refuses the report outright, so there is no upside to weigh against.
+        ["MpLeaveBlockedTitle"] = new()
+        {
+            [LangEn] = "One moment",
+            [LangEs] = "Espera un momento",
+        },
+        ["MpLeaveBlockedReading"] = new()
+        {
+            [LangEn] = "The recording is still being read to work out who won. Leaving now would "
+                     + "cost both players the result.",
+            [LangEs] = "Estamos leyendo la grabación para saber quién ganó. Si sales ahora, la "
+                     + "partida no va a contar para ninguno de los dos.",
+        },
+        ["MpLeaveBlockedReporting"] = new()
+        {
+            [LangEn] = "The result is on its way to the server. Leaving now makes it refuse the "
+                     + "report, and the match counts for nobody.",
+            [LangEs] = "Estamos enviando el resultado. Si sales ahora el servidor lo rechaza y "
+                     + "la partida no cuenta para nadie.",
+        },
+        // Closing the launcher AFTER the game has closed but before the result is settled. The
+        // ordinary mid-match warning would be false here — nothing is running to be cut short.
+        ["MpCloseDuringResultBody"] = new()
+        {
+            [LangEn] = "The launcher is still reading the recording to work out who won. If you "
+                     + "quit now that match ends up with no result, and nothing will remember it "
+                     + "was owed one. Quit anyway?",
+            [LangEs] = "El launcher todavía está leyendo la grabación para saber quién ganó. Si "
+                     + "cierras ahora, esa partida se queda sin resultado y ya no hay forma de "
+                     + "recuperarlo. ¿Cerrar de todos modos?",
+        },
+        ["MpRoomCompetitiveBadge"] = new()
+        {
+            [LangEn] = "COMPETITIVE",
+            [LangEs] = "COMPETITIVA",
+        },
+        ["MpRoomCompetitiveTooltip"] = new()
+        {
+            [LangEn] = "Competitive room — this match counts towards the rating.",
+            [LangEs] = "Sala competitiva: esta partida cuenta para el ELO.",
         },
         ["MpCreateDialogCreate"] = new() { [LangEn] = "Create", [LangEs] = "Crear" },
         // Shown ON the Create button while the request is in flight. Without it the only

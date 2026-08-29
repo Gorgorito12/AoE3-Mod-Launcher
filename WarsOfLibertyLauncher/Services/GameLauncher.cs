@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -411,7 +411,7 @@ public static class GameLauncher
     /// <c>+mp</c>, <c>+hostmpgame</c>, <c>+joinIPaddr</c>) are NOT in
     /// age3y.exe, so they no-op silently — be careful what you add.
     /// </summary>
-    public static Process? LaunchAndWatch(
+    public static WatchedLaunch LaunchAndWatch(
         LauncherConfig config,
         string? modInstallPath,
         ModProfile profile,
@@ -465,18 +465,18 @@ public static class GameLauncher
         DiagnosticLog.Write(
             $"Launching game (watched): {exePath} (profile '{profile.Id}') args='{arguments}'");
 
-        // Wrap the caller's Exited handler so a throw inside it can't escape. This
-        // fires on a thread-pool thread (Process.Exited), so an unhandled throw
-        // there is a background crash — guard it at the single point where both
-        // launch paths attach it.
-        EventHandler safeOnExited = (s, ev) =>
-        {
-            try { onExited(s, ev); }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write($"Game Exited handler failed (ignored): {ex.Message}");
-            }
-        };
+        // ONE reporter for the exit, whichever signal arrives first — the Process.Exited
+        // event or a poll that finds the process gone. It owns the once-only guard and the
+        // throw guard (this can run on a thread-pool thread, where an escaping exception is a
+        // background crash), so neither launch path has to remember either.
+        //
+        // The pid is read through the closure rather than captured, because it is only known
+        // AFTER the launch that the watcher is built for. Every path below writes it before
+        // starting the poll.
+        int launchedPid = -1;
+        var watcher = new GameExitWatcher(
+            isAlive: () => IsGameStillRunning(Volatile.Read(ref launchedPid), exePath),
+            onExited: () => onExited(null, EventArgs.Empty));
 
         // Launch DETACHED (re-parented under explorer.exe) so a forced Task Manager
         // "End task" on the launcher doesn't cascade-kill the game mid-match. We still
@@ -488,23 +488,29 @@ public static class GameLauncher
             exePath, arguments, Path.GetDirectoryName(exePath));
         if (pid > 0)
         {
+            Volatile.Write(ref launchedPid, pid);
             try
             {
                 var watched = Process.GetProcessById(pid);
                 watched.EnableRaisingEvents = true;
-                watched.Exited += safeOnExited;
+                watched.Exited += (_, _) => watcher.SignalExited();
+                watcher.Start();
                 DiagnosticLog.Write($"Game launched detached + watched (pid {pid}).");
-                return watched;
+                return new WatchedLaunch(watched, pid, exePath,
+                    NeededElevation: false, ExitWatcherAttached: true);
             }
             catch (Exception ex)
             {
-                // The game IS running (detached); we just couldn't attach the watcher
-                // (rare race if it exited instantly). Don't fall through to a second
-                // launch — return null so the caller degrades gracefully (no exit
-                // callback) instead of spawning a duplicate game.
+                // The game IS running (detached); we just couldn't attach the watcher (rare
+                // race if it exited instantly). Don't fall through to a second launch — that
+                // would spawn a duplicate game. This used to return null and lose the exit
+                // callback with it; now the poll covers it, because we still know the pid.
                 DiagnosticLog.Write(
-                    $"Game launched detached (pid {pid}) but watcher attach failed: {ex.Message}");
-                return null;
+                    $"Game launched detached (pid {pid}) but watcher attach failed: {ex.Message}" +
+                    " — falling back to the exit poll.");
+                watcher.Start();
+                return new WatchedLaunch(null, pid, exePath,
+                    NeededElevation: false, ExitWatcherAttached: false);
             }
         }
 
@@ -525,11 +531,21 @@ public static class GameLauncher
             StartInfo = startInfo,
             EnableRaisingEvents = true,
         };
-        process.Exited += safeOnExited;
+        process.Exited += (_, _) => watcher.SignalExited();
         try
         {
-            if (!process.Start()) return null;
-            return process;
+            if (!process.Start())
+            {
+                // Nothing started, so the watcher must NOT run: its probe would find no
+                // process and report an exit for a game that never opened.
+                watcher.Dispose();
+                return new WatchedLaunch(null, -1, exePath,
+                    NeededElevation: false, ExitWatcherAttached: false);
+            }
+            Volatile.Write(ref launchedPid, SafeProcessId(process));
+            watcher.Start();
+            return new WatchedLaunch(process, Volatile.Read(ref launchedPid), exePath,
+                NeededElevation: false, ExitWatcherAttached: true);
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 740)
         {
@@ -539,13 +555,18 @@ public static class GameLauncher
             // elevate, so the un-caught throw here used to fail the multiplayer launch
             // outright (the dashboard path already degrades via ShellExecute=true). Retry
             // through ShellExecute so the game LAUNCHES (with a UAC prompt Windows imposes,
-            // not us — the launcher never touches Windows compat settings). We lose the
-            // exit watcher on this degraded path: a medium-IL launcher can't open a handle
-            // to a higher-integrity child, so Process.Exited / the cancel-leave tree-kill
-            // won't fire for the elevated game. The game starting matters more; the caller
-            // gets a best-effort process (enough for the last-played stamp).
+            // not us — the launcher never touches Windows compat settings).
+            //
+            // Process.Exited is lost here for good: a medium-IL launcher cannot open a handle
+            // on a higher-integrity child. What that used to cost was the ENTIRE post-match
+            // pipeline, silently — a real player's log showed three launches and not one
+            // game-exit handler run, so no match of his was ever reported. The poll covers it
+            // now. The cancel-leave tree-kill is still gone, and no amount of polling brings
+            // that back.
             DiagnosticLog.Write(
-                "Watched child launch needs elevation; retrying via ShellExecute (no exit watcher).");
+                "Watched child launch needs elevation; retrying via ShellExecute " +
+                "(no exit watcher — the exit poll covers it).");
+            LogCompatLayer(exePath);
             try { process.Dispose(); } catch { /* ignore */ }
 
             var elevated = new Process
@@ -560,14 +581,116 @@ public static class GameLauncher
             };
             try
             {
-                return elevated.Start() ? elevated : null;
+                if (!elevated.Start())
+                {
+                    watcher.Dispose();
+                    return new WatchedLaunch(null, -1, exePath,
+                        NeededElevation: true, ExitWatcherAttached: false);
+                }
+                Volatile.Write(ref launchedPid, SafeProcessId(elevated));
+                watcher.Start();
+                return new WatchedLaunch(elevated, Volatile.Read(ref launchedPid), exePath,
+                    NeededElevation: true, ExitWatcherAttached: false);
             }
             catch (System.ComponentModel.Win32Exception cancelled) when (cancelled.NativeErrorCode == 1223)
             {
                 // Same rule as the dashboard path: declining the prompt is a decision.
                 DiagnosticLog.Write("Multiplayer game launch cancelled by the user at the UAC prompt.");
+                watcher.Dispose();
                 throw new GameLaunchCancelledException(exePath);
             }
+        }
+    }
+
+    /// <summary>
+    /// The pid of a process we just started, or -1 when the OS did not hand one back.
+    ///
+    /// <para>Reading <c>Id</c> can throw when the shell handed the launch to an already-running
+    /// instance rather than creating a process. That is not a failure — the game may well be
+    /// running — so it degrades to "unknown pid", which the liveness probe answers by name.</para>
+    /// </summary>
+    private static int SafeProcessId(Process p)
+    {
+        try { return p.Id; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Launch: no pid available for the started process ({ex.Message}).");
+            return -1;
+        }
+    }
+
+    /// <summary>
+    /// Whether the launched game is still running. Never throws — an answer it cannot give is
+    /// reported as "still running", because the caller treats absence as the end of a match and
+    /// guessing that from a failed lookup would report a match the player is still inside.
+    ///
+    /// <para>By PID first, because the NAME is ambiguous: Wars of Liberty and the stock game
+    /// both run <c>age3y.exe</c>, so a name sweep says "still playing" while an unrelated AoE3
+    /// sits open. The sweep is only the fallback for when there is no pid at all (the elevated
+    /// ShellExecute path can fail to give one) or when the pid cannot be inspected — a
+    /// medium-integrity launcher may be refused a handle on an elevated game.</para>
+    /// </summary>
+    private static bool IsGameStillRunning(int pid, string exePath)
+    {
+        if (pid > 0)
+        {
+            try
+            {
+                using var p = Process.GetProcessById(pid);
+                return !p.HasExited;
+            }
+            catch (ArgumentException)
+            {
+                // No process with that id: the one definitive answer this can give.
+                return false;
+            }
+            catch
+            {
+                // Cannot inspect it (typically the integrity barrier). Fall through: the name
+                // sweep needs no handle.
+            }
+        }
+
+        Process[] byName;
+        try { byName = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exePath)); }
+        catch { return true; }
+
+        try { return byName.Length > 0; }
+        finally { foreach (var p in byName) { try { p.Dispose(); } catch { } } }
+    }
+
+    /// <summary>
+    /// Record WHICH compatibility layer is forcing the elevation, when one is.
+    ///
+    /// <para>The log used to only guess ("usually a compatibility layer"), so a diagnostic
+    /// bundle could not tell a layer Windows pinned itself from an executable that simply
+    /// demands admin — and those need different answers. Read-only; removing a layer is
+    /// something the user is asked about, never done here.</para>
+    /// </summary>
+    private static void LogCompatLayer(string exePath)
+    {
+        try
+        {
+            var name = Path.GetFileName(exePath);
+            var layer = AppCompatLayerService.Probe(exePath);
+            if (layer == null)
+            {
+                // Worth writing down rather than staying silent: it rules the layer OUT, which
+                // means the executable itself is asking for admin — a different problem with a
+                // different answer, and one nothing in a bundle could distinguish before.
+                DiagnosticLog.Write(
+                    $"Launch: no compatibility layer on '{name}' — the exe itself demands elevation.");
+                return;
+            }
+            var l = layer.Value;
+            DiagnosticLog.Write(
+                $"Launch: compatibility layer on '{name}': '{l.RawValue}' " +
+                $"[appliedByWindows={l.AppliedByWindows} runAsAdmin={l.HasRunAsAdmin} " +
+                $"compatMode={l.HasCompatibilityMode} hkcu={l.InCurrentUserHive}]");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Launch: could not read the compatibility layer ({ex.Message}).");
         }
     }
 }

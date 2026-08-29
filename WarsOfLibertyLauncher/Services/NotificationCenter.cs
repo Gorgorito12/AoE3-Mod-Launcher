@@ -306,6 +306,53 @@ public sealed class NotificationCenter
     /// first call (guarded by <see cref="LauncherConfig.CatalogBaselineSeeded"/>).
     /// Returns true if it seeded this call.
     /// </summary>
+    /// <summary>
+    /// News from the project itself. Not tied to a mod, like the launcher-update item.
+    ///
+    /// <para><c>TargetId</c> carries the URL rather than an id, because that is what clicking it
+    /// has to do — an announcement has nowhere in the launcher to navigate to. An empty one falls
+    /// back to the Discord at the click site, so a published announcement always leads somewhere.</para>
+    ///
+    /// <para>Deduped on the author's own id. Call <see cref="SeedAnnouncementBaseline"/> once
+    /// before the first diff, or every announcement ever published arrives at once.</para>
+    /// </summary>
+    public bool RaiseAnnouncement(string id, string title, string body, string url)
+    {
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(title)) return false;
+        if (_config.NotifiedAnnouncementIds.Contains(id, StringComparer.OrdinalIgnoreCase))
+            return false;
+        _config.NotifiedAnnouncementIds.Add(id);
+        if (_config.NotifiedAnnouncementIds.Count > 500)
+            _config.NotifiedAnnouncementIds.RemoveRange(0, _config.NotifiedAnnouncementIds.Count - 500);
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.Announcement,
+            Title = title,
+            Body = body,
+            TargetId = url ?? "",
+        });
+    }
+
+    /// <summary>
+    /// Silently record everything published so far, once. Returns true when it did the seeding,
+    /// so the caller skips its diff on that pass.
+    ///
+    /// <para>Without it, the first launcher to read the feed bells the entire back catalogue of
+    /// announcements at once — which is exactly what a notification system must never do on the
+    /// day somebody installs it.</para>
+    /// </summary>
+    public bool SeedAnnouncementBaseline(IEnumerable<string> ids)
+    {
+        if (_config.AnnouncementBaselineSeeded) return false;
+        foreach (var id in ids)
+            if (!string.IsNullOrWhiteSpace(id)
+                && !_config.NotifiedAnnouncementIds.Contains(id, StringComparer.OrdinalIgnoreCase))
+                _config.NotifiedAnnouncementIds.Add(id);
+        _config.AnnouncementBaselineSeeded = true;
+        Persist();
+        return true;
+    }
+
     public bool SeedCatalogBaseline(IEnumerable<string> modIds)
     {
         if (_config.CatalogBaselineSeeded) return false;

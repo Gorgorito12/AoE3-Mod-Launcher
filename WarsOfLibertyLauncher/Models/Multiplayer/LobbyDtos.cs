@@ -128,6 +128,13 @@ public class LobbySummary
     [JsonPropertyName("is_private")]
     public bool IsPrivate { get; set; }
 
+    /// <summary>
+    /// Whether this room's match counts towards the ladder. Read-only from the server, which
+    /// is the only side that decides it — see the note on <see cref="CreateLobbyRequest"/>.
+    /// </summary>
+    [JsonPropertyName("competitive")]
+    public bool Competitive { get; set; }
+
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
 
@@ -188,6 +195,9 @@ public class LobbyDetail
     [JsonPropertyName("is_private")]
     public bool IsPrivate { get; set; }
 
+    [JsonPropertyName("competitive")]
+    public bool Competitive { get; set; }
+
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
 
@@ -214,6 +224,16 @@ public class CreateLobbyRequest
 
     [JsonPropertyName("password")]
     public string? Password { get; set; }
+
+    /// <summary>
+    /// Ask for a competitive room. <b>A request, not a decision:</b> the server refuses it for a
+    /// mod with no ladder and creates a casual room instead, so what the room actually is comes
+    /// back on <see cref="CreateLobbyResponse.Competitive"/> and nowhere else. The launcher must
+    /// never work out which mods are ranked — that policy lives on the server, and the day the
+    /// list changes a local copy would be quietly wrong.
+    /// </summary>
+    [JsonPropertyName("competitive")]
+    public bool Competitive { get; set; }
 }
 
 public class CreateLobbyResponse
@@ -223,6 +243,10 @@ public class CreateLobbyResponse
 
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
+
+    /// <summary>What the room actually is, after the server's clamp. Trust this, not the request.</summary>
+    [JsonPropertyName("competitive")]
+    public bool Competitive { get; set; }
 }
 
 public class JoinLobbyRequest

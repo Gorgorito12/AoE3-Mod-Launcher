@@ -308,6 +308,28 @@ public class DialogXamlTests
         return null;
     }
 
+    /// <summary>
+    /// The support pill is assembled in code, so nothing checks it at compile time — the same
+    /// reason MatchResultCard is built here. It resolves four resources by name
+    /// (<c>ModLinkPill</c>, <c>AccentBrush</c>, <c>TextSecondary</c>, <c>FontSizeCaption</c>),
+    /// and a rename of any of them would throw only when a player already had something go
+    /// wrong, which is the worst possible moment to find out.
+    /// </summary>
+    [Fact]
+    public void SupportLink_Builds()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var pill = SupportLink.Build();
+            Assert.NotNull(pill.Style);
+            // The full url in the tooltip is the anti-phishing measure, not decoration: a label
+            // can claim anything, so the destination has to be visible.
+            Assert.NotNull(pill.ToolTip);
+        });
+
+        Assert.Null(error);
+    }
+
     private static Exception? RunOnStaThread(Action action)
     {
         Exception? captured = null;

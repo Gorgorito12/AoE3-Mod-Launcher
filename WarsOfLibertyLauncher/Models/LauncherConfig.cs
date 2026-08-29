@@ -513,6 +513,15 @@ public enum NotificationKind
     /// discovered by someone who happened to open their History.</para>
     /// </summary>
     MatchRated,
+
+    /// <summary>
+    /// News from the project itself, published through the notification feed.
+    ///
+    /// <para>Mod-less, like <see cref="LauncherUpdate"/> and <see cref="Connectivity"/>. It
+    /// exists so announcements reach people instead of waiting for them to remember to go
+    /// looking: the bell carries the notice, and clicking it opens where the conversation is.</para>
+    /// </summary>
+    Announcement,
 }
 
 /// <summary>
@@ -1217,6 +1226,21 @@ public class LauncherConfig
     public const string PrivacyPolicyUrl =
         "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/PRIVACY.md";
 
+    /// <summary>
+    /// The project's Discord — support and announcements.
+    ///
+    /// <para>A `const` for the same reason as <see cref="PrivacyPolicyUrl"/>: a fixed project
+    /// link, not user state. Every surface that shows it goes through
+    /// <see cref="Controls.SupportLink"/>, so the label, the glyph and the opening live in one
+    /// place rather than in each dialog that happens to want one.</para>
+    ///
+    /// <para><b>Why the launcher needed this at all.</b> There was no way to reach the project
+    /// from inside the app — no Discord, no repo, no "report a bug". The word "Discord" appeared
+    /// in the whole UI exactly once outside the sign-in flow: a tooltip telling the player to
+    /// attach their diagnostics zip to a bug report there, with nothing to click.</para>
+    /// </summary>
+    public const string SupportDiscordUrl = "https://discord.gg/WVarbzzzmc";
+
     /// <summary>UI language: "en" or "es". While <see cref="LanguageExplicitlyChosen"/>
     /// is false the launcher FOLLOWS the Windows display language on every launch
     /// (see <see cref="DefaultLanguageForCulture"/>); once the user picks a language
@@ -1582,6 +1606,20 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("notifiedCatalogModIds")]
     public List<string> NotifiedCatalogModIds { get; set; } = new();
+
+    /// <summary>
+    /// Announcement ids already belled, so one is never announced twice — across restarts, and
+    /// across the feed being re-read every few minutes. Capped like its siblings.
+    /// </summary>
+    public List<string> NotifiedAnnouncementIds { get; set; } = new();
+
+    /// <summary>
+    /// Whether the announcement baseline has been taken. Distinguishes "nothing published yet"
+    /// from "first ever read", which is what keeps the entire published backlog from arriving at
+    /// once the first time a launcher sees the feed — the same trap the catalog listing and the
+    /// translation index both had to solve.
+    /// </summary>
+    public bool AnnouncementBaselineSeeded { get; set; }
 
     /// <summary>
     /// True once the catalog "new mod" baseline has been seeded (see

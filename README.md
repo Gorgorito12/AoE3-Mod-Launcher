@@ -96,6 +96,12 @@ write a protected location (the update flow can auto-resume elevated via
 
 ---
 
+## Community & support
+
+**[Join the Discord](https://discord.gg/WVarbzzzmc)** — support, announcements, and people to play against.
+It is also the fastest place to send a diagnostics bundle if something goes wrong;
+the launcher can build one for you from any mod's Properties → Diagnostics.
+
 ## Quick start (users)
 
 Download the latest `Aoe3ModLauncher.exe` from the [Releases](../../releases)

@@ -1,0 +1,25 @@
+{
+  "_readme": [
+    "Announcements shown in the launcher's notification bell.",
+    "",
+    "Publishing one is a COMMIT to this file — no deploy, no SSH. The notifier service",
+    "(github.com/Gorgorito12/notifier-server) reads it on its next poll and republishes it in",
+    "the manifest every launcher already fetches; the launcher bells anything it has not shown",
+    "before and opens 'url' when clicked.",
+    "",
+    "Each entry: { id, title, body, url?, date? }",
+    "  id     REQUIRED and PERMANENT — it is the dedup key. Never reuse one, and never edit an",
+    "         id after publishing: a changed id re-announces the item to everybody, and a reused",
+    "         one silently suppresses the new announcement for everyone who saw the old one.",
+    "  title  REQUIRED. Shown in bold in the bell row. Keep it short.",
+    "  body   One or two sentences. The bell is the notice; the link carries the detail.",
+    "  url    Where clicking goes. Omit it and the launcher opens the project's Discord, which",
+    "         is usually what you want.",
+    "  date   Informational only; ordering follows this file's own order.",
+    "",
+    "Anything without an id or a title is dropped by the server rather than published.",
+    "Newest first is the convention. Nobody is re-notified for entries already delivered, so",
+    "old ones can stay here as a record."
+  ],
+  "announcements": []
+}

@@ -176,6 +176,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0"
                                            x:Name="RoomTitleText"
@@ -185,13 +186,31 @@
                                            FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"/>
+                                <!-- Competitive badge. Beside the TITLE and not inside
+                                     RoomInfoCard, which collapses as a whole when the room has
+                                     no mod name, password or extra copy — a badge parked in
+                                     there would vanish for exactly those rooms, silently.
+                                     Painted from the room's boolean by RenderRoomPanel. -->
+                                <Border Grid.Column="1"
+                                        x:Name="RoomCompetitiveBadge"
+                                        Visibility="Collapsed"
+                                        Background="{DynamicResource MpCompetitiveBg}"
+                                        CornerRadius="4"
+                                        Padding="7,2"
+                                        Margin="10,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock x:Name="RoomCompetitiveBadgeText"
+                                               Foreground="{DynamicResource MpCompetitiveText}"
+                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontWeight="SemiBold"/>
+                                </Border>
                                 <!-- Carries the WORD, not just the pencil. As a 24x22 glyph it
                                      had a tooltip and was still not understood, which is the
                                      whole point: a symbol says something is there, only a word
                                      says what. The title beside it already ellipsises, so a long
                                      room name simply trims a little sooner. Caption is set in
                                      ApplyLobbyStaticLabels; host-only, per RenderRoomPanel. -->
-                                <Button Grid.Column="1"
+                                <Button Grid.Column="2"
                                         x:Name="RenameRoomButton"
                                         Click="RenameRoomButton_Click"
                                         Style="{StaticResource MpGhostButton}"

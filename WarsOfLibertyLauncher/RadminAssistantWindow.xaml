@@ -212,15 +212,23 @@
                     Padding="20,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <CheckBox Grid.Column="0"
+                    <!-- Filled in code-behind by Controls.SupportLink.Build. This window IS the
+                         "Help connecting" button, and its last step used to end at "verify it
+                         yourself in Radmin" with nobody to ask. -->
+                    <ContentControl Grid.Column="0"
+                                    x:Name="SupportLinkHost"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,12,0"/>
+                    <CheckBox Grid.Column="1"
                               x:Name="DontShowAgainCheck"
                               Foreground="{DynamicResource Secondary}"
                               FontSize="{StaticResource FontSizeCaption}"
                               VerticalAlignment="Center"/>
-                    <Button Grid.Column="1"
+                    <Button Grid.Column="2"
                             x:Name="CloseBtn"
                             Style="{StaticResource PrimaryButton}"
                             MinWidth="100"

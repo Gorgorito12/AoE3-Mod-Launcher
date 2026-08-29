@@ -163,6 +163,7 @@ public sealed record MatchOutcomeView(
         {
             "not_1v1" => "MpResultUnratedTeam",
             "mod_not_ranked" => "MpResultUnratedMod",
+            "not_competitive" => "MpResultUnratedNotCompetitive",
             "duplicate_recording" => "MpResultUnratedDuplicate",
             "participants_not_in_lobby" => "MpResultUnratedRoster",
             "implausible_timing" => "MpResultUnratedTiming",

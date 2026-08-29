@@ -35,6 +35,7 @@ public partial class CompatibilityLayerDialog : Window
         FileLabel.Text = Strings.Get("DlgCompatLayerFileLabel");
         FilePathText.Text = exePath;
         DontAskCheck.Content = Strings.Get("DlgCompatLayerDontAsk");
+        SupportLinkHost.Content = Controls.SupportLink.Build();
         LaterButton.Content = Strings.Get("DlgCompatLayerLater");
         PropertiesButton.Content = Strings.Get("DlgCompatLayerProperties");
         RemoveButton.Content = Strings.Get("DlgCompatLayerRemove");

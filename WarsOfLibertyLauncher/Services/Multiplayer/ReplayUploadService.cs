@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -77,6 +77,17 @@ public static class ReplayUploadService
     /// </summary>
     internal const int MaxCandidatesOpened = 12;
 
+    /// <summary>
+    /// The same ceiling for a COMPETITIVE match, where the trade-off is reversed.
+    ///
+    /// <para>The ordinary limits are tuned for the common case: almost no match is recorded, so
+    /// opening files is usually work spent learning nothing. A competitive room inverts that by
+    /// construction — the host confirmed Record Game before the countdown, so a recording SHOULD
+    /// exist — and there the seconds are worth spending, because what is at stake is somebody's
+    /// rating rather than a line in a history nobody reads.</para>
+    /// </summary>
+    internal const int MaxCandidatesOpenedCompetitive = 24;
+
     /// <summary>What a candidate turned out to be. Three states, because the third is retryable.</summary>
     public enum CandidateVerdict
     {
@@ -151,9 +162,15 @@ public static class ReplayUploadService
         string userDataDir,
         DateTime afterUtc,
         Func<FileInfo, CandidateVerdict> examine,
-        DateTime? preferBeforeUtc = null)
+        DateTime? preferBeforeUtc = null,
+        bool thorough = false)
     {
         if (examine == null) throw new ArgumentNullException(nameof(examine));
+
+        // Only the ceiling on files OPENED moves. MaxCandidatesExamined stays where it is: it
+        // counts recordings that actually parsed, and judging more than five real ones would not
+        // find a sixth answer — the right file is among the newest few or it is not there.
+        var maxOpened = thorough ? MaxCandidatesOpenedCompetitive : MaxCandidatesOpened;
 
         var parsed = 0;
         var unreadable = 0;
@@ -177,7 +194,7 @@ public static class ReplayUploadService
                 .Where(f => f.LastWriteTimeUtc >= afterUtc)
                 .OrderByDescending(f => preferBeforeUtc == null || f.LastWriteTimeUtc <= preferBeforeUtc.Value)
                 .ThenByDescending(f => f.LastWriteTimeUtc)
-                .Take(MaxCandidatesOpened);
+                .Take(maxOpened);
 
             foreach (var candidate in candidates)
             {

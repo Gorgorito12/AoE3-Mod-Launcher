@@ -45,7 +45,13 @@ public partial class MultiplayerTab : UserControl
     /// multiplayer-specific flag knowledge local to this control so
     /// MainWindow stays a dumb plumber.
     /// </summary>
-    private Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? _launchGame;
+    /// <summary>
+    /// Launch the room's game. Returns the FACTS of the launch rather than a bare process
+    /// handle: a launch can succeed with no handle to show for it (elevated, or a lost race
+    /// attaching the watcher), and reading a null there as "it didn't start" is what used to
+    /// put "couldn't open the game" in the chat of a player whose game was opening.
+    /// </summary>
+    private Func<ModProfile, EventHandler, string?, Services.WatchedLaunch>? _launchGame;
 
     /// <summary>
     /// MainWindow-provided callback to switch the launcher's active
@@ -84,6 +90,21 @@ public partial class MultiplayerTab : UserControl
     /// case that gives a wrong answer instantly today.
     /// </summary>
     private static readonly int[] ReplayRetryDelaysMs = { 0, 1000, 2500, 5000 };
+
+    /// <summary>
+    /// The same ladder for a COMPETITIVE match, where waiting is the right call rather than a
+    /// cost imposed on the majority.
+    ///
+    /// <para>The short ladder exists because almost no match is recorded, so patience buys
+    /// nothing for most players. A competitive room inverts that: the host confirmed Record Game
+    /// before the countdown, so there should be a recording, and the seconds spent finding it are
+    /// spent protecting somebody's rating.</para>
+    ///
+    /// <para>~16.5 s of delay plus the inflates, which keeps the whole wait inside
+    /// <see cref="Services.Multiplayer.RoomMatchState.ResultGraceSeconds"/> — the ceiling on how
+    /// long the host is held in the room. Lengthen one and look at the other.</para>
+    /// </summary>
+    private static readonly int[] ReplayRetryDelaysCompetitiveMs = { 0, 1000, 2500, 5000, 8000 };
 
     /// <summary>
     /// How far past the game closing a recording may be written and still be treated as this
@@ -982,7 +1003,7 @@ public partial class MultiplayerTab : UserControl
         MultiplayerSession session,
         Func<ModProfile?> getActiveProfile,
         Func<ModProfile, Task<string>> computeModFingerprint,
-        Func<ModProfile, EventHandler, string?, System.Diagnostics.Process?>? launchGame = null,
+        Func<ModProfile, EventHandler, string?, Services.WatchedLaunch>? launchGame = null,
         Func<ModProfile, bool>? switchActiveMod = null,
         LauncherConfig? config = null,
         Func<string, Task>? switchActiveCopy = null,
@@ -1350,6 +1371,7 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyModId = null;
                 _currentLobbyMaxPlayers = 0;
                 _currentLobbyIsPrivate = null;
+                _currentLobbyIsCompetitive = false;
                 _currentLobbyCreatedUtc = null;
                 // We are out of the room, so it can no longer be "in a match" as far as we're
                 // concerned — this is what takes the reopen button away.
@@ -1833,6 +1855,20 @@ public partial class MultiplayerTab : UserControl
             DiagnosticLog.Write(
                 "MultiplayerTab.HandleHostChanged: host role moved away mid-match — this client will not report it");
             _matchContext = mc.WithHostLost();
+        }
+        // The other direction, and ONLY for a competitive room. Without it the rule is
+        // one-sided: a guest who walks out is caught by the abandonment check, while a HOST who
+        // closes his launcher produces no report at all, because his client was the only one
+        // that would have sent one. See MatchContext.WithHostGained for why the double-report
+        // risk that justified the one-way rule is smaller than it was.
+        else if (_matchContext is { IsHost: false, IsCompetitive: true } promoted
+                 && _isHostInCurrentRoom
+                 && _matchPhase == MatchPhase.InGame)
+        {
+            DiagnosticLog.Write(
+                "MultiplayerTab.HandleHostChanged: promoted to host mid-match in a competitive " +
+                "room — this client will report it");
+            _matchContext = promoted.WithHostGained();
         }
 
         if (string.IsNullOrEmpty(newLogin) && _roomMembers.TryGetValue(newHost, out var e))
@@ -2826,6 +2862,9 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.RoomIdStatHeader.Text = Strings.Get("MpRoomCodeHeader");
         _lobbyWindow.RoomConnHeader.Text = Strings.Get("MpInGameConnectionHeader");
         _lobbyWindow.CopyRoomIdButton.ToolTip = Strings.Get("MpRoomCopyCode");
+        _lobbyWindow.RoomCompetitiveBadgeText.Text = Strings.Get("MpRoomCompetitiveBadge");
+        _lobbyWindow.RoomCompetitiveBadge.ToolTip =
+            TooltipHelper.Wrap(Strings.Get("MpRoomCompetitiveTooltip"));
         // Caption AND tooltip: the word says what the button does, the tooltip carries the
         // detail (who sees the new name). It lives here so a mid-room language switch catches it.
         _lobbyWindow.RenameRoomButton.Content = Strings.Get("MpRoomRenameButton");
@@ -2967,6 +3006,10 @@ public partial class MultiplayerTab : UserControl
                 : Strings.Get("MpRoomTitleGeneric");
         }
         _lobbyWindow!.RoomTitleText.Text = title;
+        // Painted from the room's own flag, alongside the title it qualifies. Repainted on
+        // every render so it follows a room switch rather than sticking from the last one.
+        _lobbyWindow.RoomCompetitiveBadge.Visibility =
+            _currentLobbyIsCompetitive ? Visibility.Visible : Visibility.Collapsed;
 
         // The window's own title carries the room name too, so the taskbar button says
         // which room it is instead of the word "Lobby" repeated per window.
@@ -3214,6 +3257,29 @@ public partial class MultiplayerTab : UserControl
     /// configured, and the one person guaranteed to know it was wrong. Null = unknown.
     /// </summary>
     private bool? _currentLobbyIsPrivate;
+
+    /// <summary>
+    /// Whether the CURRENT room puts rating on the line, mirroring <see cref="_currentLobbyIsPrivate"/>
+    /// (set on create/join, cleared on leave). Same reason as its siblings: the browser snapshot
+    /// excludes your own room, so the host has no other way to learn what the server decided.
+    ///
+    /// <para>This drives the BADGE and the Start confirmation, which are questions about the room
+    /// as it stands. The match's own copy lives in <see cref="Services.Multiplayer.MatchContext"/>
+    /// and is frozen at launch — do not read this field once the game has closed, since by then
+    /// the room may be gone.</para>
+    /// </summary>
+    private bool _currentLobbyIsCompetitive;
+
+    /// <summary>
+    /// What the launcher still owes the match that just ended, and when the game closed.
+    ///
+    /// <para>Together these hold the Leave button shut for a competitive host until the result is
+    /// actually settled — see <see cref="Services.Multiplayer.RoomMatchState.HoldLeave"/> for why
+    /// walking out in that window destroys the result rather than merely risking it.</para>
+    /// </summary>
+    private Services.Multiplayer.RoomMatchState.ResultPhase _resultPhase =
+        Services.Multiplayer.RoomMatchState.ResultPhase.None;
+    private DateTime _resultPhaseSinceUtc = DateTime.UtcNow;
 
     /// <summary>UTC time the CURRENT room opened, mirroring <see cref="_currentLobbyMaxPlayers"/>
     /// (set on create/join, cleared on leave). Drives the lobby header's live "open for X".
@@ -3856,6 +3922,7 @@ public partial class MultiplayerTab : UserControl
             _currentLobbyModId = createdModId;
             _currentLobbyMaxPlayers = dlg.CreatedLobbyMaxPlayers;
             _currentLobbyIsPrivate = dlg.CreatedLobbyIsPrivate;
+            _currentLobbyIsCompetitive = dlg.CreatedLobbyIsCompetitive;
             // We just created it — the POST returns no created_at, so ~now is the
             // room's open time (good to the second). Drives the "open for X" counter.
             _currentLobbyCreatedUtc = DateTime.UtcNow;
@@ -3867,7 +3934,14 @@ public partial class MultiplayerTab : UserControl
             // drop) before room_state lands.
             _isHostInCurrentRoom = true;
             RenderRoomPanel();
-            DiagnosticLog.Write($"CreateRoom: EnterHostedLobbyAsync completed for {dlg.CreatedLobby.Id}");
+            // Said in the room, because that is where they are now looking and because a host
+            // who believes their rating is on the line will play accordingly. A silent downgrade
+            // is the one outcome worth ruling out here.
+            if (dlg.CreatedLobbyCompetitiveDowngraded)
+                AppendChatSystem(Strings.Get("MpCreateDialogCompetitiveDowngraded"), ChatSeverity.Warning);
+            DiagnosticLog.Write(
+                $"CreateRoom: EnterHostedLobbyAsync completed for {dlg.CreatedLobby.Id} " +
+                $"(competitive={dlg.CreatedLobbyIsCompetitive})");
         }
         catch (Exception ex)
         {
@@ -6169,6 +6243,27 @@ public partial class MultiplayerTab : UserControl
         };
         Grid.SetColumn(titleBlock, 0);
         titleRow.Children.Add(titleBlock);
+
+        // Chips share column 1 so the name in column 0 keeps taking the ellipsis. The
+        // competitive one comes FIRST because it is the fact that changes what the room is,
+        // where "private" only changes how you get in.
+        var chips = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(chips, 1);
+        titleRow.Children.Add(chips);
+
+        if (lobby.Competitive)
+        {
+            // Derived from the server's boolean, never from words in the title: anyone can
+            // type "competitive" into a room name, and a badge that a stranger can forge is
+            // worth less than no badge at all.
+            var compChip = BuildRoomChip(
+                Strings.Get("MpRoomCompetitiveBadge"),
+                (Brush)Application.Current.FindResource("MpCompetitiveBg"),
+                (Brush)Application.Current.FindResource("MpCompetitiveText"));
+            compChip.Margin = new Thickness(8, 0, 0, 0);
+            compChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomCompetitiveTooltip"));
+            chips.Children.Add(compChip);
+        }
         if (lobby.IsPrivate)
         {
             // Same rounded-pill look as the MOD chip, tinted purple: a low-alpha
@@ -6179,8 +6274,7 @@ public partial class MultiplayerTab : UserControl
                 (Brush)Application.Current.FindResource("MpPrivateBg"),
                 (Brush)Application.Current.FindResource("MpPrivateText"));
             privateChip.Margin = new Thickness(8, 0, 0, 0);
-            Grid.SetColumn(privateChip, 1);
-            titleRow.Children.Add(privateChip);
+            chips.Children.Add(privateChip);
         }
         salaText.Children.Add(titleRow);
 
@@ -6948,6 +7042,7 @@ public partial class MultiplayerTab : UserControl
             _currentLobbyModId = lobby.ModId;
             _currentLobbyMaxPlayers = lobby.MaxPlayers;
             _currentLobbyIsPrivate = lobby.IsPrivate;
+            _currentLobbyIsCompetitive = lobby.Competitive;
             // We joined from the browser summary, which carries the real open time.
             _currentLobbyCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
             // Host vs joiner is decided by the WS room_state frame that
@@ -7140,6 +7235,12 @@ public partial class MultiplayerTab : UserControl
     private async Task BeginHostStart()
     {
         if (_session == null) return;
+
+        // Asked here rather than in the button handler, because this is the one choke point
+        // both starts pass through — the manual button AND MaybeAutoStartOnAllReady. Gating
+        // only the button would let the commoner path skip it entirely.
+        if (_currentLobbyIsCompetitive && !await ConfirmRecordGameAsync()) return;
+
         AppendChatSystem(Strings.Get("MpChatStartingGame"));
 
         if (_session.RoomSocket != null)
@@ -7377,7 +7478,7 @@ public partial class MultiplayerTab : UserControl
             // AoE3's stock LAN multiplayer code just works.
 
             var gameStartedAt = DateTime.UtcNow;
-            var process = _launchGame(profile, async (_, _) =>
+            var launch = _launchGame(profile, async (_, _) =>
             {
                 // Run on the UI thread so we can render chat messages
                 // and access session state safely.
@@ -7392,12 +7493,15 @@ public partial class MultiplayerTab : UserControl
                 });
             }, extraArgs);
 
-
-            if (process == null)
+            // Only when NOTHING started. A launch with no process handle but a live pid is a
+            // running game — that is the elevated path, and the whole point of the type is that
+            // it can no longer be mistaken for a failure.
+            if (launch.Failed)
             {
                 AppendChatSystem(Strings.Get("MpChatCouldNotSpawn"));
                 return null;
             }
+            var process = launch.Process;
 
             // Surface the Radmin state so a launch that can't see the host's
             // LAN game isn't a silent failure (the DeLos diagnostic bundle:
@@ -7586,6 +7690,11 @@ public partial class MultiplayerTab : UserControl
             // result and the remaining attempts run BEHIND it (see the continuation below).
             // Waiting here instead would make every match with no recording — the majority,
             // since AoE3's per-match box comes up unticked — slower for the benefit of a few.
+            // Hold the room shut from here. Only bites for a competitive host — everyone else
+            // sees no change at all — and only until the result is settled or the ceiling in
+            // RoomMatchState.ResultGraceSeconds is reached.
+            SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.ReadingRecording);
+
             var analysis = await AnalyseMatchReplayAsync(
                 profile, ctx, gameStartedAtUtc,
                 firstPassOnly: true,
@@ -7593,6 +7702,7 @@ public partial class MultiplayerTab : UserControl
             var replayInfo = analysis.Info;
             _lastLocalReadFailure = analysis.Failure;
 
+            SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.SendingResult);
             var report = await TryReportMatchAsync(profile, ctx, replayInfo);
             var roomClosedByReport = report.ClosedRoom;
 
@@ -7639,8 +7749,11 @@ public partial class MultiplayerTab : UserControl
             // CORRECTION: it goes back through the confirmation path, which is what lets a
             // late reading still decide a match the server could not.
             if (replayInfo?.HostResult == null)
+            {
+                SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.ReadingRecording);
                 replayInfo = await ContinueSearchingForResultAsync(
                     profile, ctx, gameStartedAtUtc, exitedAtUtc, replayInfo, report.Response);
+            }
 
             // Already found above, so no second walk over the folder.
             if (replayInfo != null)
@@ -7658,6 +7771,11 @@ public partial class MultiplayerTab : UserControl
         }
         finally
         {
+            // Released here rather than on the success path, so a throw anywhere above cannot
+            // leave the player shut in the room. The ResultGraceSeconds ceiling is the second
+            // belt on the same trouser, not a substitute for this one.
+            SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.None);
+
             // Two guards, and both are needed. ReferenceEquals: this can run seconds after the
             // game died, by which time an entirely new match may have captured its own context,
             // and dropping THAT one would unreport it. GameRestartedSince: the player may have
@@ -7809,16 +7927,22 @@ public partial class MultiplayerTab : UserControl
             // draw. Retrying only costs time in the case that is currently wrong anyway; the
             // delays back off, and ShouldRetry stops immediately unless something was actually
             // unreadable, so a match whose recording simply isn't there reports at once.
-            for (var attempt = 0; attempt < ReplayRetryDelaysMs.Length; attempt++)
+            // Read from the match SNAPSHOT, not from the live room: by now the room may be
+            // closed, and this decides how hard to look for the evidence of what happened in it.
+            var thorough = ctx?.IsCompetitive == true;
+            var delays = thorough ? ReplayRetryDelaysCompetitiveMs : ReplayRetryDelaysMs;
+
+            for (var attempt = 0; attempt < delays.Length; attempt++)
             {
-                if (attempt > 0) await Task.Delay(ReplayRetryDelaysMs[attempt]);
+                if (attempt > 0) await Task.Delay(delays[attempt]);
 
                 var (info, search, hadSignature) = await Task.Run(() =>
                 {
                     ReplayParserService.ReplayHeader? header = null;
                     ReplayParserService.ReplayOutcome? outcome = null;
 
-                    var result = ReplayUploadService.FindMatchReplay(modUserData, startedUtc, candidate =>
+                    var result = ReplayUploadService.FindMatchReplay(
+                        modUserData, startedUtc, candidate =>
                     {
                         // One inflate per candidate, used for both the identity check and the
                         // result — the outcome trailer is also what names the slot that recorded.
@@ -7856,7 +7980,7 @@ public partial class MultiplayerTab : UserControl
                         header = h;
                         outcome = o;
                         return ReplayUploadService.CandidateVerdict.Match;
-                    }, preferBeforeUtc);
+                    }, preferBeforeUtc, thorough);
 
                     if (result.File == null || header == null) return (null as MatchReplayInfo, result, false);
 
@@ -7886,7 +8010,7 @@ public partial class MultiplayerTab : UserControl
                 // else is on disk is its follow-up pass's problem, not this one's.
                 if (firstPassOnly) break;
 
-                if (!ReplayUploadService.ShouldRetry(search, attempt, ReplayRetryDelaysMs.Length))
+                if (!ReplayUploadService.ShouldRetry(search, attempt, delays.Length))
                 {
                     DiagnosticLog.Write(
                         "MultiplayerTab.AnalyseMatchReplayAsync: no recording of this match was found " +
@@ -7897,7 +8021,7 @@ public partial class MultiplayerTab : UserControl
 
                 DiagnosticLog.Write(
                     $"MultiplayerTab.AnalyseMatchReplayAsync: {search.Unreadable} recording(s) not readable yet " +
-                    $"— retrying in {ReplayRetryDelaysMs[attempt + 1]} ms");
+                    $"— retrying in {delays[attempt + 1]} ms");
             }
 
             // Nothing is recorded about "recording works now". A successful read proves only that
@@ -8585,8 +8709,11 @@ public partial class MultiplayerTab : UserControl
             OnChatKeyDown = e => ChatInputBox_KeyDown(this, e),
 
             // Closing the lobby is how the room got destroyed mid-match once, in silence.
-            NeedsLeaveConfirm = () => CurrentLeaveWarning()
-                != Services.Multiplayer.RoomMatchState.LeaveWarning.None,
+            // The hold is included, or closing the window would slip past a question the Leave
+            // button asks: OnClosing only consults ConfirmLeave when this says there is something
+            // to ask, so a hold with no warning beside it would let the ✕ walk straight out.
+            NeedsLeaveConfirm = () => ResultHoldActive()
+                || CurrentLeaveWarning() != Services.Multiplayer.RoomMatchState.LeaveWarning.None,
             ConfirmLeave = ConfirmLeaveRoomAsync,
         };
 
@@ -8664,6 +8791,57 @@ public partial class MultiplayerTab : UserControl
     /// What leaving the room right now would cost, from live state — the two flags the rule needs
     /// are exactly the ones that describe "is my game running" and "is the room's match running".
     /// </summary>
+    /// <summary>
+    /// Make the host say out loud that they will tick Record Game, before a competitive start.
+    ///
+    /// <para><b>Every match, not once per room</b>, and that is the whole point rather than an
+    /// oversight. AoE3's per-match box comes up unticked every single time — measured, twice —
+    /// and the launcher has no way to tick it: neither the profile setting nor a <c>+RecordGame</c>
+    /// launch argument moves it. So "they were told once" is worth nothing by the third game, and
+    /// deriving "it must be working now" from a match that happened to record is precisely the
+    /// reasoning that let every match afterwards go unrecorded in silence.</para>
+    ///
+    /// <para>Not a danger confirm: nothing is being destroyed, and painting it red would teach
+    /// people to click through the ones that are.</para>
+    /// </summary>
+    private async Task<bool> ConfirmRecordGameAsync()
+    {
+        if (_lobbyWindow == null) return true;
+        return await MpAlertOverlay.ConfirmAsync(
+            _lobbyWindow.LobbyRootGrid,
+            Strings.Get("MpStartConfirmRecordTitle"),
+            Strings.Get("MpStartConfirmRecordBody"),
+            Strings.Get("MpStartConfirmRecordYes"),
+            Strings.Get("MpStartConfirmRecordNo"),
+            danger: false);
+    }
+
+    /// <summary>
+    /// Whether the Leave button is currently held shut while the match result is settled.
+    ///
+    /// <para>Reads <see cref="MatchContext.IsCompetitive"/> — the snapshot taken at launch — and
+    /// not <see cref="_currentLobbyIsCompetitive"/>: by the time the game closes the room may be
+    /// gone, and asking a room that no longer exists is the bug MatchContext was written for.</para>
+    /// </summary>
+    private bool ResultHoldActive()
+        => Services.Multiplayer.RoomMatchState.HoldLeave(
+            _matchContext?.IsCompetitive ?? false,
+            _matchContext?.IsHost ?? false,
+            _resultPhase,
+            (DateTime.UtcNow - _resultPhaseSinceUtc).TotalSeconds);
+
+    /// <summary>Arm or release the post-match hold. Idempotent; only the transition restamps the clock.</summary>
+    private void SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase phase)
+    {
+        if (_resultPhase == phase) return;
+        // The clock starts when the hold BEGINS and is deliberately not restarted when the phase
+        // advances from reading to sending: the ceiling is on the whole wait, not on each step,
+        // or a stalled ladder could keep buying itself another thirty seconds.
+        if (_resultPhase == Services.Multiplayer.RoomMatchState.ResultPhase.None)
+            _resultPhaseSinceUtc = DateTime.UtcNow;
+        _resultPhase = phase;
+    }
+
     private Services.Multiplayer.RoomMatchState.LeaveWarning CurrentLeaveWarning()
         => Services.Multiplayer.RoomMatchState.WarnOnLeave(
             _roomMatchLive,
@@ -8686,6 +8864,25 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async Task<bool> ConfirmLeaveRoomAsync()
     {
+        // Held, not asked. While the result is still being resolved this is not a choice with a
+        // downside to weigh: leaving hands the host role to the opponent, and the server then
+        // refuses our report outright — so the match is lost for both players with nothing on
+        // screen to explain it. Bounded by ResultGraceSeconds, so it can never trap anyone.
+        if (ResultHoldActive())
+        {
+            if (_lobbyWindow != null)
+            {
+                await MpAlertOverlay.NoticeAsync(
+                    _lobbyWindow.LobbyRootGrid,
+                    Strings.Get("MpLeaveBlockedTitle"),
+                    Strings.Get(_resultPhase == Services.Multiplayer.RoomMatchState.ResultPhase.SendingResult
+                        ? "MpLeaveBlockedReporting"
+                        : "MpLeaveBlockedReading"),
+                    Strings.Get("MpAlertOk"));
+            }
+            return false;
+        }
+
         var warning = CurrentLeaveWarning();
         if (warning == Services.Multiplayer.RoomMatchState.LeaveWarning.None) return true;
         if (_lobbyWindow == null) return true;
@@ -8968,7 +9165,8 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyModId,
                 _session?.CurrentUser?.Id,
                 _isHostInCurrentRoom,
-                DateTime.UtcNow);
+                DateTime.UtcNow,
+                _currentLobbyIsCompetitive);
 
             // Snapshot the Radmin adapter's byte counter so the TRAFFIC stat
             // can show bytes moved during THIS match (delta).
@@ -9984,8 +10182,18 @@ public partial class MultiplayerTab : UserControl
     /// terminating, since closing the launcher mid-match would
     /// kill AoE3 without giving the host the chance to cancel
     /// cleanly first.
+    ///
+    /// <para><b>It also covers the seconds AFTER the game closes</b>, which the phase alone does
+    /// not: <c>ExitInGamePhase</c> sets the phase back to Lobby the instant the process dies,
+    /// while the launcher is still reading the recording and sending the result. Quitting in that
+    /// window loses the correction for good — nothing on disk remembers it was owed — so it
+    /// deserves the same question. Bounded by the same grace as the room hold, so a stalled read
+    /// cannot make the launcher permanently reluctant to close.</para>
     /// </summary>
-    public bool IsMatchActive => _matchPhase == MatchPhase.InGame || _matchPhase == MatchPhase.Starting;
+    public bool IsMatchActive
+        => _matchPhase == MatchPhase.InGame
+           || _matchPhase == MatchPhase.Starting
+           || ResultHoldActive();
 
     /// <summary>
     /// Called from MainWindow.OnClosing when the user attempts to
@@ -10003,6 +10211,18 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     public async Task<bool> ConfirmCloseDuringMatchAsync()
     {
+        // The game has ALREADY closed and we are only finishing the result. Saying "this closes
+        // the game for everyone" here would be plainly false, and there is nothing to end —
+        // EndMatchAsync would send a cancel for a match that is over.
+        var stillPlaying = _matchPhase == MatchPhase.InGame || _matchPhase == MatchPhase.Starting;
+        if (!stillPlaying)
+        {
+            var quit = MessageBox.Show(
+                Strings.Get("MpCloseDuringResultBody"), Strings.Get("MpLeaveDuringMatchTitle"),
+                MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            return quit == MessageBoxResult.Yes;
+        }
+
         // Host or guest is read from the CAPTURED match, not the live flag: if the room has
         // already collapsed, the live one says "not host" and the host would be shown the mild
         // version of what closing is about to do to everybody else.

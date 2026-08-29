@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
 using Xunit;
@@ -17,6 +17,103 @@ public class NotificationCenterTests
     {
         config = new LauncherConfig();
         return new NotificationCenter(config, persist: () => { });
+    }
+
+    // ---------- announcements ----------
+    //
+    // News from the project, delivered so people stop having to remember to go and look for it.
+    // The rules that matter are the ones that stop it becoming spam.
+
+    /// <summary>
+    /// <b>The one that matters.</b> The first read must record everything already published
+    /// WITHOUT belling any of it, or the day somebody installs the launcher they are handed the
+    /// whole back catalogue at once — the same trap the catalog listing and the translation index
+    /// each had to solve.
+    /// </summary>
+    [Fact]
+    public void Announcements_FirstReadSeedsSilently_AndNothingBells()
+    {
+        var center = NewCenter(out var config);
+
+        Assert.True(center.SeedAnnouncementBaseline(new[] { "a", "b", "c" }));
+        Assert.Empty(center.Items);
+        Assert.True(config.AnnouncementBaselineSeeded);
+
+        // Already published before we ever looked: still silent afterwards.
+        Assert.False(center.RaiseAnnouncement("a", "Old news", "", ""));
+        Assert.Empty(center.Items);
+    }
+
+    /// <summary>The seed happens once; a later read must not re-baseline and swallow real news.</summary>
+    [Fact]
+    public void Announcements_SeedingIsOneShot()
+    {
+        var center = NewCenter(out _);
+
+        Assert.True(center.SeedAnnouncementBaseline(new[] { "a" }));
+        Assert.False(center.SeedAnnouncementBaseline(new[] { "b" }));
+        // 'b' was NOT swallowed by the second call, so it can still be announced.
+        Assert.True(center.RaiseAnnouncement("b", "Real news", "", ""));
+    }
+
+    [Fact]
+    public void Announcements_SomethingNewAfterTheBaselineDoesBell()
+    {
+        var center = NewCenter(out _);
+        center.SeedAnnouncementBaseline(new[] { "a" });
+
+        Assert.True(center.RaiseAnnouncement("b", "Competitive rooms", "Ranked play is here.", ""));
+        Assert.Equal(1, center.Items.Count(i => i.Kind == NotificationKind.Announcement));
+    }
+
+    /// <summary>
+    /// The feed is re-read every few minutes and the same items come back every time, so without
+    /// the dedup one announcement would ring forever.
+    /// </summary>
+    [Fact]
+    public void Announcements_TheSameIdNeverBellsTwice()
+    {
+        var center = NewCenter(out _);
+        center.SeedAnnouncementBaseline(System.Array.Empty<string>());
+
+        Assert.True(center.RaiseAnnouncement("news-1", "Title", "Body", ""));
+        Assert.False(center.RaiseAnnouncement("news-1", "Title", "Body", ""));
+        Assert.False(center.RaiseAnnouncement("NEWS-1", "Title", "Body", ""));   // case-insensitive
+        Assert.Equal(1, center.Items.Count(i => i.Kind == NotificationKind.Announcement));
+    }
+
+    /// <summary>
+    /// An entry with no id would bell on every single poll, and one with no title would be a blank
+    /// row. Both are refused rather than shown.
+    /// </summary>
+    [Fact]
+    public void Announcements_WithoutAnIdOrATitleAreRefused()
+    {
+        var center = NewCenter(out _);
+        center.SeedAnnouncementBaseline(System.Array.Empty<string>());
+
+        Assert.False(center.RaiseAnnouncement("", "Title", "b", ""));
+        Assert.False(center.RaiseAnnouncement("   ", "Title", "b", ""));
+        Assert.False(center.RaiseAnnouncement("id", "", "b", ""));
+        Assert.Empty(center.Items);
+    }
+
+    /// <summary>
+    /// The url rides on TargetId because clicking an announcement leaves the app — there is
+    /// nowhere in the launcher to navigate to. An empty one is allowed: the click falls back to
+    /// the project's Discord, so a published announcement always leads somewhere.
+    /// </summary>
+    [Fact]
+    public void Announcements_CarryTheirUrlAsTheClickTarget()
+    {
+        var center = NewCenter(out _);
+        center.SeedAnnouncementBaseline(System.Array.Empty<string>());
+
+        center.RaiseAnnouncement("n", "T", "B", "https://example.com/post");
+        var item = center.Items.Single(i => i.Kind == NotificationKind.Announcement);
+        Assert.Equal("https://example.com/post", item.TargetId);
+        // Not tied to a mod — like the launcher-update and connectivity items.
+        Assert.True(string.IsNullOrEmpty(item.ModId));
     }
 
     [Fact]

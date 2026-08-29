@@ -87,4 +87,75 @@ public class RoomMatchStateTests
     public void AGameOfOurOwnOutranksTheRoom(bool weAreHost, Warning expected)
         => Assert.Equal(expected, RoomMatchState.WarnOnLeave(
             roomMatchLive: true, ourGameRunning: true, weAreHost));
+
+    // ---------- HoldLeave ----------
+    //
+    // Holding somebody in a room is the most intrusive thing in this file, so what these pin is
+    // mostly the ways it must let go. The reason it exists at all: the server refuses a report
+    // from anyone who is no longer the room's host, and leaving hands that role straight to the
+    // opponent — so walking out in the seconds after a game closes destroys the result for both
+    // players, silently.
+
+    [Fact]
+    public void ACompetitiveHostIsHeldWhileTheResultIsStillBeingSettled()
+        => Assert.True(RoomMatchState.HoldLeave(
+            competitive: true, weAreHost: true,
+            phase: RoomMatchState.ResultPhase.ReadingRecording, secondsSinceGameExit: 3));
+
+    /// <summary>
+    /// <b>The ceiling, and the one that matters most.</b> Everything above can stall — a folder
+    /// of half-written recordings, a server that never answers — and a player shut in a room by a
+    /// bug of ours is a worse outcome than a lost rating. Past the grace it lets go regardless of
+    /// what is still outstanding.
+    /// </summary>
+    [Fact]
+    public void PastTheGraceItLetsGoNoMatterWhatIsStillOutstanding()
+        => Assert.False(RoomMatchState.HoldLeave(
+            competitive: true, weAreHost: true,
+            phase: RoomMatchState.ResultPhase.SendingResult,
+            secondsSinceGameExit: RoomMatchState.ResultGraceSeconds + 0.1));
+
+    /// <summary>Nothing outstanding, so nothing to wait for — the ordinary case, and it must be free.</summary>
+    [Fact]
+    public void WithTheResultSettledLeavingIsImmediate()
+        => Assert.False(RoomMatchState.HoldLeave(
+            competitive: true, weAreHost: true,
+            phase: RoomMatchState.ResultPhase.None, secondsSinceGameExit: 0));
+
+    /// <summary>
+    /// A casual room has no rating to protect, and being held anywhere is an annoyance. This is
+    /// what keeps the whole feature invisible to everyone who did not opt into it.
+    /// </summary>
+    [Fact]
+    public void ACasualRoomIsNeverHeld()
+        => Assert.False(RoomMatchState.HoldLeave(
+            competitive: false, weAreHost: true,
+            phase: RoomMatchState.ResultPhase.ReadingRecording, secondsSinceGameExit: 1));
+
+    /// <summary>Only the host reports, so only the host has anything to lose by leaving early.</summary>
+    [Fact]
+    public void AGuestIsNeverHeld()
+        => Assert.False(RoomMatchState.HoldLeave(
+            competitive: true, weAreHost: false,
+            phase: RoomMatchState.ResultPhase.ReadingRecording, secondsSinceGameExit: 1));
+
+    /// <summary>
+    /// The boundary itself, spelled out: at exactly the grace it is already released. Written
+    /// down because "&lt;" versus "&lt;=" here is the difference between a hold that ends and one
+    /// that can sit on the edge forever if the clock stops advancing.
+    /// </summary>
+    [Fact]
+    public void TheGraceBoundaryIsExclusive()
+        => Assert.False(RoomMatchState.HoldLeave(
+            competitive: true, weAreHost: true,
+            phase: RoomMatchState.ResultPhase.ReadingRecording,
+            secondsSinceGameExit: RoomMatchState.ResultGraceSeconds));
+
+    /// <summary>
+    /// The hold is meant to be brief. A ceiling of minutes would be a different feature — one
+    /// nobody agreed to — so the number itself is pinned rather than left to drift.
+    /// </summary>
+    [Fact]
+    public void TheHoldIsShort()
+        => Assert.InRange(RoomMatchState.ResultGraceSeconds, 5, 60);
 }
