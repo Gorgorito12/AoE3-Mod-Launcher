@@ -56,6 +56,27 @@ public class NotificationCenterTests
         Assert.True(center.RaiseAnnouncement("b", "Real news", "", ""));
     }
 
+    /// <summary>
+    /// <b>The regression.</b> The feed ships with an empty announcements list, so the baseline
+    /// has to be seedable from NOTHING. It was not: the caller returned early when there was
+    /// nothing to seed, the marker was never written, and the first announcement ever published
+    /// then arrived, ran the seed for the first time, was swallowed as "the backlog", and reached
+    /// nobody — the one announcement that matters most, since it announces the feature.
+    /// </summary>
+    [Fact]
+    public void Announcements_AnEmptyBaselineStillCounts_SoTheFirstOnePublishedBells()
+    {
+        var center = NewCenter(out var config);
+
+        Assert.True(center.SeedAnnouncementBaseline(System.Array.Empty<string>()));
+        Assert.True(config.AnnouncementBaselineSeeded);
+        Assert.Empty(center.Items);
+
+        // The first thing ever published, arriving after that empty seed, must ring.
+        Assert.True(center.RaiseAnnouncement("first-ever", "Competitive rooms", "…", ""));
+        Assert.Equal(1, center.Items.Count(i => i.Kind == NotificationKind.Announcement));
+    }
+
     [Fact]
     public void Announcements_SomethingNewAfterTheBaselineDoesBell()
     {

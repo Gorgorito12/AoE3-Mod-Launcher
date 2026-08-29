@@ -237,6 +237,10 @@ public sealed class LobbyWebSocket : IAsyncDisposable
         // Workers' Hibernation API is happy with default subprotocol; no
         // extra headers needed beyond user-agent for politeness.
         _ws.Options.SetRequestHeader("User-Agent", "Aoe3ModLauncher/1.0");
+        // Read on the upgrade request: the room socket is refused with 4010 when the build is
+        // below the server's minimum, before the room ever sees it.
+        _ws.Options.SetRequestHeader(
+            "X-Launcher-Version", LauncherUpdateService.CurrentInformationalTag);
 
         await _ws.ConnectAsync(_uri, ct);
         _attempt = 0;     // reset backoff after a successful connect

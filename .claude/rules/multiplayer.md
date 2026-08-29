@@ -2102,6 +2102,40 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the result, so the guest's **three** polls — this bullet used to say four — are now only
   a fallback for an old backend.)
 
+- **The backend can REQUIRE a launcher version, and it refuses multiplayer ENTRY only.**
+  `MIN_LAUNCHER_VERSION` (empty by default, so the check is off) turns away builds older than it
+  from creating a room, joining one, and the room socket (`4010 launcher_too_old`). Reporting a
+  match, the global chat, history and stats stay open on purpose: somebody who already played
+  should still be able to report it, and somebody turned away should still be able to ask why.
+  **Nothing outside multiplayer is ever blocked** — the self-update can fail for reasons the
+  player cannot fix (antivirus, permissions, no network), and a launcher that does nothing at all
+  is a worse outcome than an old one that still plays.
+  **The launcher had to start reporting its version for any of this to be possible.** Both the
+  REST client and the room socket sent a hardcoded `Aoe3ModLauncher/1.0` User-Agent — a literal,
+  never the real build — so the server could not tell an old client from a new one. They now send
+  `X-Launcher-Version: {LauncherUpdateService.CurrentInformationalTag}`, the same value the
+  self-updater compares itself with, letter suffix and all.
+  **Three things are load-bearing:**
+  (1) **The comparison is duplicated on purpose and must stay in step.**
+  `src/lib/launcherVersion.ts` mirrors `LauncherUpdateService.TryParseSemVer`, including the
+  letter rank (`1.0.5 < 1.0.5a < 1.0.5b < 1.0.6`). They answer the same question from opposite
+  ends, and if they disagree a player is told they are up to date and refused entry in the same
+  breath. Both sides have tests; change one and change the other.
+  (2) **A client that reports NO version fails the check** — it can only be a build from before
+  clients reported one. That is correct and it is also the trap: set a minimum before the first
+  reporting release has shipped and everybody is locked out at once. `admin.ts versions <tag>`
+  answers "how many would this block" from `users.last_launcher_version` (migration `0009`)
+  BEFORE you set it, which is the whole reason that column exists.
+  (3) **The required version comes from the SERVER's answer** (`min_version` in the error
+  payload), never from anything the launcher knows — it cannot know what a backend it predates
+  requires. On the socket there is no payload, so the message falls back to the version-less
+  wording rather than inventing a number.
+  Being refused forces a self-update check with **no `If-None-Match`** and opens the dialog:
+  the ordinary check is conditional, and a `304` would read as "no update" and leave the player
+  told to update with nothing offering to do it. That forced path is the ONLY place the update
+  dialog opens by itself — the pill stays non-invasive everywhere else, which is what it replaced
+  a modal for.
+
 - **COMPETITIVE ROOMS are the gate on the whole ladder now: a room created without the box
   ticked stores its match and scores nothing.** `lobbies.competitive` (migration `0007`) is
   set once at creation and never again — a host who could tick it after seeing he had won

@@ -3130,6 +3130,31 @@ public static class Strings
             [LangEn] = "Couldn't read mod files",
             [LangEs] = "No se pudieron leer los archivos del mod",
         },
+        // The server refused this build. The version comes from the server's own answer — the
+        // launcher cannot know what a backend it predates requires.
+        ["MpNoticeLauncherTooOldTitle"] = new()
+        {
+            [LangEn] = "This launcher is out of date",
+            [LangEs] = "Este launcher está desactualizado",
+        },
+        ["MpNoticeLauncherTooOldBodyVersion"] = new()
+        {
+            [LangEn] = "Multiplayer needs {0} or newer, and this build is older. Everything else "
+                     + "keeps working — your mods, single player, and your match history. Update "
+                     + "the launcher and you can play again.",
+            [LangEs] = "El multijugador necesita la {0} o más nueva, y esta versión es anterior. "
+                     + "Todo lo demás sigue funcionando — tus mods, un jugador y tu historial de "
+                     + "partidas. Actualiza el launcher y ya puedes volver a jugar.",
+        },
+        ["MpNoticeLauncherTooOldBody"] = new()
+        {
+            [LangEn] = "Multiplayer needs a newer launcher than this one. Everything else keeps "
+                     + "working — your mods, single player, and your match history. Update the "
+                     + "launcher and you can play again.",
+            [LangEs] = "El multijugador necesita un launcher más nuevo que este. Todo lo demás "
+                     + "sigue funcionando — tus mods, un jugador y tu historial de partidas. "
+                     + "Actualiza el launcher y ya puedes volver a jugar.",
+        },
         ["MpNoticeMismatchTitle"] = new()
         {
             [LangEn] = "Mod version mismatch",

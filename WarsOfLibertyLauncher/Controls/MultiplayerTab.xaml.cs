@@ -124,6 +124,12 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Raised when the backend says a previously-undecided match ended up rated.</summary>
     private Action<MatchRatedNotice>? _onMatchRated;
 
+    /// <summary>
+    /// The server refused this build from multiplayer. Raised so MainWindow can offer the
+    /// update, which is the only thing the player can actually do about it.
+    /// </summary>
+    private Action<string>? _onLauncherTooOld;
+
     private Subtab _activeSubtab = Subtab.Rooms;
     private bool _isRefreshingList;
     private bool _isRefreshingHistory;
@@ -1016,6 +1022,7 @@ public partial class MultiplayerTab : UserControl
         Action<AppToast.ToastOptions>? showAppToast = null,
         Action<string, string, string, string, string>? onNewRoomFromWs = null,
         Action<MatchRatedNotice>? onMatchRated = null,
+        Action<string>? onLauncherTooOld = null,
         Action<string?, string?>? setConnectionChip = null,
         Action<string?, string?, string?>? setAccountChip = null)
     {
@@ -1037,6 +1044,7 @@ public partial class MultiplayerTab : UserControl
         _showAppToast = showAppToast;
         _onNewRoomFromWs = onNewRoomFromWs;
         _onMatchRated = onMatchRated;
+        _onLauncherTooOld = onLauncherTooOld;
         // Optional so old callers (and the parameterless ctor path
         // used by XAML preview) still work — null _config just means
         // the Radmin assistant features stay dormant.
@@ -1458,6 +1466,15 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private const string RoomClosedByReport = "server_close:4007";
 
+    /// <summary>
+    /// The socket close the backend sends when this build is below its minimum version.
+    ///
+    /// <para>It must be handled BEFORE the generic disconnect path, or the launcher would
+    /// retry forever against a server that is never going to accept it — showing "reconnecting"
+    /// instead of the one thing the player needs to know.</para>
+    /// </summary>
+    private const string RoomClosedTooOld = "server_close:4010";
+
     private void OnRoomDisconnected(object? sender, string reason) =>
         Dispatcher.InvokeAsync(() =>
         {
@@ -1477,6 +1494,16 @@ public partial class MultiplayerTab : UserControl
                 // — and without this guard we would enter the result phase a second time
                 // and fire the history polls that the frame exists to make unnecessary.
                 if (_matchPhase != MatchPhase.Result) EnterResultPhase();
+                return;
+            }
+
+            // Refused for being out of date: retrying cannot help, so stop reconnecting and
+            // say why. The server sends no min_version over the socket, so the message is the
+            // version-less one — the REST path names it when it can.
+            if (reason == RoomClosedTooOld)
+            {
+                _session?.RoomSocket?.StopReconnect();
+                _ = ShowLauncherTooOldAsync(null);
                 return;
             }
 
@@ -7066,6 +7093,10 @@ public partial class MultiplayerTab : UserControl
                 Strings.Get("MpNoticeMismatchBody"),
                 Strings.Get("MpAlertOk"));
         }
+        catch (LobbyApiException ex) when (ex.Code == "launcher_too_old")
+        {
+            await ShowLauncherTooOldAsync(ex);
+        }
         catch (Exception ex)
         {
             await MpAlertOverlay.NoticeAsync(
@@ -8948,6 +8979,40 @@ public partial class MultiplayerTab : UserControl
             Strings.Get("MpStartConfirmRecordYes"),
             Strings.Get("MpStartConfirmRecordNo"),
             danger: false);
+    }
+
+    /// <summary>
+    /// Say that this build is too old for multiplayer, name the version needed, and offer the
+    /// update — which is the only thing the player can do about it.
+    ///
+    /// <para>The required version comes from the SERVER's own answer (<c>min_version</c>), never
+    /// from anything the launcher knows: the launcher cannot know what a backend it has not been
+    /// updated for requires, and inventing a number here would send people looking for a release
+    /// that may not be the one that matters.</para>
+    /// </summary>
+    private async Task ShowLauncherTooOldAsync(LobbyApiException? ex)
+    {
+        var min = "";
+        if (ex?.Details != null && ex.Details.TryGetValue("min_version", out var raw))
+            min = raw?.ToString() ?? "";
+
+        var body = string.IsNullOrWhiteSpace(min)
+            ? Strings.Get("MpNoticeLauncherTooOldBody")
+            : Strings.Format("MpNoticeLauncherTooOldBodyVersion", min);
+
+        DiagnosticLog.Write(
+            $"Multiplayer refused: launcher too old (server requires '{min}', " +
+            $"this build is {Services.LauncherUpdateService.CurrentInformationalTag}).");
+
+        await MpAlertOverlay.NoticeAsync(
+            TabRootGrid,
+            Strings.Get("MpNoticeLauncherTooOldTitle"),
+            body,
+            Strings.Get("MpAlertOk"));
+
+        // After the notice, not instead of it: the update dialog is the action, the notice is
+        // the explanation, and one without the other leaves the player guessing.
+        _onLauncherTooOld?.Invoke(min);
     }
 
     /// <summary>

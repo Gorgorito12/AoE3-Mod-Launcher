@@ -549,6 +549,10 @@ public partial class MainWindow : Window
             // the room dedup + tab/subtab dots with the 90 s fallback poll.
             onNewRoomFromWs: OnNewRoomFromWs,
             onMatchRated: OnMatchRatedFromWs,
+            // The server refused this build from multiplayer. Offering the update is the only
+            // thing the player can do about it, and the gold pill may not even be up yet — the
+            // self-update check is gated on CheckUpdatesOnStartup and runs on its own schedule.
+            onLauncherTooOld: OnLauncherRefusedByServer,
             setConnectionChip: SetConnectionChip,
             setAccountChip: SetAccountChip);
         UpdateAccentResources(activeProfile);
@@ -7957,11 +7961,20 @@ public partial class MainWindow : Window
     /// never. The check would fail and log nothing, leaving no way to tell a working
     /// check from a dead one.</para>
     /// </summary>
-    private async Task CheckForLauncherUpdateAsync()
+    /// <param name="force">
+    /// Ignore the cached ETag and open the update dialog straight away if one is pending.
+    ///
+    /// <para>For the one case where waiting is not an option: the backend just refused this
+    /// build from multiplayer. A conditional check would answer 304 — "nothing changed" — which
+    /// reads as no update and would leave the player told to update with nothing offering to do
+    /// it. And the pill alone is not enough there, because the player is looking at a refusal
+    /// dialog, not at the title bar.</para>
+    /// </param>
+    private async Task CheckForLauncherUpdateAsync(bool force = false)
     {
         try
         {
-            await CheckForLauncherUpdateInnerAsync();
+            await CheckForLauncherUpdateInnerAsync(force);
         }
         catch (Exception ex)
         {
@@ -7969,7 +7982,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task CheckForLauncherUpdateInnerAsync()
+    private async Task CheckForLauncherUpdateInnerAsync(bool force = false)
     {
         // skippedTag is intentionally empty: the persistent "skip this version"
         // suppression was removed. Users were hitting Cancel on the auto-modal
@@ -7984,7 +7997,8 @@ public partial class MainWindow : Window
         var result = await LauncherUpdateService.CheckAsync(
             lastInstalledTag: _config.LastInstalledLauncherTag,
             skippedTag: "",
-            cachedETag: _config.LauncherUpdateETag);
+            // Forced: no If-None-Match, so a 304 cannot masquerade as "no update".
+            cachedETag: force ? "" : _config.LauncherUpdateETag);
 
         if (!result.UpdateAvailable)
         {
@@ -8032,6 +8046,10 @@ public partial class MainWindow : Window
             Strings.Get("NotifLauncherUpdateTitle"),
             Strings.Format("NotifLauncherUpdateBody", result.LatestVersion));
         DiagnosticLog.Write($"Launcher update {result.RemoteTag} available — showing persistent pill.");
+
+        // Only when something demanded it. The pill is deliberately non-invasive everywhere
+        // else — a modal on every launch is what the pill replaced.
+        if (force) LauncherUpdatePill_Click(this, new RoutedEventArgs());
     }
 
     /// <summary>
@@ -11002,6 +11020,30 @@ public partial class MainWindow : Window
     /// The exe whose launch had to elevate, parked until the game exits so the offer
     /// below never interrupts a game that is opening. Null when there's nothing pending.
     /// </summary>
+    /// <summary>
+    /// The backend turned this build away from multiplayer. Force a self-update check now and
+    /// open the update dialog if there is one.
+    ///
+    /// <para><b>Forced, not the cached answer.</b> The ordinary check is throttled and gated on
+    /// <c>CheckUpdatesOnStartup</c>, so a player who has that off — or who has been running for
+    /// hours — would be told to update with nothing on screen offering to do it. This is the one
+    /// moment where the check has to happen because the server just said so.</para>
+    ///
+    /// <para>If nothing turns up (the release is not published yet, or GitHub is unreachable),
+    /// it stays quiet: MultiplayerTab has already told them, and a second "no update found"
+    /// popup on top of that helps nobody.</para>
+    /// </summary>
+    private async void OnLauncherRefusedByServer(string minVersion)
+    {
+        DiagnosticLog.Write(
+            $"Launcher refused by the backend (needs '{minVersion}') — forcing an update check.");
+        try { await CheckForLauncherUpdateAsync(force: true); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"OnLauncherRefusedByServer: update check failed: {ex.Message}");
+        }
+    }
+
     private string? _pendingCompatLayerExe;
 
     /// <summary>
@@ -12714,9 +12756,17 @@ public partial class MainWindow : Window
     {
         try
         {
+            // Seed on the FIRST successful read of the feed, WITH OR WITHOUT announcements in
+            // it. Gating the seed on there being something to seed was a real bug: the file
+            // ships empty, so every launcher saw zero, returned early, and the marker was never
+            // written — and the day the first announcement was published the seed finally ran,
+            // swallowed it as "the backlog", and it reached nobody. The one that matters most,
+            // since it is the one announcing the feature.
+            var ids = feed.Announcements?.Select(a => a.Id) ?? Enumerable.Empty<string>();
+            if (_notifications.SeedAnnouncementBaseline(ids)) return;
+
             var published = feed.Announcements;
             if (published == null || published.Count == 0) return;
-            if (_notifications.SeedAnnouncementBaseline(published.Select(a => a.Id))) return;
             foreach (var a in published)
                 _notifications.RaiseAnnouncement(a.Id, a.Title, a.Body, a.Url);
         }

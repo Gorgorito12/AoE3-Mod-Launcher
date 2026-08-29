@@ -67,6 +67,12 @@ public class LobbyApiClient : IDisposable
             Timeout = TimeSpan.FromSeconds(30),
         };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("Aoe3ModLauncher/1.0 (Multiplayer)");
+        // The REAL build, so the server can refuse a launcher too old for the protocol — the
+        // User-Agent above is a fixed literal and has never carried the version. Same value the
+        // self-updater compares itself with, letter suffix and all (v1.0.12e), so the two sides
+        // order releases identically.
+        _http.DefaultRequestHeaders.TryAddWithoutValidation(
+            "X-Launcher-Version", LauncherUpdateService.CurrentInformationalTag);
         _sessionToken = sessionToken;
     }
 

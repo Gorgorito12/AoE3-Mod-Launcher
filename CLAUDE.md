@@ -2605,7 +2605,13 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   looking perfectly healthy. Pinned by the notifier's own `manifest.test.ts`.
   (2) **`SeedAnnouncementBaseline` on the first read**, or the day somebody installs the launcher
   they are handed the entire back catalogue at once — the same trap the catalog listing and the
-  translation index each had to solve.
+  translation index each had to solve. **Seed it EVEN WHEN THE FEED CARRIES NONE**, and that half
+  was a real bug: gating the seed on there being something to seed meant that, with
+  `announcements.json` shipping empty, the marker was never written — so the FIRST announcement
+  ever published ran the seed, was swallowed as "the backlog", and reached nobody. The unit tests
+  pin the store's contract (an empty seed still sets the marker, and a later announcement bells)
+  but they cannot catch this: the ordering lives in `MainWindow.MaybeNotifyAnnouncements`, which
+  no test constructs. Read that method before changing it.
   (3) **A `DataTrigger` for the new kind in `MainWindow.xaml`'s badge style.** A kind with no
   trigger falls back to the default bell glyph in silence, so project news would read as an
   ordinary update.
@@ -3477,7 +3483,9 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   the **hardcoded built-in `https://wol-notify.duckdns.org/manifest`**; `"none"`
   opts out (always GitHub); any URL overrides. `NotificationFeedETag` is echoed as
   `If-None-Match` for the 304. **Infra:** the feed runs on its **OWN free Oracle VM**
-  (public IP `129.213.160.55`, systemd `notifier`, nginx + Let's Encrypt),
+  (systemd `notifier`, nginx + Let's Encrypt) — **the IP is deliberately not recorded here**:
+  the launcher depends on the DOMAIN alone, and a written-down address goes stale on the next
+  migration, which has already happened once,
   **deliberately separate** from the lobby backend (`wol-lobby.duckdns.org`) — same
   split rationale as that backend. Sources + the tested deploy runbook live in the
   **companion `notifier-server` repo** (`github.com/Gorgorito12/notifier-server`,
