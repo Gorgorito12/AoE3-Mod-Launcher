@@ -232,6 +232,24 @@ public class ModState
     public bool? GameRecordingApplied { get; set; }
 
     /// <summary>
+    /// Whether the last competitive match of this mod produced no recording at all.
+    /// <c>null</c> = nothing conclusive yet.
+    ///
+    /// <para><b>What it is for.</b> The launcher cannot tick AoE3's per-match Record Game box and
+    /// cannot see whether the player did, so the confirmation before a competitive start is a
+    /// nudge rather than a guarantee — and one that reads identically every time stops being
+    /// read. This is the evidence that lets the NEXT one lead with a fact instead: "the last match
+    /// wasn't recorded". See <see cref="Services.Multiplayer.RecordingMemory"/>, which owns the
+    /// rules, including why a recording that exists but never finished writing its ending counts
+    /// as recorded.</para>
+    ///
+    /// <para><b>Per mod, like its sibling above</b>, because <c>optionrecordgame</c> is per mod
+    /// profile: that Wars of Liberty failed to record says nothing about Improvement Mod.</para>
+    /// </summary>
+    [JsonPropertyName("lastMatchHadNoRecording")]
+    public bool? LastMatchHadNoRecording { get; set; }
+
+    /// <summary>
     /// ETag of the last 200 response from <c>/releases/latest</c> for this mod
     /// (follow-latest GitHubReleases mods only). Sent as <c>If-None-Match</c> so
     /// an unchanged latest release is a free 304 (conditional requests don't

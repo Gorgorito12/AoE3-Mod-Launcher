@@ -415,6 +415,12 @@ public partial class MultiplayerTab : UserControl
     private long _matchTimerStartTicks;
 
     /// <summary>
+    /// Whether the "is anything being recorded yet?" probe has already run for this match.
+    /// One directory listing per match, never per tick.
+    /// </summary>
+    private bool _recordingProbeDone;
+
+    /// <summary>
     /// The match currently being played, captured when AoE3 was launched and consumed when it
     /// exits — roster, lobby, mod, our role and the start time. Null outside a match.
     ///
@@ -7761,6 +7767,7 @@ public partial class MultiplayerTab : UserControl
                     "MpChatReplaySaved", replayInfo.File.Name, replayInfo.File.Length / 1024));
 
             MaybeReportMissingRecording(profile, ctx, replayInfo);
+            RememberRecordingOutcome(profile, ctx, replayInfo);
 
             // The room is still playing and our game is not — offer the way back in, and say the
             // part nobody can guess: leaving the room now is one-way, because the backend refuses
@@ -8804,9 +8811,136 @@ public partial class MultiplayerTab : UserControl
     /// <para>Not a danger confirm: nothing is being destroyed, and painting it red would teach
     /// people to click through the ones that are.</para>
     /// </summary>
+    /// <summary>
+    /// How long into a match to ask whether a recording has appeared yet.
+    ///
+    /// <para>Late enough that a slow map generation or a long loading screen cannot be mistaken
+    /// for "not recording", early enough that the answer would still be worth acting on if this
+    /// ever becomes a real check.</para>
+    /// </summary>
+    private const long RecordingProbeAfterMs = 90_000;
+
+    /// <summary>
+    /// Once per competitive match, record in the log whether AoE3 has created a recording file
+    /// yet. <b>It logs; it does not warn.</b>
+    ///
+    /// <para><b>This is instrumentation for an open question, not a feature.</b> Nobody knows
+    /// whether AoE3 creates the <c>.age3Yrec</c> when the match STARTS or only when it ends. If it
+    /// is at the start, the launcher could tell a competitive host mid-match that nothing is being
+    /// recorded, while there is still time to restart — which would turn the pre-match reminder
+    /// from a nudge into a real check. If it is at the end, the idea is dead and this probe should
+    /// be deleted.</para>
+    ///
+    /// <para><b>Warning now would be worse than not asking.</b> Acting on the unproven half would
+    /// fire a false alarm on every single match if AoE3 turns out to write at the end. So this
+    /// gathers the answer from real players' bundles first — the same approach
+    /// <c>replay-index.txt</c> was added for — and a later version decides.</para>
+    ///
+    /// <para>Competitive host matches only: that is where Record Game was just confirmed, so the
+    /// absence of a file actually means something.</para>
+    /// </summary>
+    private void MaybeProbeRecordingStarted()
+    {
+        if (_recordingProbeDone) return;
+        if (_matchContext?.IsCompetitive != true) return;
+        if (Environment.TickCount64 - _matchTimerStartTicks < RecordingProbeAfterMs) return;
+        _recordingProbeDone = true;
+
+        try
+        {
+            var profile = _currentLobbyModId != null ? ModRegistry.Find(_currentLobbyModId) : null;
+            if (profile == null || _config == null) return;
+            var folder = UserDataService.GetUserDataFolder(
+                UserDataService.ResolveFolderName(profile, _config));
+            if (string.IsNullOrEmpty(folder)) return;
+            var saves = System.IO.Path.Combine(folder, "Savegame");
+            if (!System.IO.Directory.Exists(saves)) return;
+
+            // Newer than the launch, so somebody else's downloaded replay sitting in the same
+            // folder cannot answer yes for us — the same trap FindMatchReplay guards against.
+            var startedUtc = _matchContext?.StartedAtUtc ?? DateTime.UtcNow;
+            var fresh = 0;
+            foreach (var f in System.IO.Directory.EnumerateFiles(saves, "*.age3yrec"))
+            {
+                try { if (System.IO.File.GetLastWriteTimeUtc(f) >= startedUtc) fresh++; }
+                catch { /* one unreadable entry must not end the count */ }
+            }
+
+            DiagnosticLog.Write(
+                $"RecordingProbe: {RecordingProbeAfterMs / 1000}s into a competitive match, " +
+                $"{fresh} recording(s) newer than the launch in '{saves}'. " +
+                "(Answers whether AoE3 writes the file at match START or only at the end.)");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.MaybeProbeRecordingStarted: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Write down whether this competitive match produced a recording, so the next start can lead
+    /// with a fact instead of repeating the reminder.
+    ///
+    /// <para>Asked with the SAME inputs as <see cref="MaybeReportMissingRecording"/> right above
+    /// it, so the two can never disagree about whether this was a real host-side match. The rules
+    /// live in <see cref="Services.Multiplayer.RecordingMemory"/>; the null it can return means
+    /// "we learned nothing here", and must leave the previous memory untouched — otherwise one
+    /// casual game in between would quietly clear a warning that had been earned.</para>
+    /// </summary>
+    private void RememberRecordingOutcome(
+        ModProfile profile, Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay)
+    {
+        try
+        {
+            if (_config == null) return;
+            var verdict = Services.Multiplayer.RecordingMemory.Evaluate(
+                competitive: ctx?.IsCompetitive == true,
+                reportable: ctx?.CanReport(DateTime.UtcNow, MinReportableSeconds).Ok == true,
+                recordingFound: replay != null);
+            if (verdict == null) return;
+
+            var state = _config.GetState(profile.Id);
+            if (state.LastMatchHadNoRecording == verdict) return;
+            state.LastMatchHadNoRecording = verdict;
+            _config.Save();
+            DiagnosticLog.Write(
+                $"RecordingMemory: '{profile.Id}' last competitive match " +
+                $"{(verdict == true ? "produced NO recording" : "was recorded")}.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.RememberRecordingOutcome: {ex.Message}");
+        }
+    }
+
     private async Task<bool> ConfirmRecordGameAsync()
     {
         if (_lobbyWindow == null) return true;
+
+        // Lead with the fact when there is one. The plain reminder stays for everyone else: AoE3's
+        // box comes up unticked EVERY match, so the first game of a session is the one most often
+        // forgotten and would otherwise get nothing at all.
+        // The ROOM's mod, which needn't be the one on the dashboard — the memory is per mod
+        // because AoE3's recording setting is per mod profile.
+        var profileId = _currentLobbyModId ?? _getActiveProfile?.Invoke()?.Id;
+        bool? lastFailed = null;
+        if (_config != null && !string.IsNullOrEmpty(profileId)
+            && _config.Mods.TryGetValue(profileId!, out var st) && st != null)
+        {
+            lastFailed = st.LastMatchHadNoRecording;
+        }
+
+        if (Services.Multiplayer.RecordingMemory.ShouldEscalate(lastFailed))
+        {
+            return await MpAlertOverlay.ConfirmAsync(
+                _lobbyWindow.LobbyRootGrid,
+                Strings.Get("MpStartConfirmRecordTitleAgain"),
+                Strings.Get("MpStartConfirmRecordBodyAgain"),
+                Strings.Get("MpStartConfirmRecordYes"),
+                Strings.Get("MpStartConfirmRecordNo"),
+                danger: false);
+        }
+
         return await MpAlertOverlay.ConfirmAsync(
             _lobbyWindow.LobbyRootGrid,
             Strings.Get("MpStartConfirmRecordTitle"),
@@ -9129,6 +9263,7 @@ public partial class MultiplayerTab : UserControl
         if (!resume)
         {
             _matchTimerStartTicks = Environment.TickCount64;
+            _recordingProbeDone = false;
 
             // Capture the facts of this match — roster, room, our role, the clock — so the
             // report at the end reads them instead of asking a room that may be gone by then.
@@ -9195,7 +9330,11 @@ public partial class MultiplayerTab : UserControl
             // independent of this timer to stay smooth.
             Interval = TimeSpan.FromSeconds(1),
         };
-        _inGameTickTimer.Tick += (_, _) => RefreshInGamePanel();
+        _inGameTickTimer.Tick += (_, _) =>
+        {
+            RefreshInGamePanel();
+            MaybeProbeRecordingStarted();
+        };
         _inGameTickTimer.Start();
         RefreshInGamePanel();
     }

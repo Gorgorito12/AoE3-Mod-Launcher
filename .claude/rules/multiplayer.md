@@ -447,6 +447,39 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   our written value** across a launch/exit cycle, so the launcher's write is stable and is not
   fought.
 
+  **The competitive confirmation is a NUDGE, not a guarantee — and it now escalates on
+  evidence.** `ConfirmRecordGameAsync` is a dialog in the LAUNCHER: it ticks nothing inside AoE3
+  and cannot see whether the player ticked it. Nothing can (see the two dead candidates above:
+  the profile setting and `+RecordGame`). Anyone reading the code should know that before
+  reasoning about what it guarantees, because the answer is nothing.
+  **What it can do is stop repeating itself.** `Services/Multiplayer/RecordingMemory` (pure,
+  `RecordingMemoryTests`) records, per mod, whether the last competitive match produced a
+  recording; the next start then leads with the fact — "your last match wasn't recorded" —
+  instead of the same instruction a third time. A reminder that reads identically every time
+  stops being read; a statement about something that already happened does not.
+  **Three rules are load-bearing:**
+  (1) **A recording that exists but never finished writing its ending counts as RECORDED.** That
+  player DID tick the box; what failed was closing AoE3 without returning to the main menu.
+  Escalating there sends them to fix the one thing that was not broken, and the end-of-match card
+  already names the real cause.
+  (2) **`Evaluate` returns null — "learned nothing" — for a casual or non-reportable match**, and
+  the caller must leave the memory untouched. Returning "recorded" there would let one friendly
+  game in between quietly clear a warning that had been earned.
+  (3) **It is per MOD** (`ModState.LastMatchHadNoRecording`, beside `GameRecordingApplied`),
+  because `optionrecordgame` is per mod profile. It is written beside
+  `MaybeReportMissingRecording` with the SAME inputs, so the two cannot disagree about whether
+  this was a real host-side match.
+  **`MaybeProbeRecordingStarted` is INSTRUMENTATION for an open question, not a feature.** Nobody
+  knows whether AoE3 creates the `.age3Yrec` when a match STARTS or only when it ends. If at the
+  start, the launcher could tell a competitive host mid-match that nothing is recording, while
+  there is still time to restart — which would finally make this a real check. So a one-shot
+  probe 90 s into a competitive host match LOGS how many recordings newer than the launch exist,
+  and **deliberately does not warn**: acting on the unproven half would fire a false alarm on
+  every match if AoE3 turns out to write at the end. Same approach `replay-index.txt` was added
+  for — let the answer arrive from real bundles. **When it does: either this becomes a live check,
+  or the probe is deleted and the reason written down here.** Do not leave it as a permanent
+  log line nobody reads.
+
   **So the host is reminded before every launch, and only an explicit
   `LauncherConfig.GameRecordingReminderMuted` stops it.** It was first gated on "a recording
   was read, so it must be working" — and that is exactly what the measurement above kills: if

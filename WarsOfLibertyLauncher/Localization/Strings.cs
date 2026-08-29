@@ -3781,6 +3781,25 @@ public static class Strings
                      + "cada partida, y el launcher no puede activarla por ti. Sin grabación no "
                      + "hay forma de saber quién ganó, y la partida no puntúa.",
         },
+        // The same prompt once the launcher has EVIDENCE. It leads with the fact rather than the
+        // instruction, because a reminder that reads identically every time stops being read —
+        // and this one is not a reminder, it is something that already happened.
+        ["MpStartConfirmRecordTitleAgain"] = new()
+        {
+            [LangEn] = "Your last match wasn't recorded",
+            [LangEs] = "Tu partida anterior no se grabó",
+        },
+        ["MpStartConfirmRecordBodyAgain"] = new()
+        {
+            [LangEn] = "The previous competitive match left no recording, so it counted for "
+                     + "nobody. The box is inside Age of Empires III and the launcher cannot tick "
+                     + "it for you: when the game opens, tick Record Game on the match setup "
+                     + "screen — it comes up unticked every single match.",
+            [LangEs] = "La partida competitiva anterior no dejó grabación, así que no contó para "
+                     + "nadie. La casilla está dentro de Age of Empires III y el launcher no "
+                     + "puede marcarla por ti: cuando abra el juego, marca «Record Game» en la "
+                     + "pantalla de la partida — vuelve desmarcada en cada partida.",
+        },
         ["MpStartConfirmRecordYes"] = new()
         {
             [LangEn] = "Got it — start",

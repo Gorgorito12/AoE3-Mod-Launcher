@@ -12,9 +12,12 @@
 
 - **Todos empiezan en 1500.** No es un número de adorno: es el punto de partida real
   desde el que se calcula tu primera partida.
-- **Solo puntúan las partidas de Wars of Liberty, uno contra uno, y con grabación.**
-  Cualquier otra cosa **se guarda igual en tu historial**, pero no mueve la puntuación
-  de nadie.
+- **Solo puntúan las partidas de una sala competitiva, de Wars of Liberty, uno contra uno
+  y con grabación.** Al crear una sala hay una casilla, **Sala competitiva**: si no la
+  marcas, la partida se juega igual y **queda en tu historial**, pero no mueve la
+  puntuación de nadie. Es a propósito — así una partida de prueba no te cuesta puntos.
+- **En una sala competitiva, abandonar cuenta como derrota** pasados los primeros
+  5 minutos. Ver [Abandonar una partida competitiva](#abandonar-una-partida-competitiva).
 - **Tienes que marcar «Record Game» en la pantalla de configuración de AoE3, cada
   partida.** Es lo único que hay que hacer a mano.
 - **Cuando una partida no puntúa, el launcher te dice por qué** en vez de callarse.
@@ -27,6 +30,11 @@ Age of Empires III **vuelve a desmarcar esa casilla en cada partida**. Está com
 no hay forma de dejarla puesta desde fuera, ni desde el perfil ni con argumentos de
 arranque. Por eso el launcher te lo recuerda en la sala antes de empezar, y te avisa
 después si la partida se jugó sin grabar.
+
+**Ese aviso es un recordatorio, no una garantía.** La casilla está dentro del juego: el
+launcher no puede marcarla por ti ni comprobar si la marcaste. Lo que sí hace es
+**acordarse**: si tu última partida competitiva se quedó sin grabación, el aviso de la
+siguiente empieza diciéndotelo, en vez de repetirte el mismo texto.
 
 Sin grabación nadie sabe quién ganó — ni el launcher, ni el servidor. **Si no graba
 ninguno de los dos, el resultado se pierde para los dos.** Si graba solo uno, todavía se
@@ -83,6 +91,27 @@ de serlo sola, jugando.
 **No jugar no cambia nada.** No hay decaimiento por inactividad: si te vas un año y
 vuelves, tienes la misma puntuación y los mismos saltos pequeños que dejaste.
 
+### Abandonar una partida competitiva
+
+Pasados los primeros **5 minutos**, si te vas de una partida competitiva y no vuelves,
+cuenta como **derrota** y tu rival se lleva la victoria. Es la regla de siempre en cualquier
+sistema de clasificación, y la casilla te lo advierte antes de que crees la sala.
+
+- **Una desconexión cuenta igual.** Desde fuera no hay forma de distinguir un corte de luz
+  de alguien que cierra el juego para no perder puntos, y fingir que sí la hay sería
+  mentirte.
+- **Solo si el otro se queda.** Si se caen los dos —lo típico cuando se corta la conexión
+  del anfitrión y se lleva la sala por delante— no gana nadie: queda sin resultado.
+- **Una grabación que diga quién ganó siempre manda.** El abandono solo decide las partidas
+  que se habrían quedado sin resultado, nunca cambia una que ya lo tenía.
+- **Hace falta que la partida se haya grabado.** Sin una grabación de por medio el abandono
+  no decide nada, y tampoco puede repetirse una y otra vez entre los mismos dos jugadores:
+  las dos cosas están para que nadie se invente partidas y farmee puntos.
+- **Antes de los 5 minutos no pasa nada.** Ahí lo normal es que la partida empezara mal
+  —mapa equivocado, opciones mal puestas— y no que alguien esté huyendo.
+
+Si crees que una se decidió mal, escribe por Discord: se puede revisar y deshacer.
+
 ### Cuando una partida no puntúa
 
 El servidor decide si una partida cuenta y **dice el motivo**; el launcher te lo muestra
@@ -96,6 +125,7 @@ tal cual en la tarjeta del final. Estos son todos los casos:
 | «La partida no se grabó, así que no hay forma de saber quién ganó» | No apareció ninguna grabación de esa partida | Marcar «Record Game» antes de la próxima |
 | «La grabación no dice quién ganó» | Se leyó, pero no nombra un ganador utilizable | Nada que arreglar |
 | «Solo las partidas uno contra uno cuentan para el ELO» | Fue una partida por equipos | Nada: una grabación nombra a un perdedor, y eso no dice quién ganó un 2v2 |
+| «Esta sala no era competitiva» | La sala se creó sin marcar **Sala competitiva** | Marca la casilla al crear la sala. La partida queda en tu historial igual |
 | «Este mod todavía no tiene clasificación» | Hoy solo Wars of Liberty puntúa | Nada. Los demás mods siguen guardando historial |
 | «Los tiempos de esta partida no cuadran» | Duró menos de **3 minutos**, o los relojes no cuadran | Nada, salvo jugar partidas de verdad |
 | «Alguien de este reporte no estaba en la sala cuando empezó la partida» | Alguien entró después de que empezara | Que estén todos en la sala antes de empezar |
@@ -165,6 +195,26 @@ hora local sobre los últimos 30 días.
 
 ### Preguntas frecuentes
 
+**Jugué una partida entera y no me sumó nada. ¿Por qué?**
+Lo más probable es que la sala no fuera competitiva. Desde la v1.0.13 solo puntúan las
+partidas de una sala creada con la casilla **Sala competitiva** marcada; el resto se juega
+igual y queda en tu historial, pero no mueve puntos. La tarjeta del final te dice cuál de
+los motivos fue.
+
+**Se me cortó internet a mitad de una partida competitiva y perdí puntos. ¿Es normal?**
+Sí, y es a propósito. Pasados los primeros 5 minutos, irte de una partida competitiva
+cuenta como derrota — y desde fuera no hay manera de distinguir un corte real de alguien
+que cierra el juego para no perder. Es la regla en cualquier sistema de clasificación. Si
+crees que se decidió mal, escribe por Discord: se puede revisar y deshacer.
+
+**Mi juego me pide permisos de administrador y no se me reporta ninguna partida.**
+Era un fallo, arreglado en la v1.0.13. Windows le pone a veces un modo de compatibilidad a
+`age3y.exe` por su cuenta, y eso hacía que el launcher no se enterara de que habías cerrado
+el juego: no se leía la grabación, no se reportaba nada y, si eras el anfitrión, **ninguna
+de tus partidas llegaba a existir**. Ahora el launcher te ofrece quitar ese modo al terminar
+la partida. A mano: clic derecho en `age3y.exe` → Propiedades → Compatibilidad, y desmarca
+lo que esté marcado.
+
 **¿Y los empates?**
 No existen. Una partida cuyo resultado no se pudo leer **no es un empate** — por eso la
 fila del historial no muestra nada en vez de decir "Empate". Un empate que nunca ocurrió
@@ -207,8 +257,12 @@ huellas, que son números y no contienen el archivo.
 
 - **Everybody starts at 1500.** Not a placeholder: it is the real starting point your
   first match is calculated from.
-- **Only Wars of Liberty matches, one-on-one, with a recording, count.** Anything else is
-  **still saved to your history**, it just doesn't move anyone's rating.
+- **Only matches in a competitive room, on Wars of Liberty, one-on-one, with a recording,
+  count.** Creating a room has a **Competitive room** checkbox: leave it unticked and the
+  match plays exactly the same and **stays in your history**, it just doesn't move anyone's
+  rating. That is deliberate — a practice game shouldn't cost you points.
+- **In a competitive room, walking out counts as a loss** after the first five minutes. See
+  [Walking out of a competitive match](#walking-out-of-a-competitive-match).
 - **You have to tick "Record Game" on the AoE3 setup screen, every match.** It is the one
   thing you do by hand.
 - **When a match doesn't count, the launcher tells you why** instead of staying quiet.
@@ -221,6 +275,11 @@ Age of Empires III **unticks that box again every match**. This has been tested:
 no way to make it stick from outside — not from the profile, not with launch arguments.
 So the launcher reminds you in the room before you start, and tells you afterwards if the
 game was played without recording.
+
+**That reminder is a nudge, not a guarantee.** The box lives inside the game: the launcher
+can neither tick it for you nor see whether you did. What it can do is **remember**: if your
+last competitive match ended with no recording, the next reminder leads with that instead of
+repeating the same text.
 
 With no recording nobody knows who won — not the launcher, not the server. **If neither
 player records, the result is lost for both.** If only one of you did, it can still be
@@ -278,6 +337,27 @@ being provisional on its own, by playing.
 **Not playing changes nothing.** There is no inactivity decay: leave for a year and you
 return on the same rating, with the same small swings.
 
+### Walking out of a competitive match
+
+After the first **five minutes**, leaving a competitive match and not coming back counts as
+a **loss**, and your opponent is credited with the win. It is the standard rule in any
+rating system, and the checkbox warns you before you create the room.
+
+- **A disconnection counts the same.** From the outside there is no way to tell a power cut
+  from somebody closing the game to dodge a loss, and pretending otherwise would be lying to
+  you.
+- **Only if the other player stayed.** If you both drop — typically when the host's
+  connection dies and takes the room with it — nobody wins: it ends with no result.
+- **A recording that names a winner always wins.** Walking out only decides matches that
+  would have ended with no result; it never changes one that already had it.
+- **The match has to have been recorded.** With no recording involved, walking out decides
+  nothing — and it cannot happen over and over between the same two players either. Both
+  exist so nobody can invent matches and farm points.
+- **Before the five minutes, nothing happens.** That early, the usual reason is a match that
+  started wrong — the wrong map, the wrong settings — not somebody running away.
+
+If you think one was decided wrongly, say so on Discord: it can be reviewed and undone.
+
 ### When a match doesn't count
 
 The server decides whether a match counts and **says why**; the launcher shows you that
@@ -291,6 +371,7 @@ reason verbatim on the end-of-match card. These are all the cases:
 | "The match was not recorded, so nobody can tell who won" | No recording of that match turned up | Tick "Record Game" before the next one |
 | "The recording does not say who won" | It was read, but names no usable winner | Nothing to fix |
 | "Only one-on-one matches count towards the rating" | It was a team game | Nothing: a recording names one loser, which says nothing about who won a 2v2 |
+| "This room wasn't a competitive one" | The room was created without ticking **Competitive room** | Tick the box when you create the room. The match stays in your history either way |
 | "This mod has no ladder yet" | Today only Wars of Liberty is rated | Nothing. Other mods still record history |
 | "The times reported for this match don't add up" | It ran under **3 minutes**, or the clocks disagree | Nothing, other than playing real games |
 | "Someone in this report was not in the room when the game started" | Somebody joined after it began | Have everyone in the room before starting |
@@ -357,6 +438,24 @@ in your local time over the last 30 days.
 - On every **History** row, with that match's change.
 
 ### FAQ
+
+**I played a whole match and got nothing. Why?**
+Most likely the room wasn't competitive. Since v1.0.13 only matches in a room created with
+the **Competitive room** box ticked are rated; everything else plays the same and stays in
+your history, but moves no points. The end-of-match card tells you which reason applied.
+
+**My internet dropped mid-match in a competitive room and I lost points. Is that right?**
+Yes, and it is deliberate. After the first five minutes, leaving a competitive match counts
+as a loss — and from the outside there is no way to tell a real outage from somebody closing
+the game to avoid losing. It is the rule in any rating system. If you think one was decided
+wrongly, say so on Discord: it can be reviewed and undone.
+
+**My game asks for administrator permission and none of my matches get reported.**
+That was a bug, fixed in v1.0.13. Windows sometimes applies a compatibility mode to
+`age3y.exe` on its own, and that stopped the launcher noticing you had closed the game: the
+recording was never read, nothing was reported and, if you were the host, **none of your
+matches ever existed**. The launcher now offers to remove that mode when the match ends. By
+hand: right-click `age3y.exe` → Properties → Compatibility, and untick whatever is ticked.
 
 **What about draws?**
 There are none. A match whose result couldn't be read **is not a draw** — which is why the
