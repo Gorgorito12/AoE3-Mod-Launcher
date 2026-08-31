@@ -103,6 +103,17 @@ public class LobbyHost
     /// both mean "don't paint a number", never "1500".</summary>
     [JsonPropertyName("rating")]
     public double? Rating { get; set; }
+
+    /// <summary>
+    /// The host's Glicko deviation, and the ONLY thing that separates "1500 because they have
+    /// never played" from "1500 because that is where they landed" — the rating alone cannot.
+    ///
+    /// <para>Nullable for the same reason the rating is: a backend that predates it says
+    /// nothing, and nothing must not be read as a claim about the player. See
+    /// <c>RatingDisplay.IsUnrated</c>.</para>
+    /// </summary>
+    [JsonPropertyName("rd")]
+    public double? Rd { get; set; }
 }
 
 public class LobbySummary

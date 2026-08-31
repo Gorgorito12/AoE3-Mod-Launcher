@@ -25,7 +25,8 @@ public class LauncherUpdateServiceTests
     [InlineData("v0.9.9", "0.9.9.0", null,     "v0.9.9", false)]
     // Saved tag older than remote → update (unchanged behaviour).
     [InlineData("v0.9.8", "0.9.9.0", null,     "v0.9.9", true)]
-    // A saved tag wins over a stale AssemblyVersion — it's the authoritative record.
+    // With no informational stamp to consult, the saved tag is what is left to go on and it
+    // beats the numeric AssemblyVersion. It used to beat the STAMP too; see the theory below.
     [InlineData("v0.9.9", "0.6.0.0", null,     "v0.9.9", false)]
     // Dismissed tag suppresses the prompt even with no saved tag and an old asm.
     [InlineData("",       "0.6.0.0", "v0.9.9", "v0.9.9", false)]
@@ -55,6 +56,59 @@ public class LauncherUpdateServiceTests
             lastInstalledTag, Version.Parse(asmVersion), skippedTag, remoteTag);
 
         Assert.Equal(expectedOffer, offer);
+    }
+
+    /// <summary>
+    /// <b>The reported bug: a hand-downloaded older build was never offered the newer one.</b>
+    ///
+    /// <para>The config records what was last INSTALLED and lives in %LocalAppData%, away from
+    /// the .exe — so running a v1.0.12e downloaded by hand reads the tag a previous v1.0.13
+    /// wrote, concludes it is already newest, and goes quiet forever. Confirmed from a real
+    /// machine, whose log printed <c>Current tag: 'v1.0.13', AssemblyVersion: 1.0.12.0</c>.</para>
+    ///
+    /// <para>The binary's own stamp wins now. The last row is the one that keeps the reason the
+    /// saved tag was ever first: a build with no stamp still has to fall back to it.</para>
+    /// </summary>
+    [Theory]
+    // The exact report: saved tag NEWER than the running binary → offer anyway.
+    [InlineData("v1.0.13", "v1.0.12e", "v1.0.13", true)]
+    // The same shape without the letter, so the fix does not hinge on suffix parsing.
+    [InlineData("v1.0.13", "v1.0.12",  "v1.0.13", true)]
+    // The binary IS the newest → still nothing to offer. The fix must not invent updates.
+    [InlineData("v1.0.12", "v1.0.13",  "v1.0.13", false)]
+    // Both agree, which is every normal self-updated install: unchanged.
+    [InlineData("v1.0.13", "v1.0.13",  "v1.0.13", false)]
+    // No stamp (a build published without -Version) → the saved tag is the fallback.
+    [InlineData("v1.0.13", "",         "v1.0.13", false)]
+    public void EvaluateUpdate_TrustsTheRunningBinaryOverTheSavedTag(
+        string savedTag, string informationalTag, string remoteTag, bool expectedOffer)
+    {
+        var (offer, _) = LauncherUpdateService.EvaluateUpdate(
+            savedTag, new Version(1, 0, 12), skippedTag: "", remoteTag: remoteTag,
+            currentInformationalTag: informationalTag);
+
+        Assert.Equal(expectedOffer, offer);
+    }
+
+    /// <summary>
+    /// Whether the saved tag has to be thrown away — and with it the cached ETag, because a
+    /// conditional request answering 304 skips the comparison entirely.
+    ///
+    /// <para>The refusals are the point: with nothing saved, or a binary that carries no stamp,
+    /// there is no contradiction to act on and the config must be left alone.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("v1.0.13", "v1.0.12e", true)]   // the reported case
+    [InlineData("v1.0.13", "v1.0.13",  false)]  // they agree
+    [InlineData("v1.0.13", "V1.0.13",  false)]  // ...case-insensitively
+    [InlineData("",        "v1.0.12e", false)]  // nothing saved yet — a first run
+    [InlineData("v1.0.13", "",         false)]  // unstamped build: it cannot contradict anything
+    public void SavedTagContradictsBinary_OnlyWhenBothAreKnownAndDiffer(
+        string savedTag, string informationalTag, bool expected)
+    {
+        Assert.Equal(
+            expected,
+            LauncherUpdateService.SavedTagContradictsBinary(savedTag, informationalTag));
     }
 
     [Fact]

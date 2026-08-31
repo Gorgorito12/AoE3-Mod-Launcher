@@ -49,4 +49,38 @@ public static class RatingDisplay
     /// never played does not.</para>
     /// </summary>
     public static bool ShouldShow(double? rating) => rating.HasValue;
+
+    /// <summary>
+    /// The rating deviation the server hands somebody who has never been rated. Anyone still
+    /// sitting on it has not had a match move their number.
+    /// </summary>
+    public const double UnratedRd = 350;
+
+    /// <summary>
+    /// Whether this player has never played a rated match — and so should read "unrated"
+    /// instead of the 1500 everybody starts from.
+    ///
+    /// <para><b>This narrows <see cref="ShouldShow"/>, which was itself a reversal</b>, so both
+    /// turns are written down. That one argued a number everybody starts from claims nothing
+    /// about anyone; true, and it still left the same 1500 beside a name that had earned it and
+    /// a name that had not, with no way to tell which. Saying "unrated" says the one thing the
+    /// number could not.</para>
+    ///
+    /// <para><b>Not knowing is not the same as unrated, and it keeps painting the number.</b>
+    /// A backend older than these fields sends neither, and turning that silence into a claim
+    /// about the player would be inventing a state — the same refusal <see cref="ShouldShow"/>
+    /// makes about a null rating.</para>
+    ///
+    /// <para>Two signals because the surfaces carry different things: <c>GET /matches/elo</c>
+    /// gives a game count, the room roster gives only <c>rd</c>. They agree by construction —
+    /// <c>applyMatch</c> is the one writer of both.</para>
+    /// </summary>
+    public static bool IsUnrated(double? rd, int? gamesPlayed)
+    {
+        if (gamesPlayed is int played) return played <= 0;
+        // Float-safe: the server sends its own constant back, but it makes the round trip
+        // through JSON and a hair under 350 still means untouched.
+        if (rd is double dev) return dev >= UnratedRd - 0.5;
+        return false;
+    }
 }

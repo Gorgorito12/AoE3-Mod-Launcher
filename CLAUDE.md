@@ -4105,10 +4105,20 @@ magnifying the whole surface through `UiScale` was tried and rejected on sight. 
   `CheckAsync` only offers an update when the remote tag parses as a *strictly
   newer* SemVer than the installed one (`TryParseSemVer` strips a leading `v`
   and any `-rc`/`+commit` suffix). The guard compares the remote tag against an
-  **effective current version**: the saved tag when present, else — for a binary
-  that never self-updated in-app (a manual download from GitHub Releases, or a
-  build run straight from `publish\`) — the binary's **stamped AssemblyVersion**
-  (`EvaluateUpdate` → `FormatVersionTag`, `0.9.9.0` → `v0.9.9`). This closed a
+  **effective current version**, and **the order was REVERSED after a real report**: the
+  binary's own stamp first (`CurrentInformationalTag`, which carries a letter suffix),
+  then the saved tag, then the numeric AssemblyVersion. **The saved tag used to win, and
+  that is a claim about a FILE that may no longer be the one running.** The config lives in
+  `%LocalAppData%` and is deliberately decoupled from where the `.exe` sits, so downloading
+  an older release by hand reads the tag a newer one wrote: a `1.0.12e` concluded it was
+  already `v1.0.13` and went quiet **permanently**. The maintainer's own log had printed the
+  contradiction all along — `Current tag: 'v1.0.13', AssemblyVersion: 1.0.12.0` — and nothing
+  acted on it, so that line now carries the binary's stamp AND the conclusion, which it never
+  did. `MainWindow.CheckForLauncherUpdateInnerAsync` also **re-stamps the saved tag from the
+  binary and drops the cached ETag** whenever `SavedTagContradictsBinary` says they disagree;
+  the two must go together, see (4). The saved tag survives as the FALLBACK for the reason it
+  was ever first — a build published without `-Version` carries no stamp and cannot say what
+  it is. This closed a
   real bug: an empty saved tag used to fall through to prompt-on-any-difference,
   so a freshly-downloaded `v0.9.9` offered an "update" to `v0.9.9` and showed
   `current: —` (it hit every user the first time they opened the .exe). The
@@ -4149,10 +4159,16 @@ magnifying the whole surface through `UiScale` was tried and rejected on sight. 
   ETag is threaded through **every** return path (including the `catch`, which
   preserves the cached value so a transient failure doesn't force a full fetch)
   and persisted by the caller in `MainWindow.CheckForLauncherUpdateInnerAsync`
-  only when it changed. Returning `NoUpdate` on 304 is **correct, not a missed
-  prompt**: after the first prompt the tag is always either installed or saved
-  as `SkippedLauncherTag` (any dialog dismissal saves it), so the full path
-  would also return `NoUpdate`; a genuinely new release changes GitHub's ETag →
+  only when it changed. **The 304 shortcut rested on two claims and BOTH were false**, which
+  is the other half of the bug in (1): that the binary never moves backwards — a hand-swapped
+  `.exe` does exactly that, and the ETag fingerprints the REMOTE release, so nothing about a
+  local downgrade invalidates it — and that anything not installed was saved as
+  `SkippedLauncherTag`, which is now **dead code** (`MainWindow` passes `""` and the only
+  writer sets `""`; the persistent dismissal was removed when the pill replaced the modal).
+  So the mismatch check in (1) clears the ETag, and **the manual button forces a check with no
+  `If-None-Match`** — a check somebody asked for by hand must ask a real question, and
+  answering it out of a cached 304 is precisely what makes it look broken. A genuinely new
+  release changes GitHub's ETag →
   `200` → re-evaluated. Asset selection (`FindExeAsset`) prefers the exact name
   `Aoe3ModLauncher.exe`, falling back to the first `.exe` only when there's no
   exact match, and the `HttpClient` has a 15 s timeout so a slow GitHub doesn't
@@ -4186,6 +4202,26 @@ magnifying the whole surface through `UiScale` was tried and rejected on sight. 
   `StopLauncherUpdatePillPulse`) and on click (`LauncherUpdatePill_Click`) opens the
   existing download/restart dialog. Strings `LauncherUpdatePill` /
   `LauncherUpdatePillTooltip`.
+  **(7) There is a MANUAL check, in Settings -> Maintenance**, and it exists because there was no
+  way to re-run one: the check fires at startup and from the offline chip, and **that chip is only
+  on screen while you are offline**. Anyone whose check went quiet — the stale saved tag in (1),
+  the cached ETag in (4) — had to edit the JSON by hand to recover. It reuses
+  `CheckForLauncherUpdateAsync(force: true)`, which already skips `If-None-Match` and opens the
+  dialog itself; the dialog reports the outcome inline through a `Func<Task<bool?>>` callback
+  because it is NOT modal and the main window's status bar sits behind it (the same reason the
+  mod's own "check for updates" reports inline). **`null` from that callback means the server was
+  never reached, and it says something different from "up to date"** — collapsing the two is how a
+  broken check reads as a healthy one.
+  **(8) The release notes are LINKIFIED** (`Services/LinkedText.cs`, pure + `LinkedTextTests`).
+  The notes are shown verbatim from the release body, and those bodies are now a single bare URL
+  pointing at a `releases/vX.Y.Z.md` in this repo — so the panel rendered a dead address the reader
+  had to retype. Prose becomes `Run`s and each URL a `Hyperlink` opened through **`SafeUrl.TryOpen`,
+  never `Process.Start`**: this text arrives from GitHub, so it is exactly the "a url the launcher
+  did not author" case that rule exists for. (`GitHubLoginDialog` builds a hyperlink the other way
+  and is NOT the model — its target is a constant of the launcher's own.) The splitter's tests are
+  mostly REFUSALS, and that is the point: a body with no URL must come out byte-for-byte as it
+  always did, a scheme `SafeUrl` would refuse must stay prose rather than become a link that does
+  nothing, and a full stop must stay outside the address.
 
 ## Architecture
 
@@ -4816,6 +4852,33 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   that carries an icon font MUST go through `Wrap` (or bring its own TextBlock with a
   local font); don't assign a raw string there. The `ToolTip` style keeps its font
   setters as a harmless default for non-Wrapped tooltips.
+  (4) **A tooltip goes on the whole AREA a person can aim at, never on the small thing
+  painted inside it — and that area needs a non-null `Background`, because `null` is not
+  hit-testable and `Transparent` is.** Rules (1)-(3) are all about a tooltip's CONTENT;
+  this one is about whether it can be reached at all, and it has now cost two silent
+  failures. WPF hit-tests an element only over the rectangle it actually paints, and
+  resolves a tooltip by walking UP from whatever was hit — never down into children. So
+  a tooltip hung on a small painted child inside a large cell is unreachable across most
+  of that cell, and the miss falls through to an ancestor that has no tooltip, which
+  shows nothing rather than erroring. **The measured case, and it is an UNSOLVED
+  one — do not read it as a recipe that worked:** the multiplayer peak-hours histogram
+  put its tooltip on each bar; on real data a quiet hour's bar is 1-3 px tall in a 34-px
+  cell and ~6 px wide, so 91-97 % of every column was dead and the pointer had to hold
+  still inside those pixels for the 400 ms default `InitialShowDelay`. Reported as
+  "hovering does nothing". Wrapping each column in a full-cell
+  `Background = Brushes.Transparent` host carrying the tooltip took the target from
+  12×3 px to 12×34 — **and it still did not fire on the reporter's machine, so it was
+  reverted on his instruction.** Everything else was ruled out with evidence (see
+  `.claude/rules/multiplayer.md`); the suspect left standing is the remaining ~8-12 px of
+  WIDTH. The lesson to take is the rule above, not that recipe. The same recipe IS what
+  makes the rooms table's PLAYERS cell work ("or the gaps between children swallow the
+  click") — a full-size cell, where width was never the problem — and it lived only as a
+  code comment, which is why it did not stop the second case. **The related trap is
+  in the chrome**, where a control in the caption region can never fire a tooltip at all
+  (see the TitleBar bullet). None of this is visible in a build, a screenshot or a diff:
+  if a tooltip's target can be smaller than roughly a finger, assert its geometry in a
+  test the way `DialogXamlTests.EveryHourOfTheHistogramIsHoverableOverItsWholeColumn`
+  does.
   The lobby window (`LobbyWindow`) splits its localisation across **two**
   methods in `MultiplayerTab.xaml.cs`: `ApplyLobbyStaticLabels()` for static
   labels (section/field headers, button captions, chat placeholder, copy

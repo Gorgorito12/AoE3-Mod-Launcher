@@ -2077,6 +2077,14 @@ public partial class MainWindow : Window
             _cachedTranslationIndex = null;
             _ = RefreshTranslationIndexAsync(reportStatus: false);
         };
+        // FORCED, so the request carries no If-None-Match: a check the user asked for by hand
+        // must not be answered "nothing new" out of a cached 304. Returns null when the server
+        // could not be reached at all, which the dialog says differently from "up to date".
+        dialog.CheckLauncherUpdateRequested = async () =>
+        {
+            await CheckForLauncherUpdateAsync(force: true);
+            return ConnectivityState.IsOffline ? null : _pendingLauncherUpdate != null;
+        };
 
         // Closed (fires for Save, Cancel, ✕, Esc, and Alt+F4) is the
         // single rendezvous point for post-dialog refresh. ChangesSaved
@@ -8079,6 +8087,29 @@ public partial class MainWindow : Window
         // installed", so this never offers a same/older version. Passing ""
         // also recovers users who previously dismissed (their stale persisted
         // SkippedLauncherTag is no longer read).
+        // THE SAVED TAG CAN DESCRIBE A DIFFERENT FILE. The config lives in %LocalAppData%
+        // and is deliberately decoupled from where the .exe sits, so downloading an older
+        // release by hand leaves a tag from the newer one behind — and then nothing can be
+        // offered ever again, because the launcher believes it is already on the newest.
+        // Measured from a real report: the line below printed 'v1.0.13' beside an
+        // AssemblyVersion of 1.0.12.0, and the check quietly concluded there was nothing to do.
+        //
+        // The stored tag is re-stamped from the binary AND the cached ETag is dropped, which
+        // has to happen together: the ETag fingerprints the REMOTE release, so with the newest
+        // release unchanged GitHub answers 304 and the corrected comparison never runs.
+        var informationalTag = LauncherUpdateService.CurrentInformationalTag;
+        if (LauncherUpdateService.SavedTagContradictsBinary(
+                _config.LastInstalledLauncherTag, informationalTag))
+        {
+            DiagnosticLog.Write(
+                $"Launcher self-update: saved tag '{_config.LastInstalledLauncherTag}' does not " +
+                $"match the running binary '{informationalTag}' — trusting the binary, " +
+                "re-stamping the tag and dropping the cached ETag.");
+            _config.LastInstalledLauncherTag = informationalTag;
+            _config.LauncherUpdateETag = "";
+            _config.Save();
+        }
+
         var result = await LauncherUpdateService.CheckAsync(
             lastInstalledTag: _config.LastInstalledLauncherTag,
             skippedTag: "",
@@ -8097,6 +8128,11 @@ public partial class MainWindow : Window
                 _config.LauncherUpdateETag = result.ResponseETag;
                 _config.Save();
             }
+            // The CONCLUSION, which this log never carried. The line above records what the
+            // check was told; without this one a bundle shows the inputs and nothing about
+            // what was decided, which is what made the report above take an afternoon.
+            DiagnosticLog.Write(
+                $"Launcher self-update: nothing newer than '{result.CurrentVersion}'.");
             _pendingLauncherUpdate = null;
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
             StopLauncherUpdatePillPulse();

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -235,27 +236,155 @@ public static class RadminVpnService
     /// usuario prende Radmin justo después ya queda ligado al adaptador bueno.
     /// Never throws — returns null on any enumeration error.
     /// </summary>
+    /// <summary>
+    /// One network interface, reduced to the four things that decide whether it is Radmin's.
+    ///
+    /// <para>A plain record because <see cref="NetworkInterface"/> cannot be constructed, which is
+    /// why the selection below had no test at all — and the untested half is precisely the one
+    /// that failed in the wild.</para>
+    /// </summary>
+    public sealed record AdapterCandidate(
+        string Id,
+        string Name,
+        string Description,
+        OperationalStatus Status,
+        IReadOnlyList<string> IPv4Addresses)
+    {
+        /// <summary>The Radmin address this interface carries, or null. THE identity test.</summary>
+        public string? Radmin26Ip
+        {
+            get
+            {
+                foreach (var ip in IPv4Addresses)
+                    if (ip.StartsWith(Radmin26Prefix, StringComparison.Ordinal)) return ip;
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Radmin hands every machine an address in 26.0.0.0/8 and that block appears on a home PC by
+    /// no other route, so it — not a name — is what says "this is the Radmin adapter".
+    /// </summary>
+    private const string Radmin26Prefix = "26.";
+
+    /// <summary>
+    /// Picks Radmin's adapter out of the machine's interfaces, BY ITS ADDRESS.
+    ///
+    /// <para><b>It used to demand that <c>nic.Name</c> contain "Radmin", and that cost a real user
+    /// his multiplayer for days.</b> `Name` is the CONNECTION name — the label in Network
+    /// Connections — which Windows generates ("Ethernet 2", "Ethernet 5") and anyone can rewrite;
+    /// the driver string that cannot be changed is `Description`. His bundle showed
+    /// `app=running power=On adapter=none` while his Radmin was on screen, online, with
+    /// 26.217.215.106 and fifteen peers. The address was right there and the first line of the
+    /// walk threw the interface away before looking at it.</para>
+    ///
+    /// <para><b><c>OperationalStatus</c> is a preference, not a requirement</b>, for the same
+    /// reason: Windows routes and pings over an interface without consulting that field, and a
+    /// virtual NIC with no physical media may legitimately report `Unknown` or `Dormant`. An
+    /// interface that is carrying Radmin traffic is not made unusable by how its driver fills in
+    /// a status word. `Up` still wins when something is `Up`.</para>
+    ///
+    /// <para>Name and description survive only as the last tiebreak, for the machine that somehow
+    /// has two 26.x interfaces. <b>What is NOT relaxed is the address:</b> nothing without a 26.x
+    /// IPv4 is ever returned, which is what stops a loosened name from selecting the wrong card —
+    /// the very risk the old filter was guarding against, kept while dropping the part that
+    /// misfired.</para>
+    /// </summary>
+    public static AdapterCandidate? SelectRadminAdapter(IEnumerable<AdapterCandidate> candidates)
+    {
+        AdapterCandidate? best = null;
+        var bestScore = int.MinValue;
+
+        foreach (var c in candidates)
+        {
+            if (c.Radmin26Ip == null) continue;
+
+            var score = (c.Status == OperationalStatus.Up ? 2 : 0) + (MentionsRadmin(c) ? 1 : 0);
+            if (score > bestScore)
+            {
+                best = c;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    private static bool MentionsRadmin(AdapterCandidate c) =>
+        c.Name.Contains("Radmin", StringComparison.OrdinalIgnoreCase)
+        || c.Description.Contains("Radmin", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Every interface with an IPv4, in the shape the selector reasons about.</summary>
+    private static List<AdapterCandidate> ReadAdapterCandidates()
+    {
+        var list = new List<AdapterCandidate>();
+        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            var ips = new List<string>();
+            try
+            {
+                foreach (var uni in nic.GetIPProperties().UnicastAddresses)
+                {
+                    if (uni.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                        ips.Add(uni.Address.ToString());
+                }
+            }
+            catch
+            {
+                // One interface in an odd state must not abort the walk. It used to: the try
+                // wrapped the whole loop, so a single throwing NIC hid every one after it.
+                continue;
+            }
+
+            if (ips.Count == 0) continue;
+            list.Add(new AdapterCandidate(
+                nic.Id, nic.Name, nic.Description, nic.OperationalStatus, ips));
+        }
+        return list;
+    }
+
     public static string? TryGetAdapterIp()
     {
         try
         {
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (!nic.Name.Contains("Radmin", StringComparison.OrdinalIgnoreCase)) continue;
-                if (nic.OperationalStatus != OperationalStatus.Up) continue;
-                foreach (var uni in nic.GetIPProperties().UnicastAddresses)
-                {
-                    if (uni.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
-                    var ipStr = uni.Address.ToString();
-                    if (ipStr.StartsWith("26.", StringComparison.Ordinal)) return ipStr;
-                }
-            }
+            return SelectRadminAdapter(ReadAdapterCandidates())?.Radmin26Ip;
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"RadminVpnService.TryGetAdapterIp: {ex.Message}");
         }
         return null;
+    }
+
+    /// <summary>
+    /// What the adapter walk actually saw, for the log — because <c>adapter=none</c> meant two
+    /// different things and a user's bundle could not tell them apart.
+    ///
+    /// <para>It printed the same word whether nothing carried a 26.x address or every candidate
+    /// was rejected by a filter, so the report that exposed the bug above arrived without the one
+    /// fact that would have closed it. Only interfaces with an IPv4 are listed, so this stays a
+    /// short line, and the caller only writes it when the state CHANGES.</para>
+    /// </summary>
+    public static string DescribeAdapterCandidates()
+    {
+        try
+        {
+            var candidates = ReadAdapterCandidates();
+            if (candidates.Count == 0) return "no IPv4 interfaces";
+
+            var parts = new List<string>();
+            foreach (var c in candidates)
+            {
+                var ip = c.Radmin26Ip ?? string.Join("/", c.IPv4Addresses);
+                parts.Add($"'{c.Name}' [{c.Description}] {c.Status} {ip}"
+                          + (c.Radmin26Ip != null ? " <-26.x" : ""));
+            }
+            return string.Join(" | ", parts);
+        }
+        catch (Exception ex)
+        {
+            return $"candidate-walk-failed: {ex.Message}";
+        }
     }
 
     /// <summary>
@@ -283,7 +412,11 @@ public static class RadminVpnService
             var power = s_powerState;      // cached; refreshed off-thread by MaybeRefreshPowerState
             var ip = TryGetAdapterIp();
             var serviceRunning = app && power != RadminPowerState.Off && ip != null;
-            return $"installed=Installed {appPart} power={power} adapter={ip ?? "none"} serviceRunning={serviceRunning}";
+            // When there is no address, say WHAT was on the machine. "adapter=none" alone is
+            // what made a real report unanswerable: it reads the same whether nothing carried a
+            // 26.x address or a filter threw the right interface away.
+            var adapterPart = ip ?? $"none({DescribeAdapterCandidates()})";
+            return $"installed=Installed {appPart} power={power} adapter={adapterPart} serviceRunning={serviceRunning}";
         }
         catch (Exception ex)
         {
@@ -383,23 +516,15 @@ public static class RadminVpnService
     {
         try
         {
+            // The SAME selection TryGetAdapterIp makes, by id — this used to be a
+            // character-for-character copy of the four filters, which is two places to get the
+            // identity of the adapter wrong instead of one.
+            var chosen = SelectRadminAdapter(ReadAdapterCandidates());
+            if (chosen == null) return null;
+
             foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
             {
-                if (!nic.Name.Contains("Radmin", StringComparison.OrdinalIgnoreCase)) continue;
-                if (nic.OperationalStatus != OperationalStatus.Up) continue;
-                // Same 26.x gate as DetectServiceRunning so we don't read
-                // counters off some unrelated "Radmin"-named adapter.
-                bool has26 = false;
-                foreach (var uni in nic.GetIPProperties().UnicastAddresses)
-                {
-                    if (uni.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                        && uni.Address.ToString().StartsWith("26.", StringComparison.Ordinal))
-                    {
-                        has26 = true;
-                        break;
-                    }
-                }
-                if (!has26) continue;
+                if (!string.Equals(nic.Id, chosen.Id, StringComparison.Ordinal)) continue;
                 var stats = nic.GetIPv4Statistics();
                 return (stats.BytesSent, stats.BytesReceived);
             }

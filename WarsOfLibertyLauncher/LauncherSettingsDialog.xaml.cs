@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
+using System.Threading.Tasks;
 using WarsOfLibertyLauncher.Services;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 
@@ -62,6 +63,18 @@ public partial class LauncherSettingsDialog : Window
     /// catalog itself. Null = no live refresh.
     /// </summary>
     public Action? LocalModsChanged { get; set; }
+
+    /// <summary>
+    /// Asks the shell to check GitHub for a newer launcher and report what it found, so the
+    /// hint beside the button can say it.
+    ///
+    /// <para>A <c>Func</c> rather than an <c>Action</c> like its siblings, because this one has
+    /// an answer worth showing and the dialog is NOT modal — the main window's status bar sits
+    /// behind it, which is the same reason the mod's own "check for updates" reports inline.</para>
+    ///
+    /// <para>Null = the button hides itself: better than a control that does nothing.</para>
+    /// </summary>
+    public Func<Task<bool?>>? CheckLauncherUpdateRequested { get; set; }
 
     /// <summary>
     /// Invoked when the user clicks "Clear translations cache". Community
@@ -266,6 +279,9 @@ public partial class LauncherSettingsDialog : Window
         ClearTempButton.Content = Strings.Get("DlgLauncherSettingsClearTemp");
         ClearTempHint.Text = Strings.Get("DlgLauncherSettingsClearTempHint");
         SetTip(ClearTempButton, "DlgLauncherSettingsClearTempTip");
+        CheckLauncherUpdateButton.Content = Strings.Get("DlgLauncherSettingsCheckUpdate");
+        CheckLauncherUpdateHint.Text = Strings.Get("DlgLauncherSettingsCheckUpdateHint");
+        SetTip(CheckLauncherUpdateButton, "DlgLauncherSettingsCheckUpdateTip");
         OpenDataFolderButton.Content = Strings.Get("DlgLauncherSettingsOpenDataFolder");
         OpenDataFolderHint.Text = Strings.Get("DlgLauncherSettingsOpenDataFolderHint");
         SetTip(OpenDataFolderButton, "DlgLauncherSettingsOpenDataFolderTip");
@@ -629,6 +645,48 @@ public partial class LauncherSettingsDialog : Window
     /// longer clutter the .exe's own folder. Creates it first so the open never
     /// fails on a brand-new install that hasn't written anything yet.
     /// </summary>
+    /// <summary>
+    /// Asks GitHub, now, whether there is a newer launcher.
+    ///
+    /// <para>The shell's forced path is what runs: it sends no <c>If-None-Match</c>, so a 304
+    /// cannot come back as "nothing new" — which is the whole point of a check somebody asked
+    /// for by hand — and it opens the update dialog itself when there is something.</para>
+    ///
+    /// <para>The button disables itself while the request is out. Three outcomes and each says
+    /// so: there is a new version, you are up to date, or it could not be reached.</para>
+    /// </summary>
+    private async void CheckLauncherUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        var ask = CheckLauncherUpdateRequested;
+        if (ask == null) return;
+
+        CheckLauncherUpdateButton.IsEnabled = false;
+        SetHint(CheckLauncherUpdateHint, Strings.Get("DlgLauncherSettingsCheckUpdateBusy"), success: true);
+        try
+        {
+            // null = the request never got an answer. That is a different statement from
+            // "nothing new", and saying the wrong one is how a broken check looks healthy.
+            var found = await ask();
+            SetHint(
+                CheckLauncherUpdateHint,
+                Strings.Get(found == null
+                    ? "DlgLauncherSettingsCheckUpdateFailed"
+                    : found.Value
+                        ? "DlgLauncherSettingsCheckUpdateFound"
+                        : "DlgLauncherSettingsCheckUpdateNone"),
+                success: found != null);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"LauncherSettingsDialog: manual update check failed — {ex.Message}");
+            SetHint(CheckLauncherUpdateHint, Strings.Get("DlgLauncherSettingsCheckUpdateFailed"), success: false);
+        }
+        finally
+        {
+            CheckLauncherUpdateButton.IsEnabled = true;
+        }
+    }
+
     private void OpenDataFolderButton_Click(object sender, RoutedEventArgs e)
     {
         try

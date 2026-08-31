@@ -607,6 +607,30 @@
                                        Margin="12,0,0,0"/>
                         </Grid>
 
+                        <!-- Ask GitHub whether there is a newer launcher, on demand.
+                             It exists because there was NO way to re-run this check:
+                             it fires at startup and from the offline chip, and that
+                             chip is only on screen while you are offline. So anyone
+                             whose check went quiet — a stale saved tag, a cached ETag
+                             answering 304 — had to edit the config by hand to recover. -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0"
+                                    x:Name="CheckLauncherUpdateButton"
+                                    Style="{StaticResource PropertyActionButton}"
+                                    MinWidth="180"
+                                    Click="CheckLauncherUpdateButton_Click"/>
+                            <TextBlock Grid.Column="1"
+                                       x:Name="CheckLauncherUpdateHint"
+                                       Style="{StaticResource HintText}"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="12,0,0,0"/>
+                        </Grid>
+
                         <!-- Open the per-user data folder (%LocalAppData%\AoE3ModLauncher)
                              where config / logs / caches live. -->
                         <Grid>

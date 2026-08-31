@@ -2441,6 +2441,10 @@ public static class Strings
         // Just the unit, for the places that render the number and the word at different
         // sizes. The same in both languages: it is the name of the rating scale.
         ["MpEloUnit"] = new() { [LangEn] = "ELO", [LangEs] = "ELO" },
+        // Shown instead of the rating for somebody who has never played a rated match. Says
+        // WHY there is no number rather than only that one is missing — and it is not a load
+        // failure, which paints nothing at all.
+        ["MpEloUnrated"] = new() { [LangEn] = "Unrated", [LangEs] = "Sin clasificar" },
         ["MpChipElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
         ["MpChipReconnecting"] = new() { [LangEn] = "Reconnecting…", [LangEs] = "Reconectando…" },
         // Title-bar account menu. Sign out lives ONLY here now — the account row that
@@ -2450,7 +2454,10 @@ public static class Strings
         // Centred day divider in the global chat. "Today" instead of a date, because a
         // date on the line you are reading right now is noise.
         ["MpChatToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
-        // Join-by-code row under the rooms list.
+        // Join by code. The field sits in the rooms TOOLBAR, beside the search box — it was
+        // a panel of its own under the list, whose height the rooms needed more. The title
+        // and the hint no longer have a line to sit on: they are the field's tooltip, which
+        // is why two full sentences are still worth their length.
         ["MpJoinByCodeTitle"] = new()
         {
             [LangEn] = "Were you given a room code?",
@@ -2469,15 +2476,6 @@ public static class Strings
             [LangEn] = "Community activity",
             [LangEs] = "Actividad de la comunidad",
         },
-        // A FORMAT now, filled from the window the server reports. It used to be the
-        // literal "last 24 h" while nothing in the panel was a 24 h window: the recent
-        // matches are the newest few ever, the ladder is all-time, and the histogram is
-        // 30 days — which the subtitle a few pixels below it already said.
-        ["MpActivityStripWindow"] = new()
-        {
-            [LangEn] = "last {0} days",
-            [LangEs] = "últimos {0} días",
-        },
         ["MpActivityRecentTitle"] = new() { [LangEn] = "RECENT MATCHES", [LangEs] = "ÚLTIMAS PARTIDAS" },
         // Two headings for one card, because the card has two sources. The community
         // list is what the strip promises; the personal one is the fallback for a
@@ -2492,17 +2490,21 @@ public static class Strings
         ["MpActivityAgo"] = new() { [LangEn] = "{0} ago", [LangEs] = "hace {0}" },
 
         // --- the community numbers, the middle third ---
-        ["MpActivityTotalsTitle"] = new() { [LangEn] = "COMMUNITY", [LangEs] = "COMUNIDAD" },
-        ["MpActivityTotalsMatches"] = new()
+        // ONE line, and it lives in the strip's HEADER row now — which was empty, so it costs
+        // no height at all. As a footer under the recent matches it made that card the tallest
+        // of the three, and they share a grid row, so that height was the whole strip's.
+        // Each window travels with its own figure because they differ (matches over 30 days,
+        // players over 7): the single "last {0} days" label this replaced could only ever have
+        // restated one of them, and next to "(30 d)" it read as the same fact said twice.
+        ["MpActivityTotalsCounts"] = new()
         {
-            [LangEn] = "{0} matches · {1} d",
-            [LangEs] = "{0} partidas · {1} d",
+            [LangEn] = "{0} matches ({1} d) · {2} players ({3} d)",
+            [LangEs] = "{0} partidas ({1} d) · {2} jugadores ({3} d)",
         },
-        ["MpActivityTotalsPlayers"] = new()
-        {
-            [LangEn] = "{0} players · {1} d",
-            [LangEs] = "{0} jugadores · {1} d",
-        },
+        // The map is LABELLED. It shipped bare for one round — "· ESOC Fertile Crescent" after
+        // two labelled figures — and a proper noun does not announce itself as a map; reported
+        // the same day. Appended to MpActivityTotalsCounts, and last, so a narrow window drops
+        // the label together with the name it labels.
         ["MpActivityTotalsTopMap"] = new()
         {
             [LangEn] = "Most played: {0}",
@@ -2511,12 +2513,21 @@ public static class Strings
         // Shown in place of the table while nobody qualifies, which after a ratings
         // reset is everybody for weeks. It names the requirement instead of leaving a
         // third of the strip blank.
+        // No number any more: the table lists whoever has a RATED match, so there is no
+        // threshold to quote. It used to promise entry at three decided matches while a
+        // deviation filter nobody was told about was refusing everybody.
+        // The number is BACK in this string. It lost its {0} when the entry bar was one rated
+        // match — nothing worth quoting — and there is a bar again, so the empty state has to
+        // name it or it describes a rule that is not the one being enforced. The figure comes
+        // from the server (min_decided), never a literal here: those two have disagreed before,
+        // and this text is where the player would have read the wrong one.
         ["MpActivityRankingEmpty"] = new()
         {
-            [LangEn] = "Nobody is on the table yet — it takes {0} decided matches, "
-                     + "the ones whose recording says who won.",
-            [LangEs] = "Todavía no hay nadie en la tabla: entras con {0} partidas "
-                     + "decididas, las que tienen una grabación que diga quién ganó.",
+            [LangEn] = "Nobody is on the table yet — it takes {0} rated matches to enter, "
+                     + "and a match only counts with a recording that says who won.",
+            [LangEs] = "Todavía no hay nadie en la tabla: hacen falta {0} partidas puntuadas "
+                     + "para entrar, y una partida sólo cuenta con una grabación que diga "
+                     + "quién ganó.",
         },
         // A match whose result couldn't be read (no recording, or a team game). Most
         // stored matches are these, so the row says so instead of looking like a win.
@@ -2557,16 +2568,35 @@ public static class Strings
         // so on purpose: the two are not the same number and we are not going to imply
         // they are. Hours are the viewer's own local time.
         ["MpActivityPeakTitle"] = new() { [LangEn] = "PEAK HOURS", [LangEs] = "HORAS PUNTA" },
-        ["MpActivityPeakRange"] = new()
-        {
-            [LangEn] = "{0}:00 \u2013 {1}:00",
-            [LangEs] = "{0}:00 \u2013 {1}:00",
-        },
         ["MpActivityPeakSubtitle"] = new()
         {
             [LangEn] = "when rooms get opened \u2014 {0} in the last {1} days, your local time",
             [LangEs] = "cuando se abren salas \u2014 {0} en los \u00FAltimos {1} d\u00EDas, en tu hora local",
         },
+        // The handoff's sentence, with the window's two hours emphasised inside it rather
+        // than shouted above it as a separate headline. The {0}/{1} are wrapped in a bold Run
+        // by FillPeakHours, so the placeholders must stay whole words in every language.
+        // One hour, on its own, for the two emphasised values inside MpActivityPeakLine.
+        ["MpActivityPeakHour"] = new() { [LangEn] = "{0}:00", [LangEs] = "{0}:00" },
+        ["MpActivityPeakLine"] = new()
+        {
+            [LangEn] = "More people around between {0} and {1}",
+            [LangEs] = "Hay más gente entre las {0} y {1}",
+        },
+        // Kept although the handoff has no such line: the sample and the window have to travel
+        // WITH the claim, or the card starts lying the day that constant moves.
+        ["MpActivityPeakSample"] = new()
+        {
+            [LangEn] = "{0} rooms opened in the last {1} days, your local time",
+            [LangEs] = "{0} salas abiertas en los últimos {1} días, en tu hora local",
+        },
+        ["MpActivityRankingSeeAll"] = new() { [LangEn] = "See all", [LangEs] = "Ver todo" },
+        // The viewer's own row in the strip's ranking, per the handoff.
+        ["MpActivityYou"] = new() { [LangEn] = "you", [LangEs] = "tú" },
+        // ONE BAR, ONE HOUR. The histogram briefly ran on three-hour buckets and this key
+        // sat unused beside a MpActivityPeakBucketTip that named a stretch; the bars are back
+        // to one per hour, so this is live again and that one is gone. The bars carry no axis
+        // of any kind, so this tooltip is the ONLY thing that says which hour a bar is.
         ["MpActivityPeakBarTip"] = new()
         {
             [LangEn] = "{0}:00 \u2014 {1} rooms",
@@ -5282,6 +5312,47 @@ public static class Strings
                      + "Safe — it doesn't touch your installed mods.",
             [LangEs] = "Elimina archivos sobrantes de descargas/extracciones que se cancelaron o fallaron. "
                      + "Es seguro — no toca tus mods instalados.",
+        },
+        // Maintenance: ask GitHub for a newer launcher on demand. The startup check and the
+        // offline chip were the only ways in, and the chip is only on screen while offline.
+        ["DlgLauncherSettingsCheckUpdate"] = new()
+        {
+            [LangEn] = "Check for updates",
+            [LangEs] = "Buscar actualizaciones",
+        },
+        ["DlgLauncherSettingsCheckUpdateHint"] = new()
+        {
+            [LangEn] = "Asks GitHub whether there is a newer version of the launcher.",
+            [LangEs] = "Le pregunta a GitHub si hay una versión más nueva del launcher.",
+        },
+        ["DlgLauncherSettingsCheckUpdateTip"] = new()
+        {
+            [LangEn] = "The launcher already checks on startup. Use this when you want to ask "
+                     + "again — after downloading a version by hand, for example.",
+            [LangEs] = "El launcher ya lo comprueba al arrancar. Usa esto cuando quieras "
+                     + "preguntar otra vez, por ejemplo tras descargar una versión a mano.",
+        },
+        ["DlgLauncherSettingsCheckUpdateBusy"] = new()
+        {
+            [LangEn] = "Checking…",
+            [LangEs] = "Consultando…",
+        },
+        ["DlgLauncherSettingsCheckUpdateFound"] = new()
+        {
+            [LangEn] = "There is a new version — the update window just opened.",
+            [LangEs] = "Hay una versión nueva: se acaba de abrir la ventana de actualización.",
+        },
+        ["DlgLauncherSettingsCheckUpdateNone"] = new()
+        {
+            [LangEn] = "You are on the latest version.",
+            [LangEs] = "Estás en la última versión.",
+        },
+        // Deliberately NOT the same as "up to date": not reaching the server tells you nothing
+        // about which version is out there, and saying otherwise is how a broken check looks fine.
+        ["DlgLauncherSettingsCheckUpdateFailed"] = new()
+        {
+            [LangEn] = "Could not reach GitHub. Check your connection and try again.",
+            [LangEs] = "No se pudo consultar GitHub. Revisa tu conexión e inténtalo de nuevo.",
         },
         ["DlgLauncherSettingsOpenDataFolder"] = new()
         {

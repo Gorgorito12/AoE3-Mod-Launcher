@@ -592,6 +592,13 @@ public partial class MultiplayerTab : UserControl
             // ClipToBounds, so the bottom rows just are not there and nothing errors.
             // Logged once per size, and only when it actually overflows, so a healthy
             // layout stays quiet.
+            //
+            // It never caught the rooms column, and could not have: that column divided a
+            // FIXED height between a star row and two Auto ones, so being too short made the
+            // star row SHRINK rather than the tab overflow — the list collapsed to one row
+            // and this stayed silent through it (zero hits across the reporter's logs). The
+            // column scrolls now, so what this can still catch is the Auto rows ABOVE it:
+            // the header, the Radmin banner and the toolbar.
             mpRoot.SizeChanged += (_, _) =>
             {
                 var want = mpRoot.DesiredSize.Height;
@@ -602,9 +609,6 @@ public partial class MultiplayerTab : UserControl
                         $"(short by {want - got:0}). The bottom of the left column is being clipped.");
             };
         }
-        // Keep the rooms header aligned with the rows as the vertical scrollbar
-        // comes and goes (see SyncHeaderScrollbarGutter).
-        RoomsListScroll.ScrollChanged += (_, _) => SyncHeaderScrollbarGutter();
         // Re-decide which columns fit whenever the table's width changes. Hooked to the header
         // strip rather than the window because that IS the width the columns divide up, already
         // in the logical units UiScale lays this tab out in.
@@ -673,9 +677,11 @@ public partial class MultiplayerTab : UserControl
         // Plain, with no qualifier: 1500 is where everyone starts, so showing it says
         // nothing about anybody. Still hidden when there is no standing at all — that is
         // not a 1500, it is not knowing, which is what the backend outage looked like.
-        var elo = RatingDisplay.ShouldShow(_cachedStanding?.Rating)
-            ? Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding!.Rating))
-            : null;
+        var elo = !RatingDisplay.ShouldShow(_cachedStanding?.Rating)
+            ? null
+            : RatingDisplay.IsUnrated(_cachedStanding!.Rd, _cachedStanding.GamesPlayed)
+                ? Strings.Get("MpEloUnrated")
+                : Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding.Rating));
         _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo);
 
         // Null cache: either we have never fetched, or a match just invalidated it. Both
@@ -1191,7 +1197,16 @@ public partial class MultiplayerTab : UserControl
         // first timer tick after switching to this tab).
         _ = RefreshQuotaAsync();
         if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+        {
             _ = RefreshRoomsListAsync();
+            // THE ACTIVATION EDGE THE STRIP NEVER HAD. Its only two callers were the subtab
+            // CLICK handlers, and _activeSubtab starts on Rooms — so whoever opened the tab
+            // was already on the subtab they would have had to press, and the strip sat
+            // Collapsed until an accidental click. Reported as "it takes minutes to appear",
+            // and that is exactly what it was: the wait for that click. Free on re-entry,
+            // because RefreshActivityStripAsync self-limits on its 60-second window.
+            _ = RefreshActivityStripAsync();
+        }
         _quotaTimer?.Start();
 
         // Keep the rooms-browser PING (your connection latency) fresh every
@@ -1281,26 +1296,26 @@ public partial class MultiplayerTab : UserControl
         RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
         ActivityStripTitle.Text = Strings.Get("MpActivityStripTitle");
         // Both of these depend on data, so they are re-derived rather than assigned: the
-        // window is however far back the SERVER looked, and the recent-matches heading
-        // says whose matches these are — which is not the same on an older backend.
-        ActivityStripWindow.Text = _activityWindowDays > 0
-            ? Strings.Format("MpActivityStripWindow", _activityWindowDays)
-            : "";
+        // totals carry the windows the SERVER looked back over, and the recent-matches
+        // heading says whose matches these are — not the same on an older backend.
+        FillCommunityTotals(_communityStats);
         ActivityRecentTitle.Text = Strings.Get(_activityRecentIsCommunity
             ? "MpActivityRecentCommunityTitle"
             : "MpActivityRecentTitle");
-        ActivityTotalsTitle.Text = Strings.Get("MpActivityTotalsTitle");
         ActivityRankingTitle.Text = Strings.Get("MpActivityRankingTitle");
         ActivityPeakTitle.Text = Strings.Get("MpActivityPeakTitle");
-        ActivityRankColHash.Text = Strings.Get("MpActivityRankColHash");
-        ActivityRankColPlayer.Text = Strings.Get("MpActivityRankColPlayer");
-        ActivityRankColElo.Text = Strings.Get("MpActivityRankColElo");
-        ActivityRankColDecided.Text = Strings.Get("MpActivityRankColDecided");
-        ActivityRankColPct.Text = Strings.Get("MpActivityRankColPct");
-        JoinByCodeTitle.Text = Strings.Get("MpJoinByCodeTitle");
-        JoinByCodeHint.Text = Strings.Get("MpJoinByCodeHint");
+        // The strip's ranking lost its five-column header to the handoff's row shape; the
+        // MpActivityRankCol* strings live on, because BuildRankingHeader still labels the
+        // FULL table in the RANKING subtab with exactly those keys.
+        ActivityRankingSeeAll.Content = Strings.Get("MpActivityRankingSeeAll");
         JoinByCodePlaceholder.Text = Strings.Get("MpJoinByCodePlaceholder");
-        JoinByCodeButton.Content = Strings.Get("MpJoinByCodeButton");
+        // The field moved into the 48-px toolbar, where the two sentences it used to show above
+        // it do not fit. They are not dropped — they are its tooltip, from the very same keys,
+        // so a 6-character box still says what it is for and why the room is not in the list.
+        JoinByCodeBox.ToolTip = TooltipHelper.Wrap(
+            Strings.Get("MpJoinByCodeTitle") + " " + Strings.Get("MpJoinByCodeHint"));
+        // Icon-only now, so its caption is the tooltip.
+        JoinByCodeButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpJoinByCodeButton"));
 
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
@@ -1361,6 +1376,10 @@ public partial class MultiplayerTab : UserControl
             // Sign-in / sign-out flips whether the global chat should be
             // connected; entering/leaving a room is harmless (idempotent).
             SyncGlobalChat();
+            // And the strip, because everything that asks for it requires SignedIn: a request
+            // that lands during the sign-in window is dropped, and nothing used to try again.
+            if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn && IsVisible)
+                _ = RefreshActivityStripAsync();
         });
 
     // ------------------------------------------------------------------------
@@ -1397,6 +1416,22 @@ public partial class MultiplayerTab : UserControl
             if (SignInButton != null) SignInButton.ToolTip = null;
             if (RefreshButton != null) { RefreshButton.IsEnabled = true; RefreshButton.ToolTip = null; }
             if (CreateRoomButton != null) CreateRoomButton.ToolTip = null;
+            // The code field is the exception to "let RefreshFromSession recompute it": nothing
+            // there touches these two, so leaving them to it would strand them disabled for the
+            // rest of the session. Its own tooltip comes back (not null — it explains what the
+            // field is for), and the button's enabled state is whatever the box's contents say,
+            // which is the same rule JoinByCodeBox_TextChanged applies.
+            if (JoinByCodeBox != null)
+            {
+                JoinByCodeBox.IsEnabled = true;
+                JoinByCodeBox.ToolTip = TooltipHelper.Wrap(
+                    Strings.Get("MpJoinByCodeTitle") + " " + Strings.Get("MpJoinByCodeHint"));
+            }
+            if (JoinByCodeButton != null)
+            {
+                JoinByCodeButton.IsEnabled = (JoinByCodeBox?.Text ?? "").Trim().Length > 0;
+                JoinByCodeButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpJoinByCodeButton"));
+            }
             RefreshFromSession();
         }
     }
@@ -1411,6 +1446,12 @@ public partial class MultiplayerTab : UserControl
         if (SignInButton != null) { SignInButton.IsEnabled = false; SignInButton.ToolTip = _offlineNotice; }
         if (RefreshButton != null) { RefreshButton.IsEnabled = false; RefreshButton.ToolTip = _offlineNeedsInternet; }
         if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = false; CreateRoomButton.ToolTip = _offlineNeedsInternet; }
+        // Joining by code needs the backend exactly as much as its two neighbours do. It was
+        // left out while it lived in a panel of its own further down the page; sitting in the
+        // same cluster, one live control among greyed ones would read as the offline state
+        // being wrong rather than as a field that will fail when pressed.
+        if (JoinByCodeBox != null) { JoinByCodeBox.IsEnabled = false; JoinByCodeBox.ToolTip = _offlineNeedsInternet; }
+        if (JoinByCodeButton != null) { JoinByCodeButton.IsEnabled = false; JoinByCodeButton.ToolTip = _offlineNeedsInternet; }
     }
 
     /// <summary>
@@ -2292,16 +2333,23 @@ public partial class MultiplayerTab : UserControl
         // No provisional gate any more: 1500 is the shared starting point, and hiding it
         // left this line blank for everybody.
         double? memberRating = m.Rating;
+        double? memberRd = m.Rd;
         if (isMe && memberRating == null && _cachedStanding != null)
         {
             // Fallback for a backend that doesn't put ratings in the frame yet: we know
-            // our OWN standing from GET /matches/elo.
+            // our OWN standing from GET /matches/elo. The deviation comes WITH it — without
+            // that, our own row would be the one line that cannot tell unrated from 1500.
             memberRating = _cachedStanding.Rating;
+            memberRd = _cachedStanding.Rd;
         }
 
         string? rating = null;
         if (RatingDisplay.ShouldShow(memberRating))
-            rating = Strings.Format("MpRoomMemberElo", (int)Math.Round(memberRating!.Value));
+        {
+            rating = RatingDisplay.IsUnrated(memberRd, gamesPlayed: null)
+                ? Strings.Get("MpEloUnrated")
+                : Strings.Format("MpRoomMemberElo", (int)Math.Round(memberRating!.Value));
+        }
 
         string link;
         if (isMe)
@@ -2510,7 +2558,8 @@ public partial class MultiplayerTab : UserControl
     /// in two copies — the too-dim brush and the stray "·" each had to be fixed in both
     /// places separately. One function, and that stops.</para>
     /// </summary>
-    private static TextBlock BuildRatingText(double rating, double numberSize, double unitSize)
+    private static TextBlock BuildRatingText(
+        double rating, double? rd, double numberSize, double unitSize)
     {
         var value = (int)Math.Round(rating);
         var tb = new TextBlock
@@ -2519,6 +2568,22 @@ public partial class MultiplayerTab : UserControl
             Margin = new Thickness(6, 0, 0, 0),
             ToolTip = TooltipHelper.Wrap(Strings.Format("MpChipElo", value)),
         };
+
+        // Never played a rated match: the words, not the 1500 everybody starts from. Handled
+        // HERE so the rooms table and the players panel cannot answer it differently — they
+        // are the two callers, and they used to share only the styling.
+        if (RatingDisplay.IsUnrated(rd, gamesPlayed: null))
+        {
+            tb.ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloUnrated"));
+            tb.Inlines.Add(new System.Windows.Documents.Run(Strings.Get("MpEloUnrated"))
+            {
+                FontSize = unitSize,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            });
+            return tb;
+        }
+
         tb.Inlines.Add(new System.Windows.Documents.Run(value.ToString())
         {
             FontSize = numberSize,
@@ -3597,13 +3662,17 @@ public partial class MultiplayerTab : UserControl
 
     private void ShowStanding(EloSnapshot standing)
     {
-        ProfileEloText.Text = Strings.Format("MpProfileRating", (int)Math.Round(standing.Rating));
-
-        if (standing.GamesPlayed <= 0)
+        // The unrated case is decided BEFORE the number is written. It used to print the 1500
+        // first and only then notice that nothing had been played, so the one screen that knew
+        // the answer showed the placeholder anyway.
+        if (RatingDisplay.IsUnrated(standing.Rd, standing.GamesPlayed))
         {
+            ProfileEloText.Text = Strings.Get("MpEloUnrated");
             ProfileGamesText.Text = Strings.Get("MpProfileProvisional");
             return;
         }
+
+        ProfileEloText.Text = Strings.Format("MpProfileRating", (int)Math.Round(standing.Rating));
 
         var line = Strings.Format("MpProfileGames", standing.GamesPlayed);
 
@@ -3778,6 +3847,15 @@ public partial class MultiplayerTab : UserControl
             _ = RefreshActivityStripAsync();
     }
 
+    /// <summary>
+    /// "See all" on the strip's ranking card — the handoff's link to the whole table.
+    ///
+    /// <para>Before this the RANKING subtab was reachable only from the top-level button, which
+    /// is a long way from the three rows that make somebody want to see the rest.</para>
+    /// </summary>
+    private void ActivityRankingSeeAll_Click(object sender, RoutedEventArgs e)
+        => SubtabRanking_Click(sender, e);
+
     private void RankingModeSolo_Click(object sender, RoutedEventArgs e)
     {
         _rankingShowsTeam = false;
@@ -3855,9 +3933,9 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// The ladder's column headings.
     ///
-    /// <para>The widths repeat <see cref="BuildLeaderboardRow"/>'s list, which is the third
-    /// copy of it — the strip's XAML header carries one too. They have to be changed
-    /// together; the note in the multiplayer rules says so about the first two and this is
+    /// <para>The widths repeat <see cref="BuildLeaderboardRow"/>'s list, which is the SECOND
+    /// and last copy of it — the strip's XAML header used to carry a third, and lost it when
+    /// the strip went to the handoff's four-field row. They have to be changed together; the note in the multiplayer rules says so about the first two and this is
     /// now covered by the same sentence.</para>
     /// </summary>
     private UIElement BuildRankingHeader()
@@ -4615,8 +4693,6 @@ public partial class MultiplayerTab : UserControl
             _roomIdsSeeded = true;
             _lastRenderedRoomsSignature = signature;
             UpdateRoomsShowingCount(ordered.Count);
-            _ = Dispatcher.BeginInvoke(new Action(SyncHeaderScrollbarGutter),
-                System.Windows.Threading.DispatcherPriority.Render);
         }
         catch (Exception ex)
         {
@@ -4635,6 +4711,10 @@ public partial class MultiplayerTab : UserControl
             else
             {
                 RoomsListPanel.Children.Clear();
+                // The error REPLACES the empty state; it does not overlay it. Both are
+                // top-aligned siblings in the same cell, so a fetch that failed right after
+                // an empty render drew the amber line straight over "no rooms right now".
+                RoomsEmptyState.Visibility = Visibility.Collapsed;
                 RoomsErrorText.Text = ex.Message;
                 RoomsErrorRetry.Content = Strings.Get("MpRoomsErrorRetry");
                 RoomsErrorBox.Visibility = Visibility.Visible;
@@ -4910,8 +4990,6 @@ public partial class MultiplayerTab : UserControl
         foreach (var lobby in ordered)
             RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
         UpdateRoomsShowingCount(ordered.Count);
-        Dispatcher.BeginInvoke(new Action(SyncHeaderScrollbarGutter),
-            System.Windows.Threading.DispatcherPriority.Render);
     }
 
     /// <summary>
@@ -4934,7 +5012,9 @@ public partial class MultiplayerTab : UserControl
         var text = JoinByCodeBox.Text ?? string.Empty;
         JoinByCodePlaceholder.Visibility =
             text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        JoinByCodeButton.IsEnabled = text.Trim().Length > 0;
+        // Never re-enable it while the tab is offline: this fires on every keystroke, and it
+        // would undo ApplyOfflineDisable the moment somebody typed into a greyed-out field.
+        JoinByCodeButton.IsEnabled = !_offlineMode && text.Trim().Length > 0;
     }
 
     /// <summary>Return submits, so pasting a code and pressing enter is the whole flow.</summary>
@@ -4983,10 +5063,6 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Which ladder the Ranking subtab is showing.</summary>
     private bool _rankingShowsTeam;
 
-    /// <summary>How far back the server said it looked, for the strip's window label. 0
-    /// until an answer arrives, and the label is then blank rather than a guess.</summary>
-    private int _activityWindowDays;
-
     /// <summary>Whether the recent-matches card is showing EVERYONE's matches or, on a
     /// backend that cannot answer that, the viewer's own. It decides which heading is
     /// used, and it has to survive a language switch — hence a field.</summary>
@@ -5008,7 +5084,6 @@ public partial class MultiplayerTab : UserControl
     {
         if (_session?.CurrentUser == null || ActivityStrip == null) return;
         if (DateTime.UtcNow - _activityFetchedUtc < ActivityMaxAge) return;
-        _activityFetchedUtc = DateTime.UtcNow;
 
         try
         {
@@ -5027,24 +5102,29 @@ public partial class MultiplayerTab : UserControl
                 DiagnosticLog.Write($"Community stats: fetch failed: {ex.Message}");
             }
 
+            // Stamped only once an answer is IN HAND. It used to be stamped before the await,
+            // so a failed request burned the whole 60-second window and the strip stayed dead
+            // for a minute however many times the user asked — the one state where retrying
+            // is exactly the right instinct was the one where it did nothing.
+            _activityFetchedUtc = DateTime.UtcNow;
+
             // Kept for the Ranking subtab, which draws the FULL table from the very same
             // payload — one request feeds both, which is why the limit asks for the server's
             // maximum rather than the three the strip shows.
             _communityStats = stats;
             if (_activeSubtab == Subtab.Ranking) RenderRanking();
 
-            var any = await FillRecentMatchesAsync(stats);
+            // The matches card is about its list again — the totals it used to footer are in
+            // the strip's header row now, so this card is shown for its own content alone.
+            var recentDrew = await FillRecentMatchesAsync(stats);
+            ActivityRecentCard.Visibility = recentDrew ? Visibility.Visible : Visibility.Collapsed;
+
+            // Still counts towards "is there anything to show": a header line carrying the
+            // community's numbers is content even when all three cards come up empty.
+            var any = recentDrew;
+            any |= FillCommunityTotals(stats);
             any |= FillCommunityMiddle(stats);
             any |= FillPeakHours(stats);
-
-            // The window belongs to the STRIP, so it is set here and not inside a card:
-            // the peak card hides itself below MinSampleRooms, and when it did the header
-            // lost its window while the numbers beside it still said "· 30 d". Either
-            // source will do — the server uses one window for both.
-            _activityWindowDays = stats?.Activity?.WindowDays ?? stats?.Totals?.WindowDays ?? 0;
-            ActivityStripWindow.Text = _activityWindowDays > 0
-                ? Strings.Format("MpActivityStripWindow", _activityWindowDays)
-                : "";
 
             LayOutActivityColumns();
             ActivityStrip.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
@@ -5075,17 +5155,21 @@ public partial class MultiplayerTab : UserControl
         var middle = ActivityMiddleCard.Visibility == Visibility.Visible;
         var peak = ActivityPeakCard.Visibility == Visibility.Visible;
 
+        ActivityColPeak.Width = peak ? star : none;
         ActivityColRecent.Width = recent ? star : none;
         ActivityColMiddle.Width = middle ? star : none;
-        ActivityColPeak.Width = peak ? star : none;
 
-        // The left rule separates the first card from whatever comes next, which is the
-        // peak card when the middle one is absent — so it is not simply "recent && middle".
-        ActivityDividerLeft.Visibility = recent && (middle || peak)
-            ? Visibility.Visible : Visibility.Collapsed;
-        ActivityDividerRight.Visibility = middle && peak
-            ? Visibility.Visible : Visibility.Collapsed;
+        // The GAPS are what the vertical rules used to be, and they collapse for the same
+        // reason: a gap is only a gap when there is something on both sides of it. Left over
+        // beside a hidden card it is a stray inset that pushes the survivors off-centre.
+        // Note the left gap asks "is there anything AFTER the peak card", which is the recent
+        // card or — when that one is absent too — the ranking; it is not simply "peak && recent".
+        ActivityGapLeft.Width = peak && (recent || middle) ? new GridLength(ActivityCardGap) : none;
+        ActivityGapRight.Width = recent && middle ? new GridLength(ActivityCardGap) : none;
     }
+
+    /// <summary>The handoff's 11-px gutter between the three activity cards.</summary>
+    private const double ActivityCardGap = 11;
 
     /// <summary>
     /// The recent-matches card: everyone's matches, or the viewer's own as a fallback.
@@ -5139,40 +5223,80 @@ public partial class MultiplayerTab : UserControl
     /// The middle third: the community's numbers, and under them the ladder — or, while
     /// nobody qualifies for it, what it takes to get in.
     /// </summary>
+    /// <summary>
+    /// The community's numbers, on ONE line in the strip's header row.
+    ///
+    /// <para>They were a footer under the recent matches, behind a 1-px rule: first three
+    /// stacked one-fact rows under a "COMMUNITY" heading, then two rows without it. Either way
+    /// they made that card the tallest of the three — and the cards share a grid row, so the
+    /// tallest card IS the strip's height. Up in the header they cost nothing at all: that row
+    /// already existed and ran empty from the title to the far edge.</para>
+    ///
+    /// <para>Each window travels with its own figure because they differ — matches over 30
+    /// days, players over 7 — so the single "last 30 days" label this replaced could only ever
+    /// have restated one of them. The map goes last: the line trims from the right, so the
+    /// segment lost first on a narrow window is the one worth least.</para>
+    /// </summary>
+    private bool FillCommunityTotals(Models.Multiplayer.CommunityStats? stats)
+    {
+        var totals = CommunityStatsView.Totals(stats);
+        if (totals == null)
+        {
+            ActivityStripTotals.Inlines.Clear();
+            return false;
+        }
+
+        // The FIGURES are lifted out of the sentence and painted bright, the same treatment the
+        // peak card's line gives its two hours a few inches to the left. The line as a whole sat
+        // in MpTextDim, the faintest rung of the ramp — measured against the tab background it
+        // was 4.84:1, and the numbers are the only part of it anybody reads. The words are
+        // MpTextBody now (10.17:1) and the figures MpTextHeading SemiBold (15.63:1).
+        ActivityStripTotals.Inlines.Clear();
+        foreach (var run in BuildEmphasisRuns(
+                     Strings.Get("MpActivityTotalsCounts"),
+                     totals.Matches.ToString(),
+                     totals.WindowDays.ToString(),
+                     totals.Players.ToString(),
+                     totals.PlayersWindowDays.ToString()))
+        {
+            ActivityStripTotals.Inlines.Add(run);
+        }
+
+        // Appended only when there IS one: a trailing separator states nothing and spends the
+        // width the counts before it need. Plain, because a map name is not a figure.
+        //
+        // LABELLED, not bare. It shipped for one round as just the name, and a proper noun
+        // arriving after two labelled figures does not announce itself as a map — reported the
+        // same day. The label costs width only where there is width to spare: this line trims
+        // from the right and the map is last, so on a narrow window the two are lost together,
+        // which is the right order to lose them in.
+        if (!string.IsNullOrWhiteSpace(totals.TopMap))
+        {
+            ActivityStripTotals.Inlines.Add(new System.Windows.Documents.Run(
+                " · " + Strings.Format(
+                    "MpActivityTotalsTopMap", totals.TopMap!.Replace('_', ' '))));
+        }
+
+        return true;
+    }
+
+    /// <summary>The ladder, or why it is empty. Its card holds nothing else now.</summary>
     private bool FillCommunityMiddle(Models.Multiplayer.CommunityStats? stats)
     {
         var shown = false;
-
-        // ----- the numbers -----
-        var totals = CommunityStatsView.Totals(stats);
-        if (totals != null)
-        {
-            ActivityTotalsList.Children.Clear();
-            ActivityTotalsList.Children.Add(BuildTotalsLine(
-                Strings.Format("MpActivityTotalsMatches", totals.Matches, totals.WindowDays)));
-            ActivityTotalsList.Children.Add(BuildTotalsLine(
-                Strings.Format("MpActivityTotalsPlayers", totals.Players, totals.PlayersWindowDays)));
-            // Only when there IS one. A "most played: —" row states nothing and takes the
-            // same space as a row that does.
-            if (!string.IsNullOrWhiteSpace(totals.TopMap))
-            {
-                ActivityTotalsList.Children.Add(BuildTotalsLine(
-                    Strings.Format("MpActivityTotalsTopMap", totals.TopMap!.Replace('_', ' '))));
-            }
-            ActivityTotalsCard.Visibility = Visibility.Visible;
-            shown = true;
-        }
-        else ActivityTotalsCard.Visibility = Visibility.Collapsed;
-
-        // ----- the ladder, or why it is empty -----
         var rows = CommunityStatsView.Rows(stats);
         var required = CommunityStatsView.RequiredDecided(stats);
         if (rows.Count > 0)
         {
             ActivityRankingList.Children.Clear();
-            foreach (var row in rows.Take(3))
-                ActivityRankingList.Children.Add(BuildLeaderboardRow(row));
-            ActivityRankingHeader.Visibility = Visibility.Visible;
+            var meId = _session?.CurrentUser?.Id;
+            foreach (var row in rows.Take(5))
+            {
+                var isMe = !string.IsNullOrEmpty(meId)
+                    && string.Equals(row.UserId, meId, StringComparison.Ordinal);
+                ActivityRankingList.Children.Add(BuildStripLeaderboardRow(row, isMe));
+            }
+            ActivityRankingSeeAll.Visibility = Visibility.Visible;
             ActivityRankingList.Visibility = Visibility.Visible;
             ActivityRankingEmpty.Visibility = Visibility.Collapsed;
             ActivityRankingCard.Visibility = Visibility.Visible;
@@ -5180,10 +5304,12 @@ public partial class MultiplayerTab : UserControl
         }
         else if (required.HasValue)
         {
-            // The number comes from the server and is only shown when it said one: an
-            // older backend deserializes it to 0, and "you get in with 0 decided matches"
-            // is both wrong and impossible.
-            ActivityRankingHeader.Visibility = Visibility.Collapsed;
+            // RequiredDecided gates this AND fills it: there is an entry bar again, so the
+            // sentence names it, and the figure is the SERVER's rather than a literal here —
+            // those two have disagreed before, and this text is exactly where a player would
+            // have read the wrong one. The title stays; the link goes, because there is
+            // nothing more to see and the full table would be a second empty list.
+            ActivityRankingSeeAll.Visibility = Visibility.Collapsed;
             ActivityRankingList.Visibility = Visibility.Collapsed;
             ActivityRankingEmpty.Text = Strings.Format("MpActivityRankingEmpty", required.Value);
             ActivityRankingEmpty.Visibility = Visibility.Visible;
@@ -5191,11 +5317,6 @@ public partial class MultiplayerTab : UserControl
             shown = true;
         }
         else ActivityRankingCard.Visibility = Visibility.Collapsed;
-
-        ActivityMiddleSeparator.Visibility =
-            ActivityTotalsCard.Visibility == Visibility.Visible
-            && ActivityRankingCard.Visibility == Visibility.Visible
-                ? Visibility.Visible : Visibility.Collapsed;
 
         ActivityMiddleCard.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
         return shown;
@@ -5226,25 +5347,22 @@ public partial class MultiplayerTab : UserControl
             return false;
         }
 
-        ActivityPeakHeadline.Text = Strings.Format(
-            "MpActivityPeakRange", peak.Value,
-            (peak.Value + CommunityStatsView.PeakWindowHours) % 24);
+        // The handoff puts the window INSIDE the sentence, in bold, instead of shouting it
+        // above as a 16-px headline over its own echo. Built from Runs so the two hours can
+        // carry the emphasis while the sentence around them stays translatable as one string.
+        var from = Strings.Format("MpActivityPeakHour", peak.Value);
+        var to = Strings.Format(
+            "MpActivityPeakHour", (peak.Value + CommunityStatsView.PeakWindowHours) % 24);
+        ActivityPeakLine.Inlines.Clear();
+        foreach (var run in BuildEmphasisRuns(Strings.Get("MpActivityPeakLine"), from, to))
+            ActivityPeakLine.Inlines.Add(run);
+
         ActivityPeakSubtitle.Text = Strings.Format(
-            "MpActivityPeakSubtitle", activity.Total, activity.WindowDays);
-        DrawPeakBars(local);
+            "MpActivityPeakSample", activity.Total, activity.WindowDays);
+        DrawPeakBars(local, peak.Value);
         ActivityPeakCard.Visibility = Visibility.Visible;
         return true;
     }
-
-    /// <summary>One line of the numbers card.</summary>
-    internal static UIElement BuildTotalsLine(string text) => new TextBlock
-    {
-        Text = text,
-        Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
-        FontSize = (double)Application.Current.FindResource("MpActivityBodySize"),
-        TextTrimming = TextTrimming.CharacterEllipsis,
-        Margin = new Thickness(0, 0, 0, 5),
-    };
 
     /// <summary>
     /// One community match: who beat whom, and under it the mod, the map and how long ago.
@@ -5258,9 +5376,13 @@ public partial class MultiplayerTab : UserControl
     {
         var line = CommunityStatsView.Describe(m);
 
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+        // Dot, text, and the age hard RIGHT — the handoff's shape. The age used to be the last
+        // separated segment of the line below, which made a list of matches read as a stack of
+        // paragraphs: nothing lined up, so the eye had no column to run down.
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 7) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         grid.Children.Add(WithColumn(new System.Windows.Shapes.Ellipse
         {
@@ -5287,17 +5409,37 @@ public partial class MultiplayerTab : UserControl
             FontWeight = line.Decided ? FontWeights.SemiBold : FontWeights.Normal,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
-        stack.Children.Add(new TextBlock
+        // The second line keeps the mod and the map — the handoff has no such line only because
+        // its sample data carried neither, and they are real information about the match.
+        var under = line.Decided
+            ? Join(mod, map)
+            : Strings.Get("MpActivityNotCounted");
+        if (!string.IsNullOrWhiteSpace(under))
         {
-            Text = line.Decided
-                ? Join(mod, map, ago)
-                : Join(Strings.Get("MpActivityNotCounted"), ago),
-            Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-            FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 2, 0, 0),
-        });
+            stack.Children.Add(new TextBlock
+            {
+                Text = under,
+                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 1, 0, 0),
+            });
+        }
         grid.Children.Add(WithColumn(stack, 1));
+
+        // Null when the stamp was unusable, and then no cell at all rather than a blank one —
+        // an empty column would still claim its width and pull the sentence short.
+        if (!string.IsNullOrWhiteSpace(ago))
+        {
+            grid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = ago,
+                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(8, 0, 0, 0),
+            }, 2));
+        }
         return grid;
     }
 
@@ -5321,34 +5463,209 @@ public partial class MultiplayerTab : UserControl
         return Strings.Format("MpActivityAgo", Services.RoomAgeFormat.Coarse(elapsed));
     }
 
-    /// <summary>The 24 hour bars, tallest normalised to full height.</summary>
-    private void DrawPeakBars(int[] local)
+    /// <summary>
+    /// The histogram: ONE BAR PER HOUR, twenty-four of them, tallest normalised to full height.
+    ///
+    /// <para>It briefly became eight three-hour bars, on the reasoning that a bar should be the
+    /// same unit as the answer. The resolution is what was actually wanted: three hours per bar
+    /// says "evening", twenty-four says which hour, and the sentence underneath already states
+    /// the stretch in words. Reverted on request — and an hour axis under the bars was tried
+    /// after that and reverted too: at ~8 px per column a label is clipped mid-glyph ("0(" for
+    /// "00"), because a TextBlock measured against less room than it needs cuts the text.</para>
+    ///
+    /// <para><b>What is NOT reverted is which bar lights up.</b> The 24-bar version this returns
+    /// to highlighted <c>DateTime.Now.Hour</c> — the current hour, which has nothing to do with
+    /// the sentence beside it: a bright bar answering a question nobody asked, next to a sentence
+    /// answering one it did not mark. The peak window's own hours are lit instead, so the picture
+    /// and the sentence say the same thing.</para>
+    ///
+    /// <para>Every bar is the one blue at an opacity that follows its value, per the handoff's
+    /// 0.35-0.6 range, with the peak hours solid. Two channels for one number is deliberate: the
+    /// short bars of a quiet community are only a few pixels tall, and the tint is what keeps
+    /// them readable as "some" rather than "none".</para>
+    /// </summary>
+    private void DrawPeakBars(int[] local, int peakStartHour)
     {
         ActivityPeakBars.Children.Clear();
+
         var max = 0;
         foreach (var c in local) if (c > max) max = c;
         if (max <= 0) return;
 
-        var nowHour = DateTime.Now.Hour;
+        var accent = (Color)((SolidColorBrush)FindResource("MpAction")).Color;
+
         for (var h = 0; h < 24; h++)
         {
-            // Bottom-aligned so the bars grow upwards from a common baseline, and a
-            // minimum sliver for a non-zero hour so "one room" is visible at all.
             var frac = local[h] / (double)max;
-            var bar = new Border
+
+            // The lit hours are the window the sentence names, wrapping midnight with it.
+            var inPeak = false;
+            for (var i = 0; i < CommunityStatsView.PeakWindowHours; i++)
+                if ((peakStartHour + i) % 24 == h) { inPeak = true; break; }
+
+            Brush fill;
+            if (inPeak)
             {
-                Background = (Brush)FindResource(h == nowHour ? "MpAction" : "MpRimSoft"),
+                fill = (Brush)FindResource("MpAction");
+            }
+            else
+            {
+                var alpha = (byte)Math.Round(255 * (0.35 + 0.25 * frac));
+                var tint = new SolidColorBrush(Color.FromArgb(alpha, accent.R, accent.G, accent.B));
+                tint.Freeze();
+                fill = tint;
+            }
+
+            ActivityPeakBars.Children.Add(new Border
+            {
+                Background = fill,
                 CornerRadius = new CornerRadius(1),
                 Margin = new Thickness(1, 0, 1, 0),
+                // Bottom-aligned so the bars grow from a common baseline, and a minimum sliver
+                // for a non-empty hour so "one room" is visible at all.
                 VerticalAlignment = VerticalAlignment.Bottom,
                 Height = local[h] == 0 ? 1 : Math.Max(3, frac * 30),
-                ToolTip = TooltipHelper.Wrap(Strings.Format("MpActivityPeakBarTip", h, local[h])),
-            };
-            ActivityPeakBars.Children.Add(bar);
+                // KNOWN NOT TO FIRE IN PRACTICE, and left here deliberately rather than deleted.
+                // A Border is hit-testable only over the rectangle it paints, so on real data this
+                // target is a few pixels tall; wrapping each hour in a full-height transparent
+                // host was tried and MEASURED (the target went 12x3 -> 12x34) and the maintainer
+                // still got nothing on his machine, so it was reverted on his instruction. What
+                // was ruled out with evidence: an ancestor with IsHitTestVisible=False, an
+                // ancestor tooltip winning, the ScrollViewer, the app-wide ToolTip style,
+                // TooltipHelper.Wrap, and MpAlertOverlay's scrim (it removes itself from the
+                // tree). The remaining suspect is WIDTH: a column is ~8-12 px and the tooltip
+                // wants the pointer still inside it for the 400 ms default delay. Wider columns
+                // mean fewer bars, and 24 bars is what was asked for — so do not "fix" this by
+                // bucketing hours again; that was proposed, built and rejected.
+            });
+        }
+    }
+
+    /// <summary>
+    /// Splits a two-placeholder template into runs, emphasising what goes in the holes.
+    ///
+    /// <para>The alternative — three separate strings glued together — puts the word order in
+    /// the code, where a translator cannot reach it. Here the sentence stays one entry and only
+    /// its two values are picked out.</para>
+    /// </summary>
+    private static System.Collections.Generic.IEnumerable<System.Windows.Documents.Run> BuildEmphasisRuns(
+        string template, params string[] values)
+    {
+        // As many holes as the caller passes values for. It took exactly two while the peak
+        // sentence was its only caller; the community totals have four, and they are the reason
+        // this generalised rather than gaining a second copy beside it.
+        var markers = new string[values.Length];
+        for (var i = 0; i < values.Length; i++) markers[i] = "{" + i + "}";
+        var parts = template.Split(markers, StringSplitOptions.None);
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (parts[i].Length > 0)
+                yield return new System.Windows.Documents.Run(parts[i]);
+            if (i < values.Length && i < parts.Length - 1)
+                yield return new System.Windows.Documents.Run(values[i])
+                {
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
+                };
         }
     }
 
     /// <summary>One ladder row: rank, player, rating, decided games, win rate.</summary>
+    /// <summary>
+    /// One ladder row as the STRIP shows it: rank, avatar, name, rating — the handoff's shape.
+    ///
+    /// <para><b>A separate method from <see cref="BuildLeaderboardRow"/> on purpose.</b> That one
+    /// is shared with the RANKING subtab, where the whole table lives and the decided count and
+    /// win rate belong; here there is room for four fields and a face, and the columns those two
+    /// extra numbers need are what left no width for a name. The strip is a teaser, so it shows
+    /// who and how much and sends you to the table for the rest.</para>
+    ///
+    /// <para>The viewer's own row is tinted rather than bolded: the whole point of finding
+    /// yourself in a list is a glance, and weight alone does not survive one.</para>
+    /// </summary>
+    private UIElement BuildStripLeaderboardRow(Models.Multiplayer.LeaderboardRow row, bool isMe)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
+
+        var rank = new TextBlock
+        {
+            Text = row.Rank.ToString(),
+            Foreground = (Brush)FindResource(isMe ? "MpActionText" : "MpTextFaint"),
+            FontSize = (double)FindResource("MpActivityBodySize"),
+            FontWeight = FontWeights.SemiBold,
+            MinWidth = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(rank, 0);
+        grid.Children.Add(rank);
+
+        var avatar = BuildAvatarDisc(name, row.AvatarUrl, 18);
+        avatar.Margin = new Thickness(9, 0, 9, 0);
+        avatar.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(avatar, 1);
+        grid.Children.Add(avatar);
+
+        var who = new TextBlock
+        {
+            Text = isMe ? Strings.Get("MpActivityYou") : name,
+            Foreground = (Brush)FindResource(isMe ? "MpTextHeading" : "MpTextBody"),
+            FontSize = (double)FindResource("MpActivityBodySize"),
+            FontWeight = isMe ? FontWeights.SemiBold : FontWeights.Normal,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(who, 2);
+        grid.Children.Add(who);
+
+        // RANK, FACE, NAME, RATING — and nothing else. A match-count column was added here to
+        // explain the order (the table is ranked by rating MINUS its deviation, so the numbers do
+        // not descend) and removed again: a bare "13" beside an ELO, with no header over it, was
+        // read as an unexplained second number. The full table behind "See all" has real column
+        // headers — DECIDED and win % — which is where a figure like that explains itself.
+        //
+        // The cost is real and is accepted: nothing in this card now says why a higher rating can
+        // sit below a lower one. It does not show today (two players, both orderings agree) and
+        // will the day somebody arrives with a high rating and few matches.
+        //
+        // NO "?" HERE EITHER, and that is not an oversight. A provisional marker keyed on rd > 110 marked
+        // every single row: measured in this repo, the deviation does not cross 110 until about
+        // the fourteenth rated match and NEVER for a player who keeps winning, because a rising
+        // rating re-inflates it as fast as the update shrinks it — so the community's best player
+        // would have carried "provisional" for ever. A mark on 100% of the rows distinguishes
+        // nothing anyway, and the match count in the column to the left is the honest version of
+        // the same explanation. (MatchOutcomeView.IsProvisional stays: on the result card and the
+        // profile it answers a different question, about ONE player rather than a ranking.)
+        var rating = new TextBlock
+        {
+            Text = ((int)Math.Round(row.Rating)).ToString(),
+            Foreground = (Brush)FindResource("MpTextHeading"),
+            FontSize = (double)FindResource("MpActivityBodySize"),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(rating, 3);
+        grid.Children.Add(rating);
+
+        // The tint bleeds OUT to the card's padding edge — negative margin against its own
+        // padding — so the highlighted row reads as a band across the card instead of a
+        // floating pill, and none of the four columns shifts when it appears.
+        return new Border
+        {
+            Child = grid,
+            Background = isMe ? (Brush)FindResource("MpActivityOwnRow") : null,
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(6, 4, 6, 4),
+            Margin = new Thickness(-6, 0, -6, 3),
+        };
+    }
+
     private UIElement BuildLeaderboardRow(Models.Multiplayer.LeaderboardRow row)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
@@ -5485,21 +5802,6 @@ public partial class MultiplayerTab : UserControl
 
         if (RoomsShowingCount == null) return;
         RoomsShowingCount.Text = Strings.Format("MpRoomsShowingCount", n);
-    }
-
-    /// <summary>
-    /// Keep the header strip's right edge aligned with the rows when the Auto
-    /// vertical scrollbar appears/disappears (the header lives outside the
-    /// ScrollViewer, so the scrollbar only steals width from the rows).
-    /// </summary>
-    private void SyncHeaderScrollbarGutter()
-    {
-        if (RoomsHeaderStrip == null || RoomsListScroll == null) return;
-        bool bar = RoomsListScroll.ComputedVerticalScrollBarVisibility == Visibility.Visible;
-        double right = bar ? 30 + SystemParameters.VerticalScrollBarWidth : 30;
-        var m = RoomsHeaderStrip.Margin;
-        if (Math.Abs(m.Right - right) > 0.5)
-            RoomsHeaderStrip.Margin = new Thickness(m.Left, m.Top, right, m.Bottom);
     }
 
     /// <summary>
@@ -6043,7 +6345,12 @@ public partial class MultiplayerTab : UserControl
                 var status = u.TryGetProperty("status", out var stEl) ? (stEl.GetString() ?? "idle") : "idle";
                 double? rating = u.TryGetProperty("rating", out var rtEl)
                                  && rtEl.ValueKind == JsonValueKind.Number ? rtEl.GetDouble() : null;
-                _globalOnlineUsers.Add((userId, login, avatarUrl, status, rating));
+                // The deviation travels with it: the rating alone cannot say whether a 1500
+                // was earned. Absent on an older backend, which reads as "don't know" and
+                // keeps painting the number — see RatingDisplay.IsUnrated.
+                double? rd = u.TryGetProperty("rd", out var rdEl)
+                             && rdEl.ValueKind == JsonValueKind.Number ? rdEl.GetDouble() : null;
+                _globalOnlineUsers.Add((userId, login, avatarUrl, status, rating, rd));
 
                 // A genuinely new arrival (after the baseline, not us) pops once.
                 if (_presenceBaselineSeeded
@@ -6457,7 +6764,7 @@ public partial class MultiplayerTab : UserControl
     // The connected global-chat users + each one's live status, cached from the
     // presence / global_state frames' onlineUsers array (see ParseOnlineUsers).
     // Status: "in_game" / "in_room" / "idle". Rendered by RenderPlayersPanel.
-    private readonly List<(string userId, string login, string? avatarUrl, string status, double? rating)> _globalOnlineUsers = new();
+    private readonly List<(string userId, string login, string? avatarUrl, string status, double? rating, double? rd)> _globalOnlineUsers = new();
 
     // Presence "someone came online" sound: the set of userIds seen in the last
     // presence frame + a one-time baseline flag. The FIRST frame seeds the set
@@ -6507,7 +6814,7 @@ public partial class MultiplayerTab : UserControl
         }
 
         var me = _session?.CurrentUser;
-        bool IsMe((string userId, string login, string? avatarUrl, string status, double? rating) u) =>
+        bool IsMe((string userId, string login, string? avatarUrl, string status, double? rating, double? rd) u) =>
             me != null && (
                 (!string.IsNullOrEmpty(u.userId) && string.Equals(u.userId, me.Id, StringComparison.Ordinal))
                 || (!string.IsNullOrEmpty(u.login)
@@ -6580,7 +6887,7 @@ public partial class MultiplayerTab : UserControl
                 if (RatingDisplay.ShouldShow(u.rating))
                 {
                     var eloText = BuildRatingText(
-                        u.rating!.Value, numberSize: F("FontSizeBody"), unitSize: 10.5);
+                        u.rating!.Value, u.rd, numberSize: F("FontSizeBody"), unitSize: 10.5);
                     Grid.SetColumn(eloText, 2);
                     row.Children.Add(eloText);
                 }
@@ -6979,9 +7286,18 @@ public partial class MultiplayerTab : UserControl
             FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
-            // ONE line, as this table has always been: with the badge out of the way the name
-            // fits, and a uniform row height is what makes a list scannable. Wrapping it to two
-            // lines was tried first and retired — see the multiplayer rules.
+            // TWO lines before it gives up. Moving the badge to the sub-line took the name from
+            // ~115 px to ~272, which fixed most titles but not the long ones — and there is
+            // nothing left in this cell to take width from, so the remaining answer is height.
+            TextWrapping = TextWrapping.Wrap,
+            // "At most two lines", spelled the way WPF spells it: there is no MaxLines here,
+            // that is WinUI. The cap is a MaxHeight of exactly two line boxes, which is why
+            // LineHeight is pinned rather than left to the font.
+            LineHeight = 20,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            MaxHeight = 40,
+            // Now trims the SECOND line: the title field takes 64 characters, so there are
+            // still names that do not fit two lines at a narrow width.
             TextTrimming = TextTrimming.CharacterEllipsis,
             // The title field takes 64 characters, so some names will not fit however much room
             // they are given. It had no tooltip at all before, which left those unreadable.
@@ -7057,10 +7373,12 @@ public partial class MultiplayerTab : UserControl
                     // The rating comes down with the name, never on its own — it lives in
                     // that cell, so the two are folded by the same case rather than by an
                     // order-of-drops rule that could put a bare number here.
-                    subtitle.Add(RatingDisplay.ShouldShow(lobby.Host?.Rating)
-                        ? hostName + " " + Strings.Format(
-                              "MpChipElo", (int)Math.Round(lobby.Host!.Rating!.Value))
-                        : hostName!);
+                    subtitle.Add(!RatingDisplay.ShouldShow(lobby.Host?.Rating)
+                        ? hostName!
+                        : RatingDisplay.IsUnrated(lobby.Host!.Rd, gamesPlayed: null)
+                            ? hostName + " " + Strings.Get("MpEloUnrated")
+                            : hostName + " " + Strings.Format(
+                                  "MpChipElo", (int)Math.Round(lobby.Host!.Rating!.Value)));
                     break;
                 // Ping is deliberately absent: it is YOUR latency, identical on every row,
                 // so repeating it per room would add noise rather than information.
@@ -7163,7 +7481,8 @@ public partial class MultiplayerTab : UserControl
         // the digits level with the name's capitals without towering over the row.
         if (RatingDisplay.ShouldShow(lobby.Host?.Rating))
         {
-            var hostElo = BuildRatingText(lobby.Host!.Rating!.Value, numberSize: 13, unitSize: 10);
+            var hostElo = BuildRatingText(
+                lobby.Host!.Rating!.Value, lobby.Host.Rd, numberSize: 13, unitSize: 10);
             Grid.SetColumn(hostElo, 2);
             hostCell.Children.Add(hostElo);
         }

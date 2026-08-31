@@ -9,6 +9,7 @@ using WarsOfLibertyLauncher;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Controls;
+using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
 
@@ -569,14 +570,186 @@ public class DialogXamlTests
             // The strip's own pieces, by name: renaming one of these breaks
             // LayOutActivityColumns SILENTLY at runtime, since it finds them by field.
             Assert.NotNull(tab.ActivityStrip);
+            Assert.NotNull(tab.ActivityColPeak);
             Assert.NotNull(tab.ActivityColRecent);
             Assert.NotNull(tab.ActivityColMiddle);
-            Assert.NotNull(tab.ActivityColPeak);
-            Assert.NotNull(tab.ActivityDividerLeft);
-            Assert.NotNull(tab.ActivityDividerRight);
+            // The gaps replaced the vertical rules when the strip went to the handoff's
+            // three cards, and they collapse with their card for the same reason the
+            // columns do — so losing one of these names breaks the layout just as quietly.
+            Assert.NotNull(tab.ActivityGapLeft);
+            Assert.NotNull(tab.ActivityGapRight);
             Assert.NotNull(tab.ActivityMiddleCard);
-            Assert.NotNull(tab.ActivityTotalsList);
+            Assert.NotNull(tab.ActivityStripTotals);
             Assert.NotNull(tab.ActivityRankingEmpty);
+            Assert.NotNull(tab.ActivityRankingSeeAll);
+            Assert.NotNull(tab.ActivityPeakLine);
+
+            // NONE of the three cards may stretch. They share one grid row, where a Border
+            // fills the row by default — so the shortest card was drawn as tall as the
+            // tallest, which painted the ranking as a ~200-px empty box under two lines of
+            // text. Measured on this very tree: stretched, all three came out at 297 px;
+            // top-aligned they are 129 / 225 / 110. Losing this property costs no build
+            // error and no test but the one, and looks like the panel grew back.
+            foreach (var card in new[]
+                     { tab.ActivityPeakCard, tab.ActivityRecentCard, tab.ActivityMiddleCard })
+            {
+                Assert.Equal(VerticalAlignment.Top, card.VerticalAlignment);
+            }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The rooms top bar's two groups — the subtabs and the tool cluster — must FIT side by side
+    /// at the narrowest window the app allows.
+    ///
+    /// <para>They share one 48-px row as `*` + `Auto`, and NEITHER has TextTrimming. So the Auto
+    /// cluster takes its full width first and the star strip is arranged at its desired size and
+    /// then clipped at the column edge, with the cluster painting over the same pixels. The
+    /// symptom is the CLASIFICACION tab reading "CLAS" with the room-code box sitting on top of
+    /// it, which is what shipped: adding that field cost ~154 px this row did not have.</para>
+    ///
+    /// <para><b>Measured in Spanish, which is the wide language</b> (CLASIFICACION vs RANKING is
+    /// 93 px against 58). And measured against a FIXED budget rather than the window, because
+    /// UiScale lays this tab out at a scaled logical size: the transform pins the logical bar at
+    /// ~1072 px for every window between the 900-px minimum and the 1100-px default, so that is
+    /// simultaneously the worst case and the common one — making the window smaller does not
+    /// make this worse, and the default size is already it.</para>
+    ///
+    /// <para>Nothing else can catch this. It is not an overflow (a star column that shrinks
+    /// reports nothing, the same blindness the tab's own overflow diagnostic has), it throws
+    /// nothing, and it looks fine on a wide monitor.</para>
+    /// </summary>
+    [Fact]
+    public void TheRoomsTopBarFitsAtTheNarrowestWindow()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new MultiplayerTab();
+
+                var tabs = (FrameworkElement)LogicalTreeHelper.GetParent(tab.SubtabFriends);
+                var cluster = (FrameworkElement)LogicalTreeHelper.GetParent(tab.CreateRoomButton);
+                tabs.Measure(new Size(double.PositiveInfinity, 48));
+                cluster.Measure(new Size(double.PositiveInfinity, 48));
+
+                // The worst case, and it is NOT the smallest window. UiScale scales this tab by
+                // min(w/1100, h/560) with a 0.82 floor, so the LOGICAL width is 1100 at the
+                // 1100-px default and 900/0.82 = 1097.6 at the 900-px minimum — i.e. the bar is
+                // ~1098 logical px wide across that whole range, and shrinking the window does not
+                // shrink it further. Less the bar's own 10-px side padding.
+                const double budget = 1097.6 - 20;
+                var need = tabs.DesiredSize.Width + cluster.DesiredSize.Width;
+
+                Assert.True(need <= budget,
+                    $"the top bar needs {need:F0} px and has {budget:F0}: the subtab strip will be "
+                    + "painted over by the tool cluster. Take the width out of padding, a caption, "
+                    + "or the search box — but NOT out of the Radmin help button's word, which is "
+                    + "a documented refusal.");
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The rooms list may NOT have a viewport of its own.
+    ///
+    /// <para>It had one, and on a short window that is what reduced it to a single 64-px row.
+    /// The join-by-code box and the activity strip below it are Auto rows that take their
+    /// height first, so the star row holding the list absorbed the whole shortfall while the
+    /// strip kept every pixel: the list scrolled inside about one row, and the page did not
+    /// scroll at all.</para>
+    ///
+    /// <para>Both halves are pinned because both fail silently. Re-adding a ScrollViewer
+    /// around <c>RoomsListPanel</c> builds clean and looks right on a big monitor; so does
+    /// removing the page one. And the header strip has to sit in the SAME viewport as the
+    /// rows — that is what makes the old scrollbar-gutter compensation unnecessary, and
+    /// re-adding that compensation now would push the header left of the rows it labels.</para>
+    /// </summary>
+    [Fact]
+    public void TheRoomsListScrollsWithThePageAndNeverOnItsOwn()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+
+            static IEnumerable<DependencyObject> Ancestors(DependencyObject d)
+            {
+                for (var p = LogicalTreeHelper.GetParent(d); p != null;
+                     p = LogicalTreeHelper.GetParent(p))
+                    yield return p;
+            }
+
+            var overRows = Ancestors(tab.RoomsListPanel).OfType<ScrollViewer>().ToList();
+            Assert.Single(overRows);
+            Assert.Same(tab.RoomsPageScroll, overRows[0]);
+
+            // ...and it is the same one for every part of the page: the column headers (or
+            // the gutter compensation comes back), the footer and the strip. The join-by-code
+            // field used to be here too and is deliberately NOT any more — it lives in the
+            // toolbar now, outside the scroller, which is the point of having moved it.
+            foreach (FrameworkElement part in new FrameworkElement[]
+                     {
+                         tab.RoomsHeaderStrip, tab.RoomsShowingCount, tab.ActivityStrip,
+                     })
+            {
+                Assert.Same(tab.RoomsPageScroll,
+                    Ancestors(part).OfType<ScrollViewer>().Single());
+            }
+
+            // The rows' left inset is the header's: 16 here plus 14 of row padding makes the
+            // 30 the strip is inset by. It was the deleted scroller's Padding.
+            Assert.Equal(16, tab.RoomsListPanel.Margin.Left);
+            Assert.Equal(16, tab.RoomsListPanel.Margin.Right);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// On a window too short for everything, the ROOMS keep the height and the join box and
+    /// the strip go below the fold — not the other way round.
+    ///
+    /// <para>Measured, not eyeballed, and deliberately not a pixel count: the claim is that
+    /// the block is as tall as the rows it holds, whatever that comes to. Ten rows against a
+    /// 420-px window is the reported screenshot, where the block was handed about one row.
+    /// It fails on the layout this replaced, and it fails again the moment anyone divides a
+    /// fixed height between a star row and an Auto one here.</para>
+    /// </summary>
+    [Fact]
+    public void AShortWindowShrinksThePageAndNotTheRoomsList()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            const int rows = 10, rowHeight = 64;
+            for (var i = 0; i < rows; i++)
+                tab.RoomsListPanel.Children.Add(new Border { Height = rowHeight });
+            // Collapsed until its data lands; visible is the case that hurt.
+            tab.ActivityStrip.Visibility = Visibility.Visible;
+
+            // Laid out DIRECTLY, not through the tab: nobody is signed in on a bare
+            // MultiplayerTab, so the sign-in gate collapses everything under it and laying
+            // out the tab measures nothing at all (every height comes back 0). 420 is the
+            // viewport the reported short window gives this column.
+            tab.RoomsPageScroll.Measure(new Size(1100, 420));
+            tab.RoomsPageScroll.Arrange(new Rect(0, 0, 1100, 420));
+            tab.RoomsPageScroll.UpdateLayout();
+
+            Assert.True(
+                tab.RoomsBlock.ActualHeight >= rows * rowHeight,
+                $"the rooms block was squeezed to {tab.RoomsBlock.ActualHeight:0} px for "
+                + $"{rows} rows: something below it is taking the height first");
+            Assert.True(tab.RoomsPageScroll.ScrollableHeight > 0, "the page did not scroll");
+            // And nothing re-adds the scrollbar gutter: the header is in the same viewport as
+            // the rows, so it loses the same width and its inset stays a flat 30.
+            Assert.Equal(30, tab.RoomsHeaderStrip.Margin.Right);
         });
 
         Assert.Null(error);
@@ -635,7 +808,6 @@ public class DialogXamlTests
         var error = RunOnStaThread(() =>
         {
             Assert.NotNull(MultiplayerTab.BuildCommunityMatchRow(new CommunityMatch()));
-            Assert.NotNull(MultiplayerTab.BuildTotalsLine("47 partidas \u00b7 30 d"));
         });
 
         Assert.Null(error);

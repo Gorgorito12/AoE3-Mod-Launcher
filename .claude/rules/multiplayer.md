@@ -169,6 +169,70 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   detection gate (`IsServiceRunning`, `RvRvpnGui.exe` process name) was
   deliberately NOT relaxed — get the log first; a confirmed process-name mismatch
   in a future bundle is a separate, targeted fix.
+
+  **THAT FIX DID NOT HELP THE USER IT WAS WRITTEN FOR, because the fault was one level below the
+  gate. The adapter is identified by its ADDRESS now, never by its name.** DeLos reported the
+  same symptom again months later, with Radmin on screen, online, holding `26.217.215.106` and
+  fifteen peers in the AoE3 network — and the launcher showing the red "open Radmin" banner. His
+  log, in three sessions across three days:
+
+  ```
+  RadminState: installed=Installed app=running power=On adapter=none serviceRunning=False
+  BuildMultiplayerLaunchArgs: OverrideAddress OMITTED — no 26.x Radmin adapter Up [...]
+  ```
+
+  `app` and `power` passed; `serviceRunning` is literally `app && power != Off && ip != null`, so
+  that `False` is arithmetic — it means the enumeration returned null. **And it did not throw:**
+  `TryGetAdapterIp` logs every swallowed exception and the banner polls every ~3 s, so a throwing
+  walk would have flooded the log; all four markers (`TryGetAdapterIp:`, `DetectServiceRunning:`,
+  `GetAdapterBytes:`, `state-probe-failed`) appear **zero** times in his bundle. A filter was
+  simply too narrow.
+
+  **The culprit was `nic.Name.Contains("Radmin")` — the CONNECTION name.** That is the label in
+  Network Connections: Windows generates it (`Ethernet 2`, `Ethernet 5`) and anyone can rewrite
+  it. The string that cannot be changed is `nic.Description`, the driver's own
+  `Radmin VPN Ethernet Adapter`, and nothing in the walk looked at it. An installer rename that
+  did not take — a driver repair, an in-place upgrade — was enough to make the right interface,
+  carrying the right address and Up, get thrown away on the first line. The second candidate was
+  `OperationalStatus == Up` exactly, which rejects the other six values: `Unknown` and `Dormant`
+  are legal for a virtual NIC with no physical media, and **Windows routes and pings over an
+  interface without consulting that field**, which is why his Radmin worked with fifteen peers
+  while the launcher saw nothing.
+
+  **So `SelectRadminAdapter` keys on a 26.0.0.0/8 IPv4 and nothing else is required.** Radmin
+  hands every machine an address in that block and it reaches a home PC by no other route, so it
+  identifies the card better than a renameable label; `Up` and a "Radmin" in the name or the
+  description survive only as tiebreaks for a machine with two candidates. **The address is NOT
+  relaxed, and that is what keeps this safe:** an interface CALLED Radmin with no 26.x address is
+  never returned, which is the exact risk the old name filter existed to guard against — kept,
+  while dropping the half that misfired. Pinned by `RadminAdapterTests`, where the rejections are
+  the point.
+
+  **Three structural repairs came with it, each of which had hidden the bug.**
+  (1) The selection is a pure function over an `AdapterCandidate` record, because
+  `NetworkInterface` cannot be constructed and so this had **no test at all** — the covered half
+  was the power parser, the gate that PASSED on his machine, while the gate that failed was
+  unreachable from a test. Same seam as `GameExitWatcher`'s injected liveness probe.
+  (2) `GetAdapterBytes` repeated the same four filters character for character and now shares the
+  selection: one place to be wrong about which card is Radmin's, not two. (Its duplication also
+  meant his in-match TRAFFIC meter read "—" for the same reason.)
+  (3) `ReadAdapterCandidates` catches per INTERFACE. The old `try` wrapped the whole loop, so one
+  NIC in an odd state aborted the walk and hid every interface after it.
+
+  **And `adapter=none` no longer means two things.** It printed the same word whether nothing
+  carried a 26.x address or a filter discarded the right card, which is why a bundle that
+  contained the answer could not deliver it. `DescribeAdapterCandidates` now lists what was
+  actually seen — name, description, status, addresses, and which one carried 26.x — inside that
+  `none(...)`. It walks only interfaces that have an IPv4, and the existing `_lastRadminLogSig`
+  guard still means it is written on a state CHANGE, so the 3-second poll stays quiet.
+
+  **The blast radius is worth knowing, because "the banner is wrong" undersells it.** One null
+  fed six places: the banner, the create-room notice, **the `OverrideAddress` injection** — his
+  two hosted rooms both launched without it, so AoE3 bound to whatever NIC Windows picked and
+  nobody could join him — the `set_radmin_ip` frame, so every peer saw him as grey "Esperando
+  VPN" for the whole match, and the traffic meter. A user reports the banner; what he has lost is
+  multiplayer.
+
   **Radmin-off messaging is INFORMATIONAL, never a blocker — creating and JOINING
   rooms are NOT gated on Radmin.** Joining (`JoinLobbyCoreAsync`) is gated only by
   the mod fingerprint; Create is never disabled. So a room is created AND joinable
@@ -1993,10 +2057,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `MpRoomsShowingCount` = "Showing N rooms") shows the count — **no pagination**
   (the list scrolls). **The layout is ~78/22** — the rooms table col is `3*`, the
   global-chat column is FLEXIBLE (`*` MinWidth 280 / MaxWidth 300) — so the table
-  fills ~78%;
-  `SyncHeaderScrollbarGutter` (hooked to `RoomsListScroll.ScrollChanged`) bumps the
-  header's right margin by `SystemParameters.VerticalScrollBarWidth` when the vbar
-  shows so the header tracks the rows. The row shows: a **leading mod-icon disc**
+  fills ~78%. **The header strip and the rows are in the SAME viewport, so nothing
+  compensates for the scrollbar and nothing may.** `SyncHeaderScrollbarGutter` used to
+  bump the header's right margin by `SystemParameters.VerticalScrollBarWidth`, because
+  the header sat OUTSIDE the list's own scroller and the bar stole width from the rows
+  alone; that scroller is gone (see the scrolling-page bullet), so re-adding the
+  compensation would push the header ~17 px LEFT of the rows it labels — the exact
+  misalignment it was written to prevent, sign flipped. It was also already wrong under
+  `UiScale`: a device-pixel constant added inside a `LayoutTransform`, over-correcting
+  ~22 % at the 0.82 floor. The row shows: a **leading mod-icon disc**
   (the room's mod icon, resolved by `ResolveRoomModIcon` = cached catalog
   `icon.png` → built-in packed icon, cached per mod id and decoded once; **gold ★
   fallback** when the mod ships no resolvable icon), the title (with a purple
@@ -2886,6 +2955,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   NOT part of it.** This reverses an earlier rule of mine, so read the reason before
   reinstating it.
 
+  **NARROWED SINCE, and the narrowing is written up with the community strip:** a player who has
+  never been rated now reads "unrated" rather than the shared 1500, decided by
+  `RatingDisplay.IsUnrated`. Everything below still holds — a null rating still paints nothing,
+  and a rated player sitting on 1500 still shows it. What changed is only that the launcher no
+  longer prints the same number for somebody who earned it and somebody who never played. **This
+  rule has now turned twice; read both before turning it a third time.** Its declared exception,
+  the ranking table's own filter, is gone with it: entry requires a rated match, so nobody
+  unrated can reach the table anyway.
+
   The old rule withheld the server's starting 1500 (`rd > 110`) on the grounds that
   showing it passes a placeholder off as earned skill, and labelled it "provisional"
   where it did appear. **The flaw: every player who has not played is on exactly 1500.**
@@ -3011,18 +3089,357 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **were never even requested**. Community stats are fetched FIRST now and each card reports
   whether it drew anything; the strip is shown when any of them did.
 
-  **A hidden card has to give up its COLUMN and its DIVIDERS too — `LayOutActivityColumns`.**
-  This is the non-obvious half and it is what made the middle third look broken: a star
-  column keeps its share of the width whatever its child does, so collapsing a card left a
-  third of the strip reserved and blank, and the two dividers were unconditional, so that
-  blank third came framed by two rules. The XAML comment promising that "an absent card
-  reads as *not yet*" was only true of the card, never of the space it left. The left rule
-  is `recent && (middle || peak)`, not `recent && middle` — with the middle card gone it is
-  what separates the two that remain.
+  **THE STRIP IS THREE CARDS, per the design handoff, and it spent a while as three bare
+  columns with rules between them.** `docs/design_handoff_multiplayer_ui/Launcher Multiplayer.dc.html`
+  lines 102-133 specify it: three identical boxes, `#12213a`, 1-px rim, radius 8, padding 12/13,
+  an 11-px gutter, in the order **HORA PUNTA · ÚLTIMAS PARTIDAS · CLASIFICACIÓN**. The shipped
+  version had dropped the boxes for transparent columns separated by 1-px vertical rules, and
+  **no reason for that was ever written down** — which is how it survived: nothing to argue with.
+  It came back as a report that the panel "looks different from this", with a screenshot that
+  turned out to be a render of the handoff itself.
+  Every value it names was already a token: **`MpPanel` IS `#12213a`**, `MpRimFaint` is the rim,
+  `RadiusRow` is the 8, `MpOk` is the green dot and `MpAction` is the blue. The card style is
+  `MpActivityCard`, deliberately NOT `BasedOn` `MpRoomCard`, which carries a `MinHeight` and a
+  hover trigger a static info card has no use for.
 
-  **The middle third is the community's NUMBERS, with the ladder under them.** Stacked
-  rather than given a column each: a fourth column leaves every one of them too narrow for a
-  player name at the smallest window this tab supports. The numbers are `totals` —
+  **Two handoff values are deliberately NOT adopted, and copying them back would undo real
+  fixes.** Its type sizes (10.5 / 11.5) sit below this strip's `MpActivity*Size` tokens, which
+  went to the launcher's 13 floor on a separate call and are the one part of this tab nobody has
+  called small. And its text colours (`#61779a`, `#5f7592`) are the OLD ramp — raised since to
+  clear 4.5:1. Both are recorded here so the next person comparing against the handoff reads
+  them as decisions rather than as drift.
+
+  **THE STRIP HAD NO ACTIVATION EDGE, and "it takes minutes to appear" was exactly that.**
+  `RefreshActivityStripAsync` had precisely two callers and both were subtab CLICK handlers —
+  while `_activeSubtab` starts on `Rooms`, so whoever opened the tab was already sitting on the
+  subtab they would have had to press. The strip is born `Collapsed` in the XAML and is only ever
+  shown inside that fetch, so it stayed blank until an accidental click. The 60-second cache was
+  never implicated. It is now also called from `StartQuotaPolling` — the one edge both entry paths
+  cross (`Attach` with the tab visible, and every visible transition of `OnVisibleChangedTabGate`)
+  — and from `OnSessionStateChanged`, because everything that asks for it requires `SignedIn` and
+  a request landing during sign-in used to be dropped with nothing retrying. Both calls are free
+  on re-entry: the method self-limits on its own window.
+  **Paired with it: the freshness stamp moved past the `await`.** `_activityFetchedUtc` was
+  written before the request, so a fetch that FAILED burned the full minute and the strip stayed
+  dead however many times the user tried — the one state where retrying is the right instinct was
+  the one where it did nothing.
+
+  **The community's NUMBERS live under the recent matches, not in a card of their own.** They
+  were stacked above the ladder; they read as that card's footer instead, since the list is what
+  it is about. That split `FillCommunityMiddle`, which used to draw both and answer for the pair
+  with one flag: totals moved to `FillCommunityTotals`, the matches card is shown when EITHER it
+  or the list drew, and the 1-px rule between them only when BOTH did — a rule with nothing on
+  one side of it is a line across an empty card. The ranking card now does a single job.
+  `LayOutActivityColumns` is unchanged and still collapses **column and gap** together.
+
+  **AND THAT MERGE MADE THE STRIP TOO TALL, because the three cards share one grid row — so the
+  strip is always as tall as the fullest of them, and the merge had just made one of them the
+  fullest by a wide margin.** Reported the same day it shipped. Two independent costs, and they
+  need different fixes:
+  **(1) The footprint.** The matches card carried three two-line matches AND a "COMMUNITY"
+  heading over three stacked one-fact rows. The heading went (a footer under a 1-px rule is
+  already marked off; the title restated the rule) and the two counts became ONE line —
+  `MpActivityTotalsCounts`, which keeps BOTH windows because they differ: matches over 30 days,
+  players over 7, so neither can be inferred from the header's window. Every vertical gap in the
+  strip was tightened with it. **Measured on the real tree, both numbers from the same WPF layout
+  pass: 357 px → 273.**
+  **(2) The empty boxes, which is what actually looked wasteful.** A `Border` in a grid row fills
+  it, so the ranking card was drawn as a ~200-px empty box under two lines of text and the peak
+  card as a half-empty one — while the *content* of both ended a third of the way down. All three
+  cards are `VerticalAlignment="Top"` now, so each is only as tall as what it holds: stretched
+  they measured **297 / 297 / 297**, top-aligned **129 / 225 / 110**. The cost is a ragged bottom
+  edge, which is the honest shape of three cards with different amounts to say. Pinned in
+  `DialogXamlTests.MultiplayerTab_ParsesItsWholeXaml` — dropping that alignment produces no build
+  error and no visible defect except that the panel appears to have grown back.
+  **What was NOT done, deliberately: the recent list still shows three matches.** Cutting it to
+  two is the single biggest remaining saving (−41 px) and it was not taken — the complaint was
+  about space, not about content, and that list is the only community-matches surface in the
+  launcher.
+
+  **AND THEN THE TOTALS LEFT THE CARD ALTOGETHER, for the row above it that was free.**
+  Even as one line under a rule they were what made the matches card the tallest, and the
+  tallest card is the strip. The strip's header row — title on the left, and from there to
+  the far edge nothing — already existed, so putting them there costs **zero** height:
+  `ActivityStripTotals`, right-aligned, `CharacterEllipsis`, with the map LAST so the segment
+  lost first on a narrow window is the one worth least. **Measured, same harness, same layout
+  pass: 357 → 273 → 213 px**, and the matches card 297 → 225 → 165.
+  **`ActivityStripWindow` ("last 30 days") is GONE, and that is what made room for them.**
+  Every figure now carries its own window and they DIFFER — matches over 30 days, players
+  over 7 — so one label could only ever restate one of them; beside "(30 d)" it read as the
+  same fact twice. `MpActivityStripWindow` and `MpActivityTotalsTopMap` are retired with it,
+  and `BuildTotalsLine` deleted rather than left callerless (the "a control nobody can reach
+  reads as a feature that exists" rule this file already states). `FillCommunityTotals` writes
+  one string and is re-run from `ApplyStrings` off the cached `_communityStats`, since the
+  header has to survive a language switch. The matches card is now shown for `recentDrew`
+  alone; totals still count toward `any`, because a header line of numbers IS content.
+
+  **THE JOIN-BY-CODE PANEL IS GONE FROM THE PAGE — the field lives in the rooms TOOLBAR, beside
+  the search box.** It was a full-width band under the list carrying a title, a subtitle, a field
+  and a button, in the one column where the ROOMS are what should have the height. Its two
+  sentences do not fit a 48-px bar and are **not** lost: they are the field's `ToolTip`, built from
+  the very same `MpJoinByCodeTitle` + `MpJoinByCodeHint` — zero new keys, and wrapped in
+  `TooltipHelper.Wrap` per the repo rule. The button is icon-only (34×32, the send glyph) with its
+  caption on the tooltip, the shape the global-chat composer already uses for this exact problem.
+  **Deliberately small, and the reason is structural:** that bar's right-hand cluster and the
+  subtab strip share ONE row with no ellipsis on either, so every pixel added here is width taken
+  from the tabs — hence a 96-px field. **Those first numbers were wrong and the row did not fit — see the next
+  bullet.** (For the record: the ~650 had been measured with `RadminHelpButton` COLLAPSED; with it
+  shown the cluster is 820 px, the subtab strip is 377 not 430-460, and the two groups touch at
+  1226 logical px, not ~1200.)
+  **Two things it dragged with it.** The page grid is `*`/`Auto` now and `ActivityStrip` moved to
+  `Grid.Row="1"` — and `TheRoomsListScrollsWithThePageAndNeverOnItsOwn` asserted `JoinByCodeRow`
+  hung off `RoomsPageScroll`, which is exactly what stopped being true, so that name came out of
+  its list. And **the field is finally part of the offline gate**: `ApplyOfflineDisable` greyed
+  Refresh and Create and never touched this one, which was invisible while it lived in a panel of
+  its own and reads as a broken offline state sitting in the same cluster. Note the pair that makes
+  that work — `SetOfflineMode`'s online branch must re-enable it BY HAND (nothing in
+  `RefreshFromSession` touches it, so it would stay dead for the session), and
+  `JoinByCodeBox_TextChanged` must respect `_offlineMode` or a keystroke re-enables the button
+  under a greyed-out field.
+
+  **AND THAT TOOLTIP HAS NEVER ONCE FIRED — including after the fix below. This paragraph is the
+  record of a FAILED attempt, not of a solution.** The general lesson holds and is worth keeping: a
+  tooltip belongs on the whole area a person can aim at, not on the small thing painted inside it,
+  and that area needs a non-null `Background`.
+  It was on the coloured bar. A `Border` is hit-testable only over the rectangle it paints, and on
+  the real sample (119 rooms over 30 days, 11 in the busiest hour) a quiet hour's bar is **1-3 px
+  tall in a 34-px cell and ~6 px wide**: 91-97 % of every column was dead, and the pointer had to
+  hold still inside those pixels for the 400 ms default delay. The dead part fell through to
+  `ActivityPeakCard`, which carries no tooltip — **WPF resolves tooltips UPWARD from the hit
+  element and never downward into children**, so nothing rescued it. Measured after the fix: the
+  target went from ~12×3 px to **12×34**.
+  Everything else was innocent and was checked: no ancestor with `IsHitTestVisible="False"`, no
+  ancestor tooltip that could win, the `ScrollViewer` does not intercept hover, the app-wide
+  `ToolTip` style has no delay/placement setters and could only ever fail VISIBLY, and
+  `TooltipHelper.Wrap` cannot return nothing here. It was pure geometry.
+  **The fix already existed in this file** — the rooms table's PLAYERS cell puts its tooltip on
+  the cell with `Background = Brushes.Transparent` and the comment *"or the gaps between children
+  swallow the click"*. Each hour is now a full-cell transparent `Border` carrying the tooltip, with
+  the coloured bar as its bottom-aligned child. **Transparent, because null is not hit-testable and
+  Transparent is.**
+  **And it STILL did not fire on the maintainer's machine, so all of it was reverted** — the
+  transparent host, the axis, and the test that pinned them. What stands is the original: 24 bars,
+  the tooltip on the bar, unreachable. Ruled out with evidence across two passes: an ancestor with
+  `IsHitTestVisible="False"`, an ancestor tooltip winning, the `ScrollViewer`, the app-wide
+  `ToolTip` style, `TooltipHelper.Wrap`, and `MpAlertOverlay`'s scrim (it removes itself from the
+  tree — `host.Children.Remove`). **The suspect left standing is WIDTH:** a column is ~8-12 px and
+  the tooltip wants the pointer held still inside it for the 400 ms default delay, so fixing the
+  height fixed half the target. Wider columns mean fewer bars, and 24 bars is what was asked for —
+  **do not "fix" this by bucketing hours again**: that was proposed, built and rejected.
+  An hour AXIS under the bars was the other attempt and is also gone: at ~8 px a column, a
+  `TextBlock` measured against less room than it needs clips mid-glyph, so the labels read "0("
+  instead of "00".
+
+  **AND IT DID NOT FIT. The subtab strip and the tool cluster share one `*` + `Auto` row and
+  NEITHER has `TextTrimming`, so the loser is not ellipsised — it is painted over.** The Auto
+  cluster takes its full width first; the star strip is then arranged at its DESIRED size and
+  clipped at the column edge, with the cluster drawing on the same pixels. Reported as
+  CLASIFICACION reading "CLAS" with the room-code box sitting on top of it.
+  **Measured, in Spanish because that is the wide language** (CLASIFICACION 93 px vs RANKING 58):
+  cluster 820, strip 377, plus the bar's padding — **1226 logical px needed**. And the available
+  width is **pinned at ~1098 for every window from the 900-px minimum to the 1100-px default**,
+  because `UiScale` divides by `min(w/1100, …)` — so the default window IS the worst case and
+  making the window smaller does not make it worse.
+  **The obvious lever is forbidden.** "? Ayuda para conectar" is the widest control in the row at
+  170 px and shrinking it to a bare "?" saves almost exactly what the code field cost — and a bare
+  "?" is precisely what the Radmin-door bullet above records as tried and rejected ("no se sabe que
+  eso tiene una guia"). I did it anyway in one pass and reverted it; **do not restart that
+  progression**, and note the rule binds even when the motive is layout rather than design.
+  The 128 px came out of whitespace and one fixed width instead, none of it costing a word: bar
+  padding 14→10, four cluster gutters 16→10, Refresh and Create padding, the subtab padding
+  12→10 a side (5 tabs = 20 px), and the search box 230→190 (its placeholder needs ~150 of inner
+  width and now has 166). **Result: 1056 needed against 1078 available.**
+  Pinned by `DialogXamlTests.TheRoomsTopBarFitsAtTheNarrowestWindow`, which measures both groups in
+  Spanish against that fixed budget. Nothing else can see this failure: it is not an overflow (a
+  star column that shrinks reports nothing — the same blindness the tab's own overflow diagnostic
+  has), it throws nothing, and it looks perfect on a wide monitor.
+
+  **THE HISTOGRAM IS BACK TO 24 BARS, ONE PER HOUR, WITH THE HOUR IN A TOOLTIP — and "how it was
+  before" was literally `git show HEAD`.** The eight three-hour buckets were an uncommitted change
+  of mine; HEAD had 24 bars and `MpActivityPeakBarTip` already written, so restoring it needed no
+  new string and the bucket key retired instead. The argument for buckets was that a bar should be
+  the same unit as the answer; the resolution is what was actually wanted, and the sentence beneath
+  already states the stretch in words.
+  **What was NOT reverted is the highlight, and that part matters.** The 24-bar version lit
+  `DateTime.Now.Hour` — the current hour, which has nothing to do with the sentence beside it: a
+  bright bar answering a question nobody asked. The peak window's own hours are lit now
+  (`h ∈ {peakStartHour..+2} mod 24`, wrapping midnight with it), so the picture and the sentence
+  say the same thing. `MpActivityPeakRange` was already an orphan and went with the bucket key.
+  **The line this bullet used to end on — "the bars carry no axis, so the tooltip is the ONLY
+  thing that says which hour a bar is, don't drop it" — was true and useless, because the tooltip
+  could not be reached.** See the next bullet; it is a fair warning about writing down that
+  something is load-bearing without ever checking that it works.
+  **There IS an axis now**: `ActivityPeakAxis`, a twin `UniformGrid` of the same 24 columns with a
+  label every 6 hours, filled by `DrawPeakBars` in the same loop as the bars (empty `TextBlock`s in
+  the unlabelled columns) so a tick sits under ITS bar by construction, never by arithmetic. It is
+  free: measured, the peak card goes 122 → 141 px while the strip's height is set by the ranking
+  card at 168, so the strip stays at **217**.
+
+  **The totals line was the faintest rung of the ramp; the figures are now the brightest.**
+  `MpTextDim` measured **4.84:1** on the tab background — legal, and the wrong end of the scale for
+  the one line in the strip anybody actually reads. The words are `MpTextBody` (**10.17:1**) and the
+  four figures `MpTextHeading` SemiBold (**15.63:1**), through `BuildEmphasisRuns` — the same
+  treatment the peak sentence gives its two hours a few inches to the left. That helper took
+  exactly `{0}` and `{1}`; it is `params string[]` now, which is why the totals could reuse it
+  instead of growing a second copy. **Blue (`MpActionText`) was rejected**: in this tab blue means
+  *pulsable* ("Ver todo"), and this line is not.
+  **The map is LABELLED, and it shipped bare for exactly one round.** The approved sketch ended the
+  line with "· ESOC Fertile Crescent", it was flagged as ambiguous on delivery, and it was reported
+  the same day: a proper noun arriving after two labelled figures does not announce itself as a
+  map. `MpActivityTotalsTopMap` ("Mapa más jugado: {0}") is back. The label costs width only where
+  there is width to spare — the line trims from the right and the map is last, so a narrow window
+  loses the label together with the name it labels, which is the right order to lose them in.
+
+  **AND EVEN AT 213 px IT STILL COVERED THE ROOMS, because the strip's height was never the
+  problem — the question is WHO CEDES. The Rooms left column is ONE SCROLLING PAGE now
+  (`RoomsPageScroll`), and nobody may divide a fixed height in it again.** The column was
+  `*` (rooms) / `Auto` (join-by-code) / `Auto` (activity strip). Auto rows are paid FIRST and
+  in full, and the star row absorbs whatever is left — so on a short window the join box kept
+  its ~62 px and the strip its ~212, and the rooms list, the reason the tab exists, came out
+  **about ONE 64-px row tall with a scrollbar of its own**. The comment sitting there claimed
+  the opposite ("only the list takes the slack"), which held only while there WAS slack.
+  **It was silent by construction, and that is the part worth remembering.** The diagnostic
+  written for exactly this (`mpRoot.SizeChanged`, "the bottom of the left column is being
+  clipped") **never fired — zero hits across the reporter's logs** — because a star row that
+  shrinks does not overflow anything. It is kept, since it can still catch the Auto rows ABOVE
+  the column (header, Radmin banner, toolbar), but its comment now says what it cannot see.
+  **Four things are load-bearing:**
+  (1) **The two `*` rows STAY star.** Under a ScrollViewer the vertical measure is infinite and
+  a Grid sizes its star rows to content, so they behave as Auto exactly when it matters; when
+  the content DOES fit, `ScrollContentPresenter` arranges at `max(desired, viewport)` and the
+  star share is redistributed, which is what keeps a tall window looking as it did. They move
+  together or the "Showing N rooms" footer floats inside the block.
+  (2) **`HorizontalScrollBarVisibility="Disabled"` is not tidiness.** With `Auto` the header
+  strip is measured at INFINITE width, `ApplyRoomColumns` resolves against that made-up number
+  (its `available <= 0` guard never fires), and the table runs off the edge instead of dropping
+  a column.
+  (3) **The inner `RoomsListScroll` is DELETED, not disabled** — a scroller that only works
+  because something above it measures with infinity would clip the list the day a finite height
+  returns. Its `Padding="16,10,16,10"` moved to `RoomsListPanel.Margin` and must stay: 16 + each
+  row's own 14 makes the 30 the header strip is inset by, which is what puts the columns under
+  their labels. The cell carries `MinHeight="72"` so the empty and error states — both one line
+  — do not read as a sliver.
+  (4) **The column header scrolls away with the page, deliberately.** Pinning it does not require
+  the nested scroller back (title + header could stay in fixed rows above the scroller), but it
+  does require `SyncHeaderScrollbarGutter` to come back, and leaves the footer scrolling under a
+  header that does not. `ProfileView` has been this exact shape all along; Rooms was the odd one.
+  **Known consequence:** `RoomsTableLayout` drops **PING** first, and the page scrollbar is now
+  present far more often than the list's used to be, so PING folds into the room's sub-line at
+  slightly wider windows. It is this repo's own least-valuable column (your own latency, the same
+  on every row, sorting by it a documented no-op) and `Hidden()` keeps the number.
+  Pinned by two tests in `DialogXamlTests`, and **both were verified to fail on the regression
+  they name**: `TheRoomsListScrollsWithThePageAndNeverOnItsOwn` (walks the logical tree — a
+  re-added nested scroller makes it see 2 viewports) and `AShortWindowShrinksThePageAndNotTheRoomsList`
+  (10 rows into a 420-px viewport; with the page not scrolling the block measures **255 px for
+  640 px of rows**, which is the screenshot as a number). Both build clean and look right on a
+  big monitor when broken, which is why they exist.
+  **Fixed in passing:** the error branch cleared the list and showed `RoomsErrorBox` without
+  collapsing `RoomsEmptyState`, so a fetch failing right after an empty render drew the amber
+  line straight over "no rooms right now" — same cell, both top-aligned.
+
+  **AND ORDERING IT BY THE RAW RATING PUT THE NEWCOMER ON TOP. The ladder is ordered by
+  `rating - 2*rd` now — Glicko-2's own conservative estimate — and a minimum of 5 rated matches
+  is a FLOOR, not the mechanism.** Reported as "somebody who had never played gets more points in
+  3 matches for it being his first time, and it leaves him above everyone with many matches". The
+  live table the day it was fixed:
+
+  | player | rating | RD | rated matches | rating − 2·RD |
+  |---|---|---|---|---|
+  | Gommiustan | 1626 | **248** | **3** | 1130 |
+  | Aluclown | 1604 | 125 | **13** | **1353** |
+  | Geaf_Argento | 1510 | 133 | 9 | 1244 |
+  | Gorgorito12 | 1383 | 287 | 1 | 810 |
+
+  **A threshold alone could not do it, and the numbers are why.** He had exactly 3, so a bar of 3
+  still crowned him; a bar of 5 fixed the order by emptying the table to **two names** out of five
+  slots. This community plays ~35 rated matches a month, and the project has already been here
+  once — the `rd <= 110` + 3-games pair that showed nobody. The bar exists to keep a single lucky
+  night off the board; it is not what ranks anybody.
+  **The conservative rating is what ranks them**: how good the player is AT LEAST, at ~95%
+  confidence. A newcomer's enormous deviation discounts him however well he starts, and he climbs
+  on his own as it shrinks — which is what "he has not proved it yet" means, in the units the
+  rating system already keeps. It reorders the live table to Aluclown > Geaf > Gommiustan.
+  **It lives in SQL, and it has to.** `rank` is assigned by list position inside `ladder()`, and
+  both the DTO comment and `CommunityStatsViewTests.RanksComeFromTheServer_NeverRenumberedHere`
+  forbid renumbering client-side — filtering in the launcher would produce #1, #4, #5. So
+  `MIN_DECIDED` is 5 and the `ORDER BY` reads `LADDER_ORDER_BY`, a constant the query interpolates
+  and `src/stats/ladder.test.ts` asserts still mentions `e.rd`. That test exists because the
+  tempting "optimisation" is to put `ORDER BY e.rating DESC` back so the
+  `idx_elo_rating (mode, rating DESC)` index applies; doing so silently restores the bug. There is
+  no database harness in that repo (the SQL is verified on deploy, per DEPLOY.md) — sharing one
+  constant between the query and a pure test is what buys the guard without inventing one.
+  **The cost, and the two things that pay it: the number shown is still `rating`, so the column no
+  longer descends.** Emitting the adjusted figure instead was rejected — it would contradict the
+  rating the same player sees in his profile and in every room. Instead the strip's row gained the
+  **match count** (what makes the order legible at a glance: "13" beside the top name answers "why
+  is he above me") and a **`?`** on a provisional rating (`MatchOutcomeView.IsProvisional`, rd >
+  110), the chess idiom, both with tooltips. **BOTH ARE GONE NOW, in that order, and the strip's
+  ladder is rank / face / name / rating and nothing else.** The `?` marked every row (below); the
+  count was then reported as an unexplained second number beside the ELO, which is exactly what a
+  bare "13" with no header over it is. The full table behind "See all" carries real column headers
+  — DECIDED and win % — and that is where such a figure explains itself. **So the accepted state
+  is a strip that shows an order it does not justify.** It does not show today (two players, both
+  orderings agree) and it will the day somebody arrives with a high rating and few matches. If it
+  becomes worth explaining again, the honest form is a column HEADER, not another bare number. **The `?` came out, and the warning it carried is why.** It was
+  flagged here as marking every row, and on the deployed table it did exactly that (rd 125 and 133,
+  both over 110). Worse than useless: the measured decay says the deviation does not cross 110
+  until about the fourteenth rated match and **never for a player who keeps winning**, so the
+  community's best player would have been labelled "provisional" permanently. The match count in
+  the next column is the honest version of the same explanation, and it is already there.
+  `MatchOutcomeView.IsProvisional` stays — on the result card and the profile it answers a
+  question about ONE player rather than about a ranking.
+  **`MpActivityRankingEmpty` takes `{0}` again.** It lost the placeholder when the bar was one
+  match — nothing worth quoting — and there is a bar again, so the empty state must name it. The
+  figure is the SERVER's `min_decided`, never a literal launcher-side: those two have disagreed
+  before, and this sentence is exactly where a player read the wrong one.
+  **The strip shows the top 5** (`Take(3)` → `Take(5)`). Measured: the ranking card becomes the
+  tallest at 168 px against the matches card's 165, so the strip goes 213 → **217** — and only
+  when five players actually qualify.
+  **None of this shows until the backend is deployed.** Until then the launcher keeps receiving
+  the old order and the old `min_decided`.
+
+  **THE RANKING IS A LIST OF THE BEST BY ELO, and it used to be a judgement about whether the
+  number had settled.** `ladder()` filtered on `e.rd <= PROVISIONAL_RD` (110) **and** on three
+  decided games, while the payload advertised only the second — which is why the launcher's
+  empty-state promised entry at three matches while something else refused everybody. The
+  deviation was the one doing it, and it is about five times stricter: each match is its own
+  Glicko rating period, so RD falls slowly. Measured against the library this repo installs,
+  replicating `applyMatch`: **290 / 256 / 230** after one, two and three matches, first crossing
+  110 around the **fourteenth** — and **never** for a player who keeps winning, because a rising
+  rating re-inflates RD as fast as the update shrinks it. The best player in the community was
+  the one who could never appear.
+  Both filters are gone, replaced by `e.games_played >= 1`: a column `applyMatch` already
+  maintains, so eligibility counts RATED matches only and needs no subquery (the win/loss tally
+  stays, but purely to fill the DECIDED column). **`PROVISIONAL_RD` itself is untouched** — it
+  answers a different question, whether the player is told their rating is provisional, and
+  `MatchOutcomeView.ProvisionalRd` mirrors it launcher-side. `MpActivityRankingEmpty` lost its
+  `{0}`: there is no threshold left to quote. `RequiredDecided` still gates that message, for
+  what it always really meant — whether the server answered at all.
+
+  **A rating is shown wherever a player's name appears — UNLESS nobody has ever played for it,
+  and then it says so. This narrows the rule below, which was itself a reversal, so both turns
+  are written down and neither should be given a third without reading the pair.** The earlier
+  one is right that a number everybody starts from claims nothing about anyone; what it missed
+  is that this is precisely why it says nothing useful either, printing the same 1500 beside a
+  name that earned it and a name that had never played. `RatingDisplay.IsUnrated(rd,
+  gamesPlayed)` decides it — `games_played == 0` where that travels, else `rd >= 350`, the
+  deviation the server hands somebody it has never rated. **Not knowing is NOT unrated**: a
+  backend older than these fields sends neither and keeps painting the number, the same refusal
+  `ShouldShow` makes about a null rating. The two signals agree by construction, `applyMatch`
+  being the only writer of both.
+  **Two of the five surfaces could not tell the difference and needed the wire widened.**
+  `GET /matches/elo` already carried `games_played` and `rd`, and `room_state` already carried
+  `rd`; `GET /lobbies`'s host object and the `/global/ws` presence frame sent a bare number, so
+  both now send `rd` beside it with the same `?? DEFAULT_RD` the rating gets — no row means
+  unrated, which is exactly what the default deviation means. `BuildRatingText` owns the wording
+  for the rooms table and the players panel together, because those two used to share only the
+  styling and could have answered the same question differently. The Profile tab decides the
+  unrated case BEFORE writing the number: it printed the 1500 first and only then noticed nothing
+  had been played, so the one screen that knew the answer showed the placeholder anyway.
+  This also retires that rule's declared exception — the ranking table no longer keeps a filter
+  of its own, because nobody unrated can reach it: entry requires a rated match.
+
+  **The middle third is the community's NUMBERS** — `totals` —
   `matches` in a window, `players` seen in a shorter one, and the most-played map — and each
   window travels WITH its figure, so a card that hardcoded "30 days" cannot start lying the
   day that constant moves. **`totals: null` is not zeros**: an older backend reports nothing
@@ -3033,13 +3450,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   read `lobbies.created_at`. It costs a scan of `matches` (`created_at` is not indexed),
   which is no worse than the histogram's existing scan of `lobbies`.
 
-  **The ladder now explains its own emptiness instead of vanishing.** `rd <= 110` +
-  `wins + losses >= 3` means that after a ratings reset **nobody** qualifies for weeks, and
-  the card hid itself — which is where the blank third came from. It shows the requirement
-  instead, from the server's own `min_decided`, and **only when that is greater than zero**:
-  an older backend has no such field, it deserializes to 0, and "you get in with 0 decided
-  matches" is both wrong and impossible (`CommunityStatsView.RequiredDecided`). The table is
-  capped at 3 rows, not 5, so the strip does not lurch taller the week the ladder fills.
+  **The ladder explains its own emptiness instead of vanishing**, and the card hiding itself is
+  where the blank third came from. The note no longer quotes a threshold — see the ranking
+  paragraph above, the filters it described are gone — but it is still shown **only when the
+  server answered**, which is all `CommunityStatsView.RequiredDecided` has ever really tested:
+  an older backend deserializes the field to 0, and a promise built on that would be invented.
+  The table is capped at 3 rows, not 5, so the strip does not lurch taller the week the ladder
+  fills.
 
   **RECENT MATCHES is the COMMUNITY's, and says who won.** It used to be the viewer's own
   history under that heading. The server sends the last few matches from `matches` ordered by
@@ -3057,9 +3474,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   multiplayer keeps the handoff's 10.5/11.5 — see `MpLabelSize`, ratified twice — and these
   are separate tokens precisely so the two decisions stay separable and neither leaks into
   the other. The ladder's fixed column widths were widened in the same change (`26 / * / 56
-  / 72 / 48`), because "DECIDIDAS" does not fit 62 at 13 px; **the XAML header and
-  `BuildLeaderboardRow` carried that list twice, and since the RANKING subtab exists there is a
-  THIRD copy in `BuildRankingHeader` — all three must be changed together.**
+  / 72 / 48`), because "DECIDIDAS" does not fit 62 at 13 px; that list now has **TWO** copies
+  (`BuildLeaderboardRow` + `BuildRankingHeader`, both the RANKING subtab's) and they must be
+  changed together — the strip's XAML header was the third and went when the strip adopted the
+  handoff's four-field row.
 
   **(11) Only the HOST measures. The opponent's score is an inference, not a
   measurement** — `MatchResultResolver.ParticipantResult` is literally

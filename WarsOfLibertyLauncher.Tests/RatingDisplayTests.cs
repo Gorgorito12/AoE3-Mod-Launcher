@@ -59,4 +59,54 @@ public class RatingDisplayTests
         // number there would be the real invention.
         Assert.False(RatingDisplay.ShouldShow(null));
     }
+
+    /// <summary>
+    /// Who reads "unrated" instead of the 1500 everybody starts from.
+    ///
+    /// <para>This NARROWS <c>ShouldShow</c>, which was itself a reversal, so both turns are
+    /// pinned rather than only the latest. The earlier one is right that a shared starting
+    /// number claims nothing about anyone — and that is exactly why it says nothing useful
+    /// either, printing the same 1500 beside a name that earned it and one that did not.</para>
+    /// </summary>
+    [Theory]
+    // The game count is exact when it travels — GET /matches/elo sends it.
+    [InlineData(null, 0, true)]
+    [InlineData(null, 1, false)]
+    [InlineData(null, 40, false)]
+    // The room roster has only the deviation, so the untouched default stands in for it.
+    [InlineData(350.0, null, true)]
+    [InlineData(349.9, null, true)]   // survives the JSON round trip
+    [InlineData(230.0, null, false)]  // three rated matches in: provisional, but PLAYED
+    [InlineData(80.0, null, false)]
+    // The count wins when both are present: it answers the question directly.
+    [InlineData(350.0, 5, false)]
+    [InlineData(80.0, 0, true)]
+    public void IsUnrated_ReadsWhicheverSignalTheSurfaceCarries(
+        double? rd, int? gamesPlayed, bool expected)
+    {
+        Assert.Equal(expected, RatingDisplay.IsUnrated(rd, gamesPlayed));
+    }
+
+    /// <summary>
+    /// <b>The refusal, and the reason this is a separate test.</b> A backend older than these
+    /// fields sends neither, and turning that silence into "unrated" would be inventing a
+    /// claim about the player — the same mistake <c>ShouldShow</c> refuses to make about a
+    /// null rating. Not knowing keeps painting the number, exactly as before.
+    /// </summary>
+    [Fact]
+    public void KnowingNothingIsNotTheSameAsUnrated()
+    {
+        Assert.False(RatingDisplay.IsUnrated(rd: null, gamesPlayed: null));
+    }
+
+    /// <summary>
+    /// A player who really is on 1500 with matches behind them keeps the number. This is the
+    /// case the whole change would break if it keyed off the RATING instead of the evidence.
+    /// </summary>
+    [Fact]
+    public void ARatedPlayerSittingExactlyOn1500IsNotUnrated()
+    {
+        Assert.True(RatingDisplay.ShouldShow(1500));
+        Assert.False(RatingDisplay.IsUnrated(rd: 95, gamesPlayed: 12));
+    }
 }

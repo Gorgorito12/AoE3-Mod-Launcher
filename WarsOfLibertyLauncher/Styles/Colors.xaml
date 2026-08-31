@@ -566,6 +566,11 @@
     <SolidColorBrush x:Key="MpEventRim" Color="#332F7FE0"/>
     <!-- Quick-reply pill above the chat composer. -->
     <SolidColorBrush x:Key="MpQuickReplyBg" Color="#1F2F7FE0"/>
+    <!-- The viewer's own row in the community strip's ranking. The design handoff's
+         rgba(47,127,224,.12) exactly. It shares a value with MpQuickReplyBg and still gets its
+         own key: they mean different things, and a shared key is how one of them ends up
+         being changed for the other one's sake. -->
+    <SolidColorBrush x:Key="MpActivityOwnRow" Color="#1F2F7FE0"/>
     <SolidColorBrush x:Key="MpActionSoftBg" Color="#292F7FE0"/>
     <SolidColorBrush x:Key="MpActionRim" Color="#8C2F7FE0"/>
     <SolidColorBrush x:Key="MpPrivateBg" Color="#29A06EF0"/>

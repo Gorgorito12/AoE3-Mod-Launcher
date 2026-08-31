@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Documents;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -47,13 +48,51 @@ public partial class LauncherUpdateDialog : Window
         if (!string.IsNullOrWhiteSpace(update.ReleaseNotes))
         {
             ReleaseNotesHeader.Text = Strings.Get("DlgLauncherUpdateWhatsNew");
-            ReleaseNotesText.Text = update.ReleaseNotes!.Trim();
+            FillReleaseNotes(update.ReleaseNotes!.Trim());
             ReleaseNotesSection.Visibility = Visibility.Visible;
         }
 
         ActionButton.Content = Strings.Get("DlgLauncherUpdateBtnDownload");
         CancelButton.Content = Strings.Get("BtnCancel");
         OpenReleasePageButton.Content = Strings.Get("DlgLauncherUpdateOpenPage");
+    }
+
+    /// <summary>
+    /// Paints the release body, turning any address in it into something clickable.
+    ///
+    /// <para>The notes are whatever the release says, and lately they are a single bare URL
+    /// pointing at the real changelog — which rendered as dead text, so the panel showed an
+    /// address the reader had to retype. Prose goes in as plain <see cref="Run"/>s and each
+    /// link as a <see cref="Hyperlink"/>.</para>
+    ///
+    /// <para><b>Opened through <see cref="SafeUrl"/>, never <c>Process.Start</c>.</b> This text
+    /// arrives from GitHub, so it is exactly the "a url the launcher did not author" case that
+    /// rule exists for. <c>GitHubLoginDialog</c> builds a hyperlink the other way, but its
+    /// target is a constant of the launcher's own — the shape is worth copying, the destination
+    /// is not.</para>
+    /// </summary>
+    private void FillReleaseNotes(string body)
+    {
+        ReleaseNotesText.Inlines.Clear();
+        foreach (var seg in LinkedText.Split(body))
+        {
+            if (!seg.IsLink)
+            {
+                ReleaseNotesText.Inlines.Add(new Run(seg.Text));
+                continue;
+            }
+
+            var url = seg.Text;
+            var link = new Hyperlink(new Run(url))
+            {
+                Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+                // The full address, because the visible text can be long enough to wrap and
+                // there is nowhere else to see where this actually goes.
+                ToolTip = url,
+            };
+            link.Click += (_, _) => SafeUrl.TryOpen(url);
+            ReleaseNotesText.Inlines.Add(link);
+        }
     }
 
     /// <summary>

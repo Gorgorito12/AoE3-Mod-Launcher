@@ -133,9 +133,12 @@ public class LauncherUpdateService
         string? cachedETag = null,
         CancellationToken ct = default)
     {
+        // The informational tag belongs here beside the other two: it is what the decision
+        // now runs on, and printing only the saved tag and the numeric AssemblyVersion is
+        // what let a config claiming v1.0.13 sit next to a 1.0.12 binary unremarked.
         DiagnosticLog.Write(
-            $"Launcher self-update check. Current tag: '{lastInstalledTag ?? ""}', " +
-            $"AssemblyVersion: {CurrentVersion}");
+            $"Launcher self-update check. Binary: '{CurrentInformationalTag}', " +
+            $"saved tag: '{lastInstalledTag ?? ""}', AssemblyVersion: {CurrentVersion}");
 
         // Distinguishes "couldn't reach the server" (offline → report it) from "got a
         // response but it was an HTTP error" (server-side / rate-limit → NOT offline).
@@ -480,13 +483,25 @@ public class LauncherUpdateService
     /// latest remote tag, decides whether to OFFER an update and what to show as
     /// the "current" version.
     ///
-    /// Key rule: when <paramref name="lastInstalledTag"/> is empty (a binary that
-    /// never self-updated in-app — a manual download or a freshly published
-    /// build), the stamped <paramref name="assemblyVersion"/> is the effective
-    /// current version. Without this, an empty tag always reads as "different
-    /// from remote" and the launcher offers an "update" to the very version it is
-    /// already running (shown as "current: —"). A saved tag, when present, takes
-    /// precedence over the AssemblyVersion (it's the authoritative record).
+    /// <para><b>THE RUNNING BINARY OUTRANKS THE SAVED TAG, and it used to be the other way
+    /// round.</b> The saved tag is a memory of what was last installed; the stamp inside the
+    /// .exe is what is actually executing, and the two stop describing the same file the
+    /// moment somebody downloads an older release by hand. The config lives in
+    /// %LocalAppData% and is deliberately decoupled from where the .exe sits, so a
+    /// hand-downloaded 1.0.12e reads the very config a previous 1.0.13 wrote — and with the
+    /// old precedence it concluded it was 1.0.13 and offered nothing, permanently. Measured
+    /// from a real report: the log line printed <c>Current tag: 'v1.0.13', AssemblyVersion:
+    /// 1.0.12.0</c> — the contradiction was on screen and nothing acted on it.</para>
+    ///
+    /// <para>The reason the saved tag was ever first still holds and is why it survives as
+    /// the FALLBACK: a binary built without <c>-Version</c> carries no informational stamp
+    /// and cannot say what it is. Every real release does carry one, because
+    /// <c>build-release.ps1</c> demands <c>-Version</c>.</para>
+    ///
+    /// <para>Key rule that predates all this and is unchanged: with nothing usable anywhere,
+    /// the numeric <paramref name="assemblyVersion"/> is the effective current version.
+    /// Without it an empty tag always read as "different from remote" and the launcher
+    /// offered an "update" to the version it was already running, shown as "current: —".</para>
     ///
     /// Extracted from <see cref="CheckAsync"/> so it can be unit-tested without
     /// touching the network.
@@ -495,12 +510,13 @@ public class LauncherUpdateService
         string? lastInstalledTag, Version assemblyVersion, string? skippedTag, string remoteTag,
         string? currentInformationalTag = null)
     {
-        // Effective-current = saved tag (authoritative) → else the informational
-        // tag (can carry a letter, e.g. "v1.0.5a") → else the numeric AssemblyVersion.
-        var effective = !string.IsNullOrEmpty(lastInstalledTag)
-            ? lastInstalledTag!
-            : (!string.IsNullOrWhiteSpace(currentInformationalTag)
-                ? currentInformationalTag!
+        // Effective-current = what the BINARY says it is (the informational tag can carry a
+        // letter, e.g. "v1.0.5a") → else the saved tag, for a build that carries no stamp →
+        // else the numeric AssemblyVersion.
+        var effective = !string.IsNullOrWhiteSpace(currentInformationalTag)
+            ? currentInformationalTag!
+            : (!string.IsNullOrEmpty(lastInstalledTag)
+                ? lastInstalledTag!
                 : FormatVersionTag(assemblyVersion));
 
         // Already on this tag, or the user dismissed it via "Later".
@@ -520,6 +536,29 @@ public class LauncherUpdateService
             return (false, effective);
 
         return (true, effective);
+    }
+
+    /// <summary>
+    /// Whether the saved tag contradicts the binary that is running — and therefore whether
+    /// the stored tag AND the cached ETag both have to be thrown away.
+    ///
+    /// <para><b>The two go together and fixing only one changes nothing.</b> The check is a
+    /// conditional GET keyed on the cached ETag, which fingerprints the REMOTE release and
+    /// knows nothing about the local .exe. Swap the binary for an older one and the newest
+    /// release has still not changed, so GitHub answers 304 and the whole comparison is
+    /// skipped — the corrected precedence above never even runs. Clearing the ETag is what
+    /// makes the next check ask a real question.</para>
+    ///
+    /// <para>The 304 shortcut was justified on two claims and both are false: that the binary
+    /// never moves backwards, and that anything not installed was saved as a dismissed tag —
+    /// but the dismissal was removed and <c>SkippedLauncherTag</c> is now only ever written
+    /// empty.</para>
+    /// </summary>
+    public static bool SavedTagContradictsBinary(string? lastInstalledTag, string? informationalTag)
+    {
+        if (string.IsNullOrEmpty(lastInstalledTag)) return false;
+        if (string.IsNullOrWhiteSpace(informationalTag)) return false;
+        return !string.Equals(lastInstalledTag, informationalTag, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
