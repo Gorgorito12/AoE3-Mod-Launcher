@@ -345,6 +345,65 @@ public static class ReplayParserService
     private const int OutcomeTrailerBytes = 32;
 
     /// <summary>
+    /// How far back from the end of the file the outcome block may sit.
+    ///
+    /// <para><b>This was 8, and 8 was losing one competitive match in five.</b> Measured over 20
+    /// readable 1v1 recordings: the old bound decided 16 of them, and the four it gave up on had
+    /// a perfectly valid block at 78, 79, 135 and 195 bytes from the end. The player saw "the
+    /// recording gave no result" and the match went down unrated — which is how it was reported,
+    /// by a player whose 21-minute game simply did not count.</para>
+    ///
+    /// <para><b>The measurement that makes a window this wide safe, because the old comment's
+    /// caution was right about the danger and wrong about the remedy.</b> The pattern
+    /// <c>00×12 FF×8</c> IS ordinary command-stream data — 3,155 occurrences in the reported
+    /// file — so a parser that simply took the nearest hit would be reading noise. Within the
+    /// last 512 bytes of those same 20 files there are 26 candidates; exactly 20 pass validation,
+    /// <b>one per file, never two</b>, and the 6 rejected are unmistakable rubbish (<c>A = -1</c>
+    /// with <c>C = 3212836864</c>, which is the float <c>-1.0</c> repeated). So the safety comes
+    /// from validating each candidate, not from the window being small — which is what the old
+    /// comment said in its last paragraph while the constant said otherwise.</para>
+    ///
+    /// <para>512 against a measured maximum of 195: wide enough that the next few bytes of
+    /// variation cost nothing, narrow enough that it is still the tail of the file rather than a
+    /// search. <b>Do not raise it without repeating the measurement</b> — the density of
+    /// accidental signatures is what bounds this, and it grows with the window.</para>
+    ///
+    /// <para><b>Never do this by trimming trailing zeros instead.</b> The block's own last field
+    /// is <c>02 00 00 00</c> — it ENDS in three zeros — so trimming eats the payload. Anchor on
+    /// the signature, never on the end of the file.</para>
+    /// </summary>
+    private const int MaxTrailingSlack = 512;
+
+    /// <summary>The signature at an exact offset: 12 zero bytes then 8 × 0xFF.</summary>
+    private static bool HasSignatureAt(byte[] data, int start)
+    {
+        for (var i = 0; i < 12; i++)
+            if (data[start + i] != 0x00) return false;
+        for (var i = 12; i < 20; i++)
+            if (data[start + i] != 0xFF) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Every signature in the tail, nearest to the end first.
+    ///
+    /// <para>It used to return only the nearest one, and <see cref="ReadOutcome"/> gave up if
+    /// that one did not validate. <b>That is not enough, and the file that proved it is the one
+    /// this change came from:</b> its nearest signature is 12 bytes from the end and is rubbish
+    /// (<c>A = -1</c>), while the real block sits at 135. Widening the window alone would still
+    /// have thrown that match away. Enumerating is the other half.</para>
+    /// </summary>
+    private static IEnumerable<int> TrailerCandidates(byte[] data)
+    {
+        for (var slack = 0; slack <= MaxTrailingSlack; slack++)
+        {
+            var start = data.Length - OutcomeTrailerBytes - slack;
+            if (start < 0) yield break;
+            if (HasSignatureAt(data, start)) yield return start;
+        }
+    }
+
+    /// <summary>
     /// Reads the match outcome from the end of the stream.
     ///
     /// <para>The last 32 bytes of a normally-finished recording are
@@ -376,6 +435,11 @@ public static class ReplayParserService
     /// why the enum exists: no trailer means no answer, not a draw that happens to be
     /// reported as one.</para>
     ///
+    /// <para><b>And some carry it with a byte or two of slack after it</b>, which used to read as
+    /// "no trailer" and cost the loser's reading of a match both players had recorded correctly.
+    /// See <see cref="MaxTrailingSlack"/> — including why this is not the tolerant backwards
+    /// search the format notes forbid.</para>
+    ///
     /// <para>Confident requires everything to line up: the exact signature, an A that
     /// names a slot the header actually has, exactly two players, and <b>no AI among
     /// them</b>. Anything else is Ambiguous, which the caller must report as a draw:
@@ -398,21 +462,59 @@ public static class ReplayParserService
         var noSignature = new ReplayOutcome(ReplayOutcomeConfidence.Ambiguous, -1, -1, -1, false);
         if (data == null || header == null || data.Length < OutcomeTrailerBytes) return noSignature;
 
-        var start = data.Length - OutcomeTrailerBytes;
-        for (var i = 0; i < 12; i++)
-            if (data[start + i] != 0x00) return noSignature;
-        for (var i = 12; i < 20; i++)
-            if (data[start + i] != 0xFF) return noSignature;
+        // How many of the header's slots are people. The block's THIRD field has equalled this
+        // in every reading ever taken (25 of 25), which makes it a second, independent way to
+        // tell this match's block from an accidental one in the command stream.
+        var humans = header.Players.Count(p => p.IsHuman);
 
-        var loser = unchecked((int)BitConverter.ToUInt32(data, start + 20));
-        var second = unchecked((int)BitConverter.ToUInt32(data, start + 24));
+        var first = -1;     // the nearest signature, whatever it turned out to say
+        var strong = -1;    // nearest one whose loser AND head count describe this match
+        var weak = -1;      // nearest one whose loser does, on its own
+
+        foreach (var start in TrailerCandidates(data))
+        {
+            if (first < 0) first = start;
+
+            var a = unchecked((int)BitConverter.ToUInt32(data, start + 20));
+            if (header.Players.All(p => p.Slot != a)) continue;
+
+            var c = unchecked((int)BitConverter.ToUInt32(data, start + 28));
+            if (c == humans) { strong = start; break; }
+
+            if (weak < 0) weak = start;
+        }
+
+        if (first < 0) return noSignature;
+
+        // The head count is a PREFERENCE, never a refusal, and that asymmetry is deliberate.
+        // The two fixtures this parser is tested against are real skirmishes whose block says
+        // C = 1; the tests relabel their AI as human to exercise the 1v1 path, so demanding
+        // C == humans would reject genuine files over a doctored header. Preferring it costs
+        // nothing when there is one candidate and settles it when there are several — which is
+        // the only case a 512-byte window introduces.
+        var chosen = strong >= 0 ? strong : weak;
+        if (chosen < 0)
+        {
+            // A signature was there and named nobody we recognise. Different from "the game
+            // never wrote its ending", which is why SignaturePresent is a separate field.
+            return new ReplayOutcome(
+                ReplayOutcomeConfidence.Ambiguous, -1, -1,
+                unchecked((int)BitConverter.ToUInt32(data, first + 24)), true);
+        }
+
+        if (strong < 0)
+        {
+            DiagnosticLog.Write(
+                "Replay: outcome block accepted on its loser slot alone — its head count " +
+                $"({unchecked((int)BitConverter.ToUInt32(data, chosen + 28))}) disagrees with the " +
+                $"header's {humans}.");
+        }
+
+        var loser = unchecked((int)BitConverter.ToUInt32(data, chosen + 20));
+        var second = unchecked((int)BitConverter.ToUInt32(data, chosen + 24));
 
         // Past the signature, so the trailer exists whatever it turns out to say.
         var unknown = new ReplayOutcome(ReplayOutcomeConfidence.Ambiguous, -1, -1, second, true);
-
-        // The loser has to be someone who was actually in the game.
-        if (header.Players.All(p => p.Slot != loser))
-            return unknown;
 
         // Beyond a 1v1, "X lost" doesn't name a winner: the others may have lost too,
         // and nothing here says in what order. Those stay draws until the room state
@@ -420,7 +522,9 @@ public static class ReplayParserService
         //
         // The loser slot is still handed back on both this path and the AI one below —
         // it was read correctly and is worth having in a diagnostic bundle. What the
-        // caller loses is permission to treat it as a result.
+        // caller loses is permission to treat it as a result. MatchResultResolver.
+        // ResolveTeamResults is the one caller that can use it, because the room's team
+        // map turns one named loser into a whole side.
         if (header.Players.Count != 2)
             return unknown with { LoserSlot = loser };
 

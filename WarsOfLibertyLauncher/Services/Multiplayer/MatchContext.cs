@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -42,6 +42,25 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// whether the host may leave before the result is in, and both of those are questions about the
 /// match that was played, not about the room as it stands now.</para>
 /// </param>
+/// <param name="Format">
+/// What shape of match the room declared — 1v1, 2v2, 3v3, or none. Frozen here for the same
+/// reason <paramref name="IsCompetitive"/> is: it is a fact about the match that was played, and
+/// the room can be gone by the time the game closes.
+///
+/// <para>It is a PROMISE the report then checks: teams read out of the recording that do not
+/// match what the room said it would play are refused rather than written into everyone's
+/// history. See <see cref="RoomFormats.TeamsAgreeWithFormat"/>.</para>
+/// </param>
+/// <param name="InGameNames">
+/// Each participant's AoE3 profile name, as they published it in the room, captured at START
+/// for the same reason the roster is.
+///
+/// <para><b>Reading these at report time instead would lose them for the player most likely to
+/// matter.</b> The one who leaves the room first is usually the one who just lost, so by the
+/// time the host reports, the live roster no longer holds their name — and a team map missing
+/// one player refuses outright. Frozen here, the map still works for the match that was
+/// actually played.</para>
+/// </param>
 public sealed record MatchContext(
     bool IsHost,
     IReadOnlyList<string> Participants,
@@ -49,7 +68,9 @@ public sealed record MatchContext(
     string? ModId,
     string? ReporterUserId,
     DateTime StartedAtUtc,
-    bool IsCompetitive = false)
+    bool IsCompetitive = false,
+    IReadOnlyDictionary<string, string>? InGameNames = null,
+    RoomFormat Format = RoomFormat.Casual)
 {
     /// <summary>
     /// How many humans the recording should show. Same number the report uses as its
@@ -76,7 +97,9 @@ public sealed record MatchContext(
         string? reporterUserId,
         bool isHost,
         DateTime startedAtUtc,
-        bool isCompetitive = false)
+        bool isCompetitive = false,
+        IReadOnlyDictionary<string, string>? inGameNames = null,
+        RoomFormat format = RoomFormat.Casual)
     {
         var participants = (roomMemberIds ?? Enumerable.Empty<string?>())
             .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -85,6 +108,14 @@ public sealed record MatchContext(
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToList();
 
+        // Only the people who are actually playing: a name for somebody outside the roster
+        // would make the head count disagree with the recording and refuse the whole map.
+        var names = inGameNames == null
+            ? null
+            : participants
+                .Where(id => inGameNames.ContainsKey(id) && !string.IsNullOrWhiteSpace(inGameNames[id]))
+                .ToDictionary(id => id, id => inGameNames[id], StringComparer.Ordinal);
+
         return new MatchContext(
             isHost,
             participants,
@@ -92,7 +123,9 @@ public sealed record MatchContext(
             string.IsNullOrWhiteSpace(modId) ? null : modId,
             string.IsNullOrWhiteSpace(reporterUserId) ? null : reporterUserId,
             startedAtUtc,
-            isCompetitive);
+            isCompetitive,
+            names,
+            format);
     }
 
     /// <summary>Length of the match, in whole seconds, never negative.</summary>
@@ -119,6 +152,24 @@ public sealed record MatchContext(
         if (string.IsNullOrEmpty(ReporterUserId))
             return (false, "no reporter id");
 
+        return LooksLikeAPlayedMatch(endedAtUtc, minSeconds);
+    }
+
+    /// <summary>
+    /// Whether this was a real multiplayer match at all — everything <see cref="CanReport"/> asks
+    /// that has nothing to do with being the host.
+    ///
+    /// <para>Split out because the GUEST needs the same question answered and cannot use
+    /// <c>CanReport</c>, whose first line is <c>if (!IsHost)</c>. A guest never reports, but he
+    /// does WAIT for the host's report, and waiting after a solo launch or a two-minute misfire
+    /// would put a "waiting for the result…" panel in front of somebody whose result is never
+    /// coming — a promise the launcher cannot keep.</para>
+    ///
+    /// <para>The reason strings are unchanged and still reach the log through <c>CanReport</c>,
+    /// so existing debug logs stay comparable.</para>
+    /// </summary>
+    public (bool Ok, string Reason) LooksLikeAPlayedMatch(DateTime endedAtUtc, int minSeconds)
+    {
         if (string.IsNullOrEmpty(LobbyId) || string.IsNullOrEmpty(ModId))
             return (false, $"lobbyId='{LobbyId}' modId='{ModId}'");
 

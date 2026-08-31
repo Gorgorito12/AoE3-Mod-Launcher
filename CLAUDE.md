@@ -191,6 +191,13 @@ code and therefore checked by nothing at compile time; that test caught two toke
 were never added, in a card that is only built when a real match ends. **Add a case here
 whenever you add a window or a code-built card** — a green build is not evidence either
 one loads.
+**It now also constructs `MultiplayerTab` itself**, which is the broadest and cheapest guard
+in the file: that one line parses every `{StaticResource}` in the largest XAML in the
+launcher and then runs `ApplyStrings` over dozens of named elements. It is the only
+automated cover for a resource reached by XAML alone and by no code-built card. The tab does
+live inside `MainWindow`, so the smoke-launch would catch it too — but **the smoke test
+cannot run while a launcher is already open**: the single-instance guard makes the second
+process exit successfully having parsed nothing, which looks exactly like a pass.
 
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
@@ -3025,7 +3032,42 @@ rule is NOT such a case: the type scale's 13px floor was raised against the hand
   never the mod itself) so they are tested rather than buried in the dialog; `LoadGameSettings`
   is called ONCE from the ctor and deliberately NOT from `LoadUserData`, since `RefreshData()`
   re-runs that and would reset a half-made combo selection — the same reason `LoadVersions` sits
-  outside it. Everything lives in ONE file per mod,
+  outside it.
+  **There is now a THIRD surface, and its whole design is dictated by one fact: at the end of an
+  install the file to write into does not exist yet.** `InstallFolderDialog` offers "copy
+  graphics, sound and hotkeys from…" as an optional row, because the moment somebody wants their
+  own hotkeys is the moment they install a mod, not the moment they go looking through
+  Properties. **The row is collapsed when there is no eligible source**, so a first-ever install
+  never shows it — a question nobody could answer is worse than no question — and the list comes
+  from `MainWindow.BuildSettingsSources`, extracted so the settings page and the installer cannot
+  disagree about who is eligible. Not offered for `addNewSlot`: both copies of a mod share one My
+  Games folder, so there is nothing to bring.
+  **The dialog only REPORTS the choice (`CopySettingsFromModId`); the copy is deferred through
+  `ModState.PendingSettingsImportFrom`.** AoE3 writes the profile XML under `Users3\` on its
+  FIRST run, so `ResolveProfilePath` returns null for a freshly installed mod and nothing here may
+  fabricate a profile. `InstallAsync` records the choice and *tries immediately* — a reinstall of
+  a mod that was played before lands right there — and `GameLauncher.ApplyLaunchRedirects` retries
+  it on launch. **Honest consequence: on a genuinely new mod the settings appear on the SECOND
+  launch**, because the first one is what creates the profile. The install-dialog hint says so
+  rather than promising otherwise.
+  **Its position in `ApplyLaunchRedirects` is load-bearing at both ends**: AFTER the My Games
+  junction (same reason as the group graft — for a `UserDataRedirect` mod the junction decides
+  which physical folder is written), and BEFORE the group graft, because a mod can be both in the
+  group and owed an import and the group is the standing preference.
+  **`ImportFrom` returns `SettingsImportResult`, not a bool, and that fixed a pre-existing lie.**
+  Four unrelated causes used to return the same `false` — two without even logging — so the
+  settings page told a player whose mod had never been opened that "the settings couldn't be
+  read", which is false and names nothing to fix. The distinction that carries weight is
+  `NoTargetProfile` = **not yet**, isolated in the pure `KeepPending` (pinned by a test that
+  **enumerates the enum**, so a value added later must be classified on purpose instead of
+  inheriting "give up" and silently discarding a player's choice). Same shape, and same reason, as
+  `GameRecordingWrite.NoProfile` right beside it.
+  **Testing the install dialog: pass NO AoE3 source.** With one, the constructor kicks
+  `MeasureCloneSizeAsync`, whose `await` continuation returns through the captured
+  SynchronizationContext — which a bare STA test thread does not have, so it resumes on the thread
+  pool, touches a `TextBox` it does not own, and **kills the whole test host**. The run then still
+  reports success with a smaller total, which is how it hides: 1145 tests became 1115, then 1106,
+  before anyone noticed the number was the symptom. Everything lives in ONE file per mod,
   `My Games\<mod>\Users3\<profile>.xml` (UTF-16; the active profile is named inside
   `Users3\LastProfile3.dat`). **Only `GameOptions` and `KeyMapGroups` travel** — the six
   `*GameSettings` blocks are last-used lobby setups and a civ from one mod means nothing in
@@ -4392,7 +4434,25 @@ engine** and the UI binds to it.
    Everything the recording can't answer stays a 0.5 draw, which the History row
    renders as no badge at all rather than as "Draw". Replay UPLOAD remains
    scaffolded/not surfaced.
-   **Rating is opt-in per ROOM**: only a room created with the *competitive* box
+   **A 2v2/3v3 RATES, on a SEPARATE team ladder** (`elo_ratings.mode = 'team'`, which the
+   schema has carried since day one, so it cost no migration; 2v2 and 3v3 share it). The teams
+   come from the recording, joined to Discord accounts through the in-game names each launcher
+   publishes in the room (`set_ingame_name`), and naming ONE loser names a whole side. It rates
+   only with **one reading from each side that agree, on the same game** — so a team match is
+   stored `awaiting_confirmation` and released when the opposing side's reading lands. The 1v1
+   ladder is untouched, and every surface that shows a rating still shows that one; the RANKING
+   subtab is the only place both appear. **Whether a team recording carries an outcome block at
+   all is still measured at one file** — with none the match reports 0.5 and stays unrated,
+   exactly as before. Related and load-bearing: the trailer was being sought in the last **8**
+   bytes of a recording and the block routinely sits further back, which was silently losing
+   **one competitive 1v1 in five**; it now scans 512 and validates each candidate (20 of 20
+   measured, none changed). See the trailer bullet in `.claude/rules/multiplayer.md`. See the identity-bridge and ELO bullets in
+   `.claude/rules/multiplayer.md`.
+   **Rating is opt-in per ROOM, and a competitive room declares a FORMAT** — 1v1 / 2v2 / 3v3,
+   which also fixes its size (2 / 4 / 6 seats) and is DERIVED from that size rather than stored;
+   the server refuses any other size for a competitive room. The format decides which of the
+   competitive promises apply: walking out is a forfeit **only in 1v1**, because the server
+   refuses to decide a team game that way. Only a room created with the *competitive* box
    ticked can score, and in one the launcher confirms Record Game before every
    start, holds the host in the room until the result is sent, and looks harder for
    the recording. Walking out of one after five minutes is a forfeit, decided by the
@@ -4504,6 +4564,61 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   writing benign data to `%LocalAppData%` is the standard Windows pattern and
   doesn't touch the binary — unrelated to the single-file compression packer
   heuristic.
+
+- **Everything the launcher and the game write is keyed to the WINDOWS ACCOUNT THE
+  PROCESS RUNS AS, so opening the launcher elevated with a SECOND account silently
+  splits a player's data in two — `Services/RunningAccount.cs` detects it and says
+  so, and that is deliberately all it does.** Measured on a real machine (two
+  diagnostic bundles from the same player, same evening): three competitive
+  recordings under `C:\Users\a-admin\…\Savegame` and three casual ones under
+  `C:\Users\Miro\…\Savegame`, each folder internally consistent, neither aware of
+  the other; his launcher settings were split the same way, so the `Miro` session
+  came up with a **blank config** (`seeding the ON default`, empty `modInstallPath`,
+  no catalog cache). **Three separate mechanisms, one cause:** AoE3 resolves its
+  Documents from ITS token and inherits the launcher's, so recordings / saves /
+  `HomeCities` follow the launcher's account (the decks loading fine is the PROOF
+  of this, not a counter-example — they are that account's decks); `AppPaths.DataDir`
+  comes from `SpecialFolder.LocalApplicationData`, so the config does too; and
+  `StartupRegistrationService` writes **and reads** `Registry.CurrentUser`, so under
+  the wrong account the Settings checkbox reads "on" while Windows, reading the
+  signed-in user's hive at logon, starts nothing — **a lie that confirms itself**.
+  **Why the launcher only informs:** actually redirecting it means launching AoE3
+  under the interactive user's token. Via the shell (asking Explorer) there is no
+  PID back, and without a PID `LaunchAndWatch`, `GameExitWatcher`, the recording
+  read and the match report all fall over; via `CreateProcessWithTokenW` there is a
+  PID but it is the borrowed-token pattern AV heuristics punish, in a binary that
+  already carries Defender history. Maintainer's call: **nothing invasive** — no
+  file is moved, nothing is written into another account's profile or registry, the
+  launcher never relaunches itself as somebody else, and the game's token is
+  untouched. **`Evaluate` is pure and pinned by `RunningAccountTests`, where the
+  REJECTION cases are the point** (`PC\Miro` vs `Miro`, case, a UPN suffix, blanks
+  and a bare `PC\` on either side all mean "no mismatch") — a false negative changes
+  nothing, a false positive is an alarming message that is also wrong. Two details
+  are load-bearing: the signed-in account comes from **the SESSION**
+  (`WTSQuerySessionInformation` with `WTS_CURRENT_SESSION`), because "run as
+  different user" leaves the process in the same Terminal Services session and
+  because the exe's own path proves nothing about who launched it; and the other
+  account's folder is resolved **exactly** (name → SID → `ProfileImagePath`, then
+  `Directory.Exists`) or not shown at all — `C:\Users\<name>` is wrong for Microsoft
+  accounts, and a plausible wrong path sends the player looking in the wrong place.
+  Surfaces: a one-time themed `CrossUserAccountDialog` (modelled on
+  `AntivirusExclusionDialog`; it **copies the paths, never opens them** — launching
+  `explorer.exe` from the elevated process opens the shell as that account again),
+  which runs FIRST in `MainWindow`'s `Loaded` and **suppresses both the self-install
+  offer and the tray seed balloon**, because a durable install under the wrong
+  account would copy the launcher into ITS `%LocalAppData%\Programs\` and re-register
+  auto-start in ITS hive — making the broken thing sturdier (skipping it leaves
+  `SelfInstallPromptShown` unset, so it returns once the account is sorted); an amber
+  warning beside the Start-with-Windows checkbox (**`IsRegistered()` is NOT changed**
+  — it reports truthfully about its own hive, what was missing was the context); and
+  the other account's folder in Properties → USER DATA beside the existing
+  divergence warning. **`DiagnosticLog` now records the process account, the session
+  account and elevation on EVERY launch, matching or not** — `ElevationService.IsRunningAsAdmin()`
+  existed and was never logged, which is exactly why a bundle could not tell "two
+  Windows accounts" from "elevated with someone else's", and why one real report took
+  an hour to read. **This does NOT explain a recording the player cannot FIND inside
+  the right folder** — that is AoE3 naming every file `Record Game N` and renumbering
+  them, answered by the reveal button on the result card.
 - **Crash capture is a global net — an unhandled exception is PERSISTED, and
   UI-thread throws are survived, not fatal.** `App.OnStartup` subscribes the three
   global hooks (`DispatcherUnhandledException`, `AppDomain.CurrentDomain.UnhandledException`,

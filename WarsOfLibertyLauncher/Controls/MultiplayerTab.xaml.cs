@@ -28,7 +28,7 @@ namespace WarsOfLibertyLauncher.Controls;
 /// </summary>
 public partial class MultiplayerTab : UserControl
 {
-    private enum Subtab { Rooms, Friends, Profile, History }
+    private enum Subtab { Rooms, Friends, Profile, History, Ranking }
 
     private MultiplayerSession? _session;
     private Func<ModProfile?>? _getActiveProfile;
@@ -261,7 +261,17 @@ public partial class MultiplayerTab : UserControl
         /// null for legacy rooms that don't send it yet → falls back to a monogram.</summary>
         public string? AvatarUrl { get; set; }
         public bool Ready { get; set; }
-        /// <summary>Peer's Radmin VPN IP (26.x), from room_state / member_net.
+        /// <summary>
+    /// The member's AoE3 profile name, from room_state / member_ingame_name.
+    ///
+    /// <para>The only thing that joins a slot in the recording to a Discord account, and so the
+    /// only way a team game can be reported with real teams. Null until they report it, and null
+    /// from a backend that predates the frame — <see cref="Services.Multiplayer.MatchTeamMap"/>
+    /// then refuses and the match goes down with no teams, exactly as before.</para>
+    /// </summary>
+    public string? InGameName { get; set; }
+
+    /// <summary>Peer's Radmin VPN IP (26.x), from room_state / member_net.
         /// Null until they report it (at match launch). Used to ICMP-ping them
         /// for the in-game per-player ping column.</summary>
         public string? RadminIp { get; set; }
@@ -320,6 +330,22 @@ public partial class MultiplayerTab : UserControl
     private string? _lastLocalReadDetail;
 
     /// <summary>
+    /// The recording this match was read from, so the result card can point at it.
+    ///
+    /// <para><b>A field for the same reason as the two above, and it took the same bug to see
+    /// why.</b> The card's rebuilder CAPTURES its <c>MatchReplayInfo</c>, so a reading that
+    /// lands after the card was first painted — the early read, or the late correction — would
+    /// repaint it still holding the null it started with. Everything that can change has to be
+    /// read at call time, and this can change.</para>
+    ///
+    /// <para><b>Only ever assigned to a real file, and cleared only when a new match starts.</b>
+    /// A later pass may fail to find what an earlier one found, and letting it null this would
+    /// take the answer away again — the same "a later pass may only improve the diagnosis" rule
+    /// that governs <see cref="_lastLocalReadFailure"/>.</para>
+    /// </summary>
+    private string? _lastRecordingPath;
+
+    /// <summary>
     /// How to rebuild the end-of-match card, captured when it is first painted.
     ///
     /// <para><b>Why a rebuilder and not a repaint of the same model.</b> The card used to be
@@ -376,10 +402,17 @@ public partial class MultiplayerTab : UserControl
     // this; the popup's UI responds to changes.
 
     /// <summary>
-    /// Lobby → Starting → InGame → <b>Result</b>. The last one is terminal for that room:
-    /// a reported match closes it server-side, so there is nothing to go back to.
+    /// Lobby → Starting → InGame → <b>AwaitingResult</b> → <b>Result</b>. The last one is
+    /// terminal for that room: a reported match closes it server-side, so there is nothing to go
+    /// back to.
+    ///
+    /// <para><b>AwaitingResult</b> is the gap between our own game closing and the match being
+    /// settled, and it exists because a guest used to spend it looking at nothing. It is NOT
+    /// <c>Result</c> with a different label: <see cref="EnterResultPhase"/> stops the socket's
+    /// reconnect, and the socket is precisely what the <c>match_reported</c> frame still has to
+    /// arrive on. Entering Result early would hang up on the answer.</para>
     /// </summary>
-    private enum MatchPhase { Lobby, Starting, InGame, Result }
+    private enum MatchPhase { Lobby, Starting, InGame, AwaitingResult, Result }
     private MatchPhase _matchPhase = MatchPhase.Lobby;
 
     /// <summary>
@@ -420,11 +453,6 @@ public partial class MultiplayerTab : UserControl
     private System.Diagnostics.Process? _aoe3Process;
     private long _matchTimerStartTicks;
 
-    /// <summary>
-    /// Whether the "is anything being recorded yet?" probe has already run for this match.
-    /// One directory listing per match, never per tick.
-    /// </summary>
-    private bool _recordingProbeDone;
 
     /// <summary>
     /// The match currently being played, captured when AoE3 was launched and consumed when it
@@ -1190,6 +1218,9 @@ public partial class MultiplayerTab : UserControl
         SubtabFriends.Content = Strings.Get("MpSubtabFriends");
         SubtabProfile.Content = Strings.Get("MpSubtabProfile");
         SubtabHistory.Content = Strings.Get("MpSubtabHistory");
+        SubtabRanking.Content = Strings.Get("MpSubtabRanking");
+        RankingModeSolo.Content = Strings.Get("MpRankingModeSolo");
+        RankingModeTeam.Content = Strings.Get("MpRankingModeTeam");
 
         // Radmin assistant "Show steps" button. Hidden when the
         // user disabled the assistant entirely via Settings
@@ -1226,8 +1257,16 @@ public partial class MultiplayerTab : UserControl
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
         RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
         ActivityStripTitle.Text = Strings.Get("MpActivityStripTitle");
-        ActivityStripWindow.Text = Strings.Get("MpActivityStripWindow");
-        ActivityRecentTitle.Text = Strings.Get("MpActivityRecentTitle");
+        // Both of these depend on data, so they are re-derived rather than assigned: the
+        // window is however far back the SERVER looked, and the recent-matches heading
+        // says whose matches these are — which is not the same on an older backend.
+        ActivityStripWindow.Text = _activityWindowDays > 0
+            ? Strings.Format("MpActivityStripWindow", _activityWindowDays)
+            : "";
+        ActivityRecentTitle.Text = Strings.Get(_activityRecentIsCommunity
+            ? "MpActivityRecentCommunityTitle"
+            : "MpActivityRecentTitle");
+        ActivityTotalsTitle.Text = Strings.Get("MpActivityTotalsTitle");
         ActivityRankingTitle.Text = Strings.Get("MpActivityRankingTitle");
         ActivityPeakTitle.Text = Strings.Get("MpActivityPeakTitle");
         ActivityRankColHash.Text = Strings.Get("MpActivityRankColHash");
@@ -1475,6 +1514,20 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private const string RoomClosedTooOld = "server_close:4010";
 
+    /// <summary>
+    /// The backend closes with these when the room is simply GONE — deleted after a reported
+    /// match (<c>4404 lobby_not_found</c>) or closed outright (<c>4006 lobby_closed</c>).
+    ///
+    /// <para>They have to stop the reconnect, and not merely because retrying is pointless.
+    /// <see cref="LobbyWebSocket"/> resets its backoff on a connection that ESTABLISHES, and
+    /// these close immediately after the upgrade succeeds — so the exponential backoff never
+    /// grows past its first step. A real client retried a deleted room about two hundred times
+    /// over five minutes, roughly once a second, and only stopped because the player gave up and
+    /// closed the window.</para>
+    /// </summary>
+    private const string RoomClosedGone = "server_close:4404";
+    private const string RoomClosedByServer = "server_close:4006";
+
     private void OnRoomDisconnected(object? sender, string reason) =>
         Dispatcher.InvokeAsync(() =>
         {
@@ -1487,13 +1540,26 @@ public partial class MultiplayerTab : UserControl
             // Gated on having been in a match: 4007 is also the kick code, and a kick has
             // already closed the window through its own frame by the time this arrives.
             if (reason == RoomClosedByReport
-                && (_matchPhase == MatchPhase.InGame || _matchContext != null))
+                && (_matchPhase == MatchPhase.InGame || ResultContext() != null))
             {
                 // Not if the match_reported frame already got here. It arrives just
                 // before this close — the server publishes it and then shuts the sockets
                 // — and without this guard we would enter the result phase a second time
                 // and fire the history polls that the frame exists to make unnecessary.
                 if (_matchPhase != MatchPhase.Result) EnterResultPhase();
+                return;
+            }
+
+            // The room no longer exists. Retrying cannot bring it back, and the retry does not
+            // slow down on its own — see RoomClosedGone. If we were waiting on a result, it is
+            // not coming down this socket, so say so rather than leaving the card promising.
+            if (reason == RoomClosedGone || reason == RoomClosedByServer)
+            {
+                DiagnosticLog.Write(
+                    $"Room socket closed for good ({reason}) — not reconnecting.");
+                try { _session?.RoomSocket?.StopReconnect(); }
+                catch (Exception ex) { DiagnosticLog.Write($"StopReconnect — {ex.Message}"); }
+                if (_matchPhase == MatchPhase.AwaitingResult) FinishWaitingUnresolved();
                 return;
             }
 
@@ -1562,6 +1628,9 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "member_net":
                         HandleMemberNet(e.Json);
+                        break;
+                    case "member_ingame_name":
+                        HandleMemberInGameName(e.Json);
                         break;
                     case "kicked":
                         HandleKicked();
@@ -1695,6 +1764,7 @@ public partial class MultiplayerTab : UserControl
                 Login = memberLogin,
                 Ready = kv.Value.Ready,
                 RadminIp = kv.Value.RadminIp,
+                InGameName = kv.Value.InGameName,
                 AvatarUrl = kv.Value.AvatarUrl,
                 Rating = kv.Value.Rating,
                 Rd = kv.Value.Rd,
@@ -1984,6 +2054,23 @@ public partial class MultiplayerTab : UserControl
         var ip = json.TryGetProperty("radmin_ip", out var r) ? r.GetString() : null;
         if (_roomMembers.TryGetValue(userId, out var entry))
             entry.RadminIp = ip;
+    }
+
+    /// <summary>
+    /// A member told the room which AoE3 profile they play under. Stored and nothing more: it is
+    /// read once, at report time, to work out who was on which team.
+    ///
+    /// <para>Deliberately does NOT re-render the roster — nothing on screen shows this name, and
+    /// the twin above sets the precedent. If a future roster ever displays it, this is where the
+    /// <c>RenderRoomMembers()</c> call belongs.</para>
+    /// </summary>
+    private void HandleMemberInGameName(JsonElement json)
+    {
+        var userId = json.TryGetProperty("user_id", out var u) ? u.GetString() : null;
+        if (string.IsNullOrEmpty(userId)) return;
+        var name = json.TryGetProperty("ingame_name", out var n) ? n.GetString() : null;
+        if (_roomMembers.TryGetValue(userId, out var entry))
+            entry.InGameName = name;
     }
 
     /// <summary>
@@ -2788,6 +2875,7 @@ public partial class MultiplayerTab : UserControl
                 FriendsView.Visibility = Visibility.Collapsed;
                 ProfileView.Visibility = Visibility.Collapsed;
                 HistoryView.Visibility = Visibility.Collapsed;
+                RankingView.Visibility = Visibility.Collapsed;
                 RenderRoomsTab();
                 break;
             case Subtab.Friends:
@@ -2795,12 +2883,14 @@ public partial class MultiplayerTab : UserControl
                 FriendsView.Visibility = Visibility.Visible;
                 ProfileView.Visibility = Visibility.Collapsed;
                 HistoryView.Visibility = Visibility.Collapsed;
+                RankingView.Visibility = Visibility.Collapsed;
                 break;
             case Subtab.Profile:
                 RoomsView.Visibility = Visibility.Collapsed;
                 FriendsView.Visibility = Visibility.Collapsed;
                 ProfileView.Visibility = Visibility.Visible;
                 HistoryView.Visibility = Visibility.Collapsed;
+                RankingView.Visibility = Visibility.Collapsed;
                 RenderProfileTab();
                 break;
             case Subtab.History:
@@ -2808,6 +2898,15 @@ public partial class MultiplayerTab : UserControl
                 FriendsView.Visibility = Visibility.Collapsed;
                 ProfileView.Visibility = Visibility.Collapsed;
                 HistoryView.Visibility = Visibility.Visible;
+                RankingView.Visibility = Visibility.Collapsed;
+                break;
+            case Subtab.Ranking:
+                RoomsView.Visibility = Visibility.Collapsed;
+                FriendsView.Visibility = Visibility.Collapsed;
+                ProfileView.Visibility = Visibility.Collapsed;
+                HistoryView.Visibility = Visibility.Collapsed;
+                RankingView.Visibility = Visibility.Visible;
+                RenderRanking();
                 break;
         }
 
@@ -3043,6 +3142,13 @@ public partial class MultiplayerTab : UserControl
         // every render so it follows a room switch rather than sticking from the last one.
         _lobbyWindow.RoomCompetitiveBadge.Visibility =
             _currentLobbyIsCompetitive ? Visibility.Visible : Visibility.Collapsed;
+        // The format belongs on the badge: it is what decides which ladder the match counts
+        // for and which of the competitive promises apply, and there is nowhere else in the
+        // room that says it.
+        var roomFormatKey = Services.Multiplayer.RoomFormats.LabelKey(CurrentRoomFormat());
+        _lobbyWindow.RoomCompetitiveBadgeText.Text = roomFormatKey == null
+            ? Strings.Get("MpRoomCompetitiveBadge")
+            : Strings.Get("MpRoomCompetitiveBadge") + " · " + Strings.Get(roomFormatKey);
 
         // The window's own title carries the room name too, so the taskbar button says
         // which room it is instead of the word "Lobby" repeated per window.
@@ -3314,6 +3420,46 @@ public partial class MultiplayerTab : UserControl
         Services.Multiplayer.RoomMatchState.ResultPhase.None;
     private DateTime _resultPhaseSinceUtc = DateTime.UtcNow;
 
+    /// <summary>
+    /// The match we are still owed a RESULT for, after our own game has already closed.
+    ///
+    /// <para><b>Deliberately separate from <see cref="_matchContext"/>, and the separation is the
+    /// whole point.</b> That field means "the match I will report", and its life is deliberately
+    /// short: <see cref="OnGameExitedAsync"/> clears it in a <c>finally</c>, guarded so an older
+    /// exit handler cannot drop a newer match's context. Correct for reporting — and wrong for
+    /// RECEIVING, because a match does not end when our game closes. It ends when the HOST
+    /// reports it, which on a guest's machine is always later.</para>
+    ///
+    /// <para>What that cost, measured on a real match: the guest's game closed sixteen seconds
+    /// before the host's, so when <c>match_reported</c> arrived — carrying both players' results
+    /// and rating changes — the context was already null and <see cref="HandleMatchReported"/>
+    /// returned without a word. The <c>4007</c> close behind it was gated on the same field, so
+    /// it fell through to the generic reconnect and retried a deleted room some two hundred
+    /// times.</para>
+    ///
+    /// <para>Cleared when the result lands, when the room is left, when a new match captures its
+    /// own context, and by
+    /// <see cref="Services.Multiplayer.RoomMatchState.ResultWaitCeilingSeconds"/> — never left to
+    /// sit around on its own.</para>
+    /// </summary>
+    private Services.Multiplayer.MatchContext? _pendingResultContext;
+    private DateTime _pendingResultSinceUtc = DateTime.UtcNow;
+    private System.Windows.Threading.DispatcherTimer? _resultWaitTimer;
+
+    /// <summary>
+    /// The id of the match the result card is showing, kept only so the no-window fallback can
+    /// raise a notification the bell will DEDUPE. Without an id the bell would happily show the
+    /// same match twice — once from here and again from a later <c>match_rated</c> frame.
+    /// </summary>
+    private string? _lastResultMatchId;
+
+    /// <summary>
+    /// The match that post-game code should be reasoning about: the live one while our game is
+    /// still running, otherwise the one we are waiting on a result for.
+    /// </summary>
+    private Services.Multiplayer.MatchContext? ResultContext()
+        => _matchContext ?? _pendingResultContext;
+
     /// <summary>UTC time the CURRENT room opened, mirroring <see cref="_currentLobbyMaxPlayers"/>
     /// (set on create/join, cleared on leave). Drives the lobby header's live "open for X".
     /// On create it's ~now (the POST returns no created_at); on join it's parsed from the
@@ -3454,6 +3600,7 @@ public partial class MultiplayerTab : UserControl
         Paint(SubtabFriends, _activeSubtab == Subtab.Friends);
         Paint(SubtabProfile, _activeSubtab == Subtab.Profile);
         Paint(SubtabHistory, _activeSubtab == Subtab.History);
+        Paint(SubtabRanking, _activeSubtab == Subtab.Ranking);
 
         // Viewing the Rooms subtab clears the "new room created" dot.
         if (_activeSubtab == Subtab.Rooms) SetNewRoomIndicator(false);
@@ -3587,6 +3734,130 @@ public partial class MultiplayerTab : UserControl
         _activeSubtab = Subtab.Profile;
         RefreshFromSession();
     }
+    private void SubtabRanking_Click(object sender, RoutedEventArgs e)
+    {
+        _activeSubtab = Subtab.Ranking;
+        RefreshFromSession();
+        // Same self-limiting fetch the Rooms subtab uses: inside the server's own cache
+        // window this returns without asking anything.
+        if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+            _ = RefreshActivityStripAsync();
+    }
+
+    private void RankingModeSolo_Click(object sender, RoutedEventArgs e)
+    {
+        _rankingShowsTeam = false;
+        RenderRanking();
+    }
+
+    private void RankingModeTeam_Click(object sender, RoutedEventArgs e)
+    {
+        _rankingShowsTeam = true;
+        RenderRanking();
+    }
+
+    /// <summary>
+    /// Draws the whole ladder — the table the community strip only shows the top of.
+    ///
+    /// <para>Both ladders come out of one payload and one request. The 1v1 table is always
+    /// offered; the TEAM selector appears only when the backend actually sent that list,
+    /// because a null there means "this server has no team ladder" and offering a tab that
+    /// can only ever be empty is worse than not offering it.</para>
+    ///
+    /// <para>Ranks are the server's. Nothing here renumbers — a client that did would
+    /// report the fourth player as the third the moment it filtered its own copy, and two
+    /// people looking at the same table would read different positions.</para>
+    /// </summary>
+    private void RenderRanking()
+    {
+        if (RankingBody == null) return;
+        RankingBody.Children.Clear();
+
+        var team = Services.Multiplayer.CommunityStatsView.TeamRows(_communityStats);
+        var hasTeamLadder = team != null;
+
+        RankingModeTeam.Visibility = hasTeamLadder ? Visibility.Visible : Visibility.Collapsed;
+        if (!hasTeamLadder) _rankingShowsTeam = false;
+
+        RankingModeSolo.Tag = _rankingShowsTeam ? null : "active";
+        RankingModeTeam.Tag = _rankingShowsTeam ? "active" : null;
+
+        var rows = _rankingShowsTeam
+            ? team ?? new List<Models.Multiplayer.LeaderboardRow>()
+            : Services.Multiplayer.CommunityStatsView.Rows(_communityStats);
+
+        if (rows.Count == 0)
+        {
+            // The same sentence the strip uses, and for the same reason: an empty ladder
+            // that explains its own entry requirement is a fact, while a blank panel reads
+            // as something broken. The number is the server's; with none we say nothing.
+            var required = Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats);
+            RankingBody.Children.Add(new TextBlock
+            {
+                Text = required.HasValue
+                    ? Strings.Format("MpActivityRankingEmpty", required.Value)
+                    : Strings.Get("MpRankingUnavailable"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+                FontSize = (double)Application.Current.FindResource("MpActivityBodySize"),
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+            });
+            return;
+        }
+
+        var stack = new StackPanel();
+        stack.Children.Add(BuildRankingHeader());
+        foreach (var row in rows) stack.Children.Add(BuildLeaderboardRow(row));
+
+        RankingBody.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = stack,
+        });
+    }
+
+    /// <summary>
+    /// The ladder's column headings.
+    ///
+    /// <para>The widths repeat <see cref="BuildLeaderboardRow"/>'s list, which is the third
+    /// copy of it — the strip's XAML header carries one too. They have to be changed
+    /// together; the note in the multiplayer rules says so about the first two and this is
+    /// now covered by the same sentence.</para>
+    /// </summary>
+    private UIElement BuildRankingHeader()
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        foreach (var w in new[] { 26.0, -1.0, 56.0, 72.0, 48.0 })
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = w < 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(w),
+            });
+        }
+
+        var labels = new[]
+        {
+            "MpActivityRankColHash", "MpActivityRankColPlayer", "MpActivityRankColElo",
+            "MpActivityRankColDecided", "MpActivityRankColPct",
+        };
+        for (var i = 0; i < labels.Length; i++)
+        {
+            var t = new TextBlock
+            {
+                Text = Strings.Get(labels[i]),
+                Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
+                FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = i <= 1 ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+            };
+            Grid.SetColumn(t, i);
+            grid.Children.Add(t);
+        }
+        return grid;
+    }
+
     private void SubtabHistory_Click(object sender, RoutedEventArgs e)
     {
         _activeSubtab = Subtab.History;
@@ -3672,6 +3943,11 @@ public partial class MultiplayerTab : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel();
+        // Each player line is its own Grid, so without a shared scope "Won" and "Lost" —
+        // different widths, and much more so in Spanish — would put the two ELO deltas at
+        // two different x positions. Scoped to THIS card: sharing across cards would make
+        // every match in the list as wide as the longest name anywhere in it.
+        Grid.SetIsSharedSizeScope(left, true);
 
         // Mod display name — fall back to the raw id if it isn't a known
         // profile (a mod the user no longer has, an old catalog entry, etc.).
@@ -3701,12 +3977,18 @@ public partial class MultiplayerTab : UserControl
         // that "Draw" would show every one of them as a drawn game that never happened.
         // Saying nothing is the honest rendering, and it also leaves every existing
         // history row looking exactly as it does today.
-        if (row.Result >= 0.999)
+        //
+        // Through Classify rather than a second copy of the thresholds: this row used to
+        // spell out its own >= 0.999 / <= 0.001, which is the shape that drifts — the
+        // per-player lines below ask the same question and must never answer it differently
+        // about the same number.
+        var myVerdict = MatchOutcomeView.Classify(row.Result);
+        if (myVerdict == MatchVerdict.Win)
             titleRow.Children.Add(BuildBadge(
                 Strings.Get("MpHistoryWin"),
                 new SolidColorBrush(Color.FromArgb(0x33, 0x3F, 0xB9, 0x50)),
                 new SolidColorBrush(Color.FromRgb(0x5B, 0xD1, 0x6E))));
-        else if (row.Result <= 0.001)
+        else if (myVerdict == MatchVerdict.Loss)
             titleRow.Children.Add(BuildBadge(
                 Strings.Get("MpHistoryLoss"),
                 new SolidColorBrush(Color.FromArgb(0x33, 0xE5, 0x47, 0x4D)),
@@ -3737,11 +4019,17 @@ public partial class MultiplayerTab : UserControl
 
         left.Children.Add(titleRow);
 
+        // Who played, resolved before the meta line because it decides what goes in it.
+        var players = MatchParticipantsView.Build(row.Participants, _session?.CurrentUser?.Id);
+
         // Meta line: "N players · map · duration · date". Every segment is dropped
         // when its field is empty, so an old match — reported before the map or the
         // player count were sent — still renders exactly as it always did.
         var parts = new System.Collections.Generic.List<string>();
-        if (row.PlayerCount > 0)
+        // The head count survives only when there are no NAMES to replace it. "2 players"
+        // above a list of those two players is noise; above nothing it is all we can say,
+        // which is the case for every backend older than the participants field.
+        if (players.Count == 0 && row.PlayerCount > 0)
             parts.Add(Strings.Format("MpHistoryPlayers", row.PlayerCount));
         if (!string.IsNullOrWhiteSpace(row.MapName))
             parts.Add(row.MapName.Replace('_', ' '));   // "ESOC_Arizona" is a file name
@@ -3764,6 +4052,31 @@ public partial class MultiplayerTab : UserControl
             Margin = new Thickness(0, 2, 0, 0),
         });
 
+        // Sides, but ONLY when the match has them. A 1v1 reports team 0 for both players, and
+        // so does every match stored before the launcher could work teams out — HasTeams is
+        // false for all of those and this collapses back to the flat list it has always been.
+        if (Services.Multiplayer.MatchParticipantsView.HasTeams(players))
+        {
+            foreach (var side in players.GroupBy(pl => pl.Team).OrderBy(g => g.Key))
+            {
+                left.Children.Add(new TextBlock
+                {
+                    Text = Strings.Format("MpHistoryTeam", side.Key + 1),
+                    Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
+                    FontSize = (double)Application.Current.FindResource("MpPillSize"),
+                    FontWeight = FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 2),
+                });
+                foreach (var player in side)
+                    left.Children.Add(BuildHistoryPlayerRow(player));
+            }
+        }
+        else
+        {
+            foreach (var player in players)
+                left.Children.Add(BuildHistoryPlayerRow(player));
+        }
+
         Grid.SetColumn(left, 0);
         grid.Children.Add(left);
 
@@ -3776,7 +4089,9 @@ public partial class MultiplayerTab : UserControl
                 Padding = new Thickness(12, 4, 12, 4),
                 MinWidth = 90,
                 Background = new SolidColorBrush(Color.FromRgb(0x3a, 0x3d, 0x44)),
-                VerticalAlignment = VerticalAlignment.Center,
+                // Top, not centre: the card grew a roster underneath, and a centred button
+                // would drift down away from the match it belongs to.
+                VerticalAlignment = VerticalAlignment.Top,
                 Tag = row.Id,
             };
             dl.Click += async (_, _) =>
@@ -3804,6 +4119,104 @@ public partial class MultiplayerTab : UserControl
 
         card.Child = grid;
         return card;
+    }
+
+    /// <summary>
+    /// One player under a history row: avatar, name, whether they won, what it cost them.
+    ///
+    /// <para>A Grid and not a horizontal StackPanel, for the reason the rooms table
+    /// documents: a horizontal StackPanel measures its children with INFINITE width, so the
+    /// name's <c>CharacterEllipsis</c> would never fire and a long one would push the verdict
+    /// off the card instead of trimming.</para>
+    /// </summary>
+    /// <remarks>
+    /// <c>internal</c> so <c>DialogXamlTests</c> can build the real thing rather than a
+    /// hand-copied imitation of it — nothing else in the launcher constructs this, and the
+    /// History tab is not a surface the startup smoke test ever opens.
+    /// </remarks>
+    internal static FrameworkElement BuildHistoryPlayerRow(MatchParticipantLine player)
+    {
+        var caption = (double)Application.Current.FindResource("FontSizeCaption");
+
+        var grid = new Grid { Margin = new Thickness(0, 6, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // Auto, and shared with the sibling rows of the same card — see the scope set on
+        // their container. SharedSizeGroup only works on Auto or absolute widths.
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = GridLength.Auto,
+            SharedSizeGroup = "HistoryPlayerVerdict",
+        });
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = GridLength.Auto,
+            SharedSizeGroup = "HistoryPlayerDelta",
+        });
+
+        var avatar = BuildAvatarDisc(player.Name, player.AvatarUrl, 22);
+        avatar.Margin = new Thickness(0, 0, 9, 0);
+        grid.Children.Add(WithColumn(avatar, 0));
+
+        // Name and "(you)" as two Runs of ONE TextBlock, so the ellipsis applies to the pair
+        // and the marker cannot be trimmed away while the name it belongs to survives.
+        var name = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
+            FontSize = caption,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        name.Inlines.Add(new System.Windows.Documents.Run(player.Name));
+        if (player.IsMe)
+        {
+            name.Inlines.Add(new System.Windows.Documents.Run(
+                "  (" + Strings.Get("MpOnlinePlayersYou") + ")")
+            {
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            });
+        }
+        grid.Children.Add(WithColumn(name, 1));
+
+        // NOTHING for a 0.5, which is the majority of stored matches — and it is why this
+        // block is still worth drawing for them: it names who was there without claiming to
+        // know how it ended, where the old row could only say "2 players".
+        if (player.Verdict != MatchVerdict.NoResult)
+        {
+            var won = player.Verdict == MatchVerdict.Win;
+            grid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = (won ? "\u2713 " : "\u2715 ")
+                     + Strings.Get(won ? "MpHistoryPlayerWon" : "MpHistoryPlayerLost"),
+                Foreground = (Brush)Application.Current.FindResource(
+                    won ? "MpOk" : "MpDestructiveText"),
+                FontSize = caption,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(10, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            }, 2));
+        }
+
+        // Null when either end of the rating is unknown — never a "+0", the same refusal the
+        // match card makes: not knowing what a match did is not the same as it doing nothing.
+        var delta = RatingDisplay.FormatDelta(player.RatingDelta);
+        if (delta != null)
+        {
+            grid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = delta,
+                Foreground = (Brush)Application.Current.FindResource(
+                    delta.StartsWith('-') ? "MpDestructiveText" : "MpOk"),
+                FontSize = caption,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(12, 0, 0, 0),
+                MinWidth = 44,
+                TextAlignment = TextAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+            }, 3));
+        }
+
+        return grid;
     }
 
     // ---------- Sign in / out ----------
@@ -4516,8 +4929,34 @@ public partial class MultiplayerTab : UserControl
         _ = JoinByLobbyIdAsync(code);
     }
 
-    /// <summary>Guards the one-shot activity fetch — it is a page-load fact, not a poll.</summary>
-    private bool _activityLoaded;
+    /// <summary>
+    /// When the community payload was last fetched, or MinValue for never.
+    ///
+    /// <para>This used to be a one-shot bool, which meant a player never saw their own
+    /// place on the ladder change without restarting the launcher — and with a team ladder
+    /// arriving, the first thing anybody will want to do after a match is look. The window
+    /// below is the SERVER's own cache duration, so re-asking inside it would have been
+    /// answered from memory anyway; asking less often than that buys nothing.</para>
+    /// </summary>
+    private DateTime _activityFetchedUtc = DateTime.MinValue;
+
+    /// <summary>Matches the backend's 60 s memo on /stats/community. Change both together.</summary>
+    private static readonly TimeSpan ActivityMaxAge = TimeSpan.FromSeconds(60);
+
+    /// <summary>The payload the strip and the Ranking subtab both draw from.</summary>
+    private CommunityStats? _communityStats;
+
+    /// <summary>Which ladder the Ranking subtab is showing.</summary>
+    private bool _rankingShowsTeam;
+
+    /// <summary>How far back the server said it looked, for the strip's window label. 0
+    /// until an answer arrives, and the label is then blank rather than a guess.</summary>
+    private int _activityWindowDays;
+
+    /// <summary>Whether the recent-matches card is showing EVERYONE's matches or, on a
+    /// backend that cannot answer that, the viewer's own. It decides which heading is
+    /// used, and it has to survive a language switch — hence a field.</summary>
+    private bool _activityRecentIsCommunity;
 
     /// <summary>
     /// Fills the community-activity strip's "recent matches" card.
@@ -4533,89 +4972,316 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async Task RefreshActivityStripAsync()
     {
-        if (_activityLoaded || _session?.CurrentUser == null || ActivityStrip == null) return;
-        _activityLoaded = true;
+        if (_session?.CurrentUser == null || ActivityStrip == null) return;
+        if (DateTime.UtcNow - _activityFetchedUtc < ActivityMaxAge) return;
+        _activityFetchedUtc = DateTime.UtcNow;
 
         try
         {
-            var resp = await _session.Api.GetHistoryAsync(_session.CurrentUser.Id);
-            var rows = resp?.Matches;
-            if (rows == null || rows.Count == 0) return;
+            // COMMUNITY DATA FIRST, and nothing here may depend on the viewer's own
+            // history. It used to: the method opened by fetching the caller's matches and
+            // returned when there were none, so a player who had not played saw an empty
+            // panel — in a strip headed "community activity", whose other two cards are
+            // about everyone and had data all along. They were never even requested.
+            Models.Multiplayer.CommunityStats? stats = null;
+            try
+            {
+                stats = await _session.Api.GetCommunityStatsAsync();
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Community stats: fetch failed: {ex.Message}");
+            }
 
-            ActivityRecentList.Children.Clear();
-            foreach (var m in rows.Take(3))
-                ActivityRecentList.Children.Add(BuildActivityMatchRow(m));
+            // Kept for the Ranking subtab, which draws the FULL table from the very same
+            // payload — one request feeds both, which is why the limit asks for the server's
+            // maximum rather than the three the strip shows.
+            _communityStats = stats;
+            if (_activeSubtab == Subtab.Ranking) RenderRanking();
 
-            ActivityStrip.Visibility = Visibility.Visible;
+            var any = await FillRecentMatchesAsync(stats);
+            any |= FillCommunityMiddle(stats);
+            any |= FillPeakHours(stats);
 
-            // The other two cards, on the same once-per-session gate as this one. One
-            // extra request when the Rooms subtab is first opened; no timer, nothing
-            // per render — the budget is per IP and shared behind a Radmin network.
-            await RefreshCommunityCardsAsync();
+            // The window belongs to the STRIP, so it is set here and not inside a card:
+            // the peak card hides itself below MinSampleRooms, and when it did the header
+            // lost its window while the numbers beside it still said "· 30 d". Either
+            // source will do — the server uses one window for both.
+            _activityWindowDays = stats?.Activity?.WindowDays ?? stats?.Totals?.WindowDays ?? 0;
+            ActivityStripWindow.Text = _activityWindowDays > 0
+                ? Strings.Format("MpActivityStripWindow", _activityWindowDays)
+                : "";
+
+            LayOutActivityColumns();
+            ActivityStrip.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         }
         catch (Exception ex)
         {
             // Best-effort decoration: it must never be why the rooms list looks broken.
-            DiagnosticLog.Write($"Activity strip: history fetch failed: {ex.Message}");
+            DiagnosticLog.Write($"Activity strip: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Fill the ladder and peak-hours cards, or leave them hidden.
+    /// Give every card that is showing a third of the width, and every card that is not,
+    /// none of it — then draw a divider only BETWEEN two cards that are actually there.
     ///
-    /// <para>Best-effort in every direction. A backend without the route answers 404, a
-    /// ladder can legitimately be empty for weeks after a ratings reset, and a small
-    /// community can go a month without enough rooms to call anything a peak hour. All
-    /// three end the same way: the card is not shown. An empty card under a heading reads
-    /// as broken, and it must never be why the room list looks wrong.</para>
+    /// <para>Both halves are needed and they fail differently. A star column keeps its
+    /// share whatever its child does, so hiding a card on its own reserved a blank third;
+    /// and the dividers were unconditional, so that blank third came framed by two rules.
+    /// Together they are why the middle of this strip read as broken rather than as
+    /// empty.</para>
     /// </summary>
-    private async Task RefreshCommunityCardsAsync()
+    private void LayOutActivityColumns()
     {
-        if (_session?.Api == null) return;
+        var star = new GridLength(1, GridUnitType.Star);
+        var none = new GridLength(0);
 
-        Models.Multiplayer.CommunityStats? stats;
+        var recent = ActivityRecentCard.Visibility == Visibility.Visible;
+        var middle = ActivityMiddleCard.Visibility == Visibility.Visible;
+        var peak = ActivityPeakCard.Visibility == Visibility.Visible;
+
+        ActivityColRecent.Width = recent ? star : none;
+        ActivityColMiddle.Width = middle ? star : none;
+        ActivityColPeak.Width = peak ? star : none;
+
+        // The left rule separates the first card from whatever comes next, which is the
+        // peak card when the middle one is absent — so it is not simply "recent && middle".
+        ActivityDividerLeft.Visibility = recent && (middle || peak)
+            ? Visibility.Visible : Visibility.Collapsed;
+        ActivityDividerRight.Visibility = middle && peak
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// The recent-matches card: everyone's matches, or the viewer's own as a fallback.
+    ///
+    /// <para>The community list is what the strip's own heading promises, and it is the
+    /// only version a player who has never played can learn anything from. A backend that
+    /// predates the field sends none, and the card then shows the viewer's history under
+    /// its old heading — byte for byte what it did before.</para>
+    /// </summary>
+    private async Task<bool> FillRecentMatchesAsync(Models.Multiplayer.CommunityStats? stats)
+    {
+        var community = CommunityStatsView.RecentMatches(stats);
+        if (community.Count > 0)
+        {
+            _activityRecentIsCommunity = true;
+            ActivityRecentTitle.Text = Strings.Get("MpActivityRecentCommunityTitle");
+            ActivityRecentList.Children.Clear();
+            foreach (var m in community.Take(3))
+                ActivityRecentList.Children.Add(BuildCommunityMatchRow(m));
+            ActivityRecentCard.Visibility = Visibility.Visible;
+            return true;
+        }
+
+        _activityRecentIsCommunity = false;
+        ActivityRecentTitle.Text = Strings.Get("MpActivityRecentTitle");
         try
         {
-            stats = await _session.Api.GetCommunityStatsAsync();
+            var resp = await _session!.Api.GetHistoryAsync(_session.CurrentUser!.Id);
+            var rows = resp?.Matches;
+            if (rows == null || rows.Count == 0)
+            {
+                ActivityRecentCard.Visibility = Visibility.Collapsed;
+                return false;
+            }
+
+            ActivityRecentList.Children.Clear();
+            foreach (var m in rows.Take(3))
+                ActivityRecentList.Children.Add(BuildActivityMatchRow(m));
+            ActivityRecentCard.Visibility = Visibility.Visible;
+            return true;
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"Community stats: fetch failed: {ex.Message}");
-            return;
+            DiagnosticLog.Write($"Activity strip: history fetch failed: {ex.Message}");
+            ActivityRecentCard.Visibility = Visibility.Collapsed;
+            return false;
         }
+    }
 
-        // ----- the ladder -----
+    /// <summary>
+    /// The middle third: the community's numbers, and under them the ladder — or, while
+    /// nobody qualifies for it, what it takes to get in.
+    /// </summary>
+    private bool FillCommunityMiddle(Models.Multiplayer.CommunityStats? stats)
+    {
+        var shown = false;
+
+        // ----- the numbers -----
+        var totals = CommunityStatsView.Totals(stats);
+        if (totals != null)
+        {
+            ActivityTotalsList.Children.Clear();
+            ActivityTotalsList.Children.Add(BuildTotalsLine(
+                Strings.Format("MpActivityTotalsMatches", totals.Matches, totals.WindowDays)));
+            ActivityTotalsList.Children.Add(BuildTotalsLine(
+                Strings.Format("MpActivityTotalsPlayers", totals.Players, totals.PlayersWindowDays)));
+            // Only when there IS one. A "most played: —" row states nothing and takes the
+            // same space as a row that does.
+            if (!string.IsNullOrWhiteSpace(totals.TopMap))
+            {
+                ActivityTotalsList.Children.Add(BuildTotalsLine(
+                    Strings.Format("MpActivityTotalsTopMap", totals.TopMap!.Replace('_', ' '))));
+            }
+            ActivityTotalsCard.Visibility = Visibility.Visible;
+            shown = true;
+        }
+        else ActivityTotalsCard.Visibility = Visibility.Collapsed;
+
+        // ----- the ladder, or why it is empty -----
         var rows = CommunityStatsView.Rows(stats);
-        if (rows.Count > 0 && ActivityRankingList != null)
+        var required = CommunityStatsView.RequiredDecided(stats);
+        if (rows.Count > 0)
         {
             ActivityRankingList.Children.Clear();
-            foreach (var row in rows.Take(5))
+            foreach (var row in rows.Take(3))
                 ActivityRankingList.Children.Add(BuildLeaderboardRow(row));
+            ActivityRankingHeader.Visibility = Visibility.Visible;
+            ActivityRankingList.Visibility = Visibility.Visible;
+            ActivityRankingEmpty.Visibility = Visibility.Collapsed;
             ActivityRankingCard.Visibility = Visibility.Visible;
+            shown = true;
         }
-
-        // ----- peak hours -----
-        var activity = stats?.Activity;
-        if (activity != null && ActivityPeakBars != null)
+        else if (required.HasValue)
         {
-            var utc = new int[24];
-            foreach (var h in activity.Hours)
-                if (h.Hour >= 0 && h.Hour < 24) utc[h.Hour] = h.Count;
-
-            var local = CommunityStatsView.ToLocalHours(
-                utc, TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.UtcNow));
-            var peak = CommunityStatsView.PeakHour(local, activity.Total);
-
-            if (peak.HasValue)
-            {
-                ActivityPeakHeadline.Text = Strings.Format(
-                    "MpActivityPeakRange", peak.Value, (peak.Value + 1) % 24);
-                ActivityPeakSubtitle.Text = Strings.Format(
-                    "MpActivityPeakSubtitle", activity.Total, activity.WindowDays);
-                DrawPeakBars(local);
-                ActivityPeakCard.Visibility = Visibility.Visible;
-            }
+            // The number comes from the server and is only shown when it said one: an
+            // older backend deserializes it to 0, and "you get in with 0 decided matches"
+            // is both wrong and impossible.
+            ActivityRankingHeader.Visibility = Visibility.Collapsed;
+            ActivityRankingList.Visibility = Visibility.Collapsed;
+            ActivityRankingEmpty.Text = Strings.Format("MpActivityRankingEmpty", required.Value);
+            ActivityRankingEmpty.Visibility = Visibility.Visible;
+            ActivityRankingCard.Visibility = Visibility.Visible;
+            shown = true;
         }
+        else ActivityRankingCard.Visibility = Visibility.Collapsed;
+
+        ActivityMiddleSeparator.Visibility =
+            ActivityTotalsCard.Visibility == Visibility.Visible
+            && ActivityRankingCard.Visibility == Visibility.Visible
+                ? Visibility.Visible : Visibility.Collapsed;
+
+        ActivityMiddleCard.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+        return shown;
+    }
+
+    /// <summary>The peak-hours card, unchanged but for where its numbers are read.</summary>
+    private bool FillPeakHours(Models.Multiplayer.CommunityStats? stats)
+    {
+        var activity = stats?.Activity;
+        if (activity == null || ActivityPeakBars == null)
+        {
+            ActivityPeakCard.Visibility = Visibility.Collapsed;
+            return false;
+        }
+
+        var utc = new int[24];
+        foreach (var h in activity.Hours)
+            if (h.Hour >= 0 && h.Hour < 24) utc[h.Hour] = h.Count;
+
+        var local = CommunityStatsView.ToLocalHours(
+            utc, TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.UtcNow));
+        var peak = CommunityStatsView.PeakHour(local, activity.Total);
+        if (!peak.HasValue)
+        {
+            ActivityPeakCard.Visibility = Visibility.Collapsed;
+            return false;
+        }
+
+        ActivityPeakHeadline.Text = Strings.Format(
+            "MpActivityPeakRange", peak.Value, (peak.Value + 1) % 24);
+        ActivityPeakSubtitle.Text = Strings.Format(
+            "MpActivityPeakSubtitle", activity.Total, activity.WindowDays);
+        DrawPeakBars(local);
+        ActivityPeakCard.Visibility = Visibility.Visible;
+        return true;
+    }
+
+    /// <summary>One line of the numbers card.</summary>
+    internal static UIElement BuildTotalsLine(string text) => new TextBlock
+    {
+        Text = text,
+        Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
+        FontSize = (double)Application.Current.FindResource("MpActivityBodySize"),
+        TextTrimming = TextTrimming.CharacterEllipsis,
+        Margin = new Thickness(0, 0, 0, 5),
+    };
+
+    /// <summary>
+    /// One community match: who beat whom, and under it the mod, the map and how long ago.
+    ///
+    /// <para>The sentence is only written for a two-player match with a readable winner —
+    /// <see cref="CommunityStatsView.Describe"/> refuses everything else, and that is most
+    /// stored matches. Those keep the old shape: the mod and the map, and "didn't count"
+    /// said out loud rather than implied by a grey dot nobody can interpret.</para>
+    /// </summary>
+    internal static UIElement BuildCommunityMatchRow(Models.Multiplayer.CommunityMatch m)
+    {
+        var line = CommunityStatsView.Describe(m);
+
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        grid.Children.Add(WithColumn(new System.Windows.Shapes.Ellipse
+        {
+            Width = 6,
+            Height = 6,
+            Fill = (Brush)Application.Current.FindResource(line.Decided ? "MpOk" : "MpTextFaint"),
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 6, 8, 0),
+        }, 0));
+
+        var mod = ResolveModDisplayName(m.ModId);
+        var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
+        var ago = AgoOrNull(m.ReportedAt);
+
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = line.Decided
+                ? Strings.Format("MpActivityWon", line.Winner!, line.Loser!)
+                : Join(mod, map),
+            Foreground = (Brush)Application.Current.FindResource(
+                line.Decided ? "MpTextPrimary" : "MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("MpActivityBodySize"),
+            FontWeight = line.Decided ? FontWeights.SemiBold : FontWeights.Normal,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = line.Decided
+                ? Join(mod, map, ago)
+                : Join(Strings.Get("MpActivityNotCounted"), ago),
+            Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        grid.Children.Add(WithColumn(stack, 1));
+        return grid;
+    }
+
+    /// <summary>Join the parts that exist with the separator this tab uses everywhere.</summary>
+    private static string Join(params string?[] parts) =>
+        string.Join(" \u00b7 ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+    /// <summary>
+    /// "2 h ago", or null when the timestamp is unusable.
+    ///
+    /// <para>Null rather than "just now": a missing or unparsable stamp is not a recent
+    /// match, and the segment is simply dropped — the same rule the rest of the meta line
+    /// follows.</para>
+    /// </summary>
+    private static string? AgoOrNull(string? reportedAt)
+    {
+        var when = Services.RoomAgeFormat.ParseCreatedUtc(reportedAt);
+        if (when == null) return null;
+        var elapsed = DateTime.UtcNow - when.Value;
+        if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+        return Strings.Format("MpActivityAgo", Services.RoomAgeFormat.Coarse(elapsed));
     }
 
     /// <summary>The 24 hour bars, tallest normalised to full height.</summary>
@@ -4649,7 +5315,10 @@ public partial class MultiplayerTab : UserControl
     private UIElement BuildLeaderboardRow(Models.Multiplayer.LeaderboardRow row)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-        foreach (var w in new[] { 22.0, -1.0, 52.0, 62.0, 44.0 })
+        // Must MATCH the header's ColumnDefinitions in the XAML — they were widened
+        // together when this panel's text went up to the type scale's 13 floor, because
+        // "DECIDIDAS" no longer fits the old 62.
+        foreach (var w in new[] { 26.0, -1.0, 56.0, 72.0, 48.0 })
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition
             {
@@ -4676,7 +5345,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Text = text,
                 Foreground = (Brush)FindResource(brush),
-                FontSize = (double)FindResource("MpLabelSize"),
+                FontSize = (double)FindResource("MpActivityBodySize"),
                 HorizontalAlignment = align,
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -4719,7 +5388,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = string.Join(" · ", parts.Where(p => !string.IsNullOrWhiteSpace(p))),
             Foreground = (Brush)Application.Current.FindResource(decided ? "MpTextBody" : "MpTextFaint"),
-            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            FontSize = (double)Application.Current.FindResource("MpActivityBodySize"),
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -6289,8 +6958,14 @@ public partial class MultiplayerTab : UserControl
             // Derived from the server's boolean, never from words in the title: anyone can
             // type "competitive" into a room name, and a badge that a stranger can forge is
             // worth less than no badge at all.
+            // …and it names the format, from the same derivation the room itself uses, so a
+            // browser row and the room you join agree about what you are walking into.
+            var fmtKey = Services.Multiplayer.RoomFormats.LabelKey(
+                Services.Multiplayer.RoomFormats.Resolve(lobby.Competitive, lobby.MaxPlayers));
             var compChip = BuildRoomChip(
-                Strings.Get("MpRoomCompetitiveBadge"),
+                fmtKey == null
+                    ? Strings.Get("MpRoomCompetitiveBadge")
+                    : Strings.Get("MpRoomCompetitiveBadge") + " · " + Strings.Get(fmtKey),
                 (Brush)Application.Current.FindResource("MpCompetitiveBg"),
                 (Brush)Application.Current.FindResource("MpCompetitiveText"));
             compChip.Margin = new Thickness(8, 0, 0, 0);
@@ -7727,9 +8402,10 @@ public partial class MultiplayerTab : UserControl
             // result and the remaining attempts run BEHIND it (see the continuation below).
             // Waiting here instead would make every match with no recording — the majority,
             // since AoE3's per-match box comes up unticked — slower for the benefit of a few.
-            // Hold the room shut from here. Only bites for a competitive host — everyone else
-            // sees no change at all — and only until the result is settled or the ceiling in
-            // RoomMatchState.ResultGraceSeconds is reached.
+            // Hold the room shut from here. Competitive rooms only — everyone else sees no
+            // change at all — and only until the result is settled or the ceiling in
+            // RoomMatchState.ResultGraceSeconds is reached. It covers BOTH players, for two
+            // different reasons: see RoomMatchState.HoldLeave.
             SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.ReadingRecording);
 
             var analysis = await AnalyseMatchReplayAsync(
@@ -7738,6 +8414,7 @@ public partial class MultiplayerTab : UserControl
                 preferBeforeUtc: exitedAtUtc + ReplayWindowMargin);
             var replayInfo = analysis.Info;
             _lastLocalReadFailure = analysis.Failure;
+            if (analysis.Info != null) _lastRecordingPath = analysis.Info.File.FullName;
 
             SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.SendingResult);
             var report = await TryReportMatchAsync(profile, ctx, replayInfo);
@@ -7753,6 +8430,17 @@ public partial class MultiplayerTab : UserControl
             // host's card deterministic instead of dependent on that race.
             if (roomClosedByReport && _matchPhase != MatchPhase.Result)
                 EnterResultPhase(ctx, report.Response, replayInfo);
+
+            // The guest's side of that same moment, and until now it was blank. Nothing of ours
+            // is outstanding — we cannot report — so all that is left is the host's machine, and
+            // the player was made to watch that happen against an empty panel. Gated on the match
+            // having actually been played: promising a result for a solo launch would be a
+            // promise nothing can keep.
+            else if (ctx is { IsHost: false }
+                     && _roomMatchLive
+                     && _matchPhase != MatchPhase.Result
+                     && ctx.LooksLikeAPlayedMatch(exitedAtUtc, MinReportableSeconds).Ok)
+                EnterAwaitingResultPhase(ctx);
 
             // If the match wasn't reported+closed (solo / short / failed report), the
             // HOST tells the server the game ended so the room reverts in_game → open
@@ -7793,9 +8481,19 @@ public partial class MultiplayerTab : UserControl
             }
 
             // Already found above, so no second walk over the folder.
+            //
+            // The MAP is what actually distinguishes one of these from another: AoE3 names
+            // every recording "Record Game N" and renumbers after each match, so this line used
+            // to hand the player a name that belonged to a different game by the time they went
+            // looking. Measured on a real bundle — three matches in one evening, all three
+            // announced as "Record Game 1.age3Yrec". The name stays because it is correct at
+            // this instant; it is simply no longer the only thing said.
             if (replayInfo != null)
                 AppendChatSystem(Strings.Format(
-                    "MpChatReplaySaved", replayInfo.File.Name, replayInfo.File.Length / 1024));
+                    string.IsNullOrWhiteSpace(replayInfo.MapName)
+                        ? "MpChatReplaySaved"
+                        : "MpChatReplaySavedMap",
+                    replayInfo.File.Name, replayInfo.File.Length / 1024, replayInfo.MapName ?? ""));
 
             MaybeReportMissingRecording(profile, ctx, replayInfo);
             RememberRecordingOutcome(profile, ctx, replayInfo);
@@ -7820,9 +8518,55 @@ public partial class MultiplayerTab : UserControl
             // reopened the game they had closed, which deliberately keeps the SAME context — so
             // the instance matches and clearing it would still be wrong.
             if (!GameRestartedSince() && ReferenceEquals(_matchContext, ctx))
+            {
+                // Handed to the result path rather than dropped. Our GAME is over; the MATCH is
+                // not, and on a guest's machine the difference is measured in seconds during
+                // which the answer arrives. See _pendingResultContext.
                 _matchContext = null;
+                if (ctx != null && _matchPhase != MatchPhase.Result) SetPendingResultContext(ctx);
+            }
         }
     }
+
+    /// <summary>
+    /// The format of the room we are in — 1v1, 2v2, 3v3, or none.
+    ///
+    /// <para>Derived rather than stored, because a competitive room's size names its format
+    /// one-to-one and the server refuses any other size for one (see
+    /// <see cref="Services.Multiplayer.RoomFormats"/>). Capacity comes from the resolver the
+    /// player-count stat already uses, so the badge and the stat can never disagree.</para>
+    /// </summary>
+    private Services.Multiplayer.RoomFormat CurrentRoomFormat()
+        => TryGetCurrentLobbyMaxPlayers(out var max)
+            ? Services.Multiplayer.RoomFormats.Resolve(_currentLobbyIsCompetitive, max)
+            : Services.Multiplayer.RoomFormat.Casual;
+
+    /// <summary>
+    /// Every room member's self-reported AoE3 profile name, for the team map.
+    ///
+    /// <para>A member who has not reported one is simply left out — which makes the head count
+    /// disagree with the recording's and refuses the whole map. That is deliberate: a team map
+    /// missing one player is a map that puts somebody on the wrong side.</para>
+    /// </summary>
+    private Dictionary<string, string> InGameNamesInRoom()
+    {
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var kv in _roomMembers)
+            if (!string.IsNullOrWhiteSpace(kv.Value.InGameName))
+                names[kv.Key] = kv.Value.InGameName!;
+        return names;
+    }
+
+    /// <summary>
+    /// The team split as one short string for the log — "2/2", "3/3" or "none".
+    ///
+    /// <para>This is the only place we will find out whether the identity bridge actually works
+    /// in the field, since nothing on screen shows it while team games stay unrated.</para>
+    /// </summary>
+    private static string DescribeTeams(IReadOnlyDictionary<string, int>? teams)
+        => teams == null
+            ? "none"
+            : string.Join("/", teams.GroupBy(kv => kv.Value).OrderBy(g => g.Key).Select(g => g.Count()));
 
     /// <summary>
     /// Whether a game is running RIGHT NOW, asked by the tail of a previous game's exit handler
@@ -7854,12 +8598,22 @@ public partial class MultiplayerTab : UserControl
     /// game, and so one game cannot score twice even if the file's bytes change. Zero
     /// when the recording did not carry them.
     /// </param>
+    /// <param name="Players">
+    /// The recording's slots, carried so the report can work out who was on which team without
+    /// inflating the file a second time. Null on the announce-only path, which never parsed a
+    /// header — and null is simply "no teams", the same answer the launcher has always sent.
+    /// </param>
     private sealed record MatchReplayInfo(
         System.IO.FileInfo File,
         string? MapName,
         double? HostResult,
         uint RandomSeed = 0,
-        uint HostTime = 0);
+        uint HostTime = 0,
+        System.Collections.Generic.IReadOnlyList<ReplayParserService.ReplayPlayer>? Players = null,
+        // The slot the trailer named as the loser, or -1. HostResult already answers the
+        // 1v1 question and this changes nothing about it; what it adds is the only fact a
+        // TEAM match needs, because naming one loser names a whole side.
+        int LoserSlot = -1);
 
     /// <summary>
     /// Finds the recording the game just wrote and reads the result out of it.
@@ -8005,15 +8759,22 @@ public partial class MultiplayerTab : UserControl
                             return ReplayUploadService.CandidateVerdict.NotOurs;
                         }
 
-                        // The one case worth a byte dump: the trailer signature is missing
-                        // entirely, which is how a game that ended abnormally looks. Sixteen
-                        // bytes is the whole evidence, and without it "no outcome" is a claim
-                        // nobody can check from a diagnostic bundle.
-                        if (o.Confidence == ReplayParserService.ReplayOutcomeConfidence.Ambiguous
-                            && !o.SignaturePresent && data.Length >= 16)
+                        // The tail whenever the outcome was not settled, not only when the
+                        // signature is missing: a block just past the slack window and a
+                        // partially-written one both read as "no result", and under the older,
+                        // narrower rule neither left any evidence. 48 bytes because a healthy
+                        // block is 32, so 16 could not show one that was merely misplaced.
+                        //
+                        // The twin of this dump is DiagnosticLog.StageReplayIndex, which puts
+                        // the same bytes in the bundle — change both or they disagree. Between
+                        // them they are what will answer whether a TEAM game writes an outcome
+                        // block at all, which no recording anyone has been able to inspect says.
+                        if (o.Confidence != ReplayParserService.ReplayOutcomeConfidence.Confident
+                            && data.Length >= 48)
                             DiagnosticLog.Write(
-                                $"Replay: '{candidate.Name}' has no outcome trailer; last 16 bytes = " +
-                                BitConverter.ToString(data, data.Length - 16));
+                                $"Replay: '{candidate.Name}' outcome unsettled ({o.Confidence}, " +
+                                $"signature={o.SignaturePresent}); last 48 bytes = " +
+                                BitConverter.ToString(data, data.Length - 48));
 
                         header = h;
                         outcome = o;
@@ -8037,7 +8798,9 @@ public partial class MultiplayerTab : UserControl
 
                     return (new MatchReplayInfo(
                         result.File, header.MapName, hostResult,
-                        header.RandomSeed, header.HostTime), result, outcome!.SignaturePresent);
+                        header.RandomSeed, header.HostTime, header.Players,
+                        outcome.LoserSlot),
+                        result, outcome!.SignaturePresent);
                 });
 
                 lastSearch = search;
@@ -8169,6 +8932,7 @@ public partial class MultiplayerTab : UserControl
                 _lastLocalReadFailure = again.Failure;
 
             var better = again.Info ?? soFar;
+            if (again.Info != null) _lastRecordingPath = again.Info.File.FullName;
 
             if (again.Info?.HostResult != null)
             {
@@ -8331,6 +9095,30 @@ public partial class MultiplayerTab : UserControl
     /// 0.5-0.5 and find his recording seconds later. That reading has never reached the server
     /// in any form, and it is the only thing that can decide the match.
     /// </param>
+    /// <summary>
+    /// Every player's score in a team match, or null when the sides cannot be established.
+    ///
+    /// <para>Shared by the host's REPORT and by every player's CONFIRMATION, and that sharing
+    /// is the point: the two are meant to be independent readings of the same file, so they
+    /// must apply the same rule to it. If they did not, two honest players could contradict
+    /// each other over a match they both read correctly — and this rule's whole purpose is to
+    /// make a contradiction mean something.</para>
+    /// </summary>
+    private static System.Collections.Generic.IReadOnlyDictionary<string, double>? ResolveTeamResults(
+        Services.Multiplayer.MatchContext ctx,
+        MatchReplayInfo? replay,
+        System.Collections.Generic.IReadOnlyDictionary<string, int>? teams)
+    {
+        if (!Services.Multiplayer.RoomFormats.IsTeam(ctx.Format)) return null;
+
+        teams ??= Services.Multiplayer.MatchTeamMap.Resolve(replay?.Players, ctx.InGameNames);
+        if (teams == null) return null;
+        if (!Services.Multiplayer.RoomFormats.TeamsAgreeWithFormat(ctx.Format, teams)) return null;
+
+        return Services.Multiplayer.MatchResultResolver.ResolveTeamResults(
+            teams, ctx.InGameNames, replay?.Players, replay?.LoserSlot ?? -1);
+    }
+
     private async Task TryConfirmMatchAsync(
         Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay, bool allowHost = false)
     {
@@ -8346,7 +9134,19 @@ public partial class MultiplayerTab : UserControl
             // recorded THIS file", not "the host of the room" — AnalyseMatchReplayAsync
             // identifies the recording by THIS machine's own profile name and slot. On the
             // host's machine that is the host; here it is us. See the comment on the record.
-            var ownResult = replay?.HostResult
+            // In a TEAM match HostResult is always null — ReadOutcome refuses to name a
+            // winner past two players — so without this every confirmation of a 2v2 would
+            // be a 0.5, land as 'inconclusive', and the evidence rule could never be
+            // satisfied by anybody. The team ladder would be built and never move.
+            var ownId = _session.CurrentUser?.Id;
+            var teamResults = ResolveTeamResults(ctx, replay, null);
+            double? ownTeamResult =
+                teamResults != null && ownId != null && teamResults.TryGetValue(ownId, out var tr)
+                    ? tr
+                    : null;
+
+            var ownResult = ownTeamResult
+                            ?? replay?.HostResult
                             ?? Services.Multiplayer.MatchResultResolver.Unknown;
 
             // 0.5 is sent, not swallowed. How often a player cannot read their own
@@ -8448,6 +9248,46 @@ public partial class MultiplayerTab : UserControl
                 DiagnosticLog.Write(
                     $"MultiplayerTab.TryReportMatchAsync: no result — {decision.Reason}; logged as a draw");
 
+            // Who played on which side. The recording knows the teams; the room knows the
+            // accounts; the AoE3 profile name each player published is the only thing that joins
+            // them. Null — a 1v1, a free-for-all, or one member who never reported a name — means
+            // the match goes down with no teams, which is what every match before this one did.
+            // From the CONTEXT, not the live roster: by now the loser has usually left the
+            // room and their name would be gone with them, which would refuse the map for the
+            // exact matches it exists for. Same reason the roster itself is frozen at Start.
+            var teams = Services.Multiplayer.MatchTeamMap.Resolve(replay?.Players, ctx.InGameNames);
+
+            // The room's format was a promise; this is where it is kept. Sides that do not match
+            // what the room said it would play are dropped rather than written into everyone's
+            // history — a 2v2 room actually played 1v3 would otherwise record real-but-wrong
+            // teams for four people, and nothing downstream could tell.
+            if (!Services.Multiplayer.RoomFormats.TeamsAgreeWithFormat(ctx.Format, teams))
+            {
+                DiagnosticLog.Write(
+                    $"MultiplayerTab.TryReportMatchAsync: the recording's teams ({DescribeTeams(teams)}) " +
+                    $"do not match the room's declared {ctx.Format} — reporting without teams.");
+                teams = null;
+            }
+
+            // A team match's scores come from the SIDE the recording names, never from the
+            // host's own row: ParticipantResult mirrors the host onto everybody else, which
+            // in a 2v2 marks the host's own teammate a loser. Null falls back to that mirror,
+            // and for a 1v1 this block does not run at all.
+            var teamResults = ResolveTeamResults(ctx, replay, teams);
+
+            // Whether a TEAM recording carries an outcome block at all is unmeasured — one
+            // 2v2 file has ever been examined and it had none, which is also true of about a
+            // quarter of 1v1s. This line is how the first real team matches answer it, so do
+            // not remove it until they have: without the block the match reports 0.5 for
+            // everyone and the team ladder never moves, and nothing else would say why.
+            if (Services.Multiplayer.RoomFormats.IsTeam(ctx.Format))
+            {
+                DiagnosticLog.Write(
+                    $"MultiplayerTab.TryReportMatchAsync: {ctx.Format} recording — " +
+                    $"loserSlot={replay?.LoserSlot ?? -1} teams={DescribeTeams(teams)} " +
+                    $"sides={(teamResults == null ? "unresolved" : "resolved")}");
+            }
+
             // Hashed here rather than server-side, because the server never sees the
             // file. Best-effort: a recording we cannot read is not a reason to lose the
             // match report, it just means this one carries no fingerprint.
@@ -8482,13 +9322,18 @@ public partial class MultiplayerTab : UserControl
                 Participants = participantIds.Select(id => new MatchParticipantReport
                 {
                     UserId = id,
-                    Team = 0,
+                    // 0 for everyone when the map refused — see MatchTeamMap, where every rule is
+                    // a refusal, because a HALF-filled map would put a real person on the wrong
+                    // side of a real match in somebody else's history.
+                    Team = teams != null && teams.TryGetValue(id, out var t) ? t : 0,
                     Civ = null,
                     Score = 0,
-                    Result = hostResult == null
-                        ? Services.Multiplayer.MatchResultResolver.Unknown
-                        : Services.Multiplayer.MatchResultResolver.ParticipantResult(
-                            hostResult.Value, id == hostId),
+                    Result = teamResults != null && teamResults.TryGetValue(id, out var tr)
+                        ? tr
+                        : hostResult == null
+                            ? Services.Multiplayer.MatchResultResolver.Unknown
+                            : Services.Multiplayer.MatchResultResolver.ParticipantResult(
+                                hostResult.Value, id == hostId),
                 }).ToList(),
                 ReplaySha256 = replaySha,
                 // Null rather than 0 when the recording did not carry them: the server
@@ -8508,7 +9353,7 @@ public partial class MultiplayerTab : UserControl
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryReportMatchAsync: reported match lobby={lobbyId} " +
                 $"players={participantIds.Count} duration={durationSeconds}s " +
-                $"map='{replay?.MapName}' " +
+                $"map='{replay?.MapName}' teams={DescribeTeams(teams)} " +
                 $"hostResult={(hostResult.HasValue ? hostResult.Value.ToString("0.0") : "draw (no result)")} " +
                 $"rated={response.Rated} reason={response.UnratedReason ?? "-"}");
             // Visible confirmation — and it has to survive the room closing, which is what
@@ -8580,6 +9425,20 @@ public partial class MultiplayerTab : UserControl
     /// silenced — but it now costs two lines instead of seven, which is what made the old
     /// band worth silencing.</para>
     ///
+    /// <para><b>The third is a RULE rather than a task, and it is here because the rule was
+    /// written in exactly one place the person it punishes never sees.</b> The abandonment
+    /// penalty is spelled out in the create-room dialog's hint — read only by the HOST. A
+    /// guest got the competitive badge, whose tooltip says "this match counts towards the
+    /// rating", and nothing more. The first player it cost 176 points had left at 4:40 of a
+    /// match he had no way of knowing carried a five-minute forfeit line. Showing it here
+    /// is the other half of fixing that; the backend half is that the rule now measures
+    /// when he LEFT rather than when the host reported (see src/elo/abandon.ts).</para>
+    ///
+    /// <para>Reading <see cref="_currentLobbyIsCompetitive"/> — LIVE room state — is correct
+    /// here and only here: this is a pre-match surface shown while the room exists, the same
+    /// field and the same method that already drive the competitive badge. The rule about
+    /// never reading it live belongs to the POST-match path, where the room may be gone.</para>
+    ///
     /// <para>Called from <see cref="RenderRoomPanel"/> rather than once at open, so a host
     /// migration re-words it for the new host for free.</para>
     /// </summary>
@@ -8603,6 +9462,16 @@ public partial class MultiplayerTab : UserControl
             FontWeight = FontWeights.SemiBold,
         });
         if (parts.Length > 1) text.Inlines.Add(new System.Windows.Documents.Run(parts[1]));
+
+        // 1v1 ONLY, not "competitive" — and the difference is not cosmetic. decideByAbandon
+        // refuses anything but two participants, so in a 2v2 or 3v3 room this line threatened a
+        // forfeit the server does not carry out. It said "competitive" when it was written,
+        // before a room could declare a team format.
+        _lobbyWindow.PreflightAbandonText.Text = Strings.Get("MpPreflightAbandon");
+        _lobbyWindow.PreflightAbandonRow.Visibility =
+            Services.Multiplayer.RoomFormats.AbandonmentApplies(CurrentRoomFormat())
+                ? Visibility.Visible
+                : Visibility.Collapsed;
     }
 
     /// <summary>Last time the room was announced in the global chat, for the cooldown.</summary>
@@ -8792,6 +9661,9 @@ public partial class MultiplayerTab : UserControl
         // kills the ~2.5 s "Esperando VPN" flicker before the first timer Tick.
         _lastReportedRadminIp = null;
         MaybeReportRadminIp();
+        // Same reset, same reason: see MaybeReportInGameName.
+        _lastReportedInGameName = null;
+        MaybeReportInGameName();
         KickConnectionPing();
         UpdateLobbyPing();
 
@@ -8842,71 +9714,24 @@ public partial class MultiplayerTab : UserControl
     /// <para>Not a danger confirm: nothing is being destroyed, and painting it red would teach
     /// people to click through the ones that are.</para>
     /// </summary>
-    /// <summary>
-    /// How long into a match to ask whether a recording has appeared yet.
-    ///
-    /// <para>Late enough that a slow map generation or a long loading screen cannot be mistaken
-    /// for "not recording", early enough that the answer would still be worth acting on if this
-    /// ever becomes a real check.</para>
-    /// </summary>
-    private const long RecordingProbeAfterMs = 90_000;
 
-    /// <summary>
-    /// Once per competitive match, record in the log whether AoE3 has created a recording file
-    /// yet. <b>It logs; it does not warn.</b>
-    ///
-    /// <para><b>This is instrumentation for an open question, not a feature.</b> Nobody knows
-    /// whether AoE3 creates the <c>.age3Yrec</c> when the match STARTS or only when it ends. If it
-    /// is at the start, the launcher could tell a competitive host mid-match that nothing is being
-    /// recorded, while there is still time to restart — which would turn the pre-match reminder
-    /// from a nudge into a real check. If it is at the end, the idea is dead and this probe should
-    /// be deleted.</para>
-    ///
-    /// <para><b>Warning now would be worse than not asking.</b> Acting on the unproven half would
-    /// fire a false alarm on every single match if AoE3 turns out to write at the end. So this
-    /// gathers the answer from real players' bundles first — the same approach
-    /// <c>replay-index.txt</c> was added for — and a later version decides.</para>
-    ///
-    /// <para>Competitive host matches only: that is where Record Game was just confirmed, so the
-    /// absence of a file actually means something.</para>
-    /// </summary>
-    private void MaybeProbeRecordingStarted()
-    {
-        if (_recordingProbeDone) return;
-        if (_matchContext?.IsCompetitive != true) return;
-        if (Environment.TickCount64 - _matchTimerStartTicks < RecordingProbeAfterMs) return;
-        _recordingProbeDone = true;
-
-        try
-        {
-            var profile = _currentLobbyModId != null ? ModRegistry.Find(_currentLobbyModId) : null;
-            if (profile == null || _config == null) return;
-            var folder = UserDataService.GetUserDataFolder(
-                UserDataService.ResolveFolderName(profile, _config));
-            if (string.IsNullOrEmpty(folder)) return;
-            var saves = System.IO.Path.Combine(folder, "Savegame");
-            if (!System.IO.Directory.Exists(saves)) return;
-
-            // Newer than the launch, so somebody else's downloaded replay sitting in the same
-            // folder cannot answer yes for us — the same trap FindMatchReplay guards against.
-            var startedUtc = _matchContext?.StartedAtUtc ?? DateTime.UtcNow;
-            var fresh = 0;
-            foreach (var f in System.IO.Directory.EnumerateFiles(saves, "*.age3yrec"))
-            {
-                try { if (System.IO.File.GetLastWriteTimeUtc(f) >= startedUtc) fresh++; }
-                catch { /* one unreadable entry must not end the count */ }
-            }
-
-            DiagnosticLog.Write(
-                $"RecordingProbe: {RecordingProbeAfterMs / 1000}s into a competitive match, " +
-                $"{fresh} recording(s) newer than the launch in '{saves}'. " +
-                "(Answers whether AoE3 writes the file at match START or only at the end.)");
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"MultiplayerTab.MaybeProbeRecordingStarted: {ex.Message}");
-        }
-    }
+    // ANSWERED, and the probe that asked is gone. AoE3 writes the recording at the END of the
+    // match, not at the start — so there is nothing to check at 90 seconds and the idea of
+    // warning a host mid-match that nothing is recording is dead. It is recorded here rather
+    // than deleted with the code, because the next person to have the idea deserves the
+    // measurement instead of a second round of instrumentation.
+    //
+    // The evidence is direct, and it is not the probe's own count. In one player's bundle three
+    // competitive matches each produced a recording whose last-write time was 28, 42 and 54
+    // seconds BEFORE the launcher analysed it — and that analysis runs the instant the game
+    // process exits. Three out of three, written as the match ended.
+    //
+    // The probe's counts were consistent with that (0, 1, 0 recordings newer than the launch),
+    // and the 1 has no explanation: the only recording of that session carried a timestamp two
+    // minutes and twenty seconds EARLIER than the launch it was compared against. Left written
+    // down rather than smoothed over. It does not move the conclusion — a file's timestamp is
+    // direct evidence and a count is not — but if this ever comes up again, that reading is the
+    // loose end.
 
     /// <summary>
     /// Write down whether this competitive match produced a recording, so the next start can lead
@@ -9024,8 +9849,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private bool ResultHoldActive()
         => Services.Multiplayer.RoomMatchState.HoldLeave(
-            _matchContext?.IsCompetitive ?? false,
-            _matchContext?.IsHost ?? false,
+            ResultContext()?.IsCompetitive ?? false,
             _resultPhase,
             (DateTime.UtcNow - _resultPhaseSinceUtc).TotalSeconds);
 
@@ -9074,9 +9898,16 @@ public partial class MultiplayerTab : UserControl
                 await MpAlertOverlay.NoticeAsync(
                     _lobbyWindow.LobbyRootGrid,
                     Strings.Get("MpLeaveBlockedTitle"),
-                    Strings.Get(_resultPhase == Services.Multiplayer.RoomMatchState.ResultPhase.SendingResult
-                        ? "MpLeaveBlockedReporting"
-                        : "MpLeaveBlockedReading"),
+                    // Host first, because BOTH of the phase-specific messages are about the
+                    // report — "the match will not count for either of you" — and that is simply
+                    // false for a guest, who does not report. From his side the whole window is
+                    // one thing, whichever phase it is in: the result is seconds away, and
+                    // leaving now costs him the sight of it and nothing else.
+                    Strings.Get(ResultContext()?.IsHost != true
+                        ? "MpLeaveBlockedWaitingHost"
+                        : _resultPhase == Services.Multiplayer.RoomMatchState.ResultPhase.SendingResult
+                            ? "MpLeaveBlockedReporting"
+                            : "MpLeaveBlockedReading"),
                     Strings.Get("MpAlertOk"));
             }
             return false;
@@ -9116,6 +9947,15 @@ public partial class MultiplayerTab : UserControl
     {
         _lobbyPingTimer?.Stop();
         _lobbyPingTimer = null;
+
+        // The match phase belongs to the room, and the room is gone. Left at Result or
+        // AwaitingResult it survives into the NEXT room the player opens, where ApplyMatchPhaseUi
+        // reads it and paints a fresh lobby with the result overlay up and the whole left column
+        // collapsed — no roster, no Ready, no Start, and nothing on screen explaining why.
+        if (_matchPhase is MatchPhase.Result or MatchPhase.AwaitingResult)
+            _matchPhase = MatchPhase.Lobby;
+        ClearPendingResult();
+        SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.None);
 
         var s = _session;
         if (s == null) return;
@@ -9161,8 +10001,9 @@ public partial class MultiplayerTab : UserControl
             ? Visibility.Visible : Visibility.Collapsed;
         _lobbyWindow!.InGameOverlay.Visibility = _matchPhase == MatchPhase.InGame
             ? Visibility.Visible : Visibility.Collapsed;
-        _lobbyWindow!.MatchResultOverlay.Visibility = _matchPhase == MatchPhase.Result
-            ? Visibility.Visible : Visibility.Collapsed;
+        _lobbyWindow!.MatchResultOverlay.Visibility =
+            _matchPhase is MatchPhase.Result or MatchPhase.AwaitingResult
+                ? Visibility.Visible : Visibility.Collapsed;
 
         // And HIDE what those two overlays stand in front of, rather than trusting them to
         // cover it. They are opaque Borders in the same cell as the left column, which is
@@ -9173,7 +10014,8 @@ public partial class MultiplayerTab : UserControl
         // symptom was the Ready/Leave pair showing in a band under "Abort match".
         // Collapsing the column also stops measuring and rendering a whole panel that
         // nobody can see for the length of a match.
-        bool columnCovered = _matchPhase is MatchPhase.InGame or MatchPhase.Result;
+        bool columnCovered =
+            _matchPhase is MatchPhase.InGame or MatchPhase.Result or MatchPhase.AwaitingResult;
         _lobbyWindow!.LobbyLeftColumn.Visibility = columnCovered
             ? Visibility.Collapsed : Visibility.Visible;
 
@@ -9325,10 +10167,14 @@ public partial class MultiplayerTab : UserControl
         _matchPhase = MatchPhase.InGame;
         _aoe3Process = gameProcess;
 
+        // A new match supersedes whatever the last one was still owed. Without this the ceiling
+        // would be the only thing clearing it, and a quick rematch would carry a stale context
+        // into a frame meant for the game just started.
+        ClearPendingResult();
+
         if (!resume)
         {
             _matchTimerStartTicks = Environment.TickCount64;
-            _recordingProbeDone = false;
 
             // Capture the facts of this match — roster, room, our role, the clock — so the
             // report at the end reads them instead of asking a room that may be gone by then.
@@ -9338,6 +10184,7 @@ public partial class MultiplayerTab : UserControl
             _canIdentifyPlayerInReplay = true;
             _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
             _lastLocalReadDetail = null;
+            _lastRecordingPath = null;
             _outcomeRebuilder = null;
             try
             {
@@ -9366,7 +10213,9 @@ public partial class MultiplayerTab : UserControl
                 _session?.CurrentUser?.Id,
                 _isHostInCurrentRoom,
                 DateTime.UtcNow,
-                _currentLobbyIsCompetitive);
+                _currentLobbyIsCompetitive,
+                InGameNamesInRoom(),
+                CurrentRoomFormat());
 
             // Snapshot the Radmin adapter's byte counter so the TRAFFIC stat
             // can show bytes moved during THIS match (delta).
@@ -9383,6 +10232,8 @@ public partial class MultiplayerTab : UserControl
         // yet (AdapterIp null). Re-checked each tick in case they connect later.
         _lastReportedRadminIp = null;
         MaybeReportRadminIp();
+        _lastReportedInGameName = null;
+        MaybeReportInGameName();
 
         CancelLocalCountdownIfRunning();
         ApplyMatchPhaseUi();
@@ -9395,11 +10246,7 @@ public partial class MultiplayerTab : UserControl
             // independent of this timer to stay smooth.
             Interval = TimeSpan.FromSeconds(1),
         };
-        _inGameTickTimer.Tick += (_, _) =>
-        {
-            RefreshInGamePanel();
-            MaybeProbeRecordingStarted();
-        };
+        _inGameTickTimer.Tick += (_, _) => RefreshInGamePanel();
         _inGameTickTimer.Start();
         RefreshInGamePanel();
     }
@@ -9521,12 +10368,26 @@ public partial class MultiplayerTab : UserControl
     {
         // Only for a match we were actually in. A spectator who joined the room without
         // playing gets the frame too, and has no business being shown a result card.
-        var ctx = _matchContext;
-        if (ctx == null && _matchPhase != MatchPhase.InGame) return;
-        if (ctx == null) return;
+        // ResultContext, not _matchContext: on a guest the exit handler has already handed the
+        // match over to the pending slot by the time this arrives. Reading the live field alone
+        // is what silently dropped this frame — see _pendingResultContext.
+        var ctx = ResultContext();
+        if (ctx == null)
+        {
+            // Logged, because a bare return here is indistinguishable from a frame that never
+            // arrived, and that is precisely what made the original fault take an hour to find.
+            DiagnosticLog.Write(
+                "match_reported: no match context, live or pending — ignoring " +
+                $"(phase={_matchPhase})");
+            return;
+        }
 
         var myId = _session?.CurrentUser?.Id ?? ctx.ReporterUserId ?? "";
-        if (string.IsNullOrEmpty(myId)) return;
+        if (string.IsNullOrEmpty(myId))
+        {
+            DiagnosticLog.Write("match_reported: no user id to match against — ignoring");
+            return;
+        }
 
         var report = new ReportMatchResponse
         {
@@ -9639,6 +10500,7 @@ public partial class MultiplayerTab : UserControl
 
             _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
             _lastLocalReadDetail = null;
+            _lastRecordingPath = early.Info.File.FullName;
             await TryConfirmMatchAsync(ctx, early.Info, allowHost: true);
             RepaintMatchResult();
         }
@@ -9678,7 +10540,11 @@ public partial class MultiplayerTab : UserControl
         // The HOST already has everything: the POST answered with every participant's
         // rating change, so their card costs no extra request. Everyone else has to go
         // looking for it — see ResolveGuestResultAsync.
-        var context = ctx ?? _matchContext;
+        var context = ctx ?? ResultContext();
+        if (!string.IsNullOrEmpty(report?.MatchId)) _lastResultMatchId = report!.MatchId;
+
+        // The wait is over, whichever way it ended.
+        ClearPendingResult();
         if (report != null && context != null)
         {
             // Captured rather than painted once: the local reading of the recording can land
@@ -9757,7 +10623,8 @@ public partial class MultiplayerTab : UserControl
             // generic "nobody won" — the one thing the server cannot explain is why our
             // own reading of the recording failed.
             _lastLocalReadFailure,
-            _lastLocalReadDetail);
+            _lastLocalReadDetail,
+            _lastRecordingPath);
     }
 
     /// <summary>
@@ -9819,7 +10686,10 @@ public partial class MultiplayerTab : UserControl
                     // other door. Our own reading knows better and belongs on this card too.
                     null,
                     _lastLocalReadFailure,
-                    _lastLocalReadDetail);
+                    _lastLocalReadDetail,
+                    // The guest reads his own recording too — AnalyseMatchReplayAsync is not
+                    // gated on the host — so this card can point at a file just as the host's can.
+                    _lastRecordingPath);
                 _outcomeRebuilder = build;
                 ShowMatchResult(build());
                 return;
@@ -9849,7 +10719,14 @@ public partial class MultiplayerTab : UserControl
     private void ShowMatchResult(MatchOutcomeView model)
     {
         var host = _lobbyWindow?.MatchResultHost;
-        if (host == null) return;
+        if (host == null)
+        {
+            // The window is gone — the player closed it, or a teardown took it — and until now
+            // the result was computed and then dropped on the floor. Nothing here reopens the
+            // window: they closed it on purpose. It just stops being a secret.
+            AnnounceResultWithoutAWindow(model);
+            return;
+        }
         host.Children.Clear();
         host.Children.Add(MatchResultCard.Build(model, new MatchResultCard.Actions(
             // Rematch is not offered yet: it has to leave the closed room BEFORE creating
@@ -9868,16 +10745,35 @@ public partial class MultiplayerTab : UserControl
     {
         var host = _lobbyWindow?.MatchResultHost;
         if (host == null) return;
-        host.Children.Clear();
-        host.Children.Add(new TextBlock
+
+        var stack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        stack.Children.Add(new TextBlock
         {
             Text = Strings.Get("MpResultPendingTimeout"),
             Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
             FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
             TextWrapping = TextWrapping.Wrap,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
         });
+
+        // Without this the panel is a dead end: it covers the left column, and the Leave button
+        // it covers is the only other way out of the room.
+        var back = new Button
+        {
+            Content = Strings.Get("MpResultBackToRooms"),
+            Style = (Style)Application.Current.FindResource("MpSecondaryButton"),
+            Margin = new Thickness(0, 14, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        back.Click += (_, _) => ExitResultPhase();
+        stack.Children.Add(back);
+
+        host.Children.Clear();
+        host.Children.Add(stack);
     }
 
     /// <summary>
@@ -9890,9 +10786,180 @@ public partial class MultiplayerTab : UserControl
     private void ExitResultPhase()
     {
         _matchPhase = MatchPhase.Lobby;
+        ClearPendingResult();
         // The card is gone; a late reading must not repaint a window that moved on.
         _outcomeRebuilder = null;
         CloseLobbyWindow();
+    }
+
+    /// <summary>
+    /// Say how the match ended when there is no room window left to say it in.
+    ///
+    /// <para>Both surfaces on purpose, and they do different jobs: the toast is seen NOW (and
+    /// asks for the desktop, since the launcher may well be minimised by this point), while the
+    /// bell is what the player can still find in ten minutes. The window is deliberately not
+    /// reopened — they closed it.</para>
+    /// </summary>
+    private void AnnounceResultWithoutAWindow(MatchOutcomeView model)
+    {
+        var verdict = model.Verdict switch
+        {
+            Services.Multiplayer.MatchVerdict.Win => Strings.Get("MpResultWin"),
+            Services.Multiplayer.MatchVerdict.Loss => Strings.Get("MpResultLoss"),
+            _ => Strings.Get("MpResultPendingTimeout"),
+        };
+        var delta = model.RatingDelta;
+        var body = delta.HasValue
+            ? $"{verdict}  ({delta.Value:+#;-#;0} ELO)"
+            : verdict;
+
+        try
+        {
+            _showAppToast?.Invoke(new AppToast.ToastOptions(
+                "\U0001F3C1", Strings.Get("MpResultTitle"), body,
+                System.Array.Empty<AppToast.ToastAction>(),
+                AutoDismissMs: 12000, PreferDesktop: true));
+        }
+        catch (Exception ex) { DiagnosticLog.Write($"Result toast failed: {ex.Message}"); }
+
+        // Only with an id: the bell dedupes on it, and a blank one would let the same match
+        // arrive twice if the server later sends its own match_rated for it.
+        if (string.IsNullOrEmpty(_lastResultMatchId)) return;
+        try
+        {
+            _onMatchRated?.Invoke(new Models.Multiplayer.MatchRatedNotice(
+                _lastResultMatchId!, model.ModId ?? "", model.MapName,
+                model.Verdict switch
+                {
+                    Services.Multiplayer.MatchVerdict.Win => 1.0,
+                    Services.Multiplayer.MatchVerdict.Loss => 0.0,
+                    _ => (double?)null,
+                },
+                model.RatingBefore, model.RatingAfter));
+        }
+        catch (Exception ex) { DiagnosticLog.Write($"Result bell failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Remember the match we are owed a result for, and start the clock that gives up on it.
+    /// </summary>
+    private void SetPendingResultContext(Services.Multiplayer.MatchContext ctx)
+    {
+        // Idempotent, and that matters: EnterAwaitingResultPhase sets this on the way through
+        // OnGameExitedAsync and the exit handler's own finally sets it again a few seconds later.
+        // Restamping there would restart the ceiling from the END of the retry ladder rather than
+        // from the moment the game closed — the same reasoning SetResultPhase already encodes.
+        if (ReferenceEquals(_pendingResultContext, ctx)) return;
+        _pendingResultContext = ctx;
+        _pendingResultSinceUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Forget it, and stop the clock. Safe to call when there is nothing pending.</summary>
+    private void ClearPendingResult()
+    {
+        _pendingResultContext = null;
+        _resultWaitTimer?.Stop();
+        _resultWaitTimer = null;
+    }
+
+    /// <summary>
+    /// Our game is closed, the match is not settled, and there is nothing left for this launcher
+    /// to do but wait for the host.
+    ///
+    /// <para><b>This is not <see cref="EnterResultPhase"/> with a different label, and the
+    /// difference is the reason the phase exists.</b> That method calls <c>StopReconnect</c> —
+    /// and the socket it hangs up on is the one the <c>match_reported</c> frame still has to
+    /// arrive on. Entering the result phase here would hang up on the answer we are waiting
+    /// for.</para>
+    /// </summary>
+    private void EnterAwaitingResultPhase(Services.Multiplayer.MatchContext ctx)
+    {
+        SetPendingResultContext(ctx);
+        SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.WaitingForHost);
+        _matchPhase = MatchPhase.AwaitingResult;
+        ApplyMatchPhaseUi();
+        ShowResultWaitingForHost();
+
+        DiagnosticLog.Write(
+            $"Awaiting the host's result for lobby={ctx.LobbyId} " +
+            $"(ceiling {Services.Multiplayer.RoomMatchState.ResultWaitCeilingSeconds:0}s).");
+
+        _resultWaitTimer?.Stop();
+        _resultWaitTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _resultWaitTimer.Tick += (_, _) =>
+        {
+            // The hold on the Leave button releases itself on the much shorter grace; this only
+            // decides when to stop SAYING a result is coming.
+            var waited = (DateTime.UtcNow - _pendingResultSinceUtc).TotalSeconds;
+            if (waited < Services.Multiplayer.RoomMatchState.ResultWaitCeilingSeconds) return;
+            DiagnosticLog.Write(
+                $"Gave up waiting for the host's result after {waited:0}s.");
+            FinishWaitingUnresolved();
+        };
+        _resultWaitTimer.Start();
+    }
+
+    /// <summary>
+    /// Stop promising a result that is not coming, without pretending the match did not happen.
+    ///
+    /// <para>The phase is deliberately left at <c>AwaitingResult</c> so the explanation stays on
+    /// screen; the card's own "back to rooms" button is the way out. Dropping straight back to
+    /// the lobby would replace the answer with a room the player can no longer start.</para>
+    /// </summary>
+    private void FinishWaitingUnresolved()
+    {
+        ClearPendingResult();
+        SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.None);
+        ShowResultUnavailable();
+    }
+
+    /// <summary>
+    /// The guest's waiting card: what is being waited for, and — when their game closed while the
+    /// room kept playing — the way back into it.
+    ///
+    /// <para>That second half is not a nicety. The launcher cannot tell "my game closed because
+    /// the match ended" from "my game crashed mid-match", so the card offers both readings rather
+    /// than guessing one: if the match really did end, the frame replaces this within seconds; if
+    /// it did not, the player has the same way back in they would have had anyway.</para>
+    /// </summary>
+    private void ShowResultWaitingForHost()
+    {
+        var host = _lobbyWindow?.MatchResultHost;
+        if (host == null) return;
+
+        var stack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        stack.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("MpResultWaitingHost"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Center,
+        });
+
+        if (Services.Multiplayer.RoomMatchState.ShouldOfferRejoin(
+                _roomMatchLive, ourGameRunning: false, _isHostInCurrentRoom))
+        {
+            var rejoin = new Button
+            {
+                Content = Strings.Get("MpRoomRejoinGame"),
+                Style = (Style)Application.Current.FindResource("MpSecondaryButton"),
+                Margin = new Thickness(0, 14, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+            rejoin.Click += (_, _) => RejoinGame();
+            stack.Children.Add(rejoin);
+        }
+
+        host.Children.Clear();
+        host.Children.Add(stack);
     }
 
     /// <summary>
@@ -10110,6 +11177,9 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>Our last-reported Radmin IP, so we don't re-send an unchanged one.</summary>
     private string? _lastReportedRadminIp;
+
+    /// <summary>Our last-reported AoE3 profile name, so an unchanged one is not re-sent.</summary>
+    private string? _lastReportedInGameName;
     private bool _peerPingInFlight;
 
     /// <summary>
@@ -10139,6 +11209,37 @@ public partial class MultiplayerTab : UserControl
         if (sock == null) return;
         _lastReportedRadminIp = ip;
         _ = sock.SendSetRadminIpAsync(ip);
+    }
+
+    /// <summary>
+    /// Tell the room which AoE3 profile we play under, so the host can work out who was on which
+    /// team when the match is reported.
+    ///
+    /// <para>Reads it per MOD from the room's own mod, not the dashboard's: those differ whenever
+    /// somebody hosts a room for a mod other than the one on screen, and the profile name is a
+    /// property of the mod's own My Games folder.</para>
+    ///
+    /// <para>Shaped exactly like <see cref="MaybeReportRadminIp"/> above, INCLUDING the reset of
+    /// the dedup guard on room entry — without that, a second room in the same session short-
+    /// circuits on the unchanged name, never sends it to the new socket, and every team game
+    /// played from that room silently loses its teams. That precise bug already happened once
+    /// with the Radmin IP.</para>
+    /// </summary>
+    private void MaybeReportInGameName()
+    {
+        if (_config == null) return;
+        var profile = _currentLobbyModId != null ? ModRegistry.Find(_currentLobbyModId) : null;
+        if (profile == null) return;
+
+        var name = UserDataService.GetInGameName(profile, _config);
+        if (string.IsNullOrWhiteSpace(name)
+            || string.Equals(name, _lastReportedInGameName, StringComparison.Ordinal))
+            return;
+
+        var sock = _session?.RoomSocket;
+        if (sock == null) return;
+        _lastReportedInGameName = name;
+        _ = sock.SendSetInGameNameAsync(name!);
     }
 
     /// <summary>

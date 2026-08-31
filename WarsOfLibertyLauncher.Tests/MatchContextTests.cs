@@ -285,4 +285,61 @@ public class MatchContextTests
         Assert.True(ctx.IsCompetitive);
         Assert.True(ctx.CanReport(Started.AddMinutes(20), 180).Ok);
     }
+
+    // ---------- the in-game names, frozen with everything else ----------
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for team games, and the reason these names live here rather than
+    /// being read when the match is reported.
+    ///
+    /// <para>The player who leaves the room first is, reliably, the one who just lost — so by
+    /// report time the live roster no longer holds their AoE3 name. A team map is all-or-nothing
+    /// by design, so a single missing name refuses the whole thing: reading these late would
+    /// lose the teams of precisely the matches this exists for.</para>
+    /// </summary>
+    [Fact]
+    public void TheInGameNamesAreFrozenAtStart()
+    {
+        var live = new Dictionary<string, string> { [Me] = "Gorgorito", [Rival] = "Alucard" };
+
+        var ctx = MatchContext.Capture(
+            new[] { Me, Rival }, "lobby-1", "wol", Me, true, Started, false, live);
+
+        // The room moves on — the loser leaves and their name goes with them.
+        live.Remove(Rival);
+
+        Assert.NotNull(ctx.InGameNames);
+        Assert.Equal(2, ctx.InGameNames!.Count);
+        Assert.Equal("Alucard", ctx.InGameNames[Rival]);
+    }
+
+    /// <summary>
+    /// A name for somebody outside the roster would make the head count disagree with the
+    /// recording's, which refuses the whole map — so spectators and late joiners are dropped
+    /// here rather than allowed to poison it.
+    /// </summary>
+    [Fact]
+    public void OnlyThePeopleWhoPlayedKeepTheirName()
+    {
+        var ctx = MatchContext.Capture(
+            new[] { Me, Rival }, "lobby-1", "wol", Me, true, Started, false,
+            new Dictionary<string, string>
+            {
+                [Me] = "Gorgorito",
+                [Rival] = "Alucard",
+                ["someone-else"] = "Watching",
+                ["blank"] = "   ",
+            });
+
+        Assert.Equal(new[] { Me, Rival }.OrderBy(x => x, StringComparer.Ordinal),
+            ctx.InGameNames!.Keys.OrderBy(x => x, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void NoNamesReportedIsNotAnEmptyMap()
+    {
+        // Null, not empty: "nobody told us" and "we asked and there were none" would look the
+        // same to the team map otherwise, and only one of them is worth logging about.
+        Assert.Null(Match().InGameNames);
+    }
 }

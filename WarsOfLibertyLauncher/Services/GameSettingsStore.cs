@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -100,38 +100,109 @@ public static class GameSettingsStore
     }
 
     /// <summary>
+    /// What <see cref="ImportFrom"/> did — and, when it did nothing, WHY.
+    ///
+    /// <para><b>It used to be a bare bool, and that was a real defect long before anything
+    /// depended on it.</b> Four unrelated causes returned the same <c>false</c>, so the settings
+    /// page told a player whose mod had simply never been launched that "the settings couldn't be
+    /// read" — which is not true and names nothing to fix. Two of those causes did not even
+    /// reach the log.</para>
+    ///
+    /// <para>The one distinction that carries weight is <see cref="NoTargetProfile"/>: it means
+    /// <b>not yet</b>, not <b>no</b>. Same shape and same reason as
+    /// <see cref="GameRecordingWrite.NoProfile"/> right below.</para>
+    /// </summary>
+    public enum SettingsImportResult
+    {
+        /// <summary>The target profile now carries the source's graphics, sound and hotkeys.</summary>
+        Imported,
+        /// <summary>
+        /// The target mod has no profile on disk. Age of Empires III writes one on its FIRST run,
+        /// so a mod that was just installed and never opened lands here — and this is the whole
+        /// reason the import can be left pending instead of discarded.
+        /// </summary>
+        NoTargetProfile,
+        /// <summary>
+        /// The source has no profile, or none carrying anything we share. Not a "not yet": it
+        /// will read the same on every future launch.
+        /// </summary>
+        SourceUnavailable,
+        /// <summary>Unreadable XML, or the write failed. The target is left exactly as it was.</summary>
+        Failed,
+    }
+
+    /// <summary>
+    /// Whether an import that did not happen is worth trying again on the next launch.
+    ///
+    /// <para>Pure, so the one rule that decides between "wait" and "give up" is pinned by a test
+    /// rather than inferred from the I/O around it — the same treatment
+    /// <see cref="PlanGameRecording"/> gets.</para>
+    ///
+    /// <para><b>Only a missing target profile waits.</b> Everything else describes something that
+    /// will not change by itself, and retrying it every launch would be noise forever — while
+    /// giving up on a mod that simply has not been opened yet would silently throw away a choice
+    /// the player made during the install.</para>
+    /// </summary>
+    public static bool KeepPending(SettingsImportResult result)
+        => result == SettingsImportResult.NoTargetProfile;
+
+    /// <summary>
     /// Copies <paramref name="source"/>'s settings straight into <paramref name="target"/>, on
-    /// demand — the "import settings from…" button.
+    /// demand — the "import settings from…" button, and the choice made in the install dialog.
     ///
     /// <para>Deliberately does NOT touch the shared copy: this is a one-off the player asked for
     /// between two named mods, not a statement about which settings are canonical. A mod outside
     /// the sharing group can both give and receive an import without joining it.</para>
     /// </summary>
-    public static bool ImportFrom(ModProfile source, ModProfile target, LauncherConfig config)
+    public static SettingsImportResult ImportFrom(
+        ModProfile source, ModProfile target, LauncherConfig config)
     {
         try
         {
-            var from = ResolveProfilePath(source, config);
+            // The TARGET is asked first, and separately, because its absence is the only answer
+            // here that means "try again later" — see SettingsImportResult.NoTargetProfile.
             var to = ResolveProfilePath(target, config);
-            if (from == null || to == null) return false;
+            if (to == null)
+            {
+                DiagnosticLog.Write(
+                    $"GameSettings: '{target.DisplayName}' has no profile yet — it is written on the " +
+                    "game's first run, so the import waits.");
+                return SettingsImportResult.NoTargetProfile;
+            }
+
+            var from = ResolveProfilePath(source, config);
+            if (from == null)
+            {
+                DiagnosticLog.Write($"GameSettings: '{source.DisplayName}' has no profile to copy from.");
+                return SettingsImportResult.SourceUnavailable;
+            }
 
             var shared = GameSettingsSync.ExtractSections(ReadProfile(from));
-            if (shared == null) return false;
+            if (shared == null)
+            {
+                DiagnosticLog.Write(
+                    $"GameSettings: '{source.DisplayName}' carries no settings worth copying.");
+                return SettingsImportResult.SourceUnavailable;
+            }
 
             var grafted = GameSettingsSync.Graft(ReadProfile(to), shared);
-            if (grafted == null) return false;
+            if (grafted == null)
+            {
+                DiagnosticLog.Write($"GameSettings: '{target.DisplayName}' profile could not be read.");
+                return SettingsImportResult.Failed;
+            }
 
             BackUpOnce(to);
             File.WriteAllText(to, grafted, Encoding.Unicode);
             DiagnosticLog.Write(
                 $"GameSettings: imported '{source.DisplayName}' settings into '{target.DisplayName}'.");
-            return true;
+            return SettingsImportResult.Imported;
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write(
                 $"GameSettings: import '{source.DisplayName}' → '{target.DisplayName}' failed: {ex.Message}");
-            return false;
+            return SettingsImportResult.Failed;
         }
     }
 
@@ -151,6 +222,57 @@ public static class GameSettingsStore
         if (isStockGame) return false;
         if (string.IsNullOrWhiteSpace(userDataFolder)) return false;
         return installed;
+    }
+
+    /// <summary>
+    /// Carry out the copy the player asked for while installing this mod, if one is still owed.
+    ///
+    /// <para>Runs on every launch and is a no-op with no marker set, so the cost for everyone
+    /// else is one string comparison. Best-effort throughout: this happens moments before the
+    /// game starts, and the worst outcome would be a launch that fails over a convenience.</para>
+    ///
+    /// <para><b>The marker survives a launch that found no profile</b>, because that is exactly
+    /// the case it exists for: the very first run of a freshly installed mod is what CREATES the
+    /// profile, so the copy lands on the run after it. Any other outcome clears it — see
+    /// <see cref="KeepPending"/>.</para>
+    ///
+    /// <para>Returns what happened, for the caller's log. The install path uses the same method
+    /// so a reinstall — whose profile is already there — gets its settings immediately instead of
+    /// waiting for a launch it does not need.</para>
+    /// </summary>
+    public static SettingsImportResult? ApplyPendingImport(ModProfile target, LauncherConfig config)
+    {
+        if (target == null || config == null) return null;
+
+        // Read THROUGH the dictionary rather than GetState: merely launching a mod must not
+        // create a blank state entry for one the player never configured. Same rule the mod
+        // switcher and UserDataService.ResolveFolderName follow.
+        if (config.Mods == null
+            || !config.Mods.TryGetValue(target.Id, out var state)
+            || state == null
+            || string.IsNullOrWhiteSpace(state.PendingSettingsImportFrom))
+            return null;
+
+        var sourceId = state.PendingSettingsImportFrom;
+        var source = ModRegistry.Find(sourceId);
+        if (source == null)
+        {
+            // The mod was removed from the catalog, or uninstalled, between the install and now.
+            // Nothing will bring it back, so stop owing the copy.
+            DiagnosticLog.Write(
+                $"GameSettings: the pending import for '{target.Id}' named '{sourceId}', which no " +
+                "longer resolves — dropping it.");
+            state.PendingSettingsImportFrom = "";
+            SaveQuietly(config);
+            return SettingsImportResult.SourceUnavailable;
+        }
+
+        var result = ImportFrom(source, target, config);
+        if (KeepPending(result)) return result;
+
+        state.PendingSettingsImportFrom = "";
+        SaveQuietly(config);
+        return result;
     }
 
     /// <summary>Whether this mod actually has a profile on disk to read settings from.</summary>

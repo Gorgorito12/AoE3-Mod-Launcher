@@ -1,10 +1,13 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
 
 namespace WarsOfLibertyLauncher;
@@ -22,6 +25,15 @@ public partial class InstallFolderDialog : Window
 
     /// <summary>The detected AoE3 source path (for cloning), or null.</summary>
     public string? Aoe3SourcePath { get; private set; }
+
+    /// <summary>
+    /// The mod the player chose to copy graphics, sound and hotkeys from, or null for none.
+    ///
+    /// <para>An answer, not an action: this dialog never touches a profile. The caller records it
+    /// and the copy happens when there is somewhere to put it — see
+    /// <c>ModState.PendingSettingsImportFrom</c>.</para>
+    /// </summary>
+    public string? CopySettingsFromModId { get; private set; }
 
     public InstallFolderDialog(string defaultFolder)
         : this(defaultFolder, null, null, "Wars of Liberty") { }
@@ -55,8 +67,14 @@ public partial class InstallFolderDialog : Window
     /// hidden and the OK button stops waiting for it. Every other install type clones and
     /// keeps the requirement — without a source the result is an unplayable mod-only folder.
     /// </param>
+    /// <param name="settingsSources">
+    /// Mods this one may copy graphics, sound and hotkeys from — already filtered by the caller,
+    /// which owns the "is it installed" check. An empty list hides the whole row, which is what
+    /// a first-ever install gets: a question nobody could answer is worse than no question.
+    /// </param>
     public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel,
-        string modDisplayName, bool requiresAoe3Source = true)
+        string modDisplayName, bool requiresAoe3Source = true,
+        IReadOnlyList<ModProfile>? settingsSources = null)
     {
         InitializeComponent();
         _diskSpaceDefaultBrush = DiskSpaceText.Foreground;
@@ -72,10 +90,38 @@ public partial class InstallFolderDialog : Window
         FolderTextBox.SelectAll();
         FolderTextBox.Focus();
 
+        BuildCopySettingsRow(settingsSources);
+
         UpdateAoE3Display();
         UpdateDiskSpace();
         UpdateFirstRunWarning();
     }
+
+    /// <summary>
+    /// Fill the "copy my settings from" row, or hide it when there is nothing to offer.
+    ///
+    /// <para>The list arrives already filtered — the eligibility rules live in
+    /// <c>GameSettingsStore.CanImportFrom</c> so they stay testable and are not restated here.
+    /// This method only decides whether the row is worth showing at all.</para>
+    /// </summary>
+    private void BuildCopySettingsRow(IReadOnlyList<ModProfile>? sources)
+    {
+        if (sources == null || sources.Count == 0)
+        {
+            CopySettingsRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        foreach (var p in sources)
+            CopySettingsCombo.Items.Add(new ComboBoxItem { Content = p.DisplayName, Tag = p.Id });
+
+        CopySettingsCombo.SelectedIndex = 0;
+        CopySettingsRow.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>The combo is inert until the box is ticked, so "no" stays the default.</summary>
+    private void CopySettingsCheck_Click(object sender, RoutedEventArgs e)
+        => CopySettingsCombo.IsEnabled = CopySettingsCheck.IsChecked == true;
 
     /// <summary>
     /// Shows a non-blocking reminder to open the original Age of Empires III
@@ -117,6 +163,8 @@ public partial class InstallFolderDialog : Window
         BrowseButton.Content = Strings.Get("ChangePathButton");
         BrowseAoE3InDialogButton.Content = Strings.Get("ChangePathButton");
         SearchAoe3Button.Content = Strings.Get("DlgSearchAoe3Button");
+        CopySettingsCheck.Content = Strings.Get("DlgInstallCopySettings");
+        CopySettingsHint.Text = Strings.Get("DlgInstallCopySettingsHint");
         OkButton.Content = Strings.Get("BtnInstall");
         CancelButton.Content = Strings.Get("BtnCancel");
     }
@@ -537,6 +585,14 @@ public partial class InstallFolderDialog : Window
         }
 
         SelectedFolder = chosen;
+        // Read the choice HERE, not as the combo changes: a selection the player made and then
+        // unticked must not travel, and Cancel must leave nothing behind.
+        CopySettingsFromModId = CopySettingsCheck.IsChecked == true
+            && CopySettingsCombo.SelectedItem is ComboBoxItem item
+            && item.Tag is string id
+            && !string.IsNullOrWhiteSpace(id)
+                ? id
+                : null;
         DialogResult = true;
     }
 

@@ -330,6 +330,18 @@ public partial class LauncherSettingsDialog : Window
         // reads as registered here. We deliberately don't parse that blob — Windows
         // honours its own disable regardless of what we write.
         StartWithWindowsCheck.IsChecked = StartupRegistrationService.IsRegistered();
+
+        // ...and the second caveat, which is worse because it is invisible: the Run key lives in
+        // the hive of the account the launcher RUNS as. Under someone else's account that hive is
+        // not the one Windows reads at logon, so the box above can read "on" while nothing ever
+        // starts. IsRegistered() is left alone — it reports truthfully about its own hive — and
+        // the missing piece is said here instead.
+        var account = Services.RunningAccount.Current();
+        StartWithWindowsAccountWarning.Text = account.Mismatch
+            ? Strings.Format("DlgSettingsStartupWrongAccount", account.ProcessUser, account.SessionUser)
+            : "";
+        StartWithWindowsAccountWarning.Visibility =
+            account.Mismatch ? Visibility.Visible : Visibility.Collapsed;
         EnableJoinLinksCheck.IsChecked = _config.EnableJoinLinks;
         GameRecordingCheck.IsChecked = _config.EnableGameRecording;
         // Shown the positive way round — the config stores "muted", the box offers "remind me".

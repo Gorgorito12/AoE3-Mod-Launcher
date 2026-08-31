@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using WarsOfLibertyLauncher.Models.Multiplayer;
@@ -12,6 +12,64 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// </summary>
 public static class CommunityStatsView
 {
+    /// <summary>
+    /// A community match reduced to what the strip draws: was it decided, and by whom.
+    /// </summary>
+    /// <param name="Decided">A clean 1v1 whose winner is known. Everything else is false.</param>
+    /// <param name="Winner">The winner's name, or null when <paramref name="Decided"/> is false.</param>
+    /// <param name="Loser">The loser's name, same rule.</param>
+    public sealed record CommunityMatchLine(bool Decided, string? Winner, string? Loser);
+
+    /// <summary>
+    /// Who beat whom in this match — or nobody, which is the usual answer.
+    ///
+    /// <para><b>Only a two-player match with one winner and one loser is described.</b>
+    /// Most stored matches carry 0.5 for everyone because the outcome could not be read,
+    /// and past two players a single reported loser does not name a winner at all. In both
+    /// cases the caller falls back to naming the mod and the map, which is what the card
+    /// has always shown.</para>
+    ///
+    /// <para>Built on <see cref="MatchParticipantsView.Build"/> so the ordering and the
+    /// 0.5 rule live in one place: this method never looks at a raw score itself.</para>
+    /// </summary>
+    public static CommunityMatchLine Describe(CommunityMatch? match)
+    {
+        var lines = MatchParticipantsView.Build(match?.Participants, null);
+        if (lines.Count != 2) return new CommunityMatchLine(false, null, null);
+        if (lines[0].Verdict != MatchVerdict.Win) return new CommunityMatchLine(false, null, null);
+        if (lines[1].Verdict != MatchVerdict.Loss) return new CommunityMatchLine(false, null, null);
+        return new CommunityMatchLine(true, lines[0].Name, lines[1].Name);
+    }
+
+    /// <summary>
+    /// How many decided games the ladder demands, or null when the server did not say.
+    ///
+    /// <para>A backend older than the field deserializes it to 0, and "you get in with 0
+    /// decided matches" is worse than saying nothing — it is both wrong and impossible.
+    /// The empty-state note is shown only when there is a real number to put in it.</para>
+    /// </summary>
+    public static int? RequiredDecided(CommunityStats? stats)
+        => stats is { MinDecided: > 0 } ? stats.MinDecided : null;
+
+    /// <summary>
+    /// The community's recent numbers, or null when this backend does not report them.
+    ///
+    /// <para>Null is not zero. A backend that predates the field tells us nothing, and
+    /// drawing zeroes for it would report a dead community — the same refusal the rating
+    /// makes about a rating it could not fetch. Genuine zeroes DO show: "0 matches in 30
+    /// days" is a fact, and an unwelcome one is still worth knowing.</para>
+    /// </summary>
+    public static CommunityTotals? Totals(CommunityStats? stats) => stats?.Totals;
+
+    /// <summary>
+    /// The community's last matches, newest first as the server ordered them.
+    ///
+    /// <para>Never reordered here: the server sorts by when it RECORDED each match, which
+    /// is the one timestamp a wrong clock on somebody's PC cannot move.</para>
+    /// </summary>
+    public static IReadOnlyList<CommunityMatch> RecentMatches(CommunityStats? stats)
+        => stats?.RecentMatches ?? new List<CommunityMatch>();
+
     /// <summary>
     /// Fewest rooms in the window before a peak hour is worth naming.
     ///
@@ -79,6 +137,17 @@ public static class CommunityStatsView
     /// report the fourth player as the third — a table that quietly disagrees with itself
     /// between two people looking at it.</para>
     /// </summary>
+    /// <summary>
+    /// The TEAM ladder's rows, or null when this backend has none.
+    ///
+    /// <para>Null and empty mean different things and the caller needs both: null is an older
+    /// server that never had a team ladder, empty is one that has it and nobody has qualified
+    /// yet. The first hides the selector; the second explains itself, like the 1v1 table
+    /// does through <see cref="RequiredDecided"/>.</para>
+    /// </summary>
+    public static IReadOnlyList<LeaderboardRow>? TeamRows(CommunityStats? stats)
+        => stats?.LeaderboardTeam;
+
     public static IReadOnlyList<LeaderboardRow> Rows(CommunityStats? stats)
         => stats?.Leaderboard ?? new List<LeaderboardRow>();
 

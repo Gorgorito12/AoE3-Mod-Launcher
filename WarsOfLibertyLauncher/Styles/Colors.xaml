@@ -573,6 +573,24 @@
          and a room that puts rating on the line is exactly the row worth looking at first. -->
     <SolidColorBrush x:Key="MpCompetitiveBg" Color="#33C9A227"/>
     <SolidColorBrush x:Key="MpCompetitiveText" Color="#F0D68A"/>
+    <!-- The rest of the competitive family, so the box that CREATES a competitive room
+         is the same colour as the badge that marks one. It was not: the create dialog
+         reused the private-room purple wholesale, so ticking "competitive" looked like
+         ticking "private", and the room it produced then wore a gold badge.
+
+         Same alphas as the private set it replaces (.08 fill, .24 rim, .30 field rim),
+         over #C9A227 — the colour MpCompetitiveBg was already built from. No fifth hue
+         is introduced, which is the decision the badge had already taken. -->
+    <SolidColorBrush x:Key="MpCompetitive" Color="#C9A227"/>
+    <SolidColorBrush x:Key="MpCompetitiveSoftBg" Color="#14C9A227"/>
+    <SolidColorBrush x:Key="MpCompetitiveRim" Color="#3DC9A227"/>
+    <SolidColorBrush x:Key="MpCompetitiveFieldRim" Color="#4DC9A227"/>
+    <SolidColorBrush x:Key="MpCompetitiveTitle" Color="#F5E4B0"/>
+    <SolidColorBrush x:Key="MpCompetitiveSub" Color="#CBB878"/>
+    <!-- The tick INSIDE a filled gold box. White on #C9A227 is about 2.5:1 and reads as
+         a smudge; gold is a light fill and wants dark ink, which is the same call PLAY
+         already makes with #261900 on the same family. -->
+    <SolidColorBrush x:Key="MpCompetitiveInk" Color="#261900"/>
     <SolidColorBrush x:Key="MpPrivateRim" Color="#3DA06EF0"/>
     <!-- The private-room BOX in the create dialog: the same hue as the chip at a
          lower alpha (.08 vs .16), because a whole box at chip strength shouts. Its

@@ -226,6 +226,14 @@ public partial class MainWindow : Window
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
 
+        // Who is running this, and who is signed in. Written on EVERY launch, including the
+        // ordinary case where they match — "they match" is the answer that rules out a whole
+        // class of split-data reports, and until this line existed a diagnostic bundle could
+        // not tell "two Windows accounts" apart from "elevated with someone else's
+        // credentials". It sits above the Run-key registration below because it explains it.
+        _account = RunningAccount.Current();
+        DiagnosticLog.Write(RunningAccount.Describe(_account));
+
         _config = LauncherConfig.Load();
 
         // "Run in background" defaults ON, but the flags are inert on their own — the
@@ -619,11 +627,24 @@ public partial class MainWindow : Window
                 DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
                 HideToTray();
             }
+            // Running under someone else's Windows account comes FIRST, because it is what
+            // explains where this launch's data is actually going — and because it makes the
+            // other two notices wrong. A durable install would copy the launcher into the WRONG
+            // account's %LocalAppData% and re-register auto-start in its hive, making the broken
+            // thing sturdier; the seed balloon would announce an auto-start that cannot fire.
+            // Skipping the install offer leaves its own marker unset, so it returns unchanged
+            // once the account is sorted out.
+            if (MaybeWarnAboutAccountMismatch())
+            {
+                _pendingBackgroundSeedNotice = false;
+            }
             // First-launch durable-install offer. If it fired, it already explained
             // the background behaviour, so suppress the seed balloon to avoid two
             // popups in the same launch (one onboarding moment).
-            if (MaybeOfferSelfInstall())
+            else if (MaybeOfferSelfInstall())
+            {
                 _pendingBackgroundSeedNotice = false;
+            }
             // After the hide, so the balloon anchors to a tray icon that's already
             // there — and so an auto-started launch explains itself on the spot.
             MaybeShowBackgroundSeedNotice();
@@ -2901,6 +2922,13 @@ public partial class MainWindow : Window
     private bool _pendingBackgroundSeedNotice;
 
     /// <summary>
+    /// Which Windows account is running the launcher, and which one is signed in. Read ONCE in
+    /// the ctor: it cannot change while the process lives, and the log line that reports it has
+    /// to be written before anything that depends on it (the Run-key registration, the notice).
+    /// </summary>
+    private readonly Services.RunningAccount.AccountInfo _account;
+
+    /// <summary>
     /// Announce, exactly once, that the launcher now starts with Windows and lives in
     /// the tray. Auto-start is ON by default — this balloon is what keeps that default
     /// from being SILENT, which is the part of the old opt-in rule worth keeping: the
@@ -2999,6 +3027,55 @@ public partial class MainWindow : Window
             DiagnosticLog.Write($"ApplyStartupLanguage failed: {ex.Message}");
         }
         Strings.SetLanguage(_config.Language);
+    }
+
+    /// <summary>
+    /// Explains, once, that the launcher is running under a different Windows account than the
+    /// one signed in — so this player's recorded games, saves, home city decks and launcher
+    /// settings are being written into that account's folders rather than their own, and end up
+    /// split between the two the moment they also open the launcher normally.
+    ///
+    /// <para>Informational only. The launcher cannot merge the folders: the game inherits the
+    /// account the launcher runs as, and putting it back would mean launching it under a
+    /// borrowed token — the pattern antivirus heuristics punish, which this project has always
+    /// refused. See <see cref="Services.RunningAccount"/> for the measured case.</para>
+    ///
+    /// <para>Shown exactly once (<see cref="LauncherConfig.CrossUserAccountNoticeShown"/>, set
+    /// BEFORE the dialog so a dismissal or a crash can't re-nag), and never on a
+    /// <c>--minimized</c> tray launch, where a modal over a hidden window is the opposite of
+    /// useful. Because each account has its own config, it appears once in the config of the
+    /// account that has the problem — which is the one it is about.</para>
+    ///
+    /// Returns true when the dialog was shown, so the caller can keep this launch to a single
+    /// onboarding popup.
+    /// </summary>
+    private bool MaybeWarnAboutAccountMismatch()
+    {
+        if (!_account.Mismatch) return false;
+        if (App.StartMinimized) return false;
+        if (_config.CrossUserAccountNoticeShown) return false;
+
+        // Marker FIRST — one notice per config, even if the dialog fails to open or this launch
+        // is killed while it is up.
+        _config.CrossUserAccountNoticeShown = true;
+        try { _config.Save(); }
+        catch (Exception ex) { DiagnosticLog.Write($"Cross-user notice: config save failed: {ex.Message}"); }
+
+        // Where the data is going now: the active mod's own folder when we know it, since that is
+        // the one the player would go looking for. Falling back to Documents keeps the dialog
+        // truthful for a mod that declares none rather than leaving the box blank.
+        var folderName = UserDataService.ResolveFolderName(_updateService.Profile, _config);
+        var current = (string.IsNullOrEmpty(folderName) ? null : UserDataService.GetUserDataFolder(folderName))
+            ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+        DiagnosticLog.Write(
+            $"Cross-user notice: showing it once (process='{_account.ProcessUser}' " +
+            $"session='{_account.SessionUser}', data at '{current}').");
+
+        CrossUserAccountDialog.ShowNotice(
+            this, _account, current,
+            Services.RunningAccount.SignedInDataFolder(_account.SessionUser, folderName));
+        return true;
     }
 
     /// <summary>
@@ -4782,6 +4859,25 @@ public partial class MainWindow : Window
     /// profile so the dialog's "installed version" / install path /
     /// translation list resolve against the right mod's state.
     /// </summary>
+    /// <summary>
+    /// Which mods <paramref name="targetModId"/> can copy graphics, sound and hotkeys from.
+    ///
+    /// <para>Here rather than in either caller because the "is it installed" check is private to
+    /// this window; the rules themselves live in <c>GameSettingsStore.CanImportFrom</c> so they
+    /// stay testable. <b>One home on purpose</b> — it feeds both the settings page and the
+    /// install dialog, and a second copy is how the two would come to disagree about who is
+    /// eligible.</para>
+    /// </summary>
+    private List<ModProfile> BuildSettingsSources(string targetModId) => ModRegistry.All
+        // The RESOLVED folder, not p.UserDataFolder: most mods never declare that field,
+        // and reading it raw kept every one of them out of this list.
+        .Where(p => Services.GameSettingsStore.CanImportFrom(
+            p.Id, p.IsStockGame, Services.UserDataService.ResolveFolderName(p, _config),
+            IsProfileInstalledLocally(p), targetModId))
+        .Where(p => Services.GameSettingsStore.HasReadableProfile(p, _config))
+        .OrderBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
     private void OpenModPropertiesDialog(ModProfile profile)
     {
         // If a Properties dialog is already open, close it before
@@ -4878,18 +4974,7 @@ public partial class MainWindow : Window
             },
             addExistingFolder: () => AddExistingCopy(),
             searchInstall: () => _ = SearchInstallAsync(_updateService.Profile),
-            // Which mods this one can copy game settings from. Built here because the install
-            // check is private to this window; the rules themselves live in
-            // GameSettingsStore.CanImportFrom so they are testable.
-            listSettingsSources: () => ModRegistry.All
-                // The RESOLVED folder, not p.UserDataFolder: most mods never declare that field,
-                // and reading it raw kept every one of them out of this list.
-                .Where(p => Services.GameSettingsStore.CanImportFrom(
-                    p.Id, p.IsStockGame, Services.UserDataService.ResolveFolderName(p, _config),
-                    IsProfileInstalledLocally(p), profile.Id))
-                .Where(p => Services.GameSettingsStore.HasReadableProfile(p, _config))
-                .OrderBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)
-                .ToList());
+            listSettingsSources: () => BuildSettingsSources(profile.Id));
         // NO Owner on purpose: an owned window with ShowInTaskbar=True minimizes
         // its owner when closed (the "closing properties minimizes the launcher"
         // bug). Independent top-level window like LobbyWindow; Activate() on open.
@@ -9858,7 +9943,10 @@ public partial class MainWindow : Window
             suggestedFolder, aoe3SourcePath, aoe3SourceLabel,
             profile.DisplayName,
             // An in-place overlay clones nothing, so it must not wait for a clone source.
-            requiresAoe3Source: !overlayInPlace)
+            requiresAoe3Source: !overlayInPlace,
+            // Not offered when adding another COPY of a mod: the settings live in the mod's own
+            // My Games folder, which both copies already share, so there is nothing to bring.
+            settingsSources: addNewSlot ? null : BuildSettingsSources(profile.Id))
         {
             Owner = this
         };
@@ -9866,6 +9954,7 @@ public partial class MainWindow : Window
 
         var installFolder = dialog.SelectedFolder;
         aoe3SourcePath = dialog.Aoe3SourcePath; // may have been inferred
+        var copySettingsFrom = dialog.CopySettingsFromModId;
 
         // ---- A CLONING install must never land on top of the real AoE3 ----
         // A clone stamps clonedAoe3:true into the manifest, and UninstallService reads
@@ -10347,7 +10436,34 @@ public partial class MainWindow : Window
                 if (!string.IsNullOrEmpty(installVersion))
                     installState.LastKnownVersion = installVersion;
             }
+
+            // The settings the player asked to bring over from another mod. RECORDED here and
+            // attempted below rather than simply done, because the file to write into usually
+            // does not exist yet: Age of Empires III creates
+            // My Games\<mod>\Users3\<profile>.xml on its FIRST run, and nothing here may
+            // fabricate one. A reinstall of a mod that was played before is the case that lands
+            // immediately; everything else waits for a launch. See ModState.PendingSettingsImportFrom.
+            if (!string.IsNullOrWhiteSpace(copySettingsFrom))
+                installState.PendingSettingsImportFrom = copySettingsFrom!;
             _config.Save();
+
+            // Try it NOW, so a reinstall does not make the player launch twice for something
+            // they asked for during the install. Best-effort and non-fatal: the marker survives
+            // a "not yet" and the next launch settles it.
+            if (!string.IsNullOrWhiteSpace(copySettingsFrom))
+            {
+                try
+                {
+                    var importResult = Services.GameSettingsStore.ApplyPendingImport(profile, _config);
+                    DiagnosticLog.Write(
+                        $"GameSettings: post-install import for '{profile.Id}' from " +
+                        $"'{copySettingsFrom}' -> {importResult?.ToString() ?? "nothing pending"}.");
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"GameSettings: post-install import failed: {ex.Message}");
+                }
+            }
 
             // Verify installation. VerifyInstallation is now profile-aware —
             // it always checks the probe file + spot-checks zero-byte content

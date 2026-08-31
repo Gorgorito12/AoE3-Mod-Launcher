@@ -265,6 +265,26 @@ public static class GameLauncher
             DiagnosticLog.Write($"ApplyLaunchRedirects (setup path) failed: {ex.Message}");
         }
 
+        // Settle the copy the player asked for while installing this mod, if one is still owed.
+        // Usually there is none and this is a dictionary lookup.
+        //
+        // Its position is load-bearing at BOTH ends. AFTER the junction above, for the same
+        // reason the graft below is: for a UserDataRedirect mod that junction decides which
+        // physical folder `My Games\Age of Empires 3` resolves to, and writing first would put
+        // the settings in another mod's profile. BEFORE the graft, because a mod can be both in
+        // the sharing group and owed an import — and the group is the standing preference, so it
+        // has to be the one that wins.
+        //
+        // Best-effort: a launch must never fail over a convenience.
+        try
+        {
+            GameSettingsStore.ApplyPendingImport(profile, config);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ApplyLaunchRedirects (pending settings import) failed: {ex.Message}");
+        }
+
         // Carry the player's graphics / sound / hotkeys over from the last mod they played —
         // but ONLY for a mod they put in the sharing group on its own settings page. A mod
         // outside it is never written to by this path.

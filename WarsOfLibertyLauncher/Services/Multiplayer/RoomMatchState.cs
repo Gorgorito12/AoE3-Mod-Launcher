@@ -1,4 +1,4 @@
-namespace WarsOfLibertyLauncher.Services.Multiplayer;
+﻿namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
 /// <summary>
 /// The two rules that follow from a room being in a match while YOUR game is not.
@@ -44,6 +44,18 @@ public static class RoomMatchState
     /// </summary>
     public const double ResultGraceSeconds = 30;
 
+    /// <summary>
+    /// How long the launcher keeps a guest waiting for the host's report before it stops
+    /// promising one is coming and points at the History instead.
+    ///
+    /// <para>Four times <see cref="ResultGraceSeconds"/>, and the two numbers answer different
+    /// questions on purpose. The grace is how long a BUTTON may be held shut, which has to be
+    /// short because it takes a choice away. This is how long a LINE OF TEXT may say "waiting",
+    /// which costs the player nothing and so can afford to outlast a host who wandered off to
+    /// read the score screen.</para>
+    /// </summary>
+    public const double ResultWaitCeilingSeconds = 120;
+
     /// <summary>What the launcher is still doing with the match that just ended.</summary>
     public enum ResultPhase
     {
@@ -55,6 +67,17 @@ public static class RoomMatchState
 
         /// <summary>The verdict is known and on its way to the server.</summary>
         SendingResult,
+
+        /// <summary>
+        /// Our own reading is finished — or there was nothing to read — and the only thing left
+        /// is the HOST reporting the match.
+        ///
+        /// <para>Guest-side, and the state that did not exist. A guest arrived here with nothing
+        /// on screen at all: the launcher had done everything it could, and what remained was
+        /// somebody else's machine. Measured on a real match, that silence lasted sixteen
+        /// seconds and was then replaced by the room disappearing.</para>
+        /// </summary>
+        WaitingForHost,
     }
 
     /// <summary>
@@ -66,15 +89,28 @@ public static class RoomMatchState
     /// after the game closes destroys the result for both players, silently and with no way to
     /// get it back. That is what this holds shut.</para>
     ///
-    /// <para><b>Host only</b>, because only the host reports: a guest leaving costs nothing.
-    /// <b>Competitive only</b>, because in a casual room there is no rating to protect and being
-    /// held anywhere is an annoyance. And always bounded by
-    /// <see cref="ResultGraceSeconds"/>.</para>
+    /// <para><b>It holds both players now, for two different reasons</b>, and the difference is
+    /// the thing to keep hold of before anyone widens this.</para>
+    ///
+    /// <para>For the <b>guest</b> it is information, not correctness. Their leaving costs nobody
+    /// the report — which is exactly what the old <c>weAreHost</c> clause reasoned from, and why
+    /// they used to be let go instantly. But the guest is the one who cannot report and therefore
+    /// cannot know: their game closes first (the player who lost leaves first), the host is still
+    /// on the victory screen, and the result arrives seconds later. On a real match that was
+    /// sixteen seconds of an empty screen, ended by the room vanishing.</para>
+    ///
+    /// <para><b>The ceiling is what makes holding a guest defensible, and it must never be raised
+    /// for them.</b> A host waits on his own machine reading his own recording. A guest waits on
+    /// WHEN THE OTHER PLAYER CLOSES HIS GAME — which can be minutes, or never if he force-quits.
+    /// Holding somebody on something a third party controls is how a player ends up trapped in a
+    /// room, so past <see cref="ResultGraceSeconds"/> the button comes back whether or not
+    /// anything arrived; the card carries on explaining.</para>
+    ///
+    /// <para><b>Competitive only</b>, because in a casual room there is no rating to protect and
+    /// being held anywhere is an annoyance.</para>
     /// </summary>
-    public static bool HoldLeave(
-        bool competitive, bool weAreHost, ResultPhase phase, double secondsSinceGameExit)
+    public static bool HoldLeave(bool competitive, ResultPhase phase, double secondsSinceGameExit)
         => competitive
-           && weAreHost
            && phase != ResultPhase.None
            && secondsSinceGameExit < ResultGraceSeconds;
 

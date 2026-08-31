@@ -365,6 +365,14 @@
                              something only the player can do, and the launcher cannot see
                              whether they did (measured — see RecordingIndicator).
 
+                             The THIRD is a rule rather than a task, and it exists because
+                             the abandonment rule was stated in exactly one place: the
+                             create-room dialog, which only the HOST ever sees. A guest got
+                             a badge reading "counts towards the rating" and nothing else,
+                             so the first person it cost 176 points had no way to read it.
+                             Competitive rooms only — it describes a penalty that applies
+                             nowhere else.
+
                              Nothing here may be animated: these brushes are frozen
                              DynamicResources and animating one throws. -->
                         <Border Grid.Row="1"
@@ -437,6 +445,30 @@
                                             FontSize="{StaticResource MpPillSize}"
                                             Margin="9,0,0,0"
                                             VerticalAlignment="Top"/>
+                                </Grid>
+
+                                <Grid x:Name="PreflightAbandonRow"
+                                      Margin="0,8,0,0"
+                                      Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0"
+                                            Width="16" Height="16"
+                                            CornerRadius="4"
+                                            Background="Transparent"
+                                            BorderBrush="{DynamicResource MpCautionRimBox}"
+                                            BorderThickness="1"
+                                            VerticalAlignment="Top"
+                                            Margin="0,1,9,0"/>
+                                    <TextBlock Grid.Column="1"
+                                               x:Name="PreflightAbandonText"
+                                               Foreground="{DynamicResource MpCautionText}"
+                                               FontSize="{StaticResource MpLabelSize}"
+                                               LineHeight="16"
+                                               LineStackingStrategy="BlockLineHeight"
+                                               TextWrapping="Wrap"/>
                                 </Grid>
                             </StackPanel>
                         </Border>

@@ -112,4 +112,138 @@ public class MatchResultResolverTests
 
         Assert.Equal(1.0, host + rival, precision: 10);
     }
+
+    // -----------------------------------------------------------------------
+    // Team matches: naming one loser names a whole SIDE
+    // -----------------------------------------------------------------------
+    //
+    // The refusals are the point again, and more so here: a wrong side takes points from
+    // three or five people at once, and null only leaves the match where every team match
+    // already was — reported 0.5 across the board.
+
+    private static ReplayParserService.ReplayPlayer P(int slot, string name, int team, bool human = true)
+        => new(slot, name, 0, team, human ? ReplayParserService.SlotTypeHuman : 4u);
+
+    /// <summary>A 2v2: slots 1+2 against 3+4, joined to accounts by profile name.</summary>
+    private static (Dictionary<string, int> Teams,
+                    Dictionary<string, string> Names,
+                    List<ReplayParserService.ReplayPlayer> Players) TwoVTwo()
+        => (
+            new Dictionary<string, int> { ["a1"] = 0, ["a2"] = 0, ["b1"] = 1, ["b2"] = 1 },
+            new Dictionary<string, string> { ["a1"] = "Ana", ["a2"] = "Abel", ["b1"] = "Bea", ["b2"] = "Beto" },
+            new List<ReplayParserService.ReplayPlayer>
+            {
+                P(1, "Ana", 1), P(2, "Abel", 1), P(3, "Bea", 2), P(4, "Beto", 2),
+            });
+
+    [Fact]
+    public void TheLosersWholeSideLoses_AndTheOtherSideWins()
+    {
+        var (teams, names, players) = TwoVTwo();
+
+        // The trailer named slot 3 — Bea. That is not just Bea's defeat: it is her side's.
+        var r = MatchResultResolver.ResolveTeamResults(teams, names, players, loserSlot: 3);
+
+        Assert.NotNull(r);
+        Assert.Equal(1.0, r!["a1"]);
+        Assert.Equal(1.0, r["a2"]);
+        Assert.Equal(0.0, r["b1"]);
+        Assert.Equal(0.0, r["b2"]);
+    }
+
+    [Fact]
+    public void TheHostsOwnTeammateIsNeverMarkedALoser()
+    {
+        // The bug this exists to prevent. ParticipantResult mirrors the host's score onto
+        // everyone else (1.0 - x), which is right for a 1v1 and puts the host's PARTNER on
+        // the losing side of a 2v2 the host won.
+        var (teams, names, players) = TwoVTwo();
+        var r = MatchResultResolver.ResolveTeamResults(teams, names, players, loserSlot: 3)!;
+
+        Assert.Equal(r["a1"], r["a2"]);
+        Assert.Equal(r["b1"], r["b2"]);
+    }
+
+    [Fact]
+    public void TheScoresSumToHalfThePlayerCount()
+    {
+        // Exactly what the backend validates (`sum <= N/2`), and the team generalisation of
+        // TheTwoScoresAlwaysSumToOne.
+        foreach (var loser in new[] { 1, 2, 3, 4 })
+        {
+            var (teams, names, players) = TwoVTwo();
+            var r = MatchResultResolver.ResolveTeamResults(teams, names, players, loser)!;
+            var sum = 0.0;
+            foreach (var v in r.Values) sum += v;
+            Assert.Equal(2.0, sum);
+        }
+    }
+
+    [Fact]
+    public void AThreeVThreeReadsTheSameWay()
+    {
+        var teams = new Dictionary<string, int>
+        { ["a1"] = 0, ["a2"] = 0, ["a3"] = 0, ["b1"] = 1, ["b2"] = 1, ["b3"] = 1 };
+        var names = new Dictionary<string, string>
+        { ["a1"] = "A1", ["a2"] = "A2", ["a3"] = "A3", ["b1"] = "B1", ["b2"] = "B2", ["b3"] = "B3" };
+        var players = new List<ReplayParserService.ReplayPlayer>
+        {
+            P(1, "A1", 1), P(2, "A2", 1), P(3, "A3", 1),
+            P(4, "B1", 2), P(5, "B2", 2), P(6, "B3", 2),
+        };
+
+        var r = MatchResultResolver.ResolveTeamResults(teams, names, players, loserSlot: 1)!;
+        Assert.Equal(0.0, r["a1"]);
+        Assert.Equal(0.0, r["a3"]);
+        Assert.Equal(1.0, r["b2"]);
+    }
+
+    [Fact]
+    public void EveryUnestablishedSideIsRefused()
+    {
+        var (teams, names, players) = TwoVTwo();
+
+        // No trailer named anybody.
+        Assert.Null(MatchResultResolver.ResolveTeamResults(teams, names, players, -1));
+        // A slot the recording does not contain.
+        Assert.Null(MatchResultResolver.ResolveTeamResults(teams, names, players, 7));
+        // Nothing to join the file to the accounts with.
+        Assert.Null(MatchResultResolver.ResolveTeamResults(teams, null, players, 3));
+        Assert.Null(MatchResultResolver.ResolveTeamResults(null, names, players, 3));
+        Assert.Null(MatchResultResolver.ResolveTeamResults(teams, names, null, 3));
+
+        // Three sides: naming one loser leaves two possible winners, so it names nothing.
+        var ffa = new Dictionary<string, int> { ["a1"] = 0, ["a2"] = 1, ["b1"] = 2, ["b2"] = 2 };
+        Assert.Null(MatchResultResolver.ResolveTeamResults(ffa, names, players, 3));
+
+        // Two sides of unequal size — a room that promised 2v2 and was played 1v3.
+        var lopsided = new Dictionary<string, int> { ["a1"] = 0, ["a2"] = 1, ["b1"] = 1, ["b2"] = 1 };
+        Assert.Null(MatchResultResolver.ResolveTeamResults(lopsided, names, players, 3));
+    }
+
+    [Fact]
+    public void ASkirmishIsNotAMatch_WhoeverTheTrailerSaysLost()
+    {
+        // ReadOutcome makes this refusal for a 1v1 and CANNOT make it here: it hands back
+        // the loser slot before it ever looks at who is human, once there are more than two.
+        var (teams, names, _) = TwoVTwo();
+        var withAi = new List<ReplayParserService.ReplayPlayer>
+        {
+            P(1, "Ana", 1), P(2, "Abel", 1), P(3, "Bea", 2), P(4, "Beto", 2, human: false),
+        };
+
+        Assert.Null(MatchResultResolver.ResolveTeamResults(teams, names, withAi, loserSlot: 3));
+    }
+
+    [Fact]
+    public void ALoserNobodyInTheRoomClaimsIsRefused()
+    {
+        // The recording is of some other game, or of these people under names they never
+        // published. Either way there is no side to lose.
+        var (teams, _, players) = TwoVTwo();
+        var strangers = new Dictionary<string, string>
+        { ["a1"] = "Zoe", ["a2"] = "Yago", ["b1"] = "Xime", ["b2"] = "Wal" };
+
+        Assert.Null(MatchResultResolver.ResolveTeamResults(teams, strangers, players, loserSlot: 3));
+    }
 }

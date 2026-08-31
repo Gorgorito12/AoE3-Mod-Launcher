@@ -10,10 +10,15 @@ namespace WarsOfLibertyLauncher.Controls;
 /// <summary>
 /// The end-of-match card (design handoff 1f).
 ///
-/// <para>A static factory rather than a control, because the same card has to render in
-/// two hosts: the lobby window, which is where the match ended, and — when the player
-/// closed that window mid-match — the multiplayer tab. Building it from one place is what
-/// keeps those two from drifting into different cards.</para>
+/// <para>A static factory rather than a control, so the card can be built and thrown away
+/// with the room it belongs to.</para>
+///
+/// <para><b>There is exactly ONE host: the lobby window.</b> This used to claim a second one in
+/// the multiplayer tab, "for when the player closed that window mid-match" — and no such host
+/// was ever built. Every path into the card goes through <c>_lobbyWindow?.MatchResultHost</c>,
+/// so with the window gone the result was computed and silently discarded. That case is now
+/// answered by <c>AnnounceResultWithoutAWindow</c> — a desktop toast and a bell entry — rather
+/// than by a container that does not exist. Don't reinstate the claim without the host.</para>
 ///
 /// <para>Everything it shows comes from <see cref="MatchOutcomeView"/>, which is where the
 /// three refusals live: a 0.5 is "no result" and never a draw, an unknown rating has no
@@ -181,10 +186,32 @@ public static class MatchResultCard
             : Strings.Get("MpResultUnknownValue");
         grid.Children.Add(Cell(0, "MpResultDecidedHeader", decided, "MpTextPrimary", mono: true));
 
-        // REPLAY. Upload is scaffolded with no live caller, so there is nothing to link
-        // to; saying "not uploaded" is the honest version of an empty cell.
+        // REPLAY. It used to read "not uploaded" and mean it: uploading is scaffolded with
+        // no live caller, so there was nothing to link to. There is now — not the upload, the
+        // FILE, which the launcher had known all along and never told anyone.
+        //
+        // The cell shows the name and reveals it SELECTED in Explorer, and the difference is
+        // the whole point: AoE3 names every recording "Record Game N" and renumbers after each
+        // match, so ten files share one naming scheme and the newest is always number 1.
+        // Printing the name is what the room chat already did, and it is wrong by the next
+        // match; pointing at the file is not.
+        var replayPath = model.RecordingPath;
+        var hasReplay = !string.IsNullOrWhiteSpace(replayPath);
         grid.Children.Add(Cell(2, "MpResultReplayHeader",
-            Strings.Get("MpResultReplayNone"), "MpTextFaint", mono: false));
+            hasReplay
+                ? System.IO.Path.GetFileName(replayPath!)
+                : Strings.Get("MpResultReplayNone"),
+            // Only read when the cell is a LABEL. A clickable one takes its colour from
+            // MpLinkButton, which is the only way its disabled and hover states can ever work.
+            "MpTextFaint",
+            mono: false,
+            // The full path, because the folder is not always where the player expects: a
+            // launcher started as another Windows account writes under THAT account's
+            // Documents, and then no amount of browsing their own finds it.
+            tooltip: hasReplay
+                ? Strings.Get("MpResultReplayReveal") + Environment.NewLine + replayPath
+                : null,
+            onClick: hasReplay ? () => Services.FileReveal.Reveal(replayPath) : null));
 
         // RIVAL. Only a 1v1 has one; past two players "the opponent" is a fiction.
         var rival = string.IsNullOrEmpty(model.RivalLogin)
@@ -196,7 +223,14 @@ public static class MatchResultCard
         return grid;
     }
 
-    private static FrameworkElement Cell(int column, string headerKey, string value, string valueBrush, bool mono)
+    /// <param name="onClick">
+    /// Makes the cell's VALUE a button rather than a label. Null leaves the cell exactly as it
+    /// was — which is what every cell but one still passes, so a match with no recording renders
+    /// byte for byte what it did before.
+    /// </param>
+    private static FrameworkElement Cell(
+        int column, string headerKey, string value, string valueBrush, bool mono,
+        string? tooltip = null, Action? onClick = null)
     {
         var border = new Border
         {
@@ -215,14 +249,37 @@ public static class MatchResultCard
         var valueText = new TextBlock
         {
             Text = value,
-            Foreground = Brush(valueBrush),
             FontSize = Size(mono ? "FontSizeCaption" : "MpBodySize"),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 7, 0, 0),
         };
         if (mono) valueText.FontFamily = Mono();
-        stack.Children.Add(valueText);
+
+        if (onClick == null)
+        {
+            valueText.Foreground = Brush(valueBrush);
+            stack.Children.Add(valueText);
+        }
+        else
+        {
+            // NOTHING here sets a Foreground — not on the button, not on the TextBlock inside
+            // it. MpLinkButton declares its own, and its ContentPresenter propagates it down to
+            // the content text; a local value on either would beat the style's triggers and
+            // leave the disabled state painted the ordinary colour. That is the precedence trap
+            // documented in CLAUDE.md, which has already produced a launcher-wide class of dead
+            // hovers once.
+            var button = new Button
+            {
+                Style = (Style)Application.Current.FindResource("MpLinkButton"),
+                Content = valueText,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            button.Click += (_, _) => onClick();
+            stack.Children.Add(button);
+        }
+
+        if (!string.IsNullOrEmpty(tooltip)) border.ToolTip = TooltipHelper.Wrap(tooltip!);
         border.Child = stack;
         Grid.SetColumn(border, column);
         return border;

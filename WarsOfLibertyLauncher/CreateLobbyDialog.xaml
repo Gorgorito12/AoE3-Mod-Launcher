@@ -257,6 +257,53 @@
             </Setter>
         </Style>
 
+        <!-- The competitive checkbox. A twin of MpPrivateCheck rather than a BasedOn:
+             the state colours live on TargetName setters inside that template, and a
+             derived style cannot override those (the precedence trap CLAUDE.md records
+             for MpFooterPrimary and PrimaryButton, where exactly that left dead hover
+             states in fifteen dialogs). Copying the template is what makes the gold land. -->
+        <Style x:Key="MpCompetitiveCheck" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="checkBorder"
+                                    Grid.Column="0"
+                                    Width="18" Height="18"
+                                    CornerRadius="4"
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource MpCompetitiveFieldRim}"
+                                    BorderThickness="1"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,10,0">
+                                <Path x:Name="checkMark"
+                                      Data="M 3 8 L 6.5 11.5 L 13 4"
+                                      Stroke="{DynamicResource MpCompetitiveInk}"
+                                      StrokeThickness="2"
+                                      Visibility="Collapsed"/>
+                            </Border>
+                            <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="checkBorder" Property="Background" Value="{DynamicResource MpCompetitive}"/>
+                                <Setter TargetName="checkBorder" Property="BorderBrush" Value="{DynamicResource MpCompetitive}"/>
+                                <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="checkBorder" Property="BorderBrush" Value="{DynamicResource MpCompetitive}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- The password pair. Both are chromeless: the row's Border is the field. -->
         <Style x:Key="MpPrivateField" TargetType="PasswordBox">
             <Setter Property="Background" Value="Transparent"/>
@@ -662,7 +709,6 @@
                 <StackPanel x:Name="SuggestRow" Orientation="Horizontal" Margin="0,9,0,0">
                     <Button x:Name="Suggest1" Style="{StaticResource MpSuggestPill}" Click="Suggest_Click"/>
                     <Button x:Name="Suggest2" Style="{StaticResource MpSuggestPill}" Click="Suggest_Click"/>
-                    <Button x:Name="Suggest3" Style="{StaticResource MpSuggestPill}" Click="Suggest_Click"/>
                 </StackPanel>
 
                 <!-- JUGADORES MÁXIMOS: a segmented row, not a dropdown. Eight options that
@@ -742,35 +788,58 @@
                         Margin="0,10,0,0"
                         Padding="12,11"
                         CornerRadius="{StaticResource RadiusRow}"
-                        Background="{DynamicResource MpPrivateSoftBg}"
-                        BorderBrush="{DynamicResource MpPrivateRim}"
+                        Background="{DynamicResource MpCompetitiveSoftBg}"
+                        BorderBrush="{DynamicResource MpCompetitiveRim}"
                         BorderThickness="1">
-                    <CheckBox x:Name="CompetitiveCheck"
-                              Style="{StaticResource MpPrivateCheck}"
-                              Checked="CompetitiveCheck_Changed"
-                              Unchecked="CompetitiveCheck_Changed">
-                        <StackPanel>
-                            <TextBlock x:Name="CompetitiveTitleText"
-                                       Foreground="{DynamicResource MpPrivateTitle}"
-                                       FontSize="{StaticResource MpBodySize}"
+                    <StackPanel>
+                        <CheckBox x:Name="CompetitiveCheck"
+                                  Style="{StaticResource MpCompetitiveCheck}"
+                                  Checked="CompetitiveCheck_Changed"
+                                  Unchecked="CompetitiveCheck_Changed">
+                            <StackPanel>
+                                <TextBlock x:Name="CompetitiveTitleText"
+                                           Foreground="{DynamicResource MpCompetitiveTitle}"
+                                           FontSize="{StaticResource MpBodySize}"
+                                           FontWeight="SemiBold"/>
+                                <TextBlock x:Name="CompetitiveHint"
+                                           Foreground="{DynamicResource MpCompetitiveSub}"
+                                           FontSize="{StaticResource MpLabelSize}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+
+                        <!-- The format, revealed by the tick. A competitive room has to declare
+                             one: it decides which ladder the match belongs to, it fixes the room
+                             size, and it decides which of the promises above actually apply —
+                             the forfeit for walking out is a 1v1 rule and the server refuses it
+                             for a team game.
+
+                             OUTSIDE the CheckBox, not in its content: a Button inside a
+                             ToggleButton's content is asking for a click that toggles the tick
+                             as well. The 28px indent is what lines it up under the label. -->
+                        <StackPanel x:Name="CompetitiveFormatRow"
+                                    Visibility="Collapsed"
+                                    Margin="28,11,0,0">
+                            <TextBlock x:Name="CompetitiveFormatLabel"
+                                       Foreground="{DynamicResource MpTextLabel}"
+                                       FontSize="{StaticResource MpPillSize}"
                                        FontWeight="SemiBold"/>
-                            <TextBlock x:Name="CompetitiveHint"
-                                       Foreground="{DynamicResource MpPrivateSub}"
-                                       FontSize="{StaticResource MpLabelSize}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,3,0,0"/>
-                            <!-- Only when the chosen size cannot ever score. It informs, it
-                                 does not forbid: the room is still perfectly playable, it just
-                                 will not rate, and finding that out afterwards is the bad
-                                 outcome this avoids. -->
-                            <TextBlock x:Name="CompetitiveSizeNote"
-                                       Visibility="Collapsed"
-                                       Foreground="{DynamicResource MpCautionText}"
-                                       FontSize="{StaticResource MpLabelSize}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,6,0,0"/>
+                            <UniformGrid x:Name="FormatRow" Rows="1" Margin="0,7,0,0"/>
                         </StackPanel>
-                    </CheckBox>
+
+                        <!-- What the chosen format means for the rating. It informs, it never
+                             forbids: a team room is perfectly playable, it simply does not move
+                             anyone's rating yet, and finding that out afterwards is the bad
+                             outcome this avoids. Composed at refresh time, not set once — it
+                             says something different per format. -->
+                        <TextBlock x:Name="CompetitiveSizeNote"
+                                   Visibility="Collapsed"
+                                   Foreground="{DynamicResource MpCautionText}"
+                                   FontSize="{StaticResource MpLabelSize}"
+                                   TextWrapping="Wrap"
+                                   Margin="28,8,0,0"/>
+                    </StackPanel>
                 </Border>
 
                 <!-- Recording warning. Here, BEFORE the match: once it is over there is

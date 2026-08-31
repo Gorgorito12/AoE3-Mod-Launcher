@@ -350,6 +350,15 @@ public static class DiagnosticLog
     /// Skip anything this big. A recording of a long game is a few MB; well past that and we
     /// are looking at something else, and inflating it would cost seconds for nothing.
     /// </summary>
+    /// <summary>
+    /// How much of a recording's tail to print when its outcome could not be settled.
+    ///
+    /// <para>Wider than the block itself (32 bytes), so a trailer that is merely in the wrong
+    /// place is visible rather than cut off — which is exactly the shape a team game might turn
+    /// out to have. Sixteen bytes, the previous width, could not have shown one.</para>
+    /// </summary>
+    private const int TailDumpBytes = 48;
+
     private const long ReplayIndexMaxBytes = 64L * 1024 * 1024;
 
     /// <summary>
@@ -408,9 +417,13 @@ public static class DiagnosticLog
                       .Append(" seed=").Append(header.RandomSeed)
                       .Append(" hostTime=").Append(header.HostTime).AppendLine();
 
+                    // team= is what makes a 2v2 legible in a bundle at all: it is parsed from
+                    // gameplayer{N}teamid and, until this line, was read by nothing. -1 is AoE3's
+                    // "no team", which is what every 1v1 carries.
                     sb.Append("    players: ");
                     sb.AppendLine(string.Join(", ", header.Players.Select(
                         pl => $"[{pl.Slot}] {(string.IsNullOrWhiteSpace(pl.Name) ? "(unnamed)" : pl.Name)}"
+                              + $" team={pl.TeamId}"
                               + (pl.IsHuman ? "" : " (not human)"))));
 
                     var outcome = Multiplayer.ReplayParserService.ReadOutcome(data, header);
@@ -423,9 +436,24 @@ public static class DiagnosticLog
                       // "recorder=" and is not one; a bundle that asserts it again would send
                       // the next reader down the same path.
                       .Append(" trailerB=").Append(outcome.TrailerSecondSlot).AppendLine();
-                    if (!outcome.SignaturePresent && data.Length >= 16)
-                        sb.Append("    no trailer; last 16 bytes = ")
-                          .AppendLine(BitConverter.ToString(data, data.Length - 16));
+                    // The tail, whenever the outcome was not settled — not only when the
+                    // signature is absent. A trailer sitting just past the slack window, or a
+                    // partially-written one, both read as "no result" and both leave no evidence
+                    // at all under the narrower rule. It is 48 bytes rather than 16 because a
+                    // healthy block is 32 on its own, so 16 could never show one that was merely
+                    // misplaced.
+                    //
+                    // THIS IS THE OPEN QUESTION'S INSTRUMENT: nobody knows whether a TEAM game
+                    // writes an outcome block, because the one 2v2 anyone has been able to
+                    // inspect has none — and so does a quarter of the 1v1s, which is why that
+                    // proves nothing. The first team game played with the launcher answers it
+                    // here. (Its twin lives on the live path in MultiplayerTab; change both or
+                    // they disagree.)
+                    if (outcome.Confidence != Multiplayer.ReplayParserService.ReplayOutcomeConfidence.Confident
+                        && data.Length >= TailDumpBytes)
+                        sb.Append("    unsettled outcome; last ").Append(TailDumpBytes)
+                          .Append(" bytes = ")
+                          .AppendLine(BitConverter.ToString(data, data.Length - TailDumpBytes));
                 }
                 catch (Exception ex)
                 {

@@ -250,6 +250,17 @@
 
                         <CheckBox x:Name="StartWithWindowsCheck"/>
                         <TextBlock x:Name="StartWithWindowsHint" Style="{StaticResource HintText}"/>
+                        <!-- The checkbox reads the REGISTRY, and the Run key is written to the
+                             hive of the account the launcher runs AS. Under another account that
+                             is a hive Windows never reads at logon, so the box reads "on" while
+                             nothing ever starts — a lie that confirms itself. The value is left
+                             alone (it is true about its own hive); what was missing was the
+                             context. See Services/RunningAccount.cs. -->
+                        <TextBlock x:Name="StartWithWindowsAccountWarning"
+                                   Style="{StaticResource HintText}"
+                                   Foreground="#d9a94a"
+                                   TextWrapping="Wrap"
+                                   Visibility="Collapsed"/>
 
                         <CheckBox x:Name="EnableJoinLinksCheck"/>
                         <TextBlock x:Name="EnableJoinLinksHint" Style="{StaticResource HintText}"/>

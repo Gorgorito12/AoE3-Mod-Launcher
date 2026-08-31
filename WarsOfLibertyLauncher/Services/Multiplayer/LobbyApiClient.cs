@@ -198,12 +198,17 @@ public class LobbyApiClient : IDisposable
         => GetAsync<EloSnapshot>($"matches/elo/{userId}", requireAuth: false, ct);
 
     /// <summary>
-    /// The ladder and the activity histogram, for the community strip. Unauthenticated
-    /// like the other standings calls, and asked once per session when the Rooms subtab
-    /// is opened — never on a timer. A backend without the route answers 404, which the
-    /// caller treats as "hide the cards", not as an error.
+    /// BOTH ladders and the activity histogram, for the community strip and the Ranking
+    /// subtab. Unauthenticated like the other standings calls, and re-asked at most once a
+    /// minute — matching the server's own cache, so a refresh inside that window costs it
+    /// nothing. A backend without the route answers 404, which the caller treats as "hide
+    /// the cards", not as an error.
+    ///
+    /// <para>The default limit is the server's maximum: one payload feeds a three-row
+    /// summary and a full table, and asking twice for two sizes would double a budget that
+    /// is per IP and shared behind a Radmin NAT.</para>
     /// </summary>
-    public Task<CommunityStats> GetCommunityStatsAsync(int limit = 10, CancellationToken ct = default)
+    public Task<CommunityStats> GetCommunityStatsAsync(int limit = 50, CancellationToken ct = default)
         => GetAsync<CommunityStats>($"stats/community?limit={limit}", requireAuth: false, ct);
 
     /// <summary>

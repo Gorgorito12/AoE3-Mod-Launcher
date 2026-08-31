@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -683,6 +683,25 @@ public partial class ModPropertiesDialog : Window
         UserDataDivergesText.Visibility = alternate != null
             ? Visibility.Visible
             : Visibility.Collapsed;
+
+        // Second, unrelated reason the folder above may not be the one the user expects: the
+        // launcher is running as another Windows account, so this is THAT account's folder.
+        // Read live rather than cached — this tab is rebuilt on every RefreshData, and the check
+        // is two cheap reads.
+        var account = Services.RunningAccount.Current();
+        var signedIn = account.Mismatch
+            ? Services.RunningAccount.SignedInDataFolder(account.SessionUser, folderName)
+            : null;
+
+        UserDataOtherAccountText.Text = account.Mismatch
+            ? Strings.Format("ModPropUserDataOtherAccount", account.ProcessUser, account.SessionUser)
+            : "";
+        UserDataOtherAccountText.Visibility = account.Mismatch ? Visibility.Visible : Visibility.Collapsed;
+
+        // The other account's folder is resolved exactly or not at all, so the warning above can
+        // legitimately stand without a path underneath it.
+        UserDataOtherAccountPath.Text = signedIn ?? "";
+        UserDataOtherAccountPath.Visibility = signedIn != null ? Visibility.Visible : Visibility.Collapsed;
 
         // Restore row: show how many backups exist and when the latest was
         // made; with none, disable the button and say so up front instead of
@@ -1597,10 +1616,22 @@ public partial class ModPropertiesDialog : Window
         var source = ModRegistry.Find(sourceId);
         if (source == null) return;
 
-        var ok = Services.GameSettingsStore.ImportFrom(source, _profile, _config);
-        ShowUserDataResult(ok
-            ? Strings.Format("ModPropSettingsImported", source.DisplayName)
-            : Strings.Get("ModPropSettingsImportFailed"));
+        // The result says WHICH way it went, and the difference is not cosmetic: a mod that has
+        // simply never been opened used to be told "the settings couldn't be read", which is
+        // false and names nothing to do about it. Age of Empires III writes the profile on its
+        // first run, so the honest answer is "open it once".
+        var result = Services.GameSettingsStore.ImportFrom(source, _profile, _config);
+        var ok = result == Services.GameSettingsStore.SettingsImportResult.Imported;
+        ShowUserDataResult(result switch
+        {
+            Services.GameSettingsStore.SettingsImportResult.Imported =>
+                Strings.Format("ModPropSettingsImported", source.DisplayName),
+            Services.GameSettingsStore.SettingsImportResult.NoTargetProfile =>
+                Strings.Get("ModPropSettingsNeverOpened"),
+            Services.GameSettingsStore.SettingsImportResult.SourceUnavailable =>
+                Strings.Format("ModPropSettingsNoSourceSettings", source.DisplayName),
+            _ => Strings.Get("ModPropSettingsImportFailed"),
+        });
         if (!ok) UserDataResultHint.Foreground = new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D));
     }
 

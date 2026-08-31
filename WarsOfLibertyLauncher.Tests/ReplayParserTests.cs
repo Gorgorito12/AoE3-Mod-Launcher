@@ -375,6 +375,196 @@ public class ReplayParserTests
         Assert.Equal(1, o.LoserSlot);   // still reported, just not decisive on its own
     }
 
+    // ---------- a trailer the game left a byte or two of slack after ----------
+    //
+    // Measured on the first match ever captured from BOTH machines: the two recordings carry the
+    // SAME outcome block — same 0x81 marker, same A=2, B=2, C=2 — and the LOSER's copy has one
+    // extra byte after it, putting its signature 33 bytes from the end instead of 32. Checking
+    // only the exact position threw a perfectly good reading away by one byte, and the loser is
+    // half the evidence available for any match.
+
+    /// <summary>
+    /// The real shape, reduced to its one moving part: the same bytes, one byte later.
+    /// </summary>
+    [Fact]
+    public void ATrailerTheGameLeftSlackAfterIsStillRead()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+        var clean = ReplayParserService.ReadOutcome(data, header);
+
+        var withSlack = ReplayParserService.ReadOutcome(
+            data.Concat(new byte[1]).ToArray(), header);
+
+        Assert.True(withSlack.SignaturePresent);
+        Assert.Equal(clean.Confidence, withSlack.Confidence);
+        Assert.Equal(clean.LoserSlot, withSlack.LoserSlot);
+        Assert.Equal(clean.WinnerSlot, withSlack.WinnerSlot);
+    }
+
+    /// <summary>
+    /// A 32-byte outcome block: the signature, then the loser / second / head-count triple.
+    /// </summary>
+    private static byte[] Block(uint a, uint b, uint c)
+    {
+        var block = new byte[32];
+        for (var i = 12; i < 20; i++) block[i] = 0xFF;
+        BitConverter.GetBytes(a).CopyTo(block, 20);
+        BitConverter.GetBytes(b).CopyTo(block, 24);
+        BitConverter.GetBytes(c).CopyTo(block, 28);
+        return block;
+    }
+
+    /// <summary>
+    /// <b>The shape of the reported bug, reduced to its two moving parts.</b> A real match went
+    /// unrated because its outcome block sat 135 bytes from the end of the file while the parser
+    /// looked at the last 8 — and because the nearest signature to the end, 12 bytes out, was
+    /// command-stream rubbish naming nobody. Widening the window alone would not have saved it:
+    /// the scan has to walk PAST a candidate that fails and keep going.
+    ///
+    /// <para>Measured over 20 readable recordings, the old bound decided 16; the four it lost had
+    /// valid blocks at 78, 79, 135 and 195 bytes.</para>
+    /// </summary>
+    [Fact]
+    public void AGarbageSignatureNearerTheEndDoesNotHideTheRealBlock()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+        var clean = ReplayParserService.ReadOutcome(data, header);
+
+        // 103 bytes of filler then a decoy whose loser is 0xFFFFFFFF — the exact value the
+        // reported file carried at 12 bytes out. That puts the REAL block at 135.
+        var doctored = data
+            .Concat(new byte[103])
+            .Concat(Block(0xFFFFFFFF, 0, 3212836864))
+            .ToArray();
+
+        var o = ReplayParserService.ReadOutcome(doctored, header);
+
+        Assert.True(o.SignaturePresent);
+        Assert.Equal(clean.Confidence, o.Confidence);
+        Assert.Equal(clean.LoserSlot, o.LoserSlot);
+        Assert.Equal(clean.WinnerSlot, o.WinnerSlot);
+    }
+
+    /// <summary>The far end of what was actually measured — 195 bytes — still reads.</summary>
+    [Fact]
+    public void ABlockFarFromTheEndIsStillRead()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+        var clean = ReplayParserService.ReadOutcome(data, header);
+
+        var o = ReplayParserService.ReadOutcome(data.Concat(new byte[195]).ToArray(), header);
+
+        Assert.Equal(clean.Confidence, o.Confidence);
+        Assert.Equal(clean.LoserSlot, o.LoserSlot);
+    }
+
+    /// <summary>
+    /// <b>The bound still exists, and this is what replaces the test that used to assert it at
+    /// 8 bytes.</b> That one appended 12 zeros and demanded the block become unreachable; the
+    /// measurement says a block at 12 — or 135 — is real and was being thrown away, so the old
+    /// assertion was pinning the bug. What still has to hold is that the window is a TAIL and
+    /// not a search: past it, the parser does not look.
+    /// </summary>
+    [Fact]
+    public void ASignatureBeyondTheWindowIsOutOfReach()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+
+        var tooFar = ReplayParserService.ReadOutcome(
+            data.Concat(new byte[600]).ToArray(), header);
+
+        Assert.False(tooFar.SignaturePresent);
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Ambiguous, tooFar.Confidence);
+    }
+
+    /// <summary>
+    /// The head count breaks a tie, and it beats proximity when it does.
+    ///
+    /// <para>The block's third field is the number of humans, in all 25 readings ever taken. It
+    /// is a PREFERENCE and not a requirement — the two fixtures here are real skirmishes whose
+    /// blocks say 1, and the tests relabel their AI as human, so requiring it would reject
+    /// genuine files over a doctored header. Where it earns its place is the only case a wide
+    /// window introduces: more than one candidate that names a real slot.</para>
+    /// </summary>
+    [Fact]
+    public void TheCoherentBlockWinsOverTheNearerOne()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+
+        // Farther out: names slot 2 and agrees that there were two humans.
+        // Nearer: names slot 1, but claims one human, which this header contradicts.
+        var doctored = data
+            .Concat(Block(2, 2, 2))
+            .Concat(new byte[40])
+            .Concat(Block(1, 1, 1))
+            .ToArray();
+
+        var o = ReplayParserService.ReadOutcome(doctored, header);
+
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Confident, o.Confidence);
+        Assert.Equal(2, o.LoserSlot);
+    }
+
+    /// <summary>
+    /// With nothing to prefer, the nearest candidate that names a real slot is still the answer —
+    /// which is what keeps the real fixtures, whose blocks say C = 1, reading exactly as before.
+    /// </summary>
+    [Fact]
+    public void AMismatchedHeadCountIsStillAcceptedWhenItIsAllThereIs()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+
+        var o = ReplayParserService.ReadOutcome(data, header);
+
+        Assert.Equal(ReplayParserService.ReplayOutcomeConfidence.Confident, o.Confidence);
+        Assert.Equal(1, o.LoserSlot);
+    }
+
+    /// <summary>
+    /// Nearest to the end wins, so a file with a clean trailer can never be read through an
+    /// earlier accidental match. Two valid-looking blocks, and the last one is the answer.
+    /// </summary>
+    [Fact]
+    public void AnExactTrailerIsPreferredOverAnEarlierOne()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+        var clean = ReplayParserService.ReadOutcome(data, header);
+
+        // The real block, then a second copy of the last 32 bytes appended after it.
+        var doubled = data.Concat(data.Skip(data.Length - 32)).ToArray();
+
+        var o = ReplayParserService.ReadOutcome(doubled, header);
+
+        Assert.True(o.SignaturePresent);
+        Assert.Equal(clean.LoserSlot, o.LoserSlot);
+    }
+
+    /// <summary>
+    /// The slack bytes are not required to be zero, and that is deliberate. Only one real sample
+    /// exists and its byte happens to be zero; refusing anything else would reject a shape nobody
+    /// has measured yet. What keeps this safe is not the slack bytes but the two checks after
+    /// them — the loser has to name a slot the header holds, and the game has to be a clean human
+    /// 1v1 — which an accidental hit fails.
+    /// </summary>
+    [Fact]
+    public void TheSlackBytesThemselvesAreNotConstrained()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+
+        var o = ReplayParserService.ReadOutcome(
+            data.Concat(new byte[] { 0x7F, 0x01 }).ToArray(), header);
+
+        Assert.True(o.SignaturePresent);
+    }
+
     [Fact]
     public void ReadOutcomeRejectsNullsAndStubs()
     {

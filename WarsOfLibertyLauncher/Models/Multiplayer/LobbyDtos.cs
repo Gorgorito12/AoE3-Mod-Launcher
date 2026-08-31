@@ -306,6 +306,44 @@ public class QuotaCount
     public int Max { get; set; }
 }
 
+/// <summary>
+/// One player of a finished match, as returned inside a history row.
+///
+/// <para>Mirrors the shape <see cref="LobbyHost"/> already uses for a room's host, because
+/// the backend sends the two the same way — one convention for "a named person", not a
+/// second one invented for history.</para>
+/// </summary>
+public class MatchHistoryParticipant
+{
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = "";
+
+    [JsonPropertyName("discord_username")]
+    public string DiscordUsername { get; set; } = "";
+
+    [JsonPropertyName("display_name")]
+    public string DisplayName { get; set; } = "";
+
+    [JsonPropertyName("avatar_url")]
+    public string? AvatarUrl { get; set; }
+
+    [JsonPropertyName("team")]
+    public int Team { get; set; }
+
+    /// <summary>1.0 won, 0.0 lost, 0.5 the outcome could not be read — which is what MOST
+    /// stored rows carry, and is never a draw. Classified through
+    /// <c>MatchOutcomeView.Classify</c> so this file's meaning of the number and the result
+    /// card's cannot drift apart.</summary>
+    [JsonPropertyName("result")]
+    public double Result { get; set; }
+
+    [JsonPropertyName("rating_before")]
+    public double? RatingBefore { get; set; }
+
+    [JsonPropertyName("rating_after")]
+    public double? RatingAfter { get; set; }
+}
+
 /// <summary>One line of match history as returned by GET /matches/history/:userId.</summary>
 public class MatchHistoryRow
 {
@@ -353,6 +391,15 @@ public class MatchHistoryRow
 
     [JsonPropertyName("rating_after")]
     public double? RatingAfter { get; set; }
+
+    /// <summary>Everyone who played, with their own win/loss — so a history row can name the
+    /// opponent instead of only counting heads.
+    ///
+    /// <para>EMPTY on a backend that predates the field, exactly like <see cref="PlayerCount"/>
+    /// before it: the row then renders as it always did, keeping the "N players" chip that the
+    /// names otherwise replace.</para></summary>
+    [JsonPropertyName("participants")]
+    public List<MatchHistoryParticipant> Participants { get; set; } = new();
 }
 
 public class MatchHistoryResponse
@@ -631,8 +678,95 @@ public class CommunityStats
     [JsonPropertyName("leaderboard")]
     public List<LeaderboardRow> Leaderboard { get; set; } = new();
 
+    /// <summary>
+    /// The TEAM ladder — 2v2 and 3v3 share it, and it is separate from the 1v1 one above.
+    ///
+    /// <para><b>Nullable, and the null is the point.</b> A backend that predates the team
+    /// ladder simply omits the field, and that is "this server has no team ladder", not "the
+    /// team ladder is empty" — the same distinction <see cref="Totals"/> makes, and for the
+    /// same reason: drawing an empty table under a live heading reports something false.</para>
+    /// </summary>
+    [JsonPropertyName("leaderboard_team")]
+    public List<LeaderboardRow>? LeaderboardTeam { get; set; }
+
     [JsonPropertyName("activity")]
     public ActivityBuckets? Activity { get; set; }
+
+    /// <summary>How much has been going on lately. Null on a backend that predates the
+    /// field, and the card is then not drawn at all — never zeroes, which would report a
+    /// dead community rather than an unanswered question.</summary>
+    [JsonPropertyName("totals")]
+    public CommunityTotals? Totals { get; set; }
+
+    /// <summary>The last few matches ANYONE played. Empty on an older backend, and the
+    /// card then falls back to the viewer's own history exactly as before.</summary>
+    [JsonPropertyName("recent_matches")]
+    public List<CommunityMatch> RecentMatches { get; set; } = new();
+}
+
+/// <summary>
+/// The community's recent numbers.
+///
+/// <para>Each window travels WITH its figure rather than being assumed here: the server
+/// owns how far back it looked, and a card that hardcoded "30 days" would start lying the
+/// day that constant changed.</para>
+/// </summary>
+public class CommunityTotals
+{
+    /// <summary>Days behind <see cref="Matches"/>.</summary>
+    [JsonPropertyName("window_days")]
+    public int WindowDays { get; set; }
+
+    /// <summary>Matches reported inside that window.</summary>
+    [JsonPropertyName("matches")]
+    public int Matches { get; set; }
+
+    /// <summary>Days behind <see cref="Players"/> — shorter than the match window, since
+    /// this answers "is anyone around" rather than "when do people play".</summary>
+    [JsonPropertyName("players_window_days")]
+    public int PlayersWindowDays { get; set; }
+
+    /// <summary>Players seen inside that shorter window.</summary>
+    [JsonPropertyName("players")]
+    public int Players { get; set; }
+
+    /// <summary>The most-played map, or null when no match in the window named one.
+    /// Null and not "" — the row is drawn only when there is a map to name.</summary>
+    [JsonPropertyName("top_map")]
+    public string? TopMap { get; set; }
+
+    [JsonPropertyName("top_map_matches")]
+    public int TopMapMatches { get; set; }
+}
+
+/// <summary>
+/// One finished match, from anyone — the community's activity rather than the viewer's.
+///
+/// <para>Carries the same <see cref="MatchHistoryParticipant"/> list the History rows do,
+/// assembled by the same helper on the server, so "who played and who won" is read one way
+/// on this side too.</para>
+/// </summary>
+public class CommunityMatch
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("mod_id")]
+    public string ModId { get; set; } = "";
+
+    [JsonPropertyName("map_name")]
+    public string? MapName { get; set; }
+
+    [JsonPropertyName("duration_seconds")]
+    public int DurationSeconds { get; set; }
+
+    /// <summary>When the server RECORDED it, not when the client says it started — the
+    /// one of the two timestamps that cannot be moved by a wrong clock.</summary>
+    [JsonPropertyName("reported_at")]
+    public string ReportedAt { get; set; } = "";
+
+    [JsonPropertyName("participants")]
+    public List<MatchHistoryParticipant> Participants { get; set; } = new();
 }
 
 /// <summary>One row of the ladder.</summary>
@@ -773,6 +907,14 @@ public class WsRoomMemberFlags
     /// the snake_case top-level frames.</summary>
     [JsonPropertyName("radminIp")]
     public string? RadminIp { get; set; }
+
+    /// <summary>The member's AoE3 profile name, reported via <c>set_ingame_name</c>. It is what
+    /// joins a slot in the recording to a Discord account, which is what lets a team game be
+    /// stored with real teams. Null until reported, and null from a backend that predates it —
+    /// the team map then refuses and the match is reported with no teams, as it always was.
+    /// camelCase key, riding inside the room-state member object like the two above.</summary>
+    [JsonPropertyName("ingameName")]
+    public string? InGameName { get; set; }
 
     /// <summary>The member's Discord avatar URL, so the roster can paint their real
     /// photo. Null for legacy rooms that don't send it → the roster falls back to a

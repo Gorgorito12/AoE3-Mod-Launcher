@@ -57,6 +57,21 @@ public partial class CreateLobbyDialog : Window
     private readonly Dictionary<int, Button> _maxPlayerButtons = new();
     private int _maxPlayers = MaxRoomPlayers;
 
+    /// <summary>The three competitive formats, in the order the row renders them.</summary>
+    private static readonly RoomFormat[] Formats =
+        { RoomFormat.OneVOne, RoomFormat.TwoVTwo, RoomFormat.ThreeVThree };
+
+    private readonly Dictionary<RoomFormat, Button> _formatButtons = new();
+
+    /// <summary>
+    /// The format chosen while the competitive box is ticked.
+    ///
+    /// <para>Kept while unticked too, so re-ticking restores what the host picked rather than
+    /// snapping back to 1v1 — the room size follows this, and a reset would silently resize
+    /// their room under them.</para>
+    /// </summary>
+    private RoomFormat _format = RoomFormat.OneVOne;
+
     /// <summary>True while the password is shown in clear, so the two controls stay in sync.</summary>
     private bool _passwordRevealed;
 
@@ -110,6 +125,16 @@ public partial class CreateLobbyDialog : Window
     public bool CreatedLobbyCompetitiveDowngraded { get; private set; }
 
     /// <summary>
+    /// The format the room was created for, or <c>Casual</c> when it is not competitive.
+    ///
+    /// <para>Derived from what the SERVER actually made, for the same reason
+    /// <see cref="CreatedLobbyIsCompetitive"/> is: a request that got downgraded produced a
+    /// casual room whatever was ticked here. See <see cref="RoomFormats"/> for why the format
+    /// is read off the room's size rather than sent as a field of its own.</para>
+    /// </summary>
+    public RoomFormat CreatedLobbyFormat { get; private set; }
+
+    /// <summary>
     /// Build the dialog. <paramref name="profiles"/> populates the mod
     /// dropdown; <paramref name="initiallySelected"/> is the entry that
     /// starts highlighted (typically the active profile from the Play
@@ -146,11 +171,10 @@ public partial class CreateLobbyDialog : Window
         CompetitiveTitleText.Text = Strings.Get("MpCreateDialogCompetitive");
         CompetitiveHint.Text = Strings.Get("MpCreateDialogCompetitiveHint");
         CompetitiveCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogCompetitiveHint"));
-        CompetitiveSizeNote.Text = Strings.Get("MpCreateDialogCompetitiveSizeNote");
+        CompetitiveFormatLabel.Text = Strings.Get("MpCreateDialogFormat");
         PasswordRevealButton.Content = Strings.Get("MpCreateDialogShowPassword");
         Suggest1.Content = Strings.Get("MpCreateDialogSuggest1");
         Suggest2.Content = Strings.Get("MpCreateDialogSuggest2");
-        Suggest3.Content = Strings.Get("MpCreateDialogSuggest3");
         CancelButton.Content = Strings.Get("MpCreateDialogCancel");
         CreateButton.Content = Strings.Get("MpCreateDialogCreate");
         BuildRecordWarning();
@@ -184,6 +208,11 @@ public partial class CreateLobbyDialog : Window
         }
 
         BuildMaxPlayersRow();
+        BuildFormatRow();
+        // A format is chosen from the start even while the row is hidden, so ticking the box
+        // reveals a row with something already selected rather than three inert buttons.
+        SelectFormat(RoomFormat.OneVOne);
+        RefreshCompetitiveUi();
         RoomTitleBox.Focus();
 
         // Ceiling for SizeToContent="Height". This form only grows — the Record Game
@@ -293,8 +322,84 @@ public partial class CreateLobbyDialog : Window
         RefreshCompetitiveSizeNote();
     }
 
+    /// <summary>The 1v1 / 2v2 / 3v3 row, revealed only while the competitive box is ticked.</summary>
+    private void BuildFormatRow()
+    {
+        FormatRow.Children.Clear();
+        _formatButtons.Clear();
+        foreach (var format in Formats)
+        {
+            var btn = new Button
+            {
+                Content = Strings.Get(RoomFormats.LabelKey(format)!),
+                Style = (Style)FindResource("MpSegment"),
+                Tag = null,
+                // A format needing more seats than the server allows cannot be created at all,
+                // so it is shown disabled rather than hidden — the row then says what the
+                // ceiling IS, the same choice the player-count row makes one section up.
+                IsEnabled = RoomFormats.PlayersFor(format) <= _lobbyMaxPlayers,
+            };
+            var chosen = format;
+            btn.Click += (_, _) => SelectFormat(chosen);
+            _formatButtons[format] = btn;
+            FormatRow.Children.Add(btn);
+        }
+    }
+
+    /// <summary>
+    /// Pick a format, which also picks the room size — 1v1 is two seats, 2v2 four, 3v3 six.
+    ///
+    /// <para><b>The size is moved BEFORE the row is disabled, and that order is the whole
+    /// trap.</b> <c>IsEnabled = false</c> does not deselect: leaving it to the disabling pass
+    /// would keep the old segment tagged active and <c>_maxPlayers</c> holding the old number,
+    /// so the room would be created the wrong size with nothing on screen disagreeing.</para>
+    /// </summary>
+    private void SelectFormat(RoomFormat format)
+    {
+        _format = format;
+        foreach (var kv in _formatButtons)
+            kv.Value.Tag = kv.Key == format ? "active" : null;
+
+        // The size follows the format ONLY while the room is competitive. Without that guard the
+        // constructor's own SelectFormat would drag a casual room down from eight seats to two
+        // before anybody had ticked anything.
+        var seats = RoomFormats.PlayersFor(format);
+        if (CompetitiveCheck?.IsChecked == true && seats > 0 && seats <= _lobbyMaxPlayers)
+            SelectMaxPlayers(seats);
+        RefreshCompetitiveUi();
+    }
+
     private void CompetitiveCheck_Changed(object sender, RoutedEventArgs e)
-        => RefreshCompetitiveSizeNote();
+    {
+        // Ticking adopts the format that matches the size already chosen, when there is one.
+        // Snapping a host who deliberately set four players back to 1v1 would resize their room
+        // as a side effect of ticking a box.
+        if (CompetitiveCheck.IsChecked == true)
+        {
+            var fromSize = RoomFormats.Resolve(competitive: true, _maxPlayers);
+            SelectFormat(fromSize == RoomFormat.Unknown ? _format : fromSize);
+        }
+        RefreshCompetitiveUi();
+    }
+
+    /// <summary>
+    /// Show or hide the format row, lock the player-count row while a format owns it, and say
+    /// what the chosen format means for the rating.
+    /// </summary>
+    private void RefreshCompetitiveUi()
+    {
+        if (CompetitiveCheck == null || CompetitiveFormatRow == null) return;
+        var competitive = CompetitiveCheck.IsChecked == true;
+
+        CompetitiveFormatRow.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
+
+        // The size belongs to the format while there is one, so the row is shown but inert —
+        // hiding it would leave the host unable to see how big their own room is.
+        foreach (var kv in _maxPlayerButtons)
+            kv.Value.IsEnabled = !competitive && kv.Key <= _lobbyMaxPlayers;
+
+        RefreshCompetitiveSizeNote();
+    }
 
     /// <summary>
     /// Warn — never forbid — when a competitive room is sized so that it can never score.
@@ -308,8 +413,32 @@ public partial class CreateLobbyDialog : Window
     private void RefreshCompetitiveSizeNote()
     {
         if (CompetitiveSizeNote == null || CompetitiveCheck == null) return;
-        var shout = CompetitiveCheck.IsChecked == true && _maxPlayers > 2;
-        CompetitiveSizeNote.Visibility = shout ? Visibility.Visible : Visibility.Collapsed;
+
+        // Asked of the FORMAT, never of the seat count. "More than two players" also describes
+        // a casual room, which has no rating to miss out on — and the two things worth saying
+        // here are opposites, so one slot carries whichever applies.
+        var format = RoomFormats.Resolve(CompetitiveCheck.IsChecked == true, _maxPlayers);
+
+        // 1v1: the forfeit clause, which used to sit in the main hint and was shown to team
+        // rooms too. The server refuses to apply it past two players, so saying it there was a
+        // threat nothing carries out.
+        if (RoomFormats.AbandonmentApplies(format))
+        {
+            CompetitiveSizeNote.Text = Strings.Get("MpCreateDialogCompetitiveForfeit");
+            CompetitiveSizeNote.Visibility = Visibility.Visible;
+            return;
+        }
+
+        // A team format: the rating is the thing that is NOT true for it yet.
+        if (RoomFormats.IsTeam(format))
+        {
+            CompetitiveSizeNote.Text = Strings.Format(
+                "MpCreateDialogCompetitiveTeamNote", Strings.Get(RoomFormats.LabelKey(format)!));
+            CompetitiveSizeNote.Visibility = Visibility.Visible;
+            return;
+        }
+
+        CompetitiveSizeNote.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -619,6 +748,7 @@ public partial class CreateLobbyDialog : Window
             CreatedLobbyIsCompetitive = CreatedLobby?.Competitive == true;
             CreatedLobbyCompetitiveDowngraded =
                 CompetitiveCheck.IsChecked == true && !CreatedLobbyIsCompetitive;
+            CreatedLobbyFormat = RoomFormats.Resolve(CreatedLobbyIsCompetitive, maxPlayers);
             DialogResult = true;
             Close();
         }

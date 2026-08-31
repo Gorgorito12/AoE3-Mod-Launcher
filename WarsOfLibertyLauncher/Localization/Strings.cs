@@ -2328,12 +2328,23 @@ public static class Strings
             [LangEn] = "No matches yet — your first game will appear here.",
             [LangEs] = "Todavía no hay partidas — tu primera partida aparecerá aquí.",
         },
+        // Heads a side in a team match. 1-based because "Equipo 0" reads as a bug; the stored
+        // number is 0-based and normalised by MatchTeamMap.
+        ["MpHistoryTeam"] = new()
+        {
+            [LangEn] = "Team {0}",
+            [LangEs] = "Equipo {0}",
+        },
         ["MpHistoryPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
         ["MpHistoryReplay"] = new() { [LangEn] = "Replay", [LangEs] = "Repetición" },
         // Shown only for a match whose result was actually read. There is deliberately no
         // "Draw" label: 0.5 means "not known", and calling that a draw would invent one.
         ["MpHistoryWin"] = new() { [LangEn] = "Win", [LangEs] = "Victoria" },
         ["MpHistoryLoss"] = new() { [LangEn] = "Loss", [LangEs] = "Derrota" },
+        // Per-player, in the roster under a match. Same rule as the badges above: a player
+        // whose score is 0.5 gets NEITHER of these, because nobody could read who won.
+        ["MpHistoryPlayerWon"] = new() { [LangEn] = "Won", [LangEs] = "Ganó" },
+        ["MpHistoryPlayerLost"] = new() { [LangEn] = "Lost", [LangEs] = "Perdió" },
 
         // --- Profile: the standing, all of it server-side ---
         ["MpProfileRating"] = new() { [LangEn] = "Rating {0}", [LangEs] = "Puntuación {0}" },
@@ -2458,13 +2469,84 @@ public static class Strings
             [LangEn] = "Community activity",
             [LangEs] = "Actividad de la comunidad",
         },
-        ["MpActivityStripWindow"] = new() { [LangEn] = "last 24 h", [LangEs] = "últimas 24 h" },
+        // A FORMAT now, filled from the window the server reports. It used to be the
+        // literal "last 24 h" while nothing in the panel was a 24 h window: the recent
+        // matches are the newest few ever, the ladder is all-time, and the histogram is
+        // 30 days — which the subtitle a few pixels below it already said.
+        ["MpActivityStripWindow"] = new()
+        {
+            [LangEn] = "last {0} days",
+            [LangEs] = "últimos {0} días",
+        },
         ["MpActivityRecentTitle"] = new() { [LangEn] = "RECENT MATCHES", [LangEs] = "ÚLTIMAS PARTIDAS" },
+        // Two headings for one card, because the card has two sources. The community
+        // list is what the strip promises; the personal one is the fallback for a
+        // backend that cannot answer it, and calling THAT "community matches" would lie.
+        ["MpActivityRecentCommunityTitle"] = new()
+        {
+            [LangEn] = "COMMUNITY MATCHES",
+            [LangEs] = "PARTIDAS DE LA COMUNIDAD",
+        },
+        // Only ever written for a two-player match whose winner was actually read.
+        ["MpActivityWon"] = new() { [LangEn] = "{0} beat {1}", [LangEs] = "{0} le ganó a {1}" },
+        ["MpActivityAgo"] = new() { [LangEn] = "{0} ago", [LangEs] = "hace {0}" },
+
+        // --- the community numbers, the middle third ---
+        ["MpActivityTotalsTitle"] = new() { [LangEn] = "COMMUNITY", [LangEs] = "COMUNIDAD" },
+        ["MpActivityTotalsMatches"] = new()
+        {
+            [LangEn] = "{0} matches · {1} d",
+            [LangEs] = "{0} partidas · {1} d",
+        },
+        ["MpActivityTotalsPlayers"] = new()
+        {
+            [LangEn] = "{0} players · {1} d",
+            [LangEs] = "{0} jugadores · {1} d",
+        },
+        ["MpActivityTotalsTopMap"] = new()
+        {
+            [LangEn] = "Most played: {0}",
+            [LangEs] = "Mapa más jugado: {0}",
+        },
+        // Shown in place of the table while nobody qualifies, which after a ratings
+        // reset is everybody for weeks. It names the requirement instead of leaving a
+        // third of the strip blank.
+        ["MpActivityRankingEmpty"] = new()
+        {
+            [LangEn] = "Nobody is on the table yet — it takes {0} decided matches, "
+                     + "the ones whose recording says who won.",
+            [LangEs] = "Todavía no hay nadie en la tabla: entras con {0} partidas "
+                     + "decididas, las que tienen una grabación que diga quién ganó.",
+        },
         // A match whose result couldn't be read (no recording, or a team game). Most
         // stored matches are these, so the row says so instead of looking like a win.
         // The ladder card. "Decided" is the column that matters and the one that needs a
         // header of its own: most stored matches have no winner, so a table headed
         // "matches" would invite the reader to divide by the wrong number.
+        // The Ranking subtab: the whole ladder, where the community strip shows only its
+        // top three. Two ladders, one table, one payload.
+        ["MpSubtabRanking"] = new()
+        {
+            [LangEn] = "RANKING",
+            [LangEs] = "CLASIFICACIÓN",
+        },
+        ["MpRankingModeSolo"] = new()
+        {
+            [LangEn] = "1v1",
+            [LangEs] = "1v1",
+        },
+        ["MpRankingModeTeam"] = new()
+        {
+            [LangEn] = "TEAMS",
+            [LangEs] = "EQUIPOS",
+        },
+        // Shown when the server answered but has no table to give — as opposed to having
+        // one that nobody qualifies for yet, which says so with MpActivityRankingEmpty.
+        ["MpRankingUnavailable"] = new()
+        {
+            [LangEn] = "There is no ranking to show yet.",
+            [LangEs] = "Todavía no hay clasificación que mostrar.",
+        },
         ["MpActivityRankingTitle"] = new() { [LangEn] = "RANKING", [LangEs] = "CLASIFICACI\u00D3N" },
         ["MpActivityRankColHash"] = new() { [LangEn] = "#", [LangEs] = "#" },
         ["MpActivityRankColPlayer"] = new() { [LangEn] = "PLAYER", [LangEs] = "JUGADOR" },
@@ -3315,8 +3397,20 @@ public static class Strings
         // has never existed. The format arity is unchanged so the call site stays as it was.
         ["MpChatReplaySaved"] = new()
         {
-            [LangEn] = "Replay saved: {0} ({1} KB).",
-            [LangEs] = "Repetición guardada: {0} ({1} KB).",
+            [LangEn] = "Replay saved: {0} ({1} KB). AoE3 renames it after your next match — "
+                     + "open it from the result card.",
+            [LangEs] = "Repetición guardada: {0} ({1} KB). AoE3 la renombra en tu siguiente "
+                     + "partida — ábrela desde la tarjeta de resultado.",
+        },
+        // The same line when the recording gave up its map, which is the ONE thing that tells
+        // one of these apart from another: the file name does not, because AoE3 calls them all
+        // "Record Game N" and renumbers so the newest is always 1.
+        ["MpChatReplaySavedMap"] = new()
+        {
+            [LangEn] = "Replay saved: {0} · {2} ({1} KB). AoE3 renames it after your next "
+                     + "match — open it from the result card.",
+            [LangEs] = "Repetición guardada: {0} · {2} ({1} KB). AoE3 la renombra en tu "
+                     + "siguiente partida — ábrela desde la tarjeta de resultado.",
         },
         ["MpChatYouCancelled"] = new()
         {
@@ -3384,6 +3478,20 @@ public static class Strings
                      + "de hacerlo y ninguna funciona. Sin grabaci\u00F3n la partida no tiene un ganador "
                      + "legible y no cuenta para nadie.",
         },
+        // The third item, competitive rooms only. It is a RULE, not a task, and it exists
+        // because the abandonment penalty was written in exactly one place — the
+        // create-room dialog, which only the HOST sees. The wording deliberately mirrors
+        // MpCreateDialogCompetitiveHint word for word: the guest has to be able to read the
+        // same rule the host agreed to, and the two drifting apart is how somebody loses
+        // rating to a sentence they were never shown.
+        //
+        // "Five minutes" is spelled out in both, and the number the SERVER actually uses is
+        // COMPETITIVE_ABANDON_SECONDS (300). Change one and change all three.
+        ["MpPreflightAbandon"] = new()
+        {
+            [LangEn] = "Walking out after the first five minutes counts as a loss",
+            [LangEs] = "Abandonar después de los primeros cinco minutos cuenta como derrota",
+        },
         ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
         ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
         ["MpRoomLeaveShort"] = new() { [LangEn] = "Leave the room", [LangEs] = "Salir de la sala" },
@@ -3442,6 +3550,7 @@ public static class Strings
                      + "se podr\u00E1 asociar con su grabaci\u00F3n y no contar\u00E1 para el ELO de nadie. "
                      + "Abre AoE3 una vez y aseg\u00FArate de que tu perfil tiene nombre.",
         },
+        ["MpResultTitle"] = new() { [LangEn] = "Match result", [LangEs] = "Resultado de la partida" },
         ["MpResultWin"] = new() { [LangEn] = "Victory", [LangEs] = "Victoria" },
         ["MpResultLoss"] = new() { [LangEn] = "Defeat", [LangEs] = "Derrota" },
         // NOT "draw": 0.5 is what the backend stores when the outcome could not be read.
@@ -3619,7 +3728,15 @@ public static class Strings
         ["MpResultPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
         ["MpResultDecidedHeader"] = new() { [LangEn] = "DECIDED", [LangEs] = "DECIDIDAS" },
         ["MpResultReplayHeader"] = new() { [LangEn] = "REPLAY", [LangEs] = "REPETICI\u00D3N" },
-        ["MpResultReplayNone"] = new() { [LangEn] = "not uploaded", [LangEs] = "no subida" },
+        // "not uploaded" until the cell started naming the FILE. Upload is still scaffolded
+        // with no caller, but the cell no longer talks about it, so its empty state is now the
+        // honest one: the game wrote nothing.
+        ["MpResultReplayNone"] = new() { [LangEn] = "no recording", [LangEs] = "sin grabación" },
+        ["MpResultReplayReveal"] = new()
+        {
+            [LangEn] = "Show it in Explorer.",
+            [LangEs] = "Mostrarla en el Explorador.",
+        },
         ["MpResultRivalHeader"] = new() { [LangEn] = "OPPONENT", [LangEs] = "RIVAL" },
         ["MpResultUnknownValue"] = new() { [LangEn] = "\u2014", [LangEs] = "\u2014" },
         ["MpResultProvisional"] = new()
@@ -3638,6 +3755,13 @@ public static class Strings
         {
             [LangEn] = "Working out the result…",
             [LangEs] = "Calculando el resultado…",
+        },
+        // The guest's half of the wait, and the state that used to be blank. Everything this
+        // launcher could do is done; what is left is the other player's machine.
+        ["MpResultWaitingHost"] = new()
+        {
+            [LangEn] = "Waiting for the host to send the result…",
+            [LangEs] = "Esperando a que el anfitrión envíe el resultado…",
         },
         ["MpCreateDialogTitle"] = new() { [LangEn] = "Create a room", [LangEs] = "Crear una sala" },
         ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "Room title", [LangEs] = "Título de la sala" },
@@ -3669,26 +3793,72 @@ public static class Strings
             [LangEn] = "Competitive room (counts towards the rating)",
             [LangEs] = "Sala competitiva (cuenta para el ELO)",
         },
+        // THE FORFEIT CLAUSE LEFT THIS STRING, and it has to stay out. It used to end with
+        // "walking out after the first five minutes counts as a loss", which is a 1v1 rule:
+        // decideByAbandon refuses anything but two participants, so in a team room the launcher
+        // was threatening a penalty the server does not apply. It now lives in
+        // MpCreateDialogCompetitiveForfeit, shown only for 1v1. The two clauses that remain are
+        // true for every format — ConfirmRecordGameAsync and RoomMatchState.HoldLeave both key
+        // off the competitive flag alone.
         ["MpCreateDialogCompetitiveHint"] = new()
         {
-            [LangEn] = "Only matches played in a competitive room count towards anyone's rating. "
-                     + "In exchange the launcher gets strict: it asks you to confirm Record Game "
-                     + "before the countdown, it won't let you leave the room until the result "
-                     + "has been sent, and walking out after the first five minutes counts as a "
-                     + "loss.",
-            [LangEs] = "Solo las partidas de una sala competitiva cuentan para el ELO. A cambio "
-                     + "el launcher se pone estricto: te pide confirmar «Record Game» antes de "
-                     + "la cuenta atrás, no te deja salir de la sala hasta enviar el resultado, "
-                     + "y si abandonas después de los primeros cinco minutos cuenta como "
-                     + "derrota.",
+            // Says WHY before it says what, because the "why" explains both demands at
+            // once. The old copy listed the two rules and never mentioned the recording,
+            // so confirming Record Game and being held in the room read as arbitrary
+            // strictness rather than as the two halves of reading a result off a file.
+            [LangEn] = "Matches in this room count towards the rating. The winner is decided by "
+                     + "the game's own recording, not by anyone's word — which is why the "
+                     + "launcher asks you to confirm Record Game before each match, and keeps "
+                     + "you in the room for a few seconds afterwards while it reads the result "
+                     + "and sends it.",
+            [LangEs] = "Las partidas de esta sala cuentan para el ELO. El ganador lo decide la "
+                     + "grabación que hace el propio juego, no lo que diga nadie: por eso el "
+                     + "launcher te pide confirmar «Record Game» antes de cada partida y te "
+                     + "mantiene unos segundos en la sala al terminar, mientras lee el "
+                     + "resultado y lo envía.",
         },
-        // Shown only when the chosen size can never score. It informs; it does not forbid.
-        ["MpCreateDialogCompetitiveSizeNote"] = new()
+        // 1v1 only. See the note above the hint.
+        ["MpCreateDialogCompetitiveForfeit"] = new()
         {
-            [LangEn] = "Only one-on-one matches score. With more than two players the room plays "
-                     + "perfectly well — it just won't count towards anyone's rating.",
-            [LangEs] = "Solo el 1v1 puntúa. Con más de 2 jugadores la sala se juega igual, pero "
-                     + "no va a contar para el ELO de nadie.",
+            [LangEn] = "Walking out after the first five minutes counts as a loss.",
+            [LangEs] = "Si abandonas después de los primeros cinco minutos, cuenta como derrota.",
+        },
+        // The three competitive formats. Short on purpose: they are segment captions in a
+        // row three wide, and every language writes them the same way.
+        ["MpFormat1v1"] = new() { [LangEn] = "1v1", [LangEs] = "1v1" },
+        ["MpFormat2v2"] = new() { [LangEn] = "2v2", [LangEs] = "2v2" },
+        ["MpFormat3v3"] = new() { [LangEn] = "3v3", [LangEs] = "3v3" },
+        ["MpCreateDialogFormat"] = new()
+        {
+            [LangEn] = "FORMAT",
+            [LangEs] = "FORMATO",
+        },
+        // Shown for a TEAM format only. It informs, it does not forbid — and it has to be said
+        // here, because the hint above promises a rating and for these two that is not true yet.
+        // Shown on the end-of-match card for a team game whose result is in but whose
+        // corroboration is not. See teamEvidenceMet on the backend.
+        ["MpResultUnratedAwaitingTeam"] = new()
+        {
+            [LangEn] = "The result is in, but the team ladder also needs a reading from the "
+                     + "other side. It counts as soon as one of them closes the game with the "
+                     + "launcher still open.",
+            [LangEs] = "El resultado ya está, pero la clasificación de equipos necesita además "
+                     + "una lectura del otro bando. Cuenta en cuanto uno de ellos cierre el "
+                     + "juego con el launcher abierto.",
+        },
+        ["MpCreateDialogCompetitiveTeamNote"] = new()
+        {
+            // It used to say a team match moved nobody's rating. It does now — on its own
+            // ladder — so what this has to explain instead is the condition, because that
+            // is the part a player can do something about: somebody on the OTHER side has
+            // to still have the launcher open when the game closes.
+            [LangEn] = "A {0} scores on its own ladder — the team one, separate from 1v1. It "
+                     + "counts once a player from EACH side has read the recording: two "
+                     + "readings that agree, one per team, so no side decides its own result.",
+            [LangEs] = "Un {0} puntúa en una clasificación aparte, la de equipos, separada de "
+                     + "la de 1v1. Cuenta cuando un jugador de CADA bando lee la grabación: "
+                     + "dos lecturas que coincidan, una por equipo, para que ningún bando "
+                     + "decida su propio resultado.",
         },
         // The server refused the competitive room and made a casual one. Saying nothing would
         // leave the host playing as if their rating were on the line when it is not.
@@ -3743,7 +3913,6 @@ public static class Strings
         // things a host announces about the match, not as titles by themselves.
         ["MpCreateDialogSuggest1"] = new() { [LangEn] = "Quick 1v1", [LangEs] = "1v1 rápido" },
         ["MpCreateDialogSuggest2"] = new() { [LangEn] = "No rush 10 min", [LangEs] = "Sin rush 10 min" },
-        ["MpCreateDialogSuggest3"] = new() { [LangEn] = "LatAm only", [LangEs] = "Solo LatAm" },
         ["MpCreateDialogPrivateBody"] = new()
         {
             [LangEn] = "Not announced. Share the code or the password.",
@@ -3844,6 +4013,17 @@ public static class Strings
                      + "cost both players the result.",
             [LangEs] = "Estamos leyendo la grabación para saber quién ganó. Si sales ahora, la "
                      + "partida no va a contar para ninguno de los dos.",
+        },
+        // Held for a different reason than the other two: nothing of ours is outstanding, so
+        // leaving costs nobody the report — it costs only this player the sight of their own
+        // result. Say that, rather than borrowing the host's "it won't count" wording, which
+        // would be false here.
+        ["MpLeaveBlockedWaitingHost"] = new()
+        {
+            [LangEn] = "The host is still closing their game. The result arrives in a moment — "
+                     + "leave now and you will not see it.",
+            [LangEs] = "El anfitrión todavía está cerrando su juego. El resultado llega en un "
+                     + "momento; si sales ahora no lo vas a ver.",
         },
         ["MpLeaveBlockedReporting"] = new()
         {
@@ -4264,6 +4444,22 @@ public static class Strings
         {
             [LangEn] = "✔ Graphics, sound and hotkeys copied from {0}.",
             [LangEs] = "✔ Gráficos, sonido y atajos copiados de {0}.",
+        },
+        // The two causes that used to hide behind "couldn't be read". The first is not an
+        // error at all: the game writes its profile on the first run, so a mod nobody has
+        // opened yet has nothing to copy INTO — and telling that player something failed sent
+        // them looking for a problem that does not exist.
+        ["ModPropSettingsNeverOpened"] = new()
+        {
+            [LangEn] = "This mod has never been opened, so it has no settings file yet. "
+                     + "Open it once and try again.",
+            [LangEs] = "Este mod nunca se ha abierto, así que todavía no tiene archivo de "
+                     + "ajustes. Ábrelo una vez y vuelve a intentarlo.",
+        },
+        ["ModPropSettingsNoSourceSettings"] = new()
+        {
+            [LangEn] = "{0} has no graphics, sound or hotkeys to copy. This mod is unchanged.",
+            [LangEs] = "{0} no tiene gráficos, sonido ni atajos que copiar. Este mod queda igual.",
         },
         ["ModPropSettingsImportFailed"] = new()
         {
@@ -5723,6 +5919,24 @@ public static class Strings
             [LangEs] = "Esta descarga necesita unos {0} libres, pero solo hay {1} en {2}. Puede fallar "
                      + "a la mitad si el disco se llena. ¿Continuar igual?",
         },
+        // The install dialog's optional row. Shown ONLY when another installed mod could
+        // supply them, so a first-ever install never sees it.
+        ["DlgInstallCopySettings"] = new()
+        {
+            [LangEn] = "Copy graphics, sound and hotkeys from:",
+            [LangEs] = "Copiar gráficos, sonido y atajos de:",
+        },
+        // Says WHEN, because it is usually not now. The game writes its settings file on its
+        // first run, so a brand-new mod has nowhere to put them until then — and a promise
+        // that quietly does nothing for one launch is worse than no promise.
+        ["DlgInstallCopySettingsHint"] = new()
+        {
+            [LangEn] = "Your saved games, home cities and profile are not touched. If this mod is "
+                     + "new, the copy is applied once you have opened it — not on the first launch.",
+            [LangEs] = "Tus partidas guardadas, tus metrópolis y tu perfil no se tocan. Si el mod "
+                     + "es nuevo, la copia se aplica cuando ya lo hayas abierto una vez, no en el "
+                     + "primer arranque.",
+        },
         ["DiskSpaceConfirmTitle"] = new()
         {
             [LangEn] = "Low disk space",
@@ -6064,6 +6278,66 @@ public static class Strings
         {
             [LangEn] = "Close",
             [LangEs] = "Cerrar",
+        },
+
+        // -------- Running under a different Windows account (RunningAccount) --------
+        // Shown once when the launcher runs as one account while another account's session is
+        // open — the "run as administrator with someone else's credentials" case, which quietly
+        // splits a player's recordings, saves, decks and launcher settings across two profiles.
+        ["DlgCrossUserTitle"] = new()
+        {
+            [LangEn] = "The launcher is running under another Windows account",
+            [LangEs] = "El launcher está corriendo con otra cuenta de Windows",
+        },
+        ["DlgCrossUserBody"] = new()
+        {
+            [LangEn] = "You are signed in to Windows as {1}, but the launcher is running as {0}.\n\nAge of Empires III writes into the Documents folder of the account that started it, and the launcher is what starts it. So your recorded games, saves, home city decks and launcher settings are going to {0}'s folders — and if you sometimes open the launcher normally, they end up split between the two accounts.",
+            [LangEs] = "Iniciaste sesión en Windows como {1}, pero el launcher se está ejecutando como {0}.\n\nAge of Empires III escribe en la carpeta Documentos de la cuenta que lo inició, y quien lo inicia es el launcher. Así que tus partidas grabadas, tus guardados, tus mazos y los ajustes del launcher están yendo a las carpetas de {0} — y si algunas veces abres el launcher normal, terminan repartidos entre las dos cuentas.",
+        },
+        ["DlgCrossUserWhereNow"] = new()
+        {
+            [LangEn] = "Where it is being saved now, under {0}:",
+            [LangEs] = "Donde se está guardando ahora, en {0}:",
+        },
+        ["DlgCrossUserWhereYours"] = new()
+        {
+            [LangEn] = "Your own account, {0}:",
+            [LangEs] = "Tu propia cuenta, {0}:",
+        },
+        ["DlgCrossUserAutoStart"] = new()
+        {
+            [LangEn] = "Starting with Windows will not work this way either: the launcher registers it for the account it runs as, and Windows only reads your own when you sign in.",
+            [LangEs] = "Iniciar con Windows tampoco va a funcionar así: el launcher lo registra para la cuenta con la que corre, y Windows solo lee la tuya cuando inicias sesión.",
+        },
+        ["DlgCrossUserHowTo"] = new()
+        {
+            [LangEn] = "To keep everything in one place, open the launcher normally — a plain double-click, not \"run as administrator\" with another account. It does not need administrator rights. Whatever is already saved under the other account stays there, and you can copy it across yourself.",
+            [LangEs] = "Para tener todo en un mismo lugar, abre el launcher normal — con doble clic, no con «ejecutar como administrador» usando otra cuenta. No necesita permisos de administrador. Lo que ya se guardó en la otra cuenta se queda ahí, y puedes copiarlo tú mismo.",
+        },
+        ["DlgCrossUserCopyPaths"] = new()
+        {
+            [LangEn] = "Copy paths",
+            [LangEs] = "Copiar rutas",
+        },
+        ["DlgCrossUserCopied"] = new()
+        {
+            [LangEn] = "Copied",
+            [LangEs] = "Copiado",
+        },
+        ["DlgCrossUserClose"] = new()
+        {
+            [LangEn] = "Got it",
+            [LangEs] = "Entendido",
+        },
+        ["DlgSettingsStartupWrongAccount"] = new()
+        {
+            [LangEn] = "Registered for {0}, but you sign in to Windows as {1} — so Windows will not start it for you. Open the launcher as {1} and turn this on again.",
+            [LangEs] = "Registrado para {0}, pero inicias sesión en Windows como {1}, así que Windows no lo va a iniciar por ti. Abre el launcher como {1} y vuelve a activarlo.",
+        },
+        ["ModPropUserDataOtherAccount"] = new()
+        {
+            [LangEn] = "The launcher is running as {0}, so this is {0}'s folder, not {1}'s. Anything saved while the launcher was open as {1} is in a different one.",
+            [LangEs] = "El launcher se está ejecutando como {0}, así que esta es la carpeta de {0}, no la de {1}. Lo que se guardó con el launcher abierto como {1} está en otra.",
         },
 
         // -------- Download corruption retry (NativeInstall) --------

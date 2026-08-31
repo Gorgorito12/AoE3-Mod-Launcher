@@ -124,6 +124,19 @@ public enum LocalReadFailure
 /// mismatch fails EVERY match until it is fixed. Kept out of the localized string because it is
 /// data, not prose, and it must not be translated.</para>
 /// </param>
+/// <param name="RecordingPath">
+/// The full path of the recording this match was read from, or null when there was none.
+///
+/// <para><b>It is here because the file's NAME is not an answer.</b> AoE3 calls every recording
+/// <c>Record Game N.age3Yrec</c> and renumbers after each match, so the newest is always
+/// number 1 — measured on a real bundle where three matches in one evening were each read from
+/// a file called <c>Record Game 1</c>. A player told that name goes looking for it after his
+/// next match and finds a different game. The path exists so the card can SELECT the file in
+/// Explorer, which is the only form of the answer that survives.</para>
+///
+/// <para>Trailing and defaulted, like the two above, so nothing that builds this without a
+/// recording has to say so.</para>
+/// </param>
 public sealed record MatchOutcomeView(
     MatchVerdict Verdict,
     string? ModId,
@@ -139,7 +152,8 @@ public sealed record MatchOutcomeView(
     double? Rd,
     string? UnratedReason = null,
     LocalReadFailure LocalFailure = LocalReadFailure.None,
-    string? LocalFailureDetail = null)
+    string? LocalFailureDetail = null,
+    string? RecordingPath = null)
 {
     /// <summary>
     /// Which explanation to show for a match that did not score.
@@ -162,6 +176,11 @@ public sealed record MatchOutcomeView(
         var fromServer = reason switch
         {
             "not_1v1" => "MpResultUnratedTeam",
+            // Temporary, unlike every other reason here: the match HAS a winner and is
+            // waiting for the other side to send its own reading of the recording. Worth
+            // its own message because it is the only one the player can still change, by
+            // asking the opponents to leave the launcher open when the game closes.
+            "awaiting_confirmation" => "MpResultUnratedAwaitingTeam",
             "mod_not_ranked" => "MpResultUnratedMod",
             "not_competitive" => "MpResultUnratedNotCompetitive",
             "duplicate_recording" => "MpResultUnratedDuplicate",

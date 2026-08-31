@@ -232,6 +232,25 @@ public class ModState
     public bool? GameRecordingApplied { get; set; }
 
     /// <summary>
+    /// A mod the player chose, while installing THIS one, to copy graphics, sound and hotkeys
+    /// from — kept until the copy actually happens. Empty means there is nothing owed.
+    ///
+    /// <para><b>It exists because the copy cannot be made when the choice is made.</b> The
+    /// settings live in <c>My Games\&lt;mod&gt;\Users3\&lt;profile&gt;.xml</c>, and Age of Empires III
+    /// writes that file on its FIRST run — so at the end of an install there is usually nothing
+    /// to write into, and nothing may fabricate one (see
+    /// <see cref="Services.GameSettingsSync"/>, which refuses to invent profile structure). The
+    /// choice is therefore recorded and applied at the next launch that finds a profile.</para>
+    ///
+    /// <para><b>Per mod, and cleared on any outcome except "not yet"</b> — see
+    /// <see cref="Services.GameSettingsStore.KeepPending"/>. A reinstall of a mod that was played
+    /// before never lands here at all: its profile already exists and the copy happens during the
+    /// install.</para>
+    /// </summary>
+    [JsonPropertyName("pendingSettingsImportFrom")]
+    public string PendingSettingsImportFrom { get; set; } = "";
+
+    /// <summary>
     /// Whether the last competitive match of this mod produced no recording at all.
     /// <c>null</c> = nothing conclusive yet.
     ///
@@ -1113,6 +1132,25 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("selfInstallPromptShown")]
     public bool SelfInstallPromptShown { get; set; } = false;
+
+    /// <summary>
+    /// Marks that we have already explained, once, that the launcher is running under a
+    /// different Windows account than the one whose session is open (see
+    /// <see cref="Services.RunningAccount"/>) — so the player's recordings, saves, decks
+    /// and launcher settings are landing in that other account's folders.
+    ///
+    /// <para>Set BEFORE the dialog opens, the same rationale as
+    /// <see cref="SelfInstallPromptShown"/> and <see cref="BackgroundDefaultSeeded"/>: a
+    /// notice that was dismissed, or that died with the process, must not come back every
+    /// launch.</para>
+    ///
+    /// <para><b>Per-config, and that is exactly right here.</b> Each Windows account has its
+    /// own <see cref="Services.AppPaths.DataDir"/>, so this marker lives in the config of the
+    /// account that has the problem — which is the one the notice is about. Running normally
+    /// again reads a different config, where it was never needed and never shown.</para>
+    /// </summary>
+    [JsonPropertyName("crossUserAccountNoticeShown")]
+    public bool CrossUserAccountNoticeShown { get; set; } = false;
 
     /// <summary>
     /// Set when the user ticked "don't show this again" on the pre-install

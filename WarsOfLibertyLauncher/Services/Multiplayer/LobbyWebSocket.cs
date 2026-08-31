@@ -52,6 +52,23 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     private Task? _runLoop;
     private int _attempt = 0;
 
+    /// <summary>
+    /// How long a connection has to survive before it counts as a success worth resetting the
+    /// backoff for.
+    ///
+    /// <para>The reset used to happen the moment <c>ConnectAsync</c> returned, on the reasonable-
+    /// sounding theory that reaching the server means the trouble is over. It is not: the backend
+    /// accepts the upgrade and THEN closes with a code — <c>4404 lobby_not_found</c> for a room
+    /// that no longer exists — so every attempt "succeeded", the counter went back to zero, and
+    /// the exponential backoff never left its first step. Measured on a real client: about two
+    /// hundred reconnects in five minutes, roughly one a second, ending only because the player
+    /// closed the window.</para>
+    ///
+    /// <para>Terminal close codes are also handled by name a layer up, which is the better fix
+    /// for the cases we can enumerate. This is the one that covers the ones we cannot.</para>
+    /// </summary>
+    private const long StableConnectionMs = 5000;
+
     public LobbyWebSocket(Uri wsUri, HelloMode mode, string credential)
     {
         _uri = wsUri;
@@ -158,6 +175,23 @@ public sealed class LobbyWebSocket : IAsyncDisposable
         SendAsync(new { type = "set_radmin_ip", ip }, ct);
 
     /// <summary>
+    /// Report our AoE3 profile name so the room can tell which recording slot belongs to which
+    /// Discord account — the only link between the two, and the thing that lets a team game be
+    /// recorded with real teams instead of everyone on team 0.
+    ///
+    /// <para><b>Self-reported because it cannot be inferred.</b> The profile name is per MOD and
+    /// routinely nothing like the account: measured on one machine, the same person is
+    /// <c>Gorgorito12</c> on Discord and <c>Gorgorito</c> / <c>gorgorito</c> / <c>sdfs</c> in
+    /// three mods. Everyone in the room is about to read this name off each other's screens
+    /// inside AoE3 anyway.</para>
+    ///
+    /// <para>Same shape as <see cref="SendSetRadminIpAsync"/>: the server stores it on the
+    /// member, puts it in <c>room_state</c> and broadcasts <c>member_ingame_name</c>.</para>
+    /// </summary>
+    public Task SendSetInGameNameAsync(string name, CancellationToken ct = default) =>
+        SendAsync(new { type = "set_ingame_name", name }, ct);
+
+    /// <summary>
     /// Host-only: ask the server to kick a member. The server validates we're
     /// the host, tells the target it was kicked, and closes its socket (the
     /// normal disconnect path then drops it from the roster for everyone).
@@ -222,6 +256,10 @@ public sealed class LobbyWebSocket : IAsyncDisposable
             if (ct.IsCancellationRequested) return;
 
             // Backoff: 1 s, 2 s, 4 s … capped at 30 s.
+            //
+            // The counter is reset by a connection that LASTED, never by one that merely
+            // opened — see StableConnectionMs. Resetting on the upgrade alone is what turned
+            // this into a flat 1 req/s loop against a room the server had already deleted.
             var delay = Math.Min(30, 1 << Math.Min(5, _attempt));
             _attempt++;
             Reconnecting?.Invoke(this, $"in {delay}s");
@@ -243,7 +281,7 @@ public sealed class LobbyWebSocket : IAsyncDisposable
             "X-Launcher-Version", LauncherUpdateService.CurrentInformationalTag);
 
         await _ws.ConnectAsync(_uri, ct);
-        _attempt = 0;     // reset backoff after a successful connect
+        var connectedAt = Environment.TickCount64;
 
         // First frame must be hello.
         var hello = _mode == HelloMode.JoinToken
@@ -275,6 +313,9 @@ public sealed class LobbyWebSocket : IAsyncDisposable
         }
         finally
         {
+            // Here rather than after ConnectAsync: by now we know whether the connection was
+            // real or whether the server hung up on us the instant it opened.
+            if (Environment.TickCount64 - connectedAt >= StableConnectionMs) _attempt = 0;
             heartbeatCts.Cancel();
             try { await heartbeat; } catch { /* ignored */ }
         }

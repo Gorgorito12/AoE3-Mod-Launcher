@@ -250,6 +250,15 @@
          the rest of the multiplayer scale rather than inside it. -->
     <sys:Double x:Key="MpResultTitleSize">17</sys:Double>
     <sys:Double x:Key="MpRatingSize">22</sys:Double>
+    <!-- The community-activity strip, and ONLY it. Its own three sizes because it is the
+         one place in the tab that went the other way: the rest of multiplayer keeps the
+         handoff's 10.5/11.5 (see MpLabelSize above, ratified twice), while this strip was
+         raised to the type scale's documented 13 floor on a later explicit call. Separate
+         tokens so the two decisions stay separable — reversing either is one number, and
+         neither can leak into the other. -->
+    <sys:Double x:Key="MpActivityTitleSize">11.5</sys:Double>
+    <sys:Double x:Key="MpActivityBodySize">13</sys:Double>
+    <sys:Double x:Key="MpActivityHeadlineSize">16</sys:Double>
     <sys:Double x:Key="MpFieldHeight">34</sys:Double>
     <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
     <sys:Double x:Key="MpControlHeight">30</sys:Double>

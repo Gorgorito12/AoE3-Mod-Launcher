@@ -358,6 +358,52 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   What ends a game this way is not established: the container is intact, so it is not corruption
   or a truncated write. Don't guess it from one sample.
 
+  **A FOURTH shape, and this one is not damage at all — the block is PERFECT and the game simply
+  wrote a byte after it.** Measured on the first match ever captured from BOTH machines (WoL
+  1.2.0e, `ESOC_Fertile Crescent`, seed 13911). The two recordings carry the SAME outcome block —
+  marker `81`, `A=2`, `B=2`, `C=2` — and the LOSER's copy has one extra trailing byte, putting its
+  signature **33** bytes from the end against the winner's 32. `ReadOutcome` checked at exactly
+  `len-32`, so it answered `Ambiguous` for a recording that says plainly who lost. Confirmed
+  against the host's own reading of the same game: `Confident 1,0`.
+
+  That is half the evidence for every match being thrown away by one byte — the loser's copy
+  matters most, because he is the one who usually leaves first and whose confirmation is the
+  cross-check the ladder leans on.
+
+  **So `ReadOutcome` scans the last `MaxTrailingSlack` (512) bytes, nearest-to-the-end first, and
+  VALIDATES each candidate instead of stopping at the first.** This started as `len-32` only, then
+  8 bytes of slack for the loser's extra byte above — and 8 was still losing one competitive match
+  in five.
+
+  **The measurement that replaced the guess, prompted by a player whose 21-minute ranked game did
+  not count.** His recording's block sat **135 bytes** from the end, reading `A=1 B=1 C=2` — a
+  clean verdict naming him the loser. Over 20 readable 1v1 recordings the old bound decided
+  **16**; the four it gave up on had valid blocks at **78, 79, 135 and 195**. The new rule decides
+  **20 of 20 and changes none of the 16** — measured, not argued.
+
+  **Widening alone would NOT have fixed it, and that is the half worth remembering.** In that same
+  file the signature NEAREST the end is 12 bytes out and is rubbish (`A = 0xFFFFFFFF`, the Baja
+  California shape all over again). `TrailerStart` returned only the nearest and `ReadOutcome` gave
+  up when it failed, so the real block 123 bytes further back was never examined. Enumerating
+  candidates is the other half.
+
+  **What makes a window this wide safe is the validation, not the width — which is what the old
+  version of this paragraph already said while the constant said otherwise.** Within the last 512
+  bytes of those 20 files there are **26 candidates; exactly 20 pass, one per file, never two**,
+  and the 6 rejected are unmistakable (`A = -1` with `C = 3212836864`, the float `-1.0` repeated).
+  Two independent conditions do that work: **A must name a slot the header holds**, and **C should
+  equal the human count**. C is a PREFERENCE, never a refusal — the two test fixtures are real
+  skirmishes whose blocks say `C = 1` and the tests relabel their AI as human, so requiring it
+  would reject genuine files over a doctored header. It settles the only case a wide window
+  introduces: more than one candidate naming a real slot. **Do not raise 512 without repeating the
+  measurement** — accidental-signature density is what bounds this and it grows with the window.
+
+  **Never do this by trimming trailing zeros instead**: the block's last field is `02 00 00 00`, so
+  it ENDS in three zeros and trimming eats the payload. Anchor on the signature, never on the end
+  of the file. Pinned by `AGarbageSignatureNearerTheEndDoesNotHideTheRealBlock` (the reported
+  shape), `ASignatureBeyondTheWindowIsOutOfReach` (the bound still exists),
+  `TheCoherentBlockWinsOverTheNearerOne` (C beating proximity) and `AnExactTrailerIsPreferred…` (nearest still wins among the valid) — the rejections are the point.
+
   **And do not guess from a partial block.** Those 5 bytes read two ways: `00 01 00 00` =
   256 (no such slot), or `01 00 00 00` = slot 1 — the recorder, whose player states he WON
   that match. Guessing would have taken ~160 points from the winner.
@@ -384,11 +430,32 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   longer a claim about who *can* read a recording.
 
   **Confident requires all three:** the exact signature, an A naming a slot the header
-  has, and exactly two players. Past a 1v1 "X lost" doesn't name a winner — the others
-  may have lost too and nothing records the order — so team games stay draws until the
-  room state can identify every player. **Ambiguous must be reported as a draw**: this
-  feeds a rating, and an invented winner takes points from someone with nothing on
-  screen to explain it.
+  has, and exactly two players. Past a 1v1 "X lost" doesn't name a winner on its own — the
+  others may have lost too and nothing records the order. **The room state DOES identify every
+  player now** (see the identity-bridge paragraph above), so what is left before a team game
+  could be Confident is one measured fact: whether a team recording writes an outcome block at
+  all. **Ambiguous must be reported as a draw**: this feeds a rating, and an invented winner
+  takes points from someone with nothing on screen to explain it.
+
+  **What is actually known about team recordings, measured over 33 unique files.** One human
+  (skirmish): 4 of 4 carry a block. Two humans (1v1): **21 of 28**. Four humans (2v2): **0 of
+  1** — and that single 2v2 is not evidence of anything, because its tail is byte-for-byte the
+  same shape as a 1v1 that ended abnormally. **The "a team game writes a LONGER block"
+  hypothesis is refuted**; don''t re-derive it.
+
+  **READ THE ABOVE WITH THE SLACK FIX IN MIND — the "21 of 28" was largely OUR bug, not the
+  game's.** Those counts were taken with `MaxTrailingSlack = 8`. Re-measured over 20 readable
+  1v1s with the 512-byte scan, **20 of 20 carry a usable block**: the four that had looked
+  blockless had one at 78, 79, 135 and 195 bytes. So "a quarter of 1v1s have no block" was the
+  parser giving up, and the sentence that used that figure to excuse the 2v2 has lost its
+  premise. **The single 2v2 was never re-measured** — the file is not to hand — so whether a team
+  recording writes a block is still open, but it is now open for a DIFFERENT reason than it was.
+  A 43-file folder collected to answer it turned out to contain no team game at all (19 readable,
+  all 1v1; the other 10 were not recordings — a PNG, an `.exe`, four of zeroes).
+  Two things that DID come out of those files: `A == B` in all 13 decided 1v1s (thirteen more
+  confirmations that B is the loser, not the recorder), one block sits **5 bytes** short of the
+  end (without the 8-byte slack that match would not have rated), and **`C` equals the human
+  count in all 25 readings**.
 
   **The community references are worse than they look:** the official forum thread on
   the format is someone *requesting* documentation, and the AoE3:DE parser on GitHub
@@ -469,16 +536,24 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   because `optionrecordgame` is per mod profile. It is written beside
   `MaybeReportMissingRecording` with the SAME inputs, so the two cannot disagree about whether
   this was a real host-side match.
-  **`MaybeProbeRecordingStarted` is INSTRUMENTATION for an open question, not a feature.** Nobody
-  knows whether AoE3 creates the `.age3Yrec` when a match STARTS or only when it ends. If at the
-  start, the launcher could tell a competitive host mid-match that nothing is recording, while
-  there is still time to restart — which would finally make this a real check. So a one-shot
-  probe 90 s into a competitive host match LOGS how many recordings newer than the launch exist,
-  and **deliberately does not warn**: acting on the unproven half would fire a false alarm on
-  every match if AoE3 turns out to write at the end. Same approach `replay-index.txt` was added
-  for — let the answer arrive from real bundles. **When it does: either this becomes a live check,
-  or the probe is deleted and the reason written down here.** Do not leave it as a permanent
-  log line nobody reads.
+  **ANSWERED: AoE3 writes the recording at the END of the match, so there is nothing to check
+  while it is running, and `MaybeProbeRecordingStarted` has been DELETED.** This paragraph used
+  to describe that probe — a one-shot log line 90 s into a competitive match, counting recordings
+  newer than the launch — and promised that when the answer arrived it would either become a live
+  check or be removed with the reason written down. It is the second.
+
+  The evidence is a real player's bundle, and it is not the probe's own count: three competitive
+  matches in one evening each produced a recording whose last-write time was **28, 42 and 54
+  seconds BEFORE** the launcher analysed it, and that analysis runs the instant the game process
+  exits. Three out of three, written as the match ended. So the idea this was gathering evidence
+  for — warning a competitive host mid-match that nothing is being recorded, while there is still
+  time to restart — is dead: at 90 seconds there is nothing to look at.
+
+  The probe's own counts were consistent (0, 1, 0) and **the 1 has no explanation**: the only
+  recording of that session carried a timestamp two minutes and twenty seconds EARLIER than the
+  launch it was compared against. Written down rather than smoothed over. It does not move the
+  conclusion — a file's timestamp is direct evidence, a count is not — but it is the loose end if
+  this ever comes up again.
 
   **So the host is reminded before every launch, and only an explicit
   `LauncherConfig.GameRecordingReminderMuted` stops it.** It was first gated on "a recording
@@ -555,13 +630,55 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   install may write something else and the purge simply does nothing there: the safe
   direction.
 
-  **The identity gap is the blocker for scoring, not the parsing.** The replay names
+  **The identity gap WAS the blocker for scoring, and the room state now carries in-game
+  names — which is exactly what this paragraph said it was waiting for.** The replay names
   players by their *AoE3 profile name* (`'69metal69'`); the backend needs the Discord
-  `users.id`. Nothing links them. Only the host's own name is knowable, and it comes from
-  `UserDataService.GetInGameName` — which determines a 1v1 completely (host won ⇒ the
-  other lost) but not a team game, so anything beyond 1v1 stays a draw until the room
-  state carries in-game names. **Ambiguous must report a draw — never an invented
-  winner**, since this feeds a rating.
+  `users.id`. Nothing in the file links them, and only the local player's own name is
+  knowable, from `UserDataService.GetInGameName`. That determines a 1v1 completely (host won
+  ⇒ the other lost) and says nothing about a team game.
+
+  So every launcher now **publishes its own** name over the room socket —
+  `LobbyWebSocket.SendSetInGameNameAsync` → `set_ingame_name` →
+  `room_state.members[x].ingameName` + a `member_ingame_name` broadcast — copying
+  `set_radmin_ip`/`member_net` line for line, **including the dedup guard reset on room
+  ENTRY**: without it the second room of a session short-circuits on the unchanged name,
+  never sends it to the new socket, and every team game from that room silently loses its
+  teams. That precise bug already happened once with the Radmin IP.
+
+  **`Services/Multiplayer/MatchTeamMap.cs` is the pure rule that joins the two**, and every
+  clause in it is a refusal: all-or-nothing (one unmatched name refuses the WHOLE map,
+  because a half-filled one puts a real person on the wrong side of a real match in somebody
+  else's history), duplicate names refuse, a head count that disagrees with the recording
+  refuses, `teamid = -1` on every slot refuses (that is what all fourteen measured 1v1s
+  carry, and what an FFA carries), one team refuses, and a mix of real ids and -1 refuses.
+  Null means "report no teams", which is what the launcher did for every match before this.
+  Team ids are normalised to `0,1,2…` by lowest slot so both machines that could report one
+  match agree on the numbers. Pinned by `MatchTeamMapTests` against the real 2v2 fixture.
+
+  **The names are FROZEN into `MatchContext` at Start, not read when the match is reported** —
+  and this is the difference between the feature working and never working. The player who
+  leaves the room first is reliably the one who just lost, so by report time the live roster no
+  longer holds their name; with the map being all-or-nothing, one missing name refuses the whole
+  thing. Reading late would lose the teams of exactly the matches this exists for. Same rule, and
+  the same reason, as the roster itself (`AClosedRoomCannotChangeTheAnswer`); pinned by
+  `TheInGameNamesAreFrozenAtStart`. `Capture` also drops any name belonging to somebody outside
+  the roster, since that would make the head count disagree with the recording's.
+
+  **Guessing the link from the names is ruled out by measurement, not taste.** On one machine
+  the same person is `Gorgorito12` on Discord and `Gorgorito` (WoL) / `gorgorito` (Improvement
+  Mod) / `sdfs` (base game) — the profile is per MOD and none of the three equals the account.
+  That is why the name is self-reported and why `MaybeReportInGameName` resolves it from the
+  ROOM's mod, not the dashboard's.
+
+  **This reverses the rejection recorded further down** (*"Rejected on purpose: comparing AoE3
+  profile names… Don't re-propose it"*), and the distinction is worth keeping: that rejection
+  was about `same_game`, where the **seed** does the same job with no name at all and is
+  strictly better. For the team map there is no seed-shaped alternative — the name is the only
+  link that exists — and the objections it raised (names unlike the account, blank or odd ones)
+  are precisely why this self-reports and refuses rather than guesses.
+
+  **Ambiguous must still report a draw — never an invented winner**, since this feeds a
+  rating. Teams are recorded; **nothing about them rates yet** (see the ELO rules).
 
   **The in-game name is NOT in `LastProfile3.dat`.** That file holds the active profile's
   FILE name, which is the stock `NewProfile3` on all five installs checked — the same
@@ -592,6 +709,46 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   ownership before its verdict can ever be reported. His own two recordings are accepted
   and then refused a result for being skirmishes. Redundant on purpose: each gate alone
   would have let one of those through.
+
+- **A RECORDING'S NAME IS NOT AN IDENTITY — AoE3 calls them all `Record Game N` and RENUMBERS
+  after every match, so the newest is always number 1. Never hand a player a file name and
+  call it an answer.** Measured, not assumed: in one bundle three competitive matches in a
+  single evening were each analysed from a file called `Record Game 1.age3Yrec`
+  (`ESOC_Manchuria`, then `ESOC_High Plains`, then `ESOC_Tibet`), and by the time the bundle
+  was taken those same three files were numbered 1, 2 and 3 in reverse order of play.
+
+  **The bug that came out of it is the reason this is written down.** The launcher's ONLY
+  statement about the file was the room-chat line `MpChatReplaySaved` ("Replay saved: {0} ({1}
+  KB)."), so that player was told "Record Game 1" three times, and every one of those names had
+  moved on to a different game before he went looking. He reported it as the launcher not
+  recording at all. **It records fine** — the folder is `Savegame`, singular, next to `Users3`
+  under `My Games\<mod>`, and every one of his matches was there, read and rated.
+
+  Two fixes, and the split between them matters:
+  - **The end-of-match card's REPLAY cell names the file and REVEALS it** — `explorer.exe
+    /select`, via `Services/FileReveal.cs`, so the right one is selected among ten with
+    interchangeable names. Opening the folder would not have answered the question. The cell was
+    previously a fixed "not uploaded"; upload is still scaffolded with no caller, but the cell
+    stopped being about the upload, so `MpResultReplayNone` now says "no recording".
+  - **The chat line names the MAP as well** (`MpChatReplaySavedMap`, used when the recording
+    gave one) and says outright that AoE3 will rename the file. The map is the only thing in
+    that sentence that still identifies the match tomorrow.
+
+  **The path has to be a FIELD, `_lastRecordingPath`, read at paint time** — the same rule, and
+  the same trap, as `_lastLocalReadFailure`. The card's `_outcomeRebuilder` CAPTURES its
+  `MatchReplayInfo`, so a reading that lands after the first paint (the early read, or the late
+  correction) would repaint a card still holding the null it started with. It is **only ever
+  assigned a real file and cleared only in `EnterInGamePhase`**: a later pass that finds nothing
+  must not take away what an earlier one found, which is the same "a later pass may only improve
+  the diagnosis" rule one paragraph up.
+
+  **`FileReveal` falls back to the folder and never throws, and neither half is politeness.** A
+  stored path goes stale two ways — the renumbering above, and `GameRecordingPurge` deleting
+  automatic recordings past the newest ten — so by click time it routinely names nothing; and an
+  exception there would take down the card it is drawn on. Its tooltip carries the FULL path,
+  which is what a player needs when the launcher runs as another Windows account: in that same
+  bundle the `.exe` sat on one user's desktop and every file it wrote went to a different user's
+  Documents, so nothing in the player's own profile could ever have been found.
 
 - **THE GAME'S EXIT IS NOW DETECTED TWO WAYS, and the second one exists because the first
   silently does not always happen.** `Process.Exited` was the ONLY trigger for
@@ -806,10 +963,18 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   being removed. Only a real result is kept. `_replayAnalysisInFlight` keeps this and the exit
   handler's own search from interleaving.
 
-  **The `replay-index.txt` in the diagnostic bundle is what will settle whether this is worth
-  keeping**: its `mtime` against the game-exit line in the log answers when AoE3 writes the
-  file. If it writes at match end, this early read and the empty-folder retry both become dead
-  weight and should come out.
+  **ANSWERED, and the answer says this early read almost never pays.** `replay-index.txt`
+  against the game-exit line in the log was the test, and it came back: AoE3 writes the file at
+  match END (see the probe paragraph above — three recordings, each written 28-54 s before the
+  exit handler ran). So while our own game is still open there is usually nothing on disk to
+  read, and this path plus the empty-folder retry are mostly dead weight.
+
+  **They were nonetheless KEPT, and the reason is the shape of the failure, not sentiment.** The
+  early read costs nothing when there is no file — one directory walk — discards a failure in
+  silence by design, and still pays in the one case it was built for: a player whose own AoE3
+  stays open for nine minutes after a match his opponent already reported. Removing it would
+  save nothing measurable and would put that case back. Revisit it only with a bundle showing
+  it firing uselessly and often.
 
 - **The replay search window has a CEILING now, and it orders rather than rejects.**
   `FindMatchReplay`'s filter had only ever had a floor (newer than the launch), so a file
@@ -944,6 +1109,30 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   that never happened. Every meta segment is likewise dropped when empty, so an old row
   renders exactly as it always did.
 
+  **The row also NAMES who played and marks the winner, and that needed a backend change
+  because nothing on the client could supply it.** A history row is the caller's OWN
+  `match_participants` row joined to the match, so it could count heads and never name one —
+  `_roomMembers` is live-room state that dies with the room, and `MatchContext.Participants`
+  holds ids, not names. Both halves were already in the database, names in `users` and the
+  win/loss in `match_participants.result`, and simply never joined. `attachParticipants`
+  (`src/matches/rest.ts`) does it in **ONE extra query for the whole page** — fifty ids into a
+  single `IN`, grouped in JS, never one query per match. That JOIN on `users` is **INNER**,
+  unlike the two LEFT JOINs on `elo_ratings` this bullet insists on elsewhere: the FK is
+  `ON DELETE CASCADE`, so a participant cannot outlive its user, and a LEFT could only add a
+  nameless row nothing can render.
+
+  **Client-side the rule is the pure `MatchParticipantsView`** (pinned by
+  `MatchParticipantsViewTests`), and every rule in it is a refusal: a 0.5 gets **no ✓/✕** —
+  the same omission as the badge, applied per player — a rating with either end missing shows
+  **no delta rather than "+0"**, and the order is recomputed on the client rather than trusted
+  from the server's `ORDER BY`, which a client cannot see change. **The head count and the
+  names are alternatives, never both:** `MpHistoryPlayers` ("2 players") is dropped when
+  participants arrive and kept when they don't, so a backend older than the field renders the
+  row exactly as it always did — the same degradation `PlayerCount` itself already had.
+  `BuildHistoryRow` also stopped hand-rolling `>= 0.999` / `<= 0.001` and goes through
+  `MatchOutcomeView.Classify`, so the badge and the per-player lines can no longer answer the
+  same number differently.
+
 - **The History subtab is fed by a HOST-ONLY match report at game exit — don't
   re-add PER-PLAYER reporting.** (This bullet used to also forbid an ELO display.
   That half is obsolete: showing the rating is now the point. What stays banned is
@@ -969,8 +1158,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   match_reported`) tears down the lobby window for everyone. (4) **`result=0.5` is
   now the FALLBACK, not the design** — a clean human 1v1 reports the real winner
   (result-wiring bullet below); a team game, an unreadable recording or one refused
-  by any gate still reports all-draws. `BuildHistoryRow` shows `mod [Win|Loss] ·
-  N players · map · duration · date`. **The backend never needed a change for any of
+  by any gate still reports all-draws. `BuildHistoryRow` shows `mod [Win|Loss] [±ELO] ·
+  map · duration · date` over one line per player (avatar, name, won/lost, their own ±ELO) —
+  see the roster paragraph above for what it refuses to show. **The backend never needed a change for any of
   this** — an earlier note here claimed it forced 0.5; it does not. `POST /matches`
   has always taken `p.result` per participant, validated the sum against N/2, fed it
   to Glicko via `applyMatch`, and returned `result`/`map_name`/`rating_*` from
@@ -1247,6 +1437,21 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the whole `RoomAnnounceState` from `lobbies` JOIN `users` on a cache miss (every
   embed field already lived on those rows; only the ids needed the column). So any
   close path — and a REVIVED room's live edits — work across a restart.
+
+  **That rehydration was ALSO the one path through which host migration reached Discord,
+  and it credited the wrong person.** In normal operation the embed keeps naming the
+  CREATOR for the life of the room, and by three independent mechanisms:
+  `notifyRoomChanged` accepts only `players`/`status`/`title`, `renderKey` does not
+  include the host, and `reflectToDiscord` has no case for `host_changed`. But
+  `rehydrate` rebuilt the state by joining `host_user_id` — the host NOW — so after a
+  restart the author silently switched to whoever had inherited the room. Every deploy is
+  a restart, so this was frequent, and it was reported as "the second player appears as
+  the creator". Migration `0010` adds **`lobbies.created_by`**, written once at
+  `POST /lobbies` and never updated (`reassignHost` mutates `host_user_id` in place, so
+  nothing else remembers who opened the room), and the join is now
+  `COALESCE(l.created_by, l.host_user_id)` — the fallback being exactly the old behaviour
+  for rooms created before the column existed. **The three mechanisms above were left
+  alone deliberately**: they are what keeps a host change from editing the embed at all.
   **Load-bearing details:** only the webhook's **id** is stored, never the token
   (the id is the public half of `.../webhooks/<id>/<token>`; the token is re-paired
   from `cfg.discordWebhookUrls` at edit time), so a leaked/backed-up DB can't post
@@ -1986,6 +2191,58 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   host's card deterministic rather than a race. `GameRestartedSince()` stays
   `_matchPhase == InGame`, so the Result phase correctly reads as "no game running".
 
+- **A MATCH DOES NOT END WHEN OUR GAME CLOSES — it ends when the HOST reports it, and on a
+  guest's machine that is always later. `_pendingResultContext` is what survives the gap.**
+  This is the single cause behind three symptoms a real competitive match produced at once: no
+  result shown, nothing said, and a room the launcher appeared to think was still playing.
+
+  **The mechanism.** `OnGameExitedAsync`'s `finally` clears `_matchContext`, which is correct for
+  what that field MEANS ("the match I will report") and wrong for receiving. The guest's game
+  closes first — the player who lost leaves first — so by the time `match_reported` arrives,
+  carrying every participant's result and rating change, the field is null. `HandleMatchReported`
+  opened with two `return`s on that, **neither of which logged anything**, and the `4007` close
+  behind it was gated on the same field, so it fell through to the generic reconnect. Measured on
+  the real match: sixteen seconds between the two games closing, then ~230 reconnects to a deleted
+  room over five minutes, stopped only by the player closing the window.
+
+  **`_pendingResultContext` is deliberately a SECOND field, not a longer life for the first.**
+  `_matchContext`'s lifetime is guarded by `ReferenceEquals` + `GameRestartedSince` for reasons
+  that have their own bullet, and lengthening it would put the REPORT path — which works — at
+  risk to fix the RECEIVE path. `ResultContext()` returns `_matchContext ?? _pendingResultContext`
+  and is what every post-game reader now goes through. Cleared when the result lands, when the
+  room is left, when a new match captures its own context in `EnterInGamePhase`, and by
+  `ResultWaitCeilingSeconds` (120). **Every silent `return` on the frame path now logs its
+  reason** — that silence is what made the fault take an afternoon to find, because a `return`
+  with no log is indistinguishable from a frame that never arrived.
+
+  **`MatchPhase.AwaitingResult` is the guest's visible half, and it is NOT `Result` renamed.**
+  `EnterResultPhase` calls `StopReconnect`, and the socket it hangs up on is the one
+  `match_reported` still has to arrive on — entering it early hangs up on the answer. The new
+  phase shows the same `MatchResultOverlay` and collapses the same left column, and leaves the
+  socket alone. The card says `MpResultWaitingHost` and, when `ShouldOfferRejoin` applies, offers
+  the way back into the game: **the launcher cannot tell "my game closed because the match ended"
+  from "my game crashed mid-match", so the card offers both readings rather than guessing one.**
+  At the ceiling it becomes `ShowResultUnavailable`, which gained a "back to rooms" button —
+  without one that panel is a dead end, since it covers the very column the Leave button is in.
+
+  **Two terminal close codes stop the reconnect: `4404 lobby_not_found` and `4006 lobby_closed`.**
+  Retrying a deleted room cannot succeed, and it did not slow down either, because
+  `LobbyWebSocket` reset its backoff on a connection that ESTABLISHED — and these close
+  immediately after the upgrade, so the exponential backoff never left its first step. Fixed at
+  both levels: the codes are handled by name, and the backoff now only resets for a connection
+  that lasted `StableConnectionMs` (5 s). Handling the codes is the better fix for the cases we
+  can enumerate; the timer covers the ones we cannot.
+
+  **The phase does not survive its room.** `HandleLobbyWindowClosed` resets `_matchPhase` when it
+  is `Result` or `AwaitingResult`. Left set, it survives into the NEXT room the player opens,
+  where `ApplyMatchPhaseUi` paints a fresh lobby with the result overlay up and the whole left
+  column collapsed — no roster, no Ready, no Start, and nothing explaining why.
+
+  **And a result that lands with no window is no longer discarded.** `ShowMatchResult` returned
+  in silence when `_lobbyWindow` was null; it now falls back to a desktop toast plus a bell entry
+  (`AnnounceResultWithoutAWindow`), deduped on the match id so a later `match_rated` frame cannot
+  show the same match twice. The window is deliberately not reopened — the player closed it.
+
 - **The result card's numbers come from the POST for the host and from the HISTORY for
   everyone else — and `TryReportMatchAsync` must keep returning its boolean unchanged.**
   `POST /matches` answers with `ReportMatchResponse.RatingChanges`, a `rating_before` /
@@ -2095,9 +2352,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 - **Backend gaps the multiplayer redesign is waiting on** (documented, never faked).
   Four of the six are now CLOSED — see the ELO bullet below — and what remains is:
   per-room ping needs `radmin_ip` on `GET /lobbies` — without it the PING column shows
-  YOUR latency, identical on every row, which is why sorting by it is a no-op; and the
-  REPLAY cell reads "not uploaded" because `ReplayUploadService.UploadAsync` still has no
-  live caller. (Closed: per-member ELO now rides on the room-state member object;
+  YOUR latency, identical on every row, which is why sorting by it is a no-op. (The REPLAY
+  cell used to be listed here too: `ReplayUploadService.UploadAsync` still has no live
+  caller, but the cell stopped being about the upload — see the recording-file bullet.
+  Closed: per-member ELO now rides on the room-state member object;
   PEAK HOURS and RANKING are fed by `GET /stats/community`; and `match_reported` carries
   the result, so the guest's **three** polls — this bullet used to say four — are now only
   a fallback for an old backend.)
@@ -2145,8 +2403,45 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   it means "there was no room to ask", and only an explicit `false` refuses. Collapse the two
   and a report with no `lobby_id` answers `not_competitive` instead of `no_lobby` — a worse
   message and, worse, a false one. Pinned by the `no_lobby` case in `ratability.test.ts`.
+  **A competitive room also DECLARES A FORMAT — 1v1 / 2v2 / 3v3 — and the format is its SIZE.**
+  Ticking the box reveals a segmented row; picking one sets the seat count (2 / 4 / 6) and locks
+  the player-count row while the box stays ticked. **The format is DERIVED from
+  `(competitive, max_players)` by the pure `Services/Multiplayer/RoomFormats`, never sent** —
+  which is why `POST /lobbies` now also requires a competitive room to be 2, 4 or 6 seats and
+  downgrades it to casual otherwise. Without that clamp a patched client could create a
+  competitive room of 8 and leave a match whose format nothing can name.
+  **`RoomFormat.Unknown` exists so that such a room is never read as 1v1** — a fallback would
+  hand it the abandonment rule and a place on the 1v1 ladder on a guess. And `Casual` is not
+  "1v1 by default" either: a two-seat casual room's size says nothing about how it will be
+  played, which is the whole claim the competitive flag exists to prevent.
+  **The price, paid knowingly: format and size are now married.** The day a competitive room
+  wants spectator seats this stops deriving and has to become a real column on `lobbies` —
+  which is a migration plus the nine hops `competitive` already travels.
+  **The declared format is a PROMISE the report keeps.** It is frozen into `MatchContext` like
+  `IsCompetitive`, and `RoomFormats.TeamsAgreeWithFormat` drops the recording's teams when they
+  contradict it: a room created as 2v2 and actually played 1v3 would otherwise write
+  real-but-wrong sides into four people's history with nothing downstream able to tell. A room
+  that declared nothing (casual, unknown) cannot be contradicted, which is how a casual team
+  game still shows its sides.
+  **In the dialog the note under the box is format-driven and says opposite things:** the 1v1
+  forfeit clause, or — now that team games rate — which ladder a team match scores on and what
+  evidence it needs. It used to be one fixed string toggled by `_maxPlayers > 2`, which also
+  described a casual room, one with no rating to miss out on.
+
+  **The box is GOLD, and it used to wear the private-room purple.** It reused `MpPrivateCheck`
+  and the whole `MpPrivate*` family wholesale, so ticking "competitive" looked exactly like
+  ticking "private" — and the room it produced then wore a gold `MpCompetitiveBg` badge in the
+  rooms list. The badge was right and the box was wrong: "gold rather than a fifth hue" was
+  already the decision, taken where the badge is defined. The rest of the family
+  (`MpCompetitiveSoftBg` / `Rim` / `FieldRim` / `Title` / `Sub`) is the same alphas over the
+  same `#C9A227`. **`MpCompetitiveCheck` is a COPY of `MpPrivateCheck`, not a `BasedOn`** —
+  the state colours live on `TargetName` setters inside that template and a derived style
+  cannot override those, the precedence trap that left dead hover states in fifteen dialogs.
+  And the tick inside the filled box is `MpCompetitiveInk` `#261900`, not white: gold is a
+  light fill and white on it is about 2.5:1, the same call PLAY already makes.
   **The launcher asks; the server decides.** `POST /lobbies` accepts `competitive` and CLAMPS
-  it to false for a mod outside `rankedModIds`, then echoes the effective value on the 201.
+  it to false for a mod outside `rankedModIds` — and now also for a size no format names — then
+  echoes the effective value on the 201.
   `CreateLobbyDialog` reads `CreatedLobbyIsCompetitive` from the RESPONSE, never from its own
   checkbox, and says so in the room when the two differ
   (`MpCreateDialogCompetitiveDowngraded`) — a silent downgrade would leave the host playing
@@ -2168,8 +2463,17 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the button would let the commoner path skip it. Every match, not once per room: AoE3's box
   comes up unticked every time and the launcher cannot tick it, so "they were told once" is
   worth nothing by the third game.
-  (b) **`RoomMatchState.HoldLeave` shuts the Leave button** for a competitive HOST from the
-  moment the game closes until the result is settled, capped at `ResultGraceSeconds` (30).
+  (b) **`RoomMatchState.HoldLeave` shuts the Leave button** — for BOTH players in a competitive
+  room now, from the moment the game closes until the result is settled, capped at
+  `ResultGraceSeconds` (30). It used to be host-only, on the reasoning written into its own
+  comment: *"a guest leaving costs nothing"*. That is true about CORRECTNESS and is exactly where
+  it fails about EXPERIENCE — a guest's leaving costs nobody the report, and costs the guest the
+  only sight he will get of his own result. **The two holds mean different things and the
+  difference is load-bearing: the host's is correctness, the guest's is information. So the
+  guest's ceiling must never be raised.** A host waits on his own machine reading his own
+  recording; a guest waits on WHEN THE OTHER PLAYER CLOSES HIS GAME, which can be minutes or
+  never. Holding somebody on something a third party controls is how a player gets trapped in a
+  room. Pinned by `TheGuestIsReleasedAtTheCeilingEvenThoughNothingArrived`.
   **This is not politeness.** `matches/rest.ts` refuses a report from anyone who is no longer
   `lobbies.host_user_id`, and leaving hands that role straight to the opponent via
   `reassignHost` — so walking out in those seconds destroys the result for both players,
@@ -2191,7 +2495,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   confirmed Record Game. `MaxCandidatesExamined` stays at 5 either way — it counts recordings
   that PARSED, and a sixth real one holds no sixth answer.
 
-- **ABANDONING a competitive match after five minutes counts as a defeat — the one rule in the
+- **ABANDONING a match after five minutes counts as a defeat — 1v1 ONLY, and the launcher spent
+  a while promising it to everybody. The one rule in the
   project that moves rating from an ABSENCE of evidence, so read the brakes before touching
   it.** The exploit: the player who is losing closes his launcher, the game never writes an
   ending to the recording, the report goes down as "nobody won", and he keeps his rating.
@@ -2199,7 +2504,17 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   socket.
   It is defensible because it is the universal convention of competitive ladders — a
   disconnect is a loss — and because the host agrees to it in writing before the room exists
-  (`MpCreateDialogCompetitiveHint`). **It is not defensible as a default**, which is why it
+  (`MpCreateDialogCompetitiveForfeit`).
+
+  **It is 1v1 ONLY, and the launcher used to promise it to team rooms as well.** `decideByAbandon`
+  refuses anything but two participants, so in a 2v2 or 3v3 room the create-room hint and the
+  lobby's "before you start" item were both threatening a forfeit the server never carries out.
+  Both now ask `RoomFormats.AbandonmentApplies(format)` — which is true for `OneVOne` and nothing
+  else, deliberately including `Casual` and `Unknown`, because a rule written as "not 1v1" fires
+  on those too. The forfeit clause was moved OUT of `MpCreateDialogCompetitiveHint` into its own
+  string for exactly this reason: the two clauses that stayed (confirm Record Game, cannot leave
+  until the result is sent) are true for every format, since both key off the competitive flag
+  alone. **It is not defensible as a default**, which is why it
   only ever applies to a competitive room.
   **Detection is server-side and never claimed by a client.** `handleDisconnectCleanup` writes
   `lobby_abandons` (migration `0008`) in the SAME batch as the membership cleanup, via
@@ -2216,10 +2531,54 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   wait out the timer, alt-F4, repeat" with no game played, and requiring one puts every such
   match under the existing anti-duplicate index; at most one abandonment-decided match **per
   pair per 24 h** (`PAIR_COOLDOWN_MS`), because real disconnections are scattered and farming
-  is repetitive; the walkout must be at least `RECONNECT_GRACE_SECONDS` (90) old; and the game
-  must have run at least `Config.competitiveAbandonSeconds` (`COMPETITIVE_ABANDON_SECONDS`,
-  default 300 — policy, tuned with a restart like `rankedModIds`). **Both players gone is a
-  draw**, since the usual cause is the host's connection dying and taking the room with it.
+  is repetitive; the walkout must be at least `RECONNECT_GRACE_SECONDS` (90) old; and **the
+  walkout itself must be at least `Config.competitiveAbandonSeconds` into the match**
+  (`COMPETITIVE_ABANDON_SECONDS`, default 300 — policy, tuned with a restart like
+  `rankedModIds`). **Both players gone is a draw**, since the usual cause is the host's
+  connection dying and taking the room with it.
+
+  **That last brake used to measure the REPORT instead of the walkout, and it forfeited people
+  the rule was written to protect.** The check was `nowMs - startedAtMs`, where `nowMs` is when
+  the host's `POST /matches` lands — i.e. when the HOST closed his game. So the question it
+  actually asked was "had the room's match been going five minutes by the time the host
+  reported", which says nothing whatsoever about when the person being forfeited left. Measured
+  on the incident that surfaced it: a player left at **4:40**, the host kept his game open and
+  reported at **~15 min**, and the rule read fifteen minutes and took **176 points**. He would
+  have been forfeited leaving at thirty seconds just the same, and the create-room hint he
+  agreed to says the opposite in as many words. `lobby_abandons.disconnected_at` was already
+  stored and already read — it was simply never compared against the start.
+
+  Each walkout is now judged on **its own timestamp**, against the two limits separately, and
+  the refusal names WHICH one applied (`reason` is what the server logs and what `admin.ts
+  match:show` prints — it is the only account anyone disputing a forfeit will ever get; "the
+  game only ran 900s" would have been false twice over). **The new check REPLACES the old one
+  rather than joining it**: a walkout ≥ 300 s in whose report arrived ≥ 90 s later implies
+  `now - started ≥ 390 s`, so keeping both would leave a condition that can never fire. A
+  negative `secondsIntoMatch` — clocks disagreeing about a room that started after somebody
+  left it — lands in the too-early branch, which is the safe direction. Pinned by
+  `a walkout inside the first five minutes is not rescued by a long match`; its sibling
+  `a walkout past the threshold still decides, promptly` is what stops the fix from quietly
+  disarming the rule.
+
+  **The other half of that incident was that the guest had never been told the rule.** It was
+  written in exactly one place — `MpCreateDialogCompetitiveHint`, the create-room dialog, seen
+  only by the HOST. Whoever JOINS gets the competitive badge, whose tooltip says "this match
+  counts towards the rating", and nothing more. So the launcher now states it as the **third
+  item of the lobby's "BEFORE YOU START" card** (`PreflightAbandonRow` / `PreflightAbandonText`,
+  `MpPreflightAbandon`), shown only in a competitive room.
+  **Why that card and not a chat line:** the chat auto-scrolls and keeps 500 rows, so a line
+  posted on entry is gone before the match starts — the same reason the Record Game reminder
+  stopped being only a chat line. The card lives in `Grid.Column="0"`, which `InGameOverlay`
+  covers and `ApplyMatchPhaseUi` collapses during the match, so it hides itself for free; and
+  `RefreshPreflightChecklist` runs from `RenderRoomPanel`, so a host migration re-evaluates it.
+  It reads the LIVE `_currentLobbyIsCompetitive`, which is correct **here and only here** — a
+  pre-match surface shown while the room exists, the same field and method that already drive
+  the badge two lines away. The "never read it live" rule belongs to the post-match path, where
+  the room may be gone (`AClosedRoomCannotChangeTheAnswer`).
+  **The wording mirrors the create-room hint word for word, deliberately**, so the guest reads
+  the same rule the host agreed to. "Five minutes" is spelled out in BOTH strings and the number
+  the server actually enforces is `COMPETITIVE_ABANDON_SECONDS` — **three places, change them
+  together.**
   **Why 90 seconds, and it is NOT mainly about reconnecting.** Closing the launcher the moment
   a match ends is normal behaviour and drops the socket exactly like a rage-quit does; only
   WHEN tells them apart, and the window has to span the gap to the host's report, which
@@ -2262,6 +2621,116 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   missing was the server declining to rate that — which is why team games silently moved
   ratings for months. The server now requires exactly two participants itself, which also
   stops a patched launcher claiming a decided three-player match.
+
+  **(3b) A team game is RECORDED with its real sides**, joined to accounts through the in-game
+  names the room publishes (see the identity-bridge paragraph in the `.age3Yrec` section). The
+  launcher used to send `team = 0` for everybody. The backend needed nothing for it:
+  `match_participants.team` has existed since `0001_initial.sql` and `attachParticipants` already
+  selected and emitted it — it was simply always 0.
+
+  History groups the sides only when `MatchParticipantsView.HasTeams` is true, i.e. two or more
+  distinct teams. **A 1v1 and every pre-existing row report team 0 for everybody, so they render
+  exactly as before** — that equivalence is the property to protect, and it is pinned by
+  `AOneVersusOneHasNoTeamsToDraw`.
+
+  **(3c) TEAM GAMES NOW RATE, on a separate ladder. This bullet used to describe the plan; it
+  now describes what shipped, and the differences from the plan are the interesting part.**
+  `elo_ratings` carried `mode TEXT NOT NULL DEFAULT 'default'` with `PRIMARY KEY (user_id, mode)`
+  and `idx_elo_rating (mode, rating DESC)` from day one — `0001_initial.sql` says in as many
+  words that it exists for *"per-mode ratings later (1v1 / team / FFA)"* — so `mode = 'team'`
+  cost **no migration**. 2v2 and 3v3 **share** it: team games are rare and the community is
+  small, and splitting a scarce category leaves both halves permanently provisional against the
+  leaderboard's `rd <= 110` + 3 decided matches. Everything that DISPLAYS a rating still shows
+  the 1v1 one — the chip, the rooms list, the players panel, the roster — so switching this on
+  could not touch the ladder that has history. The Ranking subtab is the only surface that shows
+  both, behind a selector.
+
+  **`ReadOutcome` was NOT changed, and that is the good news the plan did not expect.** It
+  already hands back `LoserSlot` for a match of more than two players — it only refuses to name
+  a *winner*, which is a slot and genuinely does not exist for a side. So `Confidence` still
+  means "a clean 1v1 verdict" for every existing caller, and the team path reads
+  `SignaturePresent` + `LoserSlot` instead. **Naming one loser names a whole SIDE**, and the
+  other side is what is left; that is the entire idea and it needs no new bytes out of the file.
+
+  **What DID change, in order:** `MatchResultResolver.ResolveTeamResults` (new, pure) turns the
+  loser's slot into every player's score by joining it to the team map through the same in-game
+  names, refusing on three sides, uneven sides, an AI, a slot nobody claims, or a duplicate name;
+  `ratability.ts`'s `not_1v1` became `matchShape`, which keeps that answer for a free-for-all and
+  for sides that do not pair up; and **`glicko2.ts`'s round-robin, which was actively wrong** —
+  it decided each pairing by comparing `result`, so two teammates with the same score were fed to
+  Glicko as a **draw between themselves** (measured: 1900+1100 beating 1500+1500 gave the 1100
+  **+354** and the 1900 **−36**). `areOpponents` now skips same-side pairs, and a match with no
+  sides answers true for every pair, so 1v1 pairing is byte-for-byte what it always was.
+
+  **`ParticipantResult` is untouched and still `1.0 - hostResult`.** It is right for a 1v1 and
+  the team path simply does not go through it — pinned by
+  `TheHostsOwnTeammateIsNeverMarkedALoser`, which is the bug that would otherwise mark the host's
+  own partner a loser.
+
+  **Evidence required: at least one reading from EACH side, agreeing, on the same game**
+  (`teamEvidenceMet`, pure and tested). Not "N readings for an NvN": what has to be prevented is
+  a side lying about its own result, and only a witness from the other side breaks that — three
+  readings from the winning team are one claim three times. **The host's report IS his side's
+  reading**, so what the rule looks for is one agreeing confirmation from the opposing side,
+  which makes the achievable minimum two readings for any format. `same_game` must be an explicit
+  `'true'`: `'unknown'` means one side had no seed, and accepting it would let readings of
+  DIFFERENT games corroborate each other by coincidence. Being this strict is affordable
+  precisely because the ladder starts empty — a slow fill costs nobody a rating they already had,
+  which was not true when the same question was asked of 1v1.
+
+  **The sequencing consequence, and it is the genuinely new machinery: a team match is NOT rated
+  when it is reported.** It is stored with `rated = 0` and the new, TEMPORARY reason
+  `awaiting_confirmation`, and `maybeRateAwaitingTeamMatch` releases it when the witness arrives.
+  Checked from BOTH directions because the order is not guaranteed — the side that just lost
+  leaves first, so their confirmation routinely lands before the host has reported at all. The
+  row is CLAIMED with a conditional `UPDATE ... WHERE unrated_reason = 'awaiting_confirmation'`,
+  the same guard that stops the late-reading path rating one match twice, and a failure puts the
+  row back rather than leaving it marked rated with no ratings behind it. It never touches
+  `match_participants.result`: unlike its sibling it decides nothing, it only releases a result
+  that was already read.
+
+  **`teamEvidenceForMatch` recomputes `agreement` and `same_game` in memory rather than reading
+  the stored columns, and that is load-bearing.** At report time `tieConfirmations` has not run
+  yet, so those columns are still NULL for confirmations that arrived first — which is the COMMON
+  ordering. Reading the columns there would report "no evidence" for exactly the case the feature
+  exists to serve.
+
+  **The guest must compute his own side too, or none of this ever fires.** `TryConfirmMatchAsync`
+  sent `replay?.HostResult`, which is always null in a team match — so every confirmation of a
+  2v2 would have been a 0.5, landed as `inconclusive`, and the evidence rule could never be
+  satisfied by anybody. Report and confirmation now share one `ResolveTeamResults` helper, which
+  is also what stops two honest players contradicting each other over a file they both read
+  correctly.
+
+  **Migration `0010` added `matches.rating_mode`** — which ladder a match moved — because
+  `rating_before`/`rating_after` on `match_participants` could not otherwise be attributed once
+  two ladders existed. NULL means a row from before it, all of which were `'default'`; readers
+  must treat NULL as that, not as unknown. The leaderboard's win/loss tally is now scoped by it
+  too, or a player's 1v1 record would quietly be padded with their team wins.
+
+  **`scripts/admin.ts`'s `recomputeLadder` was a live bomb and is defused.** Its
+  `UPDATE elo_ratings SET …` had **no `WHERE mode`**, and it had no team guard, so the first
+  operator ladder replay after a team match was stored would have flattened both ladders and fed
+  the team match through the old round-robin. It now carries each match's `rating_mode` through
+  the replay. The reset statement still has no `WHERE`, deliberately — it replays BOTH — and the
+  comment says so, because narrowing this function to one ladder without narrowing that statement
+  would silently wipe the other.
+
+  **The one thing NOT known, and it decides whether any of this ever fires: whether a team
+  recording writes an outcome block at all.** The old figures (1v1 21/28, four humans 0 of 1) were
+  taken with the 8-byte trailer bound, and **that bound turned out to be the reason most of the
+  1v1 misses were misses** — re-measured with the 512-byte scan it is 20 of 20. The single 2v2 has
+  never been re-read, so it is still one sample, and now a doubtful one. A 43-file folder
+  collected for exactly this question held no team game at all (19 readable, all 1v1; the other
+  10 were not recordings — a PNG, an `.exe`, four of zeroes). The design is safe either way:
+  with no block the match reports 0.5 for everyone and stays unrated, which is what
+  every team game did before. `TryReportMatchAsync` logs `loserSlot` / `teams` / `sides` for every
+  team match so the first real ones answer it — **do not remove that line until they have.**
+
+  **Abandonment was deliberately NOT extended to team games.** `AbandonmentApplies` is still
+  `OneVOne` only and `abandon.ts` keeps its own `!== 2`. The rule exists for when no recording can
+  decide, and in a team game it would take rating from two or three people for one person's
+  dropped connection — while a team match that finishes is decided by the recordings anyway.
 
   **(4) `games_played` counts RATED matches**, not played ones — a consequence of (1)
   that made two launcher strings lie until they were reworded (`MpProfileGames`,
@@ -2363,14 +2832,90 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the close arriving behind the frame re-enters the result phase and fires the very polls
   this removed. `ResolveGuestResultAsync` stays as the old-backend fallback.
 
-  **(10) The ladder and peak-hours cards share ONE endpoint** (`GET /stats/community`),
-  fetched once per session on the same `_activityLoaded` gate as the recent-matches card.
-  The budget is per IP and shared behind a Radmin NAT, so two routes would cost double for
-  nothing. `rank` comes from the server and **must not be renumbered** client-side. Peak
-  hours is bucketed from `lobbies.created_at` — rooms OPENED, which is what the card's
-  wording says, not matches played — sent in UTC and shifted to local by
-  `CommunityStatsView.ToLocalHours`; below `MinSampleRooms` the card hides rather than
-  dressing four rooms up as a finding.
+  **(10) The whole community strip is ONE endpoint** (`GET /stats/community`), and so is the
+  RANKING subtab, and so is the team ladder. The budget is per IP and shared behind a Radmin
+  NAT, so a second route would cost double for nothing — every card and every table added
+  since rides the same payload and the same 60 s server-side cache, and costs **no extra
+  request**. The limit asks for the server's maximum (50) because one payload feeds a
+  three-row summary and a full table; asking twice for two sizes would double it for nothing.
+  `rank` comes from the server and **must not be renumbered** client-side.
+
+  **It is re-fetched at most once a MINUTE, and it used to be once a SESSION.** The old
+  `_activityLoaded` bool meant a player never saw their own place change without restarting
+  the launcher — untenable the moment a second ladder arrived, since the first thing anyone
+  does after a rated match is look. `_activityFetchedUtc` + `ActivityMaxAge` is exactly the
+  backend's own memo duration, so a refresh inside that window would have been answered from
+  memory anyway. **Change one and change the other.**
+
+  **The RANKING subtab is where the whole table lives; the strip keeps showing three.** A
+  strip that grew with the league would push the rooms list off the screen the week it
+  filled — which is why the strip is capped at 3 and not because three is interesting. The
+  subtab carries the 1v1/TEAM selector, and **the TEAM button is hidden when the payload has
+  no `leaderboard_team` at all**: null there means an older backend with no team ladder,
+  which is not the same as one nobody has qualified for yet, and offering a tab that can only
+  ever be empty is worse than not offering it. The selector reuses the `SubTab` style rather
+  than `MpSegment`, which lives in `CreateLobbyDialog` and is not reachable from this file.
+  **The five column widths are now written in THREE places** — the strip's XAML header,
+  `BuildLeaderboardRow`, and `BuildRankingHeader` — and must be changed together. Peak hours is bucketed
+  from `lobbies.created_at` — rooms OPENED, which is what the card's wording says, not
+  matches played — sent in UTC and shifted to local by `CommunityStatsView.ToLocalHours`;
+  below `MinSampleRooms` the card hides rather than dressing four rooms up as a finding.
+
+  **THE STRIP MUST NOT DEPEND ON THE VIEWER'S OWN HISTORY, and it used to — which made a
+  panel headed "community activity" invisible to anyone who had not played.**
+  `RefreshActivityStripAsync` opened by fetching the caller's match history and `return`ed
+  when it was empty, so the ladder and the peak hours — community data, present all along —
+  **were never even requested**. Community stats are fetched FIRST now and each card reports
+  whether it drew anything; the strip is shown when any of them did.
+
+  **A hidden card has to give up its COLUMN and its DIVIDERS too — `LayOutActivityColumns`.**
+  This is the non-obvious half and it is what made the middle third look broken: a star
+  column keeps its share of the width whatever its child does, so collapsing a card left a
+  third of the strip reserved and blank, and the two dividers were unconditional, so that
+  blank third came framed by two rules. The XAML comment promising that "an absent card
+  reads as *not yet*" was only true of the card, never of the space it left. The left rule
+  is `recent && (middle || peak)`, not `recent && middle` — with the middle card gone it is
+  what separates the two that remain.
+
+  **The middle third is the community's NUMBERS, with the ladder under them.** Stacked
+  rather than given a column each: a fourth column leaves every one of them too narrow for a
+  player name at the smallest window this tab supports. The numbers are `totals` —
+  `matches` in a window, `players` seen in a shorter one, and the most-played map — and each
+  window travels WITH its figure, so a card that hardcoded "30 days" cannot start lying the
+  day that constant moves. **`totals: null` is not zeros**: an older backend reports nothing
+  and the card is not drawn, while a genuine 0 IS shown, because a quiet month is a fact and
+  an unwelcome fact is still worth knowing. Both windows are measured against
+  **`matches.created_at`, the server-stamped column, never `started_at`**, which the client
+  sends and one wrong clock would skew — the same reasoning that already makes the histogram
+  read `lobbies.created_at`. It costs a scan of `matches` (`created_at` is not indexed),
+  which is no worse than the histogram's existing scan of `lobbies`.
+
+  **The ladder now explains its own emptiness instead of vanishing.** `rd <= 110` +
+  `wins + losses >= 3` means that after a ratings reset **nobody** qualifies for weeks, and
+  the card hid itself — which is where the blank third came from. It shows the requirement
+  instead, from the server's own `min_decided`, and **only when that is greater than zero**:
+  an older backend has no such field, it deserializes to 0, and "you get in with 0 decided
+  matches" is both wrong and impossible (`CommunityStatsView.RequiredDecided`). The table is
+  capped at 3 rows, not 5, so the strip does not lurch taller the week the ladder fills.
+
+  **RECENT MATCHES is the COMMUNITY's, and says who won.** It used to be the viewer's own
+  history under that heading. The server sends the last few matches from `matches` ordered by
+  `created_at` with the participants attached by **the same `attachParticipants` the history
+  endpoint uses** — one query for the whole page, never one per match. The sentence "X beat
+  Y" is written by `CommunityStatsView.Describe`, which is built on `MatchParticipantsView`
+  and therefore inherits its refusals: **only a two-player match with one winner and one
+  loser is described**, so the 0.5 that most stored matches carry names nobody, and a team
+  game names nobody either. Everything else keeps the old shape — mod, map, "didn't count".
+  A backend with no `recent_matches` falls back to the viewer's history **under the old
+  heading**, because calling that "community matches" would be a lie.
+
+  **This strip is the ONE place in the tab that went up to the type scale's 13 floor**
+  (`MpActivityTitleSize` / `MpActivityBodySize` / `MpActivityHeadlineSize`). The rest of
+  multiplayer keeps the handoff's 10.5/11.5 — see `MpLabelSize`, ratified twice — and these
+  are separate tokens precisely so the two decisions stay separable and neither leaks into
+  the other. The ladder's fixed column widths were widened in the same change (`26 / * / 56
+  / 72 / 48`), because "DECIDIDAS" does not fit 62 at 13 px; **the XAML header and
+  `BuildLeaderboardRow` carry that list twice and must be changed together.**
 
   **(11) Only the HOST measures. The opponent's score is an inference, not a
   measurement** — `MatchResultResolver.ParticipantResult` is literally
@@ -2430,18 +2975,34 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   that identifies the **game** rather than the **file**, so re-packing a recording no
   longer slips past the SHA-256 in (5).
 
-  **Rejected on purpose: comparing AoE3 profile names.** Publishing each player's
-  in-game name in the room and checking the other human in the recording against it was
-  the obvious design and is a worse one — profile names are frequently nothing like the
-  Discord account, changing them in AoE3 barely works, and a player with a blank or odd
-  name would silently stop being verifiable. The seed needs no name at all. Don't
-  re-propose it.
+  **Rejected on purpose FOR THIS CHECK: comparing AoE3 profile names.** Publishing each
+  player's in-game name in the room and checking the other human in the recording against it
+  was the obvious design and is a worse one *here* — profile names are frequently nothing like
+  the Discord account, changing them in AoE3 barely works, and a player with a blank or odd
+  name would silently stop being verifiable. The seed needs no name at all. Don't re-propose it
+  **for `same_game`**.
+
+  **Note the scope, because the room DOES publish those names now** (`set_ingame_name`, see the
+  identity-bridge paragraph in the `.age3Yrec` section). That is for the TEAM MAP, where there
+  is no seed-shaped alternative — the name is the only link between a recording slot and a
+  person — and where the objections above become the design rather than an argument against it:
+  the name is self-declared instead of guessed, it is resolved per MOD, and anything odd makes
+  the map refuse outright rather than produce a wrong answer. `same_game` still uses the seed
+  and must keep using it.
 
   **Load-bearing details:** the pair is indexed together and **never the seed alone**
   (largest value seen is 32747, about 15 bits — alone it would collide across unrelated
   matches); a 0 or absent value is stored as **NULL, never 0**, and the unique index is
   partial, so a scenario or an unreadable field can never block a legitimate report; and
-  **`game_host_time` is recorded but takes no part in the verdict.** Only one side of
+  **`game_host_time` is recorded but takes no part in the verdict — though the reason for that
+  has now been answered, and the answer is that it COULD.** A match captured from both machines
+  has `gamerandomseed` **13911** and `gamehosttime` **1310730** in both copies, identical. So the
+  clock is a property of the GAME rather than of the machine, and `same_game` could use the pair.
+  It still uses the seed alone, because one two-machine sample is enough to remove a doubt and not
+  enough to tighten a gate that would silently stop rating matches if it were wrong. Widen it when
+  a second capture agrees. The original wording follows, for the record:
+
+  Only one side of
   each match was available to measure, so whether the guest's recording carries the same
   clock is plausible and unproven — `same_game` is decided on the seed alone until a
   two-machine test settles it. `DEPLOY.md` has the query that does.

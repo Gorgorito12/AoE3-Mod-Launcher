@@ -551,6 +551,24 @@
                                        TextWrapping="Wrap"
                                        Margin="0,4,0,0"
                                        Visibility="Collapsed"/>
+                            <!-- Amber for the same reason as the line above: the path on screen
+                                 is real, but it belongs to the account the launcher is RUNNING
+                                 as, which need not be the one signed in. The one-time dialog
+                                 says this once at startup; this says it any day the user comes
+                                 looking. See Services/RunningAccount.cs. -->
+                            <TextBlock x:Name="UserDataOtherAccountText"
+                                       Style="{StaticResource DialogActionDesc}"
+                                       Foreground="#d9a94a"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"
+                                       Visibility="Collapsed"/>
+                            <TextBlock x:Name="UserDataOtherAccountPath"
+                                       FontFamily="Consolas"
+                                       FontSize="{StaticResource FontSizeCaption}"
+                                       Foreground="#c8d2dc"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       Visibility="Collapsed"/>
                         </StackPanel>
 
                         <Border Style="{StaticResource DialogDivider}"/>
