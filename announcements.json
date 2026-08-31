@@ -21,5 +21,13 @@
     "Newest first is the convention. Nobody is re-notified for entries already delivered, so",
     "old ones can stay here as a record."
   ],
-  "announcements": []
+  "announcements": [
+    {
+      "id": "v1013k",
+      "title": "v1.0.13k: 2v2 and 3v3 now score",
+      "body": "Team rating is here, on a ladder of its own. And if the launcher did not recognise Radmin, nobody could join the rooms you hosted - that is fixed. Notes in English and Spanish.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.13k.md",
+      "date": "2026-08-31"
+    }
+  ]
 }

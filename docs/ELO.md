@@ -1,5 +1,8 @@
 # La puntuación (ELO) del multijugador · Multiplayer rating (ELO)
 
+> **La versión en inglés está más abajo, en este mismo documento.** ·
+> *The English version is further down, in this same document.*
+>
 > **Enlace corto para compartir:** fija esta página en tu servidor de Discord y
 > enlázala cuando alguien pregunte por qué su partida no sumó. · *Pin this page
 > and link it whenever somebody asks why their match didn't count.*
@@ -124,7 +127,7 @@ tal cual en la tarjeta del final. Estos son todos los casos:
 | «La partida terminó con tu AoE3 **todavía abierto**» | No es un fallo: tu grabación aún no se ha leído | Cierra el juego. El launcher la lee y **la partida todavía puede contar** |
 | «La partida no se grabó, así que no hay forma de saber quién ganó» | No apareció ninguna grabación de esa partida | Marcar «Record Game» antes de la próxima |
 | «La grabación no dice quién ganó» | Se leyó, pero no nombra un ganador utilizable | Nada que arreglar |
-| «Solo las partidas uno contra uno cuentan para el ELO» | Fue una partida por equipos | Nada: una grabación nombra a un perdedor, y eso no dice quién ganó un 2v2 |
+| «Esperando la lectura del otro equipo» | Fue una partida por equipos y tu bando ya reportó | Nada de tu parte. Puntúa en cuanto alguien del otro equipo reporte y las dos lecturas coincidan |
 | «Esta sala no era competitiva» | La sala se creó sin marcar **Sala competitiva** | Marca la casilla al crear la sala. La partida queda en tu historial igual |
 | «Este mod todavía no tiene clasificación» | Hoy solo Wars of Liberty puntúa | Nada. Los demás mods siguen guardando historial |
 | «Los tiempos de esta partida no cuadran» | Duró menos de **3 minutos**, o los relojes no cuadran | Nada, salvo jugar partidas de verdad |
@@ -159,8 +162,9 @@ acepta siempre; que tu grabación te dé la victoria solo cuenta si el servidor 
 guardada la huella de esa misma partida** y coincide con la tuya.
 
 Esto **solo** rescata "no se pudo leer quién ganó", y **nunca cambia una partida que ya
-tenía resultado**. Una partida por equipos, un mod sin clasificación o unos tiempos que no
-cuadran no se rescatan de ninguna forma.
+tenía resultado**. Un mod sin clasificación o unos tiempos que no cuadran no se rescatan de
+ninguna forma. Una partida por equipos sí puede completarse más tarde, pero por otra vía: no
+le falta una lectura mejor, le falta la del otro bando.
 
 No es teórico: así se recuperaron las partidas que se habían perdido por el fallo que
 arregló la v1.0.12e.
@@ -170,15 +174,25 @@ arregló la v1.0.12e.
 Está al final de la pestaña **Salas**, en la tira **Actividad de la comunidad**, junto a
 **Últimas partidas** y **Horas punta**.
 
-Para aparecer hacen falta dos cosas:
+Para aparecer hace falta **haber jugado 5 partidas puntuadas**. Es un suelo contra la
+racha de una noche, nada más: una tabla llena de gente que no ha jugado estaría toda
+empatada en 1500 y en un orden arbitrario.
 
-- **Al menos 3 partidas con un resultado decidido.**
-- **Que tu puntuación haya dejado de ser provisional**, es decir unas cuantas partidas
-  puntuadas encima.
+**Se ordena por tu puntuación menos su margen de error**, no por la puntuación a secas.
+Suena raro dicho así, pero es lo que evita que quien llega y gana tres seguidas se ponga
+por encima de quien lleva trece partidas: al que acaba de llegar el sistema todavía no
+sabe cuánto vale, y esa incertidumbre le descuenta hasta que juega lo suficiente. El
+número que se muestra sigue siendo tu puntuación de siempre, así que la columna puede no
+ir de mayor a menor.
 
-No es un castigo: una tabla llena de gente que no ha jugado estaría toda empatada en 1500
-y en un orden arbitrario. Se ordena por puntuación, muestra los diez primeros y se
-actualiza cada minuto más o menos.
+El panel muestra los **5 primeros** y se actualiza cada minuto más o menos; **Ver todo**
+abre la tabla completa, con las partidas decididas y el porcentaje de victorias.
+
+**Hay dos tablas: 1v1 y equipos.** El 2v2 y el 3v3 puntúan aparte, y el selector de
+CLASIFICACIÓN cambia de una a otra. Lo que ganes o pierdas en equipo no le hace nada a tu
+puntuación individual, y viceversa. Una partida por equipos sólo puntúa cuando los dos
+bandos la reportan y las dos lecturas coinciden — si el otro equipo no tiene el launcher
+abierto, queda en tu historial sin puntos.
 
 **Horas punta** cuenta **cuándo se abren salas**, no cuándo se juega, y lo muestra en tu
 hora local sobre los últimos 30 días.
@@ -370,7 +384,7 @@ reason verbatim on the end-of-match card. These are all the cases:
 | "The match ended while your AoE3 was **still open**" | Not a failure: your recording hasn't been read yet | Close the game. The launcher reads it and **the match can still count** |
 | "The match was not recorded, so nobody can tell who won" | No recording of that match turned up | Tick "Record Game" before the next one |
 | "The recording does not say who won" | It was read, but names no usable winner | Nothing to fix |
-| "Only one-on-one matches count towards the rating" | It was a team game | Nothing: a recording names one loser, which says nothing about who won a 2v2 |
+| "Waiting for the other team's reading" | It was a team game and your side has reported | Nothing on your part. It scores as soon as someone on the other team reports and the two readings agree |
 | "This room wasn't a competitive one" | The room was created without ticking **Competitive room** | Tick the box when you create the room. The match stays in your history either way |
 | "This mod has no ladder yet" | Today only Wars of Liberty is rated | Nothing. Other mods still record history |
 | "The times reported for this match don't add up" | It ran under **3 minutes**, or the clocks disagree | Nothing, other than playing real games |
@@ -405,8 +419,9 @@ your recording only grants you a victory if the server already had a fingerprint
 same match stored** and it matches yours.
 
 This **only** rescues "who won could not be read", and it **never overturns a match that
-already had a result**. A team game, an unranked mod or times that don't add up cannot be
-rescued at all.
+already had a result**. An unranked mod or times that don't add up cannot be rescued at all.
+A team game can still be completed later, but by another route: what it is missing is not a
+better reading, it is the other side's.
 
 Not hypothetical: it is how the matches lost to the bug fixed in v1.0.12e were recovered.
 
@@ -415,14 +430,24 @@ Not hypothetical: it is how the matches lost to the bug fixed in v1.0.12e were r
 It lives at the bottom of the **Rooms** tab, in the **Community activity** strip, next to
 **Recent matches** and **Peak hours**.
 
-Two things are needed to appear:
+To appear you need **5 rated matches played**. It is a floor against one lucky night and
+nothing more: a table full of people who never played would all be tied on 1500, in an
+arbitrary order.
 
-- **At least 3 matches with a decided result.**
-- **A rating that is no longer provisional** — a handful of rated matches behind it.
+**It is sorted by your rating minus its margin of error**, not by the rating alone. It
+sounds odd put that way, but it is what stops somebody who turns up and wins three in a
+row landing above a player with thirteen matches: the system does not yet know how good a
+newcomer is, and that uncertainty discounts them until they have played enough. The number
+shown is still your ordinary rating, so the column may not run from high to low.
 
-It isn't a punishment: a table full of people who never played would all be tied on 1500,
-in an arbitrary order. It is sorted by rating, shows the top ten, and refreshes roughly
-every minute.
+The panel shows the **top 5** and refreshes roughly every minute; **See all** opens the
+full table, with decided matches and win percentage.
+
+**There are two ladders: 1v1 and teams.** 2v2 and 3v3 score separately, and the selector
+in RANKING switches between them. What you win or lose in a team game does nothing to your
+solo rating, and the other way round. A team match only scores once both sides report it
+and the two readings agree — if the other team has no launcher open, it stays in your
+history without points.
 
 **Peak hours** counts **when rooms are opened**, not when games are played, and shows it
 in your local time over the last 30 days.
