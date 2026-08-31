@@ -215,32 +215,51 @@
          ============================================================ -->
     <!-- The multiplayer sub-tab strip (Salas / Amigos / Perfil / Historial). -->
     <sys:Double x:Key="MpSubBarHeight">48</sys:Double>
-    <!-- Room row. Uniform by contract: the row is ONE line with ellipsis, so
-         its height must not depend on the content. -->
-    <sys:Double x:Key="MpRoomRowHeight">58</sys:Double>
+    <!-- Room row. A MINIMUM now, not a fixed height — MpRoomCard binds it to MinHeight.
+         It was uniform by contract ("the row is ONE line with ellipsis, so its height must
+         not depend on the content"), and that reading survived until the type sizes went to
+         the 13 floor: the room NAME then truncated to "Sala de W…" in a narrow window,
+         because it is the only element in that cell that yields. The name may now wrap to a
+         second line, so short rows still measure exactly this and long ones grow past it.
+         Raised 58 -> 64 with the type sizes; the value is unchanged by the wrap. -->
+    <sys:Double x:Key="MpRoomRowHeight">64</sys:Double>
     <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
          text input; Control = a normal button; PrimaryButton = the one CTA. -->
-    <!-- The redesign's small-label size (nav tabs, chips). 11.5 is the handoff's
-         value and it sits BELOW the type scale's documented floor of 13, which exists
-         because 10-11px secondary text was reported unreadable at 125/150% scaling.
-         Used here on the maintainer's explicit call for fidelity to the reference,
-         after the deviation was raised and declined twice. Kept as its own token so
-         reversing it is one number, and so it can't leak into body text. -->
-    <sys:Double x:Key="MpLabelSize">11.5</sys:Double>
-    <!-- The two sizes below 11.5 the reference uses in the title bar: the ES/EN pills
-         and the ELO line under the account name. Same floor caveat as MpLabelSize. -->
-    <!-- The reference's two mid-scale sizes: 12.5 for reading text (chat bodies, the
-         primary caption of a dialog button) and 12 for the name/meta line above it.
-         Same floor caveat as MpLabelSize — they are below the type scale's 13 and are
-         here for fidelity, kept as tokens so reversing them is two numbers. -->
-    <sys:Double x:Key="MpBodySize">12.5</sys:Double>
-    <sys:Double x:Key="MpMetaSize">12</sys:Double>
-    <sys:Double x:Key="MpPillSize">10.5</sys:Double>
-    <sys:Double x:Key="MpMicroSize">10</sys:Double>
-    <!-- The uppercase stat captions in the room header (9.5) and the values under
-         them (14). Both below the type scale's floor, like MpLabelSize, and kept as
-         their own tokens for the same reason. -->
-    <sys:Double x:Key="MpSectionLabelSize">9.5</sys:Double>
+
+    <!-- ===================================================================
+         MULTIPLAYER TYPE SIZES — raised to the launcher's 13 floor.
+
+         THE HISTORY MATTERS, because this reverses a decision recorded here twice.
+         These sizes came from the design handoff (11.5 labels, 10.5 pills, 9.5 section
+         captions) and sat BELOW the type scale's documented floor of 13 — a floor that
+         exists because 10-11 px secondary text was reported unreadable at 125/150%
+         scaling. Raising them was proposed and DECLINED TWICE on the maintainer's
+         explicit call for fidelity to the reference, and that is what the previous
+         version of this comment said.
+
+         It was asked for a third time, from the other direction: "still looks small",
+         about the surface as it shipped. Two things had already been tried and were not
+         enough — the bottom three rungs of the text ramp were re-coloured to clear
+         4.5:1 contrast (see .claude/rules/multiplayer.md) precisely so the sizes would
+         not have to move, and UiScale's ceiling was raised to magnify the whole surface,
+         which was rejected on sight as "gigante" (see CLAUDE.md's UiScale bullet).
+
+         The anchor for landing on 13 is evidence already on screen: the community strip
+         was raised to 13 on a separate call and has never drawn a complaint — it is the
+         one part of this tab at the floor, and the one part nobody calls small.
+
+         Still their own tokens, for the original reason: reversing this is six numbers,
+         and they cannot leak into the app-wide scale.
+         =================================================================== -->
+    <sys:Double x:Key="MpLabelSize">13</sys:Double>
+    <sys:Double x:Key="MpBodySize">13.5</sys:Double>
+    <sys:Double x:Key="MpMetaSize">13</sys:Double>
+    <sys:Double x:Key="MpPillSize">11.5</sys:Double>
+    <sys:Double x:Key="MpMicroSize">11.5</sys:Double>
+    <!-- The uppercase stat captions in the room header (was 9.5) and the values under
+         them. The caption stays the smallest thing on the surface because it is
+         letter-spaced uppercase, which reads a size larger than it measures. -->
+    <sys:Double x:Key="MpSectionLabelSize">11</sys:Double>
     <sys:Double x:Key="MpStatValueSize">14</sys:Double>
     <!-- The room name in the lobby header: serif, the one display-type moment in
          this window. -->
@@ -251,11 +270,11 @@
     <sys:Double x:Key="MpResultTitleSize">17</sys:Double>
     <sys:Double x:Key="MpRatingSize">22</sys:Double>
     <!-- The community-activity strip, and ONLY it. Its own three sizes because it is the
-         one place in the tab that went the other way: the rest of multiplayer keeps the
-         handoff's 10.5/11.5 (see MpLabelSize above, ratified twice), while this strip was
-         raised to the type scale's documented 13 floor on a later explicit call. Separate
-         tokens so the two decisions stay separable — reversing either is one number, and
-         neither can leak into the other. -->
+         first place in the tab to go to the type scale's documented 13 floor, on a call of
+         its own — and the one whose size nobody has ever complained about, which is why it
+         became the anchor when the REST of the tab was finally raised to 13 too (see the
+         block above). Separate tokens so the two decisions stay separable: they were taken
+         years apart in argument terms, and reversing either is its own number. -->
     <sys:Double x:Key="MpActivityTitleSize">11.5</sys:Double>
     <sys:Double x:Key="MpActivityBodySize">13</sys:Double>
     <sys:Double x:Key="MpActivityHeadlineSize">16</sys:Double>

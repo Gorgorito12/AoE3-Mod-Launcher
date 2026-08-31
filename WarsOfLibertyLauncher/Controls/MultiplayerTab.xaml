@@ -81,19 +81,31 @@
              strip's 30px left margin so columns line up under the labels. -->
         <!-- Room ROW (design handoff 1a). Separated rounded rows with a rim, not the
              flush table rows with a hairline divider this used to be. The reference
-             gives every row the SAME uniform height because it is one line with
-             ellipsis: nothing in it may wrap, or the rows stop scanning as a column of
-             equal blocks. Own-room rows are lifted by BuildRoomCard, which sets the
-             brighter fill and rim locally — a Style trigger can't express "this is
-             mine", since that is per-row data rather than a control state. -->
+             gives every row the same height because it is one line with ellipsis, and
+             that held until the type sizes went up to the 13 floor: the room NAME then
+             started truncating to "Sala de W…" in a narrow window, because it is the
+             only element in the cell that yields (the chips beside it never shrink, by
+             design — see BuildRoomChip). So the name may now wrap to a SECOND line and
+             the height is a MINIMUM rather than a fixed value: short names keep exactly
+             the row they had, long ones grow. The uniform-block reading is what that
+             costs, and it was given up deliberately. Own-room rows are lifted by
+             BuildRoomCard, which sets the brighter fill and rim locally — a Style trigger
+             can't express "this is mine", since that is per-row data rather than a
+             control state. -->
         <Style x:Key="MpRoomCard" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource MpPanel}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource MpRimFaint}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="{StaticResource RadiusRow}"/>
-            <Setter Property="Height" Value="{StaticResource MpRoomRowHeight}"/>
+            <Setter Property="MinHeight" Value="{StaticResource MpRoomRowHeight}"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
-            <Setter Property="Padding" Value="12,0"/>
+            <!-- Vertical padding is what makes the minimum work. With 12,0 the content
+                 floated inside a height fixed by decree; a two-line name measures 59,
+                 which still fits under the 64 minimum, so the row would not grow and the
+                 text would sit flush against both edges. 10 top and bottom leaves the
+                 one-line row at exactly 64 and lets the two-line one grow to 79 with the
+                 same breathing room it has today. -->
+            <Setter Property="Padding" Value="12,10"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource MpRoomRowHover}"/>
@@ -246,7 +258,7 @@
                             <TextBlock Grid.Column="0"
                                        Text="&#xE721;"
                                        FontFamily="Segoe MDL2 Assets"
-                                       FontSize="12"
+                                       FontSize="{StaticResource MpMetaSize}"
                                        Foreground="#7E93AF"
                                        VerticalAlignment="Center"
                                        Margin="0,0,7,0"/>
@@ -255,7 +267,7 @@
                                            IsHitTestVisible="False"
                                            Foreground="#6D829D"
                                            FontFamily="{DynamicResource BodyFont}"
-                                           FontSize="12"
+                                           FontSize="{StaticResource MpMetaSize}"
                                            VerticalAlignment="Center"/>
                                 <TextBox x:Name="RoomSearchBox"
                                          TextChanged="RoomSearchBox_TextChanged"
@@ -265,7 +277,7 @@
                                          Foreground="{DynamicResource MpTextPrimary}"
                                          CaretBrush="{DynamicResource MpTextPrimary}"
                                          FontFamily="{DynamicResource BodyFont}"
-                                         FontSize="12"
+                                         FontSize="{StaticResource MpMetaSize}"
                                          VerticalContentAlignment="Center"/>
                             </Grid>
                         </Grid>
@@ -716,7 +728,7 @@
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                 <TextBlock x:Name="JoinByCodeTitle"
                                            Foreground="{DynamicResource MpTextSecondary}"
-                                           FontSize="12.5"
+                                           FontSize="{StaticResource MpBodySize}"
                                            FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis"/>
                                 <TextBlock x:Name="JoinByCodeHint"
@@ -743,7 +755,7 @@
                                                IsHitTestVisible="False"
                                                Foreground="{DynamicResource MpTextFaint}"
                                                FontFamily="Consolas"
-                                               FontSize="12"
+                                               FontSize="{StaticResource MpMetaSize}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <TextBox x:Name="JoinByCodeBox"
@@ -754,7 +766,7 @@
                                              Foreground="{DynamicResource MpTextPrimary}"
                                              CaretBrush="{DynamicResource MpTextPrimary}"
                                              FontFamily="Consolas"
-                                             FontSize="12"
+                                             FontSize="{StaticResource MpMetaSize}"
                                              FontWeight="SemiBold"
                                              VerticalContentAlignment="Center"
                                              TextChanged="JoinByCodeBox_TextChanged"

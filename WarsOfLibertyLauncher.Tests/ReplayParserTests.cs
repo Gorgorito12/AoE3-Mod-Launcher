@@ -511,6 +511,76 @@ public class ReplayParserTests
     }
 
     /// <summary>
+    /// <b>The property that guarantees the casualty list changed nothing.</b> A 1v1 names one
+    /// slot, and it is the same one the parser decides on — so a reader that ignores
+    /// <c>EliminatedSlots</c> entirely sees exactly what it saw before.
+    /// </summary>
+    [Fact]
+    public void AOneVersusOneNamesExactlyOneCasualty_AndItIsTheLoser()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+
+        var o = ReplayParserService.ReadOutcome(data, header);
+
+        Assert.Equal(new[] { o.LoserSlot }, o.EliminatedSlots);
+    }
+
+    /// <summary>
+    /// <b>The measured shape this list exists for.</b> A four-human recording turned out to carry
+    /// TWO well-formed blocks naming two different real slots — which is what refuted "one block
+    /// per match" and suggested one per casualty instead.
+    ///
+    /// <para>They come back LAST ELIMINATION FIRST, because the scan walks from the end of the
+    /// file backwards and a team game ends when the last member of a side falls. The first entry
+    /// is therefore <c>LoserSlot</c> by construction, which is the whole reason nothing had to be
+    /// decided differently to collect them.</para>
+    /// </summary>
+    [Fact]
+    public void TwoValidBlocksAreBothReported_LastEliminationFirst()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+
+        // Farther from the end names slot 2; nearer names slot 1. Both agree there were two
+        // humans, so neither is preferred over the other and proximity decides — as it does in
+        // the real four-player file, whose nearer block is the one that wins.
+        var doctored = data
+            .Concat(Block(2, 2, 2))
+            .Concat(new byte[40])
+            .Concat(Block(1, 1, 2))
+            .ToArray();
+
+        var o = ReplayParserService.ReadOutcome(doctored, header);
+
+        Assert.Equal(1, o.LoserSlot);
+        Assert.Equal(new[] { 1, 2 }, o.EliminatedSlots);
+    }
+
+    /// <summary>
+    /// <b>The one that matters.</b> The signature <c>02 00 00 00 | 81 00 00 00 | 00x11 | FFx8</c>
+    /// occurs in the middle of the command stream too — up to 34 times in one measured file — so
+    /// what identifies a real block is its position plus the validation, never the marker. A
+    /// candidate whose A names no slot in the header is not a casualty and must not be listed as
+    /// one, or the diagnostic it feeds would invent players.
+    /// </summary>
+    [Fact]
+    public void AGarbageCandidateIsNotCountedAsACasualty()
+    {
+        var data = ReplayParserService.TryReadContainer(Loss())!;
+        var header = AllHuman(ReplayParserService.ParseHeader(data)!);
+
+        var doctored = data
+            .Concat(new byte[103])
+            .Concat(Block(0xFFFFFFFF, 0, 3212836864))
+            .ToArray();
+
+        var o = ReplayParserService.ReadOutcome(doctored, header);
+
+        Assert.Equal(new[] { 1 }, o.EliminatedSlots);
+    }
+
+    /// <summary>
     /// With nothing to prefer, the nearest candidate that names a real slot is still the answer —
     /// which is what keeps the real fixtures, whose blocks say C = 1, reading exactly as before.
     /// </summary>

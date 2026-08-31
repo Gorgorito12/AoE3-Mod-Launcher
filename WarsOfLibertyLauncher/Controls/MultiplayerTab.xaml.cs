@@ -346,6 +346,29 @@ public partial class MultiplayerTab : UserControl
     private string? _lastRecordingPath;
 
     /// <summary>
+    /// Records the recording this match was read from, and repaints the card so the REPLAY cell
+    /// actually shows it.
+    ///
+    /// <para><b>Reading the field at paint time is worth nothing if nobody paints again</b>, and
+    /// that is exactly what happened: <c>HandleMatchReported</c> can paint the card while our own
+    /// AoE3 is still open, when this is still the null <c>EnterInGamePhase</c> left — and for a
+    /// RATED match neither repaint call site can run (see <see cref="RepaintMatchResult"/>). The
+    /// exit handler then found the file, assigned it here, and the chat line named a recording
+    /// the card had just said did not exist.</para>
+    ///
+    /// <para>Assignment goes through one method so the repaint cannot be forgotten at a fourth
+    /// site. It refuses a blank rather than clearing: a later pass may only improve what an
+    /// earlier one found.</para>
+    /// </summary>
+    private void SetLastRecordingPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (string.Equals(_lastRecordingPath, path, StringComparison.Ordinal)) return;
+        _lastRecordingPath = path;
+        RepaintMatchResult();
+    }
+
+    /// <summary>
     /// How to rebuild the end-of-match card, captured when it is first painted.
     ///
     /// <para><b>Why a rebuilder and not a repaint of the same model.</b> The card used to be
@@ -3527,6 +3550,12 @@ public partial class MultiplayerTab : UserControl
     /// <b>per IP</b>, and that IP is shared behind NAT or an active Radmin network, so a poll
     /// would spend everyone's budget on that network.</para>
     ///
+    /// <para><b>One exception, and it is an EVENT rather than a timer:</b> entering the result
+    /// phase re-fetches, because the end-of-match card puts this tally on screen and the cached
+    /// one predates the match it is announcing. That is one request per match PLAYED — bounded
+    /// by how often people play, which is what the rule above is actually protecting against.
+    /// (The other exception is the backend-recovery retry; see the rooms-poll transition.)</para>
+    ///
     /// <para>A failure leaves the lines blank. There is nothing useful to say when the
     /// standing can't be read, and a default would be a lie.</para>
     /// </summary>
@@ -3550,6 +3579,11 @@ public partial class MultiplayerTab : UserControl
 
             // The user may have moved to another subtab while this was in flight.
             if (ProfileView.IsVisible) ShowStanding(standing);
+
+            // The end-of-match card's DECIDED cell reads this tally, so a refresh that does not
+            // repaint leaves that cell on whatever was cached BEFORE the match. Harmless when
+            // there is no card up — the repaint checks that itself.
+            RepaintMatchResult();
         }
         catch (Exception ex)
         {
@@ -5183,7 +5217,9 @@ public partial class MultiplayerTab : UserControl
 
         var local = CommunityStatsView.ToLocalHours(
             utc, TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.UtcNow));
-        var peak = CommunityStatsView.PeakHour(local, activity.Total);
+        // A three-hour stretch, not the single tallest bar — see PeakWindow, where the
+        // measured tie that motivated it is written down.
+        var peak = CommunityStatsView.PeakWindow(local, activity.Total);
         if (!peak.HasValue)
         {
             ActivityPeakCard.Visibility = Visibility.Collapsed;
@@ -5191,7 +5227,8 @@ public partial class MultiplayerTab : UserControl
         }
 
         ActivityPeakHeadline.Text = Strings.Format(
-            "MpActivityPeakRange", peak.Value, (peak.Value + 1) % 24);
+            "MpActivityPeakRange", peak.Value,
+            (peak.Value + CommunityStatsView.PeakWindowHours) % 24);
         ActivityPeakSubtitle.Text = Strings.Format(
             "MpActivityPeakSubtitle", activity.Total, activity.WindowDays);
         DrawPeakBars(local);
@@ -6925,14 +6962,16 @@ public partial class MultiplayerTab : UserControl
 
         var salaText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
 
-        // Title row: the room name (ellipsizes) + an optional purple "Private" chip.
-        // A private room whose STATUS is In game / Full outranks the purple "Private"
-        // dot in the STATUS column, so without this chip it would give NO hint it's
-        // private. The chip is always visible; the name is in the '*' column so it
-        // ellipsizes while the Auto chip stays put.
-        var titleRow = new Grid();
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // The room NAME gets the whole cell — it is a direct child of the vertical stack,
+        // with nothing beside it to take width away.
+        //
+        // It used to share a Grid{*,Auto} with the chips, and THAT was the truncation people
+        // reported. BuildRoomChip states outright that a chip never shrinks, so the name was
+        // the only thing in the row that could yield: the gold "COMPETITIVA / 1v1" badge took
+        // about 180 px of a ~300 px cell, the name kept ~115, and it ellipsised at "Sala de
+        // W...". Raising MpSectionLabelSize from 9.5 to 11 with the rest of the type scale had
+        // just made the badge wider still — the reminder that a TYPE token moves WIDTHS, not
+        // only heights. The chips moved down to the sub-line, which had the room all along.
         var titleBlock = new TextBlock
         {
             Text = lobby.Title,
@@ -6940,25 +6979,27 @@ public partial class MultiplayerTab : UserControl
             FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.NoWrap,
+            // ONE line, as this table has always been: with the badge out of the way the name
+            // fits, and a uniform row height is what makes a list scannable. Wrapping it to two
+            // lines was tried first and retired — see the multiplayer rules.
             TextTrimming = TextTrimming.CharacterEllipsis,
+            // The title field takes 64 characters, so some names will not fit however much room
+            // they are given. It had no tooltip at all before, which left those unreadable.
+            ToolTip = TooltipHelper.Wrap(lobby.Title),
         };
-        Grid.SetColumn(titleBlock, 0);
-        titleRow.Children.Add(titleBlock);
+        salaText.Children.Add(titleBlock);
 
-        // Chips share column 1 so the name in column 0 keeps taking the ellipsis. The
-        // competitive one comes FIRST because it is the fact that changes what the room is,
-        // where "private" only changes how you get in.
+        // Chips ride the SUB-LINE now; the row itself is assembled at the end of this cell,
+        // once the subtitle text is known. The competitive one comes FIRST because it is the
+        // fact that changes what the room IS, where "private" only changes how you get in.
         var chips = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(chips, 1);
-        titleRow.Children.Add(chips);
 
         if (lobby.Competitive)
         {
             // Derived from the server's boolean, never from words in the title: anyone can
             // type "competitive" into a room name, and a badge that a stranger can forge is
             // worth less than no badge at all.
-            // …and it names the format, from the same derivation the room itself uses, so a
+            // ...and it names the format, from the same derivation the room itself uses, so a
             // browser row and the room you join agree about what you are walking into.
             var fmtKey = Services.Multiplayer.RoomFormats.LabelKey(
                 Services.Multiplayer.RoomFormats.Resolve(lobby.Competitive, lobby.MaxPlayers));
@@ -6968,23 +7009,24 @@ public partial class MultiplayerTab : UserControl
                     : Strings.Get("MpRoomCompetitiveBadge") + " · " + Strings.Get(fmtKey),
                 (Brush)Application.Current.FindResource("MpCompetitiveBg"),
                 (Brush)Application.Current.FindResource("MpCompetitiveText"));
-            compChip.Margin = new Thickness(8, 0, 0, 0);
             compChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomCompetitiveTooltip"));
             chips.Children.Add(compChip);
         }
         if (lobby.IsPrivate)
         {
-            // Same rounded-pill look as the MOD chip, tinted purple: a low-alpha
+            // Same rounded-pill look as the competitive chip, tinted purple: a low-alpha
             // purple fill (mirrors the "Ready" pill idiom #223FB950) + the solid
             // MpStatusLocked purple text. Reuses MpRoomStatusLocked ("Private"/"Privada").
+            //
+            // It is ALWAYS shown, and that is the point: a private room whose STATUS is
+            // In game / Full outranks the purple "Private" dot, so without this chip such a
+            // room would give no hint at all that it is private.
             var privateChip = BuildRoomChip(
                 Strings.Get("MpRoomStatusLocked"),
                 (Brush)Application.Current.FindResource("MpPrivateBg"),
                 (Brush)Application.Current.FindResource("MpPrivateText"));
-            privateChip.Margin = new Thickness(8, 0, 0, 0);
             chips.Children.Add(privateChip);
         }
-        salaText.Children.Add(titleRow);
 
         // ONE subtitle line, per the reference: "{mod} · {context} · hace {t}".
         // The mod name lives here now rather than in a column of its own — it reads as
@@ -7030,12 +7072,13 @@ public partial class MultiplayerTab : UserControl
         // rest of the line travels with it (see _roomAgeCells).
         var roomCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
         var prefix = string.Join(" · ", subtitle);
+        TextBlock? subTb = null;
         if (roomCreatedUtc.HasValue || prefix.Length > 0)
         {
             var age = roomCreatedUtc.HasValue
                 ? Strings.Format("MpRoomOpenedAgo", Services.RoomAgeFormat.Compact(DateTime.UtcNow - roomCreatedUtc.Value))
                 : "";
-            var subTb = new TextBlock
+            subTb = new TextBlock
             {
                 Text = prefix.Length > 0 && age.Length > 0 ? prefix + " · " + age
                      : prefix.Length > 0 ? prefix : age,
@@ -7043,10 +7086,35 @@ public partial class MultiplayerTab : UserControl
                 FontSize = (double)Application.Current.FindResource("MpLabelSize"),
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 2, 0, 0),
             };
-            salaText.Children.Add(subTb);
             if (roomCreatedUtc.HasValue) _roomAgeCells.Add((subTb, roomCreatedUtc.Value, prefix));
+        }
+
+        // The sub-line carries the chips now, as a Grid{Auto,*} and NOT a horizontal
+        // StackPanel: a horizontal StackPanel measures its children with INFINITE width, so
+        // the text's ellipsis would never fire and it would simply run past the cell. Chips in
+        // the Auto column, text in the star — so the thing that yields is still the TEXT, never
+        // a half-trimmed "COMPETITIV...". That is the same rule this row inherits from the
+        // title, only now the text beside the chips is the one that can afford to lose a word.
+        //
+        // Built when there is EITHER a chip or a subtitle: a competitive room with no subtitle
+        // text had no second row at all before, and would have lost its badge with it.
+        if (chips.Children.Count > 0 || subTb != null)
+        {
+            var subRow = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+            subRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            subRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            if (chips.Children.Count > 0)
+            {
+                Grid.SetColumn(chips, 0);
+                subRow.Children.Add(chips);
+            }
+            if (subTb != null)
+            {
+                Grid.SetColumn(subTb, 1);
+                subRow.Children.Add(subTb);
+            }
+            salaText.Children.Add(subRow);
         }
         Grid.SetColumn(salaText, 1);
         salaCell.Children.Add(salaText);
@@ -7075,7 +7143,10 @@ public partial class MultiplayerTab : UserControl
         {
             Text = hostName,
             Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
-            FontSize = 12,
+            // Was a bare 12 while the column HEADER above it read MpPillSize. Half the row
+            // was hardcoded, so raising the tokens alone would have left every heading
+            // larger than the value under it.
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
             FontWeight = FontWeights.Medium,
             TextTrimming = TextTrimming.CharacterEllipsis,
             // What makes the ellipsis work at all in an Auto column.
@@ -7116,7 +7187,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = $"{lobby.CurrentPlayers}/{lobby.MaxPlayers}",
             Foreground = textPrimary,
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
@@ -7321,7 +7392,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = text,
             Foreground = fg,
-            FontSize = 9.5,
+            FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
             FontWeight = FontWeights.SemiBold,
         },
     };
@@ -7476,7 +7547,7 @@ public partial class MultiplayerTab : UserControl
             // three-way reading, and the bars doubled the cell's width to repeat it.
             Text = $"{(int)rtt} ms",
             Foreground = brush,
-            FontSize = 12,
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -8414,7 +8485,7 @@ public partial class MultiplayerTab : UserControl
                 preferBeforeUtc: exitedAtUtc + ReplayWindowMargin);
             var replayInfo = analysis.Info;
             _lastLocalReadFailure = analysis.Failure;
-            if (analysis.Info != null) _lastRecordingPath = analysis.Info.File.FullName;
+            if (analysis.Info != null) SetLastRecordingPath(analysis.Info.File.FullName);
 
             SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.SendingResult);
             var report = await TryReportMatchAsync(profile, ctx, replayInfo);
@@ -8613,7 +8684,12 @@ public partial class MultiplayerTab : UserControl
         // The slot the trailer named as the loser, or -1. HostResult already answers the
         // 1v1 question and this changes nothing about it; what it adds is the only fact a
         // TEAM match needs, because naming one loser names a whole side.
-        int LoserSlot = -1);
+        int LoserSlot = -1,
+        // Every slot the recording's trailer named, LAST ELIMINATION FIRST. Diagnostic only:
+        // LoserSlot is still the one that decides, and it is this list's first entry by
+        // construction. It exists to answer, from a real team match, whether one block is
+        // written per casualty and whether the losing side appears whole.
+        System.Collections.Generic.IReadOnlyList<int>? EliminatedSlots = null);
 
     /// <summary>
     /// Finds the recording the game just wrote and reads the result out of it.
@@ -8799,7 +8875,7 @@ public partial class MultiplayerTab : UserControl
                     return (new MatchReplayInfo(
                         result.File, header.MapName, hostResult,
                         header.RandomSeed, header.HostTime, header.Players,
-                        outcome.LoserSlot),
+                        outcome.LoserSlot, outcome.EliminatedSlots),
                         result, outcome!.SignaturePresent);
                 });
 
@@ -8932,7 +9008,7 @@ public partial class MultiplayerTab : UserControl
                 _lastLocalReadFailure = again.Failure;
 
             var better = again.Info ?? soFar;
-            if (again.Info != null) _lastRecordingPath = again.Info.File.FullName;
+            if (again.Info != null) SetLastRecordingPath(again.Info.File.FullName);
 
             if (again.Info?.HostResult != null)
             {
@@ -9119,6 +9195,44 @@ public partial class MultiplayerTab : UserControl
             teams, ctx.InGameNames, replay?.Players, replay?.LoserSlot ?? -1);
     }
 
+    /// <summary>
+    /// The recording's casualty list with each one's side, LAST ELIMINATION FIRST, for the
+    /// diagnostic line above — never for a decision.
+    ///
+    /// <para>It answers the two questions a single measured file could not: whether AoE3
+    /// writes one outcome block per casualty, and whether the losing side appears whole.
+    /// Everything about it is best-effort — an unresolvable slot prints <c>?</c> rather than
+    /// dropping out, because a name the room never published is exactly the kind of thing
+    /// this is meant to show.</para>
+    /// </summary>
+    private static string DescribeEliminations(
+        MatchReplayInfo? replay,
+        Services.Multiplayer.MatchContext ctx,
+        System.Collections.Generic.IReadOnlyDictionary<string, int>? teams)
+    {
+        var slots = replay?.EliminatedSlots;
+        if (slots == null || slots.Count == 0) return "none";
+
+        var parts = new System.Collections.Generic.List<string>();
+        foreach (var slot in slots)
+        {
+            var name = replay?.Players?.FirstOrDefault(p => p.Slot == slot)?.Name;
+            var side = "?";
+            if (!string.IsNullOrWhiteSpace(name) && teams != null && ctx.InGameNames != null)
+            {
+                foreach (var (userId, declared) in ctx.InGameNames)
+                {
+                    if (!string.Equals(declared?.Trim(), name!.Trim(), StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (teams.TryGetValue(userId, out var t)) side = t.ToString();
+                    break;
+                }
+            }
+            parts.Add($"{slot}:{(string.IsNullOrWhiteSpace(name) ? "?" : name)}=t{side}");
+        }
+        return string.Join(" <- ", parts);
+    }
+
     private async Task TryConfirmMatchAsync(
         Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay, bool allowHost = false)
     {
@@ -9275,17 +9389,20 @@ public partial class MultiplayerTab : UserControl
             // and for a 1v1 this block does not run at all.
             var teamResults = ResolveTeamResults(ctx, replay, teams);
 
-            // Whether a TEAM recording carries an outcome block at all is unmeasured — one
-            // 2v2 file has ever been examined and it had none, which is also true of about a
-            // quarter of 1v1s. This line is how the first real team matches answer it, so do
-            // not remove it until they have: without the block the match reports 0.5 for
+            // A recording of MORE THAN TWO humans does carry outcome blocks — measured, on a
+            // four-player game that turned out to hold two of them. What is still unmeasured
+            // is a real TEAM game: that file was a free-for-all, so it says nothing about
+            // whether the losing SIDE appears whole, or whether one block is written per
+            // casualty. This line is how the first real team matches answer it, so do not
+            // remove it until they have: with no usable block the match reports 0.5 for
             // everyone and the team ladder never moves, and nothing else would say why.
             if (Services.Multiplayer.RoomFormats.IsTeam(ctx.Format))
             {
                 DiagnosticLog.Write(
                     $"MultiplayerTab.TryReportMatchAsync: {ctx.Format} recording — " +
                     $"loserSlot={replay?.LoserSlot ?? -1} teams={DescribeTeams(teams)} " +
-                    $"sides={(teamResults == null ? "unresolved" : "resolved")}");
+                    $"sides={(teamResults == null ? "unresolved" : "resolved")} " +
+                    $"eliminations={DescribeEliminations(replay, ctx, teams)}");
             }
 
             // Hashed here rather than server-side, because the server never sees the
@@ -9345,9 +9462,9 @@ public partial class MultiplayerTab : UserControl
 
             var response = await _session.Api.ReportMatchAsync(req);
 
-            // The match just moved the rating, so the cached standing is stale. Dropping it
-            // rather than re-fetching keeps this off the per-IP budget: the next visit to the
-            // Profile tab pays for it, and only if there is one.
+            // The match just moved the rating, so the cached standing is stale. This covers the
+            // case where the report does NOT end in a result phase; when it does, EnterResultPhase
+            // both drops it and re-fetches, because the card puts that tally on screen.
             _cachedStanding = null;
 
             DiagnosticLog.Write(
@@ -10500,7 +10617,7 @@ public partial class MultiplayerTab : UserControl
 
             _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
             _lastLocalReadDetail = null;
-            _lastRecordingPath = early.Info.File.FullName;
+            SetLastRecordingPath(early.Info.File.FullName);
             await TryConfirmMatchAsync(ctx, early.Info, allowHost: true);
             RepaintMatchResult();
         }
@@ -10545,6 +10662,18 @@ public partial class MultiplayerTab : UserControl
 
         // The wait is over, whichever way it ended.
         ClearPendingResult();
+
+        // The DECIDED cell counts this match too, and the cached tally predates it — so the
+        // card would announce a victory beside the record from before it. Both roles pass
+        // through here, which the host-only drop inside TryReportMatchAsync does not.
+        //
+        // DROPPED FIRST ON PURPOSE: if the request fails, the cell shows the em dash — "I do
+        // not know" — instead of a plausible wrong number. "0-1 · 0 %" over a Victoria is
+        // worse than saying nothing. LoadStandingAsync's in-flight guard covers the double
+        // entry (the socket frame and the POST both reach this method).
+        _cachedStanding = null;
+        _ = LoadStandingAsync();
+
         if (report != null && context != null)
         {
             // Captured rather than painted once: the local reading of the recording can land

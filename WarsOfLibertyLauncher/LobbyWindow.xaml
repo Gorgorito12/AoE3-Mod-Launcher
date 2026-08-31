@@ -411,7 +411,7 @@
                                                x:Name="PreflightModsText"
                                                Foreground="{DynamicResource MpTextBody}"
                                                FontSize="{StaticResource MpLabelSize}"
-                                               LineHeight="16"
+                                               LineHeight="18"
                                                LineStackingStrategy="BlockLineHeight"
                                                TextWrapping="Wrap"/>
                                 </Grid>
@@ -434,7 +434,7 @@
                                                x:Name="PreflightRecordText"
                                                Foreground="{DynamicResource MpCautionText}"
                                                FontSize="{StaticResource MpLabelSize}"
-                                               LineHeight="16"
+                                               LineHeight="18"
                                                LineStackingStrategy="BlockLineHeight"
                                                TextWrapping="Wrap"/>
                                     <Button Grid.Column="2"
@@ -466,7 +466,7 @@
                                                x:Name="PreflightAbandonText"
                                                Foreground="{DynamicResource MpCautionText}"
                                                FontSize="{StaticResource MpLabelSize}"
-                                               LineHeight="16"
+                                               LineHeight="18"
                                                LineStackingStrategy="BlockLineHeight"
                                                TextWrapping="Wrap"/>
                                 </Grid>
@@ -956,7 +956,7 @@
                                         <TextBlock x:Name="InGameSoloBody"
                                                    Foreground="{DynamicResource MpCautionText}"
                                                    FontSize="{StaticResource MpLabelSize}"
-                                                   LineHeight="17"
+                                                   LineHeight="19"
                                                    LineStackingStrategy="BlockLineHeight"
                                                    TextWrapping="Wrap"
                                                    Margin="0,4,0,0"/>

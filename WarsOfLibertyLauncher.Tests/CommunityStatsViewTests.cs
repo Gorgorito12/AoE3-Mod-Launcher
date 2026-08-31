@@ -53,11 +53,58 @@ public class CommunityStatsViewTests
     }
 
     [Fact]
-    public void TheBusiestHourIsTheAnswer()
+    public void TheBusiestStretchIsTheAnswer()
     {
         var local = CommunityStatsView.ToLocalHours(
             Utc((18, 9), (19, 25), (20, 6)), TimeSpan.Zero);
-        Assert.Equal(19, CommunityStatsView.PeakHour(local, 40));
+
+        // The START of the window, so the card can draw 18:00 – 21:00. It used to answer 19,
+        // the single tallest bar.
+        Assert.Equal(18, CommunityStatsView.PeakWindow(local, 40));
+    }
+
+    /// <summary>
+    /// <b>The measured case this replaced a single hour for.</b> The real histogram had 11 rooms
+    /// at 11:00 and 11 rooms at 15:00 — an exact tie four hours apart — and the card stated the
+    /// earlier one as the answer because that is the order the loop walks. A window has to land
+    /// on the side that is genuinely busier around it.
+    /// </summary>
+    [Fact]
+    public void ATieBetweenTwoDistantHoursIsBrokenByWhatSurroundsThem()
+    {
+        // Both 11 and 15 peak at 11 rooms, but 10 and 12 are busy and 14 and 16 are not.
+        var local = CommunityStatsView.ToLocalHours(
+            Utc((10, 7), (11, 11), (12, 7), (14, 1), (15, 11), (16, 1)), TimeSpan.Zero);
+
+        Assert.Equal(10, CommunityStatsView.PeakWindow(local, 38));
+    }
+
+    /// <summary>
+    /// A community that plays either side of midnight. Without the wrap its peak is split
+    /// across the two ends of the array and no window ever sees it whole.
+    /// </summary>
+    [Fact]
+    public void TheWindowWrapsAroundMidnight()
+    {
+        var local = CommunityStatsView.ToLocalHours(
+            Utc((23, 12), (0, 12), (1, 12), (12, 8), (13, 8), (14, 8)), TimeSpan.Zero);
+
+        Assert.Equal(23, CommunityStatsView.PeakWindow(local, 60));
+    }
+
+    /// <summary>
+    /// Overlapping windows CAN still tie, and the earliest wins. That is not the defect the
+    /// window fixed: both answers contain the same busy hour, so either names the right stretch
+    /// of the day — unlike two tied hours four apart. Pinned so the determinism is on purpose.
+    /// </summary>
+    [Fact]
+    public void OverlappingWindowsThatTieResolveToTheEarlier()
+    {
+        // 10-13 and 11-14 both total 25.
+        var local = CommunityStatsView.ToLocalHours(
+            Utc((10, 7), (11, 11), (12, 7), (13, 7)), TimeSpan.Zero);
+
+        Assert.Equal(10, CommunityStatsView.PeakWindow(local, 32));
     }
 
     [Fact]
@@ -67,14 +114,14 @@ public class CommunityStatsViewTests
         // that bar means nothing, and printing it under the words "peak hours" dresses
         // noise up as a finding. Below the threshold the card is not shown at all.
         var local = CommunityStatsView.ToLocalHours(Utc((3, 4)), TimeSpan.Zero);
-        Assert.Null(CommunityStatsView.PeakHour(local, 4));
+        Assert.Null(CommunityStatsView.PeakWindow(local, 4));
     }
 
     [Fact]
     public void AnEmptyHistogramHasNoPeakHour()
     {
-        Assert.Null(CommunityStatsView.PeakHour(new int[24], 100));
-        Assert.Null(CommunityStatsView.PeakHour(null, 100));
+        Assert.Null(CommunityStatsView.PeakWindow(new int[24], 100));
+        Assert.Null(CommunityStatsView.PeakWindow(null, 100));
     }
 
     [Fact]

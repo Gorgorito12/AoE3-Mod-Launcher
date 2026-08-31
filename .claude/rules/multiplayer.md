@@ -381,6 +381,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **16**; the four it gave up on had valid blocks at **78, 79, 135 and 195**. The new rule decides
   **20 of 20 and changes none of the 16** — measured, not argued.
 
+  **Confirmed again over 50 recordings collected afterwards**, which is the larger sample the
+  original measurement did not have: 49 are 1v1, 48 of them decide, and **two of those sit at
+  slack 78** — matches the old 8-byte bound would have thrown away. The fix is validated on data
+  that did not exist when it was made.
+
   **Widening alone would NOT have fixed it, and that is the half worth remembering.** In that same
   file the signature NEAREST the end is 12 bytes out and is rubbish (`A = 0xFFFFFFFF`, the Baja
   California shape all over again). `TrailerStart` returned only the nearest and `ReadOutcome` gave
@@ -437,25 +442,55 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   all. **Ambiguous must be reported as a draw**: this feeds a rating, and an invented winner
   takes points from someone with nothing on screen to explain it.
 
-  **What is actually known about team recordings, measured over 33 unique files.** One human
-  (skirmish): 4 of 4 carry a block. Two humans (1v1): **21 of 28**. Four humans (2v2): **0 of
-  1** — and that single 2v2 is not evidence of anything, because its tail is byte-for-byte the
-  same shape as a 1v1 that ended abnormally. **The "a team game writes a LONGER block"
-  hypothesis is refuted**; don''t re-derive it.
+  **What is known about recordings of MORE THAN TWO humans — and this paragraph has had to be
+  corrected twice, so read the corrections rather than the old numbers.** It used to read: one
+  human 4 of 4 carry a block, 1v1 **21 of 28**, four humans **0 of 1**. The first correction was
+  that the "21 of 28" was largely OUR bug — those counts were taken with `MaxTrailingSlack = 8`,
+  and re-measured with the 512-byte scan it is **20 of 20**, so "a quarter of 1v1s have no block"
+  was the parser giving up.
 
-  **READ THE ABOVE WITH THE SLACK FIX IN MIND — the "21 of 28" was largely OUR bug, not the
-  game's.** Those counts were taken with `MaxTrailingSlack = 8`. Re-measured over 20 readable
-  1v1s with the 512-byte scan, **20 of 20 carry a usable block**: the four that had looked
-  blockless had one at 78, 79, 135 and 195 bytes. So "a quarter of 1v1s have no block" was the
-  parser giving up, and the sentence that used that figure to excuse the 2v2 has lost its
-  premise. **The single 2v2 was never re-measured** — the file is not to hand — so whether a team
-  recording writes a block is still open, but it is now open for a DIFFERENT reason than it was.
+  **The second correction is that the "0 of 1" is simply FALSE.** That file — the `ESOC_Iowa`
+  game with Gommiustan, Kanchay, Jeops and Geaf_Argento — was re-read and carries **two**
+  well-formed blocks, marker `81` and all:
+
+  ```
+  slack 81 →  A=3  B=4  C=1      (slot 3)
+  slack  0 →  A=1  B=4  C=1      (slot 1)
+  ```
+
+  **So a recording of four humans DOES write outcome blocks**, and the old sentence excusing it
+  as "byte-for-byte the same shape as a 1v1 that ended abnormally" was describing a file nobody
+  had looked at with the current parser.
+
+  **Two general claims die with it, and both were stated here as properties of the FORMAT.**
+  `A == B` holds in all 48 decided 1v1s — it is a property of the 1v1, and thirteen more
+  confirmations that B is the loser rather than the recorder — but here `B = 4` in both blocks
+  while A differs, so **never treat `A == B` as a rule the parser may lean on**. And **`C` equals
+  the human count** was recorded as true "in all 25 readings"; here `C = 1` with four humans.
+  That is exactly why `ReadOutcome` keeps C as a PREFERENCE and never a refusal: with the
+  requirement it once nearly had, this file would read as nothing at all. It falls to the weak
+  path, takes the block nearest the end and answers `A = 1`, which is correct.
+
+  **What it does NOT settle, and the distinction matters: that file is not a team game.** Its
+  teams are `0, -1, -1, 1` — a free-for-all — which both `MatchTeamMap` and `matchShape` refuse
+  on purpose. Two blocks for what would have been three casualties is also not enough to claim
+  one block per casualty. So whether the losing SIDE appears whole is still open, and it is what
+  `TryReportMatchAsync`'s team diagnostic line exists to answer from the first real 2v2.
   A 43-file folder collected to answer it turned out to contain no team game at all (19 readable,
-  all 1v1; the other 10 were not recordings — a PNG, an `.exe`, four of zeroes).
-  Two things that DID come out of those files: `A == B` in all 13 decided 1v1s (thirteen more
-  confirmations that B is the loser, not the recorder), one block sits **5 bytes** short of the
-  end (without the 8-byte slack that match would not have rated), and **`C` equals the human
-  count in all 25 readings**.
+  all 1v1; the other 10 were not recordings — a PNG, an `.exe`, four of zeroes), and a later
+  50-file folder held 49 1v1s and the free-for-all above.
+
+  **`ReplayOutcome.EliminatedSlots` carries every slot the trailer named, LAST ELIMINATION
+  FIRST**, collected in the same walk that already decides — so `LoserSlot` is its first entry by
+  construction and **nothing is decided differently than before**. It exists because the team
+  question above needs a sequence, not a verdict.
+
+  **The "all casualties on the same side" check was designed and deliberately NOT built.** In a
+  real 2v2 a player from the WINNING side can fall first and his partner finish the game, so the
+  casualties come from both sides and the check would have refused a legitimate match — costing
+  four people their rating. The sound rule, and the one the code already follows for free: a team
+  game ends when the LAST member of the losing side falls, so **the last casualty names the
+  loser** and the earlier ones mean nothing suspicious.
 
   **The community references are worse than they look:** the official forum thread on
   the format is someone *requesting* documentation, and the AoE3:DE parser on GitHub
@@ -742,6 +777,16 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   must not take away what an earlier one found, which is the same "a later pass may only improve
   the diagnosis" rule one paragraph up.
 
+  **Reading it at paint time is worth NOTHING if nobody paints again, and for a rated match
+  nobody did** — so assignment goes through `SetLastRecordingPath`, which repaints. The half this
+  paragraph was missing: `HandleMatchReported` can paint the card while our own AoE3 is still
+  open, and at that instant the field is still the null `EnterInGamePhase` left. The exit handler
+  finds the recording a moment later, assigns it, and — because both `RepaintMatchResult` call
+  sites are gated to an UNDECIDED match (see the card-rebuild bullet) — the card kept saying "no
+  recording" while the chat line two rows below it named the file. Seen in a real screenshot of a
+  won 1v1. The setter refuses a blank and a no-op, so the "only ever a real file" rule above is
+  now enforced in one place instead of repeated at three call sites.
+
   **`FileReveal` falls back to the folder and never throws, and neither half is politeness.** A
   stored path goes stale two ways — the renumbering above, and `GameRecordingPurge` deleting
   automatic recordings past the newest ten — so by click time it routinely names nothing; and an
@@ -925,6 +970,24 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   CALL time, so the rebuild picks it up. It is cleared in `ExitResultPhase` and
   `EnterInGamePhase`.
 
+  **That machinery was real and UNREACHABLE for exactly the matches people care about, which is
+  the correction this paragraph needed.** Both call sites are gated to an undecided match —
+  `ContinueSearchingForResultAsync` returns early when `report.Rated`, and
+  `TryEarlyReplayReadAsync` is only invoked under `!report.Rated` — so **a rated 1v1 was painted
+  once and never again**, and the two facts that arrive late never reached it: the recording's
+  path (previous bullet) and the win/loss tally (below). The fix is not to relax those gates,
+  which exist so a decided match does not spend seconds of disk re-reading recordings; it is that
+  **whatever produces a late fact repaints**, at the point it produces it. Both writers do that
+  now — `SetLastRecordingPath` and `LoadStandingAsync` — and `RepaintMatchResult` is cheap and
+  self-guarding, so a caller can never repaint at a wrong moment: it returns immediately unless
+  the phase is `Result` and a rebuilder exists.
+
+  **Still NOT covered, deliberately:** `ContinueSearchingForResultAsync` gives up on a rated match
+  before looking for a recording at all, so a rated match whose recording was never found keeps an
+  empty REPLAY cell. That early return is about the RESULT, which a recording genuinely cannot
+  change there; widening it to go looking purely to fill a cell is a separate decision, and it
+  costs disk on the common path.
+
   **`EnterResultPhase` must NOT be used to refresh.** It clears `_roomMatchLive`, drops the
   process handle, kills the tick timer, stops the socket's reconnect and suppresses the leave
   confirm; running that again over an already-terminal state is a different bug.
@@ -1089,6 +1152,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   leaves the lines BLANK — the 1500 the server hands new players must never be shown as if it
   were earned. Verified against the live backend: today's deployment answers without the tally
   and the rate is correctly hidden.
+
+  **The second exception, and the reason the first sentence above had to be qualified: entering
+  the RESULT PHASE re-fetches, once per match.** `EnterResultPhase` drops the cache and calls
+  `LoadStandingAsync`, and it is the only point BOTH roles pass through — the drop inside
+  `TryReportMatchAsync` is host-only, so a guest's card always showed the pre-match record. Even
+  for the host it was a race: the socket frame and the POST both reach `EnterResultPhase`, and
+  whichever won decided whether the card read the pre-match tally (`0-1 · 0 %` beside a
+  **Victoria**, seen in a real screenshot) or an em dash. Neither could ever be the record
+  including the match being announced.
+  **The drop happens BEFORE the fetch on purpose:** a failed or offline request then leaves the
+  em dash — "I do not know" — rather than a plausible wrong number, which is the same refusal
+  `PlayerStanding` makes one paragraph up. It is one request per match PLAYED, bounded by how
+  often people play rather than by a clock, which is what the per-IP budget is protecting
+  against. The rewritten rule for both writers: **anything that invalidates this cache while a
+  result card is on screen has to re-fetch, not merely drop** — dropping alone turns the cell
+  into an em dash and leaves it there.
 
   **One documented exception to "once per session", and it is an EVENT, not a timer.** A
   session that starts while the backend is down never gets a standing at all, and the only
@@ -1825,6 +1904,50 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `Grid{Auto,*}` (disc in col0, text in col1), NOT horizontal StackPanels** — a
   horizontal StackPanel measures children with infinite width so wrap/ellipsis
   never fire; the text must live in a bounded `*` column.
+
+  **The room NAME had ~115 px of a ~300 px cell, and the cause was the BADGE beside it, not the
+  row's height — two remedies were tried in that order and only the second one was the fix.**
+  The name shared a `Grid{*,Auto}` with the chips, and `BuildRoomChip` says outright that a chip
+  never shrinks, so the name was the only thing in that row that could yield. The gold
+  "COMPETITIVA · 1v1" badge took about 180 px, the disc another 40, and the name ellipsised at
+  "Sala de W…" while the sub-line one row below — which hangs off the vertical stack and never
+  passed through that Grid — had the full ~260 px and slack to spare.
+  **Raising `MpSectionLabelSize` from 9.5 to 11 with the rest of the type scale is what made it
+  acute**, because it widened the badge. Worth remembering on its own: **a TYPE token moves
+  WIDTHS, not only heights.**
+
+  **What was tried FIRST, and retired:** wrapping the name to a second line (`TextWrapping.Wrap`
+  plus a `MaxHeight` of two pinned 20-px line boxes — WPF has no `MaxLines`, that is WinUI) with
+  `MpRoomCard`'s hard `Height` relaxed to a `MinHeight` so the row could grow. It came back still
+  truncated. The whole measure chain was then traced and is **bounded at every level** — no
+  horizontal `StackPanel`, no `Auto` column above the name, and `RoomsListScroll` has horizontal
+  scrolling disabled, which the sub-line's own working ellipsis proves independently — so as
+  written it should have wrapped. **That was never explained**, and it is recorded as unexplained
+  rather than dressed up: the remedy below removed the need for it, so the question stopped
+  mattering. Don't re-derive the "infinite width" theory for this row — it was checked and is
+  false here.
+
+  **The fix is horizontal, and it is where the room already was.** The name is now a direct child
+  of the vertical stack with the whole cell to itself, on ONE line, and the chips moved to the
+  SUB-LINE, which became a `Grid{Auto,*}` — chips in the `Auto` column, the
+  "{mod} · {context} · hace {t}" text in the star. **The rule did not change, only which text
+  obeys it**: what yields is still text and never a half-trimmed "COMPETITIV…", and the line down
+  there can afford to lose its tail where a title cannot. It is a Grid rather than a horizontal
+  `StackPanel` for the usual reason — a horizontal StackPanel measures with infinite width, so
+  the ellipsis would never fire and the line would simply run past the cell.
+
+  **Two details are load-bearing.** The sub-row is built when there is EITHER a chip or subtitle
+  text: a competitive room with no subtitle had no second row at all before, and would have lost
+  its badge with it. And `subTb` is still what gets registered in `_roomAgeCells`, or the live
+  "abierta hace X" counter stops ticking.
+
+  **`MpRoomCard` keeps `MinHeight` (64) rather than going back to the hard `Height`.** With the
+  name on one line again the content is uniform and every row lands on the same 64 px, so the
+  uniformity a fixed height used to decree now follows from the content instead — while a fixed
+  height would clip in silence the next time a chip grows, which is exactly what the type scale
+  just did. The `12,10` padding stays for the same reason. The name also keeps the `ToolTip` the
+  wrap attempt gave it: the title field takes 64 characters, so some names will not fit however
+  much room they get, and before that there was no way to read them at all.
   **The columns live ONCE, in `Services/RoomsTableLayout.All`, which both the header strip and
   `BuildRoomCard` read — the old "keep the two lists in lockstep" comment is gone because the
   two lists are gone. Don't re-add literal `ColumnDefinition`s to either side, and don't revert
@@ -2333,10 +2456,14 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Now `#8C9CB1` / `#8394B1` / `#758AA5`. The hue is kept and so is the ORDER — Muted 6.30 >
   Faint 5.75 > Label 5.24 > Dim 4.55 — so the hierarchy still reads; only the floor moved.
 
-  **The sizes stay where they are.** `MpLabelSize` 11.5 sits below the launcher's documented
-  13-px floor on the maintainer's explicit call, raised and declined twice (see
-  `Tokens.xaml:223-228`). Fixing contrast is how this surface gets more legible without
-  reopening that.
+  **The sizes were left where they were, and it did not hold.** This paragraph used to end
+  "fixing contrast is how this surface gets more legible without reopening that" — the contrast
+  fix shipped, and the surface was still reported as too small afterwards. So the sizes moved
+  too: `MpLabelSize` and its neighbours are now at the launcher's 13-px floor (see
+  `Tokens.xaml`, which carries the history of all three attempts). **The contrast work was not
+  wasted and must not be undone** — it is why the smallest text here is legible at all, and the
+  two fixes address different halves of the same complaint. What is obsolete is only the claim
+  that contrast alone was enough.
 
 - **Removing the roster's health dot would have broken the live ping SILENTLY.**
   `RefreshRosterHealthDots` found its target by walking each row for an `Ellipse` with a
@@ -2716,16 +2843,20 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   comment says so, because narrowing this function to one ladder without narrowing that statement
   would silently wipe the other.
 
-  **The one thing NOT known, and it decides whether any of this ever fires: whether a team
-  recording writes an outcome block at all.** The old figures (1v1 21/28, four humans 0 of 1) were
-  taken with the 8-byte trailer bound, and **that bound turned out to be the reason most of the
-  1v1 misses were misses** — re-measured with the 512-byte scan it is 20 of 20. The single 2v2 has
-  never been re-read, so it is still one sample, and now a doubtful one. A 43-file folder
-  collected for exactly this question held no team game at all (19 readable, all 1v1; the other
-  10 were not recordings — a PNG, an `.exe`, four of zeroes). The design is safe either way:
-  with no block the match reports 0.5 for everyone and stays unrated, which is what
-  every team game did before. `TryReportMatchAsync` logs `loserSlot` / `teams` / `sides` for every
-  team match so the first real ones answer it — **do not remove that line until they have.**
+  **A recording of more than two humans DOES write outcome blocks — that half is now measured,
+  and this bullet used to say the opposite.** The old figures (1v1 21/28, four humans 0 of 1) were
+  taken with the 8-byte trailer bound; re-measured with the 512-byte scan the 1v1s are 20 of 20,
+  and the four-human file that had counted as the "0 of 1" turns out to carry **two** well-formed
+  blocks. So the design's worst case — a team game that writes nothing readable — is no longer
+  the likely one. See the `.age3Yrec` section for the numbers and for the two general claims that
+  file kills.
+
+  **What is STILL not known is whether a real TEAM game names the losing side whole**, because
+  that file is a free-for-all rather than a 2v2 and no team recording has ever been read. The
+  design is safe either way: with no usable block the match reports 0.5 for everyone and stays
+  unrated, which is what every team game did before. `TryReportMatchAsync` logs `loserSlot` /
+  `teams` / `sides` and now the whole casualty sequence with each one's side, for every team
+  match, so the first real ones answer it — **do not remove that line until they have.**
 
   **Abandonment was deliberately NOT extended to team games.** `AbandonmentApplies` is still
   `OneVOne` only and `abandon.ts` keeps its own `!== 2`. The rule exists for when no recording can
@@ -2861,6 +2992,18 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   matches played — sent in UTC and shifted to local by `CommunityStatsView.ToLocalHours`;
   below `MinSampleRooms` the card hides rather than dressing four rooms up as a finding.
 
+  **It names a THREE-HOUR window, not the tallest bar, and the reason is measured.** On the live
+  histogram (119 rooms over 30 days) the tallest bar was 11 rooms and it was TIED between 11:00
+  and 15:00 local — four hours apart — so `PeakHour` returned whichever the loop reached first
+  and the card stated it as the answer. `PeakWindow` sums `PeakWindowHours` (3) instead: over the
+  same data that is 10:00–13:00 with 25 rooms against 23 for the next, a margin where there was an
+  exact tie. It is also what the heading always promised in the plural, and the same reasoning as
+  `MinSampleRooms` one step further in — 119 rooms across 24 buckets cannot support a claim about
+  one particular hour. **The window wraps midnight** (a community playing 23:00–01:00 would
+  otherwise have its peak split across the ends of the array and never found). Overlapping windows
+  can still tie and the earliest still wins, which is fine and is NOT the old defect: they contain
+  the same busy hour, so either names the right stretch of the day.
+
   **THE STRIP MUST NOT DEPEND ON THE VIEWER'S OWN HISTORY, and it used to — which made a
   panel headed "community activity" invisible to anyone who had not played.**
   `RefreshActivityStripAsync` opened by fetching the caller's match history and `return`ed
@@ -2915,7 +3058,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   are separate tokens precisely so the two decisions stay separable and neither leaks into
   the other. The ladder's fixed column widths were widened in the same change (`26 / * / 56
   / 72 / 48`), because "DECIDIDAS" does not fit 62 at 13 px; **the XAML header and
-  `BuildLeaderboardRow` carry that list twice and must be changed together.**
+  `BuildLeaderboardRow` carried that list twice, and since the RANKING subtab exists there is a
+  THIRD copy in `BuildRankingHeader` — all three must be changed together.**
 
   **(11) Only the HOST measures. The opponent's score is an inference, not a
   measurement** — `MatchResultResolver.ParticipantResult` is literally

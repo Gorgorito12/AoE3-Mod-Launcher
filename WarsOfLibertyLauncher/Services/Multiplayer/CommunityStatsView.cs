@@ -110,12 +110,39 @@ public static class CommunityStatsView
     }
 
     /// <summary>
-    /// The busiest local hour, or null when there is not enough to go on.
+    /// How many hours the card names at once.
     ///
-    /// <para>Null on too small a sample, on an empty histogram, and on a null payload —
-    /// all three mean the same thing to the caller, which is "don't show the card".</para>
+    /// <para><b>Three, and it used to be one — which was reporting a coin toss as a finding.</b>
+    /// Measured on the real histogram (119 rooms over 30 days): the tallest bar was 11 rooms and
+    /// it was TIED between two hours four apart, so the card picked whichever the loop reached
+    /// first and stated it as the answer. Over the same data the busiest three-hour window wins
+    /// 25 to 23, which is a margin rather than a tie.</para>
+    ///
+    /// <para>It is also what the card's own heading has always promised — "peak hourS" — and it
+    /// is the same reasoning as <see cref="MinSampleRooms"/> one step further in: a histogram
+    /// this thin, 119 rooms across 24 buckets, cannot support a claim about one particular
+    /// hour.</para>
     /// </summary>
-    public static int? PeakHour(int[]? localCounts, int total)
+    public const int PeakWindowHours = 3;
+
+    /// <summary>
+    /// The start of the busiest <see cref="PeakWindowHours"/>-hour stretch of the viewer's day,
+    /// or null when there is not enough to go on.
+    ///
+    /// <para>Null on too small a sample, on an empty histogram, and on a null payload — all
+    /// three mean the same thing to the caller, which is "don't show the card".</para>
+    ///
+    /// <para><b>The window wraps midnight</b>, and that is not a detail: a community that plays
+    /// from 23:00 to 01:00 has its whole peak split across the ends of the array, and a window
+    /// that stopped at 23 would never find it.</para>
+    ///
+    /// <para><b>Ties between OVERLAPPING windows are still possible and still resolved by taking
+    /// the earliest — deliberately.</b> On the measured data 10–13 and 11–14 both total 25. That
+    /// is not the defect this replaced: both contain the same busy hour, so either answer names
+    /// the right stretch of the day. What was wrong before was a tie between two hours FOUR
+    /// APART, where the two answers pointed at genuinely different times.</para>
+    /// </summary>
+    public static int? PeakWindow(int[]? localCounts, int total)
     {
         if (localCounts == null || localCounts.Length == 0) return null;
         if (total < MinSampleRooms) return null;
@@ -124,7 +151,11 @@ public static class CommunityStatsView
         var bestCount = 0;
         for (var h = 0; h < localCounts.Length; h++)
         {
-            if (localCounts[h] > bestCount) { bestCount = localCounts[h]; best = h; }
+            var sum = 0;
+            for (var i = 0; i < PeakWindowHours; i++)
+                sum += localCounts[(h + i) % localCounts.Length];
+
+            if (sum > bestCount) { bestCount = sum; best = h; }
         }
         return bestCount > 0 ? best : null;
     }

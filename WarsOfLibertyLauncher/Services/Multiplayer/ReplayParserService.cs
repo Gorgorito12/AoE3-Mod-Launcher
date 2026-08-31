@@ -339,7 +339,8 @@ public static class ReplayParserService
         int LoserSlot,
         int WinnerSlot,
         int TrailerSecondSlot,
-        bool SignaturePresent);
+        bool SignaturePresent,
+        System.Collections.Generic.IReadOnlyList<int>? EliminatedSlots = null);
 
     /// <summary>The 12 zero bytes + 8 × 0xFF that precede the trailing triple.</summary>
     private const int OutcomeTrailerBytes = 32;
@@ -462,14 +463,25 @@ public static class ReplayParserService
         var noSignature = new ReplayOutcome(ReplayOutcomeConfidence.Ambiguous, -1, -1, -1, false);
         if (data == null || header == null || data.Length < OutcomeTrailerBytes) return noSignature;
 
-        // How many of the header's slots are people. The block's THIRD field has equalled this
-        // in every reading ever taken (25 of 25), which makes it a second, independent way to
-        // tell this match's block from an accidental one in the command stream.
+        // How many of the header's slots are people. The block's THIRD field equals this in
+        // every 1v1 ever measured (48 of 48), which makes it a second, independent way to tell
+        // this match's block from an accidental one in the command stream.
+        //
+        // It is a PREFERENCE and not a requirement, and a four-player recording is why: its
+        // blocks read C = 1 with four humans, so "C == humans" is a property of the 1v1 and not
+        // of the format. Requiring it would make that match unreadable.
         var humans = header.Players.Count(p => p.IsHuman);
 
         var first = -1;     // the nearest signature, whatever it turned out to say
         var strong = -1;    // nearest one whose loser AND head count describe this match
         var weak = -1;      // nearest one whose loser does, on its own
+
+        // Every block that names a real slot, nearest-to-the-end FIRST. A match of more than two
+        // players writes one per elimination — measured on a four-player game carrying two, at
+        // 0 and 81 bytes out, naming two different slots — so this is the elimination sequence in
+        // reverse. Diagnostic only: the DECISION is the first entry, which is what LoserSlot
+        // already was, because a team game ends when the last member of a side falls.
+        var eliminated = new System.Collections.Generic.List<int>();
 
         foreach (var start in TrailerCandidates(data))
         {
@@ -478,10 +490,14 @@ public static class ReplayParserService
             var a = unchecked((int)BitConverter.ToUInt32(data, start + 20));
             if (header.Players.All(p => p.Slot != a)) continue;
 
-            var c = unchecked((int)BitConverter.ToUInt32(data, start + 28));
-            if (c == humans) { strong = start; break; }
+            if (!eliminated.Contains(a)) eliminated.Add(a);
 
-            if (weak < 0) weak = start;
+            var c = unchecked((int)BitConverter.ToUInt32(data, start + 28));
+            // Not a break, which it used to be: the walk continues to the end of the window so
+            // the elimination list is complete even after the decision is settled. Both picks
+            // are taken once, by the nearest candidate that qualifies.
+            if (c == humans && strong < 0) strong = start;
+            else if (weak < 0 && strong < 0) weak = start;
         }
 
         if (first < 0) return noSignature;
@@ -499,7 +515,7 @@ public static class ReplayParserService
             // never wrote its ending", which is why SignaturePresent is a separate field.
             return new ReplayOutcome(
                 ReplayOutcomeConfidence.Ambiguous, -1, -1,
-                unchecked((int)BitConverter.ToUInt32(data, first + 24)), true);
+                unchecked((int)BitConverter.ToUInt32(data, first + 24)), true, eliminated);
         }
 
         if (strong < 0)
@@ -514,7 +530,8 @@ public static class ReplayParserService
         var second = unchecked((int)BitConverter.ToUInt32(data, chosen + 24));
 
         // Past the signature, so the trailer exists whatever it turns out to say.
-        var unknown = new ReplayOutcome(ReplayOutcomeConfidence.Ambiguous, -1, -1, second, true);
+        var unknown = new ReplayOutcome(
+            ReplayOutcomeConfidence.Ambiguous, -1, -1, second, true, eliminated);
 
         // Beyond a 1v1, "X lost" doesn't name a winner: the others may have lost too,
         // and nothing here says in what order. Those stay draws until the room state
@@ -533,7 +550,8 @@ public static class ReplayParserService
             return unknown with { LoserSlot = loser };
 
         var winner = header.Players.First(p => p.Slot != loser).Slot;
-        return new ReplayOutcome(ReplayOutcomeConfidence.Confident, loser, winner, second, true);
+        return new ReplayOutcome(
+            ReplayOutcomeConfidence.Confident, loser, winner, second, true, eliminated);
     }
 
     /// <summary>

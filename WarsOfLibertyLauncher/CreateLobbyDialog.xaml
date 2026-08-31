@@ -866,7 +866,7 @@
                                    x:Name="RecordWarnText"
                                    Foreground="{DynamicResource MpCautionText}"
                                    FontSize="{StaticResource MpLabelSize}"
-                                   LineHeight="17"
+                                   LineHeight="19"
                                    LineStackingStrategy="BlockLineHeight"
                                    TextWrapping="Wrap"/>
                     </Grid>

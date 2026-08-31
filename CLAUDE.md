@@ -237,8 +237,15 @@ than silently approximating. The two known cases so far: WPF's `TextBlock` has *
 letter-spacing** at all (faking it with thin spaces breaks `CharacterEllipsis` on
 localized text), and a CSS `border-radius: 999px` is a clamped-to-50% idiom that WPF
 renders as a distorted ellipse — a pill needs an explicit half-height radius. A house
-rule is NOT such a case: the type scale's 13px floor was raised against the handoff's
-11.5 twice and overruled twice, and 11.5 is what ships (see `MpLabelSize`).
+rule was NOT such a case either — until it was, on the third asking. The type scale's
+13px floor was raised against the handoff's 11.5 twice and overruled twice; the third
+time it came from the OTHER direction ("still looks small", about the shipped surface)
+and the multiplayer sizes went to the floor. **What survives those two refusals is the
+ORDER they established:** fidelity first, and a deviation only once the reference has had
+a fair run and something concrete is wrong with it. Two cheaper remedies were spent first
+— the text ramp was re-coloured to clear 4.5:1 so the sizes would not have to move, and
+magnifying the whole surface through `UiScale` was tried and rejected on sight. See
+`MpLabelSize` in `Tokens.xaml`, which carries the full history.
 
 ## Important gotchas
 
@@ -4441,12 +4448,17 @@ engine** and the UI binds to it.
    only with **one reading from each side that agree, on the same game** — so a team match is
    stored `awaiting_confirmation` and released when the opposing side's reading lands. The 1v1
    ladder is untouched, and every surface that shows a rating still shows that one; the RANKING
-   subtab is the only place both appear. **Whether a team recording carries an outcome block at
-   all is still measured at one file** — with none the match reports 0.5 and stays unrated,
-   exactly as before. Related and load-bearing: the trailer was being sought in the last **8**
+   subtab is the only place both appear. **A recording of more than two humans DOES carry outcome
+   blocks — measured, on a four-player file that turned out to hold two of them** (which also
+   kills `A == B` and `C == humans` as general rules; they are 1v1 properties). What is still
+   unmeasured is a real TEAM game, since that file is a free-for-all: with no usable block the
+   match reports 0.5 and stays unrated, exactly as before, and `ReplayOutcome.EliminatedSlots`
+   plus the team diagnostic line are what the first real 2v2 answers it with. Related and
+   load-bearing: the trailer was being sought in the last **8**
    bytes of a recording and the block routinely sits further back, which was silently losing
    **one competitive 1v1 in five**; it now scans 512 and validates each candidate (20 of 20
-   measured, none changed). See the trailer bullet in `.claude/rules/multiplayer.md`. See the identity-bridge and ELO bullets in
+   measured, none changed, and confirmed again over 50 later recordings — two of them at slack
+   78, which the old bound would have lost). See the trailer bullet in `.claude/rules/multiplayer.md`. See the identity-bridge and ELO bullets in
    `.claude/rules/multiplayer.md`.
    **Rating is opt-in per ROOM, and a competitive room declares a FORMAT** — 1v1 / 2v2 / 3v3,
    which also fixes its size (2 / 4 / 6 seats) and is DERIVED from that size rather than stored;
@@ -4973,6 +4985,17 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   "shrink to fit" below that. Crispness rides the hero's recipe
   (`SetTextCrispForScale`: Ideal/Grayscale/Animated below 1.0,
   Display/ClearType/Fixed at 1.0).
+  **RAISING THE 1.0 CEILING WAS TRIED AND REJECTED — don't re-propose it when
+  somebody says the text is too small.** The diagnosis behind it is correct and worth
+  keeping: every reference sits near the default window (1100x560 for the tabs), so on a
+  maximised 2048-DIP window the natural factor is ~1.7 and it is flattened to 1.0 — the
+  same 1100-wide layout drawn in twice the space, the surplus spent on whitespace. The
+  remedy is what failed. It was shipped at `MaxScale = 1.25` and the verdict, on sight,
+  was "se ve gigante". **Enlarging is not the same as making the text bigger:** a
+  LayoutTransform scales the air too — paddings, gutters, the 58-px room row, the chat
+  column's 300-px cap — so over a table holding one room and a lot of empty space it
+  reads as a zoom rather than as more readable text. The ask was type size; the answer is
+  the type tokens (`MpLabelSize` and friends), which is where it went.
   **The top of the range is a DEAD BAND — `SnapToOneAbove` (0.97) — and removing it
   re-opens a real bug.** Because the crispness recipe flips at `scale < 0.999`, the
   clamp alone put that decision two pixels away from a normal window resize: the

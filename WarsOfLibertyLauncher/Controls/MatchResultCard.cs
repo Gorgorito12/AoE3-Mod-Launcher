@@ -329,7 +329,9 @@ public static class MatchResultCard
                 Text = note,
                 Foreground = Brush("MpTextMuted"),
                 FontSize = Size("MpLabelSize"),
-                LineHeight = 17,
+                // Raised with MpLabelSize (11.5 -> 13): a line box shorter than the font
+                // needs clips descenders rather than tightening the leading.
+                LineHeight = 19,
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
