@@ -52,6 +52,17 @@ public class LobbyApiClient : IDisposable
     {
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        // SQLITE HAS NO BOOLEANS, and that is the whole reason this converter exists. Any column
+        // this API hands over raw arrives as a NUMBER — 0 or 1 — and System.Text.Json will not
+        // bind a number to a bool: it throws, and the throw aborts the WHOLE response, so one
+        // field takes an entire page down. Launcher 1.0.13l shipped exactly that: the history
+        // endpoint started selecting `rated`, the DTO declared it `bool?`, and the Profile's
+        // History section sat on "Loading..." for ever.
+        //
+        // The backend coerces that field now, which is the fix people already on 1.0.13l get.
+        // This is the OTHER half: it belongs on the shared options rather than on one property
+        // so that the next column somebody exposes cannot repeat it.
+        Converters = { new TolerantBoolConverter(), new TolerantNullableBoolConverter() },
     };
 
     private string? _sessionToken;

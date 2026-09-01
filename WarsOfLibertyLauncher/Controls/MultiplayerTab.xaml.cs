@@ -4198,7 +4198,10 @@ public partial class MultiplayerTab : UserControl
         // field. A field panel would have to be un-parented on every repaint (the profile is
         // rebuilt whole), and re-parenting a live element is a WPF exception waiting for the
         // first person who forgets. Rebuilding costs a header, a curve and three cells.
-        if (_historyRows == null && _isRefreshingHistory)
+        var section = Services.Multiplayer.MatchHistoryView.SectionFor(
+            _historyRows, _historyError, _isRefreshingHistory);
+
+        if (section == Services.Multiplayer.HistorySection.Loading)
         {
             host.Children.Add(new TextBlock
             {
@@ -4210,7 +4213,7 @@ public partial class MultiplayerTab : UserControl
             return host;
         }
 
-        if (_historyRows == null && _historyError != null)
+        if (section == Services.Multiplayer.HistorySection.Error)
         {
             // A themed line, not the raw Brushes.Salmon this used to paint — that was the one
             // place in the multiplayer surface still using a hardcoded system colour.
@@ -4829,25 +4832,29 @@ public partial class MultiplayerTab : UserControl
             var resp = await _session.Api.GetHistoryAsync(_session.CurrentUser.Id);
             _historyRows = resp.Matches;
             _historyError = null;
-            if (ProfileView.IsVisible) RenderProfileTab();
         }
         catch (Exception ex)
         {
+            // ALWAYS LOGGED. This used to be written only when a page was already cached, which
+            // meant the FIRST fetch — the one that actually fails — left no trace at all: a
+            // diagnostic bundle from a launcher stuck on "Loading…" contained not one line about
+            // it, and the silence read as "the request never happened".
+            DiagnosticLog.Write($"MultiplayerTab: history fetch failed"
+                + (_historyRows != null ? " (keeping the cached page)" : "") + $": {ex}");
+
             // A failed REFRESH keeps whatever was already on screen: the page we have is still
             // true, and replacing a list of real matches with an error line because the server
             // hiccuped would be losing information to report a transient.
-            if (_historyRows != null)
-            {
-                DiagnosticLog.Write($"MultiplayerTab: history refresh failed, keeping the cached page: {ex.Message}");
-                return;
-            }
-
-            _historyError = ex.Message;
-            if (ProfileView.IsVisible) RenderProfileTab();
+            if (_historyRows == null) _historyError = ex.Message;
         }
         finally
         {
+            // ONE repaint, and it happens AFTER the flag is cleared. Repainting from inside the
+            // catch is what turned this into a hang: the spinner branch tests "no rows AND still
+            // refreshing", both of which were still true at that moment, so it matched and the
+            // error line below it could never be reached. See MatchHistoryView.SectionFor.
             _isRefreshingHistory = false;
+            if (ProfileView.IsVisible) RenderProfileTab();
         }
     }
 

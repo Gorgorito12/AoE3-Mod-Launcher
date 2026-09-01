@@ -23,6 +23,13 @@
   ],
   "announcements": [
     {
+      "id": "v1013m",
+      "title": "v1.0.13m: the History fix",
+      "body": "In 1.0.13l the Profile's History sat on Loading and never arrived. It is fixed, and so is the reason it never told you what went wrong. Notes in English and Spanish.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.13m.md",
+      "date": "2026-08-31"
+    },
+    {
       "id": "v1013l",
       "title": "v1.0.13l: the multiplayer screens, rebuilt",
       "body": "The ranking table was redone and History now lives inside your Profile. There is also a text size setting, and any text cut short with an ellipsis can be read by hovering over it. Notes in English and Spanish.",

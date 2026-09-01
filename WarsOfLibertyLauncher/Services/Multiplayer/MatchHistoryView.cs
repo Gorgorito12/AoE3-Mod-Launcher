@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -17,6 +17,19 @@ public enum HistoryFilter
 
     /// <summary>Only the ones that did not — so a player can see WHY.</summary>
     Unrated,
+}
+
+/// <summary>What the History section should be drawing right now.</summary>
+public enum HistorySection
+{
+    /// <summary>Nothing in hand yet and the fetch is on its way.</summary>
+    Loading,
+
+    /// <summary>Nothing in hand and the fetch failed. The message is worth more than a spinner.</summary>
+    Error,
+
+    /// <summary>A page in hand — draw it, filters and all.</summary>
+    Rows,
 }
 
 /// <summary>One day of matches, newest day first.</summary>
@@ -214,5 +227,34 @@ public static class MatchHistoryView
 
         var them = others[0];
         return string.IsNullOrEmpty(them.DisplayName) ? them.DiscordUsername : them.DisplayName;
+    }
+
+    /// <summary>
+    /// Which of the three states the section is in — pure, because the ORDER of these tests is
+    /// the whole thing and it was wrong.
+    ///
+    /// <para><b>An error beats "loading", and that is the fix.</b> The UI used to ask "no rows and
+    /// still refreshing?" FIRST, and the failure path repainted from inside its <c>catch</c>, i.e.
+    /// before the <c>finally</c> cleared the refreshing flag — so at paint time both were still
+    /// true, the spinner branch matched, and the error line underneath it was unreachable. The
+    /// message was stored and never drawn: "Loading…" for ever, with the explanation in hand.</para>
+    ///
+    /// <para>It masked ANY first-fetch failure — a 429, a 500, no network — not just the
+    /// deserialisation bug that exposed it. Deciding it here means the ordering can be argued with
+    /// in a test instead of depending on when somebody happens to repaint.</para>
+    ///
+    /// <para>Rows in hand always win: a refresh that fails keeps the page it already had, because
+    /// real matches are worth more than a line about a hiccup.</para>
+    /// </summary>
+    public static HistorySection SectionFor(
+        IReadOnlyList<MatchHistoryRow>? rows, string? error, bool refreshing)
+    {
+        if (rows != null) return HistorySection.Rows;
+        if (!string.IsNullOrWhiteSpace(error)) return HistorySection.Error;
+
+        // Nothing yet and nothing wrong. Also the state a beat before the fetch is kicked, which
+        // is why it does not depend on the flag being set already.
+        _ = refreshing;
+        return HistorySection.Loading;
     }
 }
