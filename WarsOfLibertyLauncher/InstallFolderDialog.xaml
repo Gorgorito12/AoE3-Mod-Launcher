@@ -20,11 +20,11 @@
     <StackPanel Grid.Row="1" Margin="24">
         <!-- Header -->
         <TextBlock x:Name="HeaderText"
-                   FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
+                   FontSize="{DynamicResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="DescriptionText"
-                   FontSize="{StaticResource FontSizeBody}"
+                   FontSize="{DynamicResource FontSizeBody}"
                    Foreground="#aaa"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
@@ -34,7 +34,7 @@
              so asking for a source there would block an install that needs none. -->
         <StackPanel x:Name="Aoe3Row">
             <TextBlock x:Name="LblAoE3Folder"
-                       FontSize="{StaticResource FontSizeCaption}"
+                       FontSize="{DynamicResource FontSizeCaption}"
                        Foreground="#888"
                        Margin="0,0,0,4"/>
 
@@ -45,7 +45,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBox x:Name="Aoe3PathTextBox"
                          Grid.Column="0"
-                         FontSize="{StaticResource FontSizeBody}"
+                         FontSize="{DynamicResource FontSizeBody}"
                          Background="{DynamicResource BgPanelAlt}"
                          Foreground="White"
                          BorderBrush="{DynamicResource BorderSubtle}"
@@ -62,7 +62,7 @@
 
             <!-- AoE3 status (color-coded inline message) -->
             <TextBlock x:Name="Aoe3StatusText"
-                       FontSize="{StaticResource FontSizeCaption}"
+                       FontSize="{DynamicResource FontSizeCaption}"
                        TextWrapping="Wrap"
                        Margin="0,0,0,6"/>
 
@@ -81,7 +81,7 @@
              before installing (non-blocking, shown only when AoE3's
              user-data folder is missing). -->
         <TextBlock x:Name="FirstRunWarningText"
-                   FontSize="{StaticResource FontSizeCaption}"
+                   FontSize="{DynamicResource FontSizeCaption}"
                    Foreground="#d4a04a"
                    TextWrapping="Wrap"
                    Margin="0,0,0,14"
@@ -89,7 +89,7 @@
 
         <!-- Destination folder -->
         <TextBlock x:Name="LblFolder"
-                   FontSize="{StaticResource FontSizeCaption}"
+                   FontSize="{DynamicResource FontSizeCaption}"
                    Foreground="#888"
                    Margin="0,0,0,4"/>
 
@@ -100,7 +100,7 @@
             </Grid.ColumnDefinitions>
             <TextBox x:Name="FolderTextBox"
                      Grid.Column="0"
-                     FontSize="{StaticResource FontSizeBody}"
+                     FontSize="{DynamicResource FontSizeBody}"
                      Background="{DynamicResource BgPanelAlt}"
                      Foreground="White"
                      BorderBrush="{DynamicResource BorderSubtle}"
@@ -117,7 +117,7 @@
 
         <!-- Disk space -->
         <TextBlock x:Name="DiskSpaceText"
-                   FontSize="{StaticResource FontSizeCaption}"
+                   FontSize="{DynamicResource FontSizeCaption}"
                    Foreground="#888"
                    Margin="0,0,0,8"/>
 
@@ -143,7 +143,7 @@
                           IsEnabled="False"/>
             </StackPanel>
             <TextBlock x:Name="CopySettingsHint"
-                       FontSize="{StaticResource FontSizeCaption}"
+                       FontSize="{DynamicResource FontSizeCaption}"
                        Foreground="#888"
                        TextWrapping="Wrap"
                        Margin="0,6,0,0"/>
@@ -151,7 +151,7 @@
 
         <!-- Validation warning -->
         <TextBlock x:Name="WarningText"
-                   FontSize="{StaticResource FontSizeCaption}"
+                   FontSize="{DynamicResource FontSizeCaption}"
                    Foreground="{DynamicResource ErrorBrush}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,12"

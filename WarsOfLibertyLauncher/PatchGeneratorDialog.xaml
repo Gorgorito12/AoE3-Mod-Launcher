@@ -24,18 +24,18 @@
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#aab1bd"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
             <Setter Property="Margin" Value="0,8,0,4"/>
         </Style>
         <Style x:Key="FieldHint" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#777"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
             <Setter Property="FontStyle" Value="Italic"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,2,0,0"/>
@@ -63,10 +63,10 @@
                       HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="28,22,28,22">
                 <TextBlock x:Name="HeaderText"
-                           FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
+                           FontSize="{DynamicResource FontSizeHeading}" FontWeight="SemiBold"
                            Foreground="White" Margin="0,0,0,4"/>
                 <TextBlock x:Name="DescriptionText"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            Foreground="#aab1bd" TextWrapping="Wrap" Margin="0,0,0,16"/>
 
                 <!-- SOURCE ZIPS -->
@@ -149,7 +149,7 @@
                                    FontWeight="SemiBold" TextWrapping="Wrap"/>
                         <TextBlock x:Name="ReminderText"
                                    Foreground="#cfe8d6" TextWrapping="Wrap" Margin="0,8,0,0"
-                                   FontSize="{StaticResource FontSizeCaption}"/>
+                                   FontSize="{DynamicResource FontSizeCaption}"/>
                     </StackPanel>
                 </Border>
 

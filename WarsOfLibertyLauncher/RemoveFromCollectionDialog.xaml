@@ -24,20 +24,20 @@
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
                        Text="&#x26A0;"
-                       FontSize="{StaticResource FontSizeHeading}"
+                       FontSize="{DynamicResource FontSizeHeading}"
                        Foreground="{DynamicResource AccentBrush}"
                        VerticalAlignment="Top"
                        Margin="0,0,14,0"/>
             <StackPanel Grid.Column="1">
                 <TextBlock x:Name="ModNameText"
                            Foreground="{DynamicResource TextPrimary}"
-                           FontSize="{StaticResource FontSizeBodyStrong}"
+                           FontSize="{DynamicResource FontSizeBodyStrong}"
                            FontWeight="SemiBold"
                            TextWrapping="Wrap"
                            Margin="0,0,0,8"/>
                 <TextBlock x:Name="BodyText"
                            Foreground="{DynamicResource TextSecondary}"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            TextWrapping="Wrap"/>
             </StackPanel>
         </Grid>
@@ -47,7 +47,7 @@
         <StackPanel x:Name="PathBlock" Visibility="Collapsed" Margin="0,0,0,16">
             <TextBlock x:Name="PathLabel"
                        Foreground="{DynamicResource TextSecondary}"
-                       FontSize="{StaticResource FontSizeCaption}"
+                       FontSize="{DynamicResource FontSizeCaption}"
                        Margin="0,0,0,4"/>
             <Border Background="{DynamicResource BgPanelAlt}"
                     BorderBrush="{DynamicResource BorderSubtle}"
@@ -56,7 +56,7 @@
                     Padding="12,8">
                 <TextBlock x:Name="PathText"
                            FontFamily="Consolas"
-                           FontSize="{StaticResource FontSizeCaption}"
+                           FontSize="{DynamicResource FontSizeCaption}"
                            Foreground="{DynamicResource SecondaryFixed}"
                            TextWrapping="Wrap"/>
             </Border>

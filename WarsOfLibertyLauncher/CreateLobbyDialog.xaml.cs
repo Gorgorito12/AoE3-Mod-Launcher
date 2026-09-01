@@ -340,7 +340,22 @@ public partial class CreateLobbyDialog : Window
                 IsEnabled = RoomFormats.PlayersFor(format) <= _lobbyMaxPlayers,
             };
             var chosen = format;
-            btn.Click += (_, _) => SelectFormat(chosen);
+            btn.Click += (_, _) =>
+            {
+                // PICKING A FORMAT IS DECLARING THE ROOM COMPETITIVE. The format only means
+                // anything for a competitive room, so the alternative — a click that does
+                // nothing until you also find the checkbox — is a control that looks broken.
+                //
+                // Assigning IsChecked raises CompetitiveCheck_Changed SYNCHRONOUSLY, and that
+                // handler adopts whatever format matches the size currently chosen. So the state
+                // may pass through a different format before the line below. That is fine — the
+                // last call wins and the end state is the clicked one — but it is worth knowing
+                // before somebody reads the SelectFormat below as redundant and deletes it.
+                if (CompetitiveCheck != null && CompetitiveCheck.IsChecked != true)
+                    CompetitiveCheck.IsChecked = true;
+
+                SelectFormat(chosen);
+            };
             _formatButtons[format] = btn;
             FormatRow.Children.Add(btn);
         }
@@ -357,8 +372,9 @@ public partial class CreateLobbyDialog : Window
     private void SelectFormat(RoomFormat format)
     {
         _format = format;
-        foreach (var kv in _formatButtons)
-            kv.Value.Tag = kv.Key == format ? "active" : null;
+
+        // The highlight is NOT set here — RefreshCompetitiveUi at the bottom of this method owns
+        // it, so that a casual room can never end up showing a format it has not declared.
 
         // The size follows the format ONLY while the room is competitive. Without that guard the
         // constructor's own SelectFormat would drag a casual room down from eight seats to two
@@ -391,7 +407,22 @@ public partial class CreateLobbyDialog : Window
         if (CompetitiveCheck == null || CompetitiveFormatRow == null) return;
         var competitive = CompetitiveCheck.IsChecked == true;
 
-        CompetitiveFormatRow.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
+        // ALWAYS VISIBLE. It used to appear only once the box was ticked, which made one
+        // decision take two steps and jumped the dialog's height at the moment of ticking.
+        // Picking a format is now itself the way to declare the room competitive.
+        CompetitiveFormatRow.Visibility = Visibility.Visible;
+
+        // THE SELECTION IS PAINTED HERE AND NOWHERE ELSE, and that is what keeps the row honest
+        // now that it is on screen for casual rooms too. SelectFormat used to tag the active
+        // button itself, unconditionally — harmless while the row was hidden, and a lie the
+        // moment it is not: a casual room would show 1v1 lit up, three centimetres under a
+        // "Max players: 8" it flatly contradicts. It would also be claiming the one thing this
+        // model refuses to claim, that a two-seat casual room IS a 1v1 (see RoomFormats).
+        //
+        // No format chosen yet, therefore nothing lit. MpSegment's own inactive state does the
+        // drawing — never an Opacity layer, which would take ClearType down with it.
+        foreach (var kv in _formatButtons)
+            kv.Value.Tag = competitive && kv.Key == _format ? "active" : null;
 
         // The size belongs to the format while there is one, so the row is shown but inert —
         // hiding it would leave the host unable to see how big their own room is.

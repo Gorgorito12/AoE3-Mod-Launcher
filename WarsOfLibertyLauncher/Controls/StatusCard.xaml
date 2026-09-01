@@ -25,12 +25,12 @@
                 <TextBlock Grid.Column="1"
                            Text="Estado:"
                            Foreground="#888"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2"
                            x:Name="StatusValueText"
                            Text="—"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource SuccessBrush}"
                            VerticalAlignment="Center"/>
@@ -53,13 +53,13 @@
                 <TextBlock Grid.Column="1"
                            x:Name="StatusInstalledLabel"
                            Foreground="#888"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2"
                            x:Name="CurrentVersionText"
                            Text="—"
                            Foreground="White"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
             </Grid>
@@ -81,13 +81,13 @@
                 <TextBlock Grid.Column="1"
                            x:Name="StatusLatestLabel"
                            Foreground="#888"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2"
                            x:Name="LatestVersionText"
                            Text="—"
                            Foreground="White"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
             </Grid>
@@ -112,7 +112,7 @@
                 <TextBlock Grid.Column="1"
                            x:Name="AoE3MissingLabel"
                            Foreground="{DynamicResource ErrorBrush}"
-                           FontSize="{StaticResource FontSizeCaption}"
+                           FontSize="{DynamicResource FontSizeCaption}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            TextWrapping="Wrap"/>
@@ -121,7 +121,7 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Foreground="{DynamicResource InfoBrush}"
-                        FontSize="{StaticResource FontSizeCaption}"
+                        FontSize="{DynamicResource FontSizeCaption}"
                         FontWeight="SemiBold"
                         Cursor="Hand"
                         Padding="6,2"

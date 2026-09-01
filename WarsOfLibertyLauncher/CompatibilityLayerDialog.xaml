@@ -24,21 +24,21 @@
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0"
                        Text="&#x26A0;"
-                       FontSize="{StaticResource FontSizeHeading}"
+                       FontSize="{DynamicResource FontSizeHeading}"
                        Foreground="{DynamicResource AccentBrush}"
                        VerticalAlignment="Top"
                        Margin="0,0,14,0"/>
             <TextBlock Grid.Column="1"
                        x:Name="BodyText"
                        Foreground="{DynamicResource TextSecondary}"
-                       FontSize="{StaticResource FontSizeBody}"
+                       FontSize="{DynamicResource FontSizeBody}"
                        TextWrapping="Wrap"/>
         </Grid>
 
         <!-- The exact file, so the user can find it themselves in Explorer. -->
         <TextBlock x:Name="FileLabel"
                    Foreground="{DynamicResource TextSecondary}"
-                   FontSize="{StaticResource FontSizeCaption}"
+                   FontSize="{DynamicResource FontSizeCaption}"
                    Margin="0,0,0,4"/>
         <Border Background="{DynamicResource BgPanel}"
                 CornerRadius="{StaticResource RadiusSm}"
@@ -46,7 +46,7 @@
                 Margin="0,0,0,16">
             <TextBlock x:Name="FilePathText"
                        FontFamily="Consolas"
-                       FontSize="{StaticResource FontSizeCaption}"
+                       FontSize="{DynamicResource FontSizeCaption}"
                        Foreground="{DynamicResource TextPrimary}"
                        TextWrapping="Wrap"/>
         </Border>
@@ -59,7 +59,7 @@
                         Margin="0,0,0,16"/>
 
         <CheckBox x:Name="DontAskCheck"
-                  FontSize="{StaticResource FontSizeCaption}"
+                  FontSize="{DynamicResource FontSizeCaption}"
                   Margin="0,0,0,18"/>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

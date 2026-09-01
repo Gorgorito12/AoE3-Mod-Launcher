@@ -57,18 +57,18 @@
     <StackPanel Grid.Row="1" Margin="24">
         <!-- Header -->
         <TextBlock x:Name="HeaderText"
-                   FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
+                   FontSize="{DynamicResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="DescriptionText"
-                   FontSize="{StaticResource FontSizeBody}"
+                   FontSize="{DynamicResource FontSizeBody}"
                    Foreground="#aaa"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
 
         <!-- Backup list -->
         <TextBlock x:Name="ListLabelText"
-                   FontSize="{StaticResource FontSizeCaption}"
+                   FontSize="{DynamicResource FontSizeCaption}"
                    Foreground="#888"
                    Margin="0,0,0,6"/>
         <ListBox x:Name="BackupsList"
@@ -92,17 +92,17 @@
                                            Foreground="#9bd99b"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Text="{Binding DateLabel}"
-                                           FontSize="{StaticResource FontSizeBody}"
+                                           FontSize="{DynamicResource FontSizeBody}"
                                            FontWeight="SemiBold"
                                            Foreground="White"/>
                             </StackPanel>
                             <TextBlock Text="{Binding DetailLabel}"
-                                       FontSize="{StaticResource FontSizeCaption}"
+                                       FontSize="{DynamicResource FontSizeCaption}"
                                        Foreground="#aaa"/>
                         </StackPanel>
                         <TextBlock Grid.Column="1"
                                    Text="{Binding SizeLabel}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    FontWeight="SemiBold"
                                    Foreground="#ccc"
                                    VerticalAlignment="Center"/>
@@ -119,7 +119,7 @@
                 Padding="12,8"
                 Margin="0,0,0,16">
             <TextBlock x:Name="ReassuranceText"
-                       FontSize="{StaticResource FontSizeCaption}"
+                       FontSize="{DynamicResource FontSizeCaption}"
                        Foreground="#9bb8d9"
                        TextWrapping="Wrap"/>
         </Border>

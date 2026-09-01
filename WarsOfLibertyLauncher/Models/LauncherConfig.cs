@@ -1297,12 +1297,98 @@ public class LauncherConfig
     /// </summary>
     public const string SupportDiscordUrl = "https://discord.gg/WVarbzzzmc";
 
+    /// <summary>
+    /// The page explaining how the multiplayer rating works — <c>docs/ELO.md</c>, which is
+    /// already written in both languages and is what gets linked when somebody asks why their
+    /// match did not count.
+    ///
+    /// <para>A `const` for the same reason as the two above. Linked from the Clasificación
+    /// footnote and from the amber note on a history card that did not score, which are the two
+    /// places a player is looking at the consequence of a rule they have not read.</para>
+    /// </summary>
+    public const string RatingHelpUrl =
+        "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/docs/ELO.md";
+
     /// <summary>UI language: "en" or "es". While <see cref="LanguageExplicitlyChosen"/>
     /// is false the launcher FOLLOWS the Windows display language on every launch
     /// (see <see cref="DefaultLanguageForCulture"/>); once the user picks a language
     /// in Settings this holds their choice.</summary>
     [JsonPropertyName("language")]
     public string Language { get; set; } = "en";
+
+    /// <summary>
+    /// Launcher-wide text size: <c>"auto"</c> (the default), or a percentage as a bare
+    /// number — <c>"100"</c>, <c>"110"</c>, <c>"125"</c>.
+    ///
+    /// <para>It multiplies the font-size tokens and nothing else; see
+    /// <see cref="Services.TextScale"/> for why that is not the same thing as
+    /// <c>UiScale</c>, and for what "auto" works out from. Read once in
+    /// <c>App.OnStartup</c>, before the first window exists.</para>
+    ///
+    /// <para>A string rather than a number so <c>"auto"</c> is a value of the setting
+    /// instead of a second flag beside it — the two can then never disagree.</para>
+    ///
+    /// <para><b>The default went to 100 for one round and came back, and the reason it came
+    /// back is the half nobody had looked at.</b> Automatic raises a large desktop panel to
+    /// 115 %, which put the multiplayer type back above the handoff values that had just been
+    /// restored — so 100 was chosen to stop it deciding for people. But the curve only ever
+    /// raises: with the default at 100 it is the SMALL screens that end up on 11.5 px labels
+    /// and 9.5 px captions, which is the size this project's own notes call unreadable at
+    /// 125/150 % scaling. Trading a big monitor's comfort for a small one's legibility is the
+    /// worse of the two bargains.</para>
+    /// </summary>
+    [JsonPropertyName("textScale")]
+    public string TextScale { get; set; } = DefaultTextScale;
+
+    /// <summary>
+    /// True once the user has actually picked a text size in Settings. Until then this config
+    /// FOLLOWS <see cref="DefaultTextScale"/>, whatever value happens to be sitting in
+    /// <see cref="TextScale"/>.
+    ///
+    /// <para><b>Without this, a default can only ever reach people who have never run the
+    /// launcher — which is nobody.</b> Every property here is serialised on the first
+    /// <c>Save()</c>, and Save runs constantly (a mod switch, a game launch), so a default is
+    /// written into the file within minutes of a first launch and is indistinguishable from a
+    /// choice from then on. That is not hypothetical: the default moved to 100 for one round,
+    /// every machine that ran that build had <c>"textScale": "100"</c> stamped into its config,
+    /// and moving the default back to Automatic changed nothing for any of them. The setting
+    /// looked broken and was working exactly as written.</para>
+    ///
+    /// <para>Same shape, and the same reasoning, as <see cref="LanguageExplicitlyChosen"/> —
+    /// which is also why it is set ONLY when the value in Settings actually changes, never
+    /// merely because Settings was saved.</para>
+    /// </summary>
+    [JsonPropertyName("textScaleExplicitlyChosen")]
+    public bool TextScaleExplicitlyChosen { get; set; }
+
+    /// <summary>The text size this config is actually on. Never read <see cref="TextScale"/>
+    /// raw — a value nobody chose is not a setting, it is a leftover.</summary>
+    [JsonIgnore]
+    public string EffectiveTextScale => ResolveTextScale(TextScale, TextScaleExplicitlyChosen);
+
+    /// <summary>
+    /// The one rule for turning what is on disk into the size to use, shared by this class and
+    /// by <c>App.OnStartup</c> — which reads the raw JSON rather than going through
+    /// <see cref="Load"/>. Those two having separate copies of a simpler rule is precisely how
+    /// the default came to be honoured in one of them and not the other.
+    /// </summary>
+    public static string ResolveTextScale(string? stored, bool explicitlyChosen)
+        => explicitlyChosen && !string.IsNullOrWhiteSpace(stored)
+            ? stored.Trim()
+            : DefaultTextScale;
+
+    /// <summary>
+    /// The text size a config that has never said otherwise gets.
+    ///
+    /// <para><b>A const because TWO places need it and they diverged.</b>
+    /// <c>App.OnStartup</c> reads this one setting straight out of the JSON rather than through
+    /// <see cref="Load"/> — it runs before MainWindow and must not trigger four migrations for
+    /// one string — so it has its own fallback for a missing key. That fallback said "auto"
+    /// after this property was changed to 100, and the result was a launcher whose config
+    /// contained no <c>textScale</c> at all and which still scaled to 115 % on a large monitor:
+    /// the default was changed in the only place that could not see it.</para>
+    /// </summary>
+    public const string DefaultTextScale = Services.TextScale.Auto;
 
     /// <summary>
     /// True once the user has explicitly picked a UI language in Settings. Until

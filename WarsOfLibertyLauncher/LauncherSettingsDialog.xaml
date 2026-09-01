@@ -58,7 +58,7 @@
              to align with the box's label text. -->
         <Style x:Key="HintText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#888"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="22,1,0,8"/>
         </Style>
@@ -227,7 +227,7 @@
                             <TextBlock Grid.Column="0"
                                        x:Name="LanguageLabel"
                                        Foreground="#ddd"
-                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontSize="{DynamicResource FontSizeBody}"
                                        VerticalAlignment="Center"/>
                             <ComboBox Grid.Column="1"
                                       x:Name="LanguageCombo"
@@ -311,7 +311,7 @@
                              labels can follow the language switch. -->
                         <TextBlock x:Name="RadAsstLabelText"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBodyStrong}"
+                                   FontSize="{DynamicResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,6"/>
                         <ComboBox x:Name="RadAsstCombo"
@@ -331,9 +331,31 @@
                          opens on launch.
                          =================================================== -->
                     <StackPanel x:Name="InterfacePanel" Visibility="Collapsed">
+                        <!-- Text size. It multiplies the font-size tokens and nothing
+                             else — see Services/TextScale.cs. The resolved line under it
+                             is not decoration: "Automatic" is the default, so without it
+                             the setting would never say what it decided or why. -->
+                        <TextBlock x:Name="TextScaleLabel"
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   FontSize="{DynamicResource FontSizeBodyStrong}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,4"/>
+                        <TextBlock x:Name="TextScaleHint"
+                                   Style="{StaticResource HintText}"
+                                   Margin="0,0,0,8"/>
+                        <ComboBox x:Name="TextScaleCombo"
+                                  Width="220"
+                                  HorizontalAlignment="Left"
+                                  SelectionChanged="TextScaleCombo_SelectionChanged"/>
+                        <TextBlock x:Name="TextScaleResolvedText"
+                                   Style="{StaticResource HintText}"
+                                   Margin="0,6,0,0"/>
+
+                        <Border Style="{StaticResource DialogDivider}"/>
+
                         <TextBlock x:Name="TabOrderLabel"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBodyStrong}"
+                                   FontSize="{DynamicResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,4"/>
                         <TextBlock x:Name="TabOrderHint"
@@ -369,7 +391,7 @@
                         <!-- ── Mods catalog ── -->
                         <TextBlock x:Name="CatalogSubheader"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <RadioButton x:Name="CatalogDefaultRadio" GroupName="Catalog"/>
@@ -382,7 +404,7 @@
                                  HorizontalAlignment="Left"/>
                         <TextBlock x:Name="CatalogInvalidText"
                                    Foreground="{DynamicResource ErrorBrush}"
-                                   FontSize="{StaticResource FontSizeCaption}"
+                                   FontSize="{DynamicResource FontSizeCaption}"
                                    Margin="22,2,0,4"
                                    Visibility="Collapsed"/>
                         <RadioButton x:Name="CatalogDisabledRadio"
@@ -415,20 +437,20 @@
                              packs are downloaded from. ── -->
                         <TextBlock x:Name="TxSourcesHeader"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <!-- Default repo: always active, not removable. -->
                         <TextBlock x:Name="TxDefaultLabel"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,12"/>
 
                         <!-- User-added extra repos: all fetched + merged with the default. -->
                         <TextBlock x:Name="TxAddHeader"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,6"/>
 
@@ -449,7 +471,7 @@
 
                         <TextBlock x:Name="TxInvalidText"
                                    Foreground="{DynamicResource ErrorBrush}"
-                                   FontSize="{StaticResource FontSizeCaption}"
+                                   FontSize="{DynamicResource FontSizeCaption}"
                                    Margin="0,4,0,4"
                                    Visibility="Collapsed"/>
 
@@ -492,12 +514,12 @@
                              packager blocks below are unchanged. -->
                         <TextBlock x:Name="LocalModsHeader"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBodyStrong}"
+                                   FontSize="{DynamicResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <TextBlock x:Name="LocalModsDescription"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,16"/>
                         <Button x:Name="AddLocalModButton"
@@ -517,12 +539,12 @@
                         <Border Height="1" Background="{DynamicResource MpDivider}" Margin="0,22,0,18"/>
                         <TextBlock x:Name="TranslationsHeader"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBodyStrong}"
+                                   FontSize="{DynamicResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <TextBlock x:Name="TranslationsDescription"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,16"/>
                         <Button x:Name="OpenPackagerButton"
@@ -537,12 +559,12 @@
                         <Border Height="1" Background="{DynamicResource MpDivider}" Margin="0,22,0,18"/>
                         <TextBlock x:Name="PatchGenHeader"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBodyStrong}"
+                                   FontSize="{DynamicResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <TextBlock x:Name="PatchGenDescription"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,16"/>
                         <Button x:Name="OpenPatchGeneratorButton"
@@ -713,12 +735,12 @@
                     <StackPanel x:Name="PrivacyPanel" Visibility="Collapsed">
                         <TextBlock x:Name="PrivacyHeader"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeBodyStrong}"
+                                   FontSize="{DynamicResource FontSizeBodyStrong}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <TextBlock x:Name="PrivacyDescription"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,16"/>
 

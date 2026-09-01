@@ -215,51 +215,80 @@
          ============================================================ -->
     <!-- The multiplayer sub-tab strip (Salas / Amigos / Perfil / Historial). -->
     <sys:Double x:Key="MpSubBarHeight">48</sys:Double>
-    <!-- Room row. A MINIMUM now, not a fixed height — MpRoomCard binds it to MinHeight.
+    <!-- Room row. A MINIMUM, not a fixed height — MpRoomCard binds it to MinHeight.
          It was uniform by contract ("the row is ONE line with ellipsis, so its height must
          not depend on the content"), and that reading survived until the type sizes went to
          the 13 floor: the room NAME then truncated to "Sala de W…" in a narrow window,
-         because it is the only element in that cell that yields. The name may now wrap to a
-         second line, so short rows still measure exactly this and long ones grow past it.
-         Raised 58 -> 64 with the type sizes; the value is unchanged by the wrap. -->
-    <sys:Double x:Key="MpRoomRowHeight">64</sys:Double>
+         because it is the only element in that cell that yields. The name may wrap to a
+         second line, so short rows measure exactly this and long ones grow past it.
+
+         Back to 58, because it only ever went to 64 to carry the raised type sizes and
+         those have been reverted (see the block below). The MinHeight semantics and the
+         wrapping name STAY: that was fixed for a reason of its own — a long name in a
+         narrow window — which the type size never governed. -->
+    <sys:Double x:Key="MpRoomRowHeight">58</sys:Double>
     <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
          text input; Control = a normal button; PrimaryButton = the one CTA. -->
 
     <!-- ===================================================================
-         MULTIPLAYER TYPE SIZES — raised to the launcher's 13 floor.
+         MULTIPLAYER TYPE SIZES — the design handoff's own values.
 
-         THE HISTORY MATTERS, because this reverses a decision recorded here twice.
-         These sizes came from the design handoff (11.5 labels, 10.5 pills, 9.5 section
-         captions) and sat BELOW the type scale's documented floor of 13 — a floor that
-         exists because 10-11 px secondary text was reported unreadable at 125/150%
-         scaling. Raising them was proposed and DECLINED TWICE on the maintainer's
-         explicit call for fidelity to the reference, and that is what the previous
-         version of this comment said.
+         THE HISTORY MATTERS, because this is the FOURTH turn on the same six numbers
+         and the third reversal. These sizes came from the handoff (11.5 labels, 10.5
+         pills, 9.5 section captions) and sit BELOW the app-wide type scale's floor of
+         13 — a floor that exists because 10-11 px secondary text was reported unreadable
+         at 125/150% scaling. Raising them was proposed and DECLINED TWICE on the
+         maintainer's explicit call for fidelity to the reference; asked a third time from
+         the other direction ("still looks small", about the shipped surface) it was
+         granted, and they went to 13.
 
-         It was asked for a third time, from the other direction: "still looks small",
-         about the surface as it shipped. Two things had already been tried and were not
-         enough — the bottom three rungs of the text ramp were re-coloured to clear
-         4.5:1 contrast (see .claude/rules/multiplayer.md) precisely so the sizes would
-         not have to move, and UiScale's ceiling was raised to magnify the whole surface,
-         which was rejected on sight as "gigante" (see CLAUDE.md's UiScale bullet).
+         They are back at the reference's values, and THE ARGUMENT IS WHAT CHANGED, not
+         the taste. Every earlier round was forced to answer "the text is too small" by
+         moving these tokens, because moving them was the only lever there was: the
+         re-coloured text ramp had already been spent (see .claude/rules/multiplayer.md),
+         and magnifying the whole surface through UiScale was rejected on sight as
+         "gigante" (see CLAUDE.md's UiScale bullet) — it scales the padding too, so it is
+         a zoom rather than bigger type.
 
-         The anchor for landing on 13 is evidence already on screen: the community strip
-         was raised to 13 on a separate call and has never drawn a complaint — it is the
-         one part of this tab at the floor, and the one part nobody calls small.
+         The lever that did not exist then is Services/TextScale.cs: a launcher-wide
+         "text size" setting (100 / 110 / 125 % / Automatic) that multiplies every size
+         token and NOTHING else — no transform, no padding, ClearType intact. So the
+         reference's proportions come back for everyone and the legibility is bought where
+         it belongs, by anybody who wants it.
+
+         THE SETTING DEFAULTS TO AUTOMATIC, and that went round twice — both turns are worth
+         keeping, because each one is right about something. Automatic puts a 32" 1440p desktop
+         at 115 %, which is 11.5 x 1.15 = 13.2: it silently raised these six numbers straight
+         back to where the revert had just taken them from, so the default was moved to 100 on
+         the reasoning that a default which undoes the change it exists to enable is not a
+         default.
+
+         That lasted one round. The curve only ever RAISES, so a default of 100 leaves the
+         SMALL screens on the smallest type in the launcher — 11.5 px labels and 9.5 px
+         captions, which is the size the block above calls unreadable at 125/150 % scaling.
+         Between a large monitor showing more than the reference asks for and a laptop showing
+         less than anyone can read, the second is the worse failure. So: these tokens ARE the
+         reference, and Automatic decides what a given screen does with them.
+
+         AND THEN THE CURVE ITSELF CAME DOWN A STEP, which is the only part of this argument
+         that was ever settled by looking. 115 % was derived to put a 32" back at the size it
+         had shown before the revert; shipped to that machine, 13.2 px read as too big. The
+         29-34" band is 110 % now (11.5 x 1.10 = 12.65) and the band above it 120 %. So these
+         six numbers are still the reference, and what a large screen adds to them is smaller
+         than the arithmetic said it should be.
 
          Still their own tokens, for the original reason: reversing this is six numbers,
          and they cannot leak into the app-wide scale.
          =================================================================== -->
-    <sys:Double x:Key="MpLabelSize">13</sys:Double>
-    <sys:Double x:Key="MpBodySize">13.5</sys:Double>
-    <sys:Double x:Key="MpMetaSize">13</sys:Double>
-    <sys:Double x:Key="MpPillSize">11.5</sys:Double>
-    <sys:Double x:Key="MpMicroSize">11.5</sys:Double>
-    <!-- The uppercase stat captions in the room header (was 9.5) and the values under
-         them. The caption stays the smallest thing on the surface because it is
-         letter-spaced uppercase, which reads a size larger than it measures. -->
-    <sys:Double x:Key="MpSectionLabelSize">11</sys:Double>
+    <sys:Double x:Key="MpLabelSize">11.5</sys:Double>
+    <sys:Double x:Key="MpBodySize">12.5</sys:Double>
+    <sys:Double x:Key="MpMetaSize">12</sys:Double>
+    <sys:Double x:Key="MpPillSize">10.5</sys:Double>
+    <sys:Double x:Key="MpMicroSize">10</sys:Double>
+    <!-- The uppercase stat captions in the room header, and the values under them. The
+         caption is the smallest thing on the surface because it is letter-spaced
+         uppercase, which reads a size larger than it measures. -->
+    <sys:Double x:Key="MpSectionLabelSize">9.5</sys:Double>
     <sys:Double x:Key="MpStatValueSize">14</sys:Double>
     <!-- The room name in the lobby header: serif, the one display-type moment in
          this window. -->
@@ -269,15 +298,58 @@
          the rest of the multiplayer scale rather than inside it. -->
     <sys:Double x:Key="MpResultTitleSize">17</sys:Double>
     <sys:Double x:Key="MpRatingSize">22</sys:Double>
-    <!-- The community-activity strip, and ONLY it. Its own three sizes because it is the
-         first place in the tab to go to the type scale's documented 13 floor, on a call of
-         its own — and the one whose size nobody has ever complained about, which is why it
-         became the anchor when the REST of the tab was finally raised to 13 too (see the
-         block above). Separate tokens so the two decisions stay separable: they were taken
-         years apart in argument terms, and reversing either is its own number. -->
+    <!-- The community-activity strip, and ONLY it. Its own three sizes because it went to
+         the type scale's 13 floor on a call of its own, EARLIER than the rest of the tab
+         and separately from it — and it is the one part whose size nobody has ever
+         complained about, which is why it became the anchor when the rest was briefly
+         raised to match.
+
+         IT IS DELIBERATELY NOT REVERTED with the block above. 11.5/13 ARE its original
+         values; taking them down to the handoff's would not be undoing that raise, it
+         would be a new change to a surface that never asked for one. Separate tokens so
+         the two decisions stay separable — which is exactly what let this one stay put. -->
     <sys:Double x:Key="MpActivityTitleSize">11.5</sys:Double>
     <sys:Double x:Key="MpActivityBodySize">13</sys:Double>
     <sys:Double x:Key="MpActivityHeadlineSize">16</sys:Double>
+    <!-- ===================================================================
+         CLASIFICACION / HISTORIAL / PERFIL (design handoff 3a/3b/3c).
+
+         Five display sizes that exist nowhere else in the tab, kept apart from the scale
+         above for the same reason MpResultTitleSize is: they are one-of-a-kind moments,
+         not rungs anybody should reach for by default. All five scale with the text-size
+         setting — they are listed in TextScale.ScaledKeys.
+         =================================================================== -->
+    <!-- The page title on Clasificacion and Historial. Serif, 17/700. -->
+    <sys:Double x:Key="MpPageTitleSize">17</sys:Double>
+    <!-- The profile header: the player's name, and the rating as the one number the page
+         is built around. Both serif. -->
+    <sys:Double x:Key="MpProfileNameSize">20</sys:Double>
+    <sys:Double x:Key="MpProfileRatingSize">30</sys:Double>
+    <!-- The W-L record on the profile, in monospace so the two numbers line up. -->
+    <sys:Double x:Key="MpProfileRecordSize">20</sys:Double>
+    <!-- A history card's rating delta — the thing you actually read the card for, which is
+         why it is the largest type on it. Monospace. -->
+    <sys:Double x:Key="MpHistoryDeltaSize">17</sys:Double>
+
+    <!-- ===================================================================
+         WORKSHOP TYPE SIZES.
+
+         The Workshop ran on the app-wide scale (13 / 14 / 15 / 24) while the multiplayer
+         surface next door ran on its own, a size and a half smaller. Side by side they read
+         as two applications, which is what this closes.
+
+         THEY DUPLICATE THE Mp* VALUES ON PURPOSE — do not "simplify" them into those tokens.
+         It is the same call MpActivity*Size already documents a few lines up: these are
+         separate decisions about separate surfaces, and pointing one at the other's token
+         chains them together so the next person who tunes the multiplayer scale moves the
+         Workshop without knowing it. Reversing this is four numbers, which is the point.
+         Pinned by TextScaleTests.
+         =================================================================== -->
+    <sys:Double x:Key="WsHeadingSize">17</sys:Double>
+    <sys:Double x:Key="WsBodyStrongSize">12.5</sys:Double>
+    <sys:Double x:Key="WsBodySize">12</sys:Double>
+    <sys:Double x:Key="WsLabelSize">11.5</sys:Double>
+
     <sys:Double x:Key="MpFieldHeight">34</sys:Double>
     <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
     <sys:Double x:Key="MpControlHeight">30</sys:Double>

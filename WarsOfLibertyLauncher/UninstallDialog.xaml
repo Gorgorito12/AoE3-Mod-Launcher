@@ -29,11 +29,11 @@
     <StackPanel Grid.Row="1" Margin="24">
         <!-- Header -->
         <TextBlock x:Name="HeaderText"
-                   FontSize="{StaticResource FontSizeHeading}" FontWeight="SemiBold"
+                   FontSize="{DynamicResource FontSizeHeading}" FontWeight="SemiBold"
                    Foreground="White"
                    Margin="0,0,0,4"/>
         <TextBlock x:Name="DescriptionText"
-                   FontSize="{StaticResource FontSizeBody}"
+                   FontSize="{DynamicResource FontSizeBody}"
                    Foreground="#aaa"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
@@ -49,11 +49,11 @@
                 Visibility="Collapsed">
             <StackPanel>
                 <TextBlock x:Name="RefusedTitleText"
-                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold"
+                           FontSize="{DynamicResource FontSizeCaption}" FontWeight="SemiBold"
                            Foreground="{DynamicResource ErrorBrush}"
                            Margin="0,0,0,4"/>
                 <TextBlock x:Name="RefusedDetailText"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            Foreground="White"
                            TextWrapping="Wrap"/>
             </StackPanel>
@@ -70,17 +70,17 @@
                 Visibility="Collapsed">
             <StackPanel>
                 <TextBlock x:Name="LblInstallPath"
-                           FontSize="{StaticResource FontSizeCaption}"
+                           FontSize="{DynamicResource FontSizeCaption}"
                            Foreground="#888"
                            Margin="0,0,0,2"/>
                 <TextBlock x:Name="InstallPathText"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            Foreground="White"
                            TextWrapping="Wrap"
                            FontFamily="Consolas"
                            Margin="0,0,0,8"/>
                 <TextBlock x:Name="SummaryDetailText"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            Foreground="#aaa"
                            TextWrapping="Wrap"/>
             </StackPanel>
@@ -88,7 +88,7 @@
 
         <!-- Options -->
         <TextBlock x:Name="OptionsTitleText"
-                   FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold"
+                   FontSize="{DynamicResource FontSizeCaption}" FontWeight="SemiBold"
                    Foreground="#888"
                    Margin="0,4,0,4"/>
         <CheckBox x:Name="OptDeleteShortcuts" IsChecked="True"/>
@@ -97,7 +97,7 @@
 
         <!-- Reassurance note about AoE3 not being touched -->
         <TextBlock x:Name="AoE3SafeNoteText"
-                   FontSize="{StaticResource FontSizeCaption}"
+                   FontSize="{DynamicResource FontSizeCaption}"
                    Foreground="#9bd99b"
                    TextWrapping="Wrap"
                    Margin="0,16,0,12"/>

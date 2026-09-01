@@ -31,7 +31,7 @@
                  to spare: the toolbar beside it grew by the room-code field and there is no
                  ellipsis on either group, so the loser was CLASIFICACION getting painted over. -->
             <Setter Property="Padding" Value="10,9"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,2,0"/>
@@ -102,6 +102,23 @@
              and every value it names already exists as a token: MpPanel IS that fill and
              RadiusRow IS that 8. Deliberately NOT BasedOn MpRoomCard, which carries a
              MinHeight and a hover trigger that a static info card has no use for. -->
+        <!-- A ghost chip that STATES the scope of a table rather than changing it (the
+             Clasificación header's mod and time-window pair). It is a Border and not a
+             Button on purpose: /stats/community accepts neither a mod nor a window, so a
+             control here would be a filter that filters nothing, and looking like one is
+             most of how that lie would be told. -->
+        <Style x:Key="MpScopeChip" TargetType="Border">
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimMedium}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style x:Key="MpScopeChipText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
+        </Style>
+
         <Style x:Key="MpActivityCard" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource MpPanel}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource MpRimFaint}"/>
@@ -144,7 +161,7 @@
             <Setter Property="Padding" Value="10,6"/>
             <Setter Property="Margin" Value="0,0,6,0"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="{StaticResource MpMicroSize}"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpMicroSize}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -248,7 +265,6 @@
                     </Grid>
                     <Button x:Name="SubtabFriends" Click="SubtabFriends_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabProfile" Click="SubtabProfile_Click" Style="{StaticResource SubTab}"/>
-                    <Button x:Name="SubtabHistory" Click="SubtabHistory_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabRanking" Click="SubtabRanking_Click" Style="{StaticResource SubTab}"/>
                 </StackPanel>
 
@@ -282,7 +298,7 @@
                                        IsHitTestVisible="False"
                                        Foreground="{DynamicResource MpTextFaint}"
                                        FontFamily="Consolas"
-                                       FontSize="{StaticResource MpMetaSize}"
+                                       FontSize="{DynamicResource MpMetaSize}"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"/>
                             <TextBox x:Name="JoinByCodeBox"
@@ -293,7 +309,7 @@
                                      Foreground="{DynamicResource MpTextPrimary}"
                                      CaretBrush="{DynamicResource MpTextPrimary}"
                                      FontFamily="Consolas"
-                                     FontSize="{StaticResource MpMetaSize}"
+                                     FontSize="{DynamicResource MpMetaSize}"
                                      FontWeight="SemiBold"
                                      VerticalContentAlignment="Center"
                                      TextChanged="JoinByCodeBox_TextChanged"
@@ -336,7 +352,7 @@
                             <TextBlock Grid.Column="0"
                                        Text="&#xE721;"
                                        FontFamily="Segoe MDL2 Assets"
-                                       FontSize="{StaticResource MpMetaSize}"
+                                       FontSize="{DynamicResource MpMetaSize}"
                                        Foreground="#7E93AF"
                                        VerticalAlignment="Center"
                                        Margin="0,0,7,0"/>
@@ -345,7 +361,7 @@
                                            IsHitTestVisible="False"
                                            Foreground="#6D829D"
                                            FontFamily="{DynamicResource BodyFont}"
-                                           FontSize="{StaticResource MpMetaSize}"
+                                           FontSize="{DynamicResource MpMetaSize}"
                                            VerticalAlignment="Center"/>
                                 <TextBox x:Name="RoomSearchBox"
                                          TextChanged="RoomSearchBox_TextChanged"
@@ -355,7 +371,7 @@
                                          Foreground="{DynamicResource MpTextPrimary}"
                                          CaretBrush="{DynamicResource MpTextPrimary}"
                                          FontFamily="{DynamicResource BodyFont}"
-                                         FontSize="{StaticResource MpMetaSize}"
+                                         FontSize="{DynamicResource MpMetaSize}"
                                          VerticalContentAlignment="Center"/>
                             </Grid>
                         </Grid>
@@ -375,21 +391,40 @@
                          says help exists but never says about what. It is the widest control in
                          this bar and shrinking it is the obvious way to pay for the room-code
                          field; the width comes out of whitespace instead. -->
+                    <!-- FontSize is set here, on all three, and it is a FIX rather than a
+                         preference. MpSecondaryButton and MpPrimaryButton are the generic
+                         multiplayer button styles and set FontSizeBody (14) — the app-wide
+                         reading size — while every other control in this 48-px bar runs on
+                         the multiplayer scale. Three captions a size and a half too large is
+                         where the row's missing width was going: the tool cluster measured
+                         ~1100 px against the ~1078 the bar has, so it was painting over the
+                         subtab strip, which is the exact failure TheRoomsTopBarFitsAtTheNarrowestWindow
+                         exists to catch and could not see (it measured these at the WPF
+                         default of 12, because a StaticResource font size did not resolve in
+                         the test host — the DynamicResource move fixed that harness blindness
+                         and the overlap appeared).
+
+                         MpLabelSize is also what the design references show for this row.
+                         Set LOCALLY, not on the styles, which are worn by buttons all over
+                         the lobby and the dialogs where 14 is right. -->
                     <Button x:Name="RadminHelpButton"
                             Click="RadminHelpButton_Click"
                             Style="{StaticResource MpSecondaryButton}"
+                            FontSize="{DynamicResource MpLabelSize}"
                             Height="32"
                             Padding="10,0"
                             Margin="0,0,10,0"/>
                     <Button x:Name="RefreshButton"
                             Click="RefreshButton_Click"
                             Style="{StaticResource MpSecondaryButton}"
+                            FontSize="{DynamicResource MpLabelSize}"
                             Height="32"
                             Padding="10,0"
                             Margin="0,0,10,0"/>
                     <Button x:Name="CreateRoomButton"
                             Click="CreateRoomButton_Click"
                             Style="{StaticResource MpPrimaryButton}"
+                            FontSize="{DynamicResource MpLabelSize}"
                             Height="32"
                             Padding="12,0"/>
                 </StackPanel>
@@ -410,13 +445,13 @@
                         MaxWidth="480">
                 <TextBlock x:Name="SignInTitleText"
                            Foreground="{DynamicResource MpTextPrimary}"
-                           FontSize="{StaticResource FontSizeHeading}"
+                           FontSize="{DynamicResource FontSizeHeading}"
                            FontWeight="Bold"
                            TextAlignment="Center"
                            TextWrapping="Wrap"/>
                 <TextBlock x:Name="SignInBodyText"
                            Foreground="{DynamicResource MpTextMuted}"
-                           FontSize="{StaticResource FontSizeBody}"
+                           FontSize="{DynamicResource FontSizeBody}"
                            TextAlignment="Center"
                            TextWrapping="Wrap"
                            Margin="0,12,0,18"/>
@@ -428,7 +463,7 @@
                         MinWidth="220"/>
                 <TextBlock x:Name="SignInErrorText"
                            Foreground="{DynamicResource MpStatusOffline}"
-                           FontSize="{StaticResource FontSizeCaption}"
+                           FontSize="{DynamicResource FontSizeCaption}"
                            TextWrapping="Wrap"
                            TextAlignment="Center"
                            Margin="0,12,0,0"
@@ -501,12 +536,12 @@
                         <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock x:Name="RadminBannerTitle"
                                        Foreground="{DynamicResource MpTextPrimary}"
-                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontSize="{DynamicResource FontSizeBody}"
                                        FontWeight="SemiBold"
                                        TextWrapping="Wrap"/>
                             <TextBlock x:Name="RadminBannerBody"
                                        Foreground="{DynamicResource MpTextMuted}"
-                                       FontSize="{StaticResource FontSizeCaption}"
+                                       FontSize="{DynamicResource FontSizeCaption}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"/>
                         </StackPanel>
@@ -526,12 +561,12 @@
                                     Style="{StaticResource MpSecondaryButton}"
                                     Padding="12,6"
                                     Margin="0,0,6,0"
-                                    FontSize="{StaticResource FontSizeCaption}"/>
+                                    FontSize="{DynamicResource FontSizeCaption}"/>
                             <Button x:Name="RadminPrimaryButton"
                                     Click="RadminPrimaryButton_Click"
                                     Style="{StaticResource MpSecondaryButton}"
                                     Padding="12,6"
-                                    FontSize="{StaticResource FontSizeCaption}"/>
+                                    FontSize="{DynamicResource FontSizeCaption}"/>
                         </StackPanel>
 
                         <!-- (Rows 1 and 2 of this banner used to carry a network-name
@@ -554,10 +589,18 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*"/>
                         <ColumnDefinition Width="16"/>     <!-- gutter -->
-                        <!-- Global chat + Players ≈22-24%. Flexible: shrinks to 280,
-                             caps at 300 (narrowed from 320-360 so the rooms table
-                             gets more room). -->
-                        <ColumnDefinition Width="*" MinWidth="280" MaxWidth="300"/>
+                        <!-- Global chat + Players. Flexible: shrinks to 250, caps at 270.
+                             Narrowed twice now — 320-360, then 280-300, now this — each time
+                             so the rooms table gets the room instead.
+
+                             270 IS THE FLOOR OF THIS PARTICULAR LEVER, not a round number.
+                             The two tabs split the panel evenly (112 px each here), and
+                             "Chat global ● 5" needs about 97 of that: the dot and the count
+                             are Auto columns and never yield, so the only thing that can give
+                             is the caption, in a star column with an ellipsis. Below ~250 it
+                             starts cutting — and that cut has form in this file ("t global ·
+                             1 conecta"), so it is not worth grazing again. -->
+                        <ColumnDefinition Width="*" MinWidth="250" MaxWidth="270"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- ===================== LEFT: active rooms ===================== -->
@@ -628,7 +671,7 @@
                                          not head the page. -->
                                     <TextBlock x:Name="RoomsSectionTitle"
                                                Foreground="{DynamicResource MpTextPrimary}"
-                                               FontSize="{StaticResource FontSizeCaption}"
+                                               FontSize="{DynamicResource FontSizeCaption}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <!-- Count pill. Collapsed at zero: "Active rooms 0"
@@ -642,7 +685,7 @@
                                             VerticalAlignment="Center">
                                         <TextBlock x:Name="RoomsCountPillText"
                                                    Foreground="{DynamicResource MpTextSecondary}"
-                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   FontSize="{DynamicResource MpLabelSize}"
                                                    FontWeight="SemiBold"/>
                                     </Border>
                                 </StackPanel>
@@ -650,7 +693,7 @@
                                            HorizontalAlignment="Right"
                                            VerticalAlignment="Center"
                                            Foreground="{DynamicResource MpTextMuted}"
-                                           FontSize="{StaticResource FontSizeCaption}"/>
+                                           FontSize="{DynamicResource FontSizeCaption}"/>
                             </Grid>
 
                             <!-- Column headers for the room list. The header and the rows
@@ -711,8 +754,8 @@
                                 <Button x:Name="ColButtonRoom" Grid.Column="0" Style="{StaticResource MpColHeaderButton}" Tag="Room" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderRoom" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowRoom" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
                                 <!-- ANFITRIÓN is a plain label, not a sort button: the reference
@@ -722,26 +765,26 @@
                                      thing to try before realising it changed nothing. -->
                                 <TextBlock Grid.Column="1" x:Name="ColHeaderHost"
                                            Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold"
+                                           FontSize="{DynamicResource MpPillSize}" FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                            Margin="0,0,4,0"/>
                                 <Button x:Name="ColButtonPlayers" Grid.Column="2" Style="{StaticResource MpColHeaderButton}" Tag="Players" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPlayers" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowPlayers" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
                                 <Button x:Name="ColButtonPing" Grid.Column="3" Style="{StaticResource MpColHeaderButton}" Tag="Ping" Click="RoomHeader_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPing" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{StaticResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" x:Name="ColHeaderPing" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource MpPillSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" x:Name="SortArrowPing" Text="⇅" Foreground="{DynamicResource MpTextLabel}" FontSize="{DynamicResource FontSizeCaption}" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
                                 <TextBlock Grid.Column="4" x:Name="ColHeaderAction"
                                            Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                           FontSize="{DynamicResource FontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
                             </Border>
@@ -784,7 +827,7 @@
                         <StackPanel>
                             <TextBlock x:Name="EmptyTitleText"
                                        Foreground="{DynamicResource MpTextFaint}"
-                                       FontSize="{StaticResource FontSizeCaption}"
+                                       FontSize="{DynamicResource FontSizeCaption}"
                                        TextWrapping="Wrap"/>
                             <TextBlock x:Name="EmptyBodyText" Visibility="Collapsed"/>
                             <Button x:Name="EmptyCreateButton"
@@ -805,7 +848,7 @@
                                 Visibility="Collapsed">
                         <TextBlock x:Name="RoomsErrorText"
                                    Foreground="{DynamicResource MpCautionText}"
-                                   FontSize="{StaticResource MpLabelSize}"
+                                   FontSize="{DynamicResource MpLabelSize}"
                                    TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center"/>
                         <Button x:Name="RoomsErrorRetry"
@@ -825,7 +868,7 @@
                                     Padding="30,10,30,12">
                                 <TextBlock x:Name="RoomsShowingCount"
                                            Foreground="{DynamicResource MpTextMuted}"
-                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontSize="{DynamicResource FontSizeCaption}"
                                            VerticalAlignment="Center"/>
                             </Border>
                         </Grid>
@@ -879,7 +922,7 @@
                                 <TextBlock x:Name="ActivityStripTitle"
                                            Grid.Column="0"
                                            Foreground="{DynamicResource MpTextPrimary}"
-                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontSize="{DynamicResource FontSizeCaption}"
                                            FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis"/>
                                 <TextBlock x:Name="ActivityStripTotals"
@@ -887,7 +930,7 @@
                                            Margin="16,0,0,0"
                                            HorizontalAlignment="Right"
                                            Foreground="{DynamicResource MpTextBody}"
-                                           FontSize="{StaticResource MpLabelSize}"
+                                           FontSize="{DynamicResource MpLabelSize}"
                                            VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis"/>
                             </Grid>
@@ -939,7 +982,7 @@
                                     <StackPanel>
                                         <TextBlock x:Name="ActivityPeakTitle"
                                                    Foreground="{DynamicResource MpTextLabel}"
-                                                   FontSize="{StaticResource MpActivityTitleSize}"
+                                                   FontSize="{DynamicResource MpActivityTitleSize}"
                                                    FontWeight="SemiBold"/>
                                         <!-- One bar per hour. It was briefly eight three-hour
                                              bars; the resolution is what was wanted, and the
@@ -953,7 +996,7 @@
                                         <TextBlock x:Name="ActivityPeakLine"
                                                    Margin="0,7,0,0"
                                                    Foreground="{DynamicResource MpTextBody}"
-                                                   FontSize="{StaticResource MpActivityBodySize}"
+                                                   FontSize="{DynamicResource MpActivityBodySize}"
                                                    TextWrapping="Wrap"/>
                                         <!-- The sample size and the window it covers. The
                                              handoff has no such line; it is kept because the
@@ -963,7 +1006,7 @@
                                         <TextBlock x:Name="ActivityPeakSubtitle"
                                                    Margin="0,3,0,0"
                                                    Foreground="{DynamicResource MpTextFaint}"
-                                                   FontSize="{StaticResource MpActivityTitleSize}"
+                                                   FontSize="{DynamicResource MpActivityTitleSize}"
                                                    TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
@@ -976,7 +1019,7 @@
                                     <StackPanel>
                                         <TextBlock x:Name="ActivityRecentTitle"
                                                    Foreground="{DynamicResource MpTextLabel}"
-                                                   FontSize="{StaticResource MpActivityTitleSize}"
+                                                   FontSize="{DynamicResource MpActivityTitleSize}"
                                                    FontWeight="SemiBold"/>
                                         <StackPanel x:Name="ActivityRecentList" Margin="0,8,0,0"/>
 
@@ -1017,13 +1060,13 @@
                                                        Grid.Column="0"
                                                        VerticalAlignment="Center"
                                                        Foreground="{DynamicResource MpTextLabel}"
-                                                       FontSize="{StaticResource MpActivityTitleSize}"
+                                                       FontSize="{DynamicResource MpActivityTitleSize}"
                                                        FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"/>
                                             <Button x:Name="ActivityRankingSeeAll"
                                                     Grid.Column="1"
                                                     Style="{StaticResource MpLinkButton}"
-                                                    FontSize="{StaticResource MpActivityTitleSize}"
+                                                    FontSize="{DynamicResource MpActivityTitleSize}"
                                                     Click="ActivityRankingSeeAll_Click"/>
                                         </Grid>
                                         <StackPanel x:Name="ActivityRankingList" Margin="0,8,0,0"/>
@@ -1036,7 +1079,7 @@
                                         <TextBlock x:Name="ActivityRankingEmpty"
                                                    Visibility="Collapsed"
                                                    Foreground="{DynamicResource MpTextDim}"
-                                                   FontSize="{StaticResource MpActivityBodySize}"
+                                                   FontSize="{DynamicResource MpActivityBodySize}"
                                                    Margin="0,6,0,0"
                                                    TextWrapping="Wrap"/>
                                     </StackPanel>
@@ -1150,7 +1193,7 @@
                                 </ScrollViewer>
                                 <TextBlock x:Name="GlobalChatEmptyHint"
                                            Foreground="{DynamicResource MpTextMuted}"
-                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontSize="{DynamicResource FontSizeCaption}"
                                            FontStyle="Italic"
                                            TextWrapping="Wrap"
                                            TextAlignment="Center"
@@ -1188,7 +1231,7 @@
                                          server drops a message, cleared on next keystroke. -->
                                     <TextBlock x:Name="GlobalChatNotice"
                                                Foreground="{DynamicResource MpStatusReconnect}"
-                                               FontSize="{StaticResource FontSizeCaption}"
+                                               FontSize="{DynamicResource FontSizeCaption}"
                                                TextWrapping="Wrap"
                                                Margin="2,0,2,6"
                                                Visibility="Collapsed"/>
@@ -1220,7 +1263,7 @@
                                                  BorderBrush="{DynamicResource MpRimField}"
                                                  BorderThickness="1"
                                                  Padding="11,0"
-                                                 FontSize="{StaticResource MpBodySize}"
+                                                 FontSize="{DynamicResource MpBodySize}"
                                                  VerticalContentAlignment="Center"
                                                  TextChanged="GlobalChatInput_TextChanged"
                                                  KeyDown="GlobalChatInput_KeyDown"/>
@@ -1231,7 +1274,7 @@
                                              jumped the moment you started typing. -->
                                         <TextBlock x:Name="GlobalChatPlaceholder"
                                                    Foreground="{DynamicResource MpTextMuted}"
-                                                   FontSize="{StaticResource MpBodySize}"
+                                                   FontSize="{DynamicResource MpBodySize}"
                                                    Margin="12,0,0,0"
                                                    VerticalAlignment="Center"
                                                    IsHitTestVisible="False"/>
@@ -1273,59 +1316,171 @@
                  lobby is open since the Window does not overlay it. -->
         </Grid>                 <!-- x:Name="RoomsView" -->
 
-        <!-- Profile / History / Friends subviews. -->
+        <!-- Profile / History / Friends subviews.
+
+             This used to be four bare TextBlocks on an empty background, with "0 % wins"
+             printed as a headline for a player who had lost their single decided match. The
+             rating is the number the page is about, so it is the biggest thing on it; the
+             record is stated as W-L; and the percentage does not appear at all until it is
+             based on enough matches to mean something (see RenderProfileTab). -->
         <Grid Grid.Row="1" x:Name="ProfileView" Visibility="Collapsed">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="32,24" MaxWidth="640" HorizontalAlignment="Left">
-                    <TextBlock x:Name="ProfileNameText"
-                               Foreground="{DynamicResource MpTextPrimary}"
-                               FontSize="{StaticResource FontSizeHeading}"
-                               FontWeight="Bold"/>
-                    <TextBlock x:Name="ProfileLoginText"
-                               Foreground="{DynamicResource MpTextMuted}"
-                               FontSize="{StaticResource FontSizeBody}"
-                               Margin="0,2,0,16"/>
-                    <TextBlock x:Name="ProfileEloText"
-                               Foreground="{DynamicResource MpTextPrimary}"
-                               FontSize="{StaticResource FontSizeBodyStrong}"
-                               Margin="0,0,0,4"/>
-                    <TextBlock x:Name="ProfileGamesText"
-                               Foreground="{DynamicResource MpTextMuted}"
-                               FontSize="{StaticResource FontSizeBody}"/>
-                </StackPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="ProfileBody"
+                            Margin="14,16,14,18"
+                            HorizontalAlignment="Stretch"/>
             </ScrollViewer>
         </Grid>
 
-        <Grid Grid.Row="1" x:Name="HistoryView" Visibility="Collapsed">
-            <TextBlock Text="History â€” coming soon"
-                       Foreground="{DynamicResource MpTextMuted}"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       FontStyle="Italic"/>
-        </Grid>
+        <!-- (The History subtab lived here and is gone. Its list is a SECTION of the
+             Profile now — see BuildProfileHistory. The two pages said the same four things:
+             History's summary cells were the rating, the decided record, the "didn't count"
+             count and the most-played map, every one of which the Profile already shows, and
+             the Profile's "Latest matches" block was a three-row excerpt of History's own
+             list. One page, one set of numbers.) -->
 
         <!-- The full ladder. The community strip on the Rooms subtab keeps showing three
              places as a summary; this is where all of them live, because a strip that grew
              with the league would push the rooms list off the screen the week it filled.
-             Two ladders share one table and one payload — see RenderRanking. -->
+             Two ladders share one table and one payload — see RenderRanking.
+
+             THE COLUMN WIDTHS ARE THE POINT OF THE REDESIGN, not a detail of it. This used to
+             be a bare Grid with no margin, no card and no header rule, so on a 2560-px monitor
+             the RATING sat about a metre from the name it belonged to and a row could not be
+             read across without moving your head.
+
+             IT FILLS THE WINDOW, and it took three rounds to land there. The handoff bounds
+             this to 820 px, which is right for its own 1240-px frame and leaves more than half
+             of a real 2000-px window empty — first all on one side, then split by centring,
+             and rejected both times. So the page stretches.
+
+             WHAT MAKES STRETCHING SAFE IS WHERE THE SURPLUS GOES, and that lives in
+             Services/Multiplayer/RankingTableLayout.cs: the flexible column is RATING, whose
+             cell holds the comparative bar, NOT the player's name. With the name flexible —
+             which is what the handoff's fixed mockup implies — a wide window would put it hard
+             left and its rating 1500 px away, which is the defect the whole rebuild started
+             from. Read that file before touching either width. -->
         <Grid Grid.Row="1" x:Name="RankingView" Visibility="Collapsed">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+            <!-- The PAGE does not scroll; the table inside the card does. That is what makes
+                 "your row pinned to the foot" mean anything — pinning inside a page that
+                 scrolls as a whole would just be appending a duplicate row at the end. It also
+                 keeps the footnote, which explains the entry rule, on screen at every height. -->
+            <Grid x:Name="RankingPage"
+                  Margin="14,16,14,18" HorizontalAlignment="Stretch">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                <!-- SubTab, not a segmented control: it is the same kind of choice as the
-                     subtabs above it, it already carries the Tag="active" pill, and it is
-                     defined in THIS file's resources — MpSegment lives in CreateLobbyDialog
-                     and is not reachable here. -->
-                <Button x:Name="RankingModeSolo" Click="RankingModeSolo_Click"
-                        Style="{StaticResource SubTab}"/>
-                <Button x:Name="RankingModeTeam" Click="RankingModeTeam_Click"
-                        Style="{StaticResource SubTab}"/>
-            </StackPanel>
+                    <!-- Title, and the size of the league beside it. -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal">
+                        <TextBlock x:Name="RankingTitleText"
+                                   FontFamily="{DynamicResource DisplayFont}"
+                                   FontSize="{DynamicResource MpPageTitleSize}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource MpTextHeading}"/>
+                        <TextBlock x:Name="RankingSubtitleText"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Bottom"
+                                   FontSize="{DynamicResource MpMetaSize}"
+                                   Foreground="{DynamicResource MpTextDim}"/>
+                    </StackPanel>
 
-            <Grid Grid.Row="1" x:Name="RankingBody"/>
+                    <Grid Grid.Row="1" Margin="0,13,0,0">
+                        <!-- The 1v1 / Equipos pair, in a capsule. They were two loose SubTab
+                             buttons that read as two unrelated labels rather than as one
+                             either-or; the handoff puts them in a tray, which is what makes
+                             the choice visible. Still SubTab inside it — the same kind of
+                             choice as the subtabs above, and it already carries the active
+                             pill (MpSegment lives in CreateLobbyDialog and is not reachable
+                             from this file). -->
+                        <Border HorizontalAlignment="Left"
+                                Padding="3"
+                                CornerRadius="{StaticResource RadiusRow}"
+                                Background="{DynamicResource MpPanel}">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="RankingModeSolo" Click="RankingModeSolo_Click"
+                                        Style="{StaticResource SubTab}"/>
+                                <Button x:Name="RankingModeTeam" Click="RankingModeTeam_Click"
+                                        Style="{StaticResource SubTab}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Ghost chips describing the SCOPE of the table. Deliberately not
+                             buttons: /stats/community takes neither a mod nor a window, so a
+                             control here would be a filter that filters nothing. They state
+                             what the numbers already are — the one mod with a ladder, and the
+                             server's own window — and the day either becomes a real choice
+                             this is where it goes. -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                            <Border Style="{StaticResource MpScopeChip}">
+                                <TextBlock x:Name="RankingScopeModText"
+                                           Style="{StaticResource MpScopeChipText}"/>
+                            </Border>
+                            <Border x:Name="RankingScopeWindowChip"
+                                    Style="{StaticResource MpScopeChip}"
+                                    Margin="7,0,0,0">
+                                <TextBlock x:Name="RankingScopeWindowText"
+                                           Style="{StaticResource MpScopeChipText}"/>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- The table itself: ONE card, not a run of loose text. RankingBody holds
+                         the header row, the rows, and - when the viewer is off-screen - their
+                         own row pinned to the foot. -->
+                    <Border Grid.Row="2"
+                            Margin="0,13,0,0"
+                            VerticalAlignment="Top"
+                            CornerRadius="{StaticResource RadiusPanel}"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <!-- Column headings, outside the scroller so they stay put. -->
+                            <Grid x:Name="RankingHeaderHost" Grid.Row="0"/>
+                            <ScrollViewer x:Name="RankingRowsScroll"
+                                          Grid.Row="1"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          ScrollChanged="RankingRowsScroll_ScrollChanged">
+                                <StackPanel x:Name="RankingBody"/>
+                            </ScrollViewer>
+                            <!-- The viewer's own row, shown only while their real row is
+                                 scrolled out of sight. Collapsed the rest of the time, so a
+                                 player who can see themselves is not shown twice. -->
+                            <Grid x:Name="RankingPinnedRow"
+                                  Grid.Row="2"
+                                  Visibility="Collapsed"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="3" Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="RankingFootnoteText"
+                                   Grid.Column="0"
+                                   Margin="2,0,12,0"
+                                   TextWrapping="Wrap"
+                                   FontSize="{DynamicResource MpMetaSize}"
+                                   Foreground="{DynamicResource MpTextDim}"/>
+                        <Button x:Name="RankingEloHelpButton"
+                                Grid.Column="1"
+                                VerticalAlignment="Top"
+                                Click="RankingEloHelpButton_Click"
+                                Style="{StaticResource MpLinkButton}"/>
+                    </Grid>
+            </Grid>
         </Grid>
 
         <Grid Grid.Row="1" x:Name="FriendsView" Visibility="Collapsed">

@@ -225,6 +225,12 @@ public partial class MainWindow : Window
 
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
+        // Re-stated here, not merely logged where it is decided. The text size is resolved in
+        // App.OnStartup, which runs BEFORE this constructor rotates the log — so the line it
+        // writes lands in launcher-debug.prev.log and is missing from the session a bundle is
+        // actually about. "The text is the wrong size" arrives with a screenshot and nothing
+        // else, and every input to the answer is in this line.
+        DiagnosticLog.Write(App.DescribeTextScale());
 
         // Who is running this, and who is signed in. Written on EVERY launch, including the
         // ordinary case where they match — "they match" is the answer that rules out a whole

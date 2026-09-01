@@ -191,4 +191,22 @@ public static class CommunityStatsView
     /// </summary>
     public static int? WinPercent(LeaderboardRow row)
         => row == null ? null : PlayerStanding.WinPercent(row.Wins, row.Losses);
+
+    /// <summary>
+    /// How many players are on a ladder in total, or 0 when the server did not say.
+    ///
+    /// <para><b>Not the length of the list.</b> The lists are capped at the server's page
+    /// size, so the day the league passes it, counting the rows would quietly start reporting
+    /// the page as the size of the community — and it would report it inside a sentence
+    /// ("rank 7 of 18") that reads as a fact about the league.</para>
+    ///
+    /// <para>0 means an older backend, and the caller's job is then to say the rank alone
+    /// rather than invent a denominator — the same refusal the rest of this class makes about
+    /// a figure the server did not send.</para>
+    /// </summary>
+    public static int RankedPlayers(CommunityStats? stats, bool team)
+    {
+        var total = team ? stats?.RankedPlayersTeam : stats?.RankedPlayers;
+        return total is > 0 ? total.Value : 0;
+    }
 }

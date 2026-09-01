@@ -47,13 +47,18 @@ public class DialogXamlTests
             // the constructor returned.
             Assert.NotNull(dlg.CreateButton);
 
-            // The format row exists and starts HIDDEN, which is the state of everyone who does
-            // not tick the competitive box — i.e. almost every room. It is revealed by the tick,
-            // and the row it locks is the player-count one, so both must be here and both must
-            // start the way a casual room needs them.
+            // The format row is ALWAYS on screen now — it used to be revealed by the tick, which
+            // made one decision take two steps and jumped the dialog's height.
             Assert.NotNull(dlg.CompetitiveFormatRow);
-            Assert.Equal(Visibility.Collapsed, dlg.CompetitiveFormatRow.Visibility);
+            Assert.Equal(Visibility.Visible, dlg.CompetitiveFormatRow.Visibility);
             Assert.Equal(3, dlg.FormatRow.Children.Count);   // 1v1 / 2v2 / 3v3
+
+            // AND NOTHING IS LIT, which is the invariant that being visible put at risk. A
+            // casual room has declared no format, and showing 1v1 highlighted would both
+            // contradict the "Max players: 8" just above it and assert the one thing this model
+            // refuses to assert — that a two-seat casual room IS a 1v1 (see RoomFormats).
+            Assert.All(dlg.FormatRow.Children.OfType<Button>(),
+                b => Assert.Null(b.Tag as string));
             Assert.NotNull(dlg.MaxPlayersRow);
             Assert.True(dlg.MaxPlayersRow.Children.Count > 0);
 
@@ -63,15 +68,78 @@ public class DialogXamlTests
             Assert.Equal(Visibility.Collapsed, dlg.CompetitiveSizeNote.Visibility);
 
             // And a casual room still opens at the full eight seats. The format row picks a
-            // format at construction so the row is never revealed empty, and that pick moves the
-            // size — so without the competitive guard on it, every room would have quietly
-            // opened as a two-player one.
+            // format at construction — so that ticking the box lands on something rather than on
+            // nothing — and that pick moves the size, so without the competitive guard on it
+            // every room would have quietly opened as a two-player one. Making the row visible
+            // did not touch that guard, and this is what proves it.
             var active = dlg.MaxPlayersRow.Children.OfType<Button>()
                 .Where(b => (b.Tag as string) == "active")
                 .Select(b => b.Content as string)
                 .ToList();
             Assert.Equal(new[] { "8" }, active);
             Assert.All(dlg.MaxPlayersRow.Children.OfType<Button>(), b => Assert.True(b.IsEnabled));
+
+            dlg.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// PICKING A FORMAT DECLARES THE ROOM COMPETITIVE — the whole point of the row being on
+    /// screen for a casual room, and the half that compiles perfectly while doing nothing.
+    ///
+    /// <para>The format only means something for a competitive room, so a click that lit a
+    /// segment and left the box unticked would be a control that looks broken: you would pick
+    /// 2v2, watch nothing else move, and still have to go find the checkbox. One click has to
+    /// carry the whole decision — the box, the format, and the four seats that format IS.</para>
+    ///
+    /// <para>Asserted through the real Click event rather than by calling the handler, because
+    /// what is being pinned is the wiring: the handler could be perfect and simply not attached.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void PickingAFormatMakesTheRoomCompetitive()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var session = new MultiplayerSession(new LauncherConfig());
+            var dlg = new CreateLobbyDialog(
+                session,
+                new List<ModProfile>(),
+                null,
+                _ => Task.FromResult("0123456789abcdef"),
+                _ => new ModCopyInfo(false, false, Array.Empty<ModCopyChoice>()),
+                _ => Task.CompletedTask);
+
+            // Starts casual and eight-seat, as the test above pins in detail.
+            Assert.NotEqual(true, dlg.CompetitiveCheck.IsChecked);
+
+            // 1v1 / 2v2 / 3v3, in that order — so this is 2v2, chosen because its four seats
+            // differ from BOTH the eight the room opens on and the two a 1v1 would give: a
+            // handler that did nothing, and one that fell back to the default format, both fail.
+            var twoVTwo = dlg.FormatRow.Children.OfType<Button>().ElementAt(1);
+            twoVTwo.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            Assert.True(dlg.CompetitiveCheck.IsChecked);
+            Assert.Equal("active", twoVTwo.Tag as string);
+
+            var active = dlg.MaxPlayersRow.Children.OfType<Button>()
+                .Where(b => (b.Tag as string) == "active")
+                .Select(b => b.Content as string)
+                .ToList();
+            Assert.Equal(new[] { "4" }, active);
+
+            // The seat row belongs to the format now, and the note says what a team match needs.
+            Assert.All(dlg.MaxPlayersRow.Children.OfType<Button>(), b => Assert.False(b.IsEnabled));
+            Assert.Equal(Visibility.Visible, dlg.CompetitiveSizeNote.Visibility);
+
+            // Unticking gives the seats back and leaves NO format showing — the room stopped
+            // being one that has a format, so the row must stop claiming it has one.
+            dlg.CompetitiveCheck.IsChecked = false;
+            Assert.All(dlg.FormatRow.Children.OfType<Button>(), b => Assert.Null(b.Tag as string));
+            Assert.All(dlg.MaxPlayersRow.Children.OfType<Button>(), b => Assert.True(b.IsEnabled));
+            Assert.Equal(Visibility.Collapsed, dlg.CompetitiveSizeNote.Visibility);
 
             dlg.Close();
         });
@@ -471,6 +539,106 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// One row of the Clasificación table, built for real, in both of its states.
+    ///
+    /// <para>Same reason as the player line below: it is assembled in code, so a resource key
+    /// that does not resolve throws when it is BUILT and nothing at compile time can see it —
+    /// and this table is only ever drawn after somebody signs in and opens a subtab the
+    /// startup smoke test never reaches. The two branches paint different brushes (first place
+    /// is gold, the viewer's own row is tinted and blue) and different bar lengths.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(7, true)]
+    public void RankingRow_Builds(int rank, bool isMe)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var row = new LeaderboardRow
+            {
+                Rank = rank,
+                UserId = "me",
+                DisplayName = "Gorgorito12",
+                DiscordUsername = "gorgorito_12",
+                Rating = 1383,
+                Rd = 286,
+                GamesPlayed = 6,
+                Wins = 2,
+                Losses = 4,
+            };
+
+            Assert.NotNull(tab.BuildLeaderboardRow(row, 1383, 1604, isMe));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A history card, in the two shapes that take different branches: one that counted, with
+    /// a roster and a delta, and one that did not — which is the one that also builds the
+    /// amber note and the neutral tag, and is the majority of stored matches.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HistoryCard_Builds(bool rated)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var row = new MatchHistoryRow
+            {
+                Id = "m1",
+                ModId = "wol",
+                MapName = "ESOC_Fertile_Crescent",
+                StartedAt = "2026-08-29T17:50:00Z",
+                EndedAt = "2026-08-29T19:09:00Z",
+                Result = rated ? 0.0 : 0.5,
+                Rated = rated,
+                UnratedReason = rated ? null : "not_competitive",
+                RatingBefore = rated ? 1500 : null,
+                RatingAfter = rated ? 1383 : null,
+                Participants = new List<MatchHistoryParticipant>
+                {
+                    new() { UserId = "me", DisplayName = "Gorgorito12", Result = rated ? 0.0 : 0.5 },
+                    new() { UserId = "alu", DisplayName = "Aluclown", Result = rated ? 1.0 : 0.5 },
+                },
+            };
+
+            Assert.NotNull(tab.BuildHistoryRow(row, "me"));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The profile header — the one card that carries a gradient, a rounded-square avatar and
+    /// the 30-px rating, none of which appears anywhere else in the launcher.
+    ///
+    /// <para>Built with NO standing on purpose: that is the state a player sees while the
+    /// fetch is in flight, and it is the branch that omits elements rather than painting
+    /// them, which makes it the one most likely to be wrong and never noticed.</para>
+    /// </summary>
+    [Fact]
+    public void ProfileHeader_BuildsWithNoStandingYet()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            Assert.NotNull(tab.BuildProfileHeader(new LobbyUserSummary
+            {
+                Id = "me",
+                DisplayName = "Gorgorito12",
+                DiscordUsername = "gorgorito_12",
+                CreatedAt = "2026-08-01T00:00:00Z",
+            }));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// The degraded shape: somebody else, no avatar, no rating either side, nothing decided.
     /// Every one of those is a branch that omits an element rather than painting one, which
     /// makes this the row most likely to be built wrong and never noticed.
@@ -620,7 +788,160 @@ public class DialogXamlTests
     /// <para>Nothing else can catch this. It is not an overflow (a star column that shrinks
     /// reports nothing, the same blindness the tab's own overflow diagnostic has), it throws
     /// nothing, and it looks fine on a wide monitor.</para>
+    ///
+    /// <para><b>AND IT WAS ITSELF BLIND FOR A WHILE, which is worth knowing before trusting a
+    /// number this test reports.</b> The three text buttons in the cluster take their size from
+    /// MpSecondaryButton / MpPrimaryButton, whose Setter said <c>{StaticResource FontSizeBody}</c>
+    /// — and in this harness that reference did not resolve, so they measured at the WPF default
+    /// of 12 while the shipped app painted them at 14. The bar was therefore ~22 px over budget
+    /// in reality and passing here. Moving every font size to <c>{DynamicResource}</c> for the
+    /// text-size setting (see <c>TextScaleTests</c>) fixed the harness, the overlap appeared, and
+    /// the cluster's captions were taken down to the multiplayer scale they should always have
+    /// been on. A green result here means what it says only because the harness now measures the
+    /// same sizes the app paints.</para>
     /// </summary>
+    /// <summary>
+    /// The three rebuilt multiplayer pages FILL the window — and the ladder's flexible column
+    /// is the one that can absorb the surplus.
+    ///
+    /// <para><b>Both halves belong in one test because either alone can be satisfied by
+    /// breaking the other.</b> Filling the window is what was asked for, three rounds running;
+    /// what makes it safe is that RATING grows and PLAYER is capped, so a wide window lengthens
+    /// the comparative bar instead of stranding a name 1500 px from its own rating. Flip the
+    /// flexible column back to PLAYER — the obvious reading of the handoff's fixed-width mockup
+    /// — and the pages still "fill the window" while reproducing the exact defect the rebuild
+    /// started from, with a green build and no error anywhere.</para>
+    ///
+    /// <para>The page assertions are one XAML attribute each, which is the other reason: a
+    /// tidy-up that puts a MaxWidth back reads as harmless in a diff.</para>
+    /// </summary>
+    [Fact]
+    public void TheMultiplayerPagesFillTheWindowAndTheLadderGrowsByItsBar()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+
+            foreach (var (name, page) in new (string, FrameworkElement)[]
+                     {
+                         ("Ranking", tab.RankingPage),
+                         ("Profile", tab.ProfileBody),
+                     })
+            {
+                Assert.True(double.IsPositiveInfinity(page.MaxWidth),
+                    $"{name} is bounded to {page.MaxWidth}: these pages fill the window now, "
+                    + "and the bounding is what left more than half of it empty.");
+
+                Assert.True(page.HorizontalAlignment == HorizontalAlignment.Stretch,
+                    $"{name} is {page.HorizontalAlignment}, not Stretch, so it cannot fill "
+                    + "the width it is given.");
+            }
+
+            var flexible = RankingTableLayout.All.Where(c => c.FixedWidth == null).ToList();
+            Assert.Equal(2, flexible.Count);
+
+            var player = RankingTableLayout.All.Single(c => c.Column == RankingColumn.Player);
+            var rating = RankingTableLayout.All.Single(c => c.Column == RankingColumn.Rating);
+
+            Assert.True(player.MaxWidth is > 0,
+                "PLAYER has no cap, so on a wide window the name takes the whole surplus and "
+                + "its rating ends up an arm's length away — the defect this table was rebuilt "
+                + "to fix.");
+            Assert.True(rating.FixedWidth == null && rating.MaxWidth == null,
+                "RATING is not the column that grows. Its cell holds the comparative bar, "
+                + "which is the only thing here that gets MORE useful with more width.");
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The Workshop's filter strip cannot be painted over by the sort cluster.
+    ///
+    /// <para><b>Why this exists.</b> That row is <c>* | Auto</c> — the sort cluster takes its
+    /// width first and whatever is in the star column is arranged at its own desired size and
+    /// clipped at the column edge, with the cluster drawing over the same pixels. Nothing in
+    /// the strip trims and a Button cannot ellipsise its caption, so as a horizontal
+    /// StackPanel the chips had no way to give ground. It was invisible because a UiScale
+    /// LayoutTransform pinned the whole Workshop's logical width at ~1100 px for every window
+    /// from 900 up; with that gone the row gets the real width — about 852 px at the minimum
+    /// window — and any text size above 100 % pushes it over.</para>
+    ///
+    /// <para><b>The type assertion is the load-bearing half, and the numbers cannot replace
+    /// it.</b> <c>Measure</c> clamps <c>DesiredSize</c> to the constraint it is given, so a
+    /// StackPanel that overflows reports a width that fits — the overflow is simply not
+    /// visible from here. What IS checkable is that the strip is a panel that WRAPS, so it
+    /// cannot overflow by construction, and that the Auto cluster still leaves the first line
+    /// room for the label and the widest chip.</para>
+    /// </summary>
+    [Fact]
+    public void TheWorkshopFiltersRowFitsAtTheNarrowestWindow()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                // Spanish is the wide language here: "Actualizaciones", "No instalados".
+                Strings.SetLanguage("es");
+                var browser = new ModsBrowser();
+
+                // The captions come from MainWindow, so the harness has to supply them or
+                // every chip measures as an empty button.
+                browser.FiltersLabelText = Strings.Get("ModsBrowserFiltersLabel");
+                browser.SortLabelText = Strings.Get("ModsBrowserSortLabel");
+                browser.SetFilterLabels(
+                    Strings.Get("ModsBrowserFilterAll"),
+                    Strings.Get("ModsBrowserFilterInstalled"),
+                    Strings.Get("ModsBrowserFilterNotInstalled"),
+                    Strings.Get("ModsBrowserFilterUpdates"),
+                    Strings.Get("ModsBrowserFilterCompatible"));
+
+                var strip = LogicalTreeHelper.GetParent(browser.FilterAll);
+                Assert.True(strip is WrapPanel,
+                    $"the filter strip is a {strip?.GetType().Name}, not a WrapPanel. In a "
+                    + "`* | Auto` row nothing else can give ground: the chips do not trim and "
+                    + "cannot ellipsise, so on a narrow window they go UNDER the sort box. "
+                    + "Measuring will not catch this — DesiredSize is clamped to the "
+                    + "constraint, so the overflow reports as a fit.");
+
+                var sort = (FrameworkElement)LogicalTreeHelper.GetParent(browser.SortBox);
+                sort.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+                var label = browser.FiltersLabel;
+                label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+                var widestChip = 0.0;
+                foreach (var chip in new[]
+                         {
+                             browser.FilterAll, browser.FilterInstalled,
+                             browser.FilterNotInstalled, browser.FilterUpdates,
+                             browser.FilterCompatible,
+                         })
+                {
+                    chip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    widestChip = Math.Max(widestChip, chip.DesiredSize.Width);
+                }
+
+                // The 900-px minimum window, less the header's own 24-px side padding. NOT
+                // divided by any scale factor — that is exactly what changed when the
+                // Workshop's LayoutTransform was removed.
+                const double budget = 900 - 48;
+                var firstLine = sort.DesiredSize.Width + label.DesiredSize.Width + widestChip;
+
+                Assert.True(firstLine <= budget,
+                    $"the sort cluster ({sort.DesiredSize.Width:F0}), the label "
+                    + $"({label.DesiredSize.Width:F0}) and the widest chip ({widestChip:F0}) "
+                    + $"need {firstLine:F0} px of the {budget:F0} the narrowest window gives "
+                    + "this row — so not even one chip fits beside the sort box and wrapping "
+                    + "cannot save it. Take the width out of the sort box or a chip caption.");
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
     [Fact]
     public void TheRoomsTopBarFitsAtTheNarrowestWindow()
     {
@@ -798,6 +1119,68 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// THE AGE LABEL REGISTERS ITSELF, and the label it registers is the one actually in the
+    /// row. Both halves matter and both fail silently.
+    ///
+    /// <para>Those "31 min ago" labels were computed once, when the row was built, and the row
+    /// is only rebuilt by a fetch that got past a 60-second gate — so a tab left open kept
+    /// saying 31 min for as long as anybody looked at it. They are ticked in place now, from
+    /// the rooms ping timer, which only works if the builder hands the TextBlock back.</para>
+    ///
+    /// <para>Registering a block that is NOT in the row would tick something nobody can see,
+    /// and nothing would look wrong — the same shape as the roster health dots, which were
+    /// found by structure and silently stopped updating when that structure moved. Hence the
+    /// reference check against the row's own children.</para>
+    /// </summary>
+    [Fact]
+    public void ACommunityMatchRowHandsBackItsAgeLabel()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var cells = new List<(TextBlock Text, DateTime ReportedUtc)>();
+            var reported = DateTime.UtcNow.AddMinutes(-31);
+            var match = new CommunityMatch
+            {
+                Id = "m1",
+                ModId = "wol",
+                MapName = "ESOC_Fertile Crescent",
+                ReportedAt = reported.ToString("s"),
+            };
+
+            var row = MultiplayerTab.BuildCommunityMatchRow(match, cells);
+
+            var cell = Assert.Single(cells);
+            Assert.Contains("31", cell.Text.Text);
+            // Within a second of what was asked: the row parses the stamp itself, and a cell
+            // registered against a different instant would drift away from its own label.
+            Assert.True((cell.ReportedUtc - reported).Duration() < TimeSpan.FromSeconds(1));
+
+            var grid = Assert.IsType<Grid>(row);
+            Assert.Contains(grid.Children.Cast<UIElement>(), c => ReferenceEquals(c, cell.Text));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A row whose timestamp does not parse registers NOTHING. There is no label to tick, and a
+    /// cell holding a fabricated instant would invent an age for a match that never reported one
+    /// — the same refusal the row already makes by omitting the column entirely.
+    /// </summary>
+    [Fact]
+    public void AnUnreadableTimestampRegistersNoAgeLabel()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var cells = new List<(TextBlock Text, DateTime ReportedUtc)>();
+            MultiplayerTab.BuildCommunityMatchRow(new CommunityMatch { ReportedAt = "no" }, cells);
+            Assert.Empty(cells);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// The degraded shape: no map, no participants, and a timestamp that does not parse —
     /// every segment of the meta line absent at once, which is the row most likely to be
     /// built wrong and never seen.
@@ -856,6 +1239,168 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// THE REVEAL IS BUILT FOR REAL, because it is assembled entirely in code and nothing else
+    /// in the app would ever notice if a piece of it stopped resolving.
+    ///
+    /// <para><c>RevealTextTests</c> pins the decisions; this pins the object. It measures a
+    /// genuinely truncated line with <c>FormattedText</c> against a real arranged width, looks
+    /// up <c>RevealTooltip</c> from <c>Styles/Text.xaml</c> by name, and computes the offset
+    /// that puts the revealed first glyph on top of the original's. A renamed style resolves to
+    /// nothing and the reveal silently reverts to the app's ordinary tooltip — a shadowed,
+    /// differently-padded box in the wrong place — which is not a crash and not a build error.
+    /// </para>
+    ///
+    /// <para>The negative half is in the same test on purpose: the same block, given room to
+    /// fit, must build NOTHING. With the behaviour armed on every trimming TextBlock in the
+    /// launcher, a measurement that answered "cut" too readily would put a box over text that
+    /// was perfectly legible, everywhere, at once.</para>
+    /// </summary>
+    [Fact]
+    public void TheRevealBuildsInPlaceAndOnlyWhenTheTextIsActuallyCut()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            const string full = "Mapa mas jugado: ESOC Fertile Crescent";
+
+            var text = new TextBlock
+            {
+                Text = full,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap,
+                FontSize = 12,
+                Padding = new Thickness(3, 1, 0, 0),
+            };
+            // A card with a real fill, so the backdrop walk has something to find — the reveal
+            // sits directly on top of the original text and must not be see-through.
+            var card = new Border
+            {
+                Background = (System.Windows.Media.Brush)Application.Current.FindResource("MpPanel"),
+                Child = text,
+            };
+
+            // The implicit style in Styles/Text.xaml armed it, without the call site asking.
+            Assert.True(RevealText.GetEnabled(text),
+                "the implicit TextBlock style did not arm the behaviour");
+
+            // Narrow: the line cannot fit, which is the case the feature exists for.
+            card.Measure(new Size(90, 40));
+            card.Arrange(new Rect(0, 0, 90, 40));
+            // Loaded is the hook that arms it in the real app (SizeChanged carries it from
+            // there). Raised by hand because a detached tree is never loaded and never runs a
+            // real layout pass — what is pinned is that the handler is wired to it and does
+            // the right thing with a laid-out block, which is exactly what was wrong.
+            text.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+
+            // THE REGRESSION, and the whole reason this test exists in this shape: the tooltip
+            // has to be IN PLACE once the block has been laid out, with no mouse involved. The
+            // first version computed it on hover and therefore never showed anything at all —
+            // WPF's tooltip service inspects an element when the mouse ENTERS it, from a class
+            // handler that runs before any instance handler, so a tooltip assigned during hover
+            // is always assigned a moment too late.
+            var tip = Assert.IsType<ToolTip>(text.ToolTip);
+
+            // Same words, in full, and wrapped rather than trimmed — a reveal that trimmed
+            // again would show exactly what the user was already looking at.
+            var revealed = Assert.IsType<TextBlock>(tip.Content);
+            // Read through PlainTextOf, never revealed.Text: a TextBlock whose content is runs
+            // reports "" from that property, which is the trap the helper exists for.
+            Assert.Equal(full, RevealText.PlainTextOf(revealed));
+            Assert.Equal(TextWrapping.Wrap, revealed.TextWrapping);
+            Assert.Equal(text.FontSize, revealed.FontSize);
+
+            // Its own chrome resolved. Without the style it would inherit the app-wide tooltip
+            // template, shadow and all.
+            Assert.NotNull(tip.Style);
+            Assert.False(tip.HasDropShadow);
+
+            // NO DELAY, and on the TEXTBLOCK rather than on the balloon — the service reads it
+            // from the owner, so set on the ToolTip it would silently do nothing and the reveal
+            // would go back to WPF's stock second of waiting.
+            Assert.Equal(0, ToolTipService.GetInitialShowDelay(text));
+
+            // Placed back by its own border and padding, less whatever inset the original gives
+            // its text: the two first glyphs land on the same pixel. THAT is what makes it read
+            // as the same sentence continuing.
+            Assert.Equal(-(RevealText.PadX + 1 - text.Padding.Left), tip.HorizontalOffset, 3);
+            Assert.Equal(-(RevealText.PadY + 1 - text.Padding.Top), tip.VerticalOffset, 3);
+            Assert.Equal(text, tip.PlacementTarget);
+
+            // And the same block with room to spare reveals nothing at all — and takes its own
+            // tooltip back off, so it stops shadowing whatever an ancestor might have to say.
+            card.Measure(new Size(600, 40));
+            card.Arrange(new Rect(0, 0, 600, 40));
+            text.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            Assert.Null(text.ToolTip);
+
+            // The delay comes off with it: it was ours to impose only while our own tooltip was
+            // the one on this element.
+            Assert.NotEqual(0, ToolTipService.GetInitialShowDelay(text));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// HOVERING AN UNCHANGED BLOCK MUST NOT REBUILD ITS TOOLTIP, and this is the other half of
+    /// why the reveal took seconds to appear.
+    ///
+    /// <para>By the time the MouseEnter handler runs, WPF's tooltip service has already
+    /// inspected the element from a class handler and scheduled the show. Clearing the ToolTip
+    /// property cancels that, and re-assigning it does not reschedule — the timer only starts on
+    /// entry — so the reveal needed a SECOND inspection to appear, one full delay later. The
+    /// handler was rebuilding on every hover, unconditionally.</para>
+    ///
+    /// <para><b>The assertion has to be by REFERENCE.</b> A rebuilt tooltip holds the same words
+    /// in the same font at the same offset: compared by value it passes, looks right in a
+    /// screenshot, and is exactly the bug.</para>
+    /// </summary>
+    [Fact]
+    public void HoveringAnUnchangedBlockLeavesItsRevealAlone()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var text = new TextBlock
+            {
+                Text = "Mapa mas jugado: ESOC Fertile Crescent",
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap,
+                FontSize = 12,
+            };
+            var card = new Border
+            {
+                Background = (System.Windows.Media.Brush)Application.Current.FindResource("MpPanel"),
+                Child = text,
+            };
+            card.Measure(new Size(90, 40));
+            card.Arrange(new Rect(0, 0, 90, 40));
+            text.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+
+            var armed = Assert.IsType<ToolTip>(text.ToolTip);
+
+            // Two hovers, nothing changed in between.
+            text.RaiseEvent(new System.Windows.Input.MouseEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+            text.RaiseEvent(new System.Windows.Input.MouseEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+
+            Assert.Same(armed, text.ToolTip);
+
+            // But a block whose TEXT changed without its width changing — a room's age ticking
+            // in a fixed column — is still refreshed. That case is the whole reason the handler
+            // exists, and a "never touch it" fix would have silently dropped it.
+            text.Text = "Mapa mas jugado: ESOC Yucatan y algo mucho mas largo todavia";
+            text.RaiseEvent(new System.Windows.Input.MouseEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+
+            var refreshed = Assert.IsType<ToolTip>(text.ToolTip);
+            Assert.NotSame(armed, refreshed);
+            Assert.Equal(text.Text, RevealText.PlainTextOf(Assert.IsType<TextBlock>(refreshed.Content)));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// Runs <paramref name="action"/> on an STA thread with the launcher's resource
     /// dictionaries loaded, and returns the exception it threw (null when it didn't).
     /// </summary>
@@ -886,7 +1431,10 @@ public class DialogXamlTests
     {
         var app = Application.Current ?? new Application();
         if (app.Resources.MergedDictionaries.Count > 0) return;
-        foreach (var name in new[] { "Tokens", "Colors", "Chrome", "Buttons", "Inputs" })
+        // Text BEFORE Buttons, as App.xaml merges them: SidebarNavLabel is BasedOn the
+        // implicit TextBlock style that lives in Text.xaml, and a StaticResource in a
+        // merged dictionary can only see dictionaries merged before it.
+        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs" })
         {
             app.Resources.MergedDictionaries.Add(new ResourceDictionary
             {

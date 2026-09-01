@@ -49,13 +49,13 @@
         </Style>
         <Style x:Key="StepTitle" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
             <Setter Property="Margin" Value="0,0,0,3"/>
         </Style>
         <Style x:Key="StepBody" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
@@ -76,7 +76,7 @@
                            VerticalAlignment="Center"
                            Margin="10,0,0,0"
                            Foreground="{DynamicResource Secondary}"
-                           FontSize="{StaticResource FontSizeCaption}"/>
+                           FontSize="{DynamicResource FontSizeCaption}"/>
             </controls:TitleBar>
 
             <!-- STEPS -->
@@ -164,7 +164,7 @@
                                     <TextBlock x:Name="NetworkNameBox"
                                                Foreground="{DynamicResource SecondaryFixed}"
                                                FontFamily="Consolas"
-                                               FontSize="{StaticResource FontSizeCaption}"
+                                               FontSize="{DynamicResource FontSizeCaption}"
                                                TextTrimming="CharacterEllipsis"/>
                                 </Border>
                                 <Button Grid.Column="1"
@@ -226,7 +226,7 @@
                     <CheckBox Grid.Column="1"
                               x:Name="DontShowAgainCheck"
                               Foreground="{DynamicResource Secondary}"
-                              FontSize="{StaticResource FontSizeCaption}"
+                              FontSize="{DynamicResource FontSizeCaption}"
                               VerticalAlignment="Center"/>
                     <Button Grid.Column="2"
                             x:Name="CloseBtn"

@@ -8,7 +8,7 @@
             <TextBlock x:Name="ActionsLabel"
                        x:FieldModifier="public"
                        Foreground="#666"
-                       FontSize="{StaticResource FontSizeCaption}"
+                       FontSize="{DynamicResource FontSizeCaption}"
                        FontWeight="SemiBold"
                        Margin="0,0,0,8"/>
 
@@ -164,7 +164,7 @@
                                 <Setter Property="Foreground" Value="White"/>
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="Padding" Value="8,7"/>
-                                <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+                                <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="Cursor" Value="Hand"/>
                                 <Setter Property="OverridesDefaultStyle" Value="True"/>
@@ -263,7 +263,7 @@
                                 <Setter Property="Foreground" Value="#f0f0f0"/>
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="Padding" Value="8,8,8,4"/>
-                                <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
+                                <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
                                 <Setter Property="FontWeight" Value="Bold"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
                                 <Setter Property="IsHitTestVisible" Value="False"/>

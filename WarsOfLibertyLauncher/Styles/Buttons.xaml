@@ -120,7 +120,7 @@
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderSecondary}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadRow}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -161,7 +161,7 @@
         <Setter Property="Background" Value="{DynamicResource BgNeutral}"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadRoomy}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -256,7 +256,7 @@
         <Setter Property="Foreground" Value="#261900"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
         <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadCta}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -417,7 +417,7 @@
     <Style x:Key="SidebarColoredButton" TargetType="Button">
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadDefault}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -453,7 +453,7 @@
         <Setter Property="Background" Value="{DynamicResource BgPanelAlt}"/>
         <Setter Property="Foreground" Value="#ddd"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadDefault}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -514,7 +514,7 @@
              240px sidebar feel cramped. "MULTIJUGADOR" (longest
              label in either language at 12 chars) still has ~50px
              of headroom inside the panel. -->
-        <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -557,8 +557,14 @@
          the Width="Auto" rail clamped to SidebarRailMaxWidth — ellipsise
          instead of clipping silently when a label is longer than the max.
          The icon glyph next to it keeps its own inline size. -->
-    <Style x:Key="SidebarNavLabel" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="{StaticResource SidebarNavTextSize}"/>
+    <!-- BasedOn the implicit TextBlock style (Chrome.xaml) is load-bearing, not
+         tidiness: a NAMED style does not inherit the implicit one, and this is the
+         only named TextBlock style in the repo that sets TextTrimming — so without
+         it the rail's labels would be the one place in the launcher where a cut
+         label could not be read. -->
+    <Style x:Key="SidebarNavLabel" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SidebarNavTextSize}"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
     </Style>
@@ -580,7 +586,7 @@
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -670,7 +676,7 @@
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
-        <Setter Property="FontSize" Value="{StaticResource NavTabTextSize}"/>
+        <Setter Property="FontSize" Value="{DynamicResource NavTabTextSize}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -715,7 +721,7 @@
          open external links instead of switching the content view. -->
     <Style x:Key="SidebarFooterButton" TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
         <Setter Property="Padding" Value="22,8"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <!-- Slightly dimmer cool tone for Support/Wiki — they're not
              primary navigation so they recede a step. Matches the
@@ -733,7 +739,7 @@
         <Setter Property="Foreground" Value="#888"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="0,16"/>
         <Setter Property="Margin" Value="0,0,28,0"/>
@@ -764,7 +770,7 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="#888"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="0,10"/>
         <Setter Property="Margin" Value="0,0,28,0"/>
@@ -802,7 +808,7 @@
         <Setter Property="Background" Value="{DynamicResource MpBlue}"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadDefault}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -842,7 +848,7 @@
         <Setter Property="Foreground" Value="#dadde2"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadDefault}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -944,7 +950,7 @@
         <Setter Property="Foreground" Value="#7fb0ff"/>
         <Setter Property="BorderBrush" Value="{DynamicResource MpBlue}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadDefault}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -984,7 +990,7 @@
         <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadDefault}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -1024,7 +1030,7 @@
         <Setter Property="Background" Value="{DynamicResource MpDanger}"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="{StaticResource BtnPadDefault}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -1061,7 +1067,7 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="Padding" Value="6"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Width" Value="28"/>
@@ -1124,7 +1130,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Height" Value="{StaticResource MpFieldHeight}"/>
-        <Setter Property="FontSize" Value="{StaticResource MpMetaSize}"/>
+        <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -1174,7 +1180,7 @@
          not a primary action. -->
     <Style x:Key="MpQuietButton" TargetType="Button" BasedOn="{StaticResource MpSecondaryButton}">
         <Setter Property="Padding" Value="{StaticResource BtnPadCompact}"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
         <Setter Property="FontWeight" Value="Medium"/>
     </Style>
 
@@ -1190,7 +1196,7 @@
         <Setter Property="Height" Value="{StaticResource MpFieldHeight}"/>
         <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FontSize" Value="{StaticResource MpMetaSize}"/>
+        <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -1225,7 +1231,7 @@
         <Setter Property="Foreground" Value="{DynamicResource MpCautionTextAlt}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource MpCautionRimBox}"/>
         <Setter Property="Height" Value="28"/>
-        <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
+        <Setter Property="FontSize" Value="{DynamicResource MpLabelSize}"/>
     </Style>
 
     <!-- Text link (design handoff 1a). The reference renders the "join" affordance
@@ -1239,7 +1245,7 @@
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="0"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FontSize" Value="{StaticResource MpLabelSize}"/>
+        <Setter Property="FontSize" Value="{DynamicResource MpLabelSize}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -1260,6 +1266,18 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- The link inside an amber note — "See how", on a history card that did not count. It
+         wears the note's own colour so it reads as part of the explanation rather than as a
+         second, unrelated action.
+
+         A derived STYLE and not a local Foreground on the instance, which is the precedence
+         trap this file documents twice: a local value (3) beats the base template's
+         IsEnabled=False trigger (7), so a locally-coloured link would keep its colour while
+         disabled. A Style setter is 8, below that trigger, so the disabled state still wins. -->
+    <Style x:Key="MpNoteLinkButton" TargetType="Button" BasedOn="{StaticResource MpLinkButton}">
+        <Setter Property="Foreground" Value="{DynamicResource MpProvisionalText}"/>
     </Style>
 
     <!-- Row-level Join button: the small one inside each room row in
@@ -1469,7 +1487,7 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12,6"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>

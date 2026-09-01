@@ -1,0 +1,66 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:app="clr-namespace:WarsOfLibertyLauncher">
+
+    <!-- ============================================================
+         REVEAL-ON-HOVER for text that ends in an ellipsis. The behaviour, and
+         every reason behind it, lives in Controls/RevealText.cs; these two styles
+         are only how it reaches the 65 trimming sites without touching any of them.
+
+         WHY ITS OWN DICTIONARY, merged BEFORE Buttons.xaml. A `{StaticResource}`
+         inside a merged dictionary can only resolve resources from dictionaries
+         merged EARLIER (the same rule App.xaml's own merge block is ordered by), and
+         SidebarNavLabel in Buttons.xaml has to say
+         BasedOn="{StaticResource {x:Type TextBlock}}" — a named style does not
+         inherit an implicit one. Putting the implicit style in Chrome.xaml, where a
+         tooltip style otherwise belongs, puts it AFTER Buttons.xaml and that BasedOn
+         cannot see it. Don't move these two into Chrome.xaml, and don't reorder the
+         merge to make it possible.
+         ============================================================ -->
+
+    <!-- The reveal's own chrome. Deliberately NOT BasedOn the general tooltip style
+         in Chrome.xaml, and the differences are the point: no drop shadow (an Effect
+         over text disables ClearType, and this text sits edge to edge with the text
+         it is completing), tight padding that the placement offset is computed back
+         from, and no font of its own — the content TextBlock carries the ORIGINAL
+         block's font, which is what makes the reveal read as the same words
+         continuing rather than as a note about them. -->
+    <Style x:Key="RevealTooltip" TargetType="ToolTip">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="4">
+                        <ContentPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The implicit TextBlock style. It has NO setters — it changes nothing about how
+         any text is drawn — and arms the behaviour only where the block already trims.
+         A trigger reads the property's CURRENT value whatever set it, so this covers
+         the blocks built in code exactly as it covers the ones written in XAML.
+
+         FOR WHOEVER ADDS A NAMED TextBlock STYLE: it will not inherit this one. If it
+         sets TextTrimming it needs BasedOn="{StaticResource {x:Type TextBlock}}", or
+         its labels become the one place in the launcher where cut text cannot be read.
+         SidebarNavLabel is the only one today. -->
+    <Style TargetType="TextBlock">
+        <Style.Triggers>
+            <Trigger Property="TextTrimming" Value="CharacterEllipsis">
+                <Setter Property="app:RevealText.Enabled" Value="True"/>
+            </Trigger>
+            <Trigger Property="TextTrimming" Value="WordEllipsis">
+                <Setter Property="app:RevealText.Enabled" Value="True"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

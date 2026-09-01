@@ -67,6 +67,18 @@ public class LobbyUserSummary
 
     [JsonPropertyName("avatar_url")]
     public string? AvatarUrl { get; set; }
+
+    /// <summary>
+    /// When the account first signed in, ISO-8601 UTC. Read for the profile header's
+    /// "joined in {month}" line.
+    ///
+    /// <para><c>GET /me</c> has always sent this — it is <c>users.created_at</c>, present
+    /// since the first migration — and no client had ever deserialized it. Null on a
+    /// response that omits it, which is the only reason the header's line is optional
+    /// rather than required.</para>
+    /// </summary>
+    [JsonPropertyName("created_at")]
+    public string? CreatedAt { get; set; }
 }
 
 public class ServerConfig
@@ -411,6 +423,27 @@ public class MatchHistoryRow
     /// names otherwise replace.</para></summary>
     [JsonPropertyName("participants")]
     public List<MatchHistoryParticipant> Participants { get; set; } = new();
+
+    /// <summary>
+    /// Whether the server scored this match. <b>Null means an older row or an older
+    /// backend — "we don't know" — and must not be read as "it counted".</b>
+    /// </summary>
+    [JsonPropertyName("rated")]
+    public bool? Rated { get; set; }
+
+    /// <summary>
+    /// Why it did not score, verbatim from the server, or null when it did (or when the
+    /// row predates the field).
+    ///
+    /// <para>The launcher deliberately does NOT work this out for itself — the policy of
+    /// what counts lives on the server, and the one time a copy of it lived here too the
+    /// two drifted. It maps to an explanation through
+    /// <see cref="Services.Multiplayer.MatchOutcomeView.UnratedNoteKey"/>, the same
+    /// mapping the end-of-match card uses, so the two surfaces cannot give a player
+    /// different answers about the same match.</para>
+    /// </summary>
+    [JsonPropertyName("unrated_reason")]
+    public string? UnratedReason { get; set; }
 }
 
 public class MatchHistoryResponse
@@ -699,6 +732,20 @@ public class CommunityStats
     /// </summary>
     [JsonPropertyName("leaderboard_team")]
     public List<LeaderboardRow>? LeaderboardTeam { get; set; }
+
+    /// <summary>
+    /// How many players are on each ladder in total, which is NOT the length of the lists
+    /// above: those are capped at the page size, so once the league passes 50 the list
+    /// length would quietly start reporting the page as the size of the league.
+    ///
+    /// <para>Read by the profile's "rank N of M". 0 on a backend that predates the fields,
+    /// and the profile then shows the rank alone rather than inventing a denominator.</para>
+    /// </summary>
+    [JsonPropertyName("ranked_players")]
+    public int RankedPlayers { get; set; }
+
+    [JsonPropertyName("ranked_players_team")]
+    public int RankedPlayersTeam { get; set; }
 
     [JsonPropertyName("activity")]
     public ActivityBuckets? Activity { get; set; }

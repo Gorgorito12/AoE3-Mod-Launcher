@@ -226,6 +226,12 @@ public partial class App : System.Windows.Application
         PreviewToasts = Array.Exists(e.Args, a =>
             string.Equals(a, "--preview-toasts", StringComparison.OrdinalIgnoreCase));
 
+        // Text size, applied BEFORE the first window is built so nothing paints at one
+        // size and then jumps. It multiplies the font-size tokens and nothing else — see
+        // Services/TextScale.cs for why that is not UiScale, and for why the XAML had to
+        // move to DynamicResource before it could reach anything.
+        ApplyTextScale();
+
         // StartupUri was removed from App.xaml so this guard can suppress a second
         // window; create + show the main window ourselves for the primary instance.
         var main = new WarsOfLibertyLauncher.MainWindow();
@@ -236,6 +242,106 @@ public partial class App : System.Windows.Application
         // to Minimized first to avoid a visible flash of the full window.
         if (StartMinimized) main.WindowState = System.Windows.WindowState.Minimized;
         main.Show();
+    }
+
+    /// <summary>
+    /// The launcher-wide text size, resolved and applied. Best-effort throughout: a font
+    /// size is not worth failing a launch over.
+    ///
+    /// <para>The setting is read straight out of the config JSON rather than through
+    /// <c>LauncherConfig.Load()</c>, deliberately. Load runs four migrations and can write
+    /// the file, and MainWindow's constructor is about to call it properly a moment later —
+    /// doing all of that twice, once for one string, is how a startup path acquires a
+    /// second opinion about the config.</para>
+    /// </summary>
+    private static void ApplyTextScale()
+    {
+        try
+        {
+            var setting = ReadTextScaleSetting();
+            var screen = Services.TextScale.DescribePrimaryScreen();
+            TextScaleDiagonalInches = Services.TextScale.DetectPrimaryDiagonalInches();
+            TextScaleFactor = Services.TextScale.Resolve(
+                setting, TextScaleDiagonalInches, screen.Width, screen.Height, screen.DpiScale);
+
+            Services.TextScale.Apply(TextScaleFactor);
+            _textScaleSetting = setting;
+        }
+        catch (Exception ex)
+        {
+            Services.DiagnosticLog.Write($"App.ApplyTextScale: {ex.Message}");
+        }
+    }
+
+    private static string ReadTextScaleSetting()
+    {
+        try
+        {
+            var path = Services.AppPaths.ConfigFile;
+            // BOTH keys, resolved by LauncherConfig's own rule rather than by a simpler copy of
+            // it. This method reads the raw JSON because it runs before MainWindow and must not
+            // fire four migrations for one string, and that shortcut has already cost two bugs:
+            // first a fallback literal that drifted from the property's default, then a stored
+            // value being obeyed even though nobody had chosen it — which is what pinned every
+            // machine that ran one intermediate build to the size that build defaulted to.
+            if (!System.IO.File.Exists(path)) return Models.LauncherConfig.DefaultTextScale;
+            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+
+            var stored = doc.RootElement.TryGetProperty("textScale", out var v)
+                         && v.ValueKind == System.Text.Json.JsonValueKind.String
+                ? v.GetString()
+                : null;
+            var chosen = doc.RootElement.TryGetProperty("textScaleExplicitlyChosen", out var c)
+                         && c.ValueKind == System.Text.Json.JsonValueKind.True;
+
+            return Models.LauncherConfig.ResolveTextScale(stored, chosen);
+        }
+        catch
+        {
+            return Models.LauncherConfig.DefaultTextScale;
+        }
+    }
+
+    private static string _textScaleSetting = Models.LauncherConfig.DefaultTextScale;
+
+    /// <summary>
+    /// One line describing how the text size was arrived at, for the diagnostic log.
+    ///
+    /// <para>MainWindow writes it, not this class: the resolution happens in
+    /// <see cref="OnStartup"/>, which runs BEFORE MainWindow's constructor rotates the log,
+    /// so a line written here goes into the PREVIOUS session's file and is missing from the
+    /// one a bundle is about.</para>
+    /// </summary>
+    public static string DescribeTextScale()
+    {
+        var screen = Services.TextScale.DescribePrimaryScreen();
+        return $"Text scale: setting='{_textScaleSetting}' "
+             + $"screen={screen.Width}x{screen.Height} dpi={screen.DpiScale:0.00} diagonal="
+             + (TextScaleDiagonalInches is double inches ? $"{inches:0.0}\"" : "unknown")
+             + $" -> {TextScaleFactor:0.00}";
+    }
+
+    /// <summary>The factor currently applied to every font-size token.</summary>
+    public static double TextScaleFactor { get; private set; } = 1.0;
+
+    /// <summary>
+    /// The primary monitor's physical diagonal, or null when the panel didn't say.
+    /// Kept so Settings can show what "Automatic" worked out from without probing again.
+    /// </summary>
+    public static double? TextScaleDiagonalInches { get; private set; }
+
+    /// <summary>
+    /// Re-resolve and re-apply the text size after Settings changed it. Every font size in
+    /// the app is a <c>DynamicResource</c>, so this re-lays out the live windows — the
+    /// setting needs no restart.
+    /// </summary>
+    public static void RefreshTextScale(string? setting)
+    {
+        var screen = Services.TextScale.DescribePrimaryScreen();
+        TextScaleFactor = Services.TextScale.Resolve(
+            setting, TextScaleDiagonalInches, screen.Width, screen.Height, screen.DpiScale);
+        _textScaleSetting = setting ?? Services.TextScale.Auto;
+        Services.TextScale.Apply(TextScaleFactor);
     }
 
     /// <summary>True when this launch was an auto-start (Windows login) that

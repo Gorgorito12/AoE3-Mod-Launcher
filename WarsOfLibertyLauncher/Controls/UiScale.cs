@@ -23,6 +23,16 @@ namespace WarsOfLibertyLauncher;
 /// scaled subtree flips to Ideal/Grayscale/Animated under a non-1.0 transform
 /// and restores the app-wide Display/ClearType/Fixed trio at exactly 1.0.
 ///
+/// <para><b>Where it is NOT used, and why that is deliberate.</b> The Workshop
+/// (<c>ModsBrowser</c>) used to attach here and no longer does. This transform is a ZOOM: it
+/// shrinks the padding, the gutters and the row heights along with the type, and any scale
+/// below 1.0 costs the whole subtree its ClearType. It existed because there was no other way
+/// to keep a small window readable — and <c>Services/TextScale.cs</c> is now that other way,
+/// so a surface that can simply reflow should reflow. Don't re-add it "for consistency": the
+/// surfaces that still attach do so because something on them cannot give ground (the rooms
+/// toolbar needs ~1045 px against the 880 a 900-px window gives it), which is a property of
+/// that surface, not a house style.</para>
+///
 /// IMPORTANT (see CLAUDE.md): attach ONLY to a foreground content root, and
 /// drive it from a STABLE <c>sizeSource</c> that the transform does NOT feed
 /// back into (the element's parent / the window, never the scaled element

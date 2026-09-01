@@ -20,11 +20,11 @@
                         Margin="14,0,14,12"
                         VerticalAlignment="Bottom">
                 <TextBlock x:Name="TitleText"
-                           FontSize="{StaticResource FontSizeHeading}"
+                           FontSize="{DynamicResource FontSizeHeading}"
                            FontWeight="Bold"
                            Foreground="White"/>
                 <TextBlock x:Name="SubtitleText"
-                           FontSize="{StaticResource FontSizeCaption}"
+                           FontSize="{DynamicResource FontSizeCaption}"
                            Foreground="#ccc"
                            Margin="0,2,0,0"/>
             </StackPanel>

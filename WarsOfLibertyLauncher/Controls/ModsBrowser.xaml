@@ -17,9 +17,13 @@
             <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="14,6"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontSize" Value="{DynamicResource WsLabelSize}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
+            <!-- The bottom 6 is the gap BETWEEN wrapped lines: the strip is a WrapPanel now
+                 (see the filters row) and without it two lines would touch. The filters Grid
+                 gave up the same 6 from its own bottom margin, so an unwrapped row measures
+                 exactly what it always did. -->
+            <Setter Property="Margin" Value="0,0,8,6"/>
         </Style>
         <!-- Subtab buttons (My mods / Catalog). TERTIARY NEUTRAL recipe —
              same fix as the multiplayer SubTab: without an explicit
@@ -32,7 +36,7 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0,0,0,2"/>
             <Setter Property="Padding" Value="2,6"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="FontSize" Value="{DynamicResource WsBodySize}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,22,0"/>
@@ -87,12 +91,12 @@
                     <StackPanel Grid.Column="0" Margin="0,0,20,0">
                         <TextBlock x:Name="HeaderTitle"
                                    Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{StaticResource FontSizeHeading}"
+                                   FontSize="{DynamicResource WsHeadingSize}"
                                    FontWeight="Bold"
                                    TextTrimming="CharacterEllipsis"/>
                         <TextBlock x:Name="HeaderSubtitle"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource WsBodySize}"
                                    TextTrimming="CharacterEllipsis"
                                    Margin="0,2,0,0"/>
                     </StackPanel>
@@ -114,7 +118,7 @@
                                      It is the same defect as the padding below, in the font. -->
                                 <TextBlock x:Name="SearchPlaceholderText"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeBody}"
+                                           FontSize="{DynamicResource WsBodySize}"
                                            VerticalAlignment="Center"
                                            IsHitTestVisible="False"/>
                                 <!-- Padding 0, like every other search box in the launcher: the
@@ -129,7 +133,7 @@
                                          Padding="0"
                                          Foreground="{DynamicResource TextPrimary}"
                                          CaretBrush="{DynamicResource TextPrimary}"
-                                         FontSize="{StaticResource FontSizeBody}"
+                                         FontSize="{DynamicResource WsBodySize}"
                                          VerticalContentAlignment="Center"/>
                             </Grid>
                         </Border>
@@ -141,7 +145,7 @@
                                 BorderThickness="1"
                                 Padding="16,8"
                                 Margin="0,0,8,0"
-                                FontSize="{StaticResource FontSizeBody}"
+                                FontSize="{DynamicResource WsBodySize}"
                                 Cursor="Hand"
                                 VerticalAlignment="Center"
                                 Height="36"/>
@@ -162,19 +166,22 @@
                                 BorderThickness="1"
                                 Padding="16,8"
                                 Margin="0,0,8,0"
-                                FontSize="{StaticResource FontSizeBody}"
+                                FontSize="{DynamicResource WsBodySize}"
                                 FontWeight="SemiBold"
                                 Cursor="Hand"
                                 VerticalAlignment="Center"
                                 Height="36"/>
 
+                        <!-- Keeps the APP-wide FontSizeTitle while the rest of the
+                             Workshop moved to the compact Ws* scale: this is the height of
+                             a three-dot glyph, not a piece of text. -->
                         <Button x:Name="MoreMenuButton"
                                 Background="Transparent"
                                 Foreground="{DynamicResource TextPrimary}"
                                 BorderBrush="{DynamicResource BorderSubtle}"
                                 BorderThickness="1"
                                 Padding="8,3"
-                                FontSize="{StaticResource FontSizeTitle}"
+                                FontSize="{DynamicResource FontSizeTitle}"
                                 FontWeight="Bold"
                                 Cursor="Hand"
                                 VerticalAlignment="Center"
@@ -192,17 +199,40 @@
                     <Button x:Name="SubTabCatalog" Style="{StaticResource SubTab}"/>
                 </StackPanel>
 
-                <!-- Row 3: filters + sort. -->
-                <Grid Margin="0,8,0,12">
+                <!-- Row 3: filters + sort. The bottom 6 (was 12) pairs with the 6 the filter
+                     chips gained, so the row is unchanged while it fits on one line. -->
+                <Grid Margin="0,8,0,6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <!-- A WrapPanel, and it is load-bearing rather than tidiness.
+
+                         This Grid is `* | Auto`: the sort cluster on the right takes its
+                         desired width FIRST, and whatever is in the star column is arranged at
+                         ITS desired size and then clipped at the column edge — with the
+                         cluster painting over the same pixels. Nothing here has TextTrimming
+                         and a Button cannot ellipsise its own caption, so as a horizontal
+                         StackPanel the chips had no way to give ground: they simply went under
+                         the sort box. It is the same failure the rooms toolbar shipped with
+                         (see TheRoomsTopBarFitsAtTheNarrowestWindow), in the same shape.
+
+                         It was invisible because the whole Workshop used to sit under a
+                         UiScale LayoutTransform that pinned its logical width at ~1100 px for
+                         every window from 900 up. With that gone (see ModsBrowser.xaml.cs) the
+                         row gets the real width: ~852 px at the 900-px minimum against ~846
+                         needed — no slack at all, and none whatsoever once the text-size
+                         setting is above 100 %.
+
+                         Wrapping is the honest answer for a filter strip: the chips fall to a
+                         second line instead of hiding under something. At normal widths the
+                         row is byte-for-byte what it was — a WrapPanel that fits lays out
+                         exactly like the StackPanel it replaces. -->
+                    <WrapPanel Grid.Column="0" Orientation="Horizontal">
                         <TextBlock x:Name="FiltersLabel"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeCaption}"
+                                   FontSize="{DynamicResource WsLabelSize}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"
                                    Margin="0,0,10,0"/>
@@ -211,14 +241,14 @@
                         <Button x:Name="FilterNotInstalled" Style="{StaticResource FilterChip}"/>
                         <Button x:Name="FilterUpdates"      Style="{StaticResource FilterChip}"/>
                         <Button x:Name="FilterCompatible"   Style="{StaticResource FilterChip}"/>
-                    </StackPanel>
+                    </WrapPanel>
 
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
                         <TextBlock x:Name="SortLabel"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeCaption}"
+                                   FontSize="{DynamicResource WsLabelSize}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"
                                    Margin="0,0,10,0"/>
@@ -227,7 +257,7 @@
                                   Foreground="{DynamicResource TextPrimary}"
                                   BorderBrush="{DynamicResource BorderSubtle}"
                                   Width="160"
-                                  FontSize="{StaticResource FontSizeBody}"/>
+                                  FontSize="{DynamicResource WsBodySize}"/>
                     </StackPanel>
                 </Grid>
             </StackPanel>
@@ -256,7 +286,7 @@
                 <TextBlock x:Name="ListSummary"
                            Grid.Row="0"
                            Foreground="{DynamicResource TextSecondary}"
-                           FontSize="{StaticResource FontSizeCaption}"
+                           FontSize="{DynamicResource WsLabelSize}"
                            FontWeight="SemiBold"
                            Margin="24,14,16,8"/>
 
@@ -290,7 +320,7 @@
                                 MaxWidth="280">
                         <TextBlock x:Name="DetailEmptyText"
                                    Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource WsBodySize}"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap"/>
                     </StackPanel>
@@ -320,8 +350,12 @@
                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Bottom"
                                         Margin="0,0,20,-36">
+                                    <!-- App scale: a single letter sized to FILL the 72px
+                                         disc behind it. Shrinking it leaves a big empty
+                                         circle, which is why it is geometry rather than
+                                         type. -->
                                     <TextBlock x:Name="DetailMonogram"
-                                               FontSize="{StaticResource FontSizeDisplay}"
+                                               FontSize="{DynamicResource FontSizeDisplay}"
                                                FontWeight="Bold"
                                                Foreground="White"
                                                HorizontalAlignment="Center"
@@ -343,7 +377,7 @@
                                     <TextBlock x:Name="DetailTitle"
                                                Grid.Column="0"
                                                Foreground="{DynamicResource TextPrimary}"
-                                               FontSize="{StaticResource FontSizeHeading}"
+                                               FontSize="{DynamicResource WsHeadingSize}"
                                                FontWeight="Bold"
                                                TextWrapping="Wrap"
                                                VerticalAlignment="Center"/>
@@ -353,14 +387,14 @@
                                             Padding="8,3"
                                             VerticalAlignment="Center">
                                         <TextBlock x:Name="DetailStateBadgeText"
-                                                   FontSize="{StaticResource FontSizeCaption}"
+                                                   FontSize="{DynamicResource WsLabelSize}"
                                                    FontWeight="SemiBold"/>
                                     </Border>
                                 </Grid>
 
                                 <TextBlock x:Name="DetailDescription"
                                            Foreground="{DynamicResource TextPrimary}"
-                                           FontSize="{StaticResource FontSizeBody}"
+                                           FontSize="{DynamicResource WsBodySize}"
                                            TextWrapping="Wrap"
                                            Margin="0,0,0,16"/>
 
@@ -373,7 +407,7 @@
                                             Visibility="Collapsed">
                                     <TextBlock x:Name="DetailGalleryTitle"
                                                Foreground="{DynamicResource TextSecondary}"
-                                               FontSize="{StaticResource FontSizeCaption}"
+                                               FontSize="{DynamicResource WsLabelSize}"
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,6"/>
                                     <Border Background="{DynamicResource BgPanel}"
@@ -410,7 +444,7 @@
                                      repurposed as 'available languages'. -->
                                 <TextBlock x:Name="DetailFeaturesTitle"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontSize="{DynamicResource WsLabelSize}"
                                            FontWeight="SemiBold"
                                            Margin="0,16,0,6"
                                            Visibility="Collapsed"/>
@@ -425,7 +459,7 @@
                                      unchanged in the common case. -->
                                 <TextBlock x:Name="DetailLinksTitle"
                                            Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontSize="{DynamicResource WsLabelSize}"
                                            FontWeight="SemiBold"
                                            Margin="0,16,0,6"
                                            Visibility="Collapsed"/>
@@ -448,7 +482,7 @@
                                         Visibility="Collapsed">
                                     <TextBlock x:Name="DetailCompatText"
                                                Foreground="{DynamicResource StatusIncompatibleFg}"
-                                               FontSize="{StaticResource FontSizeCaption}"
+                                               FontSize="{DynamicResource WsLabelSize}"
                                                TextWrapping="Wrap"/>
                                 </Border>
                             </StackPanel>
@@ -480,7 +514,7 @@
                                         BorderThickness="0"
                                         Padding="0,10"
                                         FontWeight="SemiBold"
-                                        FontSize="{StaticResource FontSizeBodyStrong}"
+                                        FontSize="{DynamicResource WsBodyStrongSize}"
                                         Cursor="Hand"
                                         Margin="0,0,8,0"/>
                                 <!-- Removing from the collection lives here, not in
@@ -496,9 +530,11 @@
                                         BorderBrush="{DynamicResource BorderSubtle}"
                                         BorderThickness="1"
                                         Padding="12,10"
-                                        FontSize="{StaticResource FontSizeBody}"
+                                        FontSize="{DynamicResource WsBodySize}"
                                         Cursor="Hand"
                                         Margin="0,0,6,0"/>
+                                <!-- App scale, same reason as MoreMenuButton: a glyph,
+                                     not a word. -->
                                 <Button x:Name="DetailMoreButton"
                                         Grid.Column="2"
                                         Background="Transparent"
@@ -506,7 +542,7 @@
                                         BorderBrush="{DynamicResource BorderSubtle}"
                                         BorderThickness="1"
                                         Padding="10,8"
-                                        FontSize="{StaticResource FontSizeTitle}"
+                                        FontSize="{DynamicResource FontSizeTitle}"
                                         FontWeight="Bold"
                                         Cursor="Hand"
                                         Content="⋯">

@@ -55,7 +55,7 @@
              offset). -->
         <Style x:Key="DialogSectionTitle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeSubtitle}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,14"/>
         </Style>
@@ -73,7 +73,7 @@
         <!-- Field label (Name / Author / Installed / Website caption). -->
         <Style x:Key="DialogFieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
@@ -81,7 +81,7 @@
         <!-- Field value -->
         <Style x:Key="DialogFieldValue" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyStrong}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
@@ -101,7 +101,7 @@
              header because each row IS the action, not a sub-section. -->
         <Style x:Key="DialogActionTitle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyStrong}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
         </Style>
@@ -109,7 +109,7 @@
         <!-- Description text under an action title. -->
         <Style x:Key="DialogActionDesc" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
@@ -140,7 +140,7 @@
                     Visibility="Collapsed">
                 <TextBlock x:Name="HeaderVersionText"
                            Foreground="{DynamicResource AccentBrush}"
-                           FontSize="{StaticResource FontSizeCaption}"
+                           FontSize="{DynamicResource FontSizeCaption}"
                            FontWeight="SemiBold"/>
             </Border>
         </controls:TitleBar>
@@ -281,7 +281,7 @@
                                     Style="{StaticResource DialogPillBadge}">
                                 <TextBlock x:Name="ValVersion"
                                            Foreground="{DynamicResource AccentBrush}"
-                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontSize="{DynamicResource FontSizeCaption}"
                                            FontWeight="SemiBold"/>
                             </Border>
                         </Grid>
@@ -297,7 +297,7 @@
                                        Margin="0,2,0,0"/>
                             <TextBlock Grid.Column="1" x:Name="ValWebsite"
                                        Foreground="{DynamicResource AccentBrush}"
-                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontSize="{DynamicResource FontSizeBody}"
                                        Cursor="Hand"
                                        MouseLeftButtonUp="ValWebsite_Click"
                                        TextWrapping="Wrap"/>
@@ -310,7 +310,7 @@
                                 Click="CheckUpdatesBtn_Click"/>
                         <TextBlock x:Name="CheckUpdatesResult"
                                    Margin="0,10,0,0"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Visibility="Collapsed"/>
 
@@ -323,7 +323,7 @@
                                   Visibility="Collapsed"/>
                         <TextBlock x:Name="StayOnVersionHint"
                                    Margin="0,4,0,0"
-                                   FontSize="{StaticResource FontSizeCaption}"
+                                   FontSize="{DynamicResource FontSizeCaption}"
                                    Foreground="{DynamicResource TextSecondary}"
                                    TextWrapping="Wrap"
                                    Visibility="Collapsed"/>
@@ -336,12 +336,12 @@
                                     Margin="0,22,0,0"
                                     Visibility="Collapsed">
                             <TextBlock x:Name="VersionSectionLabel"
-                                       FontSize="{StaticResource FontSizeBodyStrong}"
+                                       FontSize="{DynamicResource FontSizeBodyStrong}"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimary}"/>
                             <TextBlock x:Name="VersionSectionHint"
                                        Margin="0,4,0,0"
-                                       FontSize="{StaticResource FontSizeCaption}"
+                                       FontSize="{DynamicResource FontSizeCaption}"
                                        Foreground="{DynamicResource TextSecondary}"
                                        TextWrapping="Wrap"/>
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -357,7 +357,7 @@
                             </StackPanel>
                             <TextBlock x:Name="VersionStatus"
                                        Margin="0,10,0,0"
-                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontSize="{DynamicResource FontSizeBody}"
                                        TextWrapping="Wrap"
                                        Visibility="Collapsed"/>
                         </StackPanel>
@@ -383,7 +383,7 @@
                                 Padding="14,10">
                             <TextBlock x:Name="ValInstallPath"
                                        Foreground="{DynamicResource SecondaryFixed}"
-                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontSize="{DynamicResource FontSizeBody}"
                                        FontFamily="Consolas"
                                        TextWrapping="Wrap"/>
                         </Border>
@@ -422,7 +422,7 @@
                                 Click="ClearTempBtn_Click"/>
                         <TextBlock x:Name="ClearTempResult"
                                    Margin="0,10,0,0"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Visibility="Collapsed"/>
 
@@ -508,7 +508,7 @@
                              "destructive area". -->
                         <TextBlock x:Name="LblDangerZone"
                                    Foreground="{DynamicResource ErrorBrush}"
-                                   FontSize="{StaticResource FontSizeSubtitle}"
+                                   FontSize="{DynamicResource FontSizeSubtitle}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <TextBlock x:Name="LblDangerZoneDesc"
@@ -541,7 +541,7 @@
                                        Style="{StaticResource DialogActionDesc}"/>
                             <TextBlock x:Name="UserDataPathText"
                                        FontFamily="Consolas"
-                                       FontSize="{StaticResource FontSizeCaption}"
+                                       FontSize="{DynamicResource FontSizeCaption}"
                                        Foreground="#c8d2dc"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"/>
@@ -564,7 +564,7 @@
                                        Visibility="Collapsed"/>
                             <TextBlock x:Name="UserDataOtherAccountPath"
                                        FontFamily="Consolas"
-                                       FontSize="{StaticResource FontSizeCaption}"
+                                       FontSize="{DynamicResource FontSizeCaption}"
                                        Foreground="#c8d2dc"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0"
@@ -708,13 +708,13 @@
                                 Visibility="Collapsed">
                             <TextBlock x:Name="LanguageBusyHintText"
                                        Foreground="{DynamicResource AccentBrush}"
-                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontSize="{DynamicResource FontSizeBody}"
                                        TextWrapping="Wrap"/>
                         </Border>
                         <StackPanel x:Name="LanguageCardList" MaxWidth="520" HorizontalAlignment="Left"/>
                         <TextBlock x:Name="LanguageEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    Margin="0,10,0,0"
                                    Visibility="Collapsed"
                                    TextWrapping="Wrap"/>
@@ -725,7 +725,7 @@
                                    Style="{StaticResource DialogSectionTitle}"/>
                         <TextBlock x:Name="LblAddonsSectionHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,14"/>
 
@@ -733,7 +733,7 @@
 
                         <TextBlock x:Name="AddonsEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    Margin="0,4,0,0"
                                    Visibility="Collapsed"
                                    TextWrapping="Wrap"/>
@@ -745,7 +745,7 @@
                                 Margin="0,16,0,0"/>
 
                         <TextBlock x:Name="AddonsResultText"
-                                   FontSize="{StaticResource FontSizeBody}"
+                                   FontSize="{DynamicResource FontSizeBody}"
                                    Margin="0,10,0,0"
                                    Visibility="Collapsed"
                                    TextWrapping="Wrap"/>

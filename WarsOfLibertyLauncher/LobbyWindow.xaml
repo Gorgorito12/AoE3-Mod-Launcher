@@ -166,7 +166,7 @@
                             <TextBlock x:Name="RoomModIconGlyph"
                                        Text="&#x2694;"
                                        Foreground="{DynamicResource MpActionText}"
-                                       FontSize="{StaticResource FontSizeSubtitle}"
+                                       FontSize="{DynamicResource FontSizeSubtitle}"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"/>
                         </Border>
@@ -182,7 +182,7 @@
                                            x:Name="RoomTitleText"
                                            Foreground="{DynamicResource MpTextHeading}"
                                            FontFamily="{DynamicResource DisplayFont}"
-                                           FontSize="{StaticResource MpRoomNameSize}"
+                                           FontSize="{DynamicResource MpRoomNameSize}"
                                            FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"/>
@@ -201,7 +201,7 @@
                                         VerticalAlignment="Center">
                                     <TextBlock x:Name="RoomCompetitiveBadgeText"
                                                Foreground="{DynamicResource MpCompetitiveText}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                FontWeight="SemiBold"/>
                                 </Border>
                                 <!-- Carries the WORD, not just the pencil. As a 24x22 glyph it
@@ -216,7 +216,7 @@
                                         Style="{StaticResource MpGhostButton}"
                                         Padding="10,3"
                                         Margin="10,0,0,0"
-                                        FontSize="{StaticResource MpLabelSize}"
+                                        FontSize="{DynamicResource MpLabelSize}"
                                         VerticalAlignment="Center"
                                         Visibility="Collapsed"/>
                             </Grid>
@@ -224,7 +224,7 @@
                                  context. Two Runs, so only the state carries the colour. -->
                             <TextBlock x:Name="RoomMetaText"
                                        Foreground="{DynamicResource MpTextFaint}"
-                                       FontSize="{StaticResource MpLabelSize}"
+                                       FontSize="{DynamicResource MpLabelSize}"
                                        TextTrimming="CharacterEllipsis"
                                        Margin="0,5,0,0"/>
                         </StackPanel>
@@ -233,35 +233,35 @@
                             <StackPanel Margin="22,0,0,0">
                                 <TextBlock x:Name="PlayersStatHeader"
                                            Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{StaticResource MpSectionLabelSize}"
+                                           FontSize="{DynamicResource MpSectionLabelSize}"
                                            FontWeight="SemiBold"/>
                                 <TextBlock x:Name="RoomPlayersText"
                                            Foreground="{DynamicResource MpTextPrimary}"
-                                           FontSize="{StaticResource MpStatValueSize}"
+                                           FontSize="{DynamicResource MpStatValueSize}"
                                            FontWeight="SemiBold"
                                            Margin="0,6,0,0"/>
                             </StackPanel>
                             <StackPanel Margin="22,0,0,0">
                                 <TextBlock x:Name="RoomConnHeader"
                                            Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{StaticResource MpSectionLabelSize}"
+                                           FontSize="{DynamicResource MpSectionLabelSize}"
                                            FontWeight="SemiBold"/>
                                 <TextBlock x:Name="RoomConnText"
                                            Foreground="{DynamicResource MpOkTextAlt}"
-                                           FontSize="{StaticResource MpStatValueSize}"
+                                           FontSize="{DynamicResource MpStatValueSize}"
                                            FontWeight="SemiBold"
                                            Margin="0,6,0,0"/>
                             </StackPanel>
                             <StackPanel Margin="22,0,0,0">
                                 <TextBlock x:Name="RoomIdStatHeader"
                                            Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{StaticResource MpSectionLabelSize}"
+                                           FontSize="{DynamicResource MpSectionLabelSize}"
                                            FontWeight="SemiBold"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                     <TextBlock x:Name="RoomIdText"
                                                Foreground="{DynamicResource MpTextPrimary}"
                                                FontFamily="{StaticResource MonoFont}"
-                                               FontSize="{StaticResource MpStatValueSize}"
+                                               FontSize="{DynamicResource MpStatValueSize}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <Button x:Name="CopyRoomIdButton"
@@ -270,7 +270,7 @@
                                             Width="22" Height="20"
                                             Padding="0"
                                             Margin="7,0,0,0"
-                                            FontSize="{StaticResource MpLabelSize}"
+                                            FontSize="{DynamicResource MpLabelSize}"
                                             Foreground="{DynamicResource MpActionText}"
                                             Content="&#x29C9;"
                                             VerticalAlignment="Center"/>
@@ -337,7 +337,7 @@
                                     <TextBlock Grid.Column="0"
                                                x:Name="PlayersListHeader"
                                                Foreground="{DynamicResource MpTextLabel}"
-                                               FontSize="{StaticResource MpPillSize}"
+                                               FontSize="{DynamicResource MpPillSize}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
@@ -386,7 +386,7 @@
                             <StackPanel>
                                 <TextBlock x:Name="PreflightHeader"
                                            Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{StaticResource MpPillSize}"
+                                           FontSize="{DynamicResource MpPillSize}"
                                            FontWeight="SemiBold"/>
 
                                 <Grid Margin="0,10,0,0">
@@ -410,7 +410,7 @@
                                     <TextBlock Grid.Column="1"
                                                x:Name="PreflightModsText"
                                                Foreground="{DynamicResource MpTextBody}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                LineHeight="18"
                                                LineStackingStrategy="BlockLineHeight"
                                                TextWrapping="Wrap"/>
@@ -433,7 +433,7 @@
                                     <TextBlock Grid.Column="1"
                                                x:Name="PreflightRecordText"
                                                Foreground="{DynamicResource MpCautionText}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                LineHeight="18"
                                                LineStackingStrategy="BlockLineHeight"
                                                TextWrapping="Wrap"/>
@@ -442,7 +442,7 @@
                                             Click="PreflightRecordHelp_Click"
                                             Style="{StaticResource MpLinkButton}"
                                             Foreground="{DynamicResource MpAccountElo}"
-                                            FontSize="{StaticResource MpPillSize}"
+                                            FontSize="{DynamicResource MpPillSize}"
                                             Margin="9,0,0,0"
                                             VerticalAlignment="Top"/>
                                 </Grid>
@@ -465,7 +465,7 @@
                                     <TextBlock Grid.Column="1"
                                                x:Name="PreflightAbandonText"
                                                Foreground="{DynamicResource MpCautionText}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                LineHeight="18"
                                                LineStackingStrategy="BlockLineHeight"
                                                TextWrapping="Wrap"/>
@@ -488,7 +488,7 @@
                             <StackPanel>
                                 <TextBlock x:Name="RoomInfoHeaderText"
                                            Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{StaticResource MpPillSize}"
+                                           FontSize="{DynamicResource MpPillSize}"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,10"/>
                                 <Grid x:Name="RoomModRow">
@@ -499,12 +499,12 @@
                                     <TextBlock Grid.Column="0"
                                                x:Name="RoomModLabel"
                                                Foreground="{DynamicResource MpTextFaint}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                Margin="0,0,10,0"/>
                                     <TextBlock Grid.Column="1"
                                                x:Name="RoomModText"
                                                Foreground="{DynamicResource MpTextSecondary}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                                 <Grid Margin="0,7,0,0">
@@ -515,13 +515,13 @@
                                     <TextBlock Grid.Column="0"
                                                x:Name="RoomPasswordLabel"
                                                Foreground="{DynamicResource MpTextFaint}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                Margin="0,0,10,0"/>
                                     <TextBlock Grid.Column="1"
                                                x:Name="RoomPasswordText"
                                                Foreground="{DynamicResource MpPrivateText}"
                                                FontFamily="{StaticResource MonoFont}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                                 <Grid x:Name="RoomCopyRow" Margin="0,7,0,0" Visibility="Collapsed">
@@ -532,12 +532,12 @@
                                     <TextBlock Grid.Column="0"
                                                x:Name="RoomCopyLabel"
                                                Foreground="{DynamicResource MpTextFaint}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                Margin="0,0,10,0"/>
                                     <TextBlock Grid.Column="1"
                                                x:Name="RoomCopyText"
                                                Foreground="{DynamicResource MpTextSecondary}"
-                                               FontSize="{StaticResource MpLabelSize}"
+                                               FontSize="{DynamicResource MpLabelSize}"
                                                TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                             </StackPanel>
@@ -552,7 +552,7 @@
                                     Style="{StaticResource MpPrimaryButton}"
                                     Height="{StaticResource MpPrimaryButtonHeight}"
                                     HorizontalContentAlignment="Center"
-                                    FontSize="{StaticResource FontSizeBody}"
+                                    FontSize="{DynamicResource FontSizeBody}"
                                     FontWeight="SemiBold"
                                     Margin="0,0,0,9"
                                     Visibility="Collapsed"/>
@@ -565,7 +565,7 @@
                                     Style="{StaticResource MpPrimaryButton}"
                                     Height="{StaticResource MpPrimaryButtonHeight}"
                                     HorizontalContentAlignment="Center"
-                                    FontSize="{StaticResource FontSizeBody}"
+                                    FontSize="{DynamicResource FontSizeBody}"
                                     FontWeight="SemiBold"
                                     Margin="0,0,0,9"
                                     Visibility="Collapsed"/>
@@ -620,7 +620,7 @@
                                     <TextBlock Grid.Column="0"
                                                x:Name="ChatHeaderText"
                                                Foreground="{DynamicResource MpTextPrimary}"
-                                               FontSize="{StaticResource MpBodySize}"
+                                               FontSize="{DynamicResource MpBodySize}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
@@ -646,7 +646,7 @@
                                        x:Name="ChatEmptyHint"
                                        Text="No messages yet — say hi!"
                                        Foreground="{DynamicResource MpTextFaint}"
-                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontSize="{DynamicResource FontSizeBody}"
                                        FontStyle="Italic"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
@@ -680,13 +680,13 @@
                                             VerticalAlignment="Center">
                                     <TextBlock Text="⏱"
                                                Foreground="{DynamicResource MpActionText}"
-                                               FontSize="{StaticResource FontSizeSubtitle}"
+                                               FontSize="{DynamicResource FontSizeSubtitle}"
                                                VerticalAlignment="Center"
                                                Margin="0,0,10,0"/>
                                     <TextBlock x:Name="CountdownLabel"
                                                Text="Starting in"
                                                Foreground="{DynamicResource MpTextPrimary}"
-                                               FontSize="{StaticResource FontSizeBody}"
+                                               FontSize="{DynamicResource FontSizeBody}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <!-- Default "5" (not "3") so even the
@@ -695,7 +695,7 @@
                                     <TextBlock x:Name="CountdownNumber"
                                                Text="10"
                                                Foreground="{DynamicResource MpActionText}"
-                                               FontSize="{StaticResource FontSizeHeading}"
+                                               FontSize="{DynamicResource FontSizeHeading}"
                                                FontWeight="Bold"
                                                VerticalAlignment="Center"
                                                Margin="10,0,0,0"/>
@@ -726,13 +726,13 @@
                                                  BorderThickness="1"
                                                  Padding="11,0"
                                                  VerticalContentAlignment="Center"
-                                                 FontSize="{StaticResource MpBodySize}"
+                                                 FontSize="{DynamicResource MpBodySize}"
                                                  MaxLength="500"
                                                  KeyDown="ChatInputBox_KeyDown"
                                                  TextChanged="ChatInputBox_TextChanged"/>
                                         <TextBlock x:Name="ChatPlaceholderText"
                                                    Foreground="{DynamicResource MpTextFaint}"
-                                                   FontSize="{StaticResource MpBodySize}"
+                                                   FontSize="{DynamicResource MpBodySize}"
                                                    IsHitTestVisible="False"
                                                    VerticalAlignment="Center"
                                                    Margin="12,0,0,0"/>
@@ -745,7 +745,7 @@
                                             Width="34" Height="34"
                                             Margin="6,0,0,0"
                                             Content="&#x1F642;"
-                                            FontSize="{StaticResource FontSizeBody}"
+                                            FontSize="{DynamicResource FontSizeBody}"
                                             ToolTip="Insert emoji"/>
 
                                     <Button Grid.Column="2"
@@ -754,7 +754,7 @@
                                             Style="{StaticResource MpPrimaryButton}"
                                             Height="{StaticResource MpFieldHeight}"
                                             Padding="15,0"
-                                            FontSize="{StaticResource MpMetaSize}"
+                                            FontSize="{DynamicResource MpMetaSize}"
                                             FontWeight="SemiBold"
                                             Margin="8,0,0,0"/>
                                 </Grid>
@@ -837,7 +837,7 @@
                                 <TextBlock Grid.Column="1"
                                            x:Name="InGameTitleText"
                                            Foreground="{DynamicResource MpTextPrimary}"
-                                           FontSize="{StaticResource FontSizeCaption}"
+                                           FontSize="{DynamicResource FontSizeCaption}"
                                            FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"/>
@@ -845,7 +845,7 @@
                                            x:Name="InGameMatchTimer"
                                            Foreground="{DynamicResource MpTextPrimary}"
                                            FontFamily="{StaticResource MonoFont}"
-                                           FontSize="{StaticResource MpStatValueSize}"
+                                           FontSize="{DynamicResource MpStatValueSize}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"/>
                             </Grid>
@@ -870,12 +870,12 @@
                                     <StackPanel>
                                         <TextBlock x:Name="InGameTrafficHeader"
                                                    Foreground="{DynamicResource MpTextLabel}"
-                                                   FontSize="{StaticResource MpSectionLabelSize}"
+                                                   FontSize="{DynamicResource MpSectionLabelSize}"
                                                    FontWeight="SemiBold"/>
                                         <TextBlock x:Name="InGameTrafficText"
                                                    Foreground="{DynamicResource MpTextPrimary}"
                                                    FontFamily="{StaticResource MonoFont}"
-                                                   FontSize="{StaticResource FontSizeCaption}"
+                                                   FontSize="{DynamicResource FontSizeCaption}"
                                                    FontWeight="SemiBold"
                                                    Margin="0,7,0,0"/>
                                     </StackPanel>
@@ -888,12 +888,12 @@
                                     <StackPanel>
                                         <TextBlock x:Name="InGameConnectionHeader"
                                                    Foreground="{DynamicResource MpTextLabel}"
-                                                   FontSize="{StaticResource MpSectionLabelSize}"
+                                                   FontSize="{DynamicResource MpSectionLabelSize}"
                                                    FontWeight="SemiBold"/>
                                         <TextBlock x:Name="InGameConnectionText"
                                                    Foreground="{DynamicResource MpOkTextAlt}"
                                                    FontFamily="{StaticResource MonoFont}"
-                                                   FontSize="{StaticResource FontSizeCaption}"
+                                                   FontSize="{DynamicResource FontSizeCaption}"
                                                    FontWeight="SemiBold"
                                                    Margin="0,7,0,0"/>
                                     </StackPanel>
@@ -912,11 +912,11 @@
                                     <StackPanel>
                                         <TextBlock x:Name="InGameRecordingHeader"
                                                    Foreground="{DynamicResource MpTextLabel}"
-                                                   FontSize="{StaticResource MpSectionLabelSize}"
+                                                   FontSize="{DynamicResource MpSectionLabelSize}"
                                                    FontWeight="SemiBold"/>
                                         <TextBlock x:Name="InGameRecordingText"
                                                    Foreground="{DynamicResource MpOk}"
-                                                   FontSize="{StaticResource FontSizeCaption}"
+                                                   FontSize="{DynamicResource FontSizeCaption}"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis"
                                                    Margin="0,7,0,0"/>
@@ -944,18 +944,18 @@
                                     <TextBlock Grid.Column="0"
                                                Text="&#x26A0;"
                                                Foreground="{DynamicResource MpCaution}"
-                                               FontSize="{StaticResource MpMetaSize}"
+                                               FontSize="{DynamicResource MpMetaSize}"
                                                VerticalAlignment="Top"
                                                Margin="0,0,10,0"/>
                                     <StackPanel Grid.Column="1">
                                         <TextBlock x:Name="InGameSoloTitle"
                                                    Foreground="{DynamicResource MpCautionTextAlt}"
-                                                   FontSize="{StaticResource MpMetaSize}"
+                                                   FontSize="{DynamicResource MpMetaSize}"
                                                    FontWeight="SemiBold"
                                                    TextWrapping="Wrap"/>
                                         <TextBlock x:Name="InGameSoloBody"
                                                    Foreground="{DynamicResource MpCautionText}"
-                                                   FontSize="{StaticResource MpLabelSize}"
+                                                   FontSize="{DynamicResource MpLabelSize}"
                                                    LineHeight="19"
                                                    LineStackingStrategy="BlockLineHeight"
                                                    TextWrapping="Wrap"
@@ -991,7 +991,7 @@
                                     Style="{StaticResource MpGhostDangerButton}"
                                     Height="38"
                                     Margin="0,12,0,0"
-                                    FontSize="{StaticResource MpBodySize}"
+                                    FontSize="{DynamicResource MpBodySize}"
                                     FontWeight="SemiBold"/>
                         </Grid>
                     </Border>

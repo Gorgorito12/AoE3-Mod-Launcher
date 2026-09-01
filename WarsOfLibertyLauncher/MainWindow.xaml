@@ -44,7 +44,7 @@
         <Style x:Key="SidebarColoredButton" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="14,9"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -84,7 +84,7 @@
             <Setter Property="Background" Value="#2a2d34"/>
             <Setter Property="Foreground" Value="#ddd"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
             <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="Padding" Value="14,9"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -123,7 +123,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#888"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="0,10"/>
             <Setter Property="Margin" Value="0,0,28,0"/>
@@ -420,7 +420,7 @@
                              already been bitten by twice. -->
                         <TextBlock Text="AoE3 Mod Launcher"
                                    FontFamily="{DynamicResource BodyFont}"
-                                   FontSize="{StaticResource MpMetaSize}"
+                                   FontSize="{DynamicResource MpMetaSize}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
                         <!-- Chevron flips ▾↔▴ in code-behind on open/close to signal
@@ -494,7 +494,7 @@
                         VerticalAlignment="Center"
                         Margin="0,0,10,0"
                         FontFamily="{DynamicResource BodyFont}"
-                        FontSize="{StaticResource FontSizeCaption}"
+                        FontSize="{DynamicResource FontSizeCaption}"
                         Click="LauncherUpdatePill_Click"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True"
                         RenderTransformOrigin="0.5,0.5">
@@ -542,7 +542,7 @@
                     VerticalAlignment="Center"
                     Click="OfflineChip_Click"
                     FontFamily="{DynamicResource BodyFont}"
-                    FontSize="{StaticResource FontSizeCaption}"
+                    FontSize="{DynamicResource FontSizeCaption}"
                     ToolTipService.InitialShowDelay="400"
                     ToolTipService.ShowDuration="8000">
                 <Button.Template>
@@ -667,7 +667,7 @@
                                        Text="Notifications"
                                        Foreground="{DynamicResource ChromeTextStrong}"
                                        FontFamily="{DynamicResource DisplayFont}"
-                                       FontSize="{StaticResource FontSizeBody}"
+                                       FontSize="{DynamicResource FontSizeBody}"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"/>
                             <StackPanel Orientation="Horizontal"
@@ -1007,7 +1007,7 @@
                             <TextBlock x:Name="ConnectionChipStatus"
                                        Foreground="{DynamicResource ChromeTextSoft}"
                                        FontFamily="{DynamicResource BodyFont}"
-                                       FontSize="{StaticResource MpMetaSize}"
+                                       FontSize="{DynamicResource MpMetaSize}"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"/>
                             <!-- ChromeTextDim, not the reference's ChromeTextFaint: that
@@ -1017,7 +1017,7 @@
                                        Margin="8,0,0,0"
                                        Foreground="{DynamicResource ChromeTextDim}"
                                        FontFamily="{DynamicResource BodyFont}"
-                                       FontSize="{StaticResource MpMetaSize}"
+                                       FontSize="{DynamicResource MpMetaSize}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
@@ -1066,7 +1066,7 @@
                                 <TextBlock x:Name="AccountName"
                                            Foreground="{DynamicResource ChromeTextStrong}"
                                            FontFamily="{DynamicResource BodyFont}"
-                                           FontSize="{StaticResource MpMetaSize}"
+                                           FontSize="{DynamicResource MpMetaSize}"
                                            FontWeight="SemiBold"/>
                                 <!-- Collapses when the standing hasn't been fetched. The
                                      rating is pulled once per session from a
@@ -1082,7 +1082,7 @@
                                            Margin="0,1,0,0"
                                            Foreground="{DynamicResource MpAccountElo}"
                                            FontFamily="{DynamicResource BodyFont}"
-                                           FontSize="{StaticResource MpMicroSize}"
+                                           FontSize="{DynamicResource MpMicroSize}"
                                            FontWeight="Medium"/>
                             </StackPanel>
                         </StackPanel>
@@ -1601,7 +1601,7 @@
                             MaxWidth="500">
                     <TextBlock x:Name="SettingsTeaserText"
                                Foreground="{DynamicResource TextPrimary}"
-                               FontSize="{StaticResource FontSizeBodyStrong}"
+                               FontSize="{DynamicResource FontSizeBodyStrong}"
                                TextAlignment="Center"
                                TextWrapping="Wrap"
                                Margin="0,0,0,16"/>

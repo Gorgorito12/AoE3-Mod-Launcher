@@ -1198,6 +1198,106 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `ShareDiagnostics` is `async` and hands the whole export to `Task.Run` — up to ten inflates
   of multi-megabyte files is not the UI thread's work.
 
+- **HISTORY IS NOT A SUBTAB — it is the last section of the PROFILE**, and the two pages were
+  saying the same things. History led with four summary cells (rating, decided record,
+  "didn't count" tally, most-played map) and the Profile already showed every one of them — in
+  its header, its RECORD card and its two stat cells — while the Profile's own "Latest
+  matches" block was a three-row excerpt of History's list sitting under a link back to it.
+  One page, one set of numbers. `BuildProfileHistory` composes the section; `BuildHistoryRow`,
+  `BuildHistoryDayHeader` and everything in `MatchHistoryView` are untouched.
+  **Two consequences worth knowing.** The filter chips scroll away with the page — the Profile
+  is one `ScrollViewer`, so they cannot stay pinned the way they did on a screen of their own;
+  don't "fix" that by nesting a second scroller. And the history fetch is kicked from
+  `RenderProfileTab`, beside the standing and the community stats, **not** from the subtab's
+  click handler: this page is also reached without a click (a session-state change re-enters it
+  through `RefreshFromSession`), and from the handler alone that path showed an empty history
+  for ever. `MultiplayerTab.ShowHistory()` survives as an alias for `ShowProfile()` because its
+  caller — the "your match was scored after all" notification — still means exactly that.
+
+- **CLASIFICACIÓN / HISTORIAL / PERFIL were rebuilt to the design handoff
+  (`docs/design_handoff_ranking_historial_perfil/`, options 3a/3b/3c), and the ONE defect all
+  three shared is the width.** Every one of them stretched to the window: on a 2560-px monitor
+  the ladder's RATING column sat about a metre from the name it belonged to, and a history card
+  ran the opponent's name to the right edge with the delta a screen away from the result. Each
+  page is now a bounded column — **820 px on Ranking and History, 900 on Profile,
+  `HorizontalAlignment="Stretch"`** — they fill the window.
+
+  **THE WIDTH WENT ROUND THREE TIMES AND THE ANSWER IS NOT WHERE THE HANDOFF PUTS IT.** It
+  bounds these to 820/900 left-aligned, which is right for its own 1240-px frame and leaves
+  more than half of a real 2000-px window empty; centring it split the emptiness and was
+  rejected too. The pages stretch now.
+
+  **What makes stretching safe is WHICH column absorbs the surplus, and getting that backwards
+  reproduces the exact defect the rebuild started from.** In the ladder the flexible column is
+  **RATING**, not PLAYER (`Services/Multiplayer/RankingTableLayout.cs`): RATING's cell holds
+  the comparative bar, so a wide window lengthens a piece of data and the name stays beside its
+  own figure — with PLAYER flexible, which is the obvious reading of the handoff's fixed-width
+  mockup, a 2000-px window puts the name hard left and its rating about 1500 px away. PLAYER
+  carries a `MaxWidth` for the same reason, generous enough never to bind at the 900-px
+  minimum. Pinned from both ends by
+  `DialogXamlTests.TheMultiplayerPagesFillTheWindowAndTheLadderGrowsByItsBar` and
+  `RankingTableLayoutTests`, together, because either half alone can be satisfied by breaking
+  the other.
+
+  **In HISTORY the card fills the window and two blocks INSIDE it do not** — the roster and the
+  amber note (`HistoryInnerBlockWidth` / `HistoryNoteWidth`). Both are "a name on the left, a
+  result on the right" laid out in a row, which is unreadable at 1900 px. The card's own delta
+  is deliberately NOT capped: it lands at the same x on every card, so it reads as a column
+  down the page rather than as a stray number. Same reasoning leaves the Profile header alone —
+  it is a banner, and the rating on its right is the page's headline.
+  Three more rules came out of the rebuild and each of them is a refusal:
+
+  **(a) The PAGE does not scroll; the LIST inside it does.** That is what makes "your row pinned
+  to the foot of the table" mean anything — pinning inside a page that scrolls as a whole is
+  just appending a duplicate row at the end. `RankingPinnedRow` is shown only while the viewer's
+  real row is outside `RankingRowsScroll`'s viewport (`UpdateRankingPinnedRow`, hooked to
+  `ScrollChanged` and kicked once at `DispatcherPriority.Loaded` — asking before the first
+  layout compares against a zero-height viewport and pins a row on a table that fits). It also
+  keeps History's four summary cells and Ranking's footnote on screen at every window height.
+
+  **(b) THERE IS NO `PROVISIONAL` TAG IN THE LADDER, and the handoff asks for one.** It was
+  measured in this repo and it marks EVERYBODY: `rd` does not fall under 110 until roughly the
+  fourteenth rated match, and never at all for a player who keeps winning, because a rising
+  rating re-inflates the deviation as fast as the update shrinks it — so the community's best
+  player would wear it for ever. A mark on 100 % of the rows distinguishes nothing. The DECIDED
+  and the new **W-D/V-D** columns are the honest version of the same caveat, and are most of why
+  the record column was added: a count of settled matches says nothing about how they went.
+  The tag DOES stay on the Profile, where it means something else and can be false — see (c).
+
+  **(c) "Provisional" on the Profile means NOT ON THE LADDER YET, not "the deviation has not
+  settled"** (`ProfileSummaryView.IsProvisional`, over the server's `min_decided` versus
+  `games_played`). It is a state a player can leave, can see the distance to, and that the page
+  can state in matches rather than in units of Glicko deviation — which is what the record card's
+  segments and its "N more rated matches" sentence do. **Below that bar the win PERCENTAGE is not
+  shown at all**; the W-L record is. That is the specific fix for a real complaint: the old page
+  led with "0 % wins" for a player whose single decided match was a loss, which is the most
+  discouraging number the launcher could have chosen and is not a rate. `PlayerStanding` is
+  untouched — the rule lives in the presentation, where it belongs.
+
+  **Two backend fields were added for this, both additive and neither needing a migration.**
+  `GET /matches/history/:userId` now selects `m.rated, m.unrated_reason` (stored since migration
+  `0006` and simply never selected), which is what lets a card that did not count state the REAL
+  reason through `MatchOutcomeView.UnratedNoteKey` — the same mapping the end-of-match card uses,
+  so the two surfaces cannot tell a player different things about one match. Without it the card
+  could only ever guess "nobody recorded it", which is right for the common case and wrong for a
+  team game, a friendly room or a mod with no ladder. And `/stats/community` gained
+  `ranked_players` / `ranked_players_team`, a `COUNT(*)` sharing `LADDER_WHERE` with the list
+  itself — the profile's "rank 7 of 18" would otherwise have to count the rows it was sent, and
+  the day the league passes the page size that sentence would quietly start reporting the page as
+  the size of the community. `GET /me` needed nothing: it has always sent `users.created_at` and
+  no client had ever deserialized it. **Null/0 on an older backend means "not said", and every
+  reader treats it that way** rather than inventing a denominator or a reason.
+
+  **What the reference asks for and is deliberately NOT built:** "Buscar jugador" (no user-search
+  endpoint, and that bar is Rooms chrome), "Editar perfil" (the name and avatar are Discord's),
+  the other-player profile with its Invite/Add-friend pair (there is no other-player profile, and
+  Friends is still a placeholder), and **"Revancha"** — creating a room and inviting the opponent
+  is a feature, and a button that looks like one and does nothing is worse than its absence. The
+  mod and time-window pills in the ladder's header are drawn as **chips, not filters**:
+  `/stats/community` accepts neither parameter, so a control there would filter nothing; they
+  state the scope, and the window's number is the server's `totals.window_days` rather than a
+  hardcoded "30 days".
+
 - **The Profile tab shows a SERVER-side standing, and the win rate divides by DECIDED games —
   never by games played.** Everything on that tab lives in the backend's `elo_ratings` table
   (Glicko, `src/elo/glicko2.ts`); the launcher stores only a per-session copy. `GET
@@ -1301,10 +1401,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   match_reported`) tears down the lobby window for everyone. (4) **`result=0.5` is
   now the FALLBACK, not the design** — a clean human 1v1 reports the real winner
   (result-wiring bullet below); a team game, an unreadable recording or one refused
-  by any gate still reports all-draws. `BuildHistoryRow` shows `mod [Win|Loss] [±ELO] ·
-  map · duration · date` over one line per player (avatar, name, won/lost, their own ±ELO) —
-  see the roster paragraph above for what it refuses to show. **The backend never needed a change for any of
-  this** — an earlier note here claimed it forced 0.5; it does not. `POST /matches`
+  by any gate still reports all-draws. `BuildHistoryRow` is now the design handoff's card — a
+  coloured stripe down the left, the verdict and the opponent on line one, `mod · map · start
+  · end` on line two, the delta as the largest type on the card and hard right, and the roster
+  under an inner rule. It used to say the same thing three times (a `Loss` pill beside a `-117`
+  pill, then the per-player lines) and print the full date inside every card; the date is a
+  per-DAY separator now. See the roster paragraph above for what it refuses to show.
+  **The backend needed no change for the all-draws question** — an earlier note here claimed it
+  forced 0.5; it does not. (It DID gain two fields for the redesign, `rated` and
+  `unrated_reason` on the history row — see the Clasificación/Historial/Perfil bullet above.) `POST /matches`
   has always taken `p.result` per participant, validated the sum against N/2, fed it
   to Glicko via `applyMatch`, and returned `result`/`map_name`/`rating_*` from
   `GET /matches/history/:userId`. The all-draws came from the LAUNCHER. No redeploy.
@@ -2600,8 +2705,20 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   and a report with no `lobby_id` answers `not_competitive` instead of `no_lobby` — a worse
   message and, worse, a false one. Pinned by the `no_lobby` case in `ratability.test.ts`.
   **A competitive room also DECLARES A FORMAT — 1v1 / 2v2 / 3v3 — and the format is its SIZE.**
-  Ticking the box reveals a segmented row; picking one sets the seat count (2 / 4 / 6) and locks
-  the player-count row while the box stays ticked. **The format is DERIVED from
+  The segmented row is ALWAYS on screen and **picking one is itself how you declare the room
+  competitive** — it ticks the box, sets the seat count (2 / 4 / 6) and locks the player-count row.
+  It used to be revealed BY the tick, which made one decision take two steps and jumped the
+  dialog's height; reported and changed.
+  **What being visible put at risk, and the rule that answers it: while the room is casual NOTHING
+  in that row is lit.** `SelectFormat` used to tag the active segment unconditionally — invisible
+  while the row was hidden, and a lie the moment it is not, since a casual room would show `1v1`
+  highlighted directly under a "Max players: 8" it contradicts, and would be asserting the one
+  thing this model refuses to assert (below). So the selection is painted in `RefreshCompetitiveUi`
+  and nowhere else, gated on `competitive`. The constructor still PICKS a format — so that ticking
+  the box lands on something — and the guard that stops that pick from moving the seats is
+  untouched. Pinned by `CreateLobbyDialog_LoadsItsXaml` (nothing lit, still 8 seats, all enabled)
+  and `PickingAFormatMakesTheRoomCompetitive`, which goes through the real Click event because the
+  half that fails silently is the wiring, not the handler. **The format is DERIVED from
   `(competitive, max_players)` by the pure `Services/Multiplayer/RoomFormats`, never sent** —
   which is why `POST /lobbies` now also requires a competitive room to be 2, 4 or 6 seats and
   downgrades it to casual otherwise. Without that clamp a patched client could create a
@@ -3064,8 +3181,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   which is not the same as one nobody has qualified for yet, and offering a tab that can only
   ever be empty is worse than not offering it. The selector reuses the `SubTab` style rather
   than `MpSegment`, which lives in `CreateLobbyDialog` and is not reachable from this file.
-  **The five column widths are now written in THREE places** — the strip's XAML header,
-  `BuildLeaderboardRow`, and `BuildRankingHeader` — and must be changed together. Peak hours is bucketed
+  **The column widths used to be written in three places and now live in ONE**:
+  `Services/Multiplayer/RankingTableLayout.cs`, which both `BuildRankingHeader` and
+  `BuildLeaderboardRow` read (`RankingTableLayoutTests`). Header and rows drifting apart
+  misaligns every row in the table, and it is a break no compile can see and no screenshot on a
+  wide monitor shows — a comment in each place asking the next reader to remember is not a
+  mechanism. The strip's own header lost its copy earlier, when it went to the handoff's
+  four-field row. Peak hours is bucketed
   from `lobbies.created_at` — rooms OPENED, which is what the card's wording says, not
   matches played — sent in UTC and shifted to local by `CommunityStatsView.ToLocalHours`;
   below `MinSampleRooms` the card hides rather than dressing four rooms up as a finding.
@@ -3123,6 +3245,39 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   written before the request, so a fetch that FAILED burned the full minute and the strip stayed
   dead however many times the user tried — the one state where retrying is the right instinct was
   the one where it did nothing.
+
+  **AND THEN IT GOT AN ACTUAL TIMER, because activation edges are not "live".** Reported the way
+  it actually feels: the strip only moved when the user went to Workshop and came back, which is
+  the edge doing its job. It now rides the EXISTING 5-second `_roomsListTimer` tick rather than
+  taking a timer of its own — that tick is already gated on tab-visible + signed-in +
+  `_activeSubtab == Rooms`, which is exactly where the strip lives (inside `RoomsPageScroll`), and
+  the cadence comes free from `ActivityMaxAge`: asked every 5 s, it fetches once a minute. **A
+  second timer would be a second cadence, free to drift from the one the method already
+  enforces.**
+  **The one thing added is a FOREGROUND check, and it is what pays for the whole feature.**
+  `/stats/community` allows 30/min and **2000/DAY per IP**; a 60-second poll with the tab left
+  open is **1440/day from one launcher**, so two behind one address (a house with two PCs, or a
+  CGNAT — common for this player base) break the daily cap, and the server's own 60 s memo does
+  not help because the quota is counted BEFORE the cache is consulted. Minimising to the taskbar
+  does NOT stop these timers — only closing to the tray does — so "left open all day" is the
+  ordinary case. With `MainWindow.IsActive`, an hour of actually watching costs 60 requests and
+  the daily cap is unreachable. **Don't drop that check to make the strip refresh while the
+  window is in the background; there is nobody there to see it.**
+  **The "31 min ago" labels tick separately and for free** (`_activityAgeCells` +
+  `RefreshActivityAgeCells`, on the 3-second `_roomsPingTimer`), a straight copy of
+  `_roomAgeCells`/`RefreshRoomAgeCells` — including the part that matters, **clearing the list
+  at the top of `FillRecentMatchesAsync`**, or every rebuild leaves it ticking TextBlocks that
+  are no longer in the tree. `BuildCommunityMatchRow` takes the list as an optional parameter so
+  it stays `static` for the tests; the legacy `BuildActivityMatchRow` fallback registers nothing
+  because its row carries no age at all. Pinned by `ACommunityMatchRowHandsBackItsAgeLabel`,
+  whose reference check against the row's own children is the point — registering a label that
+  is not in the row would tick something invisible and look perfectly fine, the same shape as the
+  roster health dots.
+  **`EnterResultPhase` also drops the window**, beside the `_cachedStanding` drop it already
+  does, and for the same reason (it is the one point BOTH roles pass through). **It does not make
+  your match appear instantly and the comment there says so**: the server memoises this payload
+  for 60 s in a single slot shared by every client. What it buys is our window aligned with the
+  EVENT rather than with whenever the user last looked.
 
   **The community's NUMBERS live under the recent matches, not in a card of their own.** They
   were stacked above the ladder; they read as that card's footer instead, since the list is what
@@ -3204,7 +3359,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   It was on the coloured bar. A `Border` is hit-testable only over the rectangle it paints, and on
   the real sample (119 rooms over 30 days, 11 in the busiest hour) a quiet hour's bar is **1-3 px
   tall in a 34-px cell and ~6 px wide**: 91-97 % of every column was dead, and the pointer had to
-  hold still inside those pixels for the 400 ms default delay. The dead part fell through to
+  hold still inside those pixels for the default delay — **1000 ms**, measured off the property's
+  metadata; the 400 ms these notes used to quote is `SystemParameters.MouseHoverTime`, a
+  different thing. The dead part fell through to
   `ActivityPeakCard`, which carries no tooltip — **WPF resolves tooltips UPWARD from the hit
   element and never downward into children**, so nothing rescued it. Measured after the fix: the
   target went from ~12×3 px to **12×34**.
@@ -3223,8 +3380,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `IsHitTestVisible="False"`, an ancestor tooltip winning, the `ScrollViewer`, the app-wide
   `ToolTip` style, `TooltipHelper.Wrap`, and `MpAlertOverlay`'s scrim (it removes itself from the
   tree — `host.Children.Remove`). **The suspect left standing is WIDTH:** a column is ~8-12 px and
-  the tooltip wants the pointer held still inside it for the 400 ms default delay, so fixing the
-  height fixed half the target. Wider columns mean fewer bars, and 24 bars is what was asked for —
+  the tooltip wants the pointer held still inside it for the default delay, so fixing the height
+  fixed half the target. **And that delay is a FULL SECOND, not the 400 ms assumed at the time** —
+  measured since, off `ToolTipService.InitialShowDelayProperty`'s own metadata. It does not
+  vindicate the reverted fix, but it does make the surviving suspect a good deal more plausible,
+  and it suggests the cheap thing to try next: a short `InitialShowDelay` on the bars, the way
+  `RevealText` sets one on the text it reveals. NOT re-bucketing the hours, which was proposed,
+  built and rejected. Wider columns mean fewer bars, and 24 bars is what was asked for —
   **do not "fix" this by bucketing hours again**: that was proposed, built and rejected.
   An hour AXIS under the bars was the other attempt and is also gone: at ~8 px a column, a
   `TextBlock` measured against less room than it needs clips mid-glyph, so the labels read "0("
@@ -3253,6 +3415,19 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Spanish against that fixed budget. Nothing else can see this failure: it is not an overflow (a
   star column that shrinks reports nothing — the same blindness the tab's own overflow diagnostic
   has), it throws nothing, and it looks perfect on a wide monitor.
+
+  **THIS SHAPE HAS NOW APPEARED TWICE, so it is worth naming: a `* | Auto` row whose star column
+  holds items that cannot trim.** The `Auto` side takes its width first, the star side is arranged
+  at its own desired size and clipped at the column edge, and the `Auto` content paints over the
+  same pixels. The second instance was the WORKSHOP's filter chips, which had been protected by
+  that tab's own `UiScale` transform until it was removed — a Button cannot ellipsise its caption,
+  so the chips had no way to give ground and went under the sort box. Fixed there by making the
+  strip a `WrapPanel`, which removes the possibility rather than budgeting for it.
+  **And note why a measuring test cannot find either one on its own:** `Measure` clamps
+  `DesiredSize` to the constraint it is handed, so a panel that overflows reports a width that
+  fits. Both tests work around it — this one by measuring at INFINITE width against a
+  hand-computed budget, the Workshop's by asserting the panel TYPE and treating the numbers as
+  the secondary check.
 
   **THE HISTOGRAM IS BACK TO 24 BARS, ONE PER HOUR, WITH THE HOUR IN A TOOLTIP — and "how it was
   before" was literally `git show HEAD`.** The eight three-hour buckets were an uncommitted change

@@ -119,6 +119,13 @@ public partial class LauncherSettingsDialog : Window
     /// </summary>
     private readonly System.Collections.Generic.List<string> _extraTxRepos = new();
 
+    /// <summary>
+    /// Guards <see cref="TextScaleCombo_SelectionChanged"/> while the combo is being
+    /// populated or re-selected in code. Without it, rebuilding the items on a language
+    /// change would fire the handler and apply a size the user never picked.
+    /// </summary>
+    private bool _suppressTextScale;
+
     public LauncherSettingsDialog(LauncherConfig config)
     {
         InitializeComponent();
@@ -170,6 +177,11 @@ public partial class LauncherSettingsDialog : Window
         TabTranslationsLabel.Text = Strings.Get("DlgLauncherSettingsSectionDeveloper");
         TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
         TabPrivacyLabel.Text = Strings.Get("DlgLauncherSettingsSectionPrivacy");
+
+        TextScaleLabel.Text = Strings.Get("DlgSettingsTextScaleLabel");
+        TextScaleHint.Text = Strings.Get("DlgSettingsTextScaleHint");
+        SetTip(TextScaleCombo, "DlgSettingsTextScaleTip");
+        BuildTextScaleItems();
 
         TabOrderLabel.Text = Strings.Get("DlgLauncherSettingsTabOrderLabel");
         TabOrderHint.Text = Strings.Get("DlgLauncherSettingsTabOrderHint");
@@ -392,6 +404,8 @@ public partial class LauncherSettingsDialog : Window
         }
         if (RadAsstCombo.SelectedItem == null)
             RadAsstCombo.SelectedIndex = 0;
+
+        SelectTextScale(_config.EffectiveTextScale);
 
         // Top-tab order: seed the working copy from the sanitised config
         // value and render the reorderable rows.
@@ -1069,6 +1083,122 @@ public partial class LauncherSettingsDialog : Window
         _ => Strings.Get("TopTabPlay"),
     };
 
+    // ---------------------------------------------------------------- text size
+
+    /// <summary>
+    /// Fills the text-size combo. Rebuilt from <see cref="ApplyLanguage"/> rather than
+    /// declared in XAML because "Automatic" is a word, and the percentages carry one too.
+    /// </summary>
+    private void BuildTextScaleItems()
+    {
+        var previous = SelectedTextScale();
+        _suppressTextScale = true;
+        try
+        {
+            TextScaleCombo.Items.Clear();
+            foreach (var choice in Services.TextScale.Choices)
+            {
+                TextScaleCombo.Items.Add(new ComboBoxItem
+                {
+                    Tag = choice,
+                    Content = choice == Services.TextScale.Auto
+                        ? Strings.Get("DlgSettingsTextScaleAuto")
+                        : Strings.Format("DlgSettingsTextScalePercent", choice),
+                });
+            }
+        }
+        finally
+        {
+            _suppressTextScale = false;
+        }
+        SelectTextScale(previous);
+    }
+
+    private void SelectTextScale(string? value)
+    {
+        var wanted = string.IsNullOrWhiteSpace(value) ? Services.TextScale.Auto : value.Trim();
+        _suppressTextScale = true;
+        try
+        {
+            foreach (ComboBoxItem item in TextScaleCombo.Items)
+            {
+                if (!string.Equals(item.Tag as string, wanted, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                TextScaleCombo.SelectedItem = item;
+                break;
+            }
+            // An unrecognised config value (hand-edited, or from a newer build) falls back to
+            // the first entry rather than leaving the combo blank. That entry is Automatic,
+            // which is also the default — so a config nobody can read shows what a fresh
+            // install shows, instead of quietly selecting a size the user never picked.
+            if (TextScaleCombo.SelectedItem == null && TextScaleCombo.Items.Count > 0)
+                TextScaleCombo.SelectedIndex = 0;
+        }
+        finally
+        {
+            _suppressTextScale = false;
+        }
+        RefreshTextScaleResolvedLine();
+    }
+
+    private string SelectedTextScale()
+        => (TextScaleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? Services.TextScale.Auto;
+
+    /// <summary>
+    /// Previews the chosen size immediately. Every font size in the app is a
+    /// <c>DynamicResource</c>, so this re-lays out the live windows — including this one,
+    /// which is the point: a text size you cannot see until you close the dialog is not
+    /// something anybody can choose between.
+    /// </summary>
+    private void TextScaleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressTextScale) return;
+        App.RefreshTextScale(SelectedTextScale());
+        RefreshTextScaleResolvedLine();
+    }
+
+    /// <summary>
+    /// Puts the live preview back to what is actually saved. Called from
+    /// <see cref="OnClosed"/> rather than from Cancel, so the ✕ and Esc — which never
+    /// reach a button handler — are covered by the same line.
+    /// </summary>
+    private void RevertTextScalePreview()
+    {
+        if (ChangesSaved) return;
+        App.RefreshTextScale(_config.EffectiveTextScale);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        RevertTextScalePreview();
+        base.OnClosed(e);
+    }
+
+    /// <summary>
+    /// The line under the combo: what the setting resolved to, and — on Automatic — what it
+    /// resolved it FROM.
+    ///
+    /// <para>It is not decoration. Automatic is the default, so without this the setting
+    /// would silently pick a size and never say which, and a panel that did not report its
+    /// diagonal would be indistinguishable from one the launcher decided to leave alone.</para>
+    /// </summary>
+    private void RefreshTextScaleResolvedLine()
+    {
+        var screen = Services.TextScale.DescribePrimaryScreen();
+        var percent = (int)Math.Round(App.TextScaleFactor * 100);
+
+        if (!string.Equals(SelectedTextScale(), Services.TextScale.Auto, StringComparison.OrdinalIgnoreCase))
+        {
+            TextScaleResolvedText.Text = "";
+            return;
+        }
+
+        TextScaleResolvedText.Text = App.TextScaleDiagonalInches is double inches
+            ? Strings.Format("DlgSettingsTextScaleResolved",
+                             inches.ToString("0.#"), screen.Width, screen.Height, percent)
+            : Strings.Format("DlgSettingsTextScaleResolvedUnknown", percent);
+    }
+
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         // Non-modal: just Close(). ChangesSaved stays false by default,
@@ -1213,6 +1343,18 @@ public partial class LauncherSettingsDialog : Window
         // would be writing to files the launcher has no reason to hold open.
         _config.EnableGameRecording = GameRecordingCheck.IsChecked == true;
         _config.GameRecordingReminderMuted = RecordReminderCheck.IsChecked != true;
+
+        // Text size (Interface section). Already applied live by the combo, so there is
+        // nothing to re-apply here — only the choice to persist.
+        //
+        // The "explicitly chosen" flag is set ONLY when the value actually changes, exactly as
+        // the language one is: saving Settings without touching this combo must not lock the
+        // config out of a future default. Until it is set the config FOLLOWS the default, which
+        // is what lets that default ever reach anybody — see LauncherConfig.TextScaleExplicitlyChosen.
+        var pickedScale = SelectedTextScale();
+        if (!string.Equals(pickedScale, _config.EffectiveTextScale, StringComparison.OrdinalIgnoreCase))
+            _config.TextScaleExplicitlyChosen = true;
+        _config.TextScale = pickedScale;
 
         // Top-tab order (Interface section). Persist the working copy;
         // MainWindow re-applies it to the nav bar on the post-save

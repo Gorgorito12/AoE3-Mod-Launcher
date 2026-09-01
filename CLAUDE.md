@@ -244,8 +244,50 @@ and the multiplayer sizes went to the floor. **What survives those two refusals 
 ORDER they established:** fidelity first, and a deviation only once the reference has had
 a fair run and something concrete is wrong with it. Two cheaper remedies were spent first
 — the text ramp was re-coloured to clear 4.5:1 so the sizes would not have to move, and
-magnifying the whole surface through `UiScale` was tried and rejected on sight. See
-`MpLabelSize` in `Tokens.xaml`, which carries the full history.
+magnifying the whole surface through `UiScale` was tried and rejected on sight.
+**And then it went round a FOURTH time and back to the reference**, because a lever that did
+not exist before arrived: `Services/TextScale.cs`, a launcher-wide text-size setting that
+multiplies the type and nothing else. So the fidelity-first order held after all — the
+deviation was a stand-in for a fix nobody had built yet, and it lasted exactly as long as that
+was true.
+**The fifth and sixth turns were about the DEFAULT rather than the numbers, and they cancel —
+but each was right about something, so both are worth keeping.** The setting shipped defaulting
+to "Automatic", which resolves to 115 % on a 32" desktop: on the very machine the complaints
+came from it silently multiplied the just-restored handoff values back to where they had been,
+and a default that undoes the change it exists to enable is not a default. So it went to `100`.
+**That lasted one round, because the curve only ever RAISES.** With the default at 100 it is the
+SMALL screens that end up on the smallest type in the launcher — 11.5 px labels, 9.5 px captions
+— which is the size this very bullet calls unreadable at 125/150 %. A big monitor showing more
+than the reference asks for is a smaller failure than a laptop showing less than anyone can
+read, so Automatic is the default again. Its floor of 1.0 was questioned in the same argument
+and kept deliberately; the machine-by-machine table that decision was taken on is in
+`TextScaleTests`.
+**Then the curve itself came down a step, and that is the only move in this whole argument that
+was settled by LOOKING rather than by arithmetic.** 115 % was derived — it is exactly what
+returns a 32" to the size it showed before the tokens were reverted. Shipped to that machine,
+13.2 px read as too big. The 29-34" band is **1.10** now and the band above it **1.20**;
+`MaxFactor` stays 1.25, because that is the ceiling of the SETTING (the dropdown offers an
+explicit 125 %) and not of the curve. Every earlier version of these numbers was argued in the
+abstract, which is worth more than the numbers.
+**And moving that default reached NOBODY until a second change landed, which is the part worth
+remembering: a value nobody chose is not a setting.** Every `LauncherConfig` property is
+serialised on the first `Save()`, and Save runs constantly, so the 100 default was stamped into
+every config that ran that one build within minutes — indistinguishable from a choice. Moving
+the default back changed nothing on those machines, and the setting looked broken while doing
+exactly what it said. So `TextScaleExplicitlyChosen` (set ONLY when the value in Settings
+actually changes, the same rule `LanguageExplicitlyChosen` follows) now gates it: until then the
+config FOLLOWS `DefaultTextScale`, and `LauncherConfig.EffectiveTextScale` is what every reader
+uses — never the raw `TextScale`. `App.OnStartup` reads both keys out of the JSON and resolves
+them through the SAME `LauncherConfig.ResolveTextScale`, because that method having its own
+simpler copy of the rule is what caused the previous bug in this same pair. See `MpLabelSize` in `Tokens.xaml`, which carries the full history.
+
+**There are TWO handoffs in `docs/` and they cover different screens.**
+`design_handoff_multiplayer_ui/` is Rooms, Create-room, the lobby and the in-game surface;
+`design_handoff_ranking_historial_perfil/` (options 3a/3b/3c) is Clasificación, Historial and
+Perfil. Read the `.html` prototype in either, not only its README — the prose omits values the
+markup carries. Where the second one was deliberately NOT followed (the PROVISIONAL tag in the
+ladder, the filter pills that filter nothing, the Revancha button), the reasons are in
+`.claude/rules/multiplayer.md` rather than here.
 
 ## Important gotchas
 
@@ -4294,17 +4336,58 @@ engine** and the UI binds to it.
   resources (`FontSizeCaption=13`, `FontSizeBody=14`, `FontSizeBodyStrong=15`,
   `FontSizeSubtitle=16`, `FontSizeTitle=18`, `FontSizeHeading=24`,
   `FontSizeDisplay=34`) live next to `DisplayFont`/`BodyFont`. Bind via
-  `FontSize="{StaticResource FontSizeBody}"` in XAML, or — in code-behind that
+  `FontSize="{DynamicResource FontSizeBody}"` in XAML, or — in code-behind that
   builds elements — `(double)FindResource("FontSizeBody")` from an instance
   method (cache it; see `ModsBrowser`'s ctor `_fsCaption`/`_fsBody`/
   `_fsBodyStrong`) **or `(double)Application.Current.FindResource("FontSizeBody")`
   from a `static` builder/helper** (instance `FindResource` won't compile there —
   `MultiplayerTab`'s `BuildBadge`, `MpAlertOverlay`, and `MainWindow`'s static card
-  builder all use the `Application.Current` form). `StaticResource` on purpose
-  (app-lifetime constants — no runtime text-scale feature). **Floor is 13, body
+  builder all use the `Application.Current` form).
+  **`DynamicResource`, and this REVERSES what this bullet used to say** ("StaticResource
+  on purpose — app-lifetime constants, no runtime text-scale feature"). There is one now:
+  `Services/TextScale.cs` + the "Tamaño del texto" setting in Settings → Interface
+  (Automatic / 100 / 110 / 125 %), which multiplies every size token in
+  `Application.Current.Resources` and **nothing else** — no transform, no padding, so the
+  layout is unchanged at any setting and ClearType survives. A `{StaticResource}` is
+  resolved when the XAML is PARSED and baked into the Setter, so it would simply never see
+  that value: the ~90 code-behind `FindResource` sites (runtime lookups) would scale and the
+  ~390 XAML ones would not. **A new font size MUST be a `{DynamicResource}`** — a
+  `StaticResource` that slips through does not fail the build and does not throw, that one
+  piece of text just silently stops scaling, which is why
+  `TextScaleTests.NoFontSizeTokenIsStillAStaticResource` walks the XAML looking for them.
+  **Two chrome tokens are the deliberate exception and stay `StaticResource`:**
+  `TitleBarTitleSize` and `TitleBarGlyphSize` sit in a bar whose height is a fixed token
+  that `App.ApplyWindowChrome` also derives `WindowChrome.CaptionHeight` from — text growing
+  inside a caption region that cannot grow with it is the documented silent-breakage zone.
+  **That conversion also fixed a blind TEST, and the finding is worth keeping:** with
+  `StaticResource`, `MpSecondaryButton`'s font size did not resolve inside `DialogXamlTests`'
+  harness, so the rooms toolbar's buttons measured at the WPF default 12 while the app
+  painted them at 14 — `TheRoomsTopBarFitsAtTheNarrowestWindow` was passing over a bar that
+  really was ~22 px too wide and painting over the subtab strip. The captions were taken down
+  to `MpLabelSize` (locally, not on the shared styles) to pay for it.
+  **THREE SCALES SHIP, and which one a surface is on is a decision, not an accident.** The
+  app-wide `FontSize*` set (13/14/15/16/18/24/34) dresses the Library, every dialog and the
+  shared styles. The multiplayer surface has `Mp*Size` and the Workshop has `Ws*Size`, both
+  smaller and holding the SAME values — separate tokens on purpose, because pointing one at
+  the other chains two surfaces together and the next person tuning one moves the other
+  without knowing (pinned by `TextScaleTests`). The Workshop only joined them on a report that
+  it read a size and a half heavier than the multiplayer tab beside it.
+  **The one thing left on the app scale inside the Workshop is the community-link pill**, and
+  it has to stay: its two MDL2 glyphs are sized off the caption token to sit optically with the
+  pill's label, and that label comes from the shared `ModLinkPill` style, which also dresses
+  the support links in half a dozen dialogs. Shrinking the glyphs alone would have left the
+  word beside them where it was. Same reasoning exempts the decorative `⋮`/`⋯` glyphs and the
+  monograms that FILL a fixed disc — geometry, not type.
+  **Floor is 13, body
   14 — calibrated to Steam's client** (its comfortable body ≈14px); 10-11px
   secondary text was unreadable on 125/150% displays (the original "text is too
-  small" report). **The whole launcher is migrated** — every surface (dashboard
+  small" report). **The MULTIPLAYER scale is the documented exception to that floor and
+  went BACK below it** — `MpLabelSize` 11.5, `MpSectionLabelSize` 9.5 and the rest are the
+  design handoff's own values again, on the fourth turn of that argument. What changed is
+  not the taste but the lever: every earlier round could only answer "the text looks small"
+  by moving those six tokens, and the text-size setting above answers it without touching
+  the reference's proportions (Automatic puts a 32" desktop — where the reports came from —
+  at 110 %, i.e. 11.5 × 1.10 = 12.65). The full history is in `Styles/Tokens.xaml`. **The whole launcher is migrated** — every surface (dashboard
   chrome, Workshop, MultiplayerTab, LobbyWindow, all the `*Dialog`s, the shared
   `Buttons.xaml`/`Inputs.xaml` implicit + keyed styles) reads the tokens. **Two
   deliberate classes of non-adopter stay literal:** (1) the **dashboard hero
@@ -4864,7 +4947,9 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   one — do not read it as a recipe that worked:** the multiplayer peak-hours histogram
   put its tooltip on each bar; on real data a quiet hour's bar is 1-3 px tall in a 34-px
   cell and ~6 px wide, so 91-97 % of every column was dead and the pointer had to hold
-  still inside those pixels for the 400 ms default `InitialShowDelay`. Reported as
+  still inside those pixels for the default `InitialShowDelay`, which is **1000 ms** — measured
+  off the property's own metadata, and NOT the 400 ms this file said for months (400 is
+  `SystemParameters.MouseHoverTime`, which governs something else). Reported as
   "hovering does nothing". Wrapping each column in a full-cell
   `Background = Brushes.Transparent` host carrying the tooltip took the target from
   12×3 px to 12×34 — **and it still did not fire on the reporter's machine, so it was
@@ -4879,6 +4964,50 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   if a tooltip's target can be smaller than roughly a finger, assert its geometry in a
   test the way `DialogXamlTests.EveryHourOfTheHistogramIsHoverableOverItsWholeColumn`
   does.
+  (5) **TEXT THAT ENDS IN AN ELLIPSIS REVEALS ITSELF ON HOVER, launcher-wide, and no call
+  site opts in — `Controls/RevealText.cs`.** 65 places trim with `CharacterEllipsis` (38 built
+  in code, 27 in XAML, none with `WordEllipsis`) and until now not one offered any way to read
+  what was cut; the report was the community strip's totals line ending "ESOC Fertile…", where
+  the map is last precisely so it is lost first. An implicit `TextBlock` style arms an attached
+  property from a trigger on `TextTrimming`, which reaches the code-built blocks too because a
+  style trigger reads the property's CURRENT value whatever set it. On hover it measures with
+  `FormattedText` — **never `DesiredSize`**, which `Measure` clamps to the constraint it was
+  given, so an overflowing block reports that it fits — and shows the full text in a tooltip
+  placed `Relative` to the block, offset back by its own border and padding so the first glyph
+  lands on the first glyph underneath. Riding under the tooltip service is what buys the delay,
+  the close-on-exit and the focus behaviour for free; what is overridden is the look
+  (`RevealTooltip`, no drop shadow — an `Effect` over text disables ClearType, and this text is
+  edge to edge with the original) and the placement.
+  **Four things are load-bearing.** (a) **It lives in its own `Styles/Text.xaml`, merged BEFORE
+  `Buttons.xaml`**, because `SidebarNavLabel` — the only NAMED TextBlock style in the repo that
+  trims, and a named style does not inherit an implicit one — needs
+  `BasedOn="{StaticResource {x:Type TextBlock}}"`, and a `StaticResource` in a merged dictionary
+  cannot see a dictionary merged after it. Any future named style that trims needs the same
+  `BasedOn`. (b) **An element whose ANCESTOR already has a tooltip is left alone**: WPF resolves
+  tooltips upward, so ours would cover a sentence somebody wrote (the rooms table's PLAYERS
+  cell, the end-of-match stat cards, every gear `MenuItem`) with a repeat of what is already on
+  screen. (c) **THE TOOLTIP IS ARMED AT LAYOUT (`SizeChanged` + `Loaded`), NEVER ON HOVER — the first
+  version did it on hover and did nothing at all.** WPF's tooltip service inspects an element
+  from a CLASS handler when the mouse ENTERS it, class handlers run before instance handlers,
+  and that version withdrew its tooltip again on the way out — so at the one instant the
+  service ever looked there was nothing there, every time, for ever, with nothing thrown and
+  nothing visibly wrong. `MouseEnter` re-evaluates (a block whose TEXT changed without its
+  width changing, like a room's age ticking in a fixed column), which works precisely because
+  layout has already put a tooltip there for the service to find.
+  (d) **`TextBlock.Text` is NOT the text a block shows.** It reports only content assigned
+  through that property; a block built by adding `Run`s answers the empty string, so an
+  emptiness guard written on it refuses exactly the run-built totals line this feature exists
+  for. `RevealText.PlainTextOf` is the reader.
+  **Deliberately out of scope, and it is a limit rather than an oversight: a WRAPPING block.**
+  Such a block is cut by HEIGHT and no width measurement can see it — so the rooms table's
+  two-line room name keeps the hand-written `TooltipHelper.Wrap` it already had, and is the one
+  trimmed block in the launcher with a tooltip of its own. Also untouched: paths shortened by
+  `PathDisplay.CompactPathMiddle`, where the ellipsis is in the STRING and there is no trimming
+  to detect. Pinned by `RevealTextTests` (where the refusals are the point) and
+  `DialogXamlTests.TheRevealBuildsInPlaceAndOnlyWhenTheTextIsActuallyCut`, whose load-bearing
+  assertion is that the tooltip is present after a LAYOUT with no mouse involved — the shape of
+  the bug above. Note what did NOT catch it: a test calling the builder directly passed
+  happily, because the builder was never the broken half.
   The lobby window (`LobbyWindow`) splits its localisation across **two**
   methods in `MultiplayerTab.xaml.cs`: `ApplyLobbyStaticLabels()` for static
   labels (section/field headers, button captions, chat placeholder, copy
@@ -5083,11 +5212,33 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `sizeSource == scaled` oscillates. `Kind.Render` (RenderTransform, no reflow) is
   the bottom-pinned **hero only**; everything else uses `Kind.Layout` (reflows,
   fills the slot, feeds the enclosing ScrollViewer). Wired: hero (`PlayView`, ref
-  1500x760, Render); `ModsBrowser` + `MultiplayerTab` (sizeSource = the
-  UserControl, ref 1100x604); `LobbyWindow` (ref 900x600);
+  1500x760, Render); `MultiplayerTab` (sizeSource = the UserControl, ref 1100x560);
+  `LobbyWindow` (ref 900x600);
   `LauncherSettingsDialog` / `ModPropertiesDialog` (their `Grid.Row=1` content,
   sized by the Window). `RadminAssistantWindow` + `CreateLobbyDialog` are
-  `NoResize` → not scaled. `UiScale.Track(ContentHost, 1100, 604)` publishes
+  `NoResize` → not scaled.
+  **`ModsBrowser` was on this list and came OFF it, and the reason generalises.** This
+  transform is a ZOOM — it shrinks padding, gutters and row heights along with the type, and
+  any scale under 1.0 costs the subtree its ClearType — and it existed only because there was
+  no other way to keep a small window readable. `Services/TextScale.cs` is now that other way,
+  so a surface that can simply REFLOW should reflow: the Workshop's body is `58*`/`42*` with a
+  `MinWidth` on the detail column, its list is one column of full-width rows that trim and
+  wrap, and it now keeps ClearType at every width (it also used to shrink on HEIGHT, so a
+  1920x620 window drew the whole tab at 94% with width to spare). **`MultiplayerTab` keeps
+  its transform because something on it cannot give ground**: the rooms toolbar needs ~1045 px
+  and a 900-px window offers 880, which is the budget
+  `DialogXamlTests.TheRoomsTopBarFitsAtTheNarrowestWindow` is written against. That is a
+  property of that surface, not a house style — don't re-attach the Workshop "for
+  consistency", and don't detach Multiplayer to "finish the job".
+  **Removing it exposed a bug the pinned width had been hiding, and the SHAPE is worth
+  recognising**: a `* | Auto` row whose star column holds items that cannot trim. The `Auto`
+  side takes its width first and the star side is arranged at its own desired size and then
+  clipped, with the `Auto` content painting over the same pixels — and `Measure` clamps
+  `DesiredSize` to its constraint, so the overflow reports as a fit and no test that measures
+  can see it. It has now appeared twice: the rooms toolbar, and the Workshop's filter chips
+  (fixed by making that strip a `WrapPanel`, pinned by
+  `TheWorkshopFiltersRowFitsAtTheNarrowestWindow`, whose load-bearing assertion is the panel
+  TYPE rather than any number). `UiScale.Track(ContentHost, 1100, 604)` publishes
   `UiScale.Current` (the general content factor) for the two code-built popups
   (brand, mod-switch), which live in their own visual tree and read it via
   `ApplyPopupScale`; the gear `ContextMenu` + `ComboBox` dropdowns stay base-size
@@ -5152,9 +5303,13 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `RefreshIdleProgressPanel` reset the dashboard progress strip with
   `DashboardProgressLabel.ClearValue(TextBlock.ForegroundProperty)`, with a comment saying
   it "falls back to the style setter". Their gold is a LOCAL value written on the element in
-  `MainWindow.xaml`, and this app has no implicit `TextBlock` style — so `ClearValue`
-  removed the only thing painting them and let `Foreground` fall back to WPF's default,
-  **Black**, on the darkest corner of the hero. The icon and label are now ASSIGNED
+  `MainWindow.xaml`, and the app's implicit `TextBlock` style paints nothing — so
+  `ClearValue` removed the only thing painting them and let `Foreground` fall back to WPF's
+  default, **Black**, on the darkest corner of the hero. (That sentence used to read "this
+  app has no implicit `TextBlock` style", which was true when it was written. There is one
+  now — `Styles/Text.xaml`, which arms the reveal-on-hover behaviour — and it has NO setters
+  at all, only a trigger on `TextTrimming`, so the diagnosis is unchanged. Anyone who gives
+  that style a `Foreground` setter changes it, and should reread this.) The icon and label are now ASSIGNED
   `AccentBrush` instead; the ProgressBar keeps its `ClearValue` because its gradient really
   does come from `ShimmerProgressBar`. Contrast **1.05 -> 10.30:1**.
   **How it hid for so long, and how to catch the next one:** the strip renders, the string

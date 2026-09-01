@@ -27,20 +27,20 @@
             <TextBlock Grid.Column="0"
                        Text="&#xE72E;"
                        FontFamily="Segoe MDL2 Assets"
-                       FontSize="{StaticResource FontSizeHeading}"
+                       FontSize="{DynamicResource FontSizeHeading}"
                        Foreground="{DynamicResource AccentBrush}"
                        VerticalAlignment="Top"
                        Margin="0,0,14,0"/>
             <TextBlock Grid.Column="1"
                        x:Name="BodyText"
                        Foreground="{DynamicResource TextSecondary}"
-                       FontSize="{StaticResource FontSizeBody}"
+                       FontSize="{DynamicResource FontSizeBody}"
                        TextWrapping="Wrap"/>
         </Grid>
 
         <TextBlock x:Name="PathsLabel"
                    Foreground="{DynamicResource TextPrimary}"
-                   FontSize="{StaticResource FontSizeBody}"
+                   FontSize="{DynamicResource FontSizeBody}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,8"/>
 
@@ -59,7 +59,7 @@
                          BorderThickness="0"
                          Padding="0"
                          FontFamily="Consolas"
-                         FontSize="{StaticResource FontSizeCaption}"
+                         FontSize="{DynamicResource FontSizeCaption}"
                          Foreground="{DynamicResource TextPrimary}"
                          TextWrapping="Wrap"/>
                 <TextBox x:Name="InstallPathText"
@@ -69,7 +69,7 @@
                          Padding="0"
                          Margin="0,6,0,0"
                          FontFamily="Consolas"
-                         FontSize="{StaticResource FontSizeCaption}"
+                         FontSize="{DynamicResource FontSizeCaption}"
                          Foreground="{DynamicResource TextPrimary}"
                          TextWrapping="Wrap"/>
             </StackPanel>
@@ -77,7 +77,7 @@
 
         <TextBlock x:Name="HowToText"
                    Foreground="{DynamicResource TextSecondary}"
-                   FontSize="{StaticResource FontSizeCaption}"
+                   FontSize="{DynamicResource FontSizeCaption}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,16"/>
 
@@ -89,7 +89,7 @@
                         Margin="0,0,0,16"/>
 
         <CheckBox x:Name="DontShowAgainCheck"
-                  FontSize="{StaticResource FontSizeBody}"
+                  FontSize="{DynamicResource FontSizeBody}"
                   Margin="0,0,0,16"/>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

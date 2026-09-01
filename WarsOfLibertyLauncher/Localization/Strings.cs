@@ -604,6 +604,54 @@ public static class Strings
             [LangEn] = "INTERFACE",
             [LangEs] = "INTERFAZ",
         },
+        // --- Text size (Settings -> Interface) ---
+        // It scales the TYPE and nothing else, and the label says so, because the obvious
+        // reading of "text size" in a launcher is the zoom this deliberately is not.
+        ["DlgSettingsTextScaleLabel"] = new()
+        {
+            [LangEn] = "Text size",
+            [LangEs] = "Tamaño del texto",
+        },
+        ["DlgSettingsTextScaleHint"] = new()
+        {
+            [LangEn] = "Makes the lettering bigger without changing the layout. "
+                     + "Automatic works it out from your monitor.",
+            [LangEs] = "Agranda la letra sin cambiar la distribución de la pantalla. "
+                     + "Automático lo calcula según tu monitor.",
+        },
+        ["DlgSettingsTextScaleTip"] = new()
+        {
+            [LangEn] = "Only the text is scaled — spacing, buttons and rows keep their size, "
+                     + "so nothing moves out of place. The change applies right away.",
+            [LangEs] = "Solo se escala el texto: los espacios, los botones y las filas mantienen "
+                     + "su tamaño, así que nada se descoloca. El cambio se aplica al momento.",
+        },
+        ["DlgSettingsTextScaleAuto"] = new()
+        {
+            [LangEn] = "Automatic",
+            [LangEs] = "Automático",
+        },
+        ["DlgSettingsTextScalePercent"] = new()
+        {
+            [LangEn] = "{0} %",
+            [LangEs] = "{0} %",
+        },
+        // What Automatic decided, and what from. A default that picks a size without ever
+        // saying which one is a setting nobody can check.
+        ["DlgSettingsTextScaleResolved"] = new()
+        {
+            [LangEn] = "Detected: {0}\" screen at {1}x{2} → {3} %",
+            [LangEs] = "Detectado: pantalla de {0}\" a {1}x{2} → {3} %",
+        },
+        // The panel didn't report its size — a remote session, a virtual display, a
+        // projector. Says so instead of implying a measurement was taken.
+        ["DlgSettingsTextScaleResolvedUnknown"] = new()
+        {
+            [LangEn] = "Your monitor doesn't report its size, so it stays at {0} %. "
+                     + "Pick a percentage if you want it bigger.",
+            [LangEs] = "Tu monitor no informa de su tamaño, así que se queda en {0} %. "
+                     + "Elige un porcentaje si lo quieres más grande.",
+        },
         ["DlgLauncherSettingsTabOrderLabel"] = new()
         {
             [LangEn] = "Tab order",
@@ -2346,31 +2394,12 @@ public static class Strings
         ["MpHistoryPlayerWon"] = new() { [LangEn] = "Won", [LangEs] = "Ganó" },
         ["MpHistoryPlayerLost"] = new() { [LangEn] = "Lost", [LangEs] = "Perdió" },
 
-        // --- Profile: the standing, all of it server-side ---
-        ["MpProfileRating"] = new() { [LangEn] = "Rating {0}", [LangEs] = "Puntuación {0}" },
-        // "Rated", not "played". The number is games_played from elo_ratings, and that
-        // counter only advances on a match the server actually scored — a 1v1, on a mod
-        // with a ladder, whose winner could be read. Everything else is in the History
-        // tab and not in here, so "matches played" would tell someone with ten matches
-        // behind them that they had played none.
-        ["MpProfileGames"] = new()
-        {
-            [LangEn] = "{0} rated matches",
-            [LangEs] = "{0} partidas puntuadas",
-        },
-        // The denominator is shown on purpose: most matches have no readable result, so the
-        // rate covers far fewer games than the player has played, and hiding that would make
-        // the number look wrong.
-        ["MpProfileWinrate"] = new()
-        {
-            [LangEn] = "{0}% wins · {1}W-{2}L of {3} decided",
-            [LangEs] = "{0}% de victorias · {1}V-{2}D de {3} decididas",
-        },
-        ["MpProfileProvisional"] = new()
-        {
-            [LangEn] = "provisional — no rated matches yet",
-            [LangEs] = "provisional — todavía sin partidas puntuadas",
-        },
+        // (The Profile tab's four one-line strings are gone with the four TextBlocks that
+        //  showed them — MpProfileRating / MpProfileGames / MpProfileWinrate /
+        //  MpProfileProvisional. The rules they carried did NOT go with them: the rate still
+        //  divides by decided games, and it is now withheld entirely below the ladder's entry
+        //  bar rather than being printed as "0 % wins" over one match. See the Perfil block
+        //  above and ProfileSummaryView.)
         ["MpChatMatchRecorded"] = new()
         {
             [LangEn] = "Match recorded in your history ({0} players).",
@@ -2536,10 +2565,13 @@ public static class Strings
         // "matches" would invite the reader to divide by the wrong number.
         // The Ranking subtab: the whole ladder, where the community strip shows only its
         // top three. Two ladders, one table, one payload.
+        // Title case, like its four neighbours in the subtab bar. It was the only one
+        // shouting, and the same key also heads the page. (MpActivityRankingTitle, the
+        // community strip's card, stays uppercase — every card there is.)
         ["MpSubtabRanking"] = new()
         {
-            [LangEn] = "RANKING",
-            [LangEs] = "CLASIFICACIÓN",
+            [LangEn] = "Ranking",
+            [LangEs] = "Clasificación",
         },
         ["MpRankingModeSolo"] = new()
         {
@@ -2558,11 +2590,245 @@ public static class Strings
             [LangEn] = "There is no ranking to show yet.",
             [LangEs] = "Todavía no hay clasificación que mostrar.",
         },
+        // --- Perfil (design handoff 3c) ---
+        // Shown in place of the page when nobody is signed in. The tab has a sign-in gate of
+        // its own on the Rooms subtab; this is the one line Profile needs so it is not blank.
+        ["MpSignInPrompt"] = new()
+        {
+            [LangEn] = "Sign in with Discord to see your profile.",
+            [LangEs] = "Inicia sesión con Discord para ver tu perfil.",
+        },
+        ["MpProfileRatingLabel"] = new()
+        {
+            [LangEn] = "RATING 1v1",
+            [LangEs] = "RATING 1v1",
+        },
+        ["MpProfileJoined"] = new()
+        {
+            [LangEn] = "joined {0}",
+            [LangEs] = "se unió en {0}",
+        },
+        ["MpProfileRank"] = new()
+        {
+            [LangEn] = "rank {0} of {1}",
+            [LangEs] = "puesto {0} de {1}",
+        },
+        // "Not on the ladder yet", said in one word. NOT the Glicko sense of provisional —
+        // see ProfileSummaryView.IsProvisional for why that one is true of practically anyone.
+        ["MpProfileProvisionalTag"] = new()
+        {
+            [LangEn] = "PROVISIONAL",
+            [LangEs] = "PROVISIONAL",
+        },
+        ["MpProfileCurveTitle"] = new()
+        {
+            [LangEn] = "RATING OVER TIME",
+            [LangEs] = "EVOLUCIÓN DEL RATING",
+        },
+        // With one point there is no line to draw, and a flat stroke would be a claim about a
+        // rating that has held steady — which is false for somebody who has played once.
+        ["MpProfileCurveTooFew"] = new()
+        {
+            [LangEn] = "Not enough rated matches yet to draw the curve.",
+            [LangEs] = "Todavía no hay suficientes partidas puntuadas para dibujar la curva.",
+        },
+        ["MpProfileCurveFrom"] = new()
+        {
+            [LangEn] = "{0} start",
+            [LangEs] = "{0} inicial",
+        },
+        ["MpProfileCurveTo"] = new()
+        {
+            [LangEn] = "{0} now",
+            [LangEs] = "{0} actual",
+        },
+        ["MpProfileRecordTitle"] = new()
+        {
+            [LangEn] = "RECORD",
+            [LangEs] = "RÉCORD",
+        },
+        // Below the ladder's entry bar the record is stated WITHOUT a percentage: a rate over
+        // one match is not a rate, and the one it produced ("0 % wins") was the most
+        // discouraging number the launcher could have led with.
+        ["MpProfileRecordDecided"] = new()
+        {
+            [LangEn] = "in {0} decided",
+            [LangEs] = "en {0} decididas",
+        },
+        ["MpProfileRecordPercent"] = new()
+        {
+            [LangEn] = "{0}% of {1} decided",
+            [LangEs] = "{0}% de {1} decididas",
+        },
+        // The distance to the ladder, in matches rather than in units of rating deviation.
+        // The number is the server's min_decided, never a literal.
+        ["MpProfileToLadder"] = new()
+        {
+            [LangEn] = "{0} more rated matches and your rating stops being provisional.",
+            [LangEs] = "Faltan {0} partidas puntuadas para que el rating deje de ser provisional.",
+        },
+        ["MpProfileOnLadder"] = new()
+        {
+            [LangEn] = "Your rating is settled — you are on the table.",
+            [LangEs] = "Tu rating ya está asentado: apareces en la tabla.",
+        },
+        ["MpProfileTotalMatches"] = new()
+        {
+            [LangEn] = "MATCHES PLAYED",
+            [LangEs] = "PARTIDAS TOTALES",
+        },
+        // All three numbers, because the first alone misleads: most matches are not decided,
+        // so "3 matches" beside a record of 0-1 reads as a contradiction until the rest is
+        // said.
+        ["MpProfileTotalBreakdown"] = new()
+        {
+            [LangEn] = "{0} decided · {1} didn't count",
+            [LangEs] = "{0} decididas · {1} sin contar",
+        },
+        ["MpProfileTopMap"] = new()
+        {
+            [LangEn] = "MOST PLAYED MAP",
+            [LangEs] = "MAPA MÁS JUGADO",
+        },
+        ["MpProfileTopMapCount"] = new()
+        {
+            [LangEn] = "{0} of {1} matches",
+            [LangEs] = "{0} de {1} partidas",
+        },
+        ["MpProfileRival"] = new()
+        {
+            [LangEn] = "USUAL OPPONENT",
+            [LangEs] = "RIVAL HABITUAL",
+        },
+        ["MpProfileRivalRecord"] = new()
+        {
+            [LangEn] = "{0}-{1} against them",
+            [LangEs] = "{0}-{1} contra él",
+        },
+        // (The "Latest matches" block is gone, and with it its three strings. It was a
+        //  three-row excerpt of the history list under a link back to the History tab — and
+        //  the full list is right there on this page now, so the excerpt was showing the same
+        //  matches twice and the link led to where you already were.)
+
+        // --- Historial (design handoff 3b) ---
+        ["MpHistoryFilterAll"] = new() { [LangEn] = "All", [LangEs] = "Todas" },
+        ["MpHistoryFilterRated"] = new() { [LangEn] = "Rated", [LangEs] = "Puntuadas" },
+        ["MpHistoryFilterUnrated"] = new() { [LangEn] = "Didn't count", [LangEs] = "Sin contar" },
+        // Shown when the FILTER emptied the list, not when there is no history at all —
+        // those are different situations, and MpHistoryEmpty would send somebody looking for
+        // matches that are one click away.
+        ["MpHistoryFilterEmpty"] = new()
+        {
+            [LangEn] = "No matches match this filter.",
+            [LangEs] = "No hay partidas que cumplan este filtro.",
+        },
+        // (The four summary cells are gone with the History tab. Every one of them is on the
+        //  Profile already: the rating in its header, the decided record in RECORD, the
+        //  "didn't count" tally in MATCHES PLAYED and the map in MOST PLAYED MAP. Keeping
+        //  them would have been the same four numbers twice on one page.)
+        // First line of a card. It replaces the two pills the card used to carry, which said
+        // the same thing twice: a "Loss" badge beside a "-117" badge.
+        ["MpHistoryAgainst"] = new()
+        {
+            [LangEn] = "against {0}",
+            [LangEs] = "contra {0}",
+        },
+        ["MpHistoryRatingMove"] = new()
+        {
+            [LangEn] = "{0} → {1}",
+            [LangEs] = "{0} → {1}",
+        },
+        // The tag on a match the ladder ignored. NOT "draw" — 0.5 is "the outcome could
+        // not be read", and most stored matches are that.
+        ["MpHistoryNotCounted"] = new()
+        {
+            [LangEn] = "DIDN'T COUNT",
+            [LangEs] = "NO CONTÓ",
+        },
+        ["MpHistorySeeHow"] = new() { [LangEn] = "See how", [LangEs] = "Ver cómo" },
+        // The heading over a day's matches when the timestamp could not be read. Such a match
+        // is still listed — dropping somebody's match over a malformed date would be
+        // worse — and this says so instead of printing a year 1 date as a day they played.
+        ["MpHistoryDayUnknown"] = new()
+        {
+            [LangEn] = "DATE UNKNOWN",
+            [LangEs] = "FECHA DESCONOCIDA",
+        },
+        // An em dash, for a value that is not merely zero but unknown. One key so every
+        // surface writes the same character.
+        ["MpDash"] = new() { [LangEn] = "—", [LangEs] = "—" },
+        // --- Clasificacion (design handoff 3a) ---
+        // How many players are on the table, beside the title. It says "with decided matches"
+        // because that is literally the entry rule, and a bare count would read as "this is
+        // how many people play", which is a different and much larger number.
+        ["MpRankSubtitle"] = new()
+        {
+            [LangEn] = "{0} players with decided matches",
+            [LangEs] = "{0} jugadores con partidas decididas",
+        },
+        // The two scope chips. They STATE the scope, they do not change it —
+        // /stats/community takes neither a mod nor a window — so the window's number comes
+        // from the server rather than being written here, where it would go stale the day the
+        // server's did.
+        ["MpRankScopeWindow"] = new()
+        {
+            [LangEn] = "{0} days",
+            [LangEs] = "{0} días",
+        },
+        // Column headings. RATING replaces ELO: the launcher says "rating" everywhere else,
+        // and DECID. is abbreviated because the column is 74px and Spanish is the wide
+        // language (DECIDIDAS does not fit beside a RECORD column that did not use to exist).
+        ["MpRankColRating"] = new()
+        {
+            [LangEn] = "RATING",
+            [LangEs] = "RATING",
+        },
+        ["MpRankColDecided"] = new()
+        {
+            [LangEn] = "DECID.",
+            [LangEs] = "DECID.",
+        },
+        // Wins-losses. The column DECIDED alone says how many matches were settled and nothing
+        // about how they went, so the count invited a comparison it could not support.
+        ["MpRankColRecord"] = new()
+        {
+            [LangEn] = "W-L",
+            [LangEs] = "V-D",
+        },
+        ["MpRankRecordValue"] = new()
+        {
+            [LangEn] = "{0}-{1}",
+            [LangEs] = "{0}-{1}",
+        },
+        ["MpRankPercentValue"] = new()
+        {
+            [LangEn] = "{0}%",
+            [LangEs] = "{0}%",
+        },
+        // The footnote under the table. It names the entry rule with the SERVER's number,
+        // never a literal: the two have disagreed before, and this is exactly where a player
+        // would read the wrong one.
+        ["MpRankFootnote"] = new()
+        {
+            [LangEn] = "It takes {0} rated matches to enter the table, and a match only counts "
+                     + "with a recording that says who won. Your own row stays pinned to the "
+                     + "bottom while it is out of sight.",
+            [LangEs] = "Hacen falta {0} partidas puntuadas para entrar en la tabla, y una "
+                     + "partida sólo cuenta con una grabación que diga quién ganó. Tu "
+                     + "propia fila queda fija al pie mientras no esté a la vista.",
+        },
+        ["MpRankEloHelp"] = new()
+        {
+            [LangEn] = "How the rating works",
+            [LangEs] = "Cómo funciona el ELO",
+        },
         ["MpActivityRankingTitle"] = new() { [LangEn] = "RANKING", [LangEs] = "CLASIFICACI\u00D3N" },
         ["MpActivityRankColHash"] = new() { [LangEn] = "#", [LangEs] = "#" },
         ["MpActivityRankColPlayer"] = new() { [LangEn] = "PLAYER", [LangEs] = "JUGADOR" },
-        ["MpActivityRankColElo"] = new() { [LangEn] = "ELO", [LangEs] = "ELO" },
-        ["MpActivityRankColDecided"] = new() { [LangEn] = "DECIDED", [LangEs] = "DECIDIDAS" },
+        // (RankColElo and RankColDecided are gone: the table says RATING, like the rest of the
+        //  launcher, and abbreviates DECID. because the column is 74px and had to make room for
+        //  a RECORD column. Their replacements are MpRankColRating / MpRankColDecided in the
+        //  Clasificación block above. Hash, Player and Pct survive unchanged.)
         ["MpActivityRankColPct"] = new() { [LangEn] = "%", [LangEs] = "%" },
         // Peak hours. The source is rooms OPENED, not matches played, and the wording says
         // so on purpose: the two are not the same number and we are not going to imply

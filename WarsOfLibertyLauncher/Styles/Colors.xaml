@@ -616,6 +616,68 @@
     <SolidColorBrush x:Key="MpCautionRim" Color="#38E6B455"/>
 
     <!-- =========================================================
+         CLASIFICACION / HISTORIAL / PERFIL (design handoff 3a/3b/3c).
+
+         Everything else those three screens need already existed: MpAppBg IS the
+         handoff's #0f1c2e, MpPanel IS its #12213a, MpAction its #2f7fe0, and MpOk /
+         MpCaution / MpDestructiveText / MpActivityOwnRow are its greens, ambers, reds and
+         own-row tint to the byte. What follows is only what was genuinely missing.
+
+         Its TEXT colours (#61779a, #5f7592, #6d829d) are deliberately NOT adopted — they
+         are the old ramp, raised since to clear 4.5:1, and copying them back would undo
+         that (see .claude/rules/multiplayer.md). The existing MpText* ramp is used
+         instead, and it matters more here than it did: the type sizes are back at the
+         reference's values, so the faintest colours would again be carrying the smallest
+         text.
+         ========================================================= -->
+    <!-- A match that did not count. A DIMMER panel than MpPanel, so a card the ladder
+         ignored recedes behind the ones it counted without going grey. -->
+    <SolidColorBrush x:Key="MpPanelDim" Color="#101D31"/>
+    <!-- The 4px stripe down a history card, and the 3px one on the profile's recent list.
+         Three states, and the third is the point: a 0.5 is not a draw, it is "nobody could
+         read who won", so it gets a colour that claims nothing. -->
+    <SolidColorBrush x:Key="MpDestructive" Color="#C8686E"/>
+    <SolidColorBrush x:Key="MpNoResult" Color="#4A5A72"/>
+    <!-- First place. The launcher's own gold would be louder than the row it sits in; this
+         is the handoff's paler one, and only the number wears it. -->
+    <SolidColorBrush x:Key="MpRankGold" Color="#F4D9A0"/>
+    <!-- The hairline between table rows inside a card: fainter than MpRimFaint, which
+         outlines the card itself. A separator as strong as the card's own edge makes a
+         table read as a stack of cards. -->
+    <SolidColorBrush x:Key="MpRimHair" Color="#1282AFFF"/>
+    <!-- The unfilled part of the ladder's rating bar. Not MpCapacityEmpty: that one is a
+         room's capacity pips and is deliberately brighter, being the thing you read. -->
+    <SolidColorBrush x:Key="MpBarTrack" Color="#14FFFFFF"/>
+    <!-- The line above the viewer's own row when it is pinned to the foot of the table —
+         the same blue as the tint under it, at the strength of an edge. -->
+    <SolidColorBrush x:Key="MpOwnRowRim" Color="#472F7FE0"/>
+    <!-- PROVISIONAL, beside a name whose rating has not settled. Amber because it is a
+         caveat, not a warning, and it never turns into one. -->
+    <SolidColorBrush x:Key="MpProvisionalBg" Color="#24E6B455"/>
+    <SolidColorBrush x:Key="MpProvisionalText" Color="#E0BE7F"/>
+    <!-- The "NO CONTO" tag. Colourless on purpose: the whole claim is that this match
+         says nothing, so a hue would be the wrong kind of emphasis. -->
+    <SolidColorBrush x:Key="MpNeutralBadgeBg" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="MpNeutralBadgeText" Color="#A8BCD2"/>
+    <!-- The amber note inside a card that explains WHY a match did not count. Fainter
+         than MpCautionBg/MpCautionRim, which head a whole panel. -->
+    <SolidColorBrush x:Key="MpNoteBg" Color="#12E6B455"/>
+    <SolidColorBrush x:Key="MpNoteRim" Color="#2EE6B455"/>
+    <!-- An inline text link ("How the ELO works", "See all history"). Reads as a link
+         without being a button; it shares its value with MpAccountElo and keeps its own
+         key, because those two would be changed for different reasons. -->
+    <SolidColorBrush x:Key="MpLinkText" Color="#8FB6EA"/>
+    <!-- The ghost blue button ("Rematch"): a rim at .4, softer than MpActionRim's .55,
+         so a secondary action does not read as the primary one. -->
+    <SolidColorBrush x:Key="MpActionRimSoft" Color="#662F7FE0"/>
+    <!-- The profile header. The one gradient in the multiplayer surface, and it earns it:
+         the header carries the single number the whole page is about. -->
+    <LinearGradientBrush x:Key="MpProfileHeaderBg" StartPoint="0,0" EndPoint="1,0.35">
+        <GradientStop Offset="0" Color="#1B2E4C"/>
+        <GradientStop Offset="1" Color="#16263E"/>
+    </LinearGradientBrush>
+
+    <!-- =========================================================
          INTERACTION TOKENS — semantic colors for hover/active
          states. Centralized so changing the dorado interaction
          tint future-proofs every button at once instead of

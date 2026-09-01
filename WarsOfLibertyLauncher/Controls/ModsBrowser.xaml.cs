@@ -143,29 +143,62 @@ public partial class ModsBrowser : UserControl
     private ModProfile? _selectedProfile;
     private readonly Dictionary<string, Border> _rowsByProfileId = new(StringComparer.OrdinalIgnoreCase);
 
-    // Typography tokens from the App.xaml scale, resolved once. Cached
-    // because BuildRow reads several per row and the values are app-lifetime
-    // constants — same pattern the row builders use for the theme brushes.
+    // The WORKSHOP's own type scale (Ws* in Tokens.xaml), resolved once. Cached because
+    // BuildRow reads several per row — same pattern the row builders use for the brushes.
+    //
+    // It used to be the app-wide scale (13 / 14 / 15), which left this tab a size and a half
+    // heavier than the multiplayer surface next door; side by side they read as two different
+    // applications. The Ws* tokens repeat the Mp* values deliberately rather than pointing at
+    // them — see the comment on them in Tokens.xaml.
     private readonly double _fsCaption;
     private readonly double _fsBody;
     private readonly double _fsBodyStrong;
+
+    /// <summary>
+    /// The APP-wide caption size, kept for the community-link pills alone.
+    ///
+    /// <para>Their two Segoe MDL2 glyphs are sized off the caption token so they sit
+    /// optically with the pill's own label — but that label comes from the shared
+    /// <c>ModLinkPill</c> style, which also dresses the support links in half a dozen dialogs
+    /// and therefore did not move. Letting the glyphs follow the Workshop down would have
+    /// shrunk the icons and left the word beside them where it was.</para>
+    /// </summary>
+    private readonly double _fsPillGlyph;
 
     public ModsBrowser()
     {
         InitializeComponent();
 
-        _fsCaption    = (double)FindResource("FontSizeCaption");
-        _fsBody       = (double)FindResource("FontSizeBody");
-        _fsBodyStrong = (double)FindResource("FontSizeBodyStrong");
+        _fsCaption    = (double)FindResource("WsLabelSize");
+        _fsBody       = (double)FindResource("WsBodySize");
+        _fsBodyStrong = (double)FindResource("WsBodyStrongSize");
+        _fsPillGlyph  = (double)FindResource("FontSizeCaption");
 
-        // Window-size scaling (Controls/UiScale.cs): the whole Workshop content
-        // shrinks to fit windows smaller than MainWindow's default footprint
-        // (ref 1100x560 → a default-sized window is exactly 1.0, no regression).
-        // sizeSource is the UserControl itself: its size is set by the content
-        // host and is NOT affected by the LayoutTransform on the content root,
-        // so there's no measure feedback loop.
-        if (Content is FrameworkElement modsRoot)
-            UiScale.Attach(modsRoot, this, 1100, 560);
+        // NO UiScale HERE, and that is a decision rather than an omission.
+        //
+        // The Workshop used to carry a UiScale LayoutTransform (ref 1100x560) that shrank the
+        // whole surface — text, margins, rows — to 82 % on a small window. It existed because
+        // there was no other way to keep the content readable, and it cost: everything got
+        // smaller together, and any scale below 1.0 flips the subtree from ClearType to
+        // grayscale, so a narrowed window turned every glyph on the tab soft. It also shrank
+        // on HEIGHT, so a wide-but-short window (1920x620 → 0.945) drew the whole Workshop at
+        // 94 % with width to spare.
+        //
+        // Services/TextScale.cs replaced the reason: text size is a setting now, applied to
+        // the type tokens alone, so the layout can just reflow like an ordinary application.
+        // Everything here degrades on its own — the body is 58*/42* with a MinWidth on the
+        // detail column, the list is one column of full-width rows with ellipsis and wrapping,
+        // and the header's title and subtitle trim.
+        //
+        // Removing it exposed ONE thing that the pinned width had been hiding: the filters row
+        // is `* | Auto` and its chips could not give ground, so they went under the sort box on
+        // a narrow window. That is fixed in the XAML by making the strip a WrapPanel, and
+        // pinned by TheWorkshopFiltersRowFitsAtTheNarrowestWindow — read that comment before
+        // adding anything else to that row.
+        //
+        // MULTIPLAYER STILL HAS ITS TRANSFORM and must keep it: the rooms toolbar needs about
+        // 1045 px and a 900-px window gives it 880, so without the transform the tool cluster
+        // paints over the subtab strip. Don't "finish the job" by removing that one too.
 
         // Search.
         SearchBox.TextChanged += (_, _) =>
@@ -606,10 +639,12 @@ public partial class ModsBrowser : UserControl
             Foreground = (Brush)FindResource("TextSecondary"),
             TextWrapping = TextWrapping.Wrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            // Sized for two lines at the body token (~37px at 14px) plus
-            // breathing room — keeps the second line's descenders from
-            // clipping. Bump this if FontSizeBody grows again.
-            MaxHeight = 42,
+            // Two lines of the body token, plus breathing room so the second line's
+            // descenders do not clip. DERIVED rather than a literal: it used to be 42 with a
+            // comment asking the next reader to bump it if the body size moved, and the body
+            // size then moved — 2.7x reproduces that same 42 at the old 14 px and follows on
+            // its own from here, including when the text-size setting scales the token.
+            MaxHeight = System.Math.Round(_fsBody * 2.7),
             Margin = new Thickness(0, 3, 0, 5),
         };
         var authorText = new TextBlock
@@ -1128,7 +1163,7 @@ public partial class ModsBrowser : UserControl
         {
             Text = ModLink.GlyphFor(link.Type),
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = _fsCaption,
+            FontSize = _fsPillGlyph,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
             Foreground = (Brush)FindResource("AccentBrush"),
@@ -1149,7 +1184,7 @@ public partial class ModsBrowser : UserControl
         {
             Text = ModLink.ExternalGlyph,
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = _fsCaption - 2,
+            FontSize = _fsPillGlyph - 2,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
             Foreground = (Brush)FindResource("TextSecondary"),
