@@ -2650,7 +2650,15 @@ ladder, the filter pills that filter nothing, the Revancha button), the reasons 
   The pieces all existed: `NotificationFeedService`, the bell, and `SafeUrl`.
   **Publishing one is a COMMIT to `announcements.json` in this repo** — no deploy — which the
   notifier (`notifier-server`, a separate repo) republishes in the manifest every launcher
-  already fetches. `NotificationKind.Announcement` is mod-less, like `LauncherUpdate` and
+  already fetches.
+  **EVERY RELEASE GETS ONE, and that rule deliberately lives with the release STEPS
+  (`docs/BUILDING.md`, "Every release, whichever channel"), not here.** This bullet explains the
+  mechanism, and explaining a mechanism is not what anybody reads while publishing — which is
+  exactly how v1.0.13l came within a commit of shipping with its notes written and no
+  announcement at all. Without the entry a release is silent: only somebody who happens to open
+  the update dialog finds out. The trap worth knowing from here is the ordering — the entry's
+  `url` points at `blob/main/releases/vX.Y.Z.md`, so announcing before that file is on `main`
+  hands everyone who taps the bell a 404. `NotificationKind.Announcement` is mod-less, like `LauncherUpdate` and
   `Connectivity`, so its branch in `NavigateToNotification` must sit ABOVE the
   `ModRegistry.Find(item.ModId)` guard. Its `TargetId` carries a URL rather than an id, because
   clicking it leaves the app; an empty one falls back to the Discord.

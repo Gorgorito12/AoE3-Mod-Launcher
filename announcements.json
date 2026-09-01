@@ -23,6 +23,13 @@
   ],
   "announcements": [
     {
+      "id": "v1013l",
+      "title": "v1.0.13l: the multiplayer screens, rebuilt",
+      "body": "The ranking table was redone and History now lives inside your Profile. There is also a text size setting, and any text cut short with an ellipsis can be read by hovering over it. Notes in English and Spanish.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.13l.md",
+      "date": "2026-08-31"
+    },
+    {
       "id": "v1013k",
       "title": "v1.0.13k: 2v2 and 3v3 now score",
       "body": "Team rating is here, on a ladder of its own. And if the launcher did not recognise Radmin, nobody could join the rooms you hosted - that is fixed. Notes in English and Spanish.",

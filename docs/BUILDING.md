@@ -64,6 +64,46 @@ the cert exists at `Cert:\CurrentUser\My\<thumbprint>`.
 
 ## Distributing a release
 
+### Every release, whichever channel
+
+Two files in this repo have to be committed to `main` **before the tag**, and neither is
+optional:
+
+1. **`releases/vX.Y.Z.md`** — the notes themselves: Spanish first, then `---`, then the same
+   sections in English (copy the shape of the previous one). The GitHub release body is then
+   just the bare URL to this file on `main`; the launcher's update dialog turns it into a
+   clickable link.
+2. **`announcements.json`** — one entry, newest first, so the release reaches the notification
+   bell. **Without it the release is silent:** only somebody who happens to open the update
+   dialog ever finds out. Publishing is a commit — no deploy, no SSH. The notifier service reads
+   the file on its next poll and republishes it in the manifest every launcher already fetches.
+
+Three things about that entry, each of them a way to get it wrong quietly:
+
+- **`id` is permanent, and it is the dedup key.** Never edit one after publishing (it
+  re-announces the item to everybody) and never reuse one (it silently suppresses the new
+  announcement for everyone who saw the old). The convention is the version without dots:
+  `v1.0.13l` → `v1013l`.
+- **`url` points at `blob/main/releases/vX.Y.Z.md`**, so the notes file has to be on `main`
+  already — the same ordering trap as the release body. Announce first and whoever taps the bell
+  gets a 404.
+- **It is not instant, and the real figure is closer to an hour than to a minute.** No deploy is
+  needed, but three delays stack: the notifier polls the file every **10 minutes** (plus GitHub's
+  raw CDN), the manifest is cached for **5 minutes**, and a running launcher only re-reads the
+  feed **at startup and then every ~30 minutes**. Don't read "nothing in the bell" five minutes
+  after committing as a failure.
+- **A player with "check for updates on startup" turned off never sees announcements at all.**
+  The feed read is gated on that setting, so for them the bell stays quiet and the release notes
+  are the only channel. That is deliberate — the setting means "metered, stay off the network" —
+  but it is worth knowing before concluding that a delivery failed.
+
+Check it actually landed: `curl -s https://wol-notify.duckdns.org/manifest` should list the new
+`id`. **If the response's `etag` did not change, no launcher will ever see it** — that is this
+feature's worst failure mode and it is completely silent. (The notifier has a test for exactly
+that, `manifest.test.ts`'s "a NEW announcement moves the ETag".)
+
+The file's own `_readme` carries the full field list.
+
 **Official channel — CI (recommended):** push a `vX.Y.Z` tag (or run
 `.github/workflows/release.yml` manually via *workflow_dispatch*). The
 `windows-latest` runner runs the unit tests, builds the same self-contained
